@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alert"
@@ -132,6 +133,7 @@ type ServiceParams struct {
 	CheckoutSessionRepo          domainCheckout.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
 	RevenueFactRepo              revenuefact.Repository
+	ActivityRepo                 domainActivity.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -238,6 +240,7 @@ func NewServiceParams(
 	encryptionService security.EncryptionService,
 	analyticsViewRepo domainAnalytics.Repository,
 	revenueFactRepo revenuefact.Repository,
+	activityRepo domainActivity.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -311,5 +314,6 @@ func NewServiceParams(
 		CheckoutSessionRepo:          checkoutSessionRepo,
 		AnalyticsViewRepo:            analyticsViewRepo,
 		RevenueFactRepo:              revenueFactRepo,
+		ActivityRepo:                 activityRepo,
 	}
 }

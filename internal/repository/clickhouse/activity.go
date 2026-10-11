@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
@@ -9,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/activity"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type activityRepository struct {
@@ -55,16 +57,105 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 	return nil
 }
 
-func (r *activityRepository) List(context.Context, *activity.ListQuery) ([]*activity.Log, error) {
-	return nil, errActivityNotImplemented
+const activityListColumns = `id, entity_type, entity_id, entity_label, customer_id, action,
+	actor_type, actor_id, actor_label, source, request_id, ip, user_agent, schema_version, occurred_at`
+
+// List returns up to q.Limit entries, newest first, without state.
+func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([]*activity.Log, error) {
+	where := []string{"tenant_id = ?", "environment_id = ?", "occurred_at >= ?", "occurred_at < ?"}
+	args := []any{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), q.From, q.To}
+	eq := func(column, value string) {
+		if value != "" {
+			where = append(where, column+" = ?")
+			args = append(args, value)
+		}
+	}
+	in := func(column string, values []string) {
+		if len(values) > 0 {
+			where = append(where, column+" IN (?)")
+			args = append(args, values)
+		}
+	}
+	eq("entity_type", q.EntityType)
+	eq("entity_id", q.EntityID)
+	eq("customer_id", q.CustomerID)
+	eq("actor_id", q.ActorID)
+	eq("request_id", q.RequestID)
+	in("actor_type", q.ActorTypes)
+	in("action", q.Actions)
+	if q.After != nil {
+		where = append(where, "(occurred_at, id) < (?, ?)")
+		args = append(args, q.After.OccurredAt, q.After.ID)
+	}
+	args = append(args, q.Limit)
+
+	query := "SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
+		" ORDER BY occurred_at DESC, id DESC LIMIT 1 BY id LIMIT ?"
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to list activity").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var logs []*activity.Log
+	for rows.Next() {
+		l := &activity.Log{}
+		if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.EntityLabel, &l.CustomerID, &l.Action,
+			&l.ActorType, &l.ActorID, &l.ActorLabel, &l.Source, &l.RequestID, &l.IP, &l.UserAgent, &l.SchemaVersion, &l.OccurredAt); err != nil {
+			return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
+		}
+		logs = append(logs, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
+	}
+	return logs, nil
 }
 
-func (r *activityRepository) States(context.Context, []string, time.Time, time.Time) (map[string]string, error) {
-	return nil, errActivityNotImplemented
+// States returns the stored state for each id; entries stored without state map to "".
+func (r *activityRepository) States(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error) {
+	rows, err := r.store.GetConn().Query(ctx, `
+		SELECT id, state FROM activity_logs
+		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= ? AND occurred_at <= ? AND id IN (?)
+		LIMIT 1 BY id`,
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from, to, ids)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read activity state").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	states := make(map[string]string, len(ids))
+	for rows.Next() {
+		var id, state string
+		if err := rows.Scan(&id, &state); err != nil {
+			return nil, ierr.WithError(err).WithHint("Failed to read activity state").Mark(ierr.ErrDatabase)
+		}
+		states[id] = state
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read activity state").Mark(ierr.ErrDatabase)
+	}
+	return states, nil
 }
 
-func (r *activityRepository) Get(context.Context, string, time.Time, time.Time) (*activity.Log, error) {
-	return nil, errActivityNotImplemented
-}
+// Get returns one entry with its state, or nil when no row matches.
+func (r *activityRepository) Get(ctx context.Context, id string, from, to time.Time) (*activity.Log, error) {
+	rows, err := r.store.GetConn().Query(ctx, "SELECT "+activityListColumns+`, state FROM activity_logs
+		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= ? AND occurred_at <= ? AND id = ?
+		LIMIT 1`,
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from, to, id)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to get activity").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
 
-var errActivityNotImplemented = ierr.NewError("not implemented").Mark(ierr.ErrInternal)
+	if !rows.Next() {
+		return nil, rows.Err()
+	}
+	l := &activity.Log{}
+	if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.EntityLabel, &l.CustomerID, &l.Action,
+		&l.ActorType, &l.ActorID, &l.ActorLabel, &l.Source, &l.RequestID, &l.IP, &l.UserAgent, &l.SchemaVersion, &l.OccurredAt, &l.State); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
+	}
+	return l, nil
+}

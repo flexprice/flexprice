@@ -2,6 +2,7 @@ package activity
 
 import (
 	"fmt"
+	"slices"
 
 	entgo "entgo.io/ent"
 	"github.com/flexprice/flexprice/internal/types"
@@ -121,7 +122,13 @@ func (r *Registry) AllowedActions(t types.SystemEntityType) []string {
 		return nil
 	}
 	prefix := string(t) + "."
-	return append([]string{prefix + "created", prefix + "updated", prefix + "deleted"}, reg.Actions...)
+	allowed := []string{prefix + "created", prefix + "updated", prefix + "deleted"}
+	for _, action := range reg.Actions {
+		if !slices.Contains(allowed, action) {
+			allowed = append(allowed, action)
+		}
+	}
+	return allowed
 }
 
 // IsAction reports whether action is valid for any registered entity.

@@ -22,6 +22,112 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/activity": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the audit trail of changes to billing entities: who changed what, when, from where. Filter by entity, customer, actor, action or request; pages are newest first.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "List activity",
+                "operationId": "listActivity",
+                "parameters": [
+                    {
+                        "description": "Filters",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ListActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/activity/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need one activity entry with the state of the entity right after the change.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "Get activity",
+                "operationId": "getActivity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Activity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid activity id",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Activity not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/addons": {
             "post": {
                 "security": [
@@ -14816,6 +14922,86 @@ const docTemplate = `{
                 }
             }
         },
+        "ActivityActor": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityEntity": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityPagination": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor": {
+                    "$ref": "#/definitions/ActivityActor"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "entity": {
+                    "$ref": "#/definitions/ActivityEntity"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "object"
+                },
+                "user_agent": {
+                    "type": "string"
+                }
+            }
+        },
         "AddAddonRequest": {
             "type": "object",
             "required": [
@@ -21505,6 +21691,70 @@ const docTemplate = `{
             "properties": {
                 "mapping": {
                     "$ref": "#/definitions/EntityIntegrationMappingResponse"
+                }
+            }
+        },
+        "ListActivityRequest": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "actor_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "cursor": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "ListActivityResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ActivityResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/ActivityPagination"
                 }
             }
         },

@@ -522,6 +522,58 @@ definitions:
     required:
     - start_date
     type: object
+  ActivityActor:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      type:
+        type: string
+    type: object
+  ActivityEntity:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      type:
+        type: string
+    type: object
+  ActivityPagination:
+    properties:
+      has_more:
+        type: boolean
+      limit:
+        type: integer
+      next_cursor:
+        type: string
+    type: object
+  ActivityResponse:
+    properties:
+      action:
+        type: string
+      actor:
+        $ref: '#/definitions/ActivityActor'
+      customer_id:
+        type: string
+      entity:
+        $ref: '#/definitions/ActivityEntity'
+      id:
+        type: string
+      ip:
+        type: string
+      occurred_at:
+        type: string
+      request_id:
+        type: string
+      source:
+        type: string
+      state:
+        type: object
+      user_agent:
+        type: string
+    type: object
   AddAddonRequest:
     properties:
       addon_id:
@@ -5413,6 +5465,48 @@ definitions:
     properties:
       mapping:
         $ref: '#/definitions/EntityIntegrationMappingResponse'
+    type: object
+  ListActivityRequest:
+    properties:
+      actions:
+        items:
+          type: string
+        type: array
+      actor_id:
+        type: string
+      actor_types:
+        items:
+          type: string
+        type: array
+      cursor:
+        type: string
+      customer_id:
+        type: string
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        type: string
+      expand:
+        items:
+          type: string
+        type: array
+      limit:
+        type: integer
+      request_id:
+        type: string
+      start_time:
+        type: string
+    type: object
+  ListActivityResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ActivityResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/ActivityPagination'
     type: object
   ListAlertLogsResponse:
     properties:
@@ -14696,6 +14790,77 @@ info:
   title: Flexprice API
   version: "1.0"
 paths:
+  /activity:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when you need the audit trail of changes to billing entities:
+        who changed what, when, from where. Filter by entity, customer, actor, action
+        or request; pages are newest first.'
+      operationId: listActivity
+      parameters:
+      - description: Filters
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/ListActivityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListActivityResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List activity
+      tags:
+      - Activity
+      x-scope: read
+  /activity/{id}:
+    get:
+      description: Use when you need one activity entry with the state of the entity
+        right after the change.
+      operationId: getActivity
+      parameters:
+      - description: Activity ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ActivityResponse'
+        "400":
+          description: Invalid activity id
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Activity not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get activity
+      tags:
+      - Activity
   /addons:
     post:
       consumes:

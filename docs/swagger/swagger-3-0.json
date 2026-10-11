@@ -23,6 +23,134 @@
     }
   ],
   "paths": {
+    "/activity": {
+      "post": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "List activity",
+        "description": "Use when you need the audit trail of changes to billing entities: who changed what, when, from where. Filter by entity, customer, actor, action or request; pages are newest first.",
+        "operationId": "listActivity",
+        "requestBody": {
+          "description": "Filters",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListActivityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/activity/{id}": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "Get activity",
+        "description": "Use when you need one activity entry with the state of the entity right after the change.",
+        "operationId": "getActivity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Activity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid activity id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/addons": {
       "post": {
         "tags": [
@@ -17245,6 +17373,88 @@
           }
         }
       },
+      "ActivityActor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityEntity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityPagination": {
+        "type": "object",
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityResponse": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ActivityActor"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/ActivityEntity"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "type": "object",
+            "properties": {}
+          },
+          "user_agent": {
+            "type": "string"
+          }
+        }
+      },
       "AddAddonRequest": {
         "required": [
           "addon_id",
@@ -23605,6 +23815,72 @@
         "properties": {
           "mapping": {
             "$ref": "#/components/schemas/EntityIntegrationMappingResponse"
+          }
+        }
+      },
+      "ListActivityRequest": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "actor_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "expand": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ListActivityResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ActivityPagination"
           }
         }
       },

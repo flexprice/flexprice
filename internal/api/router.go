@@ -39,6 +39,7 @@ type Handlers struct {
 	Tenant                   *v1.TenantHandler
 	Invoice                  *v1.InvoiceHandler
 	Feature                  *v1.FeatureHandler
+	Activity                 *v1.ActivityHandler
 	Entitlement              *v1.EntitlementHandler
 	CreditGrant              *v1.CreditGrantHandler
 	Payment                  *v1.PaymentHandler
@@ -461,6 +462,14 @@ func NewRouter(
 			feature.DELETE("/:id", write(types.EntityFeature, types.ActionWrite), handlers.Feature.DeleteFeature)
 			feature.POST("/search", handlers.Feature.QueryFeatures)
 			feature.POST("/:id/clone", write(types.EntityFeature, types.ActionWrite), handlers.Feature.CloneFeature)
+		}
+
+		if cfg.Activity.Enabled {
+			activityRoutes := v1Private.Group("/activity")
+			{
+				activityRoutes.POST("", read(types.EntityActivity, types.ActionRead), handlers.Activity.ListActivity)
+				activityRoutes.GET("/:id", read(types.EntityActivity, types.ActionRead), handlers.Activity.GetActivity)
+			}
 		}
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")
