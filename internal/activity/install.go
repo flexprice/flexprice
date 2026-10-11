@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.uber.org/fx"
 )
 
@@ -16,7 +15,7 @@ func Install(lc fx.Lifecycle, cfg *config.Configuration, clients *postgres.EntCl
 		return
 	}
 	clients.Writer.Use(Hook(reg, pub, HookOptions{
-		Strict:     cfg.Deployment.Mode == types.ModeLocal,
+		Strict:     cfg.Activity.Strict,
 		EntryPoint: string(cfg.Deployment.Mode),
 	}))
 	lc.Append(fx.Hook{

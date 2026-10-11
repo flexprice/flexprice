@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -89,7 +90,7 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 
 	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		if err := s.SubRepo.Update(ctx, sub); err != nil {
+		if err := s.SubRepo.Update(activity.WithAction(ctx, sub.ID, activity.SubscriptionActivated), sub); err != nil {
 			return err
 		}
 	}

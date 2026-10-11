@@ -2,10 +2,9 @@ package service
 
 import (
 	"testing"
-
-	"github.com/cockroachdb/errors"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"

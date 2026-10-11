@@ -2074,7 +2074,10 @@ func (s *subscriptionService) CancelSubscription(
 	// non-zero invoice on cancellation is incorrect — skip invoice creation.
 	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
 
-	ctx = activity.WithAction(ctx, subscriptionID, activity.SubscriptionCancelled)
+	// Scheduled cancellations stay active until the period ends; the rollover declares cancelled then.
+	if req.CancellationType == types.CancellationTypeImmediate {
+		ctx = activity.WithAction(ctx, subscriptionID, activity.SubscriptionCancelled)
+	}
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
@@ -3581,6 +3584,9 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		}
 
 		// Update the subscription
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			ctx = activity.WithAction(ctx, sub.ID, activity.SubscriptionCancelled)
+		}
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err
 		}
@@ -3847,7 +3853,10 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 		child.CancelAt = parentSub.CancelAt
 		child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
 		child.EndDate = parentSub.EndDate
-		childCtx := activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled)
+		childCtx := ctx
+		if child.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			childCtx = activity.WithAction(ctx, child.ID, activity.SubscriptionCancelled)
+		}
 		if err := s.SubRepo.Update(childCtx, child); err != nil {
 			return ierr.WithError(err).
 				WithHintf("Failed to cascade cancel to inherited subscription %s", child.ID).
@@ -3873,7 +3882,7 @@ func (s *subscriptionService) cancelInheritedSubscriptionAtPeriodEnd(ctx context
 			"subscription_id", sub.ID,
 			"error", err)
 	}
-	return s.SubRepo.Update(ctx, sub)
+	return s.SubRepo.Update(activity.WithAction(ctx, sub.ID, activity.SubscriptionCancelled), sub)
 }
 
 func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost decimal.Decimal, meterDisplayName string) *dto.SubscriptionUsageByMetersResponse {
@@ -5632,7 +5641,7 @@ func (s *subscriptionService) activateIncompleteSubscription(ctx context.Context
 	sub.SubscriptionStatus = types.SubscriptionStatusActive
 
 	// Update the subscription in database
-	err := s.SubRepo.Update(ctx, sub)
+	err := s.SubRepo.Update(activity.WithAction(ctx, sub.ID, activity.SubscriptionActivated), sub)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to update subscription status").
@@ -5812,6 +5821,7 @@ func (s *subscriptionService) completeTrialConversionToActive(ctx context.Contex
 	}
 	sub.SubscriptionStatus = types.SubscriptionStatusActive
 	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		txCtx = activity.WithAction(txCtx, sub.ID, activity.SubscriptionActivated)
 		if err := s.SubRepo.Update(txCtx, sub); err != nil {
 			return err
 		}

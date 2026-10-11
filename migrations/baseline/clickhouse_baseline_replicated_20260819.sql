@@ -156,5 +156,5 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs ON CLUSTER '{cluster}'
 ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}')
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE
+SETTINGS index_granularity = 8192
 ;

@@ -468,7 +468,7 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(occurred_at)
 -- Tenant feed: everything in one tenant and environment, newest first.
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
+SETTINGS index_granularity = 8192;
 ```
 
 - **Sort key** serves the tenant feed: one tenant and environment, newest first.
@@ -482,13 +482,13 @@ TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE;
   for the id.
 - **`state`** is JSON text compressed with ZSTD. It is never filtered on, only returned when an
   entry is opened.
-- **TTL** at 13 months is a safety net. The archiver normally drops a month after exporting it.
+- **No TTL** in the first release; retention and archiving come later (section 6.2).
 
 The access paths are checked with `EXPLAIN` before rollout.
 
 **Replicated clusters.** Like `events` and `meter_usage`, the table ships in both ClickHouse
 baselines. The single-node form is above. The replicated form keeps the same columns, projections,
-indexes, partitioning, ordering and TTL, and changes only the statement and the engine:
+indexes, partitioning, ordering and settings, and changes only the statement and the engine:
 
 ```sql
 CREATE TABLE activity_logs ON CLUSTER '{cluster}'

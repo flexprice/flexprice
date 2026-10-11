@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE
+SETTINGS index_granularity = 8192
 
 -- migrate:down
 -- Baseline object; no down. Recreating is a data-loss operation.
