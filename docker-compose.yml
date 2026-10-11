@@ -153,6 +153,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=api
+      - FLEXPRICE_ACTIVITY_ENABLED=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres
@@ -187,6 +188,7 @@ services:
         condition: service_healthy
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=consumer
+      - FLEXPRICE_ACTIVITY_ENABLED=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres
@@ -221,6 +223,7 @@ services:
         condition: service_healthy
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=temporal_worker
+      - FLEXPRICE_ACTIVITY_ENABLED=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres
