@@ -57,13 +57,16 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 	return nil
 }
 
+// millisParam binds a time as epoch milliseconds; the driver's time.Time binding drops sub-second precision.
+const millisParam = "fromUnixTimestamp64Milli(?)"
+
 const activityListColumns = `id, entity_type, entity_id, entity_label, customer_id, action,
 	actor_type, actor_id, actor_label, source, request_id, ip, user_agent, schema_version, occurred_at`
 
 // List returns up to q.Limit entries, newest first, without state.
 func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([]*activity.Log, error) {
-	where := []string{"tenant_id = ?", "environment_id = ?", "occurred_at >= ?", "occurred_at < ?"}
-	args := []any{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), q.From, q.To}
+	where := []string{"tenant_id = ?", "environment_id = ?", "occurred_at >= " + millisParam, "occurred_at < " + millisParam}
+	args := []any{types.GetTenantID(ctx), types.GetEnvironmentID(ctx), q.From.UnixMilli(), q.To.UnixMilli()}
 	eq := func(column, value string) {
 		if value != "" {
 			where = append(where, column+" = ?")
@@ -84,13 +87,17 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 	in("actor_type", q.ActorTypes)
 	in("action", q.Actions)
 	if q.After != nil {
-		where = append(where, "(occurred_at, id) < (?, ?)")
-		args = append(args, q.After.OccurredAt, q.After.ID)
+		where = append(where, "(occurred_at, id) < ("+millisParam+", ?)")
+		args = append(args, q.After.OccurredAt.UnixMilli(), q.After.ID)
 	}
 	args = append(args, q.Limit)
 
 	query := "SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
 		" ORDER BY occurred_at DESC, id DESC LIMIT 1 BY id LIMIT ?"
+	// An in-order read of the main sort key beats the by_customer / by_entity projections; turn it off so they are used.
+	if q.CustomerID != "" || q.EntityID != "" {
+		ctx = clickhouse_go.Context(ctx, clickhouse_go.WithSettings(clickhouse_go.Settings{"optimize_read_in_order": 0}))
+	}
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to list activity").Mark(ierr.ErrDatabase)
@@ -116,9 +123,9 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 func (r *activityRepository) States(ctx context.Context, ids []string, from, to time.Time) (map[string]string, error) {
 	rows, err := r.store.GetConn().Query(ctx, `
 		SELECT id, state FROM activity_logs
-		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= ? AND occurred_at <= ? AND id IN (?)
+		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= `+millisParam+` AND occurred_at <= `+millisParam+` AND id IN (?)
 		LIMIT 1 BY id`,
-		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from, to, ids)
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from.UnixMilli(), to.UnixMilli(), ids)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to read activity state").Mark(ierr.ErrDatabase)
 	}
@@ -141,9 +148,9 @@ func (r *activityRepository) States(ctx context.Context, ids []string, from, to 
 // Get returns one entry with its state, or nil when no row matches.
 func (r *activityRepository) Get(ctx context.Context, id string, from, to time.Time) (*activity.Log, error) {
 	rows, err := r.store.GetConn().Query(ctx, "SELECT "+activityListColumns+`, state FROM activity_logs
-		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= ? AND occurred_at <= ? AND id = ?
+		WHERE tenant_id = ? AND environment_id = ? AND occurred_at >= `+millisParam+` AND occurred_at <= `+millisParam+` AND id = ?
 		LIMIT 1`,
-		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from, to, id)
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), from.UnixMilli(), to.UnixMilli(), id)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to get activity").Mark(ierr.ErrDatabase)
 	}
