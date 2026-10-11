@@ -1,0 +1,57 @@
+-- migrate:up
+-- ClickHouse rejects multi-statement request bodies, so exactly one statement per file.
+CREATE TABLE IF NOT EXISTS flexprice.activity_logs
+(
+    -- Identity and tenancy
+    id              String,
+    tenant_id       String,
+    environment_id  String,
+
+    -- What changed
+    entity_type     LowCardinality(String),
+    entity_id       String,
+    entity_label    String,
+    customer_id     String,
+    action          LowCardinality(String),
+
+    -- Who changed it
+    actor_type      LowCardinality(String),
+    actor_id        String,
+    actor_label     String,
+
+    -- Where the request came from
+    source          LowCardinality(String),
+    request_id      String,
+    ip              String,
+    user_agent      String,
+
+    -- State after the change (snapshot JSON; empty when not stored)
+    state           String CODEC(ZSTD(3)),
+    schema_version  UInt16,
+
+    -- Time
+    occurred_at     DateTime64(3, 'UTC'),
+    ingested_at     DateTime64(3, 'UTC') DEFAULT now64(3),
+
+    -- Customer tab: everything for one customer, newest first.
+    PROJECTION by_customer
+    (
+        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, customer_id, occurred_at, id)
+    ),
+
+    -- One entity's timeline, newest first.
+    PROJECTION by_entity
+    (
+        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, entity_type, entity_id, occurred_at, id)
+    ),
+
+    INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 4
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(occurred_at)
+ORDER BY (tenant_id, environment_id, occurred_at, id)
+TTL toDateTime(occurred_at) + INTERVAL 13 MONTH DELETE
+
+-- migrate:down
+-- Baseline object; no down. Recreating is a data-loss operation.
