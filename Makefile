@@ -222,7 +222,7 @@ install-ent:
 .PHONY: generate-ent
 generate-ent: install-ent
 	@echo "Generating ent code..."
-	@go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/execquery ./ent/schema
+	@go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/execquery --template ./ent/template ./ent/schema
 
 .PHONY: migrate-ent
 migrate-ent:
