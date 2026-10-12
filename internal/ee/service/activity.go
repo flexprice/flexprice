@@ -24,12 +24,7 @@ const (
 	activityDefaultLimit  = 50
 	activityMaxLimit      = 100
 	activityMaxStateLimit = 50
-	activityIDPrefix      = "act_"
 )
-
-var activityActorTypes = []string{
-	string(types.ActorTypeUser), string(types.ActorTypeAPIKey), string(types.ActorTypeCustomer), string(types.ActorTypeSystem),
-}
 
 // ActivityService reads the activity log.
 type ActivityService interface {
@@ -103,8 +98,9 @@ func (s *activityService) List(ctx context.Context, req *dto.ListActivityRequest
 }
 
 func (s *activityService) Get(ctx context.Context, id string) (*dto.ActivityResponse, error) {
-	parsed, err := ulid.ParseStrict(strings.TrimPrefix(id, activityIDPrefix))
-	if !strings.HasPrefix(id, activityIDPrefix) || err != nil {
+	prefix := types.UUID_PREFIX_ACTIVITY + "_"
+	parsed, err := ulid.ParseStrict(strings.TrimPrefix(id, prefix))
+	if !strings.HasPrefix(id, prefix) || err != nil {
 		return nil, activityValidation("%q is not a valid activity id.", id)
 	}
 	from := ulid.Time(parsed.Time()).UTC()
@@ -157,8 +153,9 @@ func (s *activityService) validateFilters(req *dto.ListActivityRequest) error {
 		}
 	}
 	for _, actorType := range req.ActorTypes {
-		if !slices.Contains(activityActorTypes, actorType) {
-			return activityValidation("Unknown actor type %q. Allowed actor types: %s.", actorType, strings.Join(activityActorTypes, ", "))
+		if !slices.Contains(types.ActorTypes(), types.ActorType(actorType)) {
+			allowed := lo.Map(types.ActorTypes(), func(a types.ActorType, _ int) string { return string(a) })
+			return activityValidation("Unknown actor type %q. Allowed actor types: %s.", actorType, strings.Join(allowed, ", "))
 		}
 	}
 	for _, action := range req.Actions {

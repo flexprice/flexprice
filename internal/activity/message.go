@@ -52,7 +52,7 @@ type MessageEvent struct {
 func split(b Batch, maxEntries, maxBytes, maxSnapshot int) []Message {
 	newMessage := func() Message {
 		return Message{
-			MessageID: types.GenerateUUIDWithPrefix("actb"), SchemaVersion: SchemaVersion,
+			MessageID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ACTIVITY_BATCH), SchemaVersion: SchemaVersion,
 			TenantID: b.TenantID, EnvironmentID: b.EnvironmentID, CommittedAt: b.CommittedAt,
 			Request: MessageRequest{ID: b.RequestID, Source: string(b.Source), IP: b.IP, UserAgent: b.UserAgent},
 		}

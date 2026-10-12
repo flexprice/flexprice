@@ -94,7 +94,7 @@ func newEntry(ctx context.Context, r *Registration, op entgo.Op, row any) (Entry
 		metrics.RecordCounter(ctx, metrics.ActivityUnknownActor, 1)
 	}
 	return Entry{
-		ID: types.GenerateUUIDWithPrefix("act"), EntityType: r.EntityType, EntityID: entityID,
+		ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ACTIVITY), EntityType: r.EntityType, EntityID: entityID,
 		Action: resolveAction(ctx, r, op, entityID), Actor: actor, State: state, TenantID: tenantID, EnvironmentID: envID,
 	}, true
 }

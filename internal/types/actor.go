@@ -10,6 +10,11 @@ const (
 	ActorTypeSystem   ActorType = "system"
 )
 
+// ActorTypes lists every actor type.
+func ActorTypes() []ActorType {
+	return []ActorType{ActorTypeUser, ActorTypeAPIKey, ActorTypeCustomer, ActorTypeSystem}
+}
+
 // Source says which entry point a change came through.
 type Source string
 
