@@ -110,7 +110,6 @@ func TestRegistry_SnapshotKeys(t *testing.T) {
 		}
 		var referenced []string
 		referenced = append(referenced, r.Label...)
-		referenced = append(referenced, r.Customer.columns()...)
 		for _, key := range referenced {
 			require.True(t, keys[key], "%s: snapshot has no key %q", entityType, key)
 		}

@@ -252,3 +252,7 @@ func (s *InMemoryCustomerStore) ListByFilter(ctx context.Context, filter *types.
 func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.Count(ctx, filter)
 }
+
+func (s *InMemoryCustomerStore) GetLinkedCustomerID(_ context.Context, id string) (string, error) {
+	return id, nil
+}

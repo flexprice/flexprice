@@ -272,3 +272,7 @@ func (s *AutoChargePaymentSuite) TestNoExistingRecord_UsesGivenPaymentMethodType
 	s.Require().NotNil(pymnt)
 	s.Equal(types.PaymentMethodTypeCard, pymnt.PaymentMethodType)
 }
+
+func (s *inlinePaymentStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
+	return "", ierr.NewError("not implemented").Mark(ierr.ErrSystem)
+}

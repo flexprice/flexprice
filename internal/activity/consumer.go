@@ -23,12 +23,12 @@ import (
 type Consumer struct {
 	reg       *Registry
 	repo      domainActivity.Repository
-	customers CustomerResolver
+	customers LinkedCustomers
 	ps        types.ActivityPubSub
 	log       *logger.Logger
 }
 
-func NewConsumer(reg *Registry, repo domainActivity.Repository, customers CustomerResolver, ps types.ActivityPubSub, log *logger.Logger) *Consumer {
+func NewConsumer(reg *Registry, repo domainActivity.Repository, customers LinkedCustomers, ps types.ActivityPubSub, log *logger.Logger) *Consumer {
 	return &Consumer{reg: reg, repo: repo, customers: customers, ps: ps, log: log}
 }
 
@@ -74,7 +74,7 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 			}
 			stateText = string(e.State)
 		}
-		customerID, err := resolveCustomer(ctx, reg.Customer, state, c.customers)
+		customerID, err := c.customers.customerID(ctx, reg.EntityType, e.EntityID, state)
 		if err != nil {
 			metrics.RecordCounter(ctx, metrics.ActivityCustomerUnresolved, 1, metrics.L(metrics.KeyEntity, e.EntityType))
 			unresolved = append(unresolved, fmt.Errorf("activity %s (%s %s): customer lookup: %w", e.ID, e.EntityType, e.EntityID, err))

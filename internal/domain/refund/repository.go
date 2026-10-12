@@ -12,6 +12,8 @@ type Repository interface {
 	Create(ctx context.Context, refund *Refund) error
 	CreateBulk(ctx context.Context, refunds []*Refund) error
 	Get(ctx context.Context, id string) (*Refund, error)
+	// GetLinkedCustomerID returns the customer the refund is linked to, in any status; "" when it has none.
+	GetLinkedCustomerID(ctx context.Context, id string) (string, error)
 
 	// GetForUpdate row-locks the refund. Must be called inside a transaction.
 	GetForUpdate(ctx context.Context, id string) (*Refund, error)

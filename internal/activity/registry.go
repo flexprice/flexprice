@@ -17,8 +17,7 @@ type Registration struct {
 	// Label lists snapshot keys whose first non-empty value names the entity.
 	Label []string
 	// Actions are the declared actions, highest priority first.
-	Actions  []Action
-	Customer CustomerRef
+	Actions []Action
 
 	// actions is every action of the entity, highest priority first: deleted, created, Actions, updated.
 	actions []Action

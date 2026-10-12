@@ -300,3 +300,9 @@ func (m *InMemoryRefundStore) sumByPaymentIDs(
 
 	return result, nil
 }
+
+func (m *InMemoryRefundStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
+	return "", ierr.NewError("not implemented").
+		WithHint("not implemented").
+		Mark(ierr.ErrSystem)
+}

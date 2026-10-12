@@ -378,3 +378,9 @@ func (s *InMemoryPriceStore) GetByLookupKey(ctx context.Context, lookupKey strin
 
 	return foundPrice, nil
 }
+
+func (s *InMemoryPriceStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
+	return "", ierr.NewError("not implemented").
+		WithHint("not implemented").
+		Mark(ierr.ErrSystem)
+}

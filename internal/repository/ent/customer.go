@@ -605,3 +605,8 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixCustomer, customer.ID)
 	r.redisCache.Delete(ctx, cacheKey)
 }
+
+// GetLinkedCustomerID returns id; a customer is its own linked customer.
+func (r *customerRepository) GetLinkedCustomerID(_ context.Context, id string) (string, error) {
+	return id, nil
+}

@@ -231,7 +231,7 @@ func main() {
 			provideActivityPubSub,
 			activity.Registrations,
 			activity.NewPublisher,
-			activity.NewCustomerResolver,
+			activity.NewLinkedCustomers,
 			activity.NewConsumer,
 		),
 	)

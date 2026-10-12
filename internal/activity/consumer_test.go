@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -22,19 +23,36 @@ func (r *recordingRepo) Insert(_ context.Context, logs []*domainActivity.Log) er
 	return nil
 }
 
-func TestConsumer_UnresolvedCustomerRetriesMessage(t *testing.T) {
+type fakeLookup map[string]string
+
+func (f fakeLookup) GetLinkedCustomerID(_ context.Context, id string) (string, error) {
+	if c, ok := f[id]; ok {
+		return c, nil
+	}
+	return "", errors.New("not found")
+}
+
+func TestConsumer_LinkedCustomer(t *testing.T) {
 	repo := &recordingRepo{}
-	c := NewConsumer(Registrations(), repo, fakeCustomerResolver{customers: map[string]string{"invoice:inv_1": "cust_inv"}}, types.ActivityPubSub{}, logger.NewNoopLogger())
+	customers := LinkedCustomers{
+		types.SystemEntityTypeRefund:  fakeLookup{"ref_1": "cust_inv"},
+		types.SystemEntityTypeInvoice: fakeLookup{},
+	}
+	c := NewConsumer(Registrations(), repo, customers, types.ActivityPubSub{}, logger.NewNoopLogger())
 	payload, err := json.Marshal(Message{TenantID: "t", EnvironmentID: "e", Events: []MessageEvent{
 		{ID: "act_1", EntityType: "refund", EntityID: "ref_1", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_1"}`)},
 		{ID: "act_2", EntityType: "refund", EntityID: "ref_2", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_missing"}`)},
+		{ID: "act_3", EntityType: "invoice", EntityID: "inv_1", Action: "invoice.created", State: json.RawMessage(`{"customer_id":"cust_state"}`)},
+		{ID: "act_4", EntityType: "plan", EntityID: "plan_1", Action: "plan.created", State: json.RawMessage(`{"name":"Pro"}`)},
 	}})
 	require.NoError(t, err)
 
 	require.ErrorContains(t, c.process(context.Background(), message.NewMessage("m1", payload)), "act_2")
-	require.Len(t, repo.inserted, 1)
-	require.Equal(t, "act_1", repo.inserted[0].ID)
-	require.Equal(t, "cust_inv", repo.inserted[0].CustomerID)
+	got := map[string]string{}
+	for _, l := range repo.inserted {
+		got[l.ID] = l.CustomerID
+	}
+	require.Equal(t, map[string]string{"act_1": "cust_inv", "act_3": "cust_state", "act_4": ""}, got)
 }
 
 func RegistrationEntry(t *testing.T, entityType types.SystemEntityType) *Registration {

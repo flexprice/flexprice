@@ -902,3 +902,21 @@ func (r *priceRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 	}
 	return domainPrice.FromEnt(price), nil
 }
+
+// GetLinkedCustomerID returns the subscription's customer for a subscription price; "" for any other price.
+func (r *priceRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
+	return linkedCustomerID(ctx, "price", id, func() (string, error) {
+		client := r.client.Reader(ctx)
+		p, err := client.Price.Query().
+			Where(price.ID(id), price.TenantID(types.GetTenantID(ctx)), price.EnvironmentID(types.GetEnvironmentID(ctx))).
+			Select(price.FieldEntityType, price.FieldEntityID).
+			Only(ctx)
+		if err != nil {
+			return "", err
+		}
+		if p.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
+			return "", nil
+		}
+		return subscriptionCustomerID(ctx, client, p.EntityID)
+	})
+}

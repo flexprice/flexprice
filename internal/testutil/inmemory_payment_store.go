@@ -521,3 +521,9 @@ func (m *InMemoryPaymentStore) GetCreatedPayments() []*payment.Payment {
 	copy(result, m.createdInOrder)
 	return result
 }
+
+func (m *InMemoryPaymentStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
+	return "", ierr.NewError("not implemented").
+		WithHint("not implemented").
+		Mark(ierr.ErrSystem)
+}

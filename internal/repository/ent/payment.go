@@ -900,3 +900,24 @@ func (r *paymentRepository) DeleteCache(ctx context.Context, paymentID string) {
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixPayment, paymentID)
 	r.redisCache.Delete(ctx, cacheKey)
 }
+
+// GetLinkedCustomerID returns the paid invoice's customer, or the customer a payment is made for.
+func (r *paymentRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
+	return linkedCustomerID(ctx, "payment", id, func() (string, error) {
+		client := r.client.Reader(ctx)
+		p, err := client.Payment.Query().
+			Where(payment.ID(id), payment.TenantID(types.GetTenantID(ctx)), payment.EnvironmentID(types.GetEnvironmentID(ctx))).
+			Select(payment.FieldDestinationType, payment.FieldDestinationID).
+			Only(ctx)
+		if err != nil {
+			return "", err
+		}
+		switch types.PaymentDestinationType(p.DestinationType) {
+		case types.PaymentDestinationTypeInvoice:
+			return invoiceCustomerID(ctx, client, p.DestinationID)
+		case types.PaymentDestinationTypeCustomer:
+			return p.DestinationID, nil
+		}
+		return "", nil
+	})
+}
