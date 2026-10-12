@@ -1276,8 +1276,8 @@ func paidAmountSQL(tx, inv string) string {
 		types.TransactionReasonPurchasedCreditBonus)
 }
 
-func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, after walletdomain.CreditDebitsExportCursor, endTime time.Time, limit int) ([]*walletdomain.CreditDebitsExportData, error) {
-	span := StartRepositorySpan(ctx, "wallet", "get_credit_debits_for_export", map[string]interface{}{
+func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after walletdomain.WalletDebitsExportCursor, endTime time.Time, limit int) ([]*walletdomain.WalletDebitsExportData, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_wallet_debits_for_export", map[string]interface{}{
 		"tenant_id":        tenantID,
 		"env_id":           envID,
 		"after_created_at": after.CreatedAt,
@@ -1349,7 +1349,7 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch credit debits for export").
+			WithHint("Failed to fetch wallet debits for export").
 			WithReportableDetails(map[string]interface{}{
 				"tenant_id":      tenantID,
 				"env_id":         envID,
@@ -1360,9 +1360,9 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 	}
 	defer rows.Close()
 
-	result := make([]*walletdomain.CreditDebitsExportData, 0)
+	result := make([]*walletdomain.WalletDebitsExportData, 0)
 	for rows.Next() {
-		exportData := &walletdomain.CreditDebitsExportData{}
+		exportData := &walletdomain.WalletDebitsExportData{}
 		var invoiceID, creditTransactionID *string
 		err := rows.Scan(
 			&exportData.DebitID,
@@ -1381,7 +1381,7 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 		if err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
-				WithHint("Failed to read credit debit row").
+				WithHint("Failed to read wallet debit row").
 				Mark(ierr.ErrDatabase)
 		}
 		exportData.InvoiceID = lo.FromPtr(invoiceID)
@@ -1393,7 +1393,7 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 	if err = rows.Err(); err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to iterate credit debit rows").
+			WithHint("Failed to iterate wallet debit rows").
 			Mark(ierr.ErrDatabase)
 	}
 

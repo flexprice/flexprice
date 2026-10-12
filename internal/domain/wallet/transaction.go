@@ -204,9 +204,9 @@ type CreditTopupsExportData struct {
 	CreatedAt  time.Time
 }
 
-// CreditDebitsExportData is one credit batch a debit drew from. A debit with no recorded
+// WalletDebitsExportData is one credit batch a debit drew from. A debit with no recorded
 // breakdown is a single row with no batch.
-type CreditDebitsExportData struct {
+type WalletDebitsExportData struct {
 	DebitID             string
 	ExternalID          string
 	CustomerName        string
@@ -223,9 +223,9 @@ type CreditDebitsExportData struct {
 	CreatedAt           time.Time
 }
 
-// CreditDebitsExportCursor is the last debit of the previous page. The first page starts from
+// WalletDebitsExportCursor is the last debit of the previous page. The first page starts from
 // the export window's start time with an empty DebitID.
-type CreditDebitsExportCursor struct {
+type WalletDebitsExportCursor struct {
 	CreatedAt time.Time
 	DebitID   string
 }

@@ -809,8 +809,8 @@ func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tena
 	return results[start:end], nil
 }
 
-// GetCreditDebitsForExport mirrors the Postgres export: one row per consumed batch, no paid amounts.
-func (s *InMemoryWalletStore) GetCreditDebitsForExport(ctx context.Context, tenantID, envID string, after wallet.CreditDebitsExportCursor, endTime time.Time, limit int) ([]*wallet.CreditDebitsExportData, error) {
+// GetWalletDebitsForExport mirrors the Postgres export: one row per consumed batch, no paid amounts.
+func (s *InMemoryWalletStore) GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after wallet.WalletDebitsExportCursor, endTime time.Time, limit int) ([]*wallet.WalletDebitsExportData, error) {
 	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -818,7 +818,7 @@ func (s *InMemoryWalletStore) GetCreditDebitsForExport(ctx context.Context, tena
 			Mark(ierr.ErrDatabase)
 	}
 
-	var results []*wallet.CreditDebitsExportData
+	var results []*wallet.WalletDebitsExportData
 	for _, tx := range allTransactions {
 		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.Type != types.TransactionTypeDebit {
 			continue
@@ -829,7 +829,7 @@ func (s *InMemoryWalletStore) GetCreditDebitsForExport(ctx context.Context, tena
 		if tx.CreatedAt.Before(after.CreatedAt) || (tx.CreatedAt.Equal(after.CreatedAt) && tx.ID <= after.DebitID) {
 			continue
 		}
-		row := wallet.CreditDebitsExportData{
+		row := wallet.WalletDebitsExportData{
 			DebitID:           tx.ID,
 			WalletID:          tx.WalletID,
 			Currency:          tx.Currency,

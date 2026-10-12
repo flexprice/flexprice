@@ -478,13 +478,13 @@ func (r *TopUpWalletRequest) validateCoupons() error {
 
 	seen := make(map[string]bool, len(r.Coupons))
 	for _, c := range r.Coupons {
-		if c.CouponCode == "" {
+		// Coupon lookup ignores case and surrounding spaces, so "TOPUP10" and "topup10" are one coupon.
+		key := strings.ToLower(strings.TrimSpace(c.CouponCode))
+		if key == "" {
 			return ierr.NewError("coupon_code is required").
 				WithHint("Provide a coupon_code for each coupon").
 				Mark(ierr.ErrValidation)
 		}
-		// Coupon lookup ignores case and surrounding spaces, so "TOPUP10" and "topup10" are one coupon.
-		key := strings.ToLower(strings.TrimSpace(c.CouponCode))
 		if seen[key] {
 			return ierr.NewError("duplicate coupon_code").
 				WithHintf("Coupon '%s' is listed more than once", c.CouponCode).

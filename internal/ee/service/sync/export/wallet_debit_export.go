@@ -13,14 +13,14 @@ import (
 	"github.com/gocarina/gocsv"
 )
 
-// CreditDebitExporter exports wallet debits, one row per credit batch each debit drew from.
-type CreditDebitExporter struct {
+// WalletDebitExporter exports wallet debits, one row per credit batch each debit drew from.
+type WalletDebitExporter struct {
 	walletRepo wallet.Repository
 	logger     *logger.Logger
 }
 
-// CreditDebitCSV represents the CSV structure for credit debit export
-type CreditDebitCSV struct {
+// WalletDebitCSV represents the CSV structure for wallet debit export
+type WalletDebitCSV struct {
 	DebitID             string `csv:"debit_id"`
 	ExternalID          string `csv:"external_id"`
 	CustomerName        string `csv:"name"`
@@ -34,22 +34,22 @@ type CreditDebitCSV struct {
 	CreatedAt           string `csv:"created_at"`        // RFC3339 format
 }
 
-// NewCreditDebitExporter creates a new credit debit exporter
-func NewCreditDebitExporter(walletRepo wallet.Repository, logger *logger.Logger) *CreditDebitExporter {
-	return &CreditDebitExporter{
+// NewWalletDebitExporter creates a new wallet debit exporter
+func NewWalletDebitExporter(walletRepo wallet.Repository, logger *logger.Logger) *WalletDebitExporter {
+	return &WalletDebitExporter{
 		walletRepo: walletRepo,
 		logger:     logger,
 	}
 }
 
-// PrepareData fetches credit debit data in batches and converts it to CSV format
-func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
+// PrepareData fetches wallet debit data in batches and converts it to CSV format
+func (e *WalletDebitExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
 	const batchSize = 500
 
-	var csvRecords []*CreditDebitCSV
-	cursor := wallet.CreditDebitsExportCursor{CreatedAt: request.StartTime}
+	var csvRecords []*WalletDebitCSV
+	cursor := wallet.WalletDebitsExportCursor{CreatedAt: request.StartTime}
 	for {
-		rows, err := e.walletRepo.GetCreditDebitsForExport(
+		rows, err := e.walletRepo.GetWalletDebitsForExport(
 			ctx,
 			request.TenantID,
 			request.EnvID,
@@ -59,7 +59,7 @@ func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.Expo
 		)
 		if err != nil {
 			return nil, 0, ierr.WithError(err).
-				WithHint("Failed to fetch credit debit data batch").
+				WithHint("Failed to fetch wallet debit data batch").
 				WithReportableDetails(map[string]interface{}{
 					"after_debit_id": cursor.DebitID,
 					"batch_size":     batchSize,
@@ -72,7 +72,7 @@ func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.Expo
 			if i == 0 || d.DebitID != rows[i-1].DebitID {
 				debits++
 			}
-			csvRecords = append(csvRecords, toCreditDebitCSV(d))
+			csvRecords = append(csvRecords, toWalletDebitCSV(d))
 		}
 
 		// The limit counts debits, not rows: a full page means there may be more.
@@ -80,7 +80,7 @@ func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.Expo
 			break
 		}
 		last := rows[len(rows)-1]
-		cursor = wallet.CreditDebitsExportCursor{CreatedAt: last.CreatedAt, DebitID: last.DebitID}
+		cursor = wallet.WalletDebitsExportCursor{CreatedAt: last.CreatedAt, DebitID: last.DebitID}
 	}
 
 	var buf bytes.Buffer
@@ -90,7 +90,7 @@ func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.Expo
 			Mark(ierr.ErrInternal)
 	}
 
-	e.logger.Info(ctx, "completed credit debit export data fetch",
+	e.logger.Info(ctx, "completed wallet debit export data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"total_records", len(csvRecords),
@@ -99,8 +99,8 @@ func (e *CreditDebitExporter) PrepareData(ctx context.Context, request *dto.Expo
 	return buf.Bytes(), len(csvRecords), nil
 }
 
-func toCreditDebitCSV(d *wallet.CreditDebitsExportData) *CreditDebitCSV {
-	return &CreditDebitCSV{
+func toWalletDebitCSV(d *wallet.WalletDebitsExportData) *WalletDebitCSV {
+	return &WalletDebitCSV{
 		DebitID:             d.DebitID,
 		ExternalID:          d.ExternalID,
 		CustomerName:        d.CustomerName,
@@ -117,7 +117,7 @@ func toCreditDebitCSV(d *wallet.CreditDebitsExportData) *CreditDebitCSV {
 
 // topUpUsedAmount spreads the wallet transaction's paid amount evenly over its credits and takes
 // the share for the credits this debit drew.
-func topUpUsedAmount(d *wallet.CreditDebitsExportData) string {
+func topUpUsedAmount(d *wallet.WalletDebitsExportData) string {
 	if d.WalletTxnPaidAmount == nil || d.WalletTxnCredits == nil || d.WalletTxnCredits.IsZero() {
 		return ""
 	}
@@ -126,6 +126,6 @@ func topUpUsedAmount(d *wallet.CreditDebitsExportData) string {
 }
 
 // GetFilenamePrefix returns the prefix for the exported file
-func (e *CreditDebitExporter) GetFilenamePrefix() string {
-	return string(types.ScheduledTaskEntityTypeCreditDebits)
+func (e *WalletDebitExporter) GetFilenamePrefix() string {
+	return string(types.ScheduledTaskEntityTypeWalletDebits)
 }

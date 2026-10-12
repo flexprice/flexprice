@@ -31424,7 +31424,7 @@ const docTemplate = `{
                 "events",
                 "invoice",
                 "credit_topups",
-                "credit_debits",
+                "wallet_debits",
                 "credit_usage",
                 "usage_analytics",
                 "revenue_facts"
@@ -31433,7 +31433,7 @@ const docTemplate = `{
                 "ScheduledTaskEntityTypeEvents",
                 "ScheduledTaskEntityTypeInvoice",
                 "ScheduledTaskEntityTypeCreditTopups",
-                "ScheduledTaskEntityTypeCreditDebits",
+                "ScheduledTaskEntityTypeWalletDebits",
                 "ScheduledTaskEntityTypeCreditUsage",
                 "ScheduledTaskEntityTypeUsageAnalytics",
                 "ScheduledTaskEntityTypeRevenueFacts"

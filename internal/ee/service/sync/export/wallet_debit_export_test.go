@@ -13,37 +13,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreditDebitCSVTopUpUsedAmount(t *testing.T) {
+func TestWalletDebitCSVTopUpUsedAmount(t *testing.T) {
 	paid := func(v string) *decimal.Decimal { return lo.ToPtr(decimal.RequireFromString(v)) }
 
 	tests := []struct {
 		name     string
-		row      wallet.CreditDebitsExportData
+		row      wallet.WalletDebitsExportData
 		expected string
 	}{
 		{
 			name:     "share of a discounted purchase",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(200), WalletTxnCredits: paid("500"), WalletTxnPaidAmount: paid("450")},
+			row:      wallet.WalletDebitsExportData{Credits: decimal.NewFromInt(200), WalletTxnCredits: paid("500"), WalletTxnPaidAmount: paid("450")},
 			expected: "180",
 		},
 		{
 			name:     "rounded to the currency",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(1), WalletTxnCredits: paid("3"), WalletTxnPaidAmount: paid("10")},
+			row:      wallet.WalletDebitsExportData{Credits: decimal.NewFromInt(1), WalletTxnCredits: paid("3"), WalletTxnPaidAmount: paid("10")},
 			expected: "3.33",
 		},
 		{
 			name:     "free or bonus credits",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(20), WalletTxnCredits: paid("100"), WalletTxnPaidAmount: paid("0")},
+			row:      wallet.WalletDebitsExportData{Credits: decimal.NewFromInt(20), WalletTxnCredits: paid("100"), WalletTxnPaidAmount: paid("0")},
 			expected: "0",
 		},
 		{
 			name:     "credits with no paid amount",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(10), WalletTxnCredits: paid("40")},
+			row:      wallet.WalletDebitsExportData{Credits: decimal.NewFromInt(10), WalletTxnCredits: paid("40")},
 			expected: "",
 		},
 		{
 			name:     "debit with no recorded batches",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(5)},
+			row:      wallet.WalletDebitsExportData{Credits: decimal.NewFromInt(5)},
 			expected: "",
 		},
 	}
@@ -54,7 +54,7 @@ func TestCreditDebitCSVTopUpUsedAmount(t *testing.T) {
 			tt.row.TransactionReason = types.TransactionReasonInvoicePayment
 			tt.row.CreatedAt = time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)
 
-			out, err := gocsv.MarshalString([]*CreditDebitCSV{toCreditDebitCSV(&tt.row)})
+			out, err := gocsv.MarshalString([]*WalletDebitCSV{toWalletDebitCSV(&tt.row)})
 			require.NoError(t, err)
 			assert.Contains(t, out, ","+tt.row.Credits.String()+","+tt.expected+",2026-10-09T00:00:00Z")
 		})

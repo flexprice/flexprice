@@ -146,7 +146,7 @@ func TestWalletCreditReports(t *testing.T) {
 	})
 
 	t.Run("debits split by the batches they drew from", func(t *testing.T) {
-		rows, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, walletdomain.CreditDebitsExportCursor{CreatedAt: start}, end, 100)
+		rows, err := repo.GetWalletDebitsForExport(ctx, tenantID, envID, walletdomain.WalletDebitsExportCursor{CreatedAt: start}, end, 100)
 		require.NoError(t, err)
 		require.Len(t, rows, 4)
 
@@ -177,9 +177,9 @@ func TestWalletCreditReports(t *testing.T) {
 	t.Run("a page holds whole debits and the next starts after the last", func(t *testing.T) {
 		var ids []string
 		var pages [][]string
-		cursor := walletdomain.CreditDebitsExportCursor{CreatedAt: start}
+		cursor := walletdomain.WalletDebitsExportCursor{CreatedAt: start}
 		for {
-			page, err := repo.GetCreditDebitsForExport(ctx, tenantID, envID, cursor, end, 1)
+			page, err := repo.GetWalletDebitsForExport(ctx, tenantID, envID, cursor, end, 1)
 			require.NoError(t, err)
 			if len(page) == 0 {
 				break
@@ -191,7 +191,7 @@ func TestWalletCreditReports(t *testing.T) {
 			}
 			pages = append(pages, pageIDs)
 			last := page[len(page)-1]
-			cursor = walletdomain.CreditDebitsExportCursor{CreatedAt: last.CreatedAt, DebitID: last.DebitID}
+			cursor = walletdomain.WalletDebitsExportCursor{CreatedAt: last.CreatedAt, DebitID: last.DebitID}
 		}
 		require.Equal(t, [][]string{{debit.ID, debit.ID, debit.ID}, {legacyDebit.ID}}, pages)
 		require.Equal(t, []string{
