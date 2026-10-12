@@ -29,7 +29,7 @@ type Refund struct {
 	GatewayIdempotencyToken *string                 `json:"gateway_idempotency_token,omitempty"`
 	FailureReason           *string                 `json:"failure_reason,omitempty"`
 	Metadata                types.Metadata          `json:"metadata,omitempty"`
-	GatewayMetadata         map[string]interface{}  `json:"gateway_metadata,omitempty"`
+	GatewayMetadata         map[string]interface{}  `json:"gateway_metadata,omitempty" activity:"redact"`
 	InitiatedAt             *time.Time              `json:"initiated_at,omitempty"`
 	SucceededAt             *time.Time              `json:"succeeded_at,omitempty"`
 	FailedAt                *time.Time              `json:"failed_at,omitempty"`

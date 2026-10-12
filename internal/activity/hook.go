@@ -20,8 +20,6 @@ type HookOptions struct {
 	EntryPoint string
 }
 
-const redacted = `"[redacted]"`
-
 var unrecordedFields = []string{"updated_at", "updated_by"}
 
 // Hook records an entry for every captured write to a registered entity. It never fails a write.
@@ -59,7 +57,7 @@ func onlyDroppedFields(m entgo.Mutation, r *Registration) bool {
 	}
 	touched := append(append(m.Fields(), m.AddedFields()...), m.ClearedFields()...)
 	return len(touched) > 0 && !slices.ContainsFunc(touched, func(f string) bool {
-		return !slices.Contains(r.Drop, f) && !slices.Contains(unrecordedFields, f)
+		return !slices.Contains(r.Snapshot.drop, f) && !slices.Contains(unrecordedFields, f)
 	})
 }
 
@@ -97,12 +95,8 @@ func buildEntry(ctx context.Context, reg *Registry, sink Sink, opts HookOptions,
 }
 
 func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.Op, row any) (Entry, bool) {
-	raw, err := json.Marshal(r.Snapshot(row))
-	if err != nil {
-		return Entry{}, false
-	}
-	fields := map[string]json.RawMessage{}
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	fields, ok := r.Snapshot.state(row)
+	if !ok {
 		return Entry{}, false
 	}
 	entityID, tenantID, envID := stringField(fields, "id"), stringField(fields, "tenant_id"), stringField(fields, "environment_id")
@@ -114,14 +108,6 @@ func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.O
 	}
 	if entityID == "" || (tenantID == "" && envID == "") {
 		return Entry{}, false
-	}
-	for _, key := range r.Drop {
-		delete(fields, key)
-	}
-	for _, key := range r.Redact {
-		if _, ok := fields[key]; ok {
-			fields[key] = json.RawMessage(redacted)
-		}
 	}
 	state, err := json.Marshal(fields)
 	if err != nil {
@@ -153,8 +139,13 @@ func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID strin
 	return prefix + "updated"
 }
 
-func stringField(fields map[string]json.RawMessage, key string) string {
-	var s string
-	_ = json.Unmarshal(fields[key], &s)
-	return s
+func stringField(fields map[string]any, key string) string {
+	v := reflect.ValueOf(fields[key])
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.String {
+		return ""
+	}
+	return v.String()
 }

@@ -31,7 +31,7 @@ type Payment struct {
 	// The gateway_tracking_id is the tracking identifier from the external payment gateway (optional)
 	GatewayTrackingID *string `json:"gateway_tracking_id,omitempty"`
 	// The gateway_metadata field contains gateway-specific metadata (optional)
-	GatewayMetadata types.Metadata `json:"gateway_metadata,omitempty"`
+	GatewayMetadata types.Metadata `json:"gateway_metadata,omitempty" activity:"redact"`
 	// The amount field specifies the payment value in the given currency
 	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 	// The currency field uses a three-letter ISO code (USD, EUR, GBP, etc.)

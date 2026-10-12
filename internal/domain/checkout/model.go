@@ -172,16 +172,16 @@ type CheckoutSession struct {
 	// PaymentProviderConfig holds provider-specific payment configuration
 	// (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
 	// Nil if not set on the request.
-	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty"`
+	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty" activity:"redact"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
-	Result *JSONBCheckoutResult `db:"result,jsonb" json:"result,omitempty"`
+	Result *JSONBCheckoutResult `db:"result,jsonb" json:"result,omitempty" activity:"redact"`
 
 	// ProviderResult holds the external provider response (session URL,
 	// payment intent ID, etc.). Set after the provider call in the create
 	// step. Source of truth for deriving PaymentActions in API responses.
-	ProviderResult *JSONBCheckoutProviderResult `db:"provider_result,jsonb" json:"provider_result,omitempty"`
+	ProviderResult *JSONBCheckoutProviderResult `db:"provider_result,jsonb" json:"provider_result,omitempty" activity:"redact"`
 
 	// IdempotencyKey is caller-supplied. It is unique only while the session
 	// is active (initiated|pending). The same key may be reused once the

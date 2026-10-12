@@ -8,6 +8,7 @@ import (
 
 	entgo "entgo.io/ent"
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +89,7 @@ func TestHook_UncapturedStrictPanics(t *testing.T) {
 func TestHook_SnapshotPanicRecovered(t *testing.T) {
 	reg, err := NewRegistry(Registration{
 		EntityType: types.SystemEntityTypeInvoice, EntName: "Invoice",
-		Snapshot: func(entgo.Value) any { panic("boom") },
+		Snapshot: snapshotOf(func(*ent.Invoice) *invoice.Invoice { panic("boom") }),
 	})
 	require.NoError(t, err)
 	sink := &recordingSink{}

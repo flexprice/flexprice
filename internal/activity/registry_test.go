@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -101,41 +100,21 @@ func TestRegistry_ActionNames(t *testing.T) {
 	require.Equal(t, declared, consts)
 }
 
-func jsonKeys(typ reflect.Type) map[string]bool {
-	keys := map[string]bool{}
-	for typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-	}
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
-		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-		switch {
-		case tag == "-":
-		case f.Anonymous && tag == "":
-			for k := range jsonKeys(f.Type) {
-				keys[k] = true
-			}
-		case tag != "":
-			keys[tag] = true
-		}
-	}
-	return keys
-}
-
 func TestRegistry_SnapshotKeys(t *testing.T) {
 	reg := DefaultRegistry()
 	for entityType, columns := range entColumns {
 		r, _ := reg.ByType(entityType)
-		keys := jsonKeys(reflect.TypeOf(r.Snapshot(bareRow(t, r.EntName))))
+		keys := map[string]bool{}
+		for _, f := range r.Snapshot.fields {
+			keys[f.key] = true
+		}
 		var referenced []string
-		referenced = append(referenced, r.Drop...)
-		referenced = append(referenced, r.Redact...)
 		referenced = append(referenced, r.Label...)
 		referenced = append(referenced, r.Customer.columns()...)
 		for _, key := range referenced {
 			require.True(t, keys[key], "%s: snapshot has no key %q", entityType, key)
 		}
-		for _, key := range r.Drop {
+		for _, key := range r.Snapshot.drop {
 			require.Contains(t, columns, key, "%s: dropped key %q is not an ent column", entityType, key)
 		}
 	}
@@ -147,7 +126,9 @@ func TestRegistry_SnapshotBareRow(t *testing.T) {
 		r, _ := reg.ByType(entityType)
 		t.Run(string(entityType), func(t *testing.T) {
 			require.NotPanics(t, func() {
-				_, err := json.Marshal(r.Snapshot(bareRow(t, r.EntName)))
+				state, ok := r.Snapshot.state(bareRow(t, r.EntName))
+				require.True(t, ok)
+				_, err := json.Marshal(state)
 				require.NoError(t, err)
 			})
 		})

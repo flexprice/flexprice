@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 
-	entgo "entgo.io/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -12,10 +11,8 @@ import (
 type Registration struct {
 	EntityType types.SystemEntityType
 	EntName    string // ent mutation Type(), e.g. "Invoice"
-	// Snapshot converts a written row to its public-API shape.
-	Snapshot func(entgo.Value) any
-	// Drop removes snapshot keys; Redact replaces their values with "[redacted]".
-	Drop, Redact []string
+	// Snapshot converts a written row to its public-API shape; build it with snapshotOf.
+	Snapshot Snapshot
 	// Label lists snapshot keys whose first non-empty value names the entity.
 	Label []string
 	// Actions are the declared actions, highest priority first.
@@ -90,7 +87,7 @@ func NewRegistry(regs ...Registration) (*Registry, error) {
 	r := &Registry{byEnt: map[string]*Registration{}, byType: map[types.SystemEntityType]*Registration{}}
 	for i := range regs {
 		reg := &regs[i]
-		if reg.EntName == "" || reg.EntityType == "" || reg.Snapshot == nil {
+		if reg.EntName == "" || reg.EntityType == "" || reg.Snapshot.convert == nil {
 			return nil, fmt.Errorf("activity: incomplete registration for %q", reg.EntityType)
 		}
 		if _, dup := r.byEnt[reg.EntName]; dup {

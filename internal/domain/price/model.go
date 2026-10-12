@@ -140,7 +140,7 @@ type Price struct {
 	// subscription line items need to react to. Read by the plan-price sync;
 	// set by the database (DEFAULT nextval) on create and by the price
 	// repository on termination / compatibility-affecting edits.
-	Sequence int64 `db:"sequence" json:"sequence,omitempty"`
+	Sequence int64 `db:"sequence" json:"sequence,omitempty" activity:"drop"`
 
 	types.BaseModel
 }

@@ -15,13 +15,13 @@ type PaymentMethod struct {
 	// Gateway is the payment provider that holds the token (moyasar, stripe, etc.)
 	Gateway types.PaymentGatewayType `json:"gateway"`
 	// GatewayMethodID is the token or method identifier at the gateway (e.g. token_xxx in Moyasar)
-	GatewayMethodID string `json:"gateway_method_id"`
+	GatewayMethodID string `json:"gateway_method_id" activity:"redact"`
 	// PaymentMethodStatus indicates whether this method is usable
 	PaymentMethodStatus types.PaymentMethodStatus `json:"payment_method_status"`
 	// IsDefault indicates whether this is the customer's default payment method for the gateway
 	IsDefault bool `json:"is_default"`
 	// MethodDetails holds gateway-specific display metadata (brand, last4, expiry, etc.)
-	MethodDetails map[string]interface{} `json:"method_details,omitempty"`
+	MethodDetails map[string]interface{} `json:"method_details,omitempty" activity:"redact"`
 
 	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
