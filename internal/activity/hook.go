@@ -121,12 +121,13 @@ func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.O
 	}
 	return Entry{
 		ID: types.GenerateUUIDWithPrefix("act"), EntityType: r.EntityType, EntityID: entityID,
-		Action: actionFor(ctx, r, op, entityID), Actor: actor, State: state, TenantID: tenantID, EnvironmentID: envID,
+		Action: resolveAction(ctx, r, op, entityID), Actor: actor, State: state, TenantID: tenantID, EnvironmentID: envID,
 	}, true
 }
 
-func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID string) Action {
-	if declared, ok := declaredFor(ctx, r, entityID); ok {
+// resolveAction is the entry's action: the declared action for the entity, else created, updated or deleted by the write.
+func resolveAction(ctx context.Context, r *Registration, op entgo.Op, entityID string) Action {
+	if declared, ok := declaredAction(ctx, r, entityID); ok {
 		return declared
 	}
 	switch {

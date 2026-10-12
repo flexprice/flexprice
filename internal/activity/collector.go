@@ -92,7 +92,7 @@ func add(ctx context.Context, reg *Registry, sink Sink, e Entry) {
 
 func (c *collector) flush() {
 	c.mu.Lock()
-	entries := collapse(c.reg, c.entries)
+	entries := collapseByEntity(c.reg, c.entries)
 	c.entries = nil
 	c.mu.Unlock()
 
@@ -111,8 +111,8 @@ func (c *collector) flush() {
 	}
 }
 
-// collapse keeps one entry per entity: the winning action and actor, with the last state written.
-func collapse(reg *Registry, entries []Entry) []Entry {
+// collapseByEntity keeps one entry per entity: the winning action and actor, with the last state written.
+func collapseByEntity(reg *Registry, entries []Entry) []Entry {
 	type key struct {
 		t  types.SystemEntityType
 		id string

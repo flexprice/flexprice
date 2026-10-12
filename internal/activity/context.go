@@ -5,23 +5,23 @@ import (
 	"slices"
 )
 
-type declaredKey struct{}
+type declarationsKey struct{}
 
-type declaredAction struct {
+type declaration struct {
 	entityID string
 	action   Action
 }
 
 // WithAction declares the action for writes to one entity id in this context; declarations accumulate.
 func WithAction(ctx context.Context, entityID string, action Action) context.Context {
-	prev, _ := ctx.Value(declaredKey{}).([]declaredAction)
-	next := append(slices.Clone(prev), declaredAction{entityID: entityID, action: action})
-	return context.WithValue(ctx, declaredKey{}, next)
+	prev, _ := ctx.Value(declarationsKey{}).([]declaration)
+	next := append(slices.Clone(prev), declaration{entityID: entityID, action: action})
+	return context.WithValue(ctx, declarationsKey{}, next)
 }
 
-// declaredFor returns the highest-priority declared action of reg for entityID.
-func declaredFor(ctx context.Context, reg *Registration, entityID string) (Action, bool) {
-	declared, _ := ctx.Value(declaredKey{}).([]declaredAction)
+// declaredAction returns the highest-priority declared action of reg for entityID.
+func declaredAction(ctx context.Context, reg *Registration, entityID string) (Action, bool) {
+	declared, _ := ctx.Value(declarationsKey{}).([]declaration)
 	var best Action
 	for _, d := range declared {
 		if d.entityID == entityID && slices.Contains(reg.Actions, d.action) && reg.rank(d.action) > reg.rank(best) {

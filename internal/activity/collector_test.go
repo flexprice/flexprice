@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCollapse(t *testing.T) {
+func TestCollapseByEntity(t *testing.T) {
 	reg := Registrations()
 	entry := func(action Action, state string) Entry {
 		return Entry{EntityType: types.SystemEntityTypeInvoice, EntityID: "inv_1", Action: action, State: []byte(state), TenantID: "t", EnvironmentID: "e"}
@@ -27,7 +27,7 @@ func TestCollapse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := collapse(reg, tt.in)
+			got := collapseByEntity(reg, tt.in)
 			require.Len(t, got, 1)
 			require.Equal(t, tt.wantAction, got[0].Action)
 			require.Equal(t, tt.wantState, string(got[0].State))
