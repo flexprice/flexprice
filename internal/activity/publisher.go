@@ -8,16 +8,15 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-const (
-	publishAttempts = 3
-	publishBackoff  = 200 * time.Millisecond
-)
+// publishRetryWindow bounds the retries of one message; it stays under the shutdown timeout so Stop can drain.
+const publishRetryWindow = 5 * time.Second
 
 // Publisher hands committed batches to Kafka from a bounded buffer; it never blocks the caller.
 type Publisher struct {
@@ -91,14 +90,15 @@ func (p *Publisher) Stop(ctx context.Context) error {
 func (p *Publisher) send(b Batch) {
 	pub := p.cfg.Publisher
 	for _, m := range split(b, pub.MaxEntriesPerMessage, pub.MaxMessageBytes, pub.MaxSnapshotBytes) {
-		if err := p.publishWithRetry(m); err != nil {
+		if err := p.publish(m); err != nil {
 			countDropped(len(m.Events), "publish_failed")
 			p.log.Error(context.Background(), "failed to publish activity message", "error", err, "message_id", m.MessageID, "tenant_id", m.TenantID)
 		}
 	}
 }
 
-func (p *Publisher) publishWithRetry(m Message) error {
+// publish sends one message, retrying with exponential backoff because a failed publish has no other recovery.
+func (p *Publisher) publish(m Message) error {
 	if p.pubsub.PubSub == nil {
 		return errors.New("activity pubsub is not configured")
 	}
@@ -106,20 +106,15 @@ func (p *Publisher) publishWithRetry(m Message) error {
 	if err != nil {
 		return err
 	}
-	var lastErr error
-	for attempt := 0; attempt < publishAttempts; attempt++ {
-		if attempt > 0 {
-			time.Sleep(publishBackoff * time.Duration(attempt))
-		}
+	retry := backoff.NewExponentialBackOff()
+	retry.MaxElapsedTime = publishRetryWindow
+	return backoff.Retry(func() error {
 		msg := message.NewMessage(m.MessageID, payload)
 		msg.Metadata.Set("tenant_id", m.TenantID)
 		msg.Metadata.Set("environment_id", m.EnvironmentID)
 		msg.Metadata.Set("partition_key", m.MessageID)
-		if lastErr = p.pubsub.Publish(context.Background(), p.cfg.Topic, msg); lastErr == nil {
-			return nil
-		}
-	}
-	return lastErr
+		return p.pubsub.Publish(context.Background(), p.cfg.Topic, msg)
+	}, retry)
 }
 
 func countDropped(n int, reason string) {
