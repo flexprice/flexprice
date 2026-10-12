@@ -2,6 +2,7 @@ package quickbooks
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -84,7 +85,7 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 			Mark(ierr.ErrDatabase)
 	}
 
-	quickBooksCustomerID, err := s.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, flexpriceCustomer)
+	quickBooksCustomerID, err := s.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, flexpriceCustomer, flexInvoice.Currency)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get or create QuickBooks customer").
@@ -103,17 +104,40 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 			Mark(ierr.ErrValidation)
 	}
 
+	invoiceCurrency := strings.ToUpper(strings.TrimSpace(flexInvoice.Currency))
+	if invoiceCurrency == "" {
+		return nil, ierr.NewError("invoice currency is empty").
+			WithHint("FlexPrice invoices must have a currency before syncing to QuickBooks").
+			Mark(ierr.ErrValidation)
+	}
+
 	invoiceReq := &InvoiceCreateRequest{
 		CustomerRef: AccountRef{
 			Value: quickBooksCustomerID,
 		},
-		Line: lineItems,
+		Line:        lineItems,
+		CurrencyRef: &AccountRef{Value: invoiceCurrency},
 	}
 
 	// Set due date if available (format: YYYY-MM-DD)
 	if flexInvoice.DueDate != nil {
 		dueDateStr := flexInvoice.DueDate.Format("2006-01-02")
 		invoiceReq.DueDate = &dueDateStr
+	}
+
+	// Step 4: Resolve exchange rate from QuickBooks for accurate General Ledger valuation
+	exchangeRate, err := s.Client.GetExchangeRate(ctx, invoiceCurrency)
+	if err != nil {
+		s.Logger.Warn(ctx, "failed to resolve QuickBooks exchange rate, continuing without explicit rate",
+			"invoice_id", flexInvoice.ID,
+			"currency", invoiceCurrency,
+			"error", err)
+	} else if exchangeRate != nil && !exchangeRate.IsZero() {
+		invoiceReq.ExchangeRate = exchangeRate
+		s.Logger.Info(ctx, "resolved QuickBooks exchange rate for invoice",
+			"invoice_id", flexInvoice.ID,
+			"currency", invoiceCurrency,
+			"exchange_rate", exchangeRate.String())
 	}
 
 	quickBooksInvoice, err := s.Client.CreateInvoice(ctx, invoiceReq)

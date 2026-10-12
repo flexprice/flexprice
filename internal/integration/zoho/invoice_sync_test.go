@@ -48,7 +48,11 @@ func (f *fakeSyncZohoClient) CreateCustomerPayment(_ context.Context, req *Custo
 }
 
 func (f *fakeSyncZohoClient) ResolveInvoiceCurrency(_ context.Context, invoiceCurrency string) (string, float64, error) {
-	return invoiceCurrency, 1, nil
+	return "cur_" + invoiceCurrency, 1, nil
+}
+
+func (f *fakeSyncZohoClient) CurrencyIDFor(_ context.Context, currencyCode string) (string, error) {
+	return "cur_" + currencyCode, nil
 }
 
 func (f *fakeSyncZohoClient) GetZohoBooksSyncConfig(_ context.Context) (*types.SyncConfig, error) {
@@ -105,7 +109,7 @@ func (f *fakeSyncInvoiceRepo) Update(_ context.Context, _ *invoice.Invoice) erro
 
 type fakeSyncCustomerSvc struct{}
 
-func (fakeSyncCustomerSvc) GetOrCreateZohoCustomer(_ context.Context, _ *customer.Customer) (string, error) {
+func (fakeSyncCustomerSvc) GetOrCreateZohoCustomer(_ context.Context, _ *customer.Customer, _ string) (string, error) {
 	return "zoho_cust_1", nil
 }
 

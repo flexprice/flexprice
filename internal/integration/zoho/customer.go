@@ -12,7 +12,10 @@ import (
 )
 
 type ZohoCustomerService interface {
-	GetOrCreateZohoCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (string, error)
+	// GetOrCreateZohoCustomer resolves the Zoho contact for a customer, creating it in
+	// currencyCode when it does not exist. A contact's currency is immutable in Zoho once it
+	// has transactions, so it is only ever set here.
+	GetOrCreateZohoCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer, currencyCode string) (string, error)
 	// SyncCustomerUpdate pushes a customer's current details onto its Zoho contact.
 	// It is a no-op when the customer has never been synced — contacts are created
 	// lazily on first invoice, not on customer update.
@@ -35,7 +38,7 @@ func NewCustomerService(client ZohoClient, customerRepo customerDomain.Repositor
 	}
 }
 
-func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (string, error) {
+func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer, currencyCode string) (string, error) {
 	mapping, err := s.findMapping(ctx, flexpriceCustomer.ID)
 	if err == nil && mapping != nil {
 		return mapping.ProviderEntityID, nil
@@ -49,7 +52,21 @@ func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexprice
 		}
 	}
 
-	contact, err := s.client.CreateContact(ctx, buildContactRequest(flexpriceCustomer))
+	// Resolve before creating: a contact created without a currency is permanently locked to
+	// the organization's base currency, which silently reinterprets every invoice sent to it.
+	currencyID, err := s.client.CurrencyIDFor(ctx, currencyCode)
+	if err != nil {
+		s.logger.Error(ctx, "failed to resolve Zoho currency for new contact",
+			"error", err,
+			"customer_id", flexpriceCustomer.ID,
+			"currency", currencyCode)
+		return "", err
+	}
+
+	req := buildContactRequest(flexpriceCustomer)
+	req.CurrencyID = currencyID
+
+	contact, err := s.client.CreateContact(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -57,6 +74,12 @@ func (s *CustomerService) GetOrCreateZohoCustomer(ctx context.Context, flexprice
 	if contact == nil || contact.ContactID == "" {
 		return "", ierr.NewError("invalid Zoho contact response").Mark(ierr.ErrInternal)
 	}
+
+	s.logger.Info(ctx, "created Zoho contact",
+		"customer_id", flexpriceCustomer.ID,
+		"zoho_contact_id", contact.ContactID,
+		"currency", currencyCode,
+		"currency_id", currencyID)
 
 	_ = s.createCustomerMapping(ctx, flexpriceCustomer, contact)
 	return contact.ContactID, nil

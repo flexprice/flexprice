@@ -2,6 +2,7 @@ package quickbooks
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,7 +14,10 @@ import (
 
 // QuickBooksCustomerService defines the interface for QuickBooks customer operations
 type QuickBooksCustomerService interface {
-	GetOrCreateQuickBooksCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (string, error)
+	// GetOrCreateQuickBooksCustomer resolves the QuickBooks customer, creating it in currencyCode
+	// when it does not exist. A customer's currency is immutable in QuickBooks once it has
+	// transactions, so it is only ever set here.
+	GetOrCreateQuickBooksCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer, currencyCode string) (string, error)
 	GetQuickBooksCustomerID(ctx context.Context, flexpriceCustomerID string) (string, error)
 }
 
@@ -72,7 +76,7 @@ func (s *CustomerService) GetQuickBooksCustomerID(ctx context.Context, flexprice
 // 2. If not mapped, tries to find existing customer in QuickBooks by email
 // 3. If not found, creates a new customer in QuickBooks
 // Returns the QuickBooks customer ID for use in invoice creation.
-func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (string, error) {
+func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, flexpriceCustomer *customerDomain.Customer, currencyCode string) (string, error) {
 	// Check if customer already has a mapping in our database
 	quickBooksCustomerID, err := s.GetQuickBooksCustomerID(ctx, flexpriceCustomer.ID)
 	if err == nil && quickBooksCustomerID != "" {
@@ -104,7 +108,7 @@ func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, fle
 	}
 
 	// Customer doesn't exist in QuickBooks, create new one
-	customerResp, err := s.SyncCustomerToQuickBooks(ctx, flexpriceCustomer)
+	customerResp, err := s.SyncCustomerToQuickBooks(ctx, flexpriceCustomer, currencyCode)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +120,7 @@ func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, fle
 // Creates a customer in QuickBooks with DisplayName, email, and billing address.
 // If customer creation fails (e.g., name already exists), attempts to find existing customer by name
 // and creates a mapping for it to avoid duplicate creation attempts.
-func (s *CustomerService) SyncCustomerToQuickBooks(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (*CustomerResponse, error) {
+func (s *CustomerService) SyncCustomerToQuickBooks(ctx context.Context, flexpriceCustomer *customerDomain.Customer, currencyCode string) (*CustomerResponse, error) {
 	displayName := flexpriceCustomer.Name
 	if displayName == "" {
 		return nil, ierr.NewError("customer name is required").
@@ -124,8 +128,21 @@ func (s *CustomerService) SyncCustomerToQuickBooks(ctx context.Context, flexpric
 			Mark(ierr.ErrValidation)
 	}
 
+	// A customer created without a currency is permanently locked to the company's home
+	// currency, which silently reinterprets every invoice sent to it.
+	currency := strings.ToUpper(strings.TrimSpace(currencyCode))
+	if currency == "" {
+		return nil, ierr.NewError("currency is required to create a QuickBooks customer").
+			WithHint("A QuickBooks customer's currency is immutable once it has transactions").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": flexpriceCustomer.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	createReq := &CustomerCreateRequest{
 		DisplayName: displayName,
+		CurrencyRef: &AccountRef{Value: currency},
 	}
 
 	// Add email if available - used for customer lookup and communication

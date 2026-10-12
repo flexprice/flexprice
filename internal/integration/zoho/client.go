@@ -33,8 +33,11 @@ type ZohoClient interface {
 	SubmitInvoiceForApproval(ctx context.Context, zohoInvoiceID string) error
 	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
 	SearchItemByName(ctx context.Context, name string) (*ItemResponse, error)
-	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
-	ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (currencyCode string, exchangeRate float64, err error)
+	// ResolveInvoiceCurrency returns currency_id and exchange_rate for Zoho create-invoice.
+	// Zoho identifies a transaction's currency by id; the code is a response-only field.
+	ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (currencyID string, exchangeRate float64, err error)
+	// CurrencyIDFor returns the Zoho currency_id for a currency code, for stamping a contact.
+	CurrencyIDFor(ctx context.Context, currencyCode string) (string, error)
 	// GetZohoBooksWebhookConfig loads the published connection and returns the decrypted webhook signing secret (empty if unset).
 	GetZohoBooksWebhookConfig(ctx context.Context) (*connection.Connection, string, error)
 	// ListTaxes returns a paginated list of taxes from Zoho Books settings.
@@ -221,8 +224,9 @@ func (c *Client) ListTaxExemptions(ctx context.Context) ([]TaxExemption, error) 
 }
 
 // ResolveInvoiceCurrency maps a FlexPrice invoice currency to Zoho Books invoice fields.
-// If the invoice currency matches the Zoho organization base currency, exchange_rate is 1.
-// Otherwise the rate comes from Zoho Settings → Currencies (invoice currency must be enabled there).
+// Returns the currency_id Zoho identifies the currency by, and the exchange_rate it uses to
+// translate the invoice into the organization's base currency for the general ledger.
+// Exchange rate is 1 when the invoice is already in the base currency.
 func (c *Client) ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (string, float64, error) {
 	code := strings.TrimSpace(strings.ToUpper(invoiceCurrency))
 	if code == "" {
@@ -242,14 +246,22 @@ func (c *Client) ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency str
 			Mark(ierr.ErrInternal)
 	}
 
-	if code == base {
-		return code, 1, nil
-	}
-
-	rate, err := c.getBooksExchangeRate(ctx, code)
+	currencyID, rate, err := c.getBooksCurrency(ctx, code)
 	if err != nil {
 		return "", 0, err
 	}
+	if currencyID == "" {
+		return "", 0, ierr.NewErrorf("Zoho Books returned no currency_id for %s", code).
+			WithHintf("Check that %s is configured under Zoho Books → Settings → Currencies", code).
+			Mark(ierr.ErrInternal)
+	}
+
+	// An invoice already in the base currency needs no translation, whatever the
+	// settings table happens to hold for it.
+	if code == base {
+		return currencyID, 1, nil
+	}
+
 	if rate <= 0 {
 		err := ierr.NewError("invalid Zoho exchange rate for invoice currency").
 			WithHintf("Set a positive exchange rate for %s under Zoho Books → Settings → Currencies", code).
@@ -263,9 +275,10 @@ func (c *Client) ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency str
 	}
 	c.logger.Info(ctx, "resolved Zoho exchange rate for invoice currency",
 		"invoice_currency", code,
+		"currency_id", currencyID,
 		"base_currency", base,
 		"exchange_rate", rate)
-	return code, rate, nil
+	return currencyID, rate, nil
 }
 
 func (c *Client) getOrganizationBaseCurrency(ctx context.Context) (string, error) {
@@ -293,29 +306,52 @@ func (c *Client) getOrganizationBaseCurrency(ctx context.Context) (string, error
 	return resp.Organization.CurrencyCode, nil
 }
 
-func (c *Client) getBooksExchangeRate(ctx context.Context, invoiceCurrency string) (float64, error) {
+// getBooksCurrency looks up a currency enabled in the Zoho org, returning both its id and
+// its configured rate against the base currency. One call serves the contact and invoice paths.
+func (c *Client) getBooksCurrency(ctx context.Context, currencyCode string) (string, float64, error) {
 	var resp struct {
 		Currencies []struct {
+			CurrencyID   string  `json:"currency_id"`
 			CurrencyCode string  `json:"currency_code"`
 			ExchangeRate float64 `json:"exchange_rate"`
 		} `json:"currencies"`
 	}
 	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/currencies", nil, nil, &resp); err != nil {
-		return 0, err
+		return "", 0, err
 	}
-	want := strings.TrimSpace(strings.ToUpper(invoiceCurrency))
+	want := strings.TrimSpace(strings.ToUpper(currencyCode))
 	for _, cur := range resp.Currencies {
 		if strings.EqualFold(strings.TrimSpace(cur.CurrencyCode), want) {
-			return cur.ExchangeRate, nil
+			return cur.CurrencyID, cur.ExchangeRate, nil
 		}
 	}
 	available := make([]string, 0, len(resp.Currencies))
 	for _, cur := range resp.Currencies {
 		available = append(available, cur.CurrencyCode)
 	}
-	return 0, ierr.NewError(fmt.Sprintf("currency %s is not enabled in Zoho Books, currencies available: %v", want, available)).
+	return "", 0, ierr.NewError(fmt.Sprintf("currency %s is not enabled in Zoho Books, currencies available: %v", want, available)).
 		WithHint("Add it under Zoho Books → Settings → Currencies with an exchange rate vs your base currency, then retry.").
 		Mark(ierr.ErrValidation)
+}
+
+// CurrencyIDFor returns the Zoho currency_id for a currency code.
+func (c *Client) CurrencyIDFor(ctx context.Context, currencyCode string) (string, error) {
+	code := strings.TrimSpace(strings.ToUpper(currencyCode))
+	if code == "" {
+		return "", ierr.NewError("currency code is empty").
+			WithHint("A currency is required before creating a Zoho Books contact").
+			Mark(ierr.ErrValidation)
+	}
+	id, _, err := c.getBooksCurrency(ctx, code)
+	if err != nil {
+		return "", err
+	}
+	if id == "" {
+		return "", ierr.NewErrorf("Zoho Books returned no currency_id for %s", code).
+			WithHintf("Check that %s is configured under Zoho Books → Settings → Currencies", code).
+			Mark(ierr.ErrInternal)
+	}
+	return id, nil
 }
 
 func (c *Client) doBooksRequest(

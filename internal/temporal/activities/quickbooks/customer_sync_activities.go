@@ -54,7 +54,20 @@ func (a *QuickBooksCustomerSyncActivities) SyncCustomerToQuickBooks(ctx context.
 		return err
 	}
 
-	if _, err := qbIntegration.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, custResp.Customer); err != nil {
+	// A QuickBooks customer's currency is immutable once it has transactions, and a customer
+	// event carries no currency. Creating one here would lock it to the company's home currency
+	// and silently reinterpret every later invoice, so creation is deferred to the first
+	// invoice sync, which knows the currency. Matches the Zoho contact lifecycle.
+	if input.Currency == "" {
+		a.logger.Info(ctx, "SyncCustomerToQuickBooks deferred: no currency known, customer will be created on first invoice sync",
+			"customer_id", input.CustomerID,
+			"tenant_id", input.TenantID,
+			"environment_id", input.EnvironmentID,
+		)
+		return nil
+	}
+
+	if _, err := qbIntegration.CustomerSvc.GetOrCreateQuickBooksCustomer(ctx, custResp.Customer, input.Currency); err != nil {
 		a.logger.Error(ctx, "SyncCustomerToQuickBooks activity failed",
 			"error", err,
 			"customer_id", input.CustomerID,
