@@ -12,65 +12,12 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/config"
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
-	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/metrics"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
-
-// CustomerResolver returns the customer id of a parent entity (an invoice or a subscription).
-type CustomerResolver interface {
-	CustomerID(ctx context.Context, t types.SystemEntityType, id string) (string, error)
-}
-
-type repoCustomerResolver struct {
-	invoices      invoice.Repository
-	subscriptions subscription.Repository
-}
-
-func NewCustomerResolver(invoices invoice.Repository, subscriptions subscription.Repository) CustomerResolver {
-	return &repoCustomerResolver{invoices: invoices, subscriptions: subscriptions}
-}
-
-func (r *repoCustomerResolver) CustomerID(ctx context.Context, t types.SystemEntityType, id string) (string, error) {
-	switch t {
-	case types.SystemEntityTypeInvoice:
-		inv, err := r.invoices.Get(ctx, id)
-		if err != nil {
-			return "", err
-		}
-		return inv.CustomerID, nil
-	case types.SystemEntityTypeSubscription:
-		sub, err := r.subscriptions.Get(ctx, id)
-		if ierr.IsNotFound(err) {
-			sub, err = r.archivedSubscription(ctx, id)
-		}
-		if err != nil {
-			return "", err
-		}
-		return sub.CustomerID, nil
-	}
-	return "", fmt.Errorf("activity: no customer lookup for parent %q", t)
-}
-
-// archivedSubscription reads a deleted subscription, which Get does not return.
-func (r *repoCustomerResolver) archivedSubscription(ctx context.Context, id string) (*subscription.Subscription, error) {
-	filter := types.NewSubscriptionFilter()
-	filter.SubscriptionIDs = []string{id}
-	filter.QueryFilter.Status = lo.ToPtr(types.StatusArchived)
-	subs, err := r.subscriptions.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	if len(subs) == 0 {
-		return nil, ierr.NewErrorf("subscription %s not found", id).Mark(ierr.ErrNotFound)
-	}
-	return subs[0], nil
-}
 
 // Consumer turns activity messages into ClickHouse rows.
 type Consumer struct {
@@ -149,32 +96,6 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 		}
 	}
 	return errors.Join(unresolved...)
-}
-
-// resolveCustomer finds the customer id an entry rolls up to; "" when the ref points at no customer.
-func resolveCustomer(ctx context.Context, ref CustomerRef, state map[string]any, customers CustomerResolver) (string, error) {
-	if ref.whenCol != "" && stringValue(state, ref.whenCol) != ref.whenVal {
-		return "", nil
-	}
-	switch ref.kind {
-	case refSelf:
-		return stringValue(state, "id"), nil
-	case refField:
-		return stringValue(state, ref.column), nil
-	case refParent:
-		parentID := stringValue(state, ref.column)
-		if parentID == "" {
-			return "", nil
-		}
-		return customers.CustomerID(ctx, ref.parent, parentID)
-	case refFirstOf:
-		for _, sub := range ref.refs {
-			if sub.whenCol == "" || stringValue(state, sub.whenCol) == sub.whenVal {
-				return resolveCustomer(ctx, sub, state, customers)
-			}
-		}
-	}
-	return "", nil
 }
 
 // label is the first non-empty label field of the entity's state.

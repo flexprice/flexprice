@@ -37,63 +37,6 @@ func (r *Registration) rank(a Action) int {
 	return 0
 }
 
-type refKind int
-
-const (
-	refNone refKind = iota
-	refSelf
-	refField
-	refParent
-	refFirstOf
-)
-
-// CustomerRef says where an entry's customer is found; only the consumer resolves it.
-type CustomerRef struct {
-	kind    refKind
-	column  string
-	parent  types.SystemEntityType
-	whenCol string
-	whenVal string
-	refs    []CustomerRef
-}
-
-// Self marks the row itself as the customer.
-func Self() CustomerRef { return CustomerRef{kind: refSelf} }
-
-// Field reads the customer id from a snapshot column.
-func Field(col string) CustomerRef { return CustomerRef{kind: refField, column: col} }
-
-// Parent reads a parent entity id from a snapshot column; the consumer looks up the parent's customer.
-func Parent(t types.SystemEntityType, col string) CustomerRef {
-	return CustomerRef{kind: refParent, parent: t, column: col}
-}
-
-func None() CustomerRef { return CustomerRef{} }
-
-// FirstOf takes the first ref whose condition matches.
-func FirstOf(refs ...CustomerRef) CustomerRef { return CustomerRef{kind: refFirstOf, refs: refs} }
-
-// When makes the ref apply only when the snapshot column equals val.
-func (r CustomerRef) When(col, val string) CustomerRef {
-	r.whenCol, r.whenVal = col, val
-	return r
-}
-
-// columns lists every snapshot column the ref reads.
-func (r CustomerRef) columns() []string {
-	var cols []string
-	if r.column != "" {
-		cols = append(cols, r.column)
-	}
-	if r.whenCol != "" {
-		cols = append(cols, r.whenCol)
-	}
-	for _, sub := range r.refs {
-		cols = append(cols, sub.columns()...)
-	}
-	return cols
-}
-
 // Registry holds the registrations, indexed by ent name and entity type.
 type Registry struct {
 	byEnt  map[string]*Registration
