@@ -786,9 +786,7 @@ func registerRouterHandlers(
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		meterUsageTrackingSvc.RegisterBulkHandler(router, cfg)
-		if cfg.Activity.Enabled {
-			activityConsumer.RegisterHandler(router, cfg)
-		}
+		activityConsumer.RegisterHandler(router, cfg)
 	}
 }
 

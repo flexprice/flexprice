@@ -86,9 +86,23 @@ func NewConsumer(reg *Registry, repo domainActivity.Repository, customers Custom
 }
 
 func (c *Consumer) RegisterHandler(r *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.Activity.Enabled {
+		c.log.Info(context.Background(), "activity log handler disabled by configuration")
+		return
+	}
+
 	throttle := middleware.NewThrottle(cfg.Activity.RateLimit, time.Second)
-	r.AddNoPublishHandler("activity_log_consumer", cfg.Activity.Topic, cfg.Activity.TopicDLQ, c.ps, c.process, throttle.Middleware)
+	r.AddNoPublishHandler(activityHandlerName, cfg.Activity.Topic, cfg.Activity.TopicDLQ, c.ps, c.process, throttle.Middleware)
+
+	c.log.Info(context.Background(), "registered activity log handler",
+		"handler_name", activityHandlerName,
+		"topic", cfg.Activity.Topic,
+		"consumer_group", cfg.Activity.ConsumerGroup,
+		"rate_limit", cfg.Activity.RateLimit,
+	)
 }
+
+const activityHandlerName = "activity_log_handler"
 
 func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 	var m Message
