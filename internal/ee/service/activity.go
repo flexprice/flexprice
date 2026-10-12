@@ -15,6 +15,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/oklog/ulid/v2"
+	"github.com/samber/lo"
 )
 
 const (
@@ -161,12 +162,13 @@ func (s *activityService) validateFilters(req *dto.ListActivityRequest) error {
 		}
 	}
 	for _, action := range req.Actions {
-		if s.registry.IsAction(action) {
+		if s.registry.IsAction(activity.Action(action)) {
 			continue
 		}
 		entity, _, _ := strings.Cut(action, ".")
 		if allowed := s.registry.AllowedActions(types.SystemEntityType(entity)); len(allowed) > 0 {
-			return activityValidation("Unknown action %q. Allowed %s actions: %s.", action, entity, strings.Join(allowed, ", "))
+			names := lo.Map(allowed, func(a activity.Action, _ int) string { return string(a) })
+			return activityValidation("Unknown action %q. Allowed %s actions: %s.", action, entity, strings.Join(names, ", "))
 		}
 		return activityValidation("Unknown action %q. Actions are named <entity>.<verb>, for example invoice.voided.", action)
 	}

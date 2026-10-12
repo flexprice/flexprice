@@ -70,7 +70,7 @@ func split(b Batch, maxEntries, maxBytes, maxSnapshot int) []Message {
 			metrics.RecordCounter(context.Background(), metrics.ActivitySnapshotTruncated, 1, metrics.L(metrics.KeyEntity, string(e.EntityType)))
 		}
 		event := MessageEvent{
-			ID: e.ID, EntityType: string(e.EntityType), EntityID: e.EntityID, Action: e.Action,
+			ID: e.ID, EntityType: string(e.EntityType), EntityID: e.EntityID, Action: string(e.Action),
 			Actor: MessageActor{Type: string(e.Actor.Type), ID: e.Actor.ID, Label: e.Actor.Label}, State: state,
 		}
 		size := encodedSize(event) + 1

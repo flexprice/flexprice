@@ -16,7 +16,7 @@ type Registration struct {
 	// Label lists snapshot keys whose first non-empty value names the entity.
 	Label []string
 	// Actions are the declared actions, highest priority first.
-	Actions  []string
+	Actions  []Action
 	Customer CustomerRef
 }
 
@@ -113,13 +113,13 @@ func (r *Registry) ByType(t types.SystemEntityType) (*Registration, bool) {
 }
 
 // AllowedActions is created, updated, deleted plus the declared actions of t.
-func (r *Registry) AllowedActions(t types.SystemEntityType) []string {
+func (r *Registry) AllowedActions(t types.SystemEntityType) []Action {
 	reg, ok := r.byType[t]
 	if !ok {
 		return nil
 	}
 	prefix := string(t) + "."
-	allowed := []string{prefix + "created", prefix + "updated", prefix + "deleted"}
+	allowed := []Action{Action(prefix + "created"), Action(prefix + "updated"), Action(prefix + "deleted")}
 	for _, action := range reg.Actions {
 		if !slices.Contains(allowed, action) {
 			allowed = append(allowed, action)
@@ -129,7 +129,7 @@ func (r *Registry) AllowedActions(t types.SystemEntityType) []string {
 }
 
 // IsAction reports whether action is valid for any registered entity.
-func (r *Registry) IsAction(action string) bool {
+func (r *Registry) IsAction(action Action) bool {
 	for t := range r.byType {
 		for _, a := range r.AllowedActions(t) {
 			if a == action {

@@ -15,7 +15,7 @@ type Entry struct {
 	ID            string
 	EntityType    types.SystemEntityType
 	EntityID      string
-	Action        string
+	Action        Action
 	Actor         types.Actor
 	State         json.RawMessage
 	TenantID      string
@@ -113,8 +113,8 @@ func (c *collector) flush() {
 }
 
 // rank orders actions for collapse: deleted, created, declared by priority, then updated.
-func rank(reg *Registration, action string) (tier, priority int) {
-	_, verb, _ := strings.Cut(action, ".")
+func rank(reg *Registration, action Action) (tier, priority int) {
+	_, verb, _ := strings.Cut(string(action), ".")
 	switch verb {
 	case "deleted":
 		return 3, 0

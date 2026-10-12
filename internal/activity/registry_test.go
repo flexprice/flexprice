@@ -78,20 +78,20 @@ func declaredConstants(t *testing.T) []string {
 func TestRegistry_ActionNames(t *testing.T) {
 	reg := Registrations()
 	shape := regexp.MustCompile(`^[a-z_]+\.[a-z_]+$`)
-	seen := map[string]bool{}
+	seen := map[Action]bool{}
 	var declared []string
 	for entityType := range entColumns {
 		r, ok := reg.ByType(entityType)
 		require.True(t, ok, entityType)
 		for _, action := range r.Actions {
 			require.Regexp(t, shape, action)
-			prefix, verb, _ := strings.Cut(action, ".")
+			prefix, verb, _ := strings.Cut(string(action), ".")
 			require.Equal(t, string(entityType), prefix, action)
 			pastTense := slices.ContainsFunc(strings.Split(verb, "_"), func(w string) bool { return strings.HasSuffix(w, "ed") || w == "paid" })
 			require.True(t, pastTense, "%s is not past tense", action)
 			require.False(t, seen[action], "duplicate %s", action)
 			seen[action] = true
-			declared = append(declared, action)
+			declared = append(declared, string(action))
 		}
 	}
 	slices.Sort(declared)

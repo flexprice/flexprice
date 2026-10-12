@@ -1,75 +1,78 @@
 package activity
 
+// Action names what happened to an entity, as <entity>.<verb>.
+type Action string
+
 // Declared actions, one block per entity. created, updated and deleted come from the hook and are not listed.
 
 // Customer
 const (
-	CustomerArchived = "customer.archived"
+	CustomerArchived Action = "customer.archived"
 )
 
 // Subscription
 const (
-	SubscriptionArchived    = "subscription.archived"
-	SubscriptionCancelled   = "subscription.cancelled"
-	SubscriptionPlanChanged = "subscription.plan_changed"
-	SubscriptionActivated   = "subscription.activated"
+	SubscriptionArchived    Action = "subscription.archived"
+	SubscriptionCancelled   Action = "subscription.cancelled"
+	SubscriptionPlanChanged Action = "subscription.plan_changed"
+	SubscriptionActivated   Action = "subscription.activated"
 )
 
 // Invoice
 const (
-	InvoiceDeleted   = "invoice.deleted"
-	InvoiceVoided    = "invoice.voided"
-	InvoiceFinalized = "invoice.finalized"
-	InvoiceRefunded  = "invoice.refunded"
-	InvoicePaid      = "invoice.paid"
+	InvoiceDeleted   Action = "invoice.deleted"
+	InvoiceVoided    Action = "invoice.voided"
+	InvoiceFinalized Action = "invoice.finalized"
+	InvoiceRefunded  Action = "invoice.refunded"
+	InvoicePaid      Action = "invoice.paid"
 )
 
 // CreditNote
 const (
-	CreditNoteVoided    = "credit_note.voided"
-	CreditNoteFinalized = "credit_note.finalized"
+	CreditNoteVoided    Action = "credit_note.voided"
+	CreditNoteFinalized Action = "credit_note.finalized"
 )
 
 // Wallet
 const (
-	WalletTerminated = "wallet.terminated"
-	WalletToppedUp   = "wallet.topped_up"
+	WalletTerminated Action = "wallet.terminated"
+	WalletToppedUp   Action = "wallet.topped_up"
 )
 
 // Payment
 const (
-	PaymentArchived  = "payment.archived"
-	PaymentVoided    = "payment.voided"
-	PaymentRefunded  = "payment.refunded"
-	PaymentFailed    = "payment.failed"
-	PaymentSucceeded = "payment.succeeded"
+	PaymentArchived  Action = "payment.archived"
+	PaymentVoided    Action = "payment.voided"
+	PaymentRefunded  Action = "payment.refunded"
+	PaymentFailed    Action = "payment.failed"
+	PaymentSucceeded Action = "payment.succeeded"
 )
 
 // Refund
 const (
-	RefundFailed    = "refund.failed"
-	RefundSucceeded = "refund.succeeded"
+	RefundFailed    Action = "refund.failed"
+	RefundSucceeded Action = "refund.succeeded"
 )
 
 // CheckoutSession
 const (
-	CheckoutSessionArchived  = "checkout_session.archived"
-	CheckoutSessionCompleted = "checkout_session.completed"
-	CheckoutSessionFailed    = "checkout_session.failed"
-	CheckoutSessionExpired   = "checkout_session.expired"
+	CheckoutSessionArchived  Action = "checkout_session.archived"
+	CheckoutSessionCompleted Action = "checkout_session.completed"
+	CheckoutSessionFailed    Action = "checkout_session.failed"
+	CheckoutSessionExpired   Action = "checkout_session.expired"
 )
 
 // Plan
 const (
-	PlanArchived = "plan.archived"
+	PlanArchived Action = "plan.archived"
 )
 
 // Price
 const (
-	PriceTerminated = "price.terminated"
+	PriceTerminated Action = "price.terminated"
 )
 
 // Feature
 const (
-	FeatureArchived = "feature.archived"
+	FeatureArchived Action = "feature.archived"
 )

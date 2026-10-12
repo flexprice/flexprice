@@ -10,13 +10,13 @@ import (
 
 func TestCollapse(t *testing.T) {
 	reg := Registrations()
-	entry := func(action, state string) Entry {
+	entry := func(action Action, state string) Entry {
 		return Entry{EntityType: types.SystemEntityTypeInvoice, EntityID: "inv_1", Action: action, State: []byte(state), TenantID: "t", EnvironmentID: "e"}
 	}
 	tests := []struct {
 		name       string
 		in         []Entry
-		wantAction string
+		wantAction Action
 		wantState  string
 	}{
 		{"created then updated", []Entry{entry("invoice.created", "1"), entry("invoice.updated", "2")}, "invoice.created", "2"},

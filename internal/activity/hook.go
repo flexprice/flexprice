@@ -125,18 +125,18 @@ func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.O
 	}, true
 }
 
-func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID string) string {
+func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID string) Action {
 	if declared, ok := declaredFor(ctx, r, entityID); ok {
 		return declared
 	}
 	prefix := string(r.EntityType) + "."
 	switch {
 	case op.Is(entgo.OpCreate):
-		return prefix + "created"
+		return Action(prefix + "created")
 	case op.Is(entgo.OpDelete | entgo.OpDeleteOne):
-		return prefix + "deleted"
+		return Action(prefix + "deleted")
 	}
-	return prefix + "updated"
+	return Action(prefix + "updated")
 }
 
 func stringField(fields map[string]any, key string) string {

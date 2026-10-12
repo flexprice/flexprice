@@ -59,14 +59,14 @@ func TestHook_DeclaredActionWins(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := WithAction(userCtx(), "inv_1", InvoiceVoided)
 	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t_row"))
-	require.Equal(t, "invoice.voided", sink.entries()[0].Action)
+	require.Equal(t, InvoiceVoided, sink.entries()[0].Action)
 }
 
 func TestHook_DeclaredActionOtherIDIgnored(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := WithAction(userCtx(), "inv_A", InvoiceVoided)
 	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_B"), invoiceRow("inv_B", "t_row"))
-	require.Equal(t, "invoice.updated", sink.entries()[0].Action)
+	require.Equal(t, Action("invoice.updated"), sink.entries()[0].Action)
 }
 
 func TestHook_DroppedFieldsOnlyUpdateSkipped(t *testing.T) {

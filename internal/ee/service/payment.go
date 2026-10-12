@@ -449,7 +449,7 @@ func paymentProviderLabel(p *payment.Payment) string {
 }
 
 // paymentStatusAction maps a payment status to its declared activity action; pending and processing stay "updated".
-func paymentStatusAction(status types.PaymentStatus) string {
+func paymentStatusAction(status types.PaymentStatus) activity.Action {
 	switch status {
 	case types.PaymentStatusSucceeded, types.PaymentStatusOverpaid:
 		return activity.PaymentSucceeded
