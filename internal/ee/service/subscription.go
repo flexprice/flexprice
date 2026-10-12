@@ -729,7 +729,6 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			Mark(ierr.ErrValidation)
 	}
 
-	ctx = activity.WithAction(ctx, subID, activity.SubscriptionActivated)
 	// Recalculate all dates with new start date
 	newStartDate := req.StartDate.UTC()
 	hasCustomAnchor := sub.BillingCycle == types.BillingCycleAnniversary && !sub.BillingAnchor.Equal(sub.StartDate)
@@ -883,6 +882,9 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 
 		if sub.SubscriptionStatus != targetStatus {
 			sub.SubscriptionStatus = targetStatus
+			if targetStatus == types.SubscriptionStatusActive || targetStatus == types.SubscriptionStatusTrialing {
+				ctx = activity.WithAction(ctx, sub.ID, activity.SubscriptionActivated)
+			}
 			err = s.SubRepo.Update(ctx, sub)
 			if err != nil {
 				return err
