@@ -229,9 +229,9 @@ func main() {
 	opts = append(opts,
 		fx.Provide(
 			provideActivityPubSub,
-			activity.DefaultRegistry,
+			activity.Registrations,
 			activity.NewPublisher,
-			activity.NewParentLookup,
+			activity.NewCustomerResolver,
 			activity.NewConsumer,
 		),
 	)

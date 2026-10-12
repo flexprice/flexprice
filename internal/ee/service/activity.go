@@ -42,7 +42,7 @@ type activityService struct {
 }
 
 func NewActivityService(params ServiceParams) ActivityService {
-	return &activityService{ServiceParams: params, registry: activity.DefaultRegistry()}
+	return &activityService{ServiceParams: params, registry: activity.Registrations()}
 }
 
 func activityValidation(format string, args ...any) error {

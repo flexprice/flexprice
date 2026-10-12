@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,32 +19,36 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
-// ParentLookup returns the customer id of a parent entity (an invoice or a subscription).
-type ParentLookup interface {
+// CustomerResolver returns the customer id of a parent entity (an invoice or a subscription).
+type CustomerResolver interface {
 	CustomerID(ctx context.Context, t types.SystemEntityType, id string) (string, error)
 }
 
-type repoLookup struct {
+type repoCustomerResolver struct {
 	invoices      invoice.Repository
 	subscriptions subscription.Repository
 }
 
-func NewParentLookup(invoices invoice.Repository, subscriptions subscription.Repository) ParentLookup {
-	return &repoLookup{invoices: invoices, subscriptions: subscriptions}
+func NewCustomerResolver(invoices invoice.Repository, subscriptions subscription.Repository) CustomerResolver {
+	return &repoCustomerResolver{invoices: invoices, subscriptions: subscriptions}
 }
 
-func (l *repoLookup) CustomerID(ctx context.Context, t types.SystemEntityType, id string) (string, error) {
+func (r *repoCustomerResolver) CustomerID(ctx context.Context, t types.SystemEntityType, id string) (string, error) {
 	switch t {
 	case types.SystemEntityTypeInvoice:
-		inv, err := l.invoices.Get(ctx, id)
+		inv, err := r.invoices.Get(ctx, id)
 		if err != nil {
 			return "", err
 		}
 		return inv.CustomerID, nil
 	case types.SystemEntityTypeSubscription:
-		sub, err := l.subscriptions.Get(ctx, id)
+		sub, err := r.subscriptions.Get(ctx, id)
+		if ierr.IsNotFound(err) {
+			sub, err = r.archivedSubscription(ctx, id)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -52,17 +57,32 @@ func (l *repoLookup) CustomerID(ctx context.Context, t types.SystemEntityType, i
 	return "", fmt.Errorf("activity: no customer lookup for parent %q", t)
 }
 
-// Consumer turns activity messages into ClickHouse rows.
-type Consumer struct {
-	reg    *Registry
-	repo   domainActivity.Repository
-	lookup ParentLookup
-	ps     types.ActivityPubSub
-	log    *logger.Logger
+// archivedSubscription reads a deleted subscription, which Get does not return.
+func (r *repoCustomerResolver) archivedSubscription(ctx context.Context, id string) (*subscription.Subscription, error) {
+	filter := types.NewSubscriptionFilter()
+	filter.SubscriptionIDs = []string{id}
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusArchived)
+	subs, err := r.subscriptions.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(subs) == 0 {
+		return nil, ierr.NewErrorf("subscription %s not found", id).Mark(ierr.ErrNotFound)
+	}
+	return subs[0], nil
 }
 
-func NewConsumer(reg *Registry, repo domainActivity.Repository, lookup ParentLookup, ps types.ActivityPubSub, log *logger.Logger) *Consumer {
-	return &Consumer{reg: reg, repo: repo, lookup: lookup, ps: ps, log: log}
+// Consumer turns activity messages into ClickHouse rows.
+type Consumer struct {
+	reg       *Registry
+	repo      domainActivity.Repository
+	customers CustomerResolver
+	ps        types.ActivityPubSub
+	log       *logger.Logger
+}
+
+func NewConsumer(reg *Registry, repo domainActivity.Repository, customers CustomerResolver, ps types.ActivityPubSub, log *logger.Logger) *Consumer {
+	return &Consumer{reg: reg, repo: repo, customers: customers, ps: ps, log: log}
 }
 
 func (c *Consumer) RegisterHandler(r *pubsubRouter.Router, cfg *config.Configuration) {
@@ -79,6 +99,7 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 	ctx = types.SetEnvironmentID(ctx, m.EnvironmentID)
 
 	logs := make([]*domainActivity.Log, 0, len(m.Events))
+	var unresolved []error
 	for _, e := range m.Events {
 		reg, ok := c.reg.ByType(types.SystemEntityType(e.EntityType))
 		if !ok {
@@ -92,10 +113,11 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 			}
 			stateText = string(e.State)
 		}
-		customerID, err := resolveCustomer(ctx, reg.Customer, state, c.lookup)
+		customerID, err := resolveCustomer(ctx, reg.Customer, state, c.customers)
 		if err != nil {
 			metrics.RecordCounter(ctx, metrics.ActivityCustomerUnresolved, 1, metrics.L(metrics.KeyEntity, e.EntityType))
-			c.log.Info(ctx, "activity entry saved without customer", "error", err, "activity_id", e.ID, "entity_type", e.EntityType, "entity_id", e.EntityID)
+			unresolved = append(unresolved, fmt.Errorf("activity %s (%s %s): customer lookup: %w", e.ID, e.EntityType, e.EntityID, err))
+			continue
 		}
 		logs = append(logs, &domainActivity.Log{
 			ID: e.ID, TenantID: m.TenantID, EnvironmentID: m.EnvironmentID,
@@ -106,11 +128,17 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 			State: stateText, SchemaVersion: uint16(m.SchemaVersion), OccurredAt: m.CommittedAt,
 		})
 	}
-	return c.repo.Insert(ctx, logs)
+	// Resolved entries are stored now; the message is retried for the rest and duplicates collapse by id.
+	if len(logs) > 0 {
+		if err := c.repo.Insert(ctx, logs); err != nil {
+			return err
+		}
+	}
+	return errors.Join(unresolved...)
 }
 
 // resolveCustomer finds the customer id an entry rolls up to; "" when the ref points at no customer.
-func resolveCustomer(ctx context.Context, ref CustomerRef, state map[string]any, lookup ParentLookup) (string, error) {
+func resolveCustomer(ctx context.Context, ref CustomerRef, state map[string]any, customers CustomerResolver) (string, error) {
 	if ref.whenCol != "" && stringValue(state, ref.whenCol) != ref.whenVal {
 		return "", nil
 	}
@@ -124,11 +152,11 @@ func resolveCustomer(ctx context.Context, ref CustomerRef, state map[string]any,
 		if parentID == "" {
 			return "", nil
 		}
-		return lookup.CustomerID(ctx, ref.parent, parentID)
+		return customers.CustomerID(ctx, ref.parent, parentID)
 	case refFirstOf:
 		for _, sub := range ref.refs {
 			if sub.whenCol == "" || stringValue(state, sub.whenCol) == sub.whenVal {
-				return resolveCustomer(ctx, sub, state, lookup)
+				return resolveCustomer(ctx, sub, state, customers)
 			}
 		}
 	}

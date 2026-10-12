@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeLookup struct {
+type fakeCustomerResolver struct {
 	customers map[string]string
 }
 
-func (f fakeLookup) CustomerID(_ context.Context, t types.SystemEntityType, id string) (string, error) {
+func (f fakeCustomerResolver) CustomerID(_ context.Context, t types.SystemEntityType, id string) (string, error) {
 	if c, ok := f.customers[string(t)+":"+id]; ok {
 		return c, nil
 	}
@@ -25,9 +25,9 @@ func (f fakeLookup) CustomerID(_ context.Context, t types.SystemEntityType, id s
 }
 
 func TestResolveCustomer(t *testing.T) {
-	lookup := fakeLookup{customers: map[string]string{"invoice:inv_1": "cust_inv", "subscription:sub_1": "cust_sub"}}
-	payment := DefaultRegistryEntry(t, types.SystemEntityTypePayment).Customer
-	price := DefaultRegistryEntry(t, types.SystemEntityTypePrice).Customer
+	customers := fakeCustomerResolver{customers: map[string]string{"invoice:inv_1": "cust_inv", "subscription:sub_1": "cust_sub"}}
+	payment := RegistrationEntry(t, types.SystemEntityTypePayment).Customer
+	price := RegistrationEntry(t, types.SystemEntityTypePrice).Customer
 
 	tests := []struct {
 		name    string
@@ -50,7 +50,7 @@ func TestResolveCustomer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveCustomer(context.Background(), tt.ref, tt.state, lookup)
+			got, err := resolveCustomer(context.Background(), tt.ref, tt.state, customers)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -71,32 +71,32 @@ func (r *recordingRepo) Insert(_ context.Context, logs []*domainActivity.Log) er
 	return nil
 }
 
-func TestConsumer_UnresolvedCustomerKeepsMessage(t *testing.T) {
+func TestConsumer_UnresolvedCustomerRetriesMessage(t *testing.T) {
 	repo := &recordingRepo{}
-	c := NewConsumer(DefaultRegistry(), repo, fakeLookup{customers: map[string]string{"invoice:inv_1": "cust_inv"}}, types.ActivityPubSub{}, logger.NewNoopLogger())
+	c := NewConsumer(Registrations(), repo, fakeCustomerResolver{customers: map[string]string{"invoice:inv_1": "cust_inv"}}, types.ActivityPubSub{}, logger.NewNoopLogger())
 	payload, err := json.Marshal(Message{TenantID: "t", EnvironmentID: "e", Events: []MessageEvent{
 		{ID: "act_1", EntityType: "refund", EntityID: "ref_1", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_1"}`)},
 		{ID: "act_2", EntityType: "refund", EntityID: "ref_2", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_missing"}`)},
 	}})
 	require.NoError(t, err)
 
-	require.NoError(t, c.process(context.Background(), message.NewMessage("m1", payload)))
-	require.Len(t, repo.inserted, 2)
+	require.ErrorContains(t, c.process(context.Background(), message.NewMessage("m1", payload)), "act_2")
+	require.Len(t, repo.inserted, 1)
+	require.Equal(t, "act_1", repo.inserted[0].ID)
 	require.Equal(t, "cust_inv", repo.inserted[0].CustomerID)
-	require.Equal(t, "", repo.inserted[1].CustomerID)
 }
 
 func TestLabel(t *testing.T) {
-	customer := DefaultRegistryEntry(t, types.SystemEntityTypeCustomer)
+	customer := RegistrationEntry(t, types.SystemEntityTypeCustomer)
 	require.Equal(t, "ext", label(customer, map[string]any{"name": "", "external_id": "ext"}))
 	require.Equal(t, "Ada", label(customer, map[string]any{"name": "Ada", "external_id": "ext"}))
-	subscription := DefaultRegistryEntry(t, types.SystemEntityTypeSubscription)
+	subscription := RegistrationEntry(t, types.SystemEntityTypeSubscription)
 	require.Equal(t, "", label(subscription, map[string]any{"name": "x"}))
 }
 
-func DefaultRegistryEntry(t *testing.T, entityType types.SystemEntityType) *Registration {
+func RegistrationEntry(t *testing.T, entityType types.SystemEntityType) *Registration {
 	t.Helper()
-	r, ok := DefaultRegistry().ByType(entityType)
+	r, ok := Registrations().ByType(entityType)
 	require.True(t, ok)
 	return r
 }

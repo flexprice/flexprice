@@ -87,7 +87,7 @@ func fill(v reflect.Value) {
 }
 
 func TestSnapshot_MatchesJSONEncoding(t *testing.T) {
-	reg := DefaultRegistry()
+	reg := Registrations()
 	for entityType := range entColumns {
 		r, _ := reg.ByType(entityType)
 		t.Run(string(entityType), func(t *testing.T) {

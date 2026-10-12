@@ -16,8 +16,8 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// DefaultRegistry returns the v1 registrations.
-func DefaultRegistry() *Registry {
+// Registrations returns the v1 registrations.
+func Registrations() *Registry {
 	reg, err := NewRegistry(
 		Registration{
 			EntityType: types.SystemEntityTypeCustomer, EntName: "Customer",

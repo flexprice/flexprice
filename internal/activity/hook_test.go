@@ -38,7 +38,7 @@ var testClient = ent.NewClient(ent.Driver(newFakeDriver()))
 func mutate(t *testing.T, opts HookOptions, sink Sink, ctx context.Context, m entgo.Mutation, result entgo.Value) {
 	t.Helper()
 	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return result, nil })
-	_, err := Hook(DefaultRegistry(), sink, opts)(next).Mutate(ctx, m)
+	_, err := Hook(Registrations(), sink, opts)(next).Mutate(ctx, m)
 	require.NoError(t, err)
 }
 
@@ -81,8 +81,8 @@ func TestHook_UncapturedStrictPanics(t *testing.T) {
 	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return 3, nil })
 
 	sink := &recordingSink{}
-	require.Panics(t, func() { _, _ = Hook(DefaultRegistry(), sink, HookOptions{Strict: true})(next).Mutate(userCtx(), m) })
-	require.NotPanics(t, func() { _, _ = Hook(DefaultRegistry(), sink, HookOptions{})(next).Mutate(userCtx(), m) })
+	require.Panics(t, func() { _, _ = Hook(Registrations(), sink, HookOptions{Strict: true})(next).Mutate(userCtx(), m) })
+	require.NotPanics(t, func() { _, _ = Hook(Registrations(), sink, HookOptions{})(next).Mutate(userCtx(), m) })
 	require.Empty(t, sink.entries())
 }
 

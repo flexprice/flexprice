@@ -72,7 +72,7 @@ func TestCursor_RoundTrip(t *testing.T) {
 }
 
 func TestValidateList(t *testing.T) {
-	svc := &activityService{registry: activity.DefaultRegistry()}
+	svc := &activityService{registry: activity.Registrations()}
 	now := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {

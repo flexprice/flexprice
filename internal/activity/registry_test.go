@@ -76,7 +76,7 @@ func declaredConstants(t *testing.T) []string {
 }
 
 func TestRegistry_ActionNames(t *testing.T) {
-	reg := DefaultRegistry()
+	reg := Registrations()
 	shape := regexp.MustCompile(`^[a-z_]+\.[a-z_]+$`)
 	seen := map[string]bool{}
 	var declared []string
@@ -101,7 +101,7 @@ func TestRegistry_ActionNames(t *testing.T) {
 }
 
 func TestRegistry_SnapshotKeys(t *testing.T) {
-	reg := DefaultRegistry()
+	reg := Registrations()
 	for entityType, columns := range entColumns {
 		r, _ := reg.ByType(entityType)
 		keys := map[string]bool{}
@@ -121,7 +121,7 @@ func TestRegistry_SnapshotKeys(t *testing.T) {
 }
 
 func TestRegistry_SnapshotBareRow(t *testing.T) {
-	reg := DefaultRegistry()
+	reg := Registrations()
 	for entityType := range entColumns {
 		r, _ := reg.ByType(entityType)
 		t.Run(string(entityType), func(t *testing.T) {

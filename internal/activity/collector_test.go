@@ -9,7 +9,7 @@ import (
 )
 
 func TestCollapse(t *testing.T) {
-	reg := DefaultRegistry()
+	reg := Registrations()
 	entry := func(action, state string) Entry {
 		return Entry{EntityType: types.SystemEntityTypeInvoice, EntityID: "inv_1", Action: action, State: []byte(state), TenantID: "t", EnvironmentID: "e"}
 	}
