@@ -154,6 +154,7 @@ func TestNewListTenantsResponse(t *testing.T) {
 		"items": [{"id":"tenant_1","name":"Acme Inc","status":"published","internal_status":"active","created_at":"2026-04-01T10:00:00Z"}],
 		"pagination": {"total":132,"limit":50,"offset":0}
 	}`, string(body))
+	assert.Nil(t, NewTenantResponse(nil))
 }
 
 func TestNewListTenantsResponse_EmptyPage(t *testing.T) {

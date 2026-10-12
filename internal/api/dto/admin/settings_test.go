@@ -112,6 +112,8 @@ func TestNewListSettingsResponse(t *testing.T) {
 		{"key": "tenant_config", "value": {"production": 1, "development": 2, "max_users": 15}, "is_default": false, "updated_at": "2026-09-20T08:15:00Z"},
 		{"key": "saml_config", "value": {"enabled": false}, "is_default": true}
 	]}`, string(body))
+	assert.Nil(t, NewSettingResponse(nil))
+	assert.Nil(t, NewSettingResponse(&dto.SettingResponse{}))
 }
 
 func TestNewListSettingsResponse_NoSettings(t *testing.T) {

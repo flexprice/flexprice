@@ -326,3 +326,23 @@ func TestListTenantSettingsUnknownTenant(t *testing.T) {
 	assert.True(t, ierr.IsNotFound(err))
 	assert.Nil(t, resp)
 }
+
+// failingSettingsReadStore fails every tenant-level read, like a database error while loading a setting.
+type failingSettingsReadStore struct {
+	*testutil.InMemorySettingsStore
+}
+
+func (failingSettingsReadStore) GetTenantLevelSettingByKey(context.Context, types.SettingKey) (*settings.Setting, error) {
+	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+func TestListTenantSettingsReadError(t *testing.T) {
+	d := newSettingsTestDeps(t)
+	d.params.SettingsRepo = failingSettingsReadStore{InMemorySettingsStore: d.settings}
+
+	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+
+	require.Error(t, err)
+	assert.True(t, ierr.IsDatabase(err))
+	assert.Nil(t, resp)
+}

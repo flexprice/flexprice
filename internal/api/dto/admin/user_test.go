@@ -158,6 +158,7 @@ func TestNewListUsersResponse(t *testing.T) {
 		{"id": "user_1", "email": "alex@acme.com", "type": "user", "roles": ["super_admin"], "status": "published", "created_at": "2026-04-01T10:00:00Z"},
 		{"id": "user_2", "email": "", "type": "service_account", "roles": ["all_writer"], "status": "published", "created_at": "2026-04-01T10:00:00Z"}
 	]}`, string(body))
+	assert.Nil(t, NewTenantUserResponse(nil))
 }
 
 func TestNewListUsersResponse_UserWithoutRoles(t *testing.T) {

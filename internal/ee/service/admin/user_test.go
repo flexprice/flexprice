@@ -539,4 +539,16 @@ func TestListUsers(t *testing.T) {
 		assert.True(t, ierr.IsNotFound(err))
 		assert.Nil(t, resp)
 	})
+
+	t.Run("a failed read", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: tenantID, Name: "Acme"}))
+		d.params.UserRepo = failingCountStore{InMemoryUserStore: d.users}
+
+		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+
+		require.Error(t, err)
+		assert.True(t, ierr.IsDatabase(err))
+		assert.Nil(t, resp)
+	})
 }

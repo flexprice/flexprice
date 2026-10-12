@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
@@ -214,5 +215,76 @@ func TestListEnvironmentsUnknownTenant(t *testing.T) {
 
 	require.Error(t, err)
 	assert.True(t, ierr.IsNotFound(err))
+	assert.Nil(t, resp)
+}
+
+// pagedEnvironmentStore pages a fixed, ordered list of environments by limit and offset, as Postgres does.
+type pagedEnvironmentStore struct {
+	*testutil.InMemoryEnvironmentStore
+	envs []*environment.Environment
+}
+
+func (s pagedEnvironmentStore) List(_ context.Context, filter types.Filter) ([]*environment.Environment, error) {
+	start := min(filter.Offset, len(s.envs))
+	end := min(start+filter.Limit, len(s.envs))
+	return s.envs[start:end], nil
+}
+
+func TestListEnvironmentsReadsEveryPage(t *testing.T) {
+	tests := []struct {
+		name  string
+		count int
+	}{
+		{name: "exactly one full page", count: environmentPageSize},
+		{name: "one more than a page", count: environmentPageSize + 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			tenants := testutil.NewInMemoryTenantStore()
+			require.NoError(t, tenants.Create(ctx, &tenant.Tenant{ID: "ten_1", Name: "Acme"}))
+			envs := make([]*environment.Environment, tt.count)
+			for i := range envs {
+				envs[i] = &environment.Environment{ID: fmt.Sprintf("env_%d", i), BaseModel: types.BaseModel{TenantID: "ten_1"}}
+			}
+			svc := NewEnvironmentService(service.ServiceParams{
+				TenantRepo:      tenants,
+				EnvironmentRepo: pagedEnvironmentStore{InMemoryEnvironmentStore: testutil.NewInMemoryEnvironmentStore(), envs: envs},
+			})
+
+			resp, err := svc.ListEnvironments(ctx, "ten_1")
+
+			require.NoError(t, err)
+			require.Equal(t, tt.count, len(resp.Items))
+			ids := lo.Map(resp.Items, func(item *admindto.EnvironmentResponse, _ int) string { return item.ID })
+			wantIDs := lo.Map(envs, func(e *environment.Environment, _ int) string { return e.ID })
+			assert.Equal(t, wantIDs, ids, "pages must be joined in the order they were read")
+		})
+	}
+}
+
+// failingListEnvironmentStore fails every listing, like a database error while reading a tenant's environments.
+type failingListEnvironmentStore struct {
+	*testutil.InMemoryEnvironmentStore
+}
+
+func (failingListEnvironmentStore) List(context.Context, types.Filter) ([]*environment.Environment, error) {
+	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+func TestListEnvironmentsReadError(t *testing.T) {
+	ctx := context.Background()
+	tenants := testutil.NewInMemoryTenantStore()
+	require.NoError(t, tenants.Create(ctx, &tenant.Tenant{ID: "ten_1", Name: "Acme"}))
+	svc := NewEnvironmentService(service.ServiceParams{
+		TenantRepo:      tenants,
+		EnvironmentRepo: failingListEnvironmentStore{InMemoryEnvironmentStore: testutil.NewInMemoryEnvironmentStore()},
+	})
+
+	resp, err := svc.ListEnvironments(ctx, "ten_1")
+
+	require.Error(t, err)
+	assert.True(t, ierr.IsDatabase(err))
 	assert.Nil(t, resp)
 }
