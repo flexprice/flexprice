@@ -22,6 +22,10 @@ type stubUserService struct {
 	removeReq    admin.RemoveUserRequest
 	removeResp   *admin.RemoveUserResponse
 	removeErr    error
+
+	listTenantID string
+	listResp     *admin.ListUsersResponse
+	listErr      error
 }
 
 func (s *stubUserService) AddUser(_ context.Context, req admin.AddUserRequest) (*admin.UserResponse, error) {
@@ -34,6 +38,11 @@ func (s *stubUserService) RemoveUser(_ context.Context, req admin.RemoveUserRequ
 	s.removeCalled = true
 	s.removeReq = req
 	return s.removeResp, s.removeErr
+}
+
+func (s *stubUserService) ListUsers(_ context.Context, tenantID string) (*admin.ListUsersResponse, error) {
+	s.listTenantID = tenantID
+	return s.listResp, s.listErr
 }
 
 const (
@@ -146,4 +155,26 @@ func TestRemoveUser_Errors(t *testing.T) {
 			assert.Equal(t, tc.wantCalled, stub.removeCalled)
 		})
 	}
+}
+
+const tenantUsersRoute = "/v1/tenants/:tenant_id/users"
+
+func TestListUsers_Success(t *testing.T) {
+	stub := &stubUserService{listResp: &admin.ListUsersResponse{Items: []*admin.TenantUserResponse{}}}
+	router := setupAdminRouter(http.MethodGet, tenantUsersRoute, NewUserHandler(stub).ListUsers)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_1/users", "")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "tenant_1", stub.listTenantID)
+}
+
+func TestListUsers_UnknownTenant(t *testing.T) {
+	stub := &stubUserService{listErr: ierr.NewError("tenant not found").WithHint("Tenant not found").Mark(ierr.ErrNotFound)}
+	router := setupAdminRouter(http.MethodGet, tenantUsersRoute, NewUserHandler(stub).ListUsers)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_missing/users", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "tenant_missing", stub.listTenantID)
 }

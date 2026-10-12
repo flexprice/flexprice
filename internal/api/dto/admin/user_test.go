@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -126,4 +128,57 @@ func TestNewRemoveUserResponse(t *testing.T) {
 
 	assert.Equal(t, &RemoveUserResponse{UserID: "user_1", Email: "teammate@acme.com", TenantID: "tenant_1", Status: types.StatusArchived}, resp)
 	assert.Nil(t, NewRemoveUserResponse(nil))
+}
+
+func TestNewListUsersResponse(t *testing.T) {
+	ist := time.FixedZone("IST", 5*60*60+30*60)
+	created := time.Date(2026, 4, 1, 15, 30, 0, 0, ist)
+	users := []*user.User{
+		{
+			ID:        "user_1",
+			Email:     "alex@acme.com",
+			Type:      types.UserTypeUser,
+			Roles:     []string{"super_admin"},
+			BaseModel: types.BaseModel{TenantID: "tenant_1", Status: types.StatusPublished, CreatedAt: created},
+		},
+		{
+			ID:        "user_2",
+			Name:      "CI bot",
+			Type:      types.UserTypeServiceAccount,
+			Roles:     []string{"all_writer"},
+			Metadata:  map[string]string{"owner": "platform"},
+			BaseModel: types.BaseModel{TenantID: "tenant_1", Status: types.StatusPublished, CreatedAt: created},
+		},
+	}
+
+	body, err := json.Marshal(NewListUsersResponse(users))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items": [
+		{"id": "user_1", "email": "alex@acme.com", "type": "user", "roles": ["super_admin"], "status": "published", "created_at": "2026-04-01T10:00:00Z"},
+		{"id": "user_2", "email": "", "type": "service_account", "roles": ["all_writer"], "status": "published", "created_at": "2026-04-01T10:00:00Z"}
+	]}`, string(body))
+}
+
+func TestNewListUsersResponse_UserWithoutRoles(t *testing.T) {
+	users := []*user.User{{
+		ID:        "user_1",
+		Email:     "alex@acme.com",
+		Type:      types.UserTypeUser,
+		BaseModel: types.BaseModel{Status: types.StatusPublished, CreatedAt: time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)},
+	}}
+
+	body, err := json.Marshal(NewListUsersResponse(users))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items": [
+		{"id": "user_1", "email": "alex@acme.com", "type": "user", "roles": [], "status": "published", "created_at": "2026-04-01T10:00:00Z"}
+	]}`, string(body))
+}
+
+func TestNewListUsersResponse_NoUsers(t *testing.T) {
+	body, err := json.Marshal(NewListUsersResponse(nil))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items": []}`, string(body))
 }

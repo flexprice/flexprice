@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/nedpals/supabase-go"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -474,4 +475,68 @@ type lockFailingDB struct {
 
 func (lockFailingDB) LockWithWait(context.Context, postgres.LockRequest) error {
 	return cerrors.New("failed to acquire lock within 5s")
+}
+
+// recordingUserStore records the filter the service lists users with.
+type recordingUserStore struct {
+	*testutil.InMemoryUserStore
+	filter *types.UserFilter
+}
+
+func (s *recordingUserStore) ListByFilter(ctx context.Context, filter *types.UserFilter) ([]*user.User, int64, error) {
+	s.filter = filter
+	return s.InMemoryUserStore.ListByFilter(ctx, filter)
+}
+
+func TestListUsers(t *testing.T) {
+	ctx := context.Background()
+	const tenantID = "tenant_acme"
+
+	t.Run("lists the tenant's users and service accounts", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: tenantID, Name: "Acme"}))
+		owner := user.NewUser("owner@acme.com", tenantID)
+		bot := &user.User{
+			ID:        "user_bot",
+			Type:      types.UserTypeServiceAccount,
+			Roles:     []string{"all_writer"},
+			BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished},
+		}
+		for _, u := range []*user.User{owner, bot, user.NewUser("someone@other.com", "tenant_other")} {
+			require.NoError(t, d.users.Create(ctx, u))
+		}
+		store := &recordingUserStore{InMemoryUserStore: d.users}
+		d.params.UserRepo = store
+
+		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+
+		require.NoError(t, err)
+		ids := lo.Map(resp.Items, func(item *admindto.TenantUserResponse, _ int) string { return item.ID })
+		assert.ElementsMatch(t, []string{owner.ID, "user_bot"}, ids)
+		require.NotNil(t, store.filter)
+		require.NotNil(t, store.filter.QueryFilter, "the Postgres repository reads the limit through QueryFilter")
+		assert.Nil(t, store.filter.Limit, "every user is listed, not one page")
+	})
+
+	t.Run("a tenant with no users", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: tenantID, Name: "Acme"}))
+
+		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp.Items, "an empty list must marshal as [], not null")
+		assert.Empty(t, resp.Items)
+	})
+
+	t.Run("unknown tenant", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		d.params.TenantRepo = notFoundTenantStore{InMemoryTenantStore: d.tenants}
+
+		resp, err := NewUserService(d.params).ListUsers(ctx, "tenant_missing")
+
+		require.Error(t, err)
+		assert.True(t, ierr.IsNotFound(err))
+		assert.Nil(t, resp)
+	})
 }

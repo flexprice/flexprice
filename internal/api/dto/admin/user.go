@@ -3,6 +3,7 @@ package admin
 import (
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -132,4 +133,45 @@ func NewRemoveUserResponse(u *user.User) *RemoveUserResponse {
 		TenantID: u.TenantID,
 		Status:   types.StatusArchived,
 	}
+}
+
+// TenantUserResponse is one user or service account of a tenant. It carries no auth data.
+type TenantUserResponse struct {
+	ID        string         `json:"id"`
+	Email     string         `json:"email"`
+	Type      types.UserType `json:"type"`
+	Roles     []string       `json:"roles"`
+	Status    types.Status   `json:"status"`
+	CreatedAt string         `json:"created_at"`
+}
+
+// ListUsersResponse holds every user and service account of one tenant.
+type ListUsersResponse struct {
+	Items []*TenantUserResponse `json:"items"`
+}
+
+func NewTenantUserResponse(u *user.User) *TenantUserResponse {
+	if u == nil {
+		return nil
+	}
+	roles := u.Roles
+	if roles == nil {
+		roles = []string{}
+	}
+	return &TenantUserResponse{
+		ID:        u.ID,
+		Email:     u.Email,
+		Type:      u.Type,
+		Roles:     roles,
+		Status:    u.Status,
+		CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func NewListUsersResponse(users []*user.User) *ListUsersResponse {
+	items := make([]*TenantUserResponse, 0, len(users))
+	for _, u := range users {
+		items = append(items, NewTenantUserResponse(u))
+	}
+	return &ListUsersResponse{Items: items}
 }

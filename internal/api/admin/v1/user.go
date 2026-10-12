@@ -52,3 +52,13 @@ func (h *UserHandler) RemoveUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	resp, err := h.service.ListUsers(c.Request.Context(), c.Param("tenant_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

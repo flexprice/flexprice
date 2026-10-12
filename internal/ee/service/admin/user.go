@@ -13,11 +13,13 @@ import (
 	"github.com/samber/lo"
 )
 
-// UserService adds users to existing tenants for the admin portal, as the add-new-user script does.
-// The user's login is created in Supabase, so it needs auth.provider supabase.
+// UserService adds, removes and lists a tenant's users for the admin portal. Adding and removing
+// change the user's Supabase login, as the add-new-user script does, so they need auth.provider supabase.
 type UserService interface {
 	AddUser(ctx context.Context, req admindto.AddUserRequest) (*admindto.UserResponse, error)
 	RemoveUser(ctx context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error)
+	// ListUsers returns every published user and service account of a tenant, newest first.
+	ListUsers(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error)
 }
 
 type userService struct {
@@ -139,4 +141,18 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 
 	s.Logger.Info(ctx, "removed user from tenant", "tenant_id", req.TenantID, "user_id", target.ID)
 	return admindto.NewRemoveUserResponse(target), nil
+}
+
+func (s *userService) ListUsers(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error) {
+	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
+		return nil, err
+	}
+
+	ctx = types.SetTenantID(ctx, tenantID)
+	// No limit, so every user is listed. QueryFilter must be set: the repository reads the limit through it.
+	users, _, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{QueryFilter: types.NewNoLimitQueryFilter()})
+	if err != nil {
+		return nil, err
+	}
+	return admindto.NewListUsersResponse(users), nil
 }
