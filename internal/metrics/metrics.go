@@ -56,7 +56,7 @@ var catalog = map[Name]definition{
 	ActivityCaptureFailed:      {"Activity entries skipped because building them failed, by entity", "{entry}"},
 	ActivitySnapshotTruncated:  {"Activity entries whose state was too large and was stored as null, by entity", "{entry}"},
 	ActivityUnknownActor:       {"Activity entries written without an actor, by entry point", "{entry}"},
-	ActivityCustomerUnresolved: {"Activity messages whose customer could not be resolved", "{message}"},
+	ActivityCustomerUnresolved: {"Activity entries saved without a customer because the lookup failed", "{entry}"},
 }
 
 // counters is built once at init and only read afterwards, so concurrent lookups are safe.

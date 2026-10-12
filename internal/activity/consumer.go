@@ -94,8 +94,8 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 		}
 		customerID, err := resolveCustomer(ctx, reg.Customer, state, c.lookup)
 		if err != nil {
-			metrics.RecordCounter(ctx, metrics.ActivityCustomerUnresolved, 1)
-			return err
+			metrics.RecordCounter(ctx, metrics.ActivityCustomerUnresolved, 1, metrics.L(metrics.KeyEntity, e.EntityType))
+			c.log.Info(ctx, "activity entry saved without customer", "error", err, "activity_id", e.ID, "entity_type", e.EntityType, "entity_id", e.EntityID)
 		}
 		logs = append(logs, &domainActivity.Log{
 			ID: e.ID, TenantID: m.TenantID, EnvironmentID: m.EnvironmentID,
