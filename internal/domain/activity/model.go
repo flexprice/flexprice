@@ -7,21 +7,36 @@ type Log struct {
 	ID            string
 	TenantID      string
 	EnvironmentID string
-	EntityType    string
-	EntityID      string
-	EntityLabel   string
+	Entity        Entity
 	CustomerID    string
 	Action        string
-	ActorType     string
-	ActorID       string
-	ActorLabel    string
-	Source        string
-	RequestID     string
-	IP            string
-	UserAgent     string
+	Actor         Actor
+	Request       Request
 	State         string
 	SchemaVersion uint16
 	OccurredAt    time.Time
+}
+
+// Entity is the entity that changed.
+type Entity struct {
+	Type  string
+	ID    string
+	Label string
+}
+
+// Actor is who made the change.
+type Actor struct {
+	Type  string
+	ID    string
+	Label string
+}
+
+// Request is where the change came from.
+type Request struct {
+	ID        string
+	Source    string
+	IP        string
+	UserAgent string
 }
 
 // Cursor is the keyset position of the last item on a page.

@@ -82,11 +82,11 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 		}
 		logs = append(logs, &domainActivity.Log{
 			ID: e.ID, TenantID: m.TenantID, EnvironmentID: m.EnvironmentID,
-			EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: reg.label(state),
+			Entity:     domainActivity.Entity{Type: e.EntityType, ID: e.EntityID, Label: reg.label(state)},
 			CustomerID: customerID, Action: e.Action,
-			ActorType: e.Actor.Type, ActorID: e.Actor.ID, ActorLabel: e.Actor.Label,
-			Source: m.Request.Source, RequestID: m.Request.ID, IP: m.Request.IP, UserAgent: m.Request.UserAgent,
-			State: stateText, SchemaVersion: uint16(m.SchemaVersion), OccurredAt: m.CommittedAt,
+			Actor:   domainActivity.Actor{Type: e.Actor.Type, ID: e.Actor.ID, Label: e.Actor.Label},
+			Request: domainActivity.Request{ID: m.Request.ID, Source: m.Request.Source, IP: m.Request.IP, UserAgent: m.Request.UserAgent},
+			State:   stateText, SchemaVersion: uint16(m.SchemaVersion), OccurredAt: m.CommittedAt,
 		})
 	}
 	// Resolved entries are stored now; the message is retried for the rest and duplicates collapse by id.

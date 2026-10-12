@@ -247,9 +247,9 @@ func rawState(state string) *json.RawMessage {
 func toActivityResponse(l *domainActivity.Log) *dto.ActivityResponse {
 	return &dto.ActivityResponse{
 		ID: l.ID, OccurredAt: l.OccurredAt, Action: l.Action,
-		Entity:     dto.ActivityEntity{Type: l.EntityType, ID: l.EntityID, Label: l.EntityLabel},
+		Entity:     dto.ActivityEntity{Type: l.Entity.Type, ID: l.Entity.ID, Label: l.Entity.Label},
 		CustomerID: l.CustomerID,
-		Actor:      dto.ActivityActor{Type: l.ActorType, ID: l.ActorID, Label: l.ActorLabel},
-		Source:     l.Source, RequestID: l.RequestID, IP: l.IP, UserAgent: l.UserAgent,
+		Actor:      dto.ActivityActor{Type: l.Actor.Type, ID: l.Actor.ID, Label: l.Actor.Label},
+		Source:     l.Request.Source, RequestID: l.Request.ID, IP: l.Request.IP, UserAgent: l.Request.UserAgent,
 	}
 }

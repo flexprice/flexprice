@@ -44,8 +44,8 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 	}
 	for _, l := range logs {
 		if err := batch.Append(
-			l.ID, l.TenantID, l.EnvironmentID, l.EntityType, l.EntityID, l.EntityLabel, l.CustomerID, l.Action,
-			l.ActorType, l.ActorID, l.ActorLabel, l.Source, l.RequestID, l.IP, l.UserAgent, l.State, l.SchemaVersion, l.OccurredAt.UTC(),
+			l.ID, l.TenantID, l.EnvironmentID, l.Entity.Type, l.Entity.ID, l.Entity.Label, l.CustomerID, l.Action,
+			l.Actor.Type, l.Actor.ID, l.Actor.Label, l.Request.Source, l.Request.ID, l.Request.IP, l.Request.UserAgent, l.State, l.SchemaVersion, l.OccurredAt.UTC(),
 		); err != nil {
 			return ierr.WithError(err).WithHint("Failed to append row to activity_logs batch").
 				WithReportableDetails(map[string]interface{}{"activity_id": l.ID}).Mark(ierr.ErrDatabase)
@@ -107,8 +107,8 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 	var logs []*activity.Log
 	for rows.Next() {
 		l := &activity.Log{}
-		if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.EntityLabel, &l.CustomerID, &l.Action,
-			&l.ActorType, &l.ActorID, &l.ActorLabel, &l.Source, &l.RequestID, &l.IP, &l.UserAgent, &l.SchemaVersion, &l.OccurredAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Entity.Type, &l.Entity.ID, &l.Entity.Label, &l.CustomerID, &l.Action,
+			&l.Actor.Type, &l.Actor.ID, &l.Actor.Label, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt); err != nil {
 			return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
 		}
 		logs = append(logs, l)
@@ -160,8 +160,8 @@ func (r *activityRepository) Get(ctx context.Context, id string, from, to time.T
 		return nil, rows.Err()
 	}
 	l := &activity.Log{}
-	if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.EntityLabel, &l.CustomerID, &l.Action,
-		&l.ActorType, &l.ActorID, &l.ActorLabel, &l.Source, &l.RequestID, &l.IP, &l.UserAgent, &l.SchemaVersion, &l.OccurredAt, &l.State); err != nil {
+	if err := rows.Scan(&l.ID, &l.Entity.Type, &l.Entity.ID, &l.Entity.Label, &l.CustomerID, &l.Action,
+		&l.Actor.Type, &l.Actor.ID, &l.Actor.Label, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt, &l.State); err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
 	}
 	return l, nil
