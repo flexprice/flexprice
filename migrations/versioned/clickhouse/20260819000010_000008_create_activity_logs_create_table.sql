@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs
     INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 4,
     INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 4
 )
-ENGINE = MergeTree
+ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-SETTINGS index_granularity = 8192
+SETTINGS index_granularity = 8192, deduplicate_merge_projection_mode = 'rebuild'
 
 -- migrate:down
 -- Baseline object; no down. Recreating is a data-loss operation.
