@@ -53,7 +53,8 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	// broken GetTaxRates list forced create-only idempotency in the seed).
 	if seeds.SharedTaxRateID != "" || seeds.SharedTaxRateCode != "" {
 		cust0 := seeds.PersistentCustomerIDs[0]
-		listed, err := p.subscriptionInvoice(ctx, cust0, types.InvoiceFilterOrderDesc)
+		// Tax is applied at finalize; a cycle draft awaiting finalization carries none.
+		listed, err := p.subscriptionInvoice(ctx, cust0, types.InvoiceFilterOrderDesc, types.InvoiceStatusFinalized)
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 		}
@@ -91,12 +92,13 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder) (*types.InvoiceResponse, error) {
+func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder, statuses ...types.InvoiceStatus) (*types.InvoiceResponse, error) {
 	invType := types.InvoiceTypeSubscription
 	limit := int64(1)
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
 		InvoiceType:        &invType,
+		InvoiceStatus:      statuses,
 		Limit:              &limit,
 		Order:              &order,
 	})

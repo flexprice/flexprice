@@ -22,6 +22,8 @@ type addonAttachParams struct {
 	priceMap       map[string]*dto.PriceResponse
 	requestedStart time.Time
 	effectiveDate  time.Time
+	// coupons is keyed by line item ID: overrides repoint a line item's price after Resolve.
+	coupons map[string][]types.CouponRef
 
 	// isReplay marks a plan whose association is an existing pending row being activated
 	// rather than a new one being created.
@@ -83,6 +85,13 @@ func (p *addonAttachParams) getPriceMap() map[string]*dto.PriceResponse {
 		return nil
 	}
 	return p.priceMap
+}
+
+func (p *addonAttachParams) getCoupons() map[string][]types.CouponRef {
+	if p == nil {
+		return nil
+	}
+	return p.coupons
 }
 
 func (p *addonAttachParams) isReplayAttach() bool {

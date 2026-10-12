@@ -1,9 +1,7 @@
 package checks
 
 import (
-	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -21,7 +19,7 @@ type paymentFixture struct {
 	opts PaymentProbeOpts
 }
 
-func newPaymentFixture(t *testing.T, provider string, driver GatewayDriver) *paymentFixture {
+func newPaymentFixture(t *testing.T, provider string) *paymentFixture {
 	t.Helper()
 	fc := newFakeClient()
 	fc.wallets.creditBalance = "0"
@@ -36,7 +34,6 @@ func newPaymentFixture(t *testing.T, provider string, driver GatewayDriver) *pay
 		reg: e2eprobe.NewRegistry(),
 		opts: PaymentProbeOpts{
 			Provider:      e2eprobe.PaymentProviderConfig{Provider: provider, Currency: "USD"},
-			Driver:        driver,
 			SettleTimeout: 200 * time.Millisecond,
 			PollInterval:  time.Millisecond,
 		},
@@ -68,33 +65,4 @@ func apiError(status int) error {
 
 func stepOf(err error) string {
 	return e2eprobe.AttributesFrom(err)["step"]
-}
-
-// fakeGatewayDriver vaults cards straight into the fake saved-methods listing.
-type fakeGatewayDriver struct {
-	mu                 sync.Mutex
-	payments           *fakePayments
-	attached           []TestCard
-	attachErr          error
-	declineUnsupported bool
-	notAutoChargeable  bool
-}
-
-func (d *fakeGatewayDriver) AttachCard(_ context.Context, _ string, card TestCard) (string, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if card == TestCardDecline && d.declineUnsupported {
-		return "", ErrTestCardUnsupported
-	}
-	if d.attachErr != nil {
-		return "", d.attachErr
-	}
-	d.attached = append(d.attached, card)
-	id := fmt.Sprintf("pm_%s_%d", card, len(d.attached))
-	d.payments.mu.Lock()
-	d.payments.savedMethods = append(d.payments.savedMethods, e2eprobe.SavedPaymentMethod{
-		ID: id, Status: "active", CanAutoCharge: !d.notAutoChargeable,
-	})
-	d.payments.mu.Unlock()
-	return id, nil
 }

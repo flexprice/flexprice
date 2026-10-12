@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -685,4 +686,110 @@ func (s *PaymentServiceSuite) TestDeletePaymentRejectsConcurrentStatusChange() {
 	err = repo.DeleteWithExpectedStatus(ctx, p.ID, types.PaymentStatusInitiated)
 	s.Error(err, "a settled payment must not be deleted on a stale deletability check")
 	s.True(ierr.IsVersionConflict(err), "expected a version conflict, got: %v", err)
+}
+
+func (s *PaymentServiceSuite) newMetricsPayment(id, gateway string, method types.PaymentMethodType, status types.PaymentStatus) *payment.Payment {
+	ctx := s.GetContext()
+	p := &payment.Payment{
+		ID:                id,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: method,
+		PaymentStatus:     status,
+		TrackAttempts:     true,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "usd",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	if gateway != "" {
+		p.PaymentGateway = lo.ToPtr(gateway)
+	}
+	s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+	return p
+}
+
+// A status transition counts once; a later update that keeps the status must not count again.
+func (s *PaymentServiceSuite) TestPaymentOutcomeCountedOncePerTransition() {
+	r := metricstest.Install(s.T())
+	ctx := s.GetContext()
+	p := s.newMetricsPayment("pay_metrics_outcome", string(types.PaymentGatewayTypeMoyasar), types.PaymentMethodTypePaymentLink, types.PaymentStatusPending)
+	succeeded := map[string]string{"provider": string(types.PaymentGatewayTypeMoyasar), "status": string(types.PaymentStatusSucceeded)}
+	before := r.Sum("payment.transitions", succeeded)
+
+	_, err := s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{PaymentStatus: lo.ToPtr(string(types.PaymentStatusSucceeded))})
+	s.NoError(err)
+	s.Equal(before+1, r.Sum("payment.transitions", succeeded))
+
+	_, err = s.service.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{Metadata: &types.Metadata{"note": "resync"}})
+	s.NoError(err)
+	s.Equal(before+1, r.Sum("payment.transitions", succeeded))
+}
+
+func (s *PaymentServiceSuite) TestProcessPaymentCountsOutcome() {
+	r := metricstest.Install(s.T())
+	p := s.newMetricsPayment("pay_metrics_offline", "", types.PaymentMethodTypeOffline, types.PaymentStatusPending)
+	match := map[string]string{"provider": "none", "method_type": string(types.PaymentMethodTypeOffline), "status": string(types.PaymentStatusSucceeded)}
+	before := r.Sum("payment.transitions", match)
+
+	processor := NewPaymentProcessorService(ServiceParams{
+		Logger:           s.GetLogger(),
+		Config:           s.GetConfig(),
+		DB:               s.GetDB(),
+		PaymentRepo:      s.GetStores().PaymentRepo,
+		InvoiceRepo:      s.GetStores().InvoiceRepo,
+		CustomerRepo:     s.GetStores().CustomerRepo,
+		EventPublisher:   s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(),
+	})
+	processed, err := processor.ProcessPayment(s.GetContext(), p.ID)
+	s.NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, processed.PaymentStatus)
+	s.Equal(before+1, r.Sum("payment.transitions", match))
+}
+
+// Creation counts as the first transition; checkout payments carry the checkout marker.
+func (s *PaymentServiceSuite) TestPaymentCreationCountedWithCheckoutLabel() {
+	r := metricstest.Install(s.T())
+	ctx := s.GetContext()
+	count := func(checkout string, status types.PaymentStatus) int64 {
+		return r.Sum("payment.transitions", map[string]string{"provider": string(types.PaymentGatewayTypeRazorpay), "checkout": checkout, "status": string(status)})
+	}
+	checkoutBefore, directBefore := count("true", types.PaymentStatusInitiated), count("false", types.PaymentStatusInitiated)
+
+	_, err := s.service.CreatePaymentForCheckout(ctx, &dto.CreateCheckoutPaymentRequest{Invoice: s.testData.invoice, Gateway: types.PaymentGatewayTypeRazorpay})
+	s.NoError(err)
+	_, err = s.service.CreatePayment(ctx, &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeRazorpay),
+		Amount:            decimal.NewFromInt(10),
+		Currency:          "usd",
+	})
+	s.NoError(err)
+
+	s.Equal(checkoutBefore+1, count("true", types.PaymentStatusInitiated))
+	s.Equal(directBefore+1, count("false", types.PaymentStatusInitiated))
+}
+
+// Gateway and method type are not validated on create, so unknown values are labelled other.
+func (s *PaymentServiceSuite) TestPaymentLabelsBoundUnknownValues() {
+	r := metricstest.Install(s.T())
+	p := s.newMetricsPayment("pay_metrics_unknown", "made_up_gateway", types.PaymentMethodType("MADE_UP"), types.PaymentStatusPending)
+	match := map[string]string{"provider": "other", "method_type": "other", "status": string(types.PaymentStatusSucceeded)}
+	before := r.Sum("payment.transitions", match)
+
+	_, err := s.service.UpdatePayment(s.GetContext(), p.ID, dto.UpdatePaymentRequest{PaymentStatus: lo.ToPtr(string(types.PaymentStatusSucceeded))})
+	s.NoError(err)
+	s.Equal(before+1, r.Sum("payment.transitions", match))
+}
+
+func (s *PaymentServiceSuite) TestRecordAttemptCountsByStatus() {
+	r := metricstest.Install(s.T())
+	p := s.newMetricsPayment("pay_metrics_attempt", string(types.PaymentGatewayTypePaddle), types.PaymentMethodTypeCard, types.PaymentStatusPending)
+	failed := map[string]string{"provider": string(types.PaymentGatewayTypePaddle), "status": string(types.PaymentStatusFailed)}
+	before := r.Sum("payment.attempts", failed)
+
+	s.NoError(s.service.RecordAttempt(s.GetContext(), p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusFailed}))
+	s.Equal(before+1, r.Sum("payment.attempts", failed))
 }

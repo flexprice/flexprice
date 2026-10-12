@@ -53,6 +53,8 @@ type Config struct {
 	OTEL     OTELConfig
 	Payments PaymentsConfig
 
+	BillingMatrix BillingMatrixConfig
+
 	Checks map[string]CheckConfig
 
 	// Warnings collected during LoadConfig (e.g. malformed env vars that fell
@@ -92,17 +94,15 @@ type PaymentProviderConfig struct {
 
 	// SettleTimeout overrides PaymentsConfig.SettleTimeout for this gateway.
 	SettleTimeout time.Duration // E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT
+	// AutoChargeInterval floors the auto-charge probe interval for this gateway.
+	AutoChargeInterval time.Duration
 
-	StripeSecretKey string // E2EPROBE_STRIPE_TEST_SECRET_KEY, sk_test_/rk_test_ only
-
-	ChargebeeSite        string // E2EPROBE_CHARGEBEE_TEST_SITE, must end in -test
-	ChargebeeAPIKey      string // E2EPROBE_CHARGEBEE_TEST_API_KEY, test_ only
-	ChargebeeDeclineCard string // E2EPROBE_CHARGEBEE_DECLINE_CARD, optional
-
-	// FixedCustomerExternalID names a persistent customer whose mandate was
-	// authorized by hand. It stands in for card vaulting on gateways the probe
-	// cannot vault on (Razorpay), so auto-charge flows can still run.
-	FixedCustomerExternalID string // E2EPROBE_RAZORPAY_MANDATE_CUSTOMER
+	// FixedCustomerExternalID names a persistent customer whose cards or mandates
+	// were saved by hand; auto-charge flows run on it.
+	FixedCustomerExternalID string
+	// DeclineCardLast4 picks out the fixed customer's declining card; every other
+	// auto-chargeable method is treated as a good card.
+	DeclineCardLast4 string
 }
 
 // paymentDefaultSettleTimeout covers gateways slower than the global default:
@@ -111,10 +111,40 @@ var paymentDefaultSettleTimeout = map[string]time.Duration{
 	"razorpay": 10 * time.Minute,
 }
 
+// paymentFixedCustomer is the same in every region; its cards or mandates are saved by hand.
+var paymentFixedCustomer = map[string]string{
+	"stripe":    "e2eprobe-cust-pay-stripe-cards",
+	"chargebee": "e2eprobe-cust-pay-chargebee-cards",
+	"razorpay":  "e2eprobe-cust-pay-razorpay-mandate",
+}
+
+// paymentDeclineCardLast4 identifies the gateway test card that saves but declines when charged.
+var paymentDeclineCardLast4 = map[string]string{
+	"stripe":    "0341",
+	"chargebee": "0004",
+}
+
+// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards and mandates:
+// Razorpay test card mandates refuse the 22nd debit of a day.
+var paymentAutoChargeInterval = map[string]time.Duration{
+	"stripe":    6 * time.Hour,
+	"chargebee": 6 * time.Hour,
+	"razorpay":  12 * time.Hour,
+}
+
 var paymentDefaultCurrency = map[string]string{
 	"stripe":    "USD",
 	"chargebee": "USD",
 	"razorpay":  "INR",
+}
+
+// BillingMatrixConfig gates and tunes the billing-matrix checks.
+type BillingMatrixConfig struct {
+	// Enabled turns on every billing-matrix check (E2EPROBE_BILLING_MATRIX_ENABLED, default false).
+	// Off by default: the checks create plans, subscriptions and invoices every tick.
+	Enabled           bool
+	ScenariosPerRun   int  // E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN, default 3
+	AssertKnownIssues bool // E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES: run scenarios that hit known product bugs
 }
 
 type CheckConfig struct {
@@ -208,6 +238,11 @@ func LoadConfig() (*Config, error) {
 		OTEL: OTELConfig{
 			Enabled: getBool("E2EPROBE_OTEL_ENABLED", false),
 		},
+		BillingMatrix: BillingMatrixConfig{
+			Enabled:           getBool("E2EPROBE_BILLING_MATRIX_ENABLED", false),
+			ScenariosPerRun:   getInt(&warnings, "E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN", 3),
+			AssertKnownIssues: getBool("E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES", false),
+		},
 		Checks: make(map[string]CheckConfig, len(CheckNames)),
 	}
 	for _, name := range CheckNames {
@@ -251,34 +286,16 @@ func loadPaymentsConfig(warnings *[]string) (PaymentsConfig, error) {
 			return out, fmt.Errorf("E2EPROBE_PAYMENTS_PROVIDERS: unsupported provider %q (want stripe, chargebee or razorpay)", name)
 		}
 		p := PaymentProviderConfig{
-			Provider: name,
-			Currency: strings.ToUpper(os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_CURRENCY")),
+			Provider:                name,
+			Currency:                strings.ToUpper(os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_CURRENCY")),
+			FixedCustomerExternalID: paymentFixedCustomer[name],
+			DeclineCardLast4:        paymentDeclineCardLast4[name],
+			AutoChargeInterval:      paymentAutoChargeInterval[name],
 		}
 		if p.Currency == "" {
 			p.Currency = def
 		}
 		p.SettleTimeout = getDuration(warnings, "E2EPROBE_PAYMENTS_"+strings.ToUpper(name)+"_SETTLE_TIMEOUT", paymentDefaultSettleTimeout[name])
-		switch name {
-		case "stripe":
-			p.StripeSecretKey = os.Getenv("E2EPROBE_STRIPE_TEST_SECRET_KEY")
-			if p.StripeSecretKey != "" && !strings.HasPrefix(p.StripeSecretKey, "sk_test_") && !strings.HasPrefix(p.StripeSecretKey, "rk_test_") {
-				return out, errors.New("E2EPROBE_STRIPE_TEST_SECRET_KEY must be a test-mode key (sk_test_ or rk_test_)")
-			}
-		case "razorpay":
-			p.FixedCustomerExternalID = os.Getenv("E2EPROBE_RAZORPAY_MANDATE_CUSTOMER")
-		case "chargebee":
-			p.ChargebeeSite = os.Getenv("E2EPROBE_CHARGEBEE_TEST_SITE")
-			p.ChargebeeAPIKey = os.Getenv("E2EPROBE_CHARGEBEE_TEST_API_KEY")
-			p.ChargebeeDeclineCard = os.Getenv("E2EPROBE_CHARGEBEE_DECLINE_CARD")
-			if p.ChargebeeAPIKey != "" {
-				if !strings.HasPrefix(p.ChargebeeAPIKey, "test_") {
-					return out, errors.New("E2EPROBE_CHARGEBEE_TEST_API_KEY must be a test-site key (test_)")
-				}
-				if !strings.HasSuffix(p.ChargebeeSite, "-test") {
-					return out, fmt.Errorf("E2EPROBE_CHARGEBEE_TEST_SITE must be a test site ending in -test, got %q", p.ChargebeeSite)
-				}
-			}
-		}
 		out.Providers = append(out.Providers, p)
 	}
 	return out, nil

@@ -469,6 +469,16 @@ func fxPairLabel(from, to string) string {
 	return fmt.Sprintf("%s → %s", strings.ToUpper(from), strings.ToUpper(to))
 }
 
+// missingConversionHint names a missing pair and its fix: a custom factor for a custom currency,
+// a global rate otherwise. Callers append "before …".
+func missingConversionHint(ccCfg types.CustomCurrencyConfig, from, to string) string {
+	if ccCfg.IsCustom(from) {
+		return fmt.Sprintf("No conversion factor for %s. Set %s's factor for %s in the custom currency settings",
+			fxPairLabel(from, to), strings.ToUpper(from), strings.ToUpper(to))
+	}
+	return fmt.Sprintf("No exchange rate for %s. Add a global rate", fxPairLabel(from, to))
+}
+
 // fxPairKeysLabel turns sorted "from->to" keys into "USD → EUR, GBP → EUR".
 func fxPairKeysLabel(keys []string) string {
 	labels := make([]string, 0, len(keys))

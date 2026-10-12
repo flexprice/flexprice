@@ -1,0 +1,110 @@
+# Upload an ECS imagedefinitions source zip and wait for its CodePipeline run.
+name: 'Deploy via CodePipeline'
+description: 'Assume the deploy role, upload source.zip to the pipeline bucket and watch the execution that upload started'
+
+inputs:
+  role_arn:
+    description: 'IAM role to assume over OIDC'
+    required: true
+  region:
+    description: 'AWS region of the pipeline'
+    required: true
+  bucket:
+    description: 'Pipeline source bucket'
+    required: true
+  pipeline:
+    description: 'CodePipeline name'
+    required: true
+  container:
+    description: 'Container name to set the image on'
+    required: true
+  image:
+    description: 'Image URI to deploy'
+    required: true
+  dry_run:
+    description: 'If true, print the plan and do not upload'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    # Public repo: keep infra names out of logs.
+    - name: Mask deploy identifiers
+      shell: bash
+      env:
+        ROLE_ARN: ${{ inputs.role_arn }}
+        REGION: ${{ inputs.region }}
+        BUCKET: ${{ inputs.bucket }}
+        PIPELINE: ${{ inputs.pipeline }}
+      run: |
+        for v in "$ROLE_ARN" "$REGION" "$BUCKET" "$PIPELINE"; do
+          echo "::add-mask::$v"
+        done
+
+    - name: Configure AWS credentials (OIDC)
+      if: inputs.dry_run != 'true'
+      uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      with:
+        role-to-assume: ${{ inputs.role_arn }}
+        aws-region: ${{ inputs.region }}
+
+    - name: Upload source artifact
+      id: upload
+      shell: bash
+      env:
+        BUCKET: ${{ inputs.bucket }}
+        CONTAINER: ${{ inputs.container }}
+        IMAGE: ${{ inputs.image }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -euo pipefail
+        jq -n --arg n "$CONTAINER" --arg u "$IMAGE" '[{"name":$n,"imageUri":$u}]' > imagedefinitions.json
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "[DRY RUN] Would upload source.zip and wait for the pipeline"
+          exit 0
+        fi
+        python3 -m zipfile -c source.zip imagedefinitions.json
+        REV=$(aws s3api put-object --bucket "$BUCKET" --key source.zip --body source.zip \
+          --query VersionId --output text)
+        echo "revision=$REV" >> "$GITHUB_OUTPUT"
+
+    # Match on S3 version, not latest.
+    - name: Watch pipeline execution
+      if: inputs.dry_run != 'true'
+      shell: bash
+      env:
+        PIPELINE: ${{ inputs.pipeline }}
+        REV: ${{ steps.upload.outputs.revision }}
+      run: |
+        set -euo pipefail
+        EXEC=""
+        for _ in $(seq 1 30); do
+          EXEC=$(aws codepipeline get-pipeline-state --name "$PIPELINE" --output json \
+            | jq -r --arg r "$REV" '.stageStates[]
+                | select(.stageName == "Source" and .actionStates[0].currentRevision.revisionId == $r)
+                | .latestExecution.pipelineExecutionId')
+          [ -n "$EXEC" ] && break
+          sleep 10
+        done
+        if [ -z "$EXEC" ]; then
+          echo "::error::No pipeline execution picked up the upload within 5 minutes"
+          exit 1
+        fi
+        echo "Execution: $EXEC"
+        # Outlasts the ECS action's 60m timeout.
+        for _ in $(seq 1 210); do
+          STATUS=$(aws codepipeline get-pipeline-execution --pipeline-name "$PIPELINE" \
+            --pipeline-execution-id "$EXEC" --query 'pipelineExecution.status' --output text)
+          echo "Pipeline status: $STATUS"
+          case "$STATUS" in
+            Succeeded) exit 0 ;;
+            Failed|Stopped|Superseded|Cancelled)
+              echo "::error::Pipeline execution $EXEC ended $STATUS"
+              exit 1
+              ;;
+          esac
+          sleep 20
+        done
+        echo "::error::Pipeline execution $EXEC still $STATUS after 70 minutes"
+        exit 1

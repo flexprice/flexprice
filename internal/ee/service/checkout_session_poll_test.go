@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -75,7 +76,10 @@ func (f *fakeCheckoutProvider) CreatePaymentLink(_ context.Context, req interfac
 	}, nil
 }
 func (f *fakeCheckoutProvider) CreateAuthorizationLink(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, error) {
-	return nil, ierr.NewError("not used").Mark(ierr.ErrNotImplemented)
+	return &interfaces.CheckoutProviderResponse{
+		ProviderSessionID: "auth_link_created",
+		NextAction:        types.PaymentAction{Type: types.PaymentActionTypeCheckoutURL, URL: "https://rzp.io/auth"},
+	}, nil
 }
 func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, bool, error) {
 	if !f.charged {
@@ -838,4 +842,61 @@ func (s *CheckoutPollSuite) TestFallsBackToSessionHandlesWhenThePaymentHasNone()
 	s.Require().Equal(1, s.provider.callCount())
 	s.Equal("plink_from_session", s.provider.calls[0].GatewayTrackingID,
 		"the handle comes from the session when the payment never got one")
+}
+
+// The charge mode is read back from what callCheckoutProvider stored on the session.
+func (s *CheckoutPollSuite) TestCheckoutChargeMode_MatchesProviderPath() {
+	tests := []struct {
+		name    string
+		method  types.CollectionMethod
+		charged bool
+		want    string
+	}{
+		{"send invoice", types.CollectionMethodSendInvoice, false, chargeModePaymentLink},
+		{"saved method charged", types.CollectionMethodChargeAutomatically, true, chargeModeAutoCharge},
+		{"no saved method", types.CollectionMethodChargeAutomatically, false, chargeModeAuthLink},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.provider.charged = tt.charged
+			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
+				&types.CheckoutPaymentProviderConfig{CollectionMethod: tt.method},
+			)
+			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+			s.Require().NoError(err)
+
+			s.Equal(chargeModeNone, checkoutChargeMode(session))
+			result, err := s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+			s.Require().NoError(err)
+			session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(result)
+			s.Equal(tt.want, checkoutChargeMode(session))
+		})
+	}
+}
+
+func (s *CheckoutPollSuite) TestCompletion_CountedWithActionAndChargeMode() {
+	r := metricstest.Install(s.T())
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "plink_mode", "")
+	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
+		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
+	)
+	session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+		ProviderSessionID: "plink_mode",
+		NextAction:        &types.PaymentAction{Type: types.PaymentActionTypeCheckoutURL, URL: "https://rzp.io/auth"},
+	})
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+	match := map[string]string{
+		"provider":    string(types.CheckoutPaymentProviderRazorpay),
+		"action":      string(types.CheckoutActionCreateSubscription),
+		"charge_mode": chargeModeAuthLink,
+		"status":      string(types.CheckoutStatusCompleted),
+	}
+	before := r.Sum("checkout.sessions", match)
+
+	s.Require().NoError(s.svc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_mode_001"}))
+
+	s.Equal(before+1, r.Sum("checkout.sessions", match))
 }

@@ -97,3 +97,29 @@ func TestInMemoryRefundStore_GetByGatewayRefundID(t *testing.T) {
 	_, err = store.GetByGatewayRefundID(ctx, "stripe", gatewayRefundID)
 	require.Error(t, err)
 }
+
+func TestInMemoryRefundStore_SumSettledToWalletByInvoice(t *testing.T) {
+	ctx := refundCtx()
+	store := NewInMemoryRefundStore()
+
+	gateway := newTestRefund(ctx, "ref_gw", "inv_1", nil, types.RefundStatusSucceeded, "50")
+	gateway.RefundDestination = types.RefundDestinationGateway
+	otherCurrency := newTestRefund(ctx, "ref_inr", "inv_1", nil, types.RefundStatusSucceeded, "40")
+	otherCurrency.Currency = "inr"
+	require.NoError(t, store.CreateBulk(ctx, []*refund.Refund{
+		newTestRefund(ctx, "ref_1", "inv_1", nil, types.RefundStatusSucceeded, "10"),
+		newTestRefund(ctx, "ref_2", "inv_1", nil, types.RefundStatusSucceeded, "5"),
+		newTestRefund(ctx, "ref_3", "inv_1", nil, types.RefundStatusPending, "7"),
+		newTestRefund(ctx, "ref_4", "inv_2", nil, types.RefundStatusSucceeded, "100"),
+		gateway,
+		otherCurrency,
+	}))
+
+	got, err := store.SumSettledToWalletByInvoice(ctx, "inv_1", "USD")
+	require.NoError(t, err)
+	require.True(t, got.Equal(decimal.RequireFromString("15")), "only settled wallet rows of this invoice in usd, got %s", got)
+
+	none, err := store.SumSettledToWalletByInvoice(ctx, "inv_9", "usd")
+	require.NoError(t, err)
+	require.True(t, none.IsZero())
+}

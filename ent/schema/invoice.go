@@ -185,10 +185,10 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		// Mutable so a period that ends early can move its open draft's end instead of orphaning it.
 		field.Time("period_end").
 			Optional().
-			Nillable().
-			Immutable(),
+			Nillable(),
 		field.String("invoice_pdf_url").
 			Optional().
 			Nillable(),

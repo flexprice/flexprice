@@ -2,6 +2,8 @@ package webhook
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	stripeapi "github.com/stripe/stripe-go/v82"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -166,4 +168,13 @@ func TestHandler_HandleCheckoutSessionForPayment_TerminalSessionIsHandled(t *tes
 			assert.Empty(t, fakeCheckout.completeCalls)
 		})
 	}
+}
+
+func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
+	r := metricstest.Install(t)
+	h := NewHandler(nil, nil, nil, nil, nil, nil, nil, nil, logger.NewNoopLogger())
+
+	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_stripe"), "env_gw"), &stripeapi.Event{Type: "attacker.chosen"}, "env_gw", nil))
+
+	assert.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_stripe", "provider": "stripe", "event_type": "other", "outcome": "ignored"}))
 }

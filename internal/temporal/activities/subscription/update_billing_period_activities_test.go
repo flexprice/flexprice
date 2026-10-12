@@ -404,14 +404,3 @@ func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_AdvancesGrouped
 	s.True(updatedInherited.CurrentPeriodStart.Equal(oldStart), "inherited children are not cascaded by this activity")
 	s.True(updatedInherited.CurrentPeriodEnd.Equal(oldEnd), "inherited children are not cascaded by this activity")
 }
-
-func TestProcessInvoiceDelaySeconds(t *testing.T) {
-	minSeconds := int(processInvoiceStartDelay / time.Second)
-	maxSeconds := int((processInvoiceStartDelay + processInvoiceJitterSpan) / time.Second)
-	for i := 0; i < 200; i++ {
-		got := processInvoiceDelaySeconds()
-		if got < minSeconds || got >= maxSeconds {
-			t.Fatalf("delay %d outside [%d, %d)", got, minSeconds, maxSeconds)
-		}
-	}
-}

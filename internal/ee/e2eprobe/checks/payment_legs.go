@@ -1,7 +1,6 @@
 package checks
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
@@ -20,9 +19,8 @@ var knownIssueLegs = map[string]map[string]string{
 // legResults runs a probe's legs independently, so one failing leg does not hide
 // the others, and folds every failure into a single report.
 type legResults struct {
-	failed  []string
-	errs    []error
-	skipped []string
+	failed []string
+	errs   []error
 }
 
 func (l *legResults) run(leg string, fn func() error) {
@@ -33,25 +31,20 @@ func (l *legResults) run(leg string, fn func() error) {
 }
 
 // runIf runs the leg only when its prerequisite succeeded; otherwise it is skipped.
-func (l *legResults) runIf(ok bool, leg, needs string, fn func() error) {
+func (l *legResults) runIf(ok bool, leg string, fn func() error) {
 	if !ok {
-		l.skipped = append(l.skipped, fmt.Sprintf("%s (needs %s)", leg, needs))
 		return
 	}
 	l.run(leg, fn)
 }
 
 // runKnown is runIf for a leg that skips while knownIssue names an unfixed bug.
-func (l *legResults) runKnown(knownIssue string, ok bool, leg, needs string, fn func() error) {
-	if knownIssue != "" {
-		l.skipped = append(l.skipped, fmt.Sprintf("%s (known issue: %s)", leg, knownIssue))
-		return
-	}
-	l.runIf(ok, leg, needs, fn)
+func (l *legResults) runKnown(knownIssue string, ok bool, leg string, fn func() error) {
+	l.runIf(knownIssue == "" && ok, leg, fn)
 }
 
 // err returns nil when every leg passed. Otherwise the first failure's attributes
-// lead, and each failing leg's step and message are listed alongside.
+// lead, and failing legs are listed grouped by their error.
 func (l *legResults) err(f *paymentFlow) error {
 	if len(l.errs) == 0 {
 		return nil
@@ -61,18 +54,24 @@ func (l *legResults) err(f *paymentFlow) error {
 		attrs[k] = v
 	}
 	attrs["failed_legs"] = strings.Join(l.failed, ",")
-	if len(l.skipped) > 0 {
-		attrs["skipped_legs"] = strings.Join(l.skipped, ",")
-	}
-	msgs := make([]string, 0, len(l.errs))
+	var msgs []string
+	legsByMsg := map[string][]string{}
 	for i, err := range l.errs {
 		if step := e2eprobe.AttributesFrom(err)["step"]; step != "" {
 			attrs["leg."+l.failed[i]+".step"] = step
 		}
-		msgs = append(msgs, fmt.Sprintf("%s: %v", l.failed[i], err))
+		msg := e2eprobe.Brief(err)
+		if _, seen := legsByMsg[msg]; !seen {
+			msgs = append(msgs, msg)
+		}
+		legsByMsg[msg] = append(legsByMsg[msg], l.failed[i])
+	}
+	lines := make([]string, 0, len(msgs))
+	for _, msg := range msgs {
+		lines = append(lines, strings.Join(legsByMsg[msg], ", ")+": "+msg)
 	}
 	if attrs["provider"] == "" {
 		attrs["provider"] = f.provider()
 	}
-	return e2eprobe.Errorf(attrs, "%d leg(s) failed: %s", len(l.errs), strings.Join(msgs, "; "))
+	return e2eprobe.Errorf(attrs, "%s", strings.Join(lines, "\n"))
 }

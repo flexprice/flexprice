@@ -121,7 +121,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.27.1"
+          go-version: "1.27.2"
 
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.
@@ -506,3 +506,44 @@ jobs:
           python -m pip install --upgrade pip build twine
           python -m build
           twine upload dist/*
+
+  # ---------------------------------------------------------------------------
+  # MCP server image, then AWS deploy
+  # ---------------------------------------------------------------------------
+  publish-mcp-image:
+    needs: [version-check, publish-to-registries]
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/publish-mcp-image.yml
+    with:
+      version: ${{ needs.version-check.outputs.version }}
+    secrets:
+      GHCR_PUBLISH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+  deploy-mcp-aws:
+    name: Deploy MCP server to AWS (CodePipeline)
+    needs: [version-check, publish-mcp-image]
+    if: github.event_name == 'release' && vars.MCP_AWS_DEPLOY != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy via CodePipeline
+        uses: ./.github/actions/deploy-codepipeline
+        with:
+          role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.MCP_AWS_DEPLOY).role }}
+          region: ${{ fromJson(vars.MCP_AWS_DEPLOY).region }}
+          bucket: ${{ fromJson(vars.MCP_AWS_DEPLOY).pipeline }}-${{ secrets.AWS_ACCOUNT_ID }}
+          pipeline: ${{ fromJson(vars.MCP_AWS_DEPLOY).pipeline }}
+          container: mcp-server
+          image: ghcr.io/flexprice/mcp-server:${{ needs.version-check.outputs.version }}

@@ -74,6 +74,7 @@ func buildOptions(c config.RedisConfig) (*redis.UniversalOptions, redisMode, err
 		Username:     c.Username,
 		Password:     c.Password,
 		DB:           c.DB,
+		DialTimeout:  c.Timeout,
 		ReadTimeout:  c.Timeout,
 		WriteTimeout: c.Timeout,
 		PoolSize:     c.PoolSize,
@@ -121,13 +122,16 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 		rdb = redis.NewClient(opts.Simple())
 	}
 
+	// A failed startup ping keeps the client: go-redis reconnects on demand, so callers
+	// get per-call errors while Redis is down instead of a nil client for the process lifetime.
 	result, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create redis client (mode=%s): %w", mode, err)
+		log.Error(ctx, "redis unreachable at startup, continuing with reconnecting client",
+			"error", err, "addr", opts.Addrs, "mode", string(mode))
+	} else {
+		log.Info(ctx, "PING result", "result", result, "mode", string(mode))
+		log.Info(ctx, "Connected to Redis successfully", "addr", opts.Addrs, "mode", string(mode))
 	}
-
-	log.Info(ctx, "PING result", "result", result, "mode", string(mode))
-	log.Info(ctx, "Connected to Redis successfully", "addr", opts.Addrs, "mode", string(mode))
 
 	return &Client{
 		rdb: rdb,

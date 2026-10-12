@@ -83,6 +83,7 @@ distinguishable in logs:
 | `entitlement-enforcement-probe` | `e2eprobe-cust-eph-ent-<unixnano>` | Soft-limit enforcement |
 | `tax-application-probe` | `e2eprobe-cust-eph-tax-<unixnano>` | Sub + fresh tax association + preview |
 | `coupon-application-probe` | `e2eprobe-cust-eph-coupon-<unixnano>` | Sub w/ SubscriptionCoupons + preview |
+| `billing-matrix-<family>` | `e2eprobe-cust-eph-bm-<scenario>-<unixnano>` | One customer, plan and subscription per billing-matrix scenario (role `ephemeral-billing-matrix`) |
 | `payment-*-probe-<gateway>` | `e2eprobe-cust-eph-payment-<link\|method\|autocharge>-<gateway>-<unixnano>` | Checkout + saved-method flows against one gateway (roles `ephemeral-payment-link` / `-method` / `-autocharge`) |
 
 **When to use ephemeral:**

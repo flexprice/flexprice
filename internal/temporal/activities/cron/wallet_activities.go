@@ -63,13 +63,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		for _, environment := range environments.Environments {
 			envCtx := context.WithValue(tenantCtx, types.CtxEnvironmentID, environment.ID)
 
-			// The grace after expiry depends on the environment's credit expiry settlement setting.
-			cutoff, err := a.walletService.CreditExpiryCutoff(envCtx)
-			if err != nil {
-				a.logger.Error(ctx, "failed to resolve credit expiry cutoff, skipping environment", "error", err,
-					"tenant_id", tenant.ID, "environment_id", environment.ID)
-				continue
-			}
+			cutoff := a.walletService.CreditExpiryCutoff()
 			filter := types.NewNoLimitWalletTransactionFilter()
 			filter.Type = lo.ToPtr(types.TransactionTypeCredit)
 			filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
@@ -104,13 +98,6 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 					a.logger.Info(ctx, "expired credits successfully",
 						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable,
 						"applied_to_invoices", expireResult.Applied)
-					continue
-				}
-				switch expireResult.SkipReason {
-				case types.CreditExpirySkipReasonActiveSubscription:
-					result.SkippedDueToActiveSubscription++
-				case types.CreditExpirySkipReasonActiveInvoice:
-					result.SkippedDueToActiveInvoice++
 				}
 			}
 		}

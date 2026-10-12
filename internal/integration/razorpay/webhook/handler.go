@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -65,7 +66,16 @@ func getPaymentMethodID(payment Payment) string {
 // HandleWebhookEvent processes a Razorpay webhook event
 // This function never returns errors to ensure webhooks always return 200 OK
 // All errors are logged internally to prevent Razorpay from retrying
-func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) (err error) {
+	metricEventType, handled := event.Event, true
+	defer func() {
+		metrics.RecordCounter(ctx, metrics.GatewayWebhooks, 1,
+			metrics.L(metrics.KeyProvider, string(types.SecretProviderRazorpay)),
+			metrics.L(metrics.KeyEventType, metricEventType),
+			metrics.L(metrics.KeyOutcome, lo.Ternary(err != nil, "failed", lo.Ternary(handled, "processed", "ignored"))),
+		)
+	}()
+
 	h.logger.Info(ctx, "processing Razorpay webhook event",
 		"event_type", event.Event,
 		"account_id", event.AccountID,
@@ -94,6 +104,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 		return nil
 	default:
 		h.logger.Info(ctx, "unhandled Razorpay webhook event type", "type", event.Event)
+		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
 }

@@ -104,7 +104,7 @@ func TestPaymentLinkProbe(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fx := newPaymentFixture(t, tt.provider, nil)
+			fx := newPaymentFixture(t, tt.provider)
 			if tt.setup != nil {
 				tt.setup(fx)
 			}
@@ -132,7 +132,7 @@ func TestPaymentLinkProbe(t *testing.T) {
 }
 
 func TestPaymentLinkProbe_UnknownGatewaySkips(t *testing.T) {
-	fx := newPaymentFixture(t, "nomod", nil)
+	fx := newPaymentFixture(t, "nomod")
 	if err := NewPaymentLinkProbe(fx.fc, fx.reg, "run1", nil, fx.opts).Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestPaymentLinkProbe_NaturalExpiry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fx := newPaymentFixture(t, "stripe", nil)
+			fx := newPaymentFixture(t, "stripe")
 			fx.fc.payments.start = rejectUnattended(400)
 			fx.fc.invoices.getErr = nil
 			tt.setup(fx)
@@ -229,7 +229,7 @@ func TestPaymentLinkProbe_NaturalExpiry(t *testing.T) {
 }
 
 func TestPaymentLinkProbe_ImmatureWatchIsLeftAlone(t *testing.T) {
-	fx := newPaymentFixture(t, "stripe", nil)
+	fx := newPaymentFixture(t, "stripe")
 	fx.fc.payments.start = rejectUnattended(400)
 	probe := NewPaymentLinkProbe(fx.fc, fx.reg, "run1", nil, fx.opts)
 	pending := &expiryWatch{sessionID: "cs_pending", matureAt: time.Now().Add(time.Hour)}

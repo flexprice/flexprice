@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,7 @@ type fakeClient struct {
 	taxRates           fakeTaxRates
 	taxAssociations    fakeTaxAssociations
 	payments           fakePayments
+	raw                fakeRaw
 	async              *fakeAsyncEvents
 }
 
@@ -58,6 +60,21 @@ func (c *fakeClient) CouponAssociations() e2eprobe.CouponAssociationOps { return
 func (c *fakeClient) TaxRates() e2eprobe.TaxRateOps                     { return &c.taxRates }
 func (c *fakeClient) TaxAssociations() e2eprobe.TaxAssociationOps       { return &c.taxAssociations }
 func (c *fakeClient) Payments() e2eprobe.PaymentOps                     { return &c.payments }
+func (c *fakeClient) Raw() e2eprobe.RawOps                              { return &c.raw }
+
+// --- Raw ---
+
+type fakeRaw struct {
+	mu    sync.Mutex
+	calls []string // "METHOD path"
+}
+
+func (f *fakeRaw) Do(_ context.Context, method, path string, _, _ any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, method+" "+path)
+	return nil
+}
 
 // --- Customers ---
 
@@ -651,7 +668,12 @@ func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dt
 
 // applyInvoiceQuery treats invoices as newest-first (server default created_at desc).
 func applyInvoiceQuery(invoices []types.InvoiceResponse, filter types.InvoiceFilter) []types.InvoiceResponse {
-	items := append([]types.InvoiceResponse(nil), invoices...)
+	var items []types.InvoiceResponse
+	for _, inv := range invoices {
+		if inv.InvoiceStatus == nil || len(filter.InvoiceStatus) == 0 || slices.Contains(filter.InvoiceStatus, *inv.InvoiceStatus) {
+			items = append(items, inv)
+		}
+	}
 	if filter.Order != nil && *filter.Order == types.InvoiceFilterOrderAsc {
 		for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
 			items[i], items[j] = items[j], items[i]
@@ -1040,6 +1062,8 @@ type fakePayments struct {
 	portalDeleteErr   error
 	defaults          []string
 	deleted           []string
+	// ignoreSetDefault records set-default calls without changing the default.
+	ignoreSetDefault bool
 
 	// onModify and onCreditNote let a test apply what the server would on
 	// completion (new line item, refunded invoice, wallet credit).
@@ -1168,9 +1192,6 @@ func (f *fakePayments) ListSavedMethods(_ context.Context, _, _ string) ([]e2epr
 func (f *fakePayments) CreateSetupLink(_ context.Context, _, _, _ string) (string, error) {
 	return f.setupURL, nil
 }
-func (f *fakePayments) GetGatewayCustomerID(_ context.Context, _, _ string) (string, error) {
-	return f.gatewayCustomerID, nil
-}
 func (f *fakePayments) CreatePortalSession(_ context.Context, _ string) (string, error) {
 	return "portal_token", nil
 }
@@ -1184,6 +1205,9 @@ func (f *fakePayments) PortalSetDefaultMethod(_ context.Context, _, _, methodID 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.defaults = append(f.defaults, methodID)
+	if f.ignoreSetDefault {
+		return append([]e2eprobe.SavedPaymentMethod(nil), f.savedMethods...), nil
+	}
 	for i := range f.savedMethods {
 		f.savedMethods[i].IsDefault = f.savedMethods[i].ID == methodID
 	}

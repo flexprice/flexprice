@@ -1,8 +1,10 @@
 package dto
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -59,6 +61,14 @@ func taxRow(behavior types.TaxBehavior, amount string) *TaxAppliedResponse {
 	return &TaxAppliedResponse{TaxApplied: taxapplied.TaxApplied{
 		TaxBehavior: behavior,
 		TaxAmount:   decimal.RequireFromString(amount),
+	}}
+}
+
+// reversalRow is what a voided invoice leaves behind: it records tax being un-filed, carries no
+// amounts and no behavior, and is not a tax the invoice charges.
+func reversalRow() *TaxAppliedResponse {
+	return &TaxAppliedResponse{TaxApplied: taxapplied.TaxApplied{
+		TaxTransactionType: types.TaxTransactionTypeReversal,
 	}}
 }
 
@@ -137,13 +147,22 @@ func TestBuildTaxSummary(t *testing.T) {
 			why:        "same zeroed shape as the exempt case, different reason — the two must never be confused",
 		},
 		{
-			name:          "a reason code wins over whatever rows were passed",
-			taxes:         []*TaxAppliedResponse{taxRow(types.TaxBehaviorExclusive, "10.00")},
-			reasonCode:    lo.ToPtr(types.TaxExemptionReasonCustomerExempt),
-			wantInclusive: "0", wantExclusive: "0", wantTotal: "0",
-			wantReason: lo.ToPtr(types.TaxExemptionReasonCustomerExempt),
-			wantLabel:  "Customer is tax exempt",
-			why:        "the reason code is the authority on whether anything was charged, not the row count",
+			name:          "reverse charged in one jurisdiction and taxed in another",
+			taxes:         []*TaxAppliedResponse{taxRow(types.TaxBehaviorExclusive, "27.00")},
+			reasonCode:    lo.ToPtr(types.TaxExemptionReasonReverseCharge),
+			wantInclusive: "0", wantExclusive: "27", wantTotal: "27",
+			wantReason: lo.ToPtr(types.TaxExemptionReasonReverseCharge),
+			wantLabel:  types.TaxExemptionReasonReverseCharge.DisplayLabel(),
+			why:        "a reason does not mean nothing was charged, and zeroing the total would hide tax the customer owes",
+		},
+		{
+			name: "a reversal row is not a tax the invoice charges",
+			taxes: []*TaxAppliedResponse{
+				taxRow(types.TaxBehaviorExclusive, "27.00"),
+				reversalRow(),
+			},
+			wantInclusive: "0", wantExclusive: "27", wantTotal: "27",
+			why: "it records tax being un-filed after a void, so counting it would report the invoice as untaxed",
 		},
 	}
 
@@ -238,4 +257,48 @@ func TestTaxExemptionReasonCode_DisplayLabel(t *testing.T) {
 
 	assert.Equal(t, "future_code", types.TaxExemptionReasonCode("future_code").DisplayLabel(),
 		"an unmapped code falls back to itself rather than rendering as empty")
+}
+
+// A converted invoice's API response exposes fx_conversion on the invoice and on each line (the line
+// carries only charge_currency and source); a non-converted invoice omits both.
+func TestInvoiceResponse_ExposesFxConversionAndLineOriginals(t *testing.T) {
+	converted := &invoice.Invoice{
+		ID:       "inv_fx",
+		Currency: "inr",
+		FxConversion: &types.FxConversion{
+			ChargeCurrency: "usd", BillingCurrency: "inr",
+			Rate: decimal.NewFromInt(83), Scope: "tenant",
+		},
+		LineItems: []*invoice.InvoiceLineItem{{
+			ID: "il_fx", Currency: "inr", Amount: decimal.NewFromInt(8300),
+			FxConversion: &types.FxConversion{
+				ChargeCurrency: "usd",
+				Source:         types.FxConversionSource{Subtotal: decimal.NewFromInt(100), Net: decimal.NewFromInt(100)},
+			},
+		}},
+	}
+	raw, err := json.Marshal(NewInvoiceResponse(converted))
+	require.NoError(t, err)
+	var got struct {
+		FxConversion map[string]any `json:"fx_conversion"`
+		LineItems    []struct {
+			FxConversion map[string]any `json:"fx_conversion"`
+		} `json:"line_items"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+	assert.Equal(t, "83", got.FxConversion["rate"])
+	line := got.LineItems[0].FxConversion
+	assert.Equal(t, "usd", line["charge_currency"])
+	assert.Equal(t, "100", line["source"].(map[string]any)["subtotal"])
+	assert.NotContains(t, line, "rate", "the rate lives on the invoice only")
+
+	// Non-converted invoice omits them.
+	plain := &invoice.Invoice{
+		ID: "inv_plain", Currency: "usd",
+		LineItems: []*invoice.InvoiceLineItem{{ID: "il_plain", Currency: "usd", Amount: decimal.NewFromInt(100)}},
+	}
+	rawp, err := json.Marshal(NewInvoiceResponse(plain))
+	require.NoError(t, err)
+	sp := string(rawp)
+	assert.NotContains(t, sp, `"fx_conversion"`)
 }

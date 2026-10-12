@@ -101,6 +101,9 @@ func (s *LineItemEditSuite) SetupTest() {
 		InvoiceRepo:         s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
 		WebhookPublisher:    s.GetWebhookPublisher(),
+		// Voiding resolves the tax engine to reverse what was filed, which reads a setting.
+		SettingsRepo:   s.GetStores().SettingsRepo,
+		TaxAppliedRepo: s.GetStores().TaxAppliedRepo,
 	})
 }
 
@@ -711,6 +714,9 @@ func (s *InvoiceModificationServiceSuite) SetupTest() {
 		InvoiceRepo:         s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
 		WebhookPublisher:    s.GetWebhookPublisher(),
+		// Voiding resolves the tax engine to reverse what was filed, which reads a setting.
+		SettingsRepo:   s.GetStores().SettingsRepo,
+		TaxAppliedRepo: s.GetStores().TaxAppliedRepo,
 	})
 }
 

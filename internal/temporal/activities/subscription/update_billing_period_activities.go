@@ -3,7 +3,6 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- jitter, not security-sensitive
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -256,17 +255,8 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 	return nil
 }
 
-const (
-	processInvoiceStartDelay = 1 * time.Hour
-	processInvoiceJitterSpan = 4 * time.Hour
-)
-
-// processInvoiceDelaySeconds is the StartDelay for ProcessInvoiceWorkflow:
-// a 1h wait plus a uniform jitter in [0, 4h), so the workflow starts in [1h, 5h).
-func processInvoiceDelaySeconds() int {
-	jitter := time.Duration(rand.Int63n(int64(processInvoiceJitterSpan))) // #nosec G404 -- jitter, not security-sensitive
-	return int((processInvoiceStartDelay + jitter) / time.Second)
-}
+// Lets late-arriving events and pipeline lag settle.
+const processInvoiceStartDelay = 1 * time.Hour
 
 // TriggerInvoiceWorkflowActivity triggers invoice workflows for each invoice (fire-and-forget)
 // If triggering fails for any invoice, it logs the error and continues with the rest
@@ -301,7 +291,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
-			processInvoiceDelaySeconds(),
+			int(processInvoiceStartDelay/time.Second),
 		)
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",

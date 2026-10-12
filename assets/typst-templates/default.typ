@@ -80,7 +80,25 @@
   format-number(rounded, precision: precision)
 }
 
+// A rate carries its own precision, not the currency's: 8.375% must not print as 8.38%. Only
+// the third place is dropped when it is a zero, so an ordinary rate still reads as 10.00%.
+#let format-rate = (num) => {
+  let s = format-number(num, precision: 3)
+  if s.ends-with("0") { s = s.slice(0, -1) }
+  s
+}
+
 // Define the default-invoice function
+// Renders the registered tax numbers under a party's address. A compliant VAT invoice carries
+// both the seller's and the buyer's.
+#let tax-id-lines = (tax-ids) => {
+  if tax-ids == none { return }
+  for id in tax-ids {
+    linebreak()
+    text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#upper(id.type.replace("_", " ")): #id.value]
+  }
+}
+
 #let default-invoice(
   language: "en",
   currency: "$",
@@ -100,6 +118,7 @@
   styling: (:),                 // font, font-size, margin (sets defaults below)
   items: (),                    // Line items
   applied-taxes: (),            // Applied taxes breakdown
+  tax-notice: "",               // Statement the invoice must carry, e.g. reverse charge
   applied-discounts: (),        // Applied discounts breakdown
   subtotal: 0,                  // Subtotal before discounts and tax
   discount: 0,                  // Total discounts
@@ -219,6 +238,7 @@
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("street", default: "--")] \
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("city", default: "--")] \
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("postal-code", default: "--")]
+      #tax-id-lines(biller.at("tax_ids", default: none))
     ],
     [
       #text(weight: "semibold", size: 11pt)[Bill to]
@@ -228,6 +248,7 @@
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("street", default: "--")] \
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("city", default: "--")] \
       #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("postal-code", default: "--")]
+      #tax-id-lines(recipient.at("tax_ids", default: none))
     ]
   )
 
@@ -448,9 +469,9 @@
     v(0.5em)
 
     table(
-      columns: (1fr, 1fr, 1fr, 1fr, 1fr, 1fr),
-      inset: 8pt,
-      align: (left, left, left, right, right, right),
+      columns: (1.5fr, 1fr, 1fr, 0.8fr, 0.7fr, 1fr, 1fr),
+      inset: 7pt,
+      align: (left, left, left, left, right, right, right),
       fill: white,
       stroke: (x, y) => (
         bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
@@ -458,27 +479,31 @@
       table.header(
         [*Tax Name*],
         [*Code*],
+        [*Jurisdiction*],
         [*Type*],
         [*Rate*],
         [*Taxable Amount*],
         [*Tax Amount*],
-        // [*Applied At*],
       ),
       ..applied-taxes.map((tax) => {
+        // A rate of zero on anything but a percentage means none was reported, so the cell
+        // stays empty rather than claiming the tax was charged at nothing.
         let rate-display = if tax.tax_type == "percentage" {
-          [#format-currency(tax.tax_rate, precision: precision)%]
+          [#format-rate(tax.tax_rate)%]
+        } else if tax.tax_rate == 0 {
+          []
         } else {
           [#currency#format-currency(tax.tax_rate, precision: precision)]
         }
-        
+
         (
           tax.tax_name,
           tax.tax_code,
+          tax.at("jurisdiction", default: ""),
           tax.tax_type,
           rate-display,
           [#currency#format-currency(tax.taxable_amount, precision: precision)],
           [#currency#format-currency(tax.tax_amount, precision: precision)],
-          // tax.applied_at,
         )
       }).flatten(),
     )
@@ -497,6 +522,13 @@
       v(0.5em)
       biller.payment-instructions
     }
+  }
+
+  // A statement the invoice must carry to be compliant, such as reverse charge. Printed
+  // under the tax breakdown, where a reader looks for the tax.
+  if tax-notice != "" {
+    v(1em)
+    text(weight: "medium")[#tax-notice]
   }
 
   // Notes and Description

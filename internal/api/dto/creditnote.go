@@ -104,6 +104,28 @@ func (r *CreateCreditNoteRequest) ToCreditNote(ctx context.Context, inv *invoice
 	return cn
 }
 
+// CreditNotePreviewResponse is what a credit note would come to if it were issued now. The tax
+// on a credit is only known once the engine has been asked, so the tenant sees what the customer
+// will actually get back before committing to it. Nothing is written to produce this.
+type CreditNotePreviewResponse struct {
+	// Subtotal is the sum of the requested line items, before tax.
+	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
+
+	// TotalTax is the tax on that subtotal. Zero when no external engine is configured.
+	TotalTax decimal.Decimal `json:"total_tax" swaggertype:"string"`
+
+	// TotalAmount is what the customer gets back, tax included.
+	TotalAmount decimal.Decimal `json:"total_amount" swaggertype:"string"`
+
+	Currency string `json:"currency"`
+
+	// CreditNoteType is what this would be issued as, which follows the invoice's payment state.
+	CreditNoteType types.CreditNoteType `json:"credit_note_type"`
+
+	// Taxes are the individual taxes making up TotalTax, for display.
+	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
+}
+
 // CreateCreditNoteLineItemRequest represents a single line item in a credit note creation request
 type CreateCreditNoteLineItemRequest struct {
 	// invoice_line_item_id is the unique identifier of the invoice line item being credited

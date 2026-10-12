@@ -93,8 +93,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Unreleased; v2.29.0 breaks on Go 1.27.2
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+        run: go install github.com/securego/gosec/v2/cmd/gosec@7b1b5cebe007d62fb58eacb90fc571112939ec30
 
       # BLOCKING on high-confidence findings: scoped to -severity high
       # -confidence high so only high/high issues fail the PR. Findings (exit 1)

@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -779,6 +780,78 @@ func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEv
 	}
 	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
 	s.Equal(resp.ID, pl.InvoiceID)
+}
+
+// A one-off invoice counts its draft creation and finalization; voiding counts once more.
+func (s *InvoiceServiceSuite) TestInvoiceTransitionsCounted() {
+	r := metricstest.Install(s.T())
+	ctx := s.GetContext()
+	count := func(status types.InvoiceStatus) int64 {
+		return r.Sum("invoice.transitions", map[string]string{
+			"invoice_type":   string(types.InvoiceTypeOneOff),
+			"billing_reason": string(types.InvoiceBillingReasonManual),
+			"status":         string(status),
+		})
+	}
+	draftBefore, finalizedBefore, voidedBefore := count(types.InvoiceStatusDraft), count(types.InvoiceStatusFinalized), count(types.InvoiceStatusVoided)
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+	_, err = s.service.VoidInvoice(ctx, resp.ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+
+	s.Equal(draftBefore+1, count(types.InvoiceStatusDraft))
+	s.Equal(finalizedBefore+1, count(types.InvoiceStatusFinalized))
+	s.Equal(voidedBefore+1, count(types.InvoiceStatusVoided))
+}
+
+// A zero-charge cycle draft counts as skipped once; recomputing a still-skipped invoice adds nothing.
+func (s *InvoiceServiceSuite) TestInvoiceSkipCountedOnce() {
+	r := metricstest.Install(s.T())
+	s.invoiceRepo.Clear()
+	match := map[string]string{
+		"invoice_type":   string(types.InvoiceTypeSubscription),
+		"billing_reason": string(types.InvoiceBillingReasonSubscriptionCycle),
+		"status":         string(types.InvoiceStatusSkipped),
+	}
+	before := r.Sum("invoice.transitions", match)
+
+	inv := s.computedCycleDraft("sub_metrics_skip", "usd", decimal.Zero)
+	s.Require().Equal(types.InvoiceStatusSkipped, inv.InvoiceStatus)
+	_, skipped, err := s.service.ComputeInvoice(s.GetContext(), inv.ID, nil)
+	s.Require().NoError(err)
+	s.Require().True(skipped)
+
+	s.Equal(before+1, r.Sum("invoice.transitions", match))
+}
+
+// A skipped invoice that recompute brings back to draft counts the draft transition.
+func (s *InvoiceServiceSuite) TestInvoiceUnskipCounted() {
+	r := metricstest.Install(s.T())
+	s.invoiceRepo.Clear()
+	match := map[string]string{
+		"invoice_type":   string(types.InvoiceTypeSubscription),
+		"billing_reason": string(types.InvoiceBillingReasonSubscriptionCycle),
+		"status":         string(types.InvoiceStatusDraft),
+	}
+
+	inv := s.computedCycleDraft("sub_metrics_unskip", "usd", decimal.Zero)
+	s.Require().Equal(types.InvoiceStatusSkipped, inv.InvoiceStatus)
+	s.applyToDraft(inv, decimal.NewFromInt(20))
+	before := r.Sum("invoice.transitions", match)
+
+	_, skipped, err := s.service.ComputeInvoice(s.GetContext(), inv.ID, nil)
+	s.Require().NoError(err)
+	s.Require().False(skipped)
+	s.Equal(before+1, r.Sum("invoice.transitions", match))
 }
 
 func (s *InvoiceServiceSuite) TestSyncInvoiceToMoyasarIfEnabled_NoConnection_NoOp() {
@@ -3207,7 +3280,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesReturnsTaxSummary() {
 	applied := []*taxapplied.TaxApplied{
 		{
 			ID:            "taxapp_inc",
-			TaxRateID:     "taxrate_inc",
+			TaxRateID:     lo.ToPtr("taxrate_inc"),
 			EntityType:    types.TaxRateEntityTypeInvoice,
 			EntityID:      taxed.ID,
 			TaxableAmount: decimal.NewFromInt(100),
@@ -3218,7 +3291,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesReturnsTaxSummary() {
 		},
 		{
 			ID:            "taxapp_exc",
-			TaxRateID:     "taxrate_exc",
+			TaxRateID:     lo.ToPtr("taxrate_exc"),
 			EntityType:    types.TaxRateEntityTypeInvoice,
 			EntityID:      taxed.ID,
 			TaxableAmount: decimal.NewFromInt(100),
@@ -3281,7 +3354,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesTaxSummaryIsPerInvoice() {
 		for r := 0; r <= i; r++ {
 			s.NoError(s.GetStores().TaxAppliedRepo.Create(ctx, &taxapplied.TaxApplied{
 				ID:            fmt.Sprintf("taxapp_per_%02d_%02d", i, r),
-				TaxRateID:     fmt.Sprintf("taxrate_%02d", r),
+				TaxRateID:     lo.ToPtr(fmt.Sprintf("taxrate_%02d", r)),
 				EntityType:    types.TaxRateEntityTypeInvoice,
 				EntityID:      id,
 				TaxableAmount: decimal.NewFromInt(100),

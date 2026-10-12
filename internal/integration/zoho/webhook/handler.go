@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"net/url"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ type ServiceDeps struct {
 
 // Handle verifies the signature and dispatches on payload shape.
 // webhookSecretPlain must be the decrypted signing secret from the connection (see zoho.Client.GetZohoBooksWebhookConfig).
-func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parsedURL *url.URL, rawBody []byte, signatureHeader string, webhookSecretPlain string, deps *ServiceDeps) error {
+func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parsedURL *url.URL, rawBody []byte, signatureHeader string, webhookSecretPlain string, deps *ServiceDeps) (err error) {
 	if deps == nil {
 		return ierr.NewError("zoho webhook: nil dependencies").Mark(ierr.ErrInternal)
 	}
@@ -67,6 +68,14 @@ func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parse
 	if !VerifySignature(signatureHeader, signing, webhookSecretPlain) {
 		return fmt.Errorf("%w", ErrInvalidWebhookSignature)
 	}
+	metricEventType, handled := "other", true
+	defer func() {
+		metrics.RecordCounter(ctx, metrics.GatewayWebhooks, 1,
+			metrics.L(metrics.KeyProvider, string(types.SecretProviderZohoBooks)),
+			metrics.L(metrics.KeyEventType, metricEventType),
+			metrics.L(metrics.KeyOutcome, lo.Ternary(err != nil, "failed", lo.Ternary(handled, "processed", "ignored"))),
+		)
+	}()
 
 	var p Payload
 	if err := json.Unmarshal(rawBody, &p); err != nil {
@@ -81,10 +90,13 @@ func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parse
 
 	switch {
 	case p.Invoice != nil:
+		metricEventType = "invoice"
 		return h.handleInvoice(ctx, p.Invoice, deps)
 	case p.Contact != nil:
+		metricEventType = "contact"
 		return h.handleContact(ctx, conn, p.Contact, deps)
 	default:
+		handled = false
 		h.logger.Debug(ctx, "zoho webhook: no invoice or contact in payload, ignoring")
 		return nil
 	}

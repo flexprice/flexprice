@@ -40,6 +40,10 @@ type Repository interface {
 	// If billingReason is empty, it matches any billing reason (backward compat).
 	GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*Invoice, error)
 
+	// UpdateDraftInvoicePeriod sets a draft invoice's period end, billing reason and idempotency key, for a
+	// period that ends early. Returns ErrNotFound if the invoice is not a draft.
+	UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error
+
 	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
 	// Format: INV-YYYYMM-XXXXX
 	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error)

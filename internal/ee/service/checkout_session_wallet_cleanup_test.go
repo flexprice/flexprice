@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -317,4 +318,28 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_TopupDraftNotVoided() {
 	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
 	s.Require().NoError(err)
 	s.Equal(types.TransactionStatusFailed, tx.TxStatus)
+}
+
+// Each session counts once per status reached, however many times cleanup or completion runs.
+func (s *WalletServiceSuite) TestCheckoutSessionStatusCountedOnce() {
+	s.seedAutoComplete(false)
+	r := metricstest.Install(s.T())
+	ctx := s.GetContext()
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	count := func(status types.CheckoutStatus) int64 {
+		return r.Sum("checkout.sessions", map[string]string{"provider": string(types.CheckoutPaymentProviderRazorpay), "status": string(status)})
+	}
+	completedBefore, expiredBefore := count(types.CheckoutStatusCompleted), count(types.CheckoutStatusExpired)
+
+	_, completed := s.seedPayFirstTopupSession("metrics-complete", decimal.NewFromInt(200), nil)
+	stale := *completed
+	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, completed.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_metrics_001"}))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+
+	_, expired := s.seedPayFirstTopupSession("metrics-expire", decimal.NewFromInt(200), nil)
+	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, expired.ID, nil))
+	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, expired.ID, nil))
+
+	s.Equal(completedBefore+1, count(types.CheckoutStatusCompleted))
+	s.Equal(expiredBefore+1, count(types.CheckoutStatusExpired))
 }

@@ -5,6 +5,8 @@ package webhook
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -503,4 +505,13 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_NoSessionFound_Falls
 	s.Empty(s.client.refundCalls)
 	s.Require().NotEmpty(s.paymentSvc.updateCalls, "standalone path must still update the payment to Succeeded")
 	s.Equal(types.PaymentStatusSucceeded, s.paymentSvc.payment.PaymentStatus)
+}
+
+func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
+	r := metricstest.Install(t)
+	h := NewHandler(nil, nil, nil, nil, logger.NewNoopLogger())
+
+	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_rzp"), "env_gw"), &RazorpayWebhookEvent{Event: "attacker.chosen"}, "env_gw", nil))
+
+	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_rzp", "provider": "razorpay", "event_type": "other", "outcome": "ignored"}))
 }

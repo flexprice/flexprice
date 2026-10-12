@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -31,7 +32,7 @@ func (r *CreateTaxAppliedRequest) Validate() error {
 func (r *CreateTaxAppliedRequest) ToTaxApplied(ctx context.Context) *taxapplied.TaxApplied {
 	return &taxapplied.TaxApplied{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_APPLIED),
-		TaxRateID:        r.TaxRateID,
+		TaxRateID:        lo.ToPtr(r.TaxRateID),
 		EntityType:       r.EntityType,
 		EntityID:         r.EntityID,
 		TaxableAmount:    r.TaxableAmount,

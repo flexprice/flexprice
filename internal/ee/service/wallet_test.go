@@ -115,6 +115,7 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
+		FXRateRepo:                   stores.FXRateRepo,
 	}
 }
 

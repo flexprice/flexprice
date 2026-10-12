@@ -192,6 +192,7 @@ func (s *subscriptionService) replayAddonChangeRequest(
 				StartDate:         lo.ToPtr(ref.StartDate),
 				ProrationBehavior: ref.ProrationBehavior,
 				Metadata:          association.Metadata,
+				CouponRefs:        ref.Coupons,
 			},
 			Existing: association,
 		})

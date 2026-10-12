@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -39,13 +40,17 @@ func (TaxApplied) Fields() []ent.Field {
 			Unique().
 			Immutable(),
 
+		// Null when an external engine calculated the tax: there is no Flexprice rate
+		// to point at. Postgres does not collide null values in the unique index below,
+		// so any number of external rows coexist on one entity.
 		field.String("tax_rate_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
+			Optional().
+			Nillable().
 			Immutable().
-			Comment("Reference to the TaxRate entity that was applied"),
+			Comment("Reference to the TaxRate entity that was applied. Null for external engine rows"),
 
 		field.String("entity_type").
 			SchemaType(map[string]string{
@@ -121,6 +126,37 @@ func (TaxApplied) Fields() []ent.Field {
 			}).
 			Optional().
 			Comment("inclusive or exclusive, frozen at apply time"),
+
+		field.String("provider").
+			GoType(types.TaxProvider("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Comment("Engine that produced this row. Null or empty means the native engine"),
+
+		field.String("tax_transaction_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Provider transaction recording the filed tax, stamped once at commit"),
+
+		field.String("tax_transaction_type").
+			GoType(types.TaxTransactionType("")).
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Comment("What the provider transaction did. Null or empty means a filing"),
+
+		field.JSON("external_tax_details", &types.ExternalTaxDetails{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Comment("What the external engine returned about this tax. Null for native rows"),
 	}
 }
 
@@ -132,13 +168,16 @@ func (TaxApplied) Edges() []ent.Edge {
 // Indexes of the TaxApplied.
 func (TaxApplied) Indexes() []ent.Index {
 	return []ent.Index{
-		// Primary lookup: find tax applications for entity and tax rate
+		// Primary lookup: find tax applications for entity and tax rate.
+		// Archived rows are excluded, so a recalculation can archive the current set and
+		// write a new one without colliding with what earlier recalculations left behind.
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "tax_rate_id").
 			Unique().
-			StorageKey(Idx_entity_tax_rate_id),
+			StorageKey(Idx_entity_tax_rate_id).
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 
 		// Secondary lookup: find tax applications for entity and tax association
-		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id").
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "status").
 			StorageKey(Idx_entity_tax_association_lookup),
 	}
 }

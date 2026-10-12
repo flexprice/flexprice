@@ -16,9 +16,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -689,6 +691,19 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 	}
 	s.False(foundAPI, "GetWithLineItems should omit line item whose EndDate is before new CurrentPeriodStart")
 
+	// The API usage line has no events in this window, so keep zero usage lines to assert it is still picked up.
+	raw, err := utils.ToMap(types.InvoiceConfig{IncludeZeroValueLineItems: true})
+	s.NoError(err)
+	invoiceConfigSetting := &settings.Setting{
+		ID:            "setting_invoice_config",
+		Key:           types.SettingKeyInvoiceConfig,
+		Value:         raw,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	invoiceConfigSetting.Status = types.StatusPublished
+	s.NoError(s.GetStores().SettingsRepo.Create(ctx, invoiceConfigSetting))
+
 	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 		Subscription:   sub,
 		PeriodStart:    oldStart,
@@ -706,6 +721,85 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 		}
 	}
 	s.True(hasAPI, "PrepareSubscriptionInvoiceRequest for historical period should still bill API usage")
+}
+
+func (s *BillingServiceSuite) TestCreateInvoiceRequestForCharges_ZeroUsageLineItems() {
+	tests := []struct {
+		name                      string
+		includeZeroUsageLineItems *bool
+		referencePoint            types.InvoiceReferencePoint
+		expectedPriceIDs          []string
+	}{
+		{
+			name:             "setting absent skips zero usage line items",
+			expectedPriceIDs: []string{"price_fixed_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:                      "setting disabled skips zero usage line items",
+			includeZeroUsageLineItems: lo.ToPtr(false),
+			expectedPriceIDs:          []string{"price_fixed_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:                      "setting enabled keeps zero usage line items",
+			includeZeroUsageLineItems: lo.ToPtr(true),
+			expectedPriceIDs:          []string{"price_fixed_zero", "price_usage_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:             "revenue facts keep zero value line items regardless of setting",
+			referencePoint:   types.ReferencePointRevenueFacts,
+			expectedPriceIDs: []string{"price_fixed_zero", "price_usage_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.GetStores().SettingsRepo.(*testutil.InMemorySettingsStore).Clear()
+			ctx := s.GetContext()
+
+			if tt.includeZeroUsageLineItems != nil {
+				raw, err := utils.ToMap(types.InvoiceConfig{IncludeZeroValueLineItems: *tt.includeZeroUsageLineItems})
+				s.Require().NoError(err)
+				invoiceConfigSetting := &settings.Setting{
+					ID:            "setting_invoice_config",
+					Key:           types.SettingKeyInvoiceConfig,
+					Value:         raw,
+					EnvironmentID: types.GetEnvironmentID(ctx),
+					BaseModel:     types.GetDefaultBaseModel(ctx),
+				}
+				invoiceConfigSetting.Status = types.StatusPublished
+				s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, invoiceConfigSetting))
+			}
+
+			sub := s.testData.subscription
+			result := &dto.BillingCalculationResult{
+				Currency:    sub.Currency,
+				TotalAmount: decimal.NewFromInt(10),
+				FixedCharges: []dto.CreateInvoiceLineItemRequest{
+					{PriceID: lo.ToPtr("price_fixed_zero"), Quantity: decimal.Zero, Amount: decimal.Zero},
+				},
+				UsageCharges: []dto.CreateInvoiceLineItemRequest{
+					{PriceID: lo.ToPtr("price_usage_zero"), Quantity: decimal.Zero, Amount: decimal.Zero},
+					{PriceID: lo.ToPtr("price_usage_qty_only"), Quantity: decimal.NewFromInt(5), Amount: decimal.Zero},
+					{PriceID: lo.ToPtr("price_usage_billed"), Quantity: decimal.NewFromInt(10), Amount: decimal.NewFromInt(10)},
+				},
+			}
+
+			req, err := s.service.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
+				Subscription:   sub,
+				Result:         result,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+				ReferencePoint: tt.referencePoint,
+			})
+			s.Require().NoError(err)
+
+			priceIDs := lo.Map(req.LineItems, func(li dto.CreateInvoiceLineItemRequest, _ int) string {
+				return lo.FromPtr(li.PriceID)
+			})
+			s.ElementsMatch(tt.expectedPriceIDs, priceIDs)
+			s.Len(result.UsageCharges, 3, "caller's calculation result must not be mutated")
+		})
+	}
 }
 
 // Helper methods for specific validations

@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"crypto/tls"
 	"testing"
 	"time"
@@ -207,8 +208,6 @@ func TestNewClient_SentinelMissingAddrsErrors(t *testing.T) {
 		// Empty addrs must be rejected up front — go-redis would otherwise
 		// substitute 127.0.0.1:26379 and connect to a phantom local sentinel.
 		{name: "empty addrs", addrs: nil},
-		// Unreachable addrs must surface a connection error, not hang.
-		{name: "unreachable addr", addrs: []string{"127.0.0.1:1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -227,6 +226,50 @@ func TestNewClient_SentinelMissingAddrsErrors(t *testing.T) {
 					_ = client.Close()
 				}
 				t.Fatal("expected an error, got nil")
+			}
+		})
+	}
+}
+
+// TestNewClient_UnreachableKeepsClient: an unreachable Redis at startup still yields a
+// client whose calls fail fast, so dependents never see a nil client.
+func TestNewClient_UnreachableKeepsClient(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  func(cfg *config.Configuration)
+	}{
+		{name: "standalone", cfg: func(cfg *config.Configuration) {
+			cfg.Redis.Host = "127.0.0.1"
+			cfg.Redis.Port = 1
+		}},
+		{name: "sentinel", cfg: func(cfg *config.Configuration) {
+			cfg.Redis.SentinelMasterName = "mymaster"
+			cfg.Redis.SentinelAddrs = []string{"127.0.0.1:1"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.GetDefaultConfig()
+			cfg.Redis.Timeout = 500 * time.Millisecond
+			tt.cfg(cfg)
+
+			log, err := logger.NewLogger(cfg)
+			if err != nil {
+				t.Fatalf("logger: %v", err)
+			}
+			client, err := NewClient(cfg, log)
+			if err != nil {
+				t.Fatalf("expected a client, got error: %v", err)
+			}
+			if client == nil {
+				t.Fatal("expected a client, got nil")
+			}
+			defer client.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := client.Ping(ctx); err == nil {
+				t.Fatal("expected ping to fail against unreachable redis")
 			}
 		})
 	}

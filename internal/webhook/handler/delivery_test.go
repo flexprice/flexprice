@@ -2,13 +2,19 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -149,4 +155,56 @@ func TestAbsorbDeliveryError_RealErrorNoPanicWithoutRepo(t *testing.T) {
 			EventName: types.WebhookEventCustomerCreated,
 		}, "mid")
 	})
+}
+
+type stubBuilders struct{ err error }
+
+func (f stubBuilders) GetBuilder(types.WebhookEventName) (payload.PayloadBuilder, error) {
+	return nil, f.err
+}
+
+// Only events the tenant is subscribed to are counted, labelled by delivery outcome.
+func TestProcessMessage_CountsSubscribedDeliveries(t *testing.T) {
+	r := metricstest.Install(t)
+	tests := []struct {
+		name     string
+		tenant   *config.TenantWebhookConfig
+		buildErr error
+		outcome  string
+		want     int64
+	}{
+		{name: "tenant not configured", outcome: "error", want: 0},
+		{name: "event excluded", tenant: &config.TenantWebhookConfig{Enabled: true, ExcludedEvents: []types.WebhookEventName{types.WebhookEventCustomerCreated}}, outcome: "error", want: 0},
+		{name: "subscribed, entity missing", tenant: &config.TenantWebhookConfig{Enabled: true}, buildErr: ierr.NewError("gone").Mark(ierr.ErrNotFound), outcome: "skipped", want: 1},
+		{name: "subscribed, build fails", tenant: &config.TenantWebhookConfig{Enabled: true}, buildErr: errors.New("boom"), outcome: "error", want: 1},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tenantID := fmt.Sprintf("ten_metrics_%d", i)
+			tenants := map[string]config.TenantWebhookConfig{}
+			if tt.tenant != nil {
+				tenants[tenantID] = *tt.tenant
+			}
+			h := &handler{
+				config:  &config.Webhook{Enabled: true, Tenants: tenants},
+				factory: stubBuilders{err: tt.buildErr},
+				logger:  testLogger(t),
+			}
+			event, err := json.Marshal(types.WebhookEvent{
+				ID:            "sev_metrics",
+				TenantID:      tenantID,
+				EnvironmentID: "env_metrics",
+				EventName:     types.WebhookEventCustomerCreated,
+				Timestamp:     time.Now().UTC(),
+			})
+			require.NoError(t, err)
+
+			require.NoError(t, h.processMessage(context.Background(), message.NewMessage("sev_metrics", event)))
+			require.Equal(t, tt.want, r.Sum("webhook.outbound.deliveries", map[string]string{
+				"tenant_id": tenantID,
+				"transport": "native",
+				"outcome":   tt.outcome,
+			}))
+		})
+	}
 }

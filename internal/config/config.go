@@ -753,6 +753,10 @@ type OtelMetricsConfig struct {
 	// and SigNoz already derives it); turn it on where the backend cannot store
 	// traces and this is the only source of API latency.
 	HTTPServerEnabled bool `mapstructure:"http_server_enabled" default:"false"`
+	// AppEnabled, DisabledMetrics and TenantAllowlist control internal/metrics only.
+	AppEnabled      bool     `mapstructure:"app_enabled" default:"false"`
+	DisabledMetrics []string `mapstructure:"disabled_metrics"`
+	TenantAllowlist []string `mapstructure:"tenant_allowlist"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
@@ -848,6 +852,18 @@ type TemporalWorkerConfig struct {
 	// TaskQueueActivitiesPerSecond is the rate limit for activities per second across all workers for the task queue. 0 means unlimited.
 	// Default: 0 (unlimited)
 	TaskQueueActivitiesPerSecond float64 `mapstructure:"task_queue_activities_per_second"`
+	// Queues holds per-task-queue overrides, keyed by task queue name. Unset
+	// fields fall back to the values above.
+	Queues map[string]TemporalQueueWorkerConfig `mapstructure:"queues"`
+}
+
+// TemporalQueueWorkerConfig overrides worker limits for a single task queue.
+// Zero fields inherit the global TemporalWorkerConfig value.
+type TemporalQueueWorkerConfig struct {
+	MaxConcurrentActivityExecutionSize     int     `mapstructure:"max_concurrent_activity_execution_size"`
+	MaxConcurrentWorkflowTaskExecutionSize int     `mapstructure:"max_concurrent_workflow_task_execution_size"`
+	WorkerActivitiesPerSecond              float64 `mapstructure:"worker_activities_per_second"`
+	TaskQueueActivitiesPerSecond           float64 `mapstructure:"task_queue_activities_per_second"`
 }
 
 type SecretsConfig struct {

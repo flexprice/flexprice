@@ -137,6 +137,16 @@ type ModifySubscriptionLineItem struct {
 	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
 	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
+	Coupons       []CouponRef      `json:"coupons,omitempty"`
+}
+
+// CouponRef is a coupon resolved at quote time, applied as-is at execute time and on replay.
+type CouponRef struct {
+	AssociationID string     `json:"association_id"`
+	CouponID      string     `json:"coupon_id"`
+	PriceID       *string    `json:"price_id,omitempty"`
+	StartDate     time.Time  `json:"start_date"`
+	EndDate       *time.Time `json:"end_date,omitempty"`
 }
 
 func (p *ModifySubscriptionParams) Validate() error {
@@ -197,6 +207,7 @@ type AddAddonRef struct {
 	// Needed to prorate the addon's first credit grant.
 	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         time.Time         `json:"start_date"`
+	Coupons           []CouponRef       `json:"coupons,omitempty"`
 }
 
 // RemoveAddonRef is one removal riding along with a payment-gated attach. It persists nothing

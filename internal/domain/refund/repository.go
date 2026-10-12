@@ -37,4 +37,8 @@ type Repository interface {
 	// SumInFlightByPaymentIDs sums the requested amount of refunds that have claimed money
 	// but not yet settled, so a second allocation cannot draw the same balance again.
 	SumInFlightByPaymentIDs(ctx context.Context, invoiceID string, paymentIDs []string) (map[string]decimal.Decimal, error)
+
+	// SumSettledToWalletByInvoice sums the settled amount of an invoice's succeeded wallet refunds in
+	// the given currency.
+	SumSettledToWalletByInvoice(ctx context.Context, invoiceID, currency string) (decimal.Decimal, error)
 }

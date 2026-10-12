@@ -421,7 +421,7 @@ func TestApplyTaxResultToInvoice_Totals(t *testing.T) {
 				AmountPaid:                 decimal.Zero,
 			}
 
-			applyTaxResultToInvoice(inv, &TaxCalculationResult{
+			applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 				InclusiveTax:      decimal.RequireFromString(tt.inclusiveTax),
 				ExclusiveTax:      decimal.RequireFromString(tt.exclusiveTax),
 				TotalTaxAmount:    decimal.RequireFromString(tt.wantTotalTax),
@@ -446,7 +446,7 @@ func TestApplyTaxResultToInvoice_AmountRemainingSubtractsWhatWasPaid(t *testing.
 		AmountPaid: decimal.NewFromInt(40),
 	}
 
-	applyTaxResultToInvoice(inv, &TaxCalculationResult{
+	applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 		ExclusiveTax:      decimal.NewFromInt(10),
 		TotalTaxAmount:    decimal.NewFromInt(10),
 		TaxAppliedRecords: []*dto.TaxAppliedResponse{{}},
@@ -494,7 +494,7 @@ func TestApplyTaxResultToInvoice_ExemptionReasonCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := &invoice.Invoice{Subtotal: decimal.NewFromInt(100)}
-			applyTaxResultToInvoice(inv, &TaxCalculationResult{
+			applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 				TotalTaxAmount:    decimal.Zero,
 				Exempt:            tt.exempt,
 				TaxAppliedRecords: tt.records,
@@ -514,7 +514,7 @@ func TestApplyTaxResultToInvoice_ExemptionReasonCode(t *testing.T) {
 // total from subtotal every time rather than adjusting whatever was already there.
 func TestApplyTaxResultToInvoice_IsIdempotent(t *testing.T) {
 	inv := &invoice.Invoice{Subtotal: decimal.NewFromInt(100)}
-	result := &TaxCalculationResult{
+	result := &dto.TaxCalculationResult{
 		ExclusiveTax:      decimal.NewFromInt(10),
 		TotalTaxAmount:    decimal.NewFromInt(10),
 		TaxAppliedRecords: []*dto.TaxAppliedResponse{{}},
@@ -554,6 +554,8 @@ func (s *TaxCalculationSuite) SetupTest() {
 		InvoiceRepo:        st.InvoiceRepo,
 		CustomerRepo:       st.CustomerRepo,
 		SubRepo:            st.SubscriptionRepo,
+		SettingsRepo:       st.SettingsRepo,
+		ConnectionRepo:     st.ConnectionRepo,
 	})
 }
 
@@ -950,7 +952,7 @@ func (s *TaxCalculationSuite) TestApplyTaxesOnInvoice_PersistedRowFields() {
 
 	byRateID := make(map[string]*dto.TaxAppliedResponse)
 	for _, r := range s.taxAppliedFor(inv.ID) {
-		byRateID[r.TaxRateID] = r
+		byRateID[r.GetTaxRateID()] = r
 	}
 	s.Require().Len(byRateID, 2)
 
@@ -1058,7 +1060,7 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_SkipsRateMissingPercen
 		&dto.InvoiceTaxRates{Rates: []*dto.TaxRateWithBehavior{broken, good}})
 
 	s.Len(result.TaxAppliedRecords, 1, "the unusable rate must be dropped, not charged at zero")
-	s.Equal(good.ID, result.TaxAppliedRecords[0].TaxRateID)
+	s.Equal(good.ID, result.TaxAppliedRecords[0].GetTaxRateID())
 	s.True(decimal.NewFromInt(10).Equal(result.TotalTaxAmount), "the usable rate still applies, got %s", result.TotalTaxAmount)
 }
 

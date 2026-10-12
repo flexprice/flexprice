@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/metrics"
+	"github.com/samber/lo"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -56,7 +58,16 @@ func NewHandler(
 }
 
 // HandleWebhookEvent processes a Stripe webhook event
-func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event, environmentID string, services *ServiceDependencies) (err error) {
+	metricEventType, handled := string(event.Type), true
+	defer func() {
+		metrics.RecordCounter(ctx, metrics.GatewayWebhooks, 1,
+			metrics.L(metrics.KeyProvider, string(types.SecretProviderStripe)),
+			metrics.L(metrics.KeyEventType, metricEventType),
+			metrics.L(metrics.KeyOutcome, lo.Ternary(err != nil, "failed", lo.Ternary(handled, "processed", "ignored"))),
+		)
+	}()
+
 	h.logger.Info(ctx, "processing Stripe webhook event",
 		"event_id", event.ID,
 		"event_type", event.Type,
@@ -95,6 +106,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event
 
 	default:
 		h.logger.Info(ctx, "unhandled Stripe webhook event type", "type", event.Type)
+		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
 }

@@ -199,6 +199,7 @@ jobs:
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
+      api_targets: ${{ steps.config.outputs.api_targets }}
       preprod_targets: ${{ steps.config.outputs.preprod_targets }}
       environment: ${{ steps.config.outputs.environment }}
       dry_run: ${{ steps.config.outputs.dry_run }}
@@ -228,11 +229,21 @@ jobs:
           # manual approval gate before the full production rollout.
           if [ -z "$TARGETS_JSON" ]; then
             PREPROD_TARGETS_JSON="[]"
+            API_TARGETS_JSON="[]"
           else
             PREPROD_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
           import json, sys
           targets = json.load(sys.stdin)
           print(json.dumps([t for t in targets if t.get('preprod_service')]))
+          ")
+            API_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
+          import json, sys
+          targets = json.load(sys.stdin)
+          print(json.dumps([
+              {'region': t['region'], 'cluster': t['cluster'], 'api_service': svc}
+              for t in targets
+              for svc in [t['api_service'], *t.get('extra_api_services', [])]
+          ]))
           ")
           fi
 
@@ -240,6 +251,10 @@ jobs:
           echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
           echo "$TARGETS_JSON" >> $GITHUB_OUTPUT
           echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+
+          echo "api_targets<<API_TARGETS_EOF" >> $GITHUB_OUTPUT
+          echo "$API_TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "API_TARGETS_EOF" >> $GITHUB_OUTPUT
 
           echo "preprod_targets<<PREPROD_EOF" >> $GITHUB_OUTPUT
           echo "$PREPROD_TARGETS_JSON" >> $GITHUB_OUTPUT
@@ -375,13 +390,32 @@ jobs:
       max-parallel: 3
 
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: vars.ECS_DEPLOY_VIA == 'codepipeline'
+        with:
+          persist-credentials: false
+
       - name: Configure AWS credentials (OIDC)
+        if: vars.ECS_DEPLOY_VIA != 'codepipeline'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
           aws-region: ${{ matrix.target.region }}
 
+      - name: Deploy ECS Preprod service (CodePipeline)
+        if: vars.ECS_DEPLOY_VIA == 'codepipeline'
+        uses: ./.github/actions/deploy-codepipeline
+        with:
+          role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.ECS_CODEPIPELINE).role }}
+          region: ${{ fromJson(vars.ECS_CODEPIPELINE).region }}
+          bucket: ${{ fromJson(vars.ECS_CODEPIPELINE).preprod_pipeline }}-${{ secrets.AWS_ACCOUNT_ID }}
+          pipeline: ${{ fromJson(vars.ECS_CODEPIPELINE).preprod_pipeline }}
+          container: main
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
       - name: Deploy ECS Preprod service
+        if: vars.ECS_DEPLOY_VIA != 'codepipeline'
         uses: ./.github/actions/deploy-ecs-service
         with:
           cluster: ${{ matrix.target.cluster }}
@@ -494,6 +528,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
@@ -503,7 +538,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+        target: ${{ fromJson(needs.resolve-config.outputs.api_targets) }}
       fail-fast: false
       max-parallel: 3
 
@@ -533,6 +568,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
@@ -572,6 +608,7 @@ jobs:
     # dry-run: bypasses the gate; composite action prints plan only
     if: >-
       ${{ always() &&
+          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
@@ -602,4 +639,37 @@ jobs:
           ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
           ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
           ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  # api, consumer, worker in one CodePipeline run.
+  deploy-backend-codepipeline:
+    name: Deploy API, Consumer, Worker (CodePipeline)
+    needs: [build, resolve-config, migrate, approval-gate]
+    if: >-
+      ${{ always() &&
+          vars.ECS_DEPLOY_VIA == 'codepipeline' &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.targets != '[]' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
+    runs-on: self-hosted
+    timeout-minutes: 80
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy via CodePipeline
+        uses: ./.github/actions/deploy-codepipeline
+        with:
+          role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.ECS_CODEPIPELINE).role }}
+          region: ${{ fromJson(vars.ECS_CODEPIPELINE).region }}
+          bucket: ${{ fromJson(vars.ECS_CODEPIPELINE).backend_pipeline }}-${{ secrets.AWS_ACCOUNT_ID }}
+          pipeline: ${{ fromJson(vars.ECS_CODEPIPELINE).backend_pipeline }}
+          container: main
+          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}

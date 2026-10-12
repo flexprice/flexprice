@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -61,6 +62,7 @@ type lineItemChangeMod struct {
 	oldLineItem     *subscription.SubscriptionLineItem
 	oldPrice        *dto.PriceResponse
 	newEndDate      time.Time
+	coupons         []types.CouponRef
 }
 
 func newLineItemChangeMod(
@@ -149,6 +151,13 @@ func (m *lineItemChangeMod) getOldPrice() *dto.PriceResponse {
 		return nil
 	}
 	return m.oldPrice
+}
+
+func (m *lineItemChangeMod) getCoupons() []types.CouponRef {
+	if m == nil {
+		return nil
+	}
+	return m.coupons
 }
 
 func (m *lineItemChangeMod) getNewEndDate() time.Time {
@@ -305,6 +314,12 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		if mod == nil {
 			continue
 		}
+		// The old item's price only anchors the fan-out; coupons land on the new item.
+		mod.coupons, err = NewCouponAssociationService(s.serviceParams).ResolveCouponRefs(
+			ctx, sub, change.Coupons, effectiveDate, []string{mod.getOldLineItem().PriceID})
+		if err != nil {
+			return nil, err
+		}
 		mods = append(mods, mod)
 	}
 
@@ -343,6 +358,7 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		if mod == nil {
 			continue
 		}
+		mod.coupons = m.Coupons
 		mods = append(mods, mod)
 	}
 
@@ -421,6 +437,7 @@ func (r *lineItemChangeRequest) toModifySubscriptionParams() *types.ModifySubscr
 			Quantity:      m.getUpdatedQuantity(),
 			Amount:        m.getAmount(),
 			EffectiveDate: &ed,
+			Coupons:       m.getCoupons(),
 		})
 	}
 
@@ -552,6 +569,11 @@ func (s *subscriptionModificationService) applyLineItemChange(
 				return err
 			}
 
+			if err := NewCouponAssociationService(sp).CreateCouponRefAssociations(
+				txCtx, request.GetSubscription(), mod.getCoupons(), newItem.ID); err != nil {
+				return err
+			}
+
 			setSuccessorLineItemID(endedItem, newItem.ID)
 			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
 				return ierr.WithError(err).
@@ -638,6 +660,15 @@ func (s *subscriptionModificationService) quoteLineItemChange(
 			entry.NewPrice = newPrice
 		}
 
+		coupons := lo.Map(mod.getCoupons(), func(ref types.CouponRef, _ int) dto.InvoiceLineItemCoupon {
+			return dto.InvoiceLineItemCoupon{
+				LineItemID:             oldLineItem.PriceID,
+				SubscriptionLineItemID: lo.ToPtr(oldLineItem.ID),
+				CouponID:               ref.CouponID,
+				CouponAssociationID:    lo.ToPtr(ref.AssociationID),
+			}
+		})
+
 		effectiveDate := mod.getEffectiveDate()
 		computed, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
 			Subscription:  sub,
@@ -645,6 +676,7 @@ func (s *subscriptionModificationService) quoteLineItemChange(
 			EffectiveDate: effectiveDate,
 			Behavior:      types.ProrationBehaviorCreateProrations,
 			Reason:        lineItemChangeReason,
+			Coupons:       coupons,
 		})
 		if err != nil {
 			return nil, err
@@ -812,7 +844,7 @@ func (s *subscriptionModificationService) archiveLineItemChangeDraft(
 		return
 	}
 
-	if err := s.serviceParams.InvoiceRepo.Delete(ctx, draft.ID); err != nil {
+	if err := archiveDraftInvoice(ctx, s.serviceParams, draft.ID); err != nil {
 		s.serviceParams.Logger.Error(ctx, "failed to archive draft invoice after pay-first failure",
 			"error", err,
 			"invoice_id", draft.ID,

@@ -3,17 +3,27 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
+)
+
+// Checkout charge modes, a metrics label; "none" means the gateway was not contacted yet.
+const (
+	chargeModeNone        = "none"
+	chargeModeAutoCharge  = "auto_charge"
+	chargeModeAuthLink    = "auth_link"
+	chargeModePaymentLink = "payment_link"
 )
 
 type CheckoutSessionService = interfaces.CheckoutSessionService
@@ -150,6 +160,7 @@ func (s *checkoutSessionService) Create(ctx context.Context, req dto.CreateCheck
 	}
 
 	resp := s.toPollableResponse(ctx, session, false)
+	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, types.CheckoutStatusInitiated)...)
 	s.publishCheckoutEvent(ctx, resp, types.WebhookEventCheckoutSessionInitiated)
 	return resp, nil
 }
@@ -445,6 +456,7 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 
 	session.CheckoutStatus = status
 	session.FailureReason = failureReason
+	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, status)...)
 	return true, nil
 }
 
@@ -528,11 +540,28 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		if err := s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, invoiceID); err != nil {
 			return err
 		}
-		if err := s.InvoiceRepo.Delete(ctx, invoiceID); err != nil {
+		if err := archiveDraftInvoice(ctx, s.ServiceParams, invoiceID); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// archiveDraftInvoice archives an unpaid checkout draft along with the coupon applications computed onto it.
+func archiveDraftInvoice(ctx context.Context, sp ServiceParams, invoiceID string) error {
+	filter := types.NewNoLimitCouponApplicationFilter()
+	filter.InvoiceIDs = []string{invoiceID}
+	applications, err := sp.CouponApplicationRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+	for _, application := range applications {
+		if err := sp.CouponApplicationRepo.Delete(ctx, application.ID); err != nil {
+			return err
+		}
+	}
+
+	return sp.InvoiceRepo.Delete(ctx, invoiceID)
 }
 
 const cleanupExpiredBatchSize = 1000
@@ -622,8 +651,33 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	if mergedResult != nil {
 		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(mergedResult)
 	}
+	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, types.CheckoutStatusCompleted)...)
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
 	return nil
+}
+
+func checkoutMetricLabels(session *domainCheckout.CheckoutSession, status types.CheckoutStatus) []metrics.Label {
+	return []metrics.Label{
+		metrics.L(metrics.KeyProvider, string(session.PaymentProvider)),
+		metrics.L(metrics.KeyAction, string(session.Action)),
+		metrics.L(metrics.KeyChargeMode, checkoutChargeMode(session)),
+		metrics.L(metrics.KeyStatus, string(status)),
+	}
+}
+
+// checkoutChargeMode relies on auto-charge responses carrying no URL while auth links always do.
+func checkoutChargeMode(session *domainCheckout.CheckoutSession) string {
+	result := session.ProviderResult.ToProviderResult()
+	switch {
+	case result == nil:
+		return chargeModeNone
+	case lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig()).CollectionMethod == types.CollectionMethodSendInvoice:
+		return chargeModePaymentLink
+	case lo.FromPtr(result.NextAction).URL != "":
+		return chargeModeAuthLink
+	default:
+		return chargeModeAutoCharge
+	}
 }
 
 func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, session *dto.CheckoutSessionResponse, eventName types.WebhookEventName) {
@@ -800,7 +854,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
 		// Compute already debited prepaid credits; archiving alone would not return them.
 		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
-		if delErr := s.InvoiceRepo.Delete(ctx, draftInvoiceID); delErr != nil {
+		if delErr := archiveDraftInvoice(ctx, s.ServiceParams, draftInvoiceID); delErr != nil {
 			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
 				"invoice_id", draftInvoiceID,
 				"error", delErr,
@@ -833,6 +887,7 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	}
 
 	sessionResp := s.toPollableResponse(ctx, session, false)
+	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, types.CheckoutStatusInitiated)...)
 	s.publishCheckoutEvent(ctx, sessionResp, types.WebhookEventCheckoutSessionInitiated)
 	return sessionResp, nil
 }
