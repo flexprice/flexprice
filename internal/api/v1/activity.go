@@ -39,6 +39,10 @@ func (h *ActivityHandler) ListActivity(c *gin.Context) {
 		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 		return
 	}
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
 	resp, err := h.service.List(c.Request.Context(), &req)
 	if err != nil {
 		c.Error(err)

@@ -1,11 +1,11 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -22,8 +22,6 @@ const (
 	activityDefaultWindow = 30 * 24 * time.Hour
 	activityMaxWindow     = 90 * 24 * time.Hour
 	activityDefaultLimit  = 50
-	activityMaxLimit      = 100
-	activityMaxStateLimit = 50
 )
 
 // ActivityService reads the activity log.
@@ -52,7 +50,7 @@ func (s *activityService) List(ctx context.Context, req *dto.ListActivityRequest
 	if err != nil {
 		return nil, err
 	}
-	withState := slices.Contains(req.Expand, "state")
+	withState := req.WithState()
 
 	rows, err := s.ActivityRepo.List(ctx, query)
 	if err != nil {
@@ -117,7 +115,7 @@ func (s *activityService) Get(ctx context.Context, id string) (*dto.ActivityResp
 	return item, nil
 }
 
-// buildQuery validates req and returns the repository query and the page size.
+// buildQuery checks what needs the registry or the clock and returns the repository query and the page size.
 func (s *activityService) buildQuery(req *dto.ListActivityRequest, now time.Time) (*domainActivity.ListQuery, int, error) {
 	from, to, err := resolveWindow(now, req.StartTime, req.EndTime)
 	if err != nil {
@@ -126,10 +124,7 @@ func (s *activityService) buildQuery(req *dto.ListActivityRequest, now time.Time
 	if err := s.validateFilters(req); err != nil {
 		return nil, 0, err
 	}
-	limit, err := resolveLimit(req.Limit, slices.Contains(req.Expand, "state"))
-	if err != nil {
-		return nil, 0, err
-	}
+	limit := cmp.Or(req.Limit, activityDefaultLimit)
 	var after *domainActivity.Cursor
 	if req.Cursor != "" {
 		if after, err = decodeCursor(req.Cursor); err != nil {
@@ -143,19 +138,11 @@ func (s *activityService) buildQuery(req *dto.ListActivityRequest, now time.Time
 	}, limit, nil
 }
 
+// validateFilters checks the entity type and actions against the registry.
 func (s *activityService) validateFilters(req *dto.ListActivityRequest) error {
-	if req.EntityID != "" && req.EntityType == "" {
-		return activityValidation("entity_type is required when entity_id is set.")
-	}
 	if req.EntityType != "" {
 		if _, ok := s.registry.ByType(types.SystemEntityType(req.EntityType)); !ok {
 			return activityValidation("Unknown entity_type %q.", req.EntityType)
-		}
-	}
-	for _, actorType := range req.ActorTypes {
-		if !slices.Contains(types.ActorTypes(), types.ActorType(actorType)) {
-			allowed := lo.Map(types.ActorTypes(), func(a types.ActorType, _ int) string { return string(a) })
-			return activityValidation("Unknown actor type %q. Allowed actor types: %s.", actorType, strings.Join(allowed, ", "))
 		}
 	}
 	for _, action := range req.Actions {
@@ -168,11 +155,6 @@ func (s *activityService) validateFilters(req *dto.ListActivityRequest) error {
 			return activityValidation("Unknown action %q. Allowed %s actions: %s.", action, entity, strings.Join(names, ", "))
 		}
 		return activityValidation("Unknown action %q. Actions are named <entity>.<verb>, for example invoice.voided.", action)
-	}
-	for _, expand := range req.Expand {
-		if expand != "state" {
-			return activityValidation("Unknown expand %q. Allowed values: state.", expand)
-		}
 	}
 	return nil
 }
@@ -199,20 +181,6 @@ func resolveWindow(now time.Time, start, end *time.Time) (from, to time.Time, er
 		return from, to, activityValidation("The time range can be at most 90 days. Narrow start_time and end_time.")
 	}
 	return from, to, nil
-}
-
-func resolveLimit(limit int, withState bool) (int, error) {
-	maxLimit := activityMaxLimit
-	if withState {
-		maxLimit = activityMaxStateLimit
-	}
-	if limit == 0 {
-		return activityDefaultLimit, nil
-	}
-	if limit < 0 || limit > maxLimit {
-		return 0, activityValidation("limit can be at most 100 (50 with expand state).")
-	}
-	return limit, nil
 }
 
 func encodeCursor(c domainActivity.Cursor) string {

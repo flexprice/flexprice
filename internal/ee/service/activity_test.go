@@ -71,7 +71,7 @@ func TestCursor_RoundTrip(t *testing.T) {
 	require.Contains(t, hintOf(err), "The cursor is invalid")
 }
 
-func TestValidateList(t *testing.T) {
+func TestBuildQuery_Validation(t *testing.T) {
 	svc := &activityService{registry: activity.Registrations()}
 	now := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
 
@@ -80,12 +80,8 @@ func TestValidateList(t *testing.T) {
 		req      dto.ListActivityRequest
 		wantHint string
 	}{
-		{"entity_id without entity_type", dto.ListActivityRequest{EntityID: "inv_1"}, "entity_type is required when entity_id is set"},
+		{"unknown entity type", dto.ListActivityRequest{EntityType: "coupon"}, "Unknown entity_type"},
 		{"unknown action lists allowed", dto.ListActivityRequest{Actions: []string{"invoice.pay"}}, "Allowed invoice actions: invoice.deleted, invoice.created, invoice.voided, invoice.finalized, invoice.refunded, invoice.paid, invoice.updated."},
-		{"limit over max", dto.ListActivityRequest{Limit: 101}, "limit can be at most 100 (50 with expand state)"},
-		{"limit over max with state", dto.ListActivityRequest{Limit: 60, Expand: []string{"state"}}, "limit can be at most 100 (50 with expand state)"},
-		{"unknown actor type", dto.ListActivityRequest{ActorTypes: []string{"robot"}}, "Unknown actor type"},
-		{"unknown expand", dto.ListActivityRequest{Expand: []string{"diff"}}, "Unknown expand"},
 		{"valid", dto.ListActivityRequest{EntityType: "invoice", EntityID: "inv_1", Actions: []string{"invoice.voided"}, Limit: 100}, ""},
 	}
 	for _, tt := range tests {
