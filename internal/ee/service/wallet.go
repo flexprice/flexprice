@@ -2401,13 +2401,20 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		}
 	}
 
+	// Taken before consuming: what each credit gave is its available credits before less after.
+	availableBefore := lo.SliceToMap(credits, func(c *wallet.Transaction) (string, decimal.Decimal) {
+		return c.ID, c.CreditsAvailable
+	})
+
 	// Process debit across credits
 	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
 	if err != nil {
 		return nil, err
 	}
 
-	return consumedCredits, nil
+	return lo.Map(consumedCredits, func(c *wallet.Transaction, _ int) types.WalletTxConsumption {
+		return types.WalletTxConsumption{CreditTransactionID: c.ID, Credits: availableBefore[c.ID].Sub(c.CreditsAvailable)}
+	}), nil
 }
 
 // processWalletOperation handles both credit and debit operations

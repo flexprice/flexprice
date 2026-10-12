@@ -34,8 +34,8 @@ type Repository interface {
 
 	// Credit/Debit specific operations
 	FindEligibleCredits(ctx context.Context, walletID string, requiredAmount decimal.Decimal, pageSize int, timeReference time.Time) ([]*Transaction, error)
-	// ConsumeCredits draws amount from credits in order and returns the credits taken from each.
-	ConsumeCredits(ctx context.Context, credits []*Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error)
+	// ConsumeCredits draws amount from credits in order and returns the credits it drew from, as updated.
+	ConsumeCredits(ctx context.Context, credits []*Transaction, amount decimal.Decimal) ([]*Transaction, error)
 	CreateTransaction(ctx context.Context, tx *Transaction) error
 	UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error
 

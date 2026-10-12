@@ -95,15 +95,17 @@ func TestWalletLedgerFacts(t *testing.T) {
 
 		consumed, err := repo.ConsumeCredits(ctx, []*walletdomain.Transaction{first, second}, decimal.RequireFromString("70.5"))
 		require.NoError(t, err)
-		require.Equal(t, []types.WalletTxConsumption{
-			{CreditTransactionID: first.ID, Credits: decimal.NewFromInt(50)},
-			{CreditTransactionID: second.ID, Credits: decimal.RequireFromString("20.5")},
-		}, consumed)
+		require.Len(t, consumed, 2)
+		require.True(t, consumed[0].CreditsAvailable.IsZero(), "returns the credits as updated")
+		require.True(t, consumed[1].CreditsAvailable.Equal(decimal.RequireFromString("9.5")))
 
 		debit := newTx("wtx_debit_"+runID, types.TransactionTypeDebit, types.TransactionStatusCompleted, 0)
 		debit.CreditAmount = decimal.RequireFromString("70.5")
 		debit.CreditsAvailable = decimal.Zero
-		debit.ConsumptionBreakdown = consumed
+		debit.ConsumptionBreakdown = []types.WalletTxConsumption{
+			{CreditTransactionID: first.ID, Credits: decimal.NewFromInt(50)},
+			{CreditTransactionID: second.ID, Credits: decimal.RequireFromString("20.5")},
+		}
 		debit.SourceType = types.WalletTxSourceTypeInvoice
 		debit.SourceID = "inv_debit_" + runID
 		require.NoError(t, repo.CreateTransaction(ctx, debit))

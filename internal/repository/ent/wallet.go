@@ -317,7 +317,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 }
 
 // ConsumeCredits processes debit operation across multiple credits
-func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
+func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*walletdomain.Transaction, amount decimal.Decimal) ([]*walletdomain.Transaction, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "consume_credits", map[string]interface{}{
 		"credits_count": len(credits),
@@ -326,7 +326,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
-	consumedCreditTransactions := make([]types.WalletTxConsumption, 0, len(credits))
+	consumedCreditTransactions := make([]*walletdomain.Transaction, 0, len(credits))
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -337,7 +337,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		newAvailable := credit.CreditsAvailable.Sub(toConsume)
 
 		// Update credit's available amount
-		_, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
+		updated, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
 			ID: credit.ID,
 		}).
 			SetCreditsAvailable(newAvailable).
@@ -356,7 +356,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCreditTransactions = append(consumedCreditTransactions, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
+		consumedCreditTransactions = append(consumedCreditTransactions, walletdomain.TransactionFromEnt(updated))
 	}
 
 	return consumedCreditTransactions, nil

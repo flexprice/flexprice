@@ -322,8 +322,8 @@ func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID 
 }
 
 // ConsumeCredits consumes credits from a wallet
-func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]types.WalletTxConsumption, error) {
-	consumedCredits := make([]types.WalletTxConsumption, 0, len(credits))
+func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wallet.Transaction, amount decimal.Decimal) ([]*wallet.Transaction, error) {
+	consumedCredits := make([]*wallet.Transaction, 0, len(credits))
 	remainingAmount := amount
 
 	for _, credit := range credits {
@@ -350,7 +350,7 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCredits = append(consumedCredits, types.WalletTxConsumption{CreditTransactionID: credit.ID, Credits: toConsume})
+		consumedCredits = append(consumedCredits, credit)
 	}
 
 	return consumedCredits, nil
