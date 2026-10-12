@@ -91,8 +91,13 @@ func NewSeedEnsure(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *log
 func (s *SeedEnsure) Name() string        { return "seed-ensure" }
 func (s *SeedEnsure) Kind() e2eprobe.Kind { return e2eprobe.KindBootstrap }
 func (s *SeedEnsure) Run(ctx context.Context) error {
+	// Carried from the previous tick so recordTaxedSub can tell a first sighting
+	// of the association from a repeat one; everything else is rebuilt.
+	previous := s.reg.Seeds()
 	seeds := e2eprobe.Seeds{
-		MeterIDs: map[string]string{},
+		MeterIDs:                 map[string]string{},
+		TaxedSubID:               previous.TaxedSubID,
+		TaxAssociationActiveFrom: previous.TaxAssociationActiveFrom,
 	}
 	// Order matters: features first (provides MeterIDs), then customers, plan, prices,
 	// subscriptions (needs plan + customers), wallets (needs customers).
@@ -1150,8 +1155,10 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 }
 
 // findPersistentCohortSub returns the id of the sub tagged with the persistent
-// cohort, or "" when the listing holds none. Subs predating the cohort tag have
-// no metadata, so a single untagged sub is accepted as the persistent one.
+// cohort. Subs predating the cohort tag carry no metadata, so untagged subs are
+// a fallback, resolved by lowest id — ULIDs sort by creation time, so that is
+// the oldest and the same one on every run. Returning "" for a listing that
+// holds a candidate would make the caller create a duplicate subscription.
 func findPersistentCohortSub(resp *sdkdtos.QuerySubscriptionResponse) string {
 	if resp == nil || resp.ListSubscriptionsResponse == nil {
 		return ""
@@ -1169,10 +1176,11 @@ func findPersistentCohortSub(resp *sdkdtos.QuerySubscriptionResponse) string {
 			untagged = append(untagged, *sub.ID)
 		}
 	}
-	if len(untagged) == 1 {
-		return untagged[0]
+	if len(untagged) == 0 {
+		return ""
 	}
-	return ""
+	sort.Strings(untagged)
+	return untagged[0]
 }
 
 // persistentCohort tags the standard monthly seed sub, distinguishing it from
@@ -1527,7 +1535,14 @@ func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2
 // recordTaxedSub pins the subscription carrying the shared tax association and
 // when it became active. Falls back to now when the server omits start_date, so
 // the probe never treats an unknown activation as "applies to every invoice".
+//
+// That fallback is only taken once per subscription: Run rebuilds Seeds every
+// tick, so re-stamping now on each run would walk the boundary forward forever
+// and silently retire the invariant.
 func recordTaxedSub(out *e2eprobe.Seeds, subID string, startDate *time.Time) {
+	if startDate == nil && out.TaxedSubID == subID && out.TaxAssociationActiveFrom != nil {
+		return
+	}
 	out.TaxedSubID = subID
 	if startDate != nil {
 		out.TaxAssociationActiveFrom = startDate

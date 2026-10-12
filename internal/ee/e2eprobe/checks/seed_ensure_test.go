@@ -772,7 +772,7 @@ func TestFindPersistentCohortSub(t *testing.T) {
 		{"cohort wins over quarterly", resp(sub("subs_q", multiCadenceCohort), sub("subs_p", persistentCohort)), "subs_p"},
 		{"cohort wins regardless of order", resp(sub("subs_p", persistentCohort), sub("subs_q", multiCadenceCohort)), "subs_p"},
 		{"untagged legacy sub alongside quarterly", resp(sub("subs_q", multiCadenceCohort), sub("subs_old", "")), "subs_old"},
-		{"ambiguous untagged pair", resp(sub("subs_a", ""), sub("subs_b", "")), ""},
+		{"untagged pair resolves to lowest id", resp(sub("subs_b", ""), sub("subs_a", "")), "subs_a"},
 		{"only quarterly", resp(sub("subs_q", multiCadenceCohort)), ""},
 	}
 	for _, tt := range tests {
@@ -781,5 +781,85 @@ func TestFindPersistentCohortSub(t *testing.T) {
 				t.Errorf("findPersistentCohortSub() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// countCohortCreates returns how many of the recorded creates carry the given
+// cohort tag. ensureSubscriptions tags persistentCohort; the quarterly seed
+// tags multiCadenceCohort, so the two are separable.
+func countCohortCreates(reqs []types.CreateSubscriptionRequest, cohort string) int {
+	n := 0
+	for _, r := range reqs {
+		if r.Metadata["e2eprobe_cohort"] == cohort {
+			n++
+		}
+	}
+	return n
+}
+
+// A listing of only untagged subs (the pre-cohort-tag shape) must still resolve.
+// Returning "" makes ensureSubscriptions fall through and create a duplicate
+// subscription — and on a real tenant that also cuts an opening invoice.
+func TestSeedEnsure_UntaggedListingCreatesNoDuplicateSub(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+	s := NewSeedEnsure(fc, reg, "test-run", lg)
+
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("first Run() unexpected error: %v", err)
+	}
+	firstRound := countCohortCreates(fc.subs.created, persistentCohort)
+	if firstRound == 0 {
+		t.Fatalf("expected the first run to create persistent subs")
+	}
+
+	// Subs now exist and the fake stores them without metadata, so the listing
+	// is all-untagged.
+	fc.subs.queryReturnsAll = true
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("second Run() unexpected error: %v", err)
+	}
+	if got := countCohortCreates(fc.subs.created, persistentCohort); got != firstRound {
+		t.Errorf("untagged listing created %d duplicate persistent subs; want 0", got-firstRound)
+	}
+}
+
+// Run rebuilds Seeds each tick. If an association reports no start_date the
+// boundary must be stamped once, not walked forward every run — otherwise
+// taxableSince rejects every invoice and the invariant silently stops asserting.
+func TestSeedEnsure_ActivationBoundaryStableWithoutStartDate(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+	s := NewSeedEnsure(fc, reg, "test-run", lg)
+
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("first Run() unexpected error: %v", err)
+	}
+	first := reg.Seeds()
+	if first.TaxAssociationActiveFrom == nil {
+		t.Fatalf("TaxAssociationActiveFrom not recorded on first run")
+	}
+
+	// Keep the sub stable across runs, and report the association back without
+	// a start_date.
+	fc.subs.queryReturnsAll = true
+	trID := first.SharedTaxRateID
+	fc.taxAssociations.listResp = &dtos.ListTaxAssociationsResponse{
+		ListTaxAssociationsResponse: &types.ListTaxAssociationsResponse{
+			Items: []types.TaxAssociationResponse{{TaxRateID: &trID}},
+		},
+	}
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("second Run() unexpected error: %v", err)
+	}
+	second := reg.Seeds()
+	if second.TaxedSubID != first.TaxedSubID {
+		t.Fatalf("TaxedSubID moved from %q to %q; test cannot isolate the boundary", first.TaxedSubID, second.TaxedSubID)
+	}
+	if second.TaxAssociationActiveFrom == nil || !second.TaxAssociationActiveFrom.Equal(*first.TaxAssociationActiveFrom) {
+		t.Errorf("activation boundary moved from %v to %v across runs; must hold once stamped",
+			first.TaxAssociationActiveFrom, second.TaxAssociationActiveFrom)
 	}
 }
