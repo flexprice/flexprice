@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"slices"
 
 	entgo "entgo.io/ent"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // HookOptions configures the ent hook.
@@ -19,8 +19,6 @@ type HookOptions struct {
 	// EntryPoint labels the unknown-actor metric (the deployment mode).
 	EntryPoint string
 }
-
-var unrecordedFields = []string{"updated_at", "updated_by"}
 
 // Hook records an entry for every captured write to a registered entity. It never fails a write.
 func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
@@ -50,15 +48,13 @@ func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
 	}
 }
 
-// onlyDroppedFields reports whether an update touches nothing but dropped fields and timestamps.
+// onlyDroppedFields reports whether an update touches nothing but dropped fields.
 func onlyDroppedFields(m entgo.Mutation, r *Registration) bool {
 	if !m.Op().Is(entgo.OpUpdate | entgo.OpUpdateOne) {
 		return false
 	}
 	touched := append(append(m.Fields(), m.AddedFields()...), m.ClearedFields()...)
-	return len(touched) > 0 && !slices.ContainsFunc(touched, func(f string) bool {
-		return !slices.Contains(r.Snapshot.drop, f) && !slices.Contains(unrecordedFields, f)
-	})
+	return len(touched) > 0 && lo.Every(r.Snapshot.drop, touched)
 }
 
 // rowsOf extracts written rows from a mutation result; counted is true when only a row count came back.
