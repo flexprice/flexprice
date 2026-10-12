@@ -1244,8 +1244,10 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.CreatedAt,
 		)
 		if err != nil {
-			r.logger.Error(ctx, "failed to scan credit topup export data", "error", err)
-			continue
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read credit topup row").
+				Mark(ierr.ErrDatabase)
 		}
 		exportData.InvoiceID = lo.FromPtr(invoiceID)
 
@@ -1293,44 +1295,44 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 	// one (written before breakdowns were recorded) keeps a single row with no batch.
 	query := `
 		WITH page AS (
-			SELECT d.*
-			FROM wallet_transactions d
+			SELECT debit.*
+			FROM wallet_transactions debit
 			WHERE
-				d.tenant_id = $1
-				AND d.environment_id = $2
-				AND d.type = $3
-				AND d.transaction_status = $4
-				AND d.status = $5
-				AND d.created_at >= $6
-				AND (d.created_at, d.id) > ($6, $7)
-				AND d.created_at < $8
-			ORDER BY d.created_at ASC, d.id ASC
+				debit.tenant_id = $1
+				AND debit.environment_id = $2
+				AND debit.type = $3
+				AND debit.transaction_status = $4
+				AND debit.status = $5
+				AND debit.created_at >= $6
+				AND (debit.created_at, debit.id) > ($6, $7)
+				AND debit.created_at < $8
+			ORDER BY debit.created_at ASC, debit.id ASC
 			LIMIT $9
 		)
 		SELECT
-			d.id,
-			c.external_id,
-			c.name,
-			d.wallet_id,
-			d.currency,
-			d.transaction_reason,
-			CASE WHEN d.source_type = 'INVOICE' THEN d.source_id END,
-			b.credit_transaction_id,
-			COALESCE(b.credits, d.credit_amount),
-			ct.credit_amount,
-			` + paidAmountSQL("ct", "i") + `,
-			d.created_at
+			debit.id,
+			customer.external_id,
+			customer.name,
+			debit.wallet_id,
+			debit.currency,
+			debit.transaction_reason,
+			CASE WHEN debit.source_type = 'INVOICE' THEN debit.source_id END,
+			drawn.credit_transaction_id,
+			COALESCE(drawn.credits, debit.credit_amount),
+			batch.credit_amount,
+			` + paidAmountSQL("batch", "invoice") + `,
+			debit.created_at
 		FROM
-			page d
-			INNER JOIN wallets w ON w.id = d.wallet_id
-			INNER JOIN customers c ON c.id = w.customer_id
+			page debit
+			INNER JOIN wallets wallet ON wallet.id = debit.wallet_id
+			INNER JOIN customers customer ON customer.id = wallet.customer_id
 			LEFT JOIN LATERAL ROWS FROM (
-				jsonb_to_recordset(CASE WHEN jsonb_typeof(d.consumption_breakdown) = 'array' THEN d.consumption_breakdown END)
+				jsonb_to_recordset(CASE WHEN jsonb_typeof(debit.consumption_breakdown) = 'array' THEN debit.consumption_breakdown END)
 					AS (credit_transaction_id text, credits numeric)
-			) WITH ORDINALITY AS b(credit_transaction_id, credits, ord) ON true
-			LEFT JOIN wallet_transactions ct ON ct.id = b.credit_transaction_id
-			LEFT JOIN invoices i ON i.id = ct.source_id AND ct.source_type = 'INVOICE'
-		ORDER BY d.created_at ASC, d.id ASC, b.ord ASC
+			) WITH ORDINALITY AS drawn(credit_transaction_id, credits, ord) ON true
+			LEFT JOIN wallet_transactions batch ON batch.id = drawn.credit_transaction_id
+			LEFT JOIN invoices invoice ON invoice.id = batch.source_id AND batch.source_type = 'INVOICE'
+		ORDER BY debit.created_at ASC, debit.id ASC, drawn.ord ASC
 	`
 
 	rows, err := client.QueryContext(ctx, query,
@@ -1372,8 +1374,8 @@ func (r *walletRepository) GetCreditDebitsForExport(ctx context.Context, tenantI
 			&invoiceID,
 			&creditTransactionID,
 			&exportData.Credits,
-			&exportData.BatchCredits,
-			&exportData.BatchPaidAmount,
+			&exportData.WalletTxnCredits,
+			&exportData.WalletTxnPaidAmount,
 			&exportData.CreatedAt,
 		)
 		if err != nil {

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreditDebitCSVRecognizedAmount(t *testing.T) {
+func TestCreditDebitCSVTopUpUsedAmount(t *testing.T) {
 	paid := func(v string) *decimal.Decimal { return lo.ToPtr(decimal.RequireFromString(v)) }
 
 	tests := []struct {
@@ -23,22 +23,22 @@ func TestCreditDebitCSVRecognizedAmount(t *testing.T) {
 	}{
 		{
 			name:     "share of a discounted purchase",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(200), BatchCredits: paid("500"), BatchPaidAmount: paid("450")},
+			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(200), WalletTxnCredits: paid("500"), WalletTxnPaidAmount: paid("450")},
 			expected: "180",
 		},
 		{
 			name:     "rounded to the currency",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(1), BatchCredits: paid("3"), BatchPaidAmount: paid("10")},
+			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(1), WalletTxnCredits: paid("3"), WalletTxnPaidAmount: paid("10")},
 			expected: "3.33",
 		},
 		{
 			name:     "free or bonus credits",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(20), BatchCredits: paid("100"), BatchPaidAmount: paid("0")},
+			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(20), WalletTxnCredits: paid("100"), WalletTxnPaidAmount: paid("0")},
 			expected: "0",
 		},
 		{
 			name:     "credits with no paid amount",
-			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(10), BatchCredits: paid("40")},
+			row:      wallet.CreditDebitsExportData{Credits: decimal.NewFromInt(10), WalletTxnCredits: paid("40")},
 			expected: "",
 		},
 		{

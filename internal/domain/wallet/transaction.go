@@ -216,10 +216,11 @@ type CreditDebitsExportData struct {
 	InvoiceID           string
 	CreditTransactionID string
 	Credits             decimal.Decimal
-	// The batch's size and paid amount, for spreading the paid amount over the credits drawn.
-	BatchCredits    *decimal.Decimal
-	BatchPaidAmount *decimal.Decimal
-	CreatedAt       time.Time
+	// The size and paid amount of the credit drawn from, for spreading the paid amount over the
+	// credits drawn.
+	WalletTxnCredits    *decimal.Decimal
+	WalletTxnPaidAmount *decimal.Decimal
+	CreatedAt           time.Time
 }
 
 // CreditDebitsExportCursor is the last debit of the previous page. The first page starts from

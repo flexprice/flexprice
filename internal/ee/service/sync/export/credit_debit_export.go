@@ -11,8 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gocarina/gocsv"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreditDebitExporter exports wallet debits, one row per credit batch each debit drew from.
@@ -23,17 +21,17 @@ type CreditDebitExporter struct {
 
 // CreditDebitCSV represents the CSV structure for credit debit export
 type CreditDebitCSV struct {
-	DebitID             string           `csv:"debit_id"`
-	ExternalID          string           `csv:"external_id"`
-	CustomerName        string           `csv:"name"`
-	WalletID            string           `csv:"wallet_id"`
-	Currency            string           `csv:"currency"`
-	TransactionReason   string           `csv:"transaction_reason"`
-	InvoiceID           string           `csv:"invoice_id"`
-	CreditTransactionID string           `csv:"credit_transaction_id"`
-	Credits             string           `csv:"credits"`
-	RecognizedAmount    *decimal.Decimal `csv:"recognized_amount"` // Empty when the batch has no paid amount
-	CreatedAt           string           `csv:"created_at"`        // RFC3339 format
+	DebitID             string `csv:"debit_id"`
+	ExternalID          string `csv:"external_id"`
+	CustomerName        string `csv:"name"`
+	WalletID            string `csv:"wallet_id"`
+	Currency            string `csv:"currency"`
+	TransactionReason   string `csv:"transaction_reason"`
+	InvoiceID           string `csv:"invoice_id"`
+	CreditTransactionID string `csv:"credit_transaction_id"`
+	Credits             string `csv:"credits"`
+	TopUpUsedAmount     string `csv:"topup_used_amount"` // Empty when the credit drawn from has no paid amount
+	CreatedAt           string `csv:"created_at"`        // RFC3339 format
 }
 
 // NewCreditDebitExporter creates a new credit debit exporter
@@ -112,19 +110,19 @@ func toCreditDebitCSV(d *wallet.CreditDebitsExportData) *CreditDebitCSV {
 		InvoiceID:           d.InvoiceID,
 		CreditTransactionID: d.CreditTransactionID,
 		Credits:             d.Credits.String(),
-		RecognizedAmount:    recognizedAmount(d),
+		TopUpUsedAmount:     topUpUsedAmount(d),
 		CreatedAt:           d.CreatedAt.Format(time.RFC3339),
 	}
 }
 
-// recognizedAmount spreads the batch's paid amount evenly over its credits and takes the share
-// for the credits this debit drew.
-func recognizedAmount(d *wallet.CreditDebitsExportData) *decimal.Decimal {
-	if d.BatchPaidAmount == nil || d.BatchCredits == nil || d.BatchCredits.IsZero() {
-		return nil
+// topUpUsedAmount spreads the wallet transaction's paid amount evenly over its credits and takes
+// the share for the credits this debit drew.
+func topUpUsedAmount(d *wallet.CreditDebitsExportData) string {
+	if d.WalletTxnPaidAmount == nil || d.WalletTxnCredits == nil || d.WalletTxnCredits.IsZero() {
+		return ""
 	}
-	amount := d.Credits.Mul(*d.BatchPaidAmount).Div(*d.BatchCredits)
-	return lo.ToPtr(types.RoundToCurrencyPrecision(amount, d.Currency))
+	amount := d.Credits.Mul(*d.WalletTxnPaidAmount).Div(*d.WalletTxnCredits)
+	return types.RoundToCurrencyPrecision(amount, d.Currency).String()
 }
 
 // GetFilenamePrefix returns the prefix for the exported file

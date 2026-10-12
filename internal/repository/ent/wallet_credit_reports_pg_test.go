@@ -157,15 +157,17 @@ func TestWalletCreditReports(t *testing.T) {
 		}
 		require.Equal(t, purchase.ID, rows[0].CreditTransactionID)
 		require.True(t, decimal.NewFromInt(200).Equal(rows[0].Credits))
-		require.True(t, decimal.NewFromInt(500).Equal(*rows[0].BatchCredits))
-		require.True(t, decimal.NewFromInt(450).Equal(*rows[0].BatchPaidAmount))
+		require.True(t, decimal.NewFromInt(500).Equal(*rows[0].WalletTxnCredits))
+		require.True(t, decimal.NewFromInt(450).Equal(*rows[0].WalletTxnPaidAmount))
 
 		require.Equal(t, bonus.ID, rows[1].CreditTransactionID)
-		require.NotNil(t, rows[1].BatchPaidAmount)
-		require.True(t, rows[1].BatchPaidAmount.IsZero())
+		require.True(t, decimal.NewFromInt(100).Equal(*rows[1].WalletTxnCredits))
+		require.NotNil(t, rows[1].WalletTxnPaidAmount)
+		require.True(t, rows[1].WalletTxnPaidAmount.IsZero())
 
 		require.Equal(t, adjustment.ID, rows[2].CreditTransactionID)
-		require.Nil(t, rows[2].BatchPaidAmount)
+		require.True(t, decimal.NewFromInt(40).Equal(*rows[2].WalletTxnCredits))
+		require.Nil(t, rows[2].WalletTxnPaidAmount)
 
 		require.Equal(t, legacyDebit.ID, rows[3].DebitID)
 		require.Empty(t, rows[3].CreditTransactionID)
