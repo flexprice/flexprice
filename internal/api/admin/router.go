@@ -14,6 +14,7 @@ import (
 // in provideAdminHandlers, and register its routes in NewRouter.
 type Handlers struct {
 	Health      *v1.HealthHandler
+	Me          *v1.MeHandler
 	Environment *v1.EnvironmentHandler
 	Tenant      *v1.TenantHandler
 	User        *v1.UserHandler
@@ -42,6 +43,8 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	group.Use(middleware.ErrorHandler())
 	group.Use(requireSecret(secret))
 	{
+		group.GET("/me", handlers.Me.Me)
+
 		environment := group.Group("/environments")
 		{
 			environment.POST("", handlers.Environment.CreateEnvironment)

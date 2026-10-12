@@ -163,6 +163,37 @@ func TestCreateEnvironmentUnauthorized(t *testing.T) {
 	}
 }
 
+func TestMe(t *testing.T) {
+	tests := []struct {
+		name       string
+		secret     string
+		wantStatus int
+		wantBody   string
+	}{
+		{name: "accepted secret", secret: "test-secret", wantStatus: http.StatusOK, wantBody: `{"ok": true}`},
+		{name: "missing secret", wantStatus: http.StatusUnauthorized},
+		{name: "wrong secret", secret: "wrong-secret", wantStatus: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := NewRouter(Handlers{Health: v1.NewHealthHandler(), Me: v1.NewMeHandler()}, nil, "test-secret")
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+			if tt.secret != "" {
+				req.Header.Set(secretHeader, tt.secret)
+			}
+			rec := httptest.NewRecorder()
+			server.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantBody != "" {
+				assert.JSONEq(t, tt.wantBody, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestEmptySecretFailsClosed(t *testing.T) {
 	server := NewRouter(Handlers{
 		Health:      v1.NewHealthHandler(),

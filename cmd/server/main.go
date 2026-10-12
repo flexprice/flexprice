@@ -477,6 +477,7 @@ func provideAdminHandlers(
 ) adminapi.Handlers {
 	return adminapi.Handlers{
 		Health:      adminv1.NewHealthHandler(),
+		Me:          adminv1.NewMeHandler(),
 		Environment: adminv1.NewEnvironmentHandler(environments),
 		Tenant:      adminv1.NewTenantHandler(tenants),
 		User:        adminv1.NewUserHandler(users),
