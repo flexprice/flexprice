@@ -9,7 +9,6 @@ import (
 	entgo "entgo.io/ent"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // HookOptions configures the ent hook.
@@ -25,7 +24,7 @@ func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
 	return func(next entgo.Mutator) entgo.Mutator {
 		return entgo.MutateFunc(func(ctx context.Context, m entgo.Mutation) (entgo.Value, error) {
 			r, ok := reg.ByEntName(m.Type())
-			if !ok || onlyDroppedFields(m, r) {
+			if !ok {
 				return next.Mutate(ctx, m)
 			}
 			v, err := next.Mutate(ctx, m)
@@ -46,15 +45,6 @@ func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
 			return v, nil
 		})
 	}
-}
-
-// onlyDroppedFields reports whether an update touches nothing but dropped fields.
-func onlyDroppedFields(m entgo.Mutation, r *Registration) bool {
-	if !m.Op().Is(entgo.OpUpdate | entgo.OpUpdateOne) {
-		return false
-	}
-	touched := append(append(m.Fields(), m.AddedFields()...), m.ClearedFields()...)
-	return len(touched) > 0 && lo.Every(r.Snapshot.drop, touched)
 }
 
 // rowsOf extracts written rows from a mutation result; counted is true when only a row count came back.

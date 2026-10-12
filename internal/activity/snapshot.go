@@ -22,7 +22,6 @@ const (
 type Snapshot struct {
 	convert func(entgo.Value) reflect.Value
 	fields  []snapshotField
-	drop    []string
 }
 
 type snapshotField struct {
@@ -48,9 +47,6 @@ func snapshotOf[E, D any](convert func(*E) *D) Snapshot {
 			return reflect.ValueOf(convert(row))
 		},
 		fields: fields,
-		drop: lo.FilterMap(fields, func(f snapshotField, _ int) (string, bool) {
-			return f.key, f.mode == tagDrop
-		}),
 	}
 }
 

@@ -69,13 +69,6 @@ func TestHook_DeclaredActionOtherIDIgnored(t *testing.T) {
 	require.Equal(t, Action("invoice.updated"), sink.entries()[0].Action)
 }
 
-func TestHook_DroppedFieldsOnlyUpdateSkipped(t *testing.T) {
-	sink := &recordingSink{}
-	m := testClient.Subscription.Update().SetSyncedPriceSequence(7).SetUpdatedAt(fixedTime).Mutation()
-	mutate(t, HookOptions{Strict: true}, sink, userCtx(), m, 3)
-	require.Empty(t, sink.entries())
-}
-
 func TestHook_UncapturedStrictPanics(t *testing.T) {
 	m := testClient.Invoice.Update().SetPaymentStatus(types.PaymentStatusSucceeded).Mutation()
 	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return 3, nil })

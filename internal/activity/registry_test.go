@@ -102,7 +102,7 @@ func TestRegistry_ActionNames(t *testing.T) {
 
 func TestRegistry_SnapshotKeys(t *testing.T) {
 	reg := Registrations()
-	for entityType, columns := range entColumns {
+	for entityType := range entColumns {
 		r, _ := reg.ByType(entityType)
 		keys := map[string]bool{}
 		for _, f := range r.Snapshot.fields {
@@ -112,9 +112,6 @@ func TestRegistry_SnapshotKeys(t *testing.T) {
 		referenced = append(referenced, r.Label...)
 		for _, key := range referenced {
 			require.True(t, keys[key], "%s: snapshot has no key %q", entityType, key)
-		}
-		for _, key := range r.Snapshot.drop {
-			require.Contains(t, columns, key, "%s: dropped key %q is not an ent column", entityType, key)
 		}
 	}
 }
