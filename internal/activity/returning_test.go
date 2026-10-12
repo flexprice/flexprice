@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func returningClient(f *fakeDriver) *ent.Client { return ent.NewClient(ent.Driver(f)) }
+func returningClient(f *recordingDriver) *ent.Client { return ent.NewClient(ent.Driver(f)) }
 
 func quotedColumns(cols []string) string {
 	return `"` + strings.Join(cols, `", "`) + `"`
@@ -35,12 +35,12 @@ func TestSaveReturning_SQLParity(t *testing.T) {
 		return c.CheckoutSession.Update().Where(predicate.CheckoutSession(checkoutsession.IDIn("a", "b"))).SetFailureReason("x").SetUpdatedAt(fixedTime)
 	}
 
-	plain := newFakeDriver()
+	plain := newRecordingDriver()
 	_, err := build(returningClient(plain)).Save(ctx)
 	require.NoError(t, err)
 	require.Len(t, plain.execs, 1)
 
-	ret := newFakeDriver()
+	ret := newRecordingDriver()
 	ret.columns = checkoutsession.Columns
 	_, err = build(returningClient(ret)).SaveReturning(ctx)
 	require.NoError(t, err)
@@ -57,11 +57,11 @@ func TestExecReturning_SQLParity(t *testing.T) {
 		return c.CheckoutSession.Delete().Where(predicate.CheckoutSession(checkoutsession.ID("a")))
 	}
 
-	plain := newFakeDriver()
+	plain := newRecordingDriver()
 	_, err := build(returningClient(plain)).Exec(ctx)
 	require.NoError(t, err)
 
-	ret := newFakeDriver()
+	ret := newRecordingDriver()
 	ret.columns = checkoutsession.Columns
 	_, err = build(returningClient(ret)).ExecReturning(ctx)
 	require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestExecReturning_SQLParity(t *testing.T) {
 }
 
 func TestSaveReturning_HookReceivesRows(t *testing.T) {
-	f := newFakeDriver()
+	f := newRecordingDriver()
 	f.columns = []string{checkoutsession.FieldID, checkoutsession.FieldFailureReason}
 	f.rows = []map[string]any{
 		{checkoutsession.FieldID: "cs_1", checkoutsession.FieldFailureReason: "x"},
@@ -211,7 +211,7 @@ func TestReturning_SQLParityAllNodes(t *testing.T) {
 			"delete": func(n node) func(c *ent.Client) (func() error, func() error) { return n.del },
 		} {
 			t.Run(n.name+"/"+kind, func(t *testing.T) {
-				plain, ret := newFakeDriver(), newFakeDriver()
+				plain, ret := newRecordingDriver(), newRecordingDriver()
 				ret.columns = n.columns
 				plainFn, _ := pick(n)(returningClient(plain))
 				_, retFn := pick(n)(returningClient(ret))

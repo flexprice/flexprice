@@ -32,7 +32,7 @@ func (s *recordingSink) entries() []Entry {
 	return out
 }
 
-var testClient = ent.NewClient(ent.Driver(newFakeDriver()))
+var testClient = ent.NewClient()
 
 // mutate runs the hook around a write that returns result.
 func mutate(t *testing.T, opts HookOptions, sink Sink, ctx context.Context, m entgo.Mutation, result entgo.Value) {
