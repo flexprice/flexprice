@@ -37,6 +37,16 @@ func (r *Registration) rank(a Action) int {
 	return 0
 }
 
+// label is the first non-empty Label field of the entity's state.
+func (r *Registration) label(state map[string]any) string {
+	for _, key := range r.Label {
+		if v := stringField(state, key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // Registry holds the registrations, indexed by ent name and entity type.
 type Registry struct {
 	byEnt  map[string]*Registration

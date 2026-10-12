@@ -119,3 +119,15 @@ func isEmpty(v reflect.Value) bool {
 	}
 	return v.IsZero()
 }
+
+// stringField reads a string value from a snapshot map, following pointers.
+func stringField(fields map[string]any, key string) string {
+	v := reflect.ValueOf(fields[key])
+	for v.Kind() == reflect.Pointer && !v.IsNil() {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.String {
+		return ""
+	}
+	return v.String()
+}

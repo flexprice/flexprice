@@ -134,3 +134,11 @@ func TestRegistry_SnapshotBareRow(t *testing.T) {
 		})
 	}
 }
+
+func TestLabel(t *testing.T) {
+	customer := RegistrationEntry(t, types.SystemEntityTypeCustomer)
+	require.Equal(t, "ext", customer.label(map[string]any{"name": "", "external_id": "ext"}))
+	require.Equal(t, "Ada", customer.label(map[string]any{"name": "Ada", "external_id": "ext"}))
+	subscription := RegistrationEntry(t, types.SystemEntityTypeSubscription)
+	require.Equal(t, "", subscription.label(map[string]any{"name": "x"}))
+}

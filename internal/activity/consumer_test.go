@@ -37,14 +37,6 @@ func TestConsumer_UnresolvedCustomerRetriesMessage(t *testing.T) {
 	require.Equal(t, "cust_inv", repo.inserted[0].CustomerID)
 }
 
-func TestLabel(t *testing.T) {
-	customer := RegistrationEntry(t, types.SystemEntityTypeCustomer)
-	require.Equal(t, "ext", label(customer, map[string]any{"name": "", "external_id": "ext"}))
-	require.Equal(t, "Ada", label(customer, map[string]any{"name": "Ada", "external_id": "ext"}))
-	subscription := RegistrationEntry(t, types.SystemEntityTypeSubscription)
-	require.Equal(t, "", label(subscription, map[string]any{"name": "x"}))
-}
-
 func RegistrationEntry(t *testing.T, entityType types.SystemEntityType) *Registration {
 	t.Helper()
 	r, ok := Registrations().ByType(entityType)

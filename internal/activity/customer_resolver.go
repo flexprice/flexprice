@@ -120,23 +120,23 @@ func (r *repoCustomerResolver) archivedSubscription(ctx context.Context, id stri
 
 // resolveCustomer finds the customer id an entry rolls up to; "" when the ref points at no customer.
 func resolveCustomer(ctx context.Context, ref CustomerRef, state map[string]any, customers CustomerResolver) (string, error) {
-	if ref.whenCol != "" && stringValue(state, ref.whenCol) != ref.whenVal {
+	if ref.whenCol != "" && stringField(state, ref.whenCol) != ref.whenVal {
 		return "", nil
 	}
 	switch ref.kind {
 	case refSelf:
-		return stringValue(state, "id"), nil
+		return stringField(state, "id"), nil
 	case refField:
-		return stringValue(state, ref.column), nil
+		return stringField(state, ref.column), nil
 	case refParent:
-		parentID := stringValue(state, ref.column)
+		parentID := stringField(state, ref.column)
 		if parentID == "" {
 			return "", nil
 		}
 		return customers.CustomerID(ctx, ref.parent, parentID)
 	case refFirstOf:
 		for _, sub := range ref.refs {
-			if sub.whenCol == "" || stringValue(state, sub.whenCol) == sub.whenVal {
+			if sub.whenCol == "" || stringField(state, sub.whenCol) == sub.whenVal {
 				return resolveCustomer(ctx, sub, state, customers)
 			}
 		}

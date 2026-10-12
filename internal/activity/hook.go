@@ -137,14 +137,3 @@ func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID strin
 	}
 	return r.action("updated")
 }
-
-func stringField(fields map[string]any, key string) string {
-	v := reflect.ValueOf(fields[key])
-	for v.Kind() == reflect.Pointer && !v.IsNil() {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.String {
-		return ""
-	}
-	return v.String()
-}

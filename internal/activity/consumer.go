@@ -82,7 +82,7 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 		}
 		logs = append(logs, &domainActivity.Log{
 			ID: e.ID, TenantID: m.TenantID, EnvironmentID: m.EnvironmentID,
-			EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: label(reg, state),
+			EntityType: e.EntityType, EntityID: e.EntityID, EntityLabel: reg.label(state),
 			CustomerID: customerID, Action: e.Action,
 			ActorType: e.Actor.Type, ActorID: e.Actor.ID, ActorLabel: e.Actor.Label,
 			Source: m.Request.Source, RequestID: m.Request.ID, IP: m.Request.IP, UserAgent: m.Request.UserAgent,
@@ -96,19 +96,4 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 		}
 	}
 	return errors.Join(unresolved...)
-}
-
-// label is the first non-empty label field of the entity's state.
-func label(reg *Registration, state map[string]any) string {
-	for _, key := range reg.Label {
-		if v := stringValue(state, key); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func stringValue(state map[string]any, key string) string {
-	s, _ := state[key].(string)
-	return s
 }
