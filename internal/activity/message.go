@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
 	"github.com/flexprice/flexprice/internal/metrics"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 // SchemaVersion versions the Kafka message and snapshot format; it is stored on every row.
@@ -52,7 +52,7 @@ type MessageEvent struct {
 func split(b Batch, maxEntries, maxBytes, maxSnapshot int) []Message {
 	newMessage := func() Message {
 		return Message{
-			MessageID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ACTIVITY_BATCH), SchemaVersion: SchemaVersion,
+			MessageID: watermill.NewUUID(), SchemaVersion: SchemaVersion,
 			TenantID: b.TenantID, EnvironmentID: b.EnvironmentID, CommittedAt: b.CommittedAt,
 			Request: MessageRequest{ID: b.RequestID, Source: string(b.Source), IP: b.IP, UserAgent: b.UserAgent},
 		}
