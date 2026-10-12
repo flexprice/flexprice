@@ -22,6 +22,10 @@ type stubTenantService struct {
 	listReq    admin.ListTenantsRequest
 	listResp   *admin.ListTenantsResponse
 	listErr    error
+
+	getID   string
+	getResp *admin.TenantDetailResponse
+	getErr  error
 }
 
 func (s *stubTenantService) CreateTenant(_ context.Context, req admin.CreateTenantRequest) (*admin.CreateTenantResponse, error) {
@@ -34,6 +38,11 @@ func (s *stubTenantService) ListTenants(_ context.Context, req admin.ListTenants
 	s.listCalled = true
 	s.listReq = req
 	return s.listResp, s.listErr
+}
+
+func (s *stubTenantService) GetTenant(_ context.Context, tenantID string) (*admin.TenantDetailResponse, error) {
+	s.getID = tenantID
+	return s.getResp, s.getErr
 }
 
 const createTenantBody = `{"tenant_name":"Acme","email":"owner@acme.com","password":"chosen-by-operator","create_production":true}`
@@ -139,4 +148,26 @@ func TestListTenants_Errors(t *testing.T) {
 			assert.Equal(t, tc.wantCalled, stub.listCalled)
 		})
 	}
+}
+
+const tenantDetailRoute = "/v1/tenants/:tenant_id"
+
+func TestGetTenant_Success(t *testing.T) {
+	stub := &stubTenantService{getResp: &admin.TenantDetailResponse{TenantResponse: admin.TenantResponse{ID: "tenant_1"}}}
+	router := setupAdminRouter(http.MethodGet, tenantDetailRoute, NewTenantHandler(stub).GetTenant)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_1", "")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "tenant_1", stub.getID)
+}
+
+func TestGetTenant_NotFound(t *testing.T) {
+	stub := &stubTenantService{getErr: ierr.NewError("tenant not found").WithHint("Tenant not found").Mark(ierr.ErrNotFound)}
+	router := setupAdminRouter(http.MethodGet, tenantDetailRoute, NewTenantHandler(stub).GetTenant)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_missing", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "tenant_missing", stub.getID)
 }

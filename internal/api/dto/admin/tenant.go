@@ -159,3 +159,27 @@ func NewListTenantsResponse(page []*tenant.Tenant, total, limit, offset int) *Li
 	resp := types.NewListResponse(items, total, limit, offset)
 	return &resp
 }
+
+// TenantDetailResponse is the list row plus the fields the tenant's own page shows.
+type TenantDetailResponse struct {
+	TenantResponse
+	BillingDetails *dto.TenantBillingDetails `json:"billing_details,omitempty"`
+	Metadata       types.Metadata            `json:"metadata,omitempty"`
+	UpdatedAt      string                    `json:"updated_at"`
+}
+
+func NewTenantDetailResponse(t *tenant.Tenant) *TenantDetailResponse {
+	if t == nil {
+		return nil
+	}
+	resp := &TenantDetailResponse{
+		TenantResponse: *NewTenantResponse(t),
+		Metadata:       t.Metadata,
+		UpdatedAt:      t.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+	if t.BillingDetails != (tenant.TenantBillingDetails{}) {
+		billing := dto.NewTenantBillingDetails(t.BillingDetails)
+		resp.BillingDetails = &billing
+	}
+	return resp
+}

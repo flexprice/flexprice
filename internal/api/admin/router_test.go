@@ -36,6 +36,10 @@ type fakeTenantService struct {
 	listCalled bool
 	listResp   *admindto.ListTenantsResponse
 	listErr    error
+
+	getID   string
+	getResp *admindto.TenantDetailResponse
+	getErr  error
 }
 
 func (f *fakeTenantService) CreateTenant(_ context.Context, req admindto.CreateTenantRequest) (*admindto.CreateTenantResponse, error) {
@@ -47,6 +51,11 @@ func (f *fakeTenantService) CreateTenant(_ context.Context, req admindto.CreateT
 func (f *fakeTenantService) ListTenants(_ context.Context, _ admindto.ListTenantsRequest) (*admindto.ListTenantsResponse, error) {
 	f.listCalled = true
 	return f.listResp, f.listErr
+}
+
+func (f *fakeTenantService) GetTenant(_ context.Context, tenantID string) (*admindto.TenantDetailResponse, error) {
+	f.getID = tenantID
+	return f.getResp, f.getErr
 }
 
 func newTestServer(environments *fakeEnvironmentService) *Server {
@@ -274,6 +283,36 @@ func TestListTenantsRoute(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.Equal(t, tt.wantCalled, fake.listCalled)
+		})
+	}
+}
+
+func TestGetTenantRoute(t *testing.T) {
+	tests := []struct {
+		name       string
+		secret     string
+		wantStatus int
+		wantID     string
+	}{
+		{name: "with the secret", secret: "test-secret", wantStatus: http.StatusOK, wantID: "tenant_1"},
+		{name: "missing secret", wantStatus: http.StatusUnauthorized},
+		{name: "wrong secret", secret: "wrong-secret", wantStatus: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeTenantService{getResp: &admindto.TenantDetailResponse{TenantResponse: admindto.TenantResponse{ID: "tenant_1"}}}
+			server := newTestServerWith(&fakeEnvironmentService{}, fake)
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_1", nil)
+			if tt.secret != "" {
+				req.Header.Set(secretHeader, tt.secret)
+			}
+			rec := httptest.NewRecorder()
+			server.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantID, fake.getID)
 		})
 	}
 }

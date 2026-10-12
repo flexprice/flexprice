@@ -162,3 +162,78 @@ func TestNewListTenantsResponse_EmptyPage(t *testing.T) {
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"items":[],"pagination":{"total":4,"limit":50,"offset":10}}`, string(body))
 }
+
+func TestNewTenantDetailResponse(t *testing.T) {
+	ist := time.FixedZone("IST", 5*60*60+30*60)
+	acme := &tenant.Tenant{
+		ID:             "tenant_1",
+		Name:           "Acme Inc",
+		Status:         types.StatusPublished,
+		InternalStatus: types.TenantInternalStatusActive,
+		BillingDetails: tenant.TenantBillingDetails{
+			Email:     "billing@acme.com",
+			HelpEmail: "help@acme.com",
+			Phone:     "+1 555 0100",
+			Address: tenant.TenantAddress{
+				Line1:      "1 Market St",
+				City:       "San Francisco",
+				State:      "CA",
+				PostalCode: "94105",
+				Country:    "US",
+			},
+		},
+		Metadata:  types.Metadata{"plan": "enterprise"},
+		CreatedAt: time.Date(2026, 4, 1, 15, 30, 0, 0, ist),
+		UpdatedAt: time.Date(2026, 9, 20, 13, 45, 0, 0, ist),
+	}
+
+	body, err := json.Marshal(NewTenantDetailResponse(acme))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"id": "tenant_1",
+		"name": "Acme Inc",
+		"status": "published",
+		"internal_status": "active",
+		"billing_details": {
+			"email": "billing@acme.com",
+			"help_email": "help@acme.com",
+			"phone": "+1 555 0100",
+			"address": {
+				"address_line1": "1 Market St",
+				"address_line2": "",
+				"address_city": "San Francisco",
+				"address_state": "CA",
+				"address_postal_code": "94105",
+				"address_country": "US"
+			}
+		},
+		"metadata": {"plan": "enterprise"},
+		"created_at": "2026-04-01T10:00:00Z",
+		"updated_at": "2026-09-20T08:15:00Z"
+	}`, string(body))
+}
+
+func TestNewTenantDetailResponse_NoBillingDetailsOrMetadata(t *testing.T) {
+	bare := &tenant.Tenant{
+		ID:             "tenant_1",
+		Name:           "Acme Inc",
+		Status:         types.StatusPublished,
+		InternalStatus: types.TenantInternalStatusTrialing,
+		CreatedAt:      time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
+		UpdatedAt:      time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
+	}
+
+	body, err := json.Marshal(NewTenantDetailResponse(bare))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"id": "tenant_1",
+		"name": "Acme Inc",
+		"status": "published",
+		"internal_status": "trialing",
+		"created_at": "2026-04-01T10:00:00Z",
+		"updated_at": "2026-04-01T10:00:00Z"
+	}`, string(body))
+	assert.Nil(t, NewTenantDetailResponse(nil))
+}

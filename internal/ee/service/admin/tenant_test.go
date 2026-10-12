@@ -650,3 +650,45 @@ func TestListTenantsErrors(t *testing.T) {
 		})
 	}
 }
+
+// notFoundTenantStore reports every tenant as missing, the way the Postgres repository does.
+type notFoundTenantStore struct {
+	*testutil.InMemoryTenantStore
+}
+
+func (notFoundTenantStore) GetByID(context.Context, string) (*tenant.Tenant, error) {
+	return nil, ierr.NewError("tenant not found").WithHint("Tenant not found").Mark(ierr.ErrNotFound)
+}
+
+func TestGetTenant(t *testing.T) {
+	t.Run("existing tenant", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		ctx := context.Background()
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: "tenant_other", Name: "Other Co"}))
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{
+			ID:             "tenant_acme",
+			Name:           "Acme Inc",
+			BillingDetails: tenant.TenantBillingDetails{Email: "billing@acme.com"},
+		}))
+
+		resp, err := newTestTenantService(d.params).GetTenant(ctx, "tenant_acme")
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Equal(t, "tenant_acme", resp.ID)
+		assert.Equal(t, "Acme Inc", resp.Name)
+		require.NotNil(t, resp.BillingDetails)
+		assert.Equal(t, "billing@acme.com", resp.BillingDetails.Email)
+	})
+
+	t.Run("unknown tenant", func(t *testing.T) {
+		d := newTenantTestDeps(t)
+		d.params.TenantRepo = notFoundTenantStore{InMemoryTenantStore: d.tenants}
+
+		resp, err := newTestTenantService(d.params).GetTenant(context.Background(), "tenant_missing")
+
+		require.Error(t, err)
+		assert.True(t, ierr.IsNotFound(err))
+		assert.Nil(t, resp)
+	})
+}

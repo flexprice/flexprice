@@ -52,3 +52,13 @@ func (h *TenantHandler) ListTenants(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *TenantHandler) GetTenant(c *gin.Context) {
+	resp, err := h.service.GetTenant(c.Request.Context(), c.Param("tenant_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

@@ -22,6 +22,8 @@ type TenantService interface {
 	CreateTenant(ctx context.Context, req admindto.CreateTenantRequest) (*admindto.CreateTenantResponse, error)
 	// ListTenants returns one page of tenants, newest first, that match the search and internal status.
 	ListTenants(ctx context.Context, req admindto.ListTenantsRequest) (*admindto.ListTenantsResponse, error)
+	// GetTenant returns one tenant with its billing details and metadata.
+	GetTenant(ctx context.Context, tenantID string) (*admindto.TenantDetailResponse, error)
 }
 
 type tenantService struct {
@@ -166,4 +168,12 @@ func (s *tenantService) tenantIDByEmail(ctx context.Context, search string) (str
 		return "", err
 	}
 	return u.TenantID, nil
+}
+
+func (s *tenantService) GetTenant(ctx context.Context, tenantID string) (*admindto.TenantDetailResponse, error) {
+	t, err := s.TenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return admindto.NewTenantDetailResponse(t), nil
 }
