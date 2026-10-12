@@ -966,7 +966,6 @@ type WalletBalanceAlertConfig struct {
 // ActivityConfig configures the activity log pipeline; Enabled is the kill switch.
 type ActivityConfig struct {
 	Enabled       bool                    `mapstructure:"enabled" default:"false"`
-	Strict        bool                    `mapstructure:"strict" default:"false"` // panic on uncaptured bulk writes; for tests and dev only
 	Topic         string                  `mapstructure:"topic" default:"activity_logs"`
 	TopicDLQ      string                  `mapstructure:"topic_dlq" default:"activity_logs_dlq"`
 	ConsumerGroup string                  `mapstructure:"consumer_group" default:"flexprice-activity-consumer"`

@@ -42,7 +42,7 @@ func txCtx() context.Context {
 func TestCollector_RollbackDrops(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := txCtx()
-	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
+	mutate(t, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
 	types.DiscardPostCommitHooks(ctx)
 	require.Empty(t, sink.batches)
 }
@@ -50,8 +50,8 @@ func TestCollector_RollbackDrops(t *testing.T) {
 func TestCollector_NestedTxSingleFlush(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := txCtx()
-	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
-	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_2"), invoiceRow("inv_2", "t"))
+	mutate(t, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
+	mutate(t, sink, ctx, invoiceUpdate("inv_2"), invoiceRow("inv_2", "t"))
 	require.Empty(t, sink.batches, "nothing before commit")
 	types.RunPostCommitHooks(ctx)
 	require.Len(t, sink.batches, 1)
@@ -60,7 +60,7 @@ func TestCollector_NestedTxSingleFlush(t *testing.T) {
 
 func TestCollector_OutsideTxImmediate(t *testing.T) {
 	sink := &recordingSink{}
-	mutate(t, HookOptions{}, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
+	mutate(t, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
 	require.Len(t, sink.batches, 1)
 	require.False(t, sink.batches[0].CommittedAt.IsZero())
 }

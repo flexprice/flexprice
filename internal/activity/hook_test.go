@@ -35,10 +35,10 @@ func (s *recordingSink) entries() []Entry {
 var testClient = ent.NewClient()
 
 // mutate runs the hook around a write that returns result.
-func mutate(t *testing.T, opts HookOptions, sink Sink, ctx context.Context, m entgo.Mutation, result entgo.Value) {
+func mutate(t *testing.T, sink Sink, ctx context.Context, m entgo.Mutation, result entgo.Value) {
 	t.Helper()
 	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return result, nil })
-	_, err := Hook(Registrations(), sink, opts)(next).Mutate(ctx, m)
+	_, err := Hook(Registrations(), sink)(next).Mutate(ctx, m)
 	require.NoError(t, err)
 }
 
@@ -58,24 +58,20 @@ func invoiceRow(id, tenant string) *ent.Invoice {
 func TestHook_DeclaredActionWins(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := WithAction(userCtx(), "inv_1", InvoiceVoided)
-	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t_row"))
+	mutate(t, sink, ctx, invoiceUpdate("inv_1"), invoiceRow("inv_1", "t_row"))
 	require.Equal(t, InvoiceVoided, sink.entries()[0].Action)
 }
 
 func TestHook_DeclaredActionOtherIDIgnored(t *testing.T) {
 	sink := &recordingSink{}
 	ctx := WithAction(userCtx(), "inv_A", InvoiceVoided)
-	mutate(t, HookOptions{}, sink, ctx, invoiceUpdate("inv_B"), invoiceRow("inv_B", "t_row"))
+	mutate(t, sink, ctx, invoiceUpdate("inv_B"), invoiceRow("inv_B", "t_row"))
 	require.Equal(t, Action("invoice.updated"), sink.entries()[0].Action)
 }
 
-func TestHook_UncapturedStrictPanics(t *testing.T) {
-	m := testClient.Invoice.Update().SetPaymentStatus(types.PaymentStatusSucceeded).Mutation()
-	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return 3, nil })
-
+func TestHook_CountOnlyWriteNotCaptured(t *testing.T) {
 	sink := &recordingSink{}
-	require.Panics(t, func() { _, _ = Hook(Registrations(), sink, HookOptions{Strict: true})(next).Mutate(userCtx(), m) })
-	require.NotPanics(t, func() { _, _ = Hook(Registrations(), sink, HookOptions{})(next).Mutate(userCtx(), m) })
+	mutate(t, sink, userCtx(), testClient.Invoice.Update().SetPaymentStatus(types.PaymentStatusSucceeded).Mutation(), 3)
 	require.Empty(t, sink.entries())
 }
 
@@ -87,7 +83,7 @@ func TestHook_SnapshotPanicRecovered(t *testing.T) {
 	require.NoError(t, err)
 	sink := &recordingSink{}
 	next := entgo.MutateFunc(func(context.Context, entgo.Mutation) (entgo.Value, error) { return invoiceRow("inv_1", "t"), nil })
-	v, err := Hook(reg, sink, HookOptions{})(next).Mutate(userCtx(), invoiceUpdate("inv_1"))
+	v, err := Hook(reg, sink)(next).Mutate(userCtx(), invoiceUpdate("inv_1"))
 	require.NoError(t, err)
 	require.NotNil(t, v)
 	require.Empty(t, sink.entries())
@@ -95,35 +91,35 @@ func TestHook_SnapshotPanicRecovered(t *testing.T) {
 
 func TestHook_TenantFromRow(t *testing.T) {
 	sink := &recordingSink{}
-	mutate(t, HookOptions{}, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t_row"))
+	mutate(t, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t_row"))
 	require.Equal(t, "t_row", sink.batches[0].TenantID)
 	require.Equal(t, "env_1", sink.batches[0].EnvironmentID)
 
 	sink = &recordingSink{}
-	mutate(t, HookOptions{}, sink, userCtx(), invoiceUpdate("inv_1"), &ent.Invoice{ID: "inv_1"})
+	mutate(t, sink, userCtx(), invoiceUpdate("inv_1"), &ent.Invoice{ID: "inv_1"})
 	require.Equal(t, "t_ctx", sink.batches[0].TenantID, "ctx is the fallback")
 
 	sink = &recordingSink{}
-	mutate(t, HookOptions{}, sink, types.SetActor(context.Background(), types.Actor{}, types.SourceAPI), invoiceUpdate("inv_1"), &ent.Invoice{ID: "inv_1"})
+	mutate(t, sink, types.SetActor(context.Background(), types.Actor{}, types.SourceAPI), invoiceUpdate("inv_1"), &ent.Invoice{ID: "inv_1"})
 	require.Empty(t, sink.entries(), "no tenant anywhere skips the entry")
 }
 
 func TestHook_UnknownActor(t *testing.T) {
 	sink := &recordingSink{}
-	mutate(t, HookOptions{}, sink, context.Background(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
+	mutate(t, sink, context.Background(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
 	require.Equal(t, types.Actor{Type: types.ActorTypeSystem, ID: "unknown", Label: "unknown"}, sink.entries()[0].Actor)
 }
 
 func TestHook_RedactAndDrop(t *testing.T) {
 	sink := &recordingSink{}
 	pay := &ent.Payment{ID: "pay_1", TenantID: "t", EnvironmentID: "e", GatewayMetadata: map[string]string{"card": "4242"}}
-	mutate(t, HookOptions{}, sink, userCtx(), testClient.Payment.Update().SetPaymentStatus("SUCCEEDED").Mutation(), []*ent.Payment{pay})
+	mutate(t, sink, userCtx(), testClient.Payment.Update().SetPaymentStatus("SUCCEEDED").Mutation(), []*ent.Payment{pay})
 	var state map[string]any
 	require.NoError(t, json.Unmarshal(sink.entries()[0].State, &state))
 	require.Equal(t, "[redacted]", state["gateway_metadata"])
 
 	sink = &recordingSink{}
-	mutate(t, HookOptions{}, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
+	mutate(t, sink, userCtx(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
 	state = map[string]any{}
 	require.NoError(t, json.Unmarshal(sink.entries()[0].State, &state))
 	require.NotContains(t, state, "version")

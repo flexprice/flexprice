@@ -14,10 +14,7 @@ func Install(lc fx.Lifecycle, cfg *config.Configuration, clients *postgres.EntCl
 	if !cfg.Activity.Enabled {
 		return
 	}
-	clients.Writer.Use(Hook(reg, pub, HookOptions{
-		Strict:     cfg.Activity.Strict,
-		EntryPoint: string(cfg.Deployment.Mode),
-	}))
+	clients.Writer.Use(Hook(reg, pub))
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			pub.Start()

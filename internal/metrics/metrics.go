@@ -84,7 +84,6 @@ const (
 	KeyDestination   LabelKey = "destination"
 	KeyReason        LabelKey = "reason"
 	KeyEntity        LabelKey = "entity"
-	KeyEntryPoint    LabelKey = "entry_point"
 )
 
 type Label struct {

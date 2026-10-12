@@ -3,7 +3,6 @@ package activity
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
 
 	entgo "entgo.io/ent"
@@ -11,16 +10,8 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// HookOptions configures the ent hook.
-type HookOptions struct {
-	// Strict panics on bulk writes that return only a row count.
-	Strict bool
-	// EntryPoint labels the unknown-actor metric (the deployment mode).
-	EntryPoint string
-}
-
 // Hook records an entry for every captured write to a registered entity. It never fails a write.
-func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
+func Hook(reg *Registry, sink Sink) entgo.Hook {
 	return func(next entgo.Mutator) entgo.Mutator {
 		return entgo.MutateFunc(func(ctx context.Context, m entgo.Mutation) (entgo.Value, error) {
 			r, ok := reg.ByEntName(m.Type())
@@ -33,14 +24,11 @@ func Hook(reg *Registry, sink Sink, opts HookOptions) entgo.Hook {
 			}
 			rows, counted := rowsOf(v)
 			if counted {
-				if opts.Strict {
-					panic(fmt.Sprintf("activity: uncaptured write to %s; use SaveReturning or ExecReturning", r.EntityType))
-				}
 				metrics.RecordCounter(ctx, metrics.ActivityUncaptured, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
 				return v, nil
 			}
 			for _, row := range rows {
-				buildEntry(ctx, reg, sink, opts, r, m.Op(), row)
+				buildEntry(ctx, reg, sink, r, m.Op(), row)
 			}
 			return v, nil
 		})
@@ -66,13 +54,13 @@ func rowsOf(v entgo.Value) (rows []any, counted bool) {
 }
 
 // buildEntry snapshots one written row and queues it; any failure skips the entry and is counted.
-func buildEntry(ctx context.Context, reg *Registry, sink Sink, opts HookOptions, r *Registration, op entgo.Op, row any) {
+func buildEntry(ctx context.Context, reg *Registry, sink Sink, r *Registration, op entgo.Op, row any) {
 	defer func() {
 		if recover() != nil {
 			metrics.RecordCounter(ctx, metrics.ActivityCaptureFailed, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
 		}
 	}()
-	entry, ok := newEntry(ctx, opts, r, op, row)
+	entry, ok := newEntry(ctx, r, op, row)
 	if !ok {
 		metrics.RecordCounter(ctx, metrics.ActivityCaptureFailed, 1, metrics.L(metrics.KeyEntity, string(r.EntityType)))
 		return
@@ -80,7 +68,7 @@ func buildEntry(ctx context.Context, reg *Registry, sink Sink, opts HookOptions,
 	add(ctx, reg, sink, entry)
 }
 
-func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.Op, row any) (Entry, bool) {
+func newEntry(ctx context.Context, r *Registration, op entgo.Op, row any) (Entry, bool) {
 	fields, ok := r.Snapshot.state(row)
 	if !ok {
 		return Entry{}, false
@@ -103,7 +91,7 @@ func newEntry(ctx context.Context, opts HookOptions, r *Registration, op entgo.O
 	actor, _, hasActor := types.GetActor(ctx)
 	if !hasActor {
 		actor = types.Actor{Type: types.ActorTypeSystem, ID: "unknown", Label: "unknown"}
-		metrics.RecordCounter(ctx, metrics.ActivityUnknownActor, 1, metrics.L(metrics.KeyEntryPoint, opts.EntryPoint))
+		metrics.RecordCounter(ctx, metrics.ActivityUnknownActor, 1)
 	}
 	return Entry{
 		ID: types.GenerateUUIDWithPrefix("act"), EntityType: r.EntityType, EntityID: entityID,

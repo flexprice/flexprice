@@ -549,7 +549,6 @@ wallet_balance_alert:
 
 activity:
   enabled: false
-  strict: false
   topic: activity_logs
   topic_dlq: activity_logs_dlq
   consumer_group: flexprice-activity-consumer
