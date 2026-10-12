@@ -4,6 +4,7 @@ import (
 	"context"
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -82,8 +83,8 @@ func (s *environmentService) resolveTenant(ctx context.Context, tenantID, email 
 	return tenantID, userID, nil
 }
 
-// maxTenantEnvironments is more than any tenant has. The repository needs a limit, because zero returns nothing.
-const maxTenantEnvironments = 1000
+// environmentPageSize is the limit for each environment read. The repository returns nothing for a limit of 0.
+const environmentPageSize = 50
 
 func (s *environmentService) ListEnvironments(ctx context.Context, tenantID string) (*admindto.ListEnvironmentsResponse, error) {
 	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
@@ -91,9 +92,16 @@ func (s *environmentService) ListEnvironments(ctx context.Context, tenantID stri
 	}
 
 	ctx = types.SetTenantID(ctx, tenantID)
-	envs, err := s.EnvironmentRepo.List(ctx, types.Filter{Limit: maxTenantEnvironments})
-	if err != nil {
-		return nil, err
+	var envs []*environment.Environment
+	for offset := 0; ; offset += environmentPageSize {
+		page, err := s.EnvironmentRepo.List(ctx, types.Filter{Limit: environmentPageSize, Offset: offset})
+		if err != nil {
+			return nil, err
+		}
+		envs = append(envs, page...)
+		if len(page) < environmentPageSize {
+			break
+		}
 	}
 	return admindto.NewListEnvironmentsResponse(envs), nil
 }
