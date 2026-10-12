@@ -81,7 +81,7 @@ func TestValidateList(t *testing.T) {
 		wantHint string
 	}{
 		{"entity_id without entity_type", dto.ListActivityRequest{EntityID: "inv_1"}, "entity_type is required when entity_id is set"},
-		{"unknown action lists allowed", dto.ListActivityRequest{Actions: []string{"invoice.pay"}}, "Allowed invoice actions: invoice.created, invoice.updated, invoice.deleted, invoice.voided"},
+		{"unknown action lists allowed", dto.ListActivityRequest{Actions: []string{"invoice.pay"}}, "Allowed invoice actions: invoice.deleted, invoice.created, invoice.voided, invoice.finalized, invoice.refunded, invoice.paid, invoice.updated."},
 		{"limit over max", dto.ListActivityRequest{Limit: 101}, "limit can be at most 100 (50 with expand state)"},
 		{"limit over max with state", dto.ListActivityRequest{Limit: 60, Expand: []string{"state"}}, "limit can be at most 100 (50 with expand state)"},
 		{"unknown actor type", dto.ListActivityRequest{ActorTypes: []string{"robot"}}, "Unknown actor type"},

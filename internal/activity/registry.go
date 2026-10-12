@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // Registration describes how one entity type is logged.
@@ -18,6 +19,22 @@ type Registration struct {
 	// Actions are the declared actions, highest priority first.
 	Actions  []Action
 	Customer CustomerRef
+
+	// actions is every action of the entity, highest priority first: deleted, created, Actions, updated.
+	actions []Action
+}
+
+// action names a built-in action of the entity, e.g. invoice.created.
+func (r *Registration) action(verb string) Action {
+	return Action(string(r.EntityType) + "." + verb)
+}
+
+// rank is the action's precedence when one transaction writes the entity more than once; 0 for an unknown action.
+func (r *Registration) rank(a Action) int {
+	if i := slices.Index(r.actions, a); i >= 0 {
+		return len(r.actions) - i
+	}
+	return 0
 }
 
 type refKind int
@@ -96,6 +113,8 @@ func NewRegistry(regs ...Registration) (*Registry, error) {
 		if _, dup := r.byType[reg.EntityType]; dup {
 			return nil, fmt.Errorf("activity: duplicate entity type %q", reg.EntityType)
 		}
+		reg.actions = append([]Action{reg.action("deleted"), reg.action("created")}, reg.Actions...)
+		reg.actions = lo.Uniq(append(reg.actions, reg.action("updated")))
 		r.byEnt[reg.EntName] = reg
 		r.byType[reg.EntityType] = reg
 	}
@@ -112,29 +131,20 @@ func (r *Registry) ByType(t types.SystemEntityType) (*Registration, bool) {
 	return reg, ok
 }
 
-// AllowedActions is created, updated, deleted plus the declared actions of t.
+// AllowedActions lists every action of t, highest priority first.
 func (r *Registry) AllowedActions(t types.SystemEntityType) []Action {
 	reg, ok := r.byType[t]
 	if !ok {
 		return nil
 	}
-	prefix := string(t) + "."
-	allowed := []Action{Action(prefix + "created"), Action(prefix + "updated"), Action(prefix + "deleted")}
-	for _, action := range reg.Actions {
-		if !slices.Contains(allowed, action) {
-			allowed = append(allowed, action)
-		}
-	}
-	return allowed
+	return slices.Clone(reg.actions)
 }
 
 // IsAction reports whether action is valid for any registered entity.
 func (r *Registry) IsAction(action Action) bool {
-	for t := range r.byType {
-		for _, a := range r.AllowedActions(t) {
-			if a == action {
-				return true
-			}
+	for _, reg := range r.byType {
+		if slices.Contains(reg.actions, action) {
+			return true
 		}
 	}
 	return false

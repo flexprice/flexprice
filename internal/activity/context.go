@@ -22,15 +22,11 @@ func WithAction(ctx context.Context, entityID string, action Action) context.Con
 // declaredFor returns the highest-priority declared action of reg for entityID.
 func declaredFor(ctx context.Context, reg *Registration, entityID string) (Action, bool) {
 	declared, _ := ctx.Value(declaredKey{}).([]declaredAction)
-	best, bestIdx := Action(""), -1
+	var best Action
 	for _, d := range declared {
-		if d.entityID != entityID {
-			continue
-		}
-		idx := slices.Index(reg.Actions, d.action)
-		if idx >= 0 && (bestIdx < 0 || idx < bestIdx) {
-			best, bestIdx = d.action, idx
+		if d.entityID == entityID && slices.Contains(reg.Actions, d.action) && reg.rank(d.action) > reg.rank(best) {
+			best = d.action
 		}
 	}
-	return best, bestIdx >= 0
+	return best, best != ""
 }

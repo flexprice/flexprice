@@ -129,14 +129,13 @@ func actionFor(ctx context.Context, r *Registration, op entgo.Op, entityID strin
 	if declared, ok := declaredFor(ctx, r, entityID); ok {
 		return declared
 	}
-	prefix := string(r.EntityType) + "."
 	switch {
 	case op.Is(entgo.OpCreate):
-		return Action(prefix + "created")
+		return r.action("created")
 	case op.Is(entgo.OpDelete | entgo.OpDeleteOne):
-		return Action(prefix + "deleted")
+		return r.action("deleted")
 	}
-	return Action(prefix + "updated")
+	return r.action("updated")
 }
 
 func stringField(fields map[string]any, key string) string {

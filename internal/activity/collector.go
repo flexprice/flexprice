@@ -3,7 +3,6 @@ package activity
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
@@ -112,23 +111,6 @@ func (c *collector) flush() {
 	}
 }
 
-// rank orders actions for collapse: deleted, created, declared by priority, then updated.
-func rank(reg *Registration, action Action) (tier, priority int) {
-	_, verb, _ := strings.Cut(string(action), ".")
-	switch verb {
-	case "deleted":
-		return 3, 0
-	case "created":
-		return 2, 0
-	}
-	for i, a := range reg.Actions {
-		if a == action {
-			return 1, -i
-		}
-	}
-	return 0, 0
-}
-
 // collapse keeps one entry per entity: the winning action and actor, with the last state written.
 func collapse(reg *Registry, entries []Entry) []Entry {
 	type key struct {
@@ -146,10 +128,8 @@ func collapse(reg *Registry, entries []Entry) []Entry {
 			continue
 		}
 		r, _ := reg.ByType(e.EntityType)
-		curTier, curPrio := rank(r, cur.Action)
-		tier, prio := rank(r, e.Action)
 		winner := cur
-		if tier > curTier || (tier == curTier && prio > curPrio) {
+		if r.rank(e.Action) > r.rank(cur.Action) {
 			winner = e
 		}
 		winner.State = e.State
