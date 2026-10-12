@@ -723,3 +723,63 @@ func TestSeedEnsure_GrantsFailureDoesNotBlockDownstream(t *testing.T) {
 		t.Errorf("GrantEntitlementIDs = %v; expected empty when grant provisioning failed", seeds.GrantEntitlementIDs)
 	}
 }
+
+// The probe needs to know WHICH sub carries the association and from when,
+// because cust #0 owns more than one sub and tax is never backfilled.
+func TestSeedEnsure_RecordsTaxedSub(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	lg, _ := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: itypes.LogLevelInfo}})
+	s := NewSeedEnsure(fc, reg, "test-run", lg)
+
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+	seeds := reg.Seeds()
+	if seeds.TaxedSubID == "" {
+		t.Fatalf("TaxedSubID not recorded after attaching the tax association")
+	}
+	if len(seeds.PersistentSubIDs) == 0 || seeds.TaxedSubID != seeds.PersistentSubIDs[0] {
+		t.Errorf("TaxedSubID = %q, want PersistentSubIDs[0] = %v", seeds.TaxedSubID, seeds.PersistentSubIDs)
+	}
+	if seeds.TaxAssociationActiveFrom == nil {
+		t.Errorf("TaxAssociationActiveFrom not recorded; probe cannot tell which invoices predate the association")
+	}
+}
+
+func TestFindPersistentCohortSub(t *testing.T) {
+	sub := func(id, cohort string) types.SubscriptionResponse {
+		r := types.SubscriptionResponse{ID: &id}
+		if cohort != "" {
+			r.Metadata = map[string]string{"e2eprobe_cohort": cohort}
+		}
+		return r
+	}
+	resp := func(items ...types.SubscriptionResponse) *dtos.QuerySubscriptionResponse {
+		return &dtos.QuerySubscriptionResponse{
+			ListSubscriptionsResponse: &types.ListSubscriptionsResponse{Items: items},
+		}
+	}
+
+	tests := []struct {
+		name string
+		in   *dtos.QuerySubscriptionResponse
+		want string
+	}{
+		{"nil response", nil, ""},
+		{"empty listing", resp(), ""},
+		{"single untagged legacy sub", resp(sub("subs_old", "")), "subs_old"},
+		{"cohort wins over quarterly", resp(sub("subs_q", multiCadenceCohort), sub("subs_p", persistentCohort)), "subs_p"},
+		{"cohort wins regardless of order", resp(sub("subs_p", persistentCohort), sub("subs_q", multiCadenceCohort)), "subs_p"},
+		{"untagged legacy sub alongside quarterly", resp(sub("subs_q", multiCadenceCohort), sub("subs_old", "")), "subs_old"},
+		{"ambiguous untagged pair", resp(sub("subs_a", ""), sub("subs_b", "")), ""},
+		{"only quarterly", resp(sub("subs_q", multiCadenceCohort)), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := findPersistentCohortSub(tt.in); got != tt.want {
+				t.Errorf("findPersistentCohortSub() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -51,10 +52,11 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	// Persistent cust #0 → tax invariant. Match by ID when available, else
 	// by nested TaxRate.Code (SharedTaxRateID may be empty when the SDK's
 	// broken GetTaxRates list forced create-only idempotency in the seed).
-	if seeds.SharedTaxRateID != "" || seeds.SharedTaxRateCode != "" {
+	// Soft-skips until the seed has pinned which sub carries the association.
+	if (seeds.SharedTaxRateID != "" || seeds.SharedTaxRateCode != "") && seeds.TaxedSubID != "" {
 		cust0 := seeds.PersistentCustomerIDs[0]
 		// Tax is applied at finalize; a cycle draft awaiting finalization carries none.
-		listed, err := p.subscriptionInvoice(ctx, cust0, types.InvoiceFilterOrderDesc, types.InvoiceStatusFinalized)
+		listed, err := p.taxableInvoice(ctx, cust0, seeds)
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 		}
@@ -64,7 +66,7 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 				return e2eprobe.Errorf(map[string]string{"step": "load_invoice_cust0", "external_customer_id": cust0}, "load invoice: %w", err)
 			}
 			if inv != nil && !invoiceHasTaxRate(inv, seeds.SharedTaxRateID, seeds.SharedTaxRateCode) {
-				return e2eprobe.Errorf(map[string]string{"step": "assert_tax_present_cust0", "external_customer_id": cust0, "tax_rate_id": seeds.SharedTaxRateID, "tax_rate_code": seeds.SharedTaxRateCode}, "latest invoice for cust #0 does not include our tax rate (checked id %q AND code %q)", seeds.SharedTaxRateID, seeds.SharedTaxRateCode)
+				return e2eprobe.Errorf(map[string]string{"step": "assert_tax_present_cust0", "external_customer_id": cust0, "subscription_id": seeds.TaxedSubID, "invoice_id": derefStr(inv.ID), "tax_rate_id": seeds.SharedTaxRateID, "tax_rate_code": seeds.SharedTaxRateCode}, "latest invoice for cust #0 sub %s does not include our tax rate (checked id %q AND code %q)", seeds.TaxedSubID, seeds.SharedTaxRateID, seeds.SharedTaxRateCode)
 			}
 		}
 	}
@@ -92,13 +94,73 @@ func (p *persistentBillingInvariantsProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder, statuses ...types.InvoiceStatus) (*types.InvoiceResponse, error) {
+// taxInvoiceScanLimit bounds the newest-first page scanned for an invoice of
+// the taxed sub. Cust #0 owns several subs, so the newest invoice overall is
+// often another sub's. Finding none in this window soft-skips rather than
+// alarming.
+const taxInvoiceScanLimit = int64(20)
+
+// taxableInvoice returns the newest finalized invoice of the subscription that
+// carries the tax association, ignoring any finalized before the association
+// became active. Tax is stamped at finalize and never backfilled, so an invoice
+// older than the association is untaxed forever and asserting on it alarms
+// every run until the next cycle.
+//
+// Filtering by subscription happens client-side: the server-side
+// InvoiceFilter.SubscriptionID is unreliable here (see cycle-invoice-probe).
+func (p *persistentBillingInvariantsProbe) taxableInvoice(ctx context.Context, extID string, seeds e2eprobe.Seeds) (*types.InvoiceResponse, error) {
+	invType := types.InvoiceTypeSubscription
+	order := types.InvoiceFilterOrderDesc
+	limit := taxInvoiceScanLimit
+	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
+		ExternalCustomerID: &extID,
+		InvoiceType:        &invType,
+		InvoiceStatus:      []types.InvoiceStatus{types.InvoiceStatusFinalized},
+		Limit:              &limit,
+		Order:              &order,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.ListInvoicesResponse == nil {
+		return nil, nil
+	}
+	for _, inv := range resp.ListInvoicesResponse.Items {
+		if inv.SubscriptionID == nil || *inv.SubscriptionID != seeds.TaxedSubID {
+			continue
+		}
+		if !taxableSince(inv, seeds.TaxAssociationActiveFrom) {
+			continue
+		}
+		return &inv, nil
+	}
+	return nil, nil
+}
+
+// taxableSince reports whether the invoice was finalized once the association
+// was active. Falls back to created_at when the server omits finalized_at.
+func taxableSince(inv types.InvoiceResponse, activeFrom *time.Time) bool {
+	if activeFrom == nil {
+		return true
+	}
+	stamped := inv.FinalizedAt
+	if stamped == nil {
+		stamped = inv.CreatedAt
+	}
+	if stamped == nil {
+		// No timestamp to judge by. Assume it predates the association rather
+		// than alarm on an invoice that may never have been taxable.
+		return false
+	}
+	return !stamped.Before(*activeFrom)
+}
+
+func (p *persistentBillingInvariantsProbe) subscriptionInvoice(ctx context.Context, extID string, order types.InvoiceFilterOrder) (*types.InvoiceResponse, error) {
 	invType := types.InvoiceTypeSubscription
 	limit := int64(1)
 	resp, err := p.client.Invoices().Query(ctx, types.InvoiceFilter{
 		ExternalCustomerID: &extID,
 		InvoiceType:        &invType,
-		InvoiceStatus:      statuses,
 		Limit:              &limit,
 		Order:              &order,
 	})

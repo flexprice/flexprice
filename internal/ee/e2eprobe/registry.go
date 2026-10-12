@@ -45,6 +45,15 @@ type Seeds struct {
 	// MultiCadenceSubID is a persistent quarterly subscription seeded to exercise
 	// the monthly-charge-on-quarterly-sub fan-out end-to-end. "" if not yet seeded.
 	MultiCadenceSubID string
+
+	// TaxedSubID is the one subscription carrying the shared tax association.
+	// Persistent cust #0 owns more than one sub, so an invariant on "the
+	// customer's latest invoice" would read an untaxed sub's invoice.
+	TaxedSubID string
+	// TaxAssociationActiveFrom is when TaxedSubID's association became active.
+	// Invoices finalized before it are untaxed forever — tax is stamped at
+	// finalize and never backfilled — so assertions must ignore them.
+	TaxAssociationActiveFrom *time.Time
 }
 
 type EphemeralEntity struct {
@@ -91,6 +100,8 @@ func (r *registry) LoadSeeds(s Seeds) {
 		PlanEntitlementIDs:            append([]string(nil), s.PlanEntitlementIDs...),
 		GrantEntitlementIDs:           copyStringMap(s.GrantEntitlementIDs),
 		MultiCadenceSubID:             s.MultiCadenceSubID,
+		TaxedSubID:                    s.TaxedSubID,
+		TaxAssociationActiveFrom:      s.TaxAssociationActiveFrom,
 	}
 }
 
@@ -114,6 +125,8 @@ func (r *registry) Seeds() Seeds {
 		PlanEntitlementIDs:            append([]string(nil), r.seeds.PlanEntitlementIDs...),
 		GrantEntitlementIDs:           copyStringMap(r.seeds.GrantEntitlementIDs),
 		MultiCadenceSubID:             r.seeds.MultiCadenceSubID,
+		TaxedSubID:                    r.seeds.TaxedSubID,
+		TaxAssociationActiveFrom:      r.seeds.TaxAssociationActiveFrom,
 	}
 }
 

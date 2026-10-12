@@ -25,7 +25,7 @@ make run-e2eprobe
 7. **7 plan-level soft-limit entitlements**: one on each non-bucketed metered feature EXCEPT `e2eprobe_sum_multiplier_feature` (reserved for the additive grant, see next bullet) and `e2eprobe_sum_commit_feature` (entitlement-free by design).
 8. **1 additive grant entitlement** on `e2eprobe_sum_multiplier_feature` (grant_measure=quantity, quota=1000, duration=1 hour, aggregation_mode=additive). Post-create config-echo verified at seed time via raw HTTP GET, since SDK v2.0.24 doesn't expose grant fields on `EntitlementResponse`.
 9. **10 subscriptions** — one per persistent customer — on the e2eprobe plan (monthly, anniversary cycle). New subs carry a $5/mo commitment (1.5× overage factor); cust #1's sub additionally carries the shared coupon via SubscriptionCoupons. Draft subscriptions are activated automatically.
-10. **1 tax association** linking the shared tax rate to persistent cust #0's subscription (idempotent — covers both new and existing subs).
+10. **1 tax association** linking the shared tax rate to persistent cust #0's monthly subscription (idempotent — covers both new and existing subs). Cust #0 also owns the quarterly multi-cadence sub, which is deliberately untaxed; the seed records the taxed sub in `Seeds.TaxedSubID` so the invariant does not read the wrong sub's invoice.
 11. **3 wallets** on the first 3 persistent customers (`e2eprobe-cust-persistent-0/1/2`), each topped up to $100.00 USD.
 12. **Payments plan per currency** (`e2eprobe_payments_plan_<currency>`) with one in-advance fixed price, created by payment-autocharge-probe the first time it runs for that currency.
 
@@ -160,7 +160,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | entitlement-enforcement-probe | 8m | Ephemeral sub → ingest 150 events past soft-limit(100) → usage-summary assertion |
 | scenario | tax-application-probe | 15m | Ephemeral sub + tax association → preview → assert `preview.Taxes` includes the seed rate and 10% math |
 | scenario | coupon-application-probe | 15m | Ephemeral sub w/ SubscriptionCoupons → preview → assert `preview.CouponApplications` references the seed coupon |
-| probe | persistent-billing-invariants-probe | 30m | Cycle invoices for pers cust #0/#1 → assert tax on latest + coupon on oldest (ONCE cadence) |
+| probe | persistent-billing-invariants-probe | 30m | Cycle invoices for pers cust #0/#1 → assert tax on the taxed sub's latest invoice finalized after the association went active, + coupon on oldest (ONCE cadence) |
 | scenario | entitlement-grant-additive-probe | 15m | Ephemeral sub inheriting plan additive grant → ingest 200 events → assert usage summary populates |
 | scenario | payment-link-probe-`<gateway>` | 20m | Ephemeral customer, no saved method → pay_invoice / wallet_topup / auto-charge-fallback each issue a pending session with a payment URL; cancel expires it with no payment or credit; unattended auto-charge is refused with a 4xx. Natural expiry: each run leaves one top-up link untouched on `e2eprobe-cust-pay-<gateway>-expiry`; a later run (past expiry + one 30m cleanup cycle) asserts the cleanup job failed the top-up, removed its draft invoice/payment, credited nothing and expired the session |
 | scenario | payment-method-probe-`<gateway>` | 30m | Saved-method listing (API + portal), setup / add-method links. Unsupported operations must 4xx |
