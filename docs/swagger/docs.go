@@ -31155,6 +31155,7 @@ const docTemplate = `{
                 "events",
                 "invoice",
                 "credit_topups",
+                "credit_debits",
                 "credit_usage",
                 "usage_analytics",
                 "revenue_facts"
@@ -31163,6 +31164,7 @@ const docTemplate = `{
                 "ScheduledTaskEntityTypeEvents",
                 "ScheduledTaskEntityTypeInvoice",
                 "ScheduledTaskEntityTypeCreditTopups",
+                "ScheduledTaskEntityTypeCreditDebits",
                 "ScheduledTaskEntityTypeCreditUsage",
                 "ScheduledTaskEntityTypeUsageAnalytics",
                 "ScheduledTaskEntityTypeRevenueFacts"

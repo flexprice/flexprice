@@ -47,6 +47,7 @@ const (
 	ScheduledTaskEntityTypeEvents         ScheduledTaskEntityType = "events"
 	ScheduledTaskEntityTypeInvoice        ScheduledTaskEntityType = "invoice"
 	ScheduledTaskEntityTypeCreditTopups   ScheduledTaskEntityType = "credit_topups"
+	ScheduledTaskEntityTypeCreditDebits   ScheduledTaskEntityType = "credit_debits"
 	ScheduledTaskEntityTypeCreditUsage    ScheduledTaskEntityType = "credit_usage"
 	ScheduledTaskEntityTypeUsageAnalytics ScheduledTaskEntityType = "usage_analytics"
 	ScheduledTaskEntityTypeRevenueFacts   ScheduledTaskEntityType = "revenue_facts"
@@ -58,6 +59,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		ScheduledTaskEntityTypeEvents,
 		ScheduledTaskEntityTypeInvoice,
 		ScheduledTaskEntityTypeCreditTopups,
+		ScheduledTaskEntityTypeCreditDebits,
 		ScheduledTaskEntityTypeCreditUsage,
 		ScheduledTaskEntityTypeUsageAnalytics,
 		ScheduledTaskEntityTypeRevenueFacts,
