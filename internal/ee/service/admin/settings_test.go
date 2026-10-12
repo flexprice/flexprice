@@ -2,9 +2,12 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+	"time"
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -210,4 +213,116 @@ type failingSettingsStore struct {
 
 func (failingSettingsStore) Create(context.Context, *settings.Setting) error {
 	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+// storeSetting saves a tenant-level setting for a tenant, last changed at updatedAt.
+func (d *settingsTestDeps) storeSetting(t *testing.T, tenantID string, key types.SettingKey, value map[string]interface{}, updatedAt time.Time) {
+	t.Helper()
+	require.NoError(t, d.settings.Create(context.Background(), &settings.Setting{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:       key,
+		Value:     value,
+		BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished, UpdatedAt: updatedAt},
+	}))
+}
+
+// withSAML switches SAML on for the deployment, as auth.saml.enabled does.
+func (d *settingsTestDeps) withSAML() {
+	d.params.Config = &config.Configuration{}
+	d.params.Config.Auth.SAML.Enabled = true
+}
+
+func TestListTenantSettings(t *testing.T) {
+	changed := time.Date(2026, 10, 9, 8, 15, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T, d *settingsTestDeps)
+		wantJSON string
+	}{
+		{
+			name:     "nothing stored gives the default limits and no saml_config",
+			wantJSON: `{"items": [{"key": "tenant_config", "value": {"production": 0, "development": 2, "max_users": 10}, "is_default": true}]}`,
+		},
+		{
+			name: "a stored tenant_config is merged over the defaults",
+			setup: func(t *testing.T, d *settingsTestDeps) {
+				d.storeSetting(t, settingsTenantID, types.SettingKeyTenantConfig, map[string]interface{}{"max_users": 15}, changed)
+			},
+			wantJSON: `{"items": [{"key": "tenant_config", "value": {"production": 0, "development": 2, "max_users": 15}, "is_default": false, "updated_at": "2026-10-09T08:15:00Z"}]}`,
+		},
+		{
+			name: "another tenant's settings are not shown",
+			setup: func(t *testing.T, d *settingsTestDeps) {
+				d.storeSetting(t, "tenant_other", types.SettingKeyTenantConfig, map[string]interface{}{"max_users": 99}, changed)
+			},
+			wantJSON: `{"items": [{"key": "tenant_config", "value": {"production": 0, "development": 2, "max_users": 10}, "is_default": true}]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newSettingsTestDeps(t)
+			if tt.setup != nil {
+				tt.setup(t, d)
+			}
+
+			resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+
+			require.NoError(t, err)
+			body, err := json.Marshal(resp)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.wantJSON, string(body))
+		})
+	}
+}
+
+func TestListTenantSettingsWithSAML(t *testing.T) {
+	samlItem := func(t *testing.T, resp *admindto.ListSettingsResponse) *admindto.SettingResponse {
+		t.Helper()
+		require.NotNil(t, resp)
+		keys := lo.Map(resp.Items, func(item *admindto.SettingResponse, _ int) types.SettingKey { return item.Key })
+		require.Equal(t, []types.SettingKey{types.SettingKeyTenantConfig, types.SettingKeySAMLConfig}, keys)
+		return resp.Items[1]
+	}
+
+	t.Run("nothing stored gives the SAML default", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withSAML()
+
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+
+		require.NoError(t, err)
+		saml := samlItem(t, resp)
+		assert.True(t, saml.IsDefault)
+		assert.Equal(t, false, saml.Value["enabled"])
+	})
+
+	t.Run("a stored saml_config is read without a super admin on the request", func(t *testing.T) {
+		d := newSettingsTestDeps(t)
+		d.withSAML()
+		d.storeSetting(t, settingsTenantID, types.SettingKeySAMLConfig,
+			map[string]interface{}{"enabled": true, "default_role": "all_writer"}, time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC))
+
+		resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), settingsTenantID)
+
+		require.NoError(t, err)
+		saml := samlItem(t, resp)
+		assert.False(t, saml.IsDefault)
+		assert.Equal(t, "2026-06-02T12:00:00Z", saml.UpdatedAt)
+		assert.Equal(t, true, saml.Value["enabled"])
+		assert.Equal(t, "all_writer", saml.Value["default_role"])
+		assert.Equal(t, false, saml.Value["enforce_sso"], "a field that was never stored comes from the default")
+	})
+}
+
+func TestListTenantSettingsUnknownTenant(t *testing.T) {
+	d := newSettingsTestDeps(t)
+	d.params.TenantRepo = notFoundTenantStore{InMemoryTenantStore: d.tenants}
+
+	resp, err := newTestSettingsService(d.params).ListTenantSettings(context.Background(), "tenant_missing")
+
+	require.Error(t, err)
+	assert.True(t, ierr.IsNotFound(err))
+	assert.Nil(t, resp)
 }

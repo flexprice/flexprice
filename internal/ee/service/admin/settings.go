@@ -11,9 +11,11 @@ import (
 	"github.com/flexprice/flexprice/internal/utils"
 )
 
-// SettingsService changes a tenant's settings for the admin portal. Only tenant_config is exposed.
+// SettingsService reads and changes a tenant's settings for the admin portal. Only tenant_config can be changed.
 type SettingsService interface {
 	UpdateTenantConfig(ctx context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error)
+	// ListTenantSettings returns tenant_config, and saml_config when this deployment offers SAML.
+	ListTenantSettings(ctx context.Context, tenantID string) (*admindto.ListSettingsResponse, error)
 }
 
 type settingsService struct {
@@ -53,4 +55,27 @@ func (s *settingsService) UpdateTenantConfig(ctx context.Context, req admindto.U
 	s.Logger.Info(ctx, "updated tenant config", "tenant_id", req.TenantID,
 		"production", cfg.Production, "development", cfg.Development, "max_users", cfg.MaxUsers)
 	return admindto.NewTenantConfigResponse(req.TenantID, cfg), nil
+}
+
+func (s *settingsService) ListTenantSettings(ctx context.Context, tenantID string) (*admindto.ListSettingsResponse, error) {
+	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
+		return nil, err
+	}
+	ctx = types.SetTenantID(ctx, tenantID)
+
+	keys := []types.SettingKey{types.SettingKeyTenantConfig}
+	if s.Config != nil && s.Config.Auth.SAML.Enabled {
+		keys = append(keys, types.SettingKeySAMLConfig)
+	}
+
+	found := make([]*dto.SettingResponse, 0, len(keys))
+	for _, key := range keys {
+		// Unchecked: its checks are for logged-in tenant users; operators are authorized by the admin secret.
+		setting, err := s.settings.GetSettingByKeyUnchecked(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, setting)
+	}
+	return admindto.NewListSettingsResponse(found), nil
 }

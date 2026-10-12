@@ -16,12 +16,21 @@ type stubSettingsService struct {
 	req    admin.UpdateTenantConfigRequest
 	resp   *admin.TenantConfigResponse
 	err    error
+
+	listTenantID string
+	listResp     *admin.ListSettingsResponse
+	listErr      error
 }
 
 func (s *stubSettingsService) UpdateTenantConfig(_ context.Context, req admin.UpdateTenantConfigRequest) (*admin.TenantConfigResponse, error) {
 	s.called = true
 	s.req = req
 	return s.resp, s.err
+}
+
+func (s *stubSettingsService) ListTenantSettings(_ context.Context, tenantID string) (*admin.ListSettingsResponse, error) {
+	s.listTenantID = tenantID
+	return s.listResp, s.listErr
 }
 
 const tenantConfigPath = "/v1/settings/tenant_config"
@@ -72,4 +81,26 @@ func TestUpdateTenantConfig_Errors(t *testing.T) {
 			assert.Equal(t, tc.wantCalled, stub.called)
 		})
 	}
+}
+
+const tenantSettingsRoute = "/v1/tenants/:tenant_id/settings"
+
+func TestListTenantSettings_Success(t *testing.T) {
+	stub := &stubSettingsService{listResp: &admin.ListSettingsResponse{Items: []*admin.SettingResponse{}}}
+	router := setupAdminRouter(http.MethodGet, tenantSettingsRoute, NewSettingsHandler(stub).ListTenantSettings)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_1/settings", "")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "tenant_1", stub.listTenantID)
+}
+
+func TestListTenantSettings_UnknownTenant(t *testing.T) {
+	stub := &stubSettingsService{listErr: ierr.NewError("tenant not found").WithHint("Tenant not found").Mark(ierr.ErrNotFound)}
+	router := setupAdminRouter(http.MethodGet, tenantSettingsRoute, NewSettingsHandler(stub).ListTenantSettings)
+
+	w := doAdminRequest(router, http.MethodGet, "/v1/tenants/tenant_missing/settings", "")
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "tenant_missing", stub.listTenantID)
 }

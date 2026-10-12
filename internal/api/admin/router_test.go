@@ -525,12 +525,21 @@ type fakeSettingsService struct {
 	req    admindto.UpdateTenantConfigRequest
 	resp   *admindto.TenantConfigResponse
 	err    error
+
+	listTenantID string
+	listResp     *admindto.ListSettingsResponse
+	listErr      error
 }
 
 func (f *fakeSettingsService) UpdateTenantConfig(_ context.Context, req admindto.UpdateTenantConfigRequest) (*admindto.TenantConfigResponse, error) {
 	f.called = true
 	f.req = req
 	return f.resp, f.err
+}
+
+func (f *fakeSettingsService) ListTenantSettings(_ context.Context, tenantID string) (*admindto.ListSettingsResponse, error) {
+	f.listTenantID = tenantID
+	return f.listResp, f.listErr
 }
 
 func newSettingsTestServer(settings *fakeSettingsService) *Server {
@@ -697,6 +706,36 @@ func TestRemoveUserErrors(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 			assert.Equal(t, tt.wantCalled, fake.removeCalled)
+		})
+	}
+}
+
+func TestListTenantSettingsRoute(t *testing.T) {
+	tests := []struct {
+		name         string
+		secret       string
+		wantStatus   int
+		wantTenantID string
+	}{
+		{name: "with the secret", secret: "test-secret", wantStatus: http.StatusOK, wantTenantID: "tenant_1"},
+		{name: "missing secret", wantStatus: http.StatusUnauthorized},
+		{name: "wrong secret", secret: "wrong-secret", wantStatus: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeSettingsService{listResp: &admindto.ListSettingsResponse{Items: []*admindto.SettingResponse{}}}
+			server := newSettingsTestServer(fake)
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/tenants/tenant_1/settings", nil)
+			if tt.secret != "" {
+				req.Header.Set(secretHeader, tt.secret)
+			}
+			rec := httptest.NewRecorder()
+			server.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+			assert.Equal(t, tt.wantTenantID, fake.listTenantID)
 		})
 	}
 }

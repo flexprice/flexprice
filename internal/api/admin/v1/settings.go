@@ -34,3 +34,13 @@ func (h *SettingsHandler) UpdateTenantConfig(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *SettingsHandler) ListTenantSettings(c *gin.Context) {
+	resp, err := h.service.ListTenantSettings(c.Request.Context(), c.Param("tenant_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

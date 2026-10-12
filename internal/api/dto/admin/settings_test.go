@@ -1,8 +1,12 @@
 package admin
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -86,4 +90,33 @@ func TestNewTenantConfigResponse(t *testing.T) {
 	resp := NewTenantConfigResponse("tenant_1", types.TenantConfig{Production: 1, Development: 2, MaxUsers: 3})
 
 	assert.Equal(t, &TenantConfigResponse{TenantID: "tenant_1", Production: 1, Development: 2, MaxUsers: 3}, resp)
+}
+
+func TestNewListSettingsResponse(t *testing.T) {
+	ist := time.FixedZone("IST", 5*60*60+30*60)
+	stored := dto.NewSettingResponse(&settings.Setting{
+		ID:        "setting_1",
+		Key:       types.SettingKeyTenantConfig,
+		Value:     map[string]interface{}{"production": 1, "development": 2, "max_users": 15},
+		BaseModel: types.BaseModel{UpdatedAt: time.Date(2026, 9, 20, 13, 45, 0, 0, ist)},
+	})
+	unsaved := dto.NewSettingResponse(&settings.Setting{
+		Key:   types.SettingKeySAMLConfig,
+		Value: map[string]interface{}{"enabled": false},
+	})
+
+	body, err := json.Marshal(NewListSettingsResponse([]*dto.SettingResponse{stored, unsaved}))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items": [
+		{"key": "tenant_config", "value": {"production": 1, "development": 2, "max_users": 15}, "is_default": false, "updated_at": "2026-09-20T08:15:00Z"},
+		{"key": "saml_config", "value": {"enabled": false}, "is_default": true}
+	]}`, string(body))
+}
+
+func TestNewListSettingsResponse_NoSettings(t *testing.T) {
+	body, err := json.Marshal(NewListSettingsResponse(nil))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items": []}`, string(body))
 }

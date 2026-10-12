@@ -2,7 +2,9 @@ package admin
 
 import (
 	"strings"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -91,4 +93,37 @@ func NewTenantConfigResponse(tenantID string, cfg types.TenantConfig) *TenantCon
 		Development: cfg.Development,
 		MaxUsers:    cfg.MaxUsers,
 	}
+}
+
+// SettingResponse is one setting: its stored value merged over the default, and whether anything is stored.
+type SettingResponse struct {
+	Key       types.SettingKey       `json:"key"`
+	Value     map[string]interface{} `json:"value"`
+	IsDefault bool                   `json:"is_default"`
+	UpdatedAt string                 `json:"updated_at,omitempty"`
+}
+
+// ListSettingsResponse holds the settings of one tenant or environment.
+type ListSettingsResponse struct {
+	Items []*SettingResponse `json:"items"`
+}
+
+// NewSettingResponse treats a setting without an ID as a default: the settings service returns defaults unsaved.
+func NewSettingResponse(setting *dto.SettingResponse) *SettingResponse {
+	if setting == nil || setting.Setting == nil {
+		return nil
+	}
+	resp := &SettingResponse{Key: setting.Key, Value: setting.Value, IsDefault: setting.ID == ""}
+	if !resp.IsDefault {
+		resp.UpdatedAt = setting.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	return resp
+}
+
+func NewListSettingsResponse(found []*dto.SettingResponse) *ListSettingsResponse {
+	items := make([]*SettingResponse, 0, len(found))
+	for _, setting := range found {
+		items = append(items, NewSettingResponse(setting))
+	}
+	return &ListSettingsResponse{Items: items}
 }
