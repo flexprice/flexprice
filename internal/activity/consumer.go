@@ -56,6 +56,9 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 	if err := json.Unmarshal(msg.Payload, &m); err != nil {
 		return ierr.WithError(err).WithHint("Invalid activity message").Mark(ierr.ErrValidation)
 	}
+	if m.SchemaVersion < 1 || m.SchemaVersion > SchemaVersion {
+		return ierr.NewErrorf("unknown activity schema version %d", m.SchemaVersion).Mark(ierr.ErrValidation)
+	}
 	ctx = types.SetTenantID(ctx, m.TenantID)
 	ctx = types.SetEnvironmentID(ctx, m.EnvironmentID)
 

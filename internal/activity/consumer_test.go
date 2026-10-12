@@ -39,7 +39,7 @@ func TestConsumer_LinkedCustomer(t *testing.T) {
 		types.SystemEntityTypeInvoice: fakeLookup{},
 	}
 	c := NewConsumer(Registrations(), repo, customers, types.ActivityPubSub{}, logger.NewNoopLogger())
-	payload, err := json.Marshal(Message{TenantID: "t", EnvironmentID: "e", Events: []MessageEvent{
+	payload, err := json.Marshal(Message{SchemaVersion: SchemaVersion, TenantID: "t", EnvironmentID: "e", Events: []MessageEvent{
 		{ID: "act_1", EntityType: "refund", EntityID: "ref_1", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_1"}`)},
 		{ID: "act_2", EntityType: "refund", EntityID: "ref_2", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_missing"}`)},
 		{ID: "act_3", EntityType: "invoice", EntityID: "inv_1", Action: "invoice.created", State: json.RawMessage(`{"customer_id":"cust_state"}`)},
