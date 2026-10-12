@@ -44,6 +44,7 @@ func TestConsumer_LinkedCustomer(t *testing.T) {
 		{ID: "act_2", EntityType: "refund", EntityID: "ref_2", Action: "refund.created", State: json.RawMessage(`{"invoice_id":"inv_missing"}`)},
 		{ID: "act_3", EntityType: "invoice", EntityID: "inv_1", Action: "invoice.created", State: json.RawMessage(`{"customer_id":"cust_state"}`)},
 		{ID: "act_4", EntityType: "plan", EntityID: "plan_1", Action: "plan.created", State: json.RawMessage(`{"name":"Pro"}`)},
+		{ID: "act_5", EntityType: "customer", EntityID: "cust_1", Action: "customer.created", State: json.RawMessage(`{"id":"cust_1"}`)},
 	}})
 	require.NoError(t, err)
 
@@ -52,7 +53,7 @@ func TestConsumer_LinkedCustomer(t *testing.T) {
 	for _, l := range repo.inserted {
 		got[l.ID] = l.CustomerID
 	}
-	require.Equal(t, map[string]string{"act_1": "cust_inv", "act_3": "cust_state", "act_4": ""}, got)
+	require.Equal(t, map[string]string{"act_1": "cust_inv", "act_3": "cust_state", "act_4": "", "act_5": "cust_1"}, got)
 }
 
 func RegistrationEntry(t *testing.T, entityType types.SystemEntityType) *Registration {

@@ -10,8 +10,6 @@ import (
 type Repository interface {
 	Create(ctx context.Context, customer *Customer) error
 	Get(ctx context.Context, id string) (*Customer, error)
-	// GetLinkedCustomerID returns id; a customer is its own linked customer.
-	GetLinkedCustomerID(ctx context.Context, id string) (string, error)
 	List(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
 	Count(ctx context.Context, filter *types.CustomerFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
