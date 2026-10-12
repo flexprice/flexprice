@@ -24,6 +24,7 @@ type EnvironmentResponse struct {
 	Name      string                `json:"name"`
 	Type      types.EnvironmentType `json:"type"`
 	TenantID  string                `json:"tenant_id"`
+	Status    types.Status          `json:"status"`
 	CreatedAt string                `json:"created_at"`
 	UpdatedAt string                `json:"updated_at"`
 }
@@ -79,7 +80,21 @@ func NewEnvironmentResponse(e *environment.Environment) *EnvironmentResponse {
 		Name:      e.Name,
 		Type:      e.Type,
 		TenantID:  e.TenantID,
-		CreatedAt: e.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: e.UpdatedAt.Format(time.RFC3339),
+		Status:    e.Status,
+		CreatedAt: e.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt: e.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+// ListEnvironmentsResponse holds every environment of one tenant.
+type ListEnvironmentsResponse struct {
+	Items []*EnvironmentResponse `json:"items"`
+}
+
+func NewListEnvironmentsResponse(envs []*environment.Environment) *ListEnvironmentsResponse {
+	items := make([]*EnvironmentResponse, 0, len(envs))
+	for _, e := range envs {
+		items = append(items, NewEnvironmentResponse(e))
+	}
+	return &ListEnvironmentsResponse{Items: items}
 }

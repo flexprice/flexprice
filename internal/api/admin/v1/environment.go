@@ -34,3 +34,13 @@ func (h *EnvironmentHandler) CreateEnvironment(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, resp)
 }
+
+func (h *EnvironmentHandler) ListEnvironments(c *gin.Context) {
+	resp, err := h.service.ListEnvironments(c.Request.Context(), c.Param("tenant_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

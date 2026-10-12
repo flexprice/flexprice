@@ -5,11 +5,15 @@ import (
 	"testing"
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -123,4 +127,92 @@ func TestCreateEnvironment(t *testing.T) {
 			}
 		})
 	}
+}
+
+// tenantScopedEnvironmentStore lists like the Postgres repository: it needs a tenant on the context
+// and returns only that tenant's environments, which the in-memory store does not check.
+type tenantScopedEnvironmentStore struct {
+	*testutil.InMemoryEnvironmentStore
+}
+
+func (s tenantScopedEnvironmentStore) List(ctx context.Context, filter types.Filter) ([]*environment.Environment, error) {
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant ID not found in context").Mark(ierr.ErrValidation)
+	}
+	envs, err := s.InMemoryEnvironmentStore.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return lo.Filter(envs, func(e *environment.Environment, _ int) bool { return e.TenantID == tenantID }), nil
+}
+
+func TestListEnvironments(t *testing.T) {
+	newEnv := func(id, tenantID string, envType types.EnvironmentType) *environment.Environment {
+		return &environment.Environment{
+			ID:        id,
+			Name:      envType.DisplayTitle(),
+			Type:      envType,
+			BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		envs    []*environment.Environment
+		wantIDs []string
+	}{
+		{
+			name: "only the tenant's environments",
+			envs: []*environment.Environment{
+				newEnv("env_sandbox", "ten_1", types.EnvironmentDevelopment),
+				newEnv("env_prod", "ten_1", types.EnvironmentProduction),
+				newEnv("env_other", "ten_2", types.EnvironmentDevelopment),
+			},
+			wantIDs: []string{"env_sandbox", "env_prod"},
+		},
+		{
+			name:    "a tenant with no environments",
+			envs:    []*environment.Environment{newEnv("env_other", "ten_2", types.EnvironmentDevelopment)},
+			wantIDs: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			tenants := testutil.NewInMemoryTenantStore()
+			require.NoError(t, tenants.Create(ctx, &tenant.Tenant{ID: "ten_1", Name: "Acme"}))
+			environments := testutil.NewInMemoryEnvironmentStore()
+			for _, env := range tt.envs {
+				require.NoError(t, environments.Create(ctx, env))
+			}
+			svc := NewEnvironmentService(service.ServiceParams{
+				TenantRepo:      tenants,
+				EnvironmentRepo: tenantScopedEnvironmentStore{InMemoryEnvironmentStore: environments},
+			})
+
+			resp, err := svc.ListEnvironments(ctx, "ten_1")
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.NotNil(t, resp.Items, "an empty list must marshal as [], not null")
+			ids := lo.Map(resp.Items, func(item *admindto.EnvironmentResponse, _ int) string { return item.ID })
+			assert.ElementsMatch(t, tt.wantIDs, ids)
+		})
+	}
+}
+
+func TestListEnvironmentsUnknownTenant(t *testing.T) {
+	environments := testutil.NewInMemoryEnvironmentStore()
+	svc := NewEnvironmentService(service.ServiceParams{
+		TenantRepo:      notFoundTenantStore{InMemoryTenantStore: testutil.NewInMemoryTenantStore()},
+		EnvironmentRepo: tenantScopedEnvironmentStore{InMemoryEnvironmentStore: environments},
+	})
+
+	resp, err := svc.ListEnvironments(context.Background(), "ten_missing")
+
+	require.Error(t, err)
+	assert.True(t, ierr.IsNotFound(err))
+	assert.Nil(t, resp)
 }

@@ -9,10 +9,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// EnvironmentService creates environments for the admin portal.
-// It does not apply the self-serve environment quota used by the public API.
+// EnvironmentService creates and lists environments for the admin portal.
+// Creating does not apply the self-serve environment quota used by the public API.
 type EnvironmentService interface {
 	CreateEnvironment(ctx context.Context, req admindto.CreateEnvironmentRequest) (*admindto.EnvironmentResponse, error)
+	// ListEnvironments returns every published environment of a tenant, newest first.
+	ListEnvironments(ctx context.Context, tenantID string) (*admindto.ListEnvironmentsResponse, error)
 }
 
 type environmentService struct {
@@ -78,4 +80,20 @@ func (s *environmentService) resolveTenant(ctx context.Context, tenantID, email 
 		return "", "", err
 	}
 	return tenantID, userID, nil
+}
+
+// maxTenantEnvironments is more than any tenant has. The repository needs a limit, because zero returns nothing.
+const maxTenantEnvironments = 1000
+
+func (s *environmentService) ListEnvironments(ctx context.Context, tenantID string) (*admindto.ListEnvironmentsResponse, error) {
+	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
+		return nil, err
+	}
+
+	ctx = types.SetTenantID(ctx, tenantID)
+	envs, err := s.EnvironmentRepo.List(ctx, types.Filter{Limit: maxTenantEnvironments})
+	if err != nil {
+		return nil, err
+	}
+	return admindto.NewListEnvironmentsResponse(envs), nil
 }
