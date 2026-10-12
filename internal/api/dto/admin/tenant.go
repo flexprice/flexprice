@@ -2,10 +2,12 @@ package admin
 
 import (
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -79,4 +81,81 @@ func NewCreateTenantResponse(t *dto.TenantResponse, u *user.User, envs []*enviro
 		Email:        u.Email,
 		Environments: environments,
 	}
+}
+
+const (
+	defaultTenantPageSize = 50
+	maxTenantPageSize     = 100
+)
+
+// ListTenantsRequest filters and pages the tenant list. Every field is optional.
+type ListTenantsRequest struct {
+	// Search matches part of a tenant's name, its exact id, or the exact email of one of its users.
+	Search         string                     `form:"search"`
+	InternalStatus types.TenantInternalStatus `form:"internal_status"`
+	Limit          int                        `form:"limit"`
+	Offset         int                        `form:"offset"`
+}
+
+// TenantResponse is one row of the tenant list.
+type TenantResponse struct {
+	ID             string                     `json:"id"`
+	Name           string                     `json:"name"`
+	Status         types.Status               `json:"status"`
+	InternalStatus types.TenantInternalStatus `json:"internal_status"`
+	CreatedAt      string                     `json:"created_at"`
+}
+
+type ListTenantsResponse = types.ListResponse[*TenantResponse]
+
+// Validate trims search and sets a limit of 0 to the default page size.
+func (r *ListTenantsRequest) Validate() error {
+	if r == nil {
+		return ierr.NewError("request is required").
+			WithHint("Provide the list query").
+			Mark(ierr.ErrValidation)
+	}
+
+	r.Search = strings.TrimSpace(r.Search)
+	if r.Limit == 0 {
+		r.Limit = defaultTenantPageSize
+	}
+
+	if r.Limit < 1 || r.Limit > maxTenantPageSize {
+		return ierr.NewError("invalid limit").
+			WithHintf("limit must be between 1 and %d", maxTenantPageSize).
+			Mark(ierr.ErrValidation)
+	}
+	if r.Offset < 0 {
+		return ierr.NewError("invalid offset").
+			WithHint("offset cannot be negative").
+			Mark(ierr.ErrValidation)
+	}
+	if r.InternalStatus != "" {
+		return r.InternalStatus.Validate()
+	}
+	return nil
+}
+
+func NewTenantResponse(t *tenant.Tenant) *TenantResponse {
+	if t == nil {
+		return nil
+	}
+	return &TenantResponse{
+		ID:             t.ID,
+		Name:           t.Name,
+		Status:         t.Status,
+		InternalStatus: t.InternalStatus,
+		CreatedAt:      t.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// NewListTenantsResponse builds one page of the tenant list. total counts every match, not just this page.
+func NewListTenantsResponse(page []*tenant.Tenant, total, limit, offset int) *ListTenantsResponse {
+	items := make([]*TenantResponse, 0, len(page))
+	for _, t := range page {
+		items = append(items, NewTenantResponse(t))
+	}
+	resp := types.NewListResponse(items, total, limit, offset)
+	return &resp
 }

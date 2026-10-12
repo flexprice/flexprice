@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	cerrors "github.com/cockroachdb/errors"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
@@ -486,4 +487,166 @@ func cleanupFailingSupabase(t *testing.T) string {
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// listedTenantStore lists exactly the tenants it holds, in that order, or fails with err.
+type listedTenantStore struct {
+	*testutil.InMemoryTenantStore
+	tenants []*tenant.Tenant
+	err     error
+}
+
+func (s listedTenantStore) List(context.Context) ([]*tenant.Tenant, error) {
+	return s.tenants, s.err
+}
+
+// failingEmailLookupStore fails every email lookup, like a database error during a search.
+type failingEmailLookupStore struct {
+	*testutil.InMemoryUserStore
+}
+
+func (failingEmailLookupStore) GetByEmail(context.Context, string) (*user.User, error) {
+	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+// listTenantsFixture returns four tenants out of date order, as a repository might list them.
+func listTenantsFixture() []*tenant.Tenant {
+	firstOf := func(month time.Month) time.Time { return time.Date(2026, month, 1, 10, 0, 0, 0, time.UTC) }
+	return []*tenant.Tenant{
+		{ID: "tenant_sarvam", Name: "Sarvam AI", Status: types.StatusPublished, InternalStatus: types.TenantInternalStatusTrialing, CreatedAt: firstOf(time.May)},
+		{ID: "tenant_acme", Name: "Acme Inc", Status: types.StatusPublished, InternalStatus: types.TenantInternalStatusActive, CreatedAt: firstOf(time.April)},
+		{ID: "tenant_acme_cloud", Name: "acme cloud", Status: types.StatusPublished, InternalStatus: types.TenantInternalStatusTrialing, CreatedAt: firstOf(time.July)},
+		{ID: "tenant_beta", Name: "Beta Labs", Status: types.StatusArchived, InternalStatus: types.TenantInternalStatusSuspended, CreatedAt: firstOf(time.June)},
+	}
+}
+
+func TestListTenants(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      admindto.ListTenantsRequest
+		wantIDs  []string
+		wantPage types.PaginationResponse
+	}{
+		{
+			name:     "no filters lists every tenant newest first",
+			wantIDs:  []string{"tenant_acme_cloud", "tenant_beta", "tenant_sarvam", "tenant_acme"},
+			wantPage: types.PaginationResponse{Total: 4, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "search matches part of the name ignoring case",
+			req:      admindto.ListTenantsRequest{Search: "ACME"},
+			wantIDs:  []string{"tenant_acme_cloud", "tenant_acme"},
+			wantPage: types.PaginationResponse{Total: 2, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "search matches an exact tenant id",
+			req:      admindto.ListTenantsRequest{Search: "tenant_beta"},
+			wantIDs:  []string{"tenant_beta"},
+			wantPage: types.PaginationResponse{Total: 1, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "search matches the email of a user in the tenant",
+			req:      admindto.ListTenantsRequest{Search: "Owner@Sarvam.ai"},
+			wantIDs:  []string{"tenant_sarvam"},
+			wantPage: types.PaginationResponse{Total: 1, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "an email no user has matches nothing",
+			req:      admindto.ListTenantsRequest{Search: "nobody@example.com"},
+			wantIDs:  []string{},
+			wantPage: types.PaginationResponse{Total: 0, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "internal status filter",
+			req:      admindto.ListTenantsRequest{InternalStatus: types.TenantInternalStatusTrialing},
+			wantIDs:  []string{"tenant_acme_cloud", "tenant_sarvam"},
+			wantPage: types.PaginationResponse{Total: 2, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "search and internal status must both match",
+			req:      admindto.ListTenantsRequest{Search: "acme", InternalStatus: types.TenantInternalStatusActive},
+			wantIDs:  []string{"tenant_acme"},
+			wantPage: types.PaginationResponse{Total: 1, Limit: 50, Offset: 0},
+		},
+		{
+			name:     "a page counts every match in its total",
+			req:      admindto.ListTenantsRequest{Limit: 2, Offset: 1},
+			wantIDs:  []string{"tenant_beta", "tenant_sarvam"},
+			wantPage: types.PaginationResponse{Total: 4, Limit: 2, Offset: 1},
+		},
+		{
+			name:     "an offset past the end gives an empty page",
+			req:      admindto.ListTenantsRequest{Offset: 10},
+			wantIDs:  []string{},
+			wantPage: types.PaginationResponse{Total: 4, Limit: 50, Offset: 10},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newTenantTestDeps(t)
+			d.params.TenantRepo = listedTenantStore{InMemoryTenantStore: d.tenants, tenants: listTenantsFixture()}
+			require.NoError(t, d.users.Create(context.Background(), user.NewUser("owner@sarvam.ai", "tenant_sarvam")))
+
+			resp, err := newTestTenantService(d.params).ListTenants(context.Background(), tt.req)
+
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			ids := make([]string, 0, len(resp.Items))
+			for _, item := range resp.Items {
+				ids = append(ids, item.ID)
+			}
+			assert.Equal(t, tt.wantIDs, ids)
+			assert.Equal(t, tt.wantPage, resp.Pagination)
+		})
+	}
+}
+
+func TestListTenantsErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		req   admindto.ListTenantsRequest
+		setup func(d *tenantTestDeps)
+		check func(error) bool
+	}{
+		{
+			name:  "limit above 100",
+			req:   admindto.ListTenantsRequest{Limit: 500},
+			check: ierr.IsValidation,
+		},
+		{
+			name: "listing tenants fails",
+			setup: func(d *tenantTestDeps) {
+				d.params.TenantRepo = listedTenantStore{
+					InMemoryTenantStore: d.tenants,
+					err:                 ierr.NewError("database unavailable").Mark(ierr.ErrDatabase),
+				}
+			},
+			check: ierr.IsDatabase,
+		},
+		{
+			name: "email lookup fails",
+			req:  admindto.ListTenantsRequest{Search: "owner@sarvam.ai"},
+			setup: func(d *tenantTestDeps) {
+				d.params.TenantRepo = listedTenantStore{InMemoryTenantStore: d.tenants, tenants: listTenantsFixture()}
+				d.params.UserRepo = failingEmailLookupStore{InMemoryUserStore: d.users}
+			},
+			check: ierr.IsDatabase,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newTenantTestDeps(t)
+			if tt.setup != nil {
+				tt.setup(d)
+			}
+
+			resp, err := newTestTenantService(d.params).ListTenants(context.Background(), tt.req)
+
+			require.Error(t, err)
+			assert.True(t, tt.check(err))
+			assert.Nil(t, resp)
+		})
+	}
 }

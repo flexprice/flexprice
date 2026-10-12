@@ -1,10 +1,13 @@
 package admin
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -85,4 +88,77 @@ func TestNewCreateTenantResponse(t *testing.T) {
 
 	assert.Nil(t, NewCreateTenantResponse(nil, owner, envs))
 	assert.Nil(t, NewCreateTenantResponse(&dto.TenantResponse{ID: "tenant_1"}, nil, envs))
+}
+
+func TestListTenantsRequest_Validate(t *testing.T) {
+	cases := []struct {
+		name      string
+		req       ListTenantsRequest
+		wantLimit int
+		wantErr   bool
+	}{
+		{name: "no values gives a page of 50", req: ListTenantsRequest{}, wantLimit: 50},
+		{name: "limit of 100", req: ListTenantsRequest{Limit: 100}, wantLimit: 100},
+		{name: "known internal status", req: ListTenantsRequest{InternalStatus: types.TenantInternalStatusSuspended}, wantLimit: 50},
+		{name: "limit above 100", req: ListTenantsRequest{Limit: 101}, wantErr: true},
+		{name: "negative limit", req: ListTenantsRequest{Limit: -1}, wantErr: true},
+		{name: "negative offset", req: ListTenantsRequest{Offset: -1}, wantErr: true},
+		{name: "unknown internal status", req: ListTenantsRequest{InternalStatus: "deleted"}, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := tc.req
+
+			err := req.Validate()
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.True(t, ierr.IsValidation(err))
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantLimit, req.Limit)
+		})
+	}
+}
+
+func TestListTenantsRequest_ValidateTrimsSearch(t *testing.T) {
+	req := ListTenantsRequest{Search: "  Sarvam "}
+
+	require.NoError(t, req.Validate())
+	assert.Equal(t, "Sarvam", req.Search)
+}
+
+func TestListTenantsRequest_ValidateNil(t *testing.T) {
+	var req *ListTenantsRequest
+
+	err := req.Validate()
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestNewListTenantsResponse(t *testing.T) {
+	ist := time.FixedZone("IST", 5*60*60+30*60)
+	page := []*tenant.Tenant{{
+		ID:             "tenant_1",
+		Name:           "Acme Inc",
+		Status:         types.StatusPublished,
+		InternalStatus: types.TenantInternalStatusActive,
+		CreatedAt:      time.Date(2026, 4, 1, 15, 30, 0, 0, ist),
+	}}
+
+	body, err := json.Marshal(NewListTenantsResponse(page, 132, 50, 0))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"items": [{"id":"tenant_1","name":"Acme Inc","status":"published","internal_status":"active","created_at":"2026-04-01T10:00:00Z"}],
+		"pagination": {"total":132,"limit":50,"offset":0}
+	}`, string(body))
+}
+
+func TestNewListTenantsResponse_EmptyPage(t *testing.T) {
+	body, err := json.Marshal(NewListTenantsResponse(nil, 4, 50, 10))
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"items":[],"pagination":{"total":4,"limit":50,"offset":10}}`, string(body))
 }

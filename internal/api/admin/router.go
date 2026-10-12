@@ -50,6 +50,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 		tenant := group.Group("/tenants")
 		{
 			tenant.POST("", handlers.Tenant.CreateTenant)
+			tenant.GET("", handlers.Tenant.ListTenants)
 		}
 
 		user := group.Group("/users")
