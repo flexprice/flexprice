@@ -92,6 +92,7 @@ const (
 	EntityCostsheet       Entity = "costsheet"
 	EntityCreditNote      Entity = "creditnote"
 	EntityCoupon          Entity = "coupon"
+	EntityCommitment      Entity = "commitment"
 	EntityAI              Entity = "ai"
 	EntityPortal          Entity = "portal"
 	EntityWebhook         Entity = "webhook"

@@ -124,6 +124,7 @@ const (
 	UUID_PREFIX_FX_RATE                    = "fxr"
 	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_COMMITMENT                 = "cmt"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"
