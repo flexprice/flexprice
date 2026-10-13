@@ -79,6 +79,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetCustomCurrency(item.CustomCurrency).
 		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+		SetNillableCommitmentID(item.CommitmentID).
 		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetNillableParentLineItemID(item.ParentLineItemID).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
@@ -171,6 +172,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetCommitmentInfo(item.CommitmentInfo).
 				SetCustomCurrency(item.CustomCurrency).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+				SetNillableCommitmentID(item.CommitmentID).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
