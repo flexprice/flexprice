@@ -38,6 +38,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		{"C10 windows with billing_period", func(r *dto.CreateCommitmentRequest) {
 			r.ActiveWindows = types.ActiveWindows{{Start: "09:00", End: "21:00"}}
 		}, false},
+		{"C12 negative priority", func(r *dto.CreateCommitmentRequest) { r.Priority = -1 }, false},
 		{"C11 bad timezone", func(r *dto.CreateCommitmentRequest) { r.Timezone = "Mars/Base" }, false},
 		{"C13 non-binding with collection method", func(r *dto.CreateCommitmentRequest) {
 			r.Binding = lo.ToPtr(false)
