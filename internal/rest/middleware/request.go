@@ -47,7 +47,7 @@ func WebhookActorMiddleware(c *gin.Context) {
 	if i := strings.IndexByte(provider, '/'); i >= 0 {
 		provider = provider[:i]
 	}
-	actor := types.Actor{Type: types.ActorTypeSystem, ID: provider, Label: provider}
+	actor := types.Actor{Type: types.ActorTypeSystem, ID: provider}
 	c.Request = c.Request.WithContext(types.SetActor(c.Request.Context(), actor, types.SourceWebhook))
 	c.Next()
 }

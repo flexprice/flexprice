@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs
     -- Who changed it
     actor_type      LowCardinality(String),
     actor_id        String,
-    actor_label     String,
 
     -- Where the request came from
     source          LowCardinality(String),

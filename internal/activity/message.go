@@ -33,9 +33,8 @@ type MessageRequest struct {
 }
 
 type MessageActor struct {
-	Type  string `json:"type"`
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	Type string `json:"type"`
+	ID   string `json:"id"`
 }
 
 type MessageEvent struct {
@@ -71,7 +70,7 @@ func split(b Batch, maxEntries, maxBytes, maxSnapshot int) []Message {
 		}
 		event := MessageEvent{
 			ID: e.ID, EntityType: string(e.EntityType), EntityID: e.EntityID, Action: string(e.Action),
-			Actor: MessageActor{Type: string(e.Actor.Type), ID: e.Actor.ID, Label: e.Actor.Label}, State: state,
+			Actor: MessageActor{Type: string(e.Actor.Type), ID: e.Actor.ID}, State: state,
 		}
 		size := encodedSize(event) + 1
 		if len(cur.Events) > 0 && (len(cur.Events) >= maxEntries || curBytes+size > maxBytes) {

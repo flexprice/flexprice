@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemorySecretStore implements secret.Repository
@@ -61,6 +62,10 @@ func secretFilterFn(ctx context.Context, s *secret.Secret, filter interface{}) b
 
 	// Filter by user_id
 	if filter_.UserID != nil && s.UserID != *filter_.UserID {
+		return false
+	}
+
+	if len(filter_.SecretIDs) > 0 && !lo.Contains(filter_.SecretIDs, s.ID) {
 		return false
 	}
 
@@ -132,6 +137,7 @@ func (s *InMemorySecretStore) ListAll(ctx context.Context, filter *types.SecretF
 		Prefix:          filter.Prefix,
 		UserID:          filter.UserID,
 		NotExpiredAt:    filter.NotExpiredAt,
+		SecretIDs:       filter.SecretIDs,
 	}
 	if filter.QueryFilter != nil {
 		unlimitedFilter.QueryFilter.Status = filter.QueryFilter.Status

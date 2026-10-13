@@ -28,7 +28,7 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	if valid {
 		// Config keys are operator-provisioned and carry no database record to
 		// hold roles, so they are granted full access explicitly.
-		return tenantID, userID, "", "", []string{types.RoleSuperAdmin.String()}, types.Actor{Type: types.ActorTypeAPIKey, ID: "config", Label: "Operator key"}, true
+		return tenantID, userID, "", "", []string{types.RoleSuperAdmin.String()}, types.Actor{Type: types.ActorTypeAPIKey, ID: types.ActorIDOperatorKey}, true
 	}
 
 	// If not found in config, check in database
@@ -36,7 +36,7 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 		secret, err := secretService.VerifyAPIKey(ctx, apiKey)
 		if err == nil && secret != nil {
 			// Return roles from the secret for RBAC permission checks
-			return secret.TenantID, secret.UserID, secret.EnvironmentID, secret.UserType, secret.Roles, types.Actor{Type: types.ActorTypeAPIKey, ID: secret.ID, Label: secret.Name}, true
+			return secret.TenantID, secret.UserID, secret.EnvironmentID, secret.UserType, secret.Roles, types.Actor{Type: types.ActorTypeAPIKey, ID: secret.ID}, true
 		}
 	}
 
@@ -375,11 +375,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 			return
 		}
 
-		userLabel := user.Name
-		if userLabel == "" {
-			userLabel = user.Email
-		}
-		jwtActor := types.Actor{Type: types.ActorTypeUser, ID: claims.UserID, Label: userLabel}
+		jwtActor := types.Actor{Type: types.ActorTypeUser, ID: claims.UserID}
 		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", user.Roles, jwtActor, types.SourceDashboard); err != nil {
 			abortEnvironmentResolution(c, logger, err, claims.TenantID, claims.UserID)
 			return
@@ -414,7 +410,7 @@ func SessionTokenAuthMiddleware(cfg *config.Configuration, logger *logger.Logger
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, claims.EnvironmentID)
 		ctx = context.WithValue(ctx, types.CtxCustomerID, claims.CustomerID)
 		ctx = context.WithValue(ctx, types.CtxExternalCustomerID, claims.ExternalCustomerID)
-		ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeCustomer, ID: claims.CustomerID, Label: claims.ExternalCustomerID}, types.SourceCustomerPortal)
+		ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeCustomer, ID: claims.CustomerID}, types.SourceCustomerPortal)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()

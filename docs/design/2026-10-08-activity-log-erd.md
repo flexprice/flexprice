@@ -176,21 +176,21 @@ association.
 ### 4.1 Actor and request context
 
 Every entry point puts an actor and a request context into the Go context. The hook reads both at the
-moment of each write.
+moment of each write. The actor is stored as type and id only; the read API resolves labels (7.3).
 
 | Entry point | Actor | Source |
 | --- | --- | --- |
-| Dashboard (JWT) | `user`: user id and name (email when unnamed) | `dashboard` |
-| API key | `api_key`: key id and key name (`config` / "Operator key" for a configured key) | `api` |
-| Customer portal session | `customer`: customer id and external customer id | `customer_portal` |
+| Dashboard (JWT) | `user`: user id | `dashboard` |
+| API key | `api_key`: key id (`config` for a configured key) | `api` |
+| Customer portal session | `customer`: customer id | `customer_portal` |
 | Temporal activity | `system`: workflow type, set once by a worker interceptor | `workflow` |
 | Gateway webhook | `system`: the provider named in the route, set by one middleware on the webhook group | `webhook` |
 | Kafka consumer | `system`: the handler name passed to the router wrapper | `consumer` |
 
 **Writes the platform makes on a user's behalf** are attributed to the system. A credit purchase by a
-user creates the invoice as `system` "Credit purchase billing". The entry keeps the request id and
+user creates the invoice as `system` `credit_purchase_billing`. The entry keeps the request id and
 source of the request that triggered it, which links it to the user. The code doing derived work wraps
-the context with `types.SetDerivedSystemActor(ctx, id, label)`.
+the context with `types.SetDerivedSystemActor(ctx, id)`.
 
 Request middleware adds the request id, IP address and user agent. System work has none.
 
@@ -370,7 +370,7 @@ in `internal/activity/actions.go`, one block per entity, and a test checks them 
       "entity_type": "addon_association",
       "entity_id": "aa_1",
       "action": "updated",
-      "actor": { "type": "user", "id": "user_7", "label": "Manish" },
+      "actor": { "type": "user", "id": "user_7" },
       "state": { "id": "aa_1", "entity_type": "subscription", "entity_id": "subs_01", "addon_id": "addon_seats",
                  "addon_status": "cancelled", "cancelled_at": "2026-10-08T11:02:44Z", "end_date": "2026-10-08T11:02:44Z" }
     },
@@ -429,7 +429,6 @@ CREATE TABLE activity_logs
     -- Who changed it
     actor_type      LowCardinality(String),     -- user, api_key, customer, system
     actor_id        String,
-    actor_label     String,
 
     -- Where the request came from
     source          LowCardinality(String),     -- dashboard, api, customer_portal, workflow, webhook, consumer
@@ -571,7 +570,20 @@ stored but never returned. The id's embedded time is when the entry was built, s
 commit time, and a transaction can commit in the next month. The lookup therefore searches from that
 time to one day after it, which touches at most two partitions.
 
-### 7.3 Access
+### 7.3 Actor labels
+
+Entries store no actor names, so erasing a user, key or customer row in Postgres leaves no personal
+data in the log. Both routes resolve `actor.label` per page with one batched primary-key lookup per
+actor type (users, secrets, customers), reading only published rows.
+
+| Actor | Label | Row gone or not published |
+| --- | --- | --- |
+| `user` | name, else email | "Deleted user" |
+| `api_key` | key name; `config` is "Operator key" | "Deleted API key" |
+| `customer` | external customer id | "Deleted customer" |
+| `system` | the id; `credit_purchase_billing` is "Credit purchase billing" | — |
+
+### 7.4 Access
 
 - Both routes need the single `activity:read` permission; roles with a wildcard already have it.
 - API keys can read the log.

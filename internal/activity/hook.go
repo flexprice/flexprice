@@ -90,7 +90,7 @@ func newEntry(ctx context.Context, r *Registration, op entgo.Op, row any) (Entry
 
 	actor, _, hasActor := types.GetActor(ctx)
 	if !hasActor {
-		actor = types.Actor{Type: types.ActorTypeSystem, ID: "unknown", Label: "unknown"}
+		actor = types.Actor{Type: types.ActorTypeSystem, ID: "unknown"}
 		metrics.RecordCounter(ctx, metrics.ActivityUnknownActor, 1)
 	}
 	return Entry{

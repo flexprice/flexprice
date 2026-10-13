@@ -87,7 +87,7 @@ func (c *Consumer) process(ctx context.Context, msg *message.Message) error {
 			ID: e.ID, TenantID: m.TenantID, EnvironmentID: m.EnvironmentID,
 			Entity:     domainActivity.Entity{Type: e.EntityType, ID: e.EntityID, Label: reg.label(state)},
 			CustomerID: customerID, Action: e.Action,
-			Actor:   domainActivity.Actor{Type: e.Actor.Type, ID: e.Actor.ID, Label: e.Actor.Label},
+			Actor:   domainActivity.Actor{Type: e.Actor.Type, ID: e.Actor.ID},
 			Request: domainActivity.Request{ID: m.Request.ID, Source: m.Request.Source, IP: m.Request.IP, UserAgent: m.Request.UserAgent},
 			State:   stateText, SchemaVersion: uint16(m.SchemaVersion), OccurredAt: m.CommittedAt,
 		})

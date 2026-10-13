@@ -79,9 +79,14 @@ func (s *activityService) List(ctx context.Context, req *dto.ListActivityRequest
 		}
 	}
 
+	labels, err := s.actorLabels(ctx, lo.Map(rows, func(row *domainActivity.Log, _ int) domainActivity.Actor { return row.Actor }))
+	if err != nil {
+		return nil, err
+	}
+
 	resp := &dto.ListActivityResponse{Items: make([]*dto.ActivityResponse, 0, len(rows)), Pagination: dto.ActivityPagination{Limit: limit, HasMore: hasMore}}
 	for _, row := range rows {
-		item := toActivityResponse(row)
+		item := toActivityResponse(row, labels[row.Actor])
 		if withState {
 			item.State = rawState(states[row.ID])
 		}
@@ -110,7 +115,11 @@ func (s *activityService) Get(ctx context.Context, id string) (*dto.ActivityResp
 		msg := fmt.Sprintf("Activity %s was not found.", id)
 		return nil, ierr.NewError(msg).WithHint(msg).Mark(ierr.ErrNotFound)
 	}
-	item := toActivityResponse(row)
+	labels, err := s.actorLabels(ctx, []domainActivity.Actor{row.Actor})
+	if err != nil {
+		return nil, err
+	}
+	item := toActivityResponse(row, labels[row.Actor])
 	item.State = rawState(row.State)
 	return item, nil
 }
@@ -209,12 +218,96 @@ func rawState(state string) *json.RawMessage {
 	return &raw
 }
 
-func toActivityResponse(l *domainActivity.Log) *dto.ActivityResponse {
+func toActivityResponse(l *domainActivity.Log, actorLabel string) *dto.ActivityResponse {
 	return &dto.ActivityResponse{
 		ID: l.ID, OccurredAt: l.OccurredAt, Action: l.Action,
 		Entity:     dto.ActivityEntity{Type: l.Entity.Type, ID: l.Entity.ID, Label: l.Entity.Label},
 		CustomerID: l.CustomerID,
-		Actor:      dto.ActivityActor{Type: l.Actor.Type, ID: l.Actor.ID, Label: l.Actor.Label},
+		Actor:      dto.ActivityActor{Type: l.Actor.Type, ID: l.Actor.ID, Label: actorLabel},
 		Source:     l.Request.Source, RequestID: l.Request.ID, IP: l.Request.IP, UserAgent: l.Request.UserAgent,
 	}
+}
+
+// actorLabels names each actor from its active row; an actor whose row is gone or inactive gets a "Deleted …" label.
+func (s *activityService) actorLabels(ctx context.Context, actors []domainActivity.Actor) (map[domainActivity.Actor]string, error) {
+	labels := make(map[domainActivity.Actor]string, len(actors))
+	idsByType := make(map[types.ActorType][]string)
+	for _, a := range lo.Uniq(actors) {
+		if label, ok := fixedActorLabel(a); ok {
+			labels[a] = label
+			continue
+		}
+		idsByType[types.ActorType(a.Type)] = append(idsByType[types.ActorType(a.Type)], a.ID)
+	}
+	for actorType, ids := range idsByType {
+		active, err := s.activeActorLabels(ctx, actorType, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			label, ok := active[id]
+			if !ok {
+				label = deletedActorLabel(actorType)
+			}
+			labels[domainActivity.Actor{Type: string(actorType), ID: id}] = label
+		}
+	}
+	return labels, nil
+}
+
+// activeActorLabels returns the labels of the published rows among ids, keyed by id.
+func (s *activityService) activeActorLabels(ctx context.Context, actorType types.ActorType, ids []string) (map[string]string, error) {
+	labels := make(map[string]string, len(ids))
+	switch actorType {
+	case types.ActorTypeUser:
+		users, _, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{QueryFilter: types.NewNoLimitPublishedQueryFilter(), UserIDs: ids})
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range users {
+			labels[u.ID] = cmp.Or(u.Name, u.Email)
+		}
+	case types.ActorTypeAPIKey:
+		keys, err := s.SecretRepo.List(ctx, &types.SecretFilter{QueryFilter: types.NewNoLimitPublishedQueryFilter(), SecretIDs: ids})
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range keys {
+			labels[k.ID] = k.Name
+		}
+	case types.ActorTypeCustomer:
+		customers, err := s.CustomerRepo.List(ctx, &types.CustomerFilter{QueryFilter: types.NewNoLimitPublishedQueryFilter(), CustomerIDs: ids})
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range customers {
+			labels[c.ID] = c.ExternalID
+		}
+	}
+	return labels, nil
+}
+
+// fixedActorLabel names actors that have no row to look up.
+func fixedActorLabel(a domainActivity.Actor) (string, bool) {
+	switch {
+	case a.Type == string(types.ActorTypeAPIKey) && a.ID == types.ActorIDOperatorKey:
+		return "Operator key", true
+	case a.Type == string(types.ActorTypeSystem) && a.ID == types.ActorIDCreditPurchaseBilling:
+		return "Credit purchase billing", true
+	case a.Type == string(types.ActorTypeSystem):
+		return a.ID, true
+	}
+	return "", false
+}
+
+func deletedActorLabel(actorType types.ActorType) string {
+	switch actorType {
+	case types.ActorTypeUser:
+		return "Deleted user"
+	case types.ActorTypeAPIKey:
+		return "Deleted API key"
+	case types.ActorTypeCustomer:
+		return "Deleted customer"
+	}
+	return ""
 }

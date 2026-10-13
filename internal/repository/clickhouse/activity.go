@@ -37,7 +37,7 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 	batch, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO activity_logs (
 			id, tenant_id, environment_id, entity_type, entity_id, entity_label, customer_id, action,
-			actor_type, actor_id, actor_label, source, request_id, ip, user_agent, state, schema_version, occurred_at
+			actor_type, actor_id, source, request_id, ip, user_agent, state, schema_version, occurred_at
 		)`)
 	if err != nil {
 		return ierr.WithError(err).WithHint("Failed to prepare batch for activity_logs insert").Mark(ierr.ErrDatabase)
@@ -45,7 +45,7 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 	for _, l := range logs {
 		if err := batch.Append(
 			l.ID, l.TenantID, l.EnvironmentID, l.Entity.Type, l.Entity.ID, l.Entity.Label, l.CustomerID, l.Action,
-			l.Actor.Type, l.Actor.ID, l.Actor.Label, l.Request.Source, l.Request.ID, l.Request.IP, l.Request.UserAgent, l.State, l.SchemaVersion, l.OccurredAt.UTC(),
+			l.Actor.Type, l.Actor.ID, l.Request.Source, l.Request.ID, l.Request.IP, l.Request.UserAgent, l.State, l.SchemaVersion, l.OccurredAt.UTC(),
 		); err != nil {
 			return ierr.WithError(err).WithHint("Failed to append row to activity_logs batch").
 				WithReportableDetails(map[string]interface{}{"activity_id": l.ID}).Mark(ierr.ErrDatabase)
@@ -61,7 +61,7 @@ func (r *activityRepository) Insert(ctx context.Context, logs []*activity.Log) e
 const millisParam = "fromUnixTimestamp64Milli(?)"
 
 const activityListColumns = `id, entity_type, entity_id, entity_label, customer_id, action,
-	actor_type, actor_id, actor_label, source, request_id, ip, user_agent, schema_version, occurred_at`
+	actor_type, actor_id, source, request_id, ip, user_agent, schema_version, occurred_at`
 
 // List returns up to q.Limit entries, newest first, without state.
 func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([]*activity.Log, error) {
@@ -108,7 +108,7 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 	for rows.Next() {
 		l := &activity.Log{}
 		if err := rows.Scan(&l.ID, &l.Entity.Type, &l.Entity.ID, &l.Entity.Label, &l.CustomerID, &l.Action,
-			&l.Actor.Type, &l.Actor.ID, &l.Actor.Label, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt); err != nil {
+			&l.Actor.Type, &l.Actor.ID, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt); err != nil {
 			return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
 		}
 		logs = append(logs, l)
@@ -161,7 +161,7 @@ func (r *activityRepository) Get(ctx context.Context, id string, from, to time.T
 	}
 	l := &activity.Log{}
 	if err := rows.Scan(&l.ID, &l.Entity.Type, &l.Entity.ID, &l.Entity.Label, &l.CustomerID, &l.Action,
-		&l.Actor.Type, &l.Actor.ID, &l.Actor.Label, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt, &l.State); err != nil {
+		&l.Actor.Type, &l.Actor.ID, &l.Request.Source, &l.Request.ID, &l.Request.IP, &l.Request.UserAgent, &l.SchemaVersion, &l.OccurredAt, &l.State); err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to read activity").Mark(ierr.ErrDatabase)
 	}
 	return l, nil

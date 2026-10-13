@@ -305,9 +305,9 @@ func GetActor(ctx context.Context) (Actor, Source, bool) {
 
 // SetDerivedSystemActor attributes work the platform does on someone's behalf to the system,
 // keeping the original source (and request metadata).
-func SetDerivedSystemActor(ctx context.Context, id, label string) context.Context {
+func SetDerivedSystemActor(ctx context.Context, id string) context.Context {
 	_, source, _ := GetActor(ctx)
-	return SetActor(ctx, Actor{Type: ActorTypeSystem, ID: id, Label: label}, source)
+	return SetActor(ctx, Actor{Type: ActorTypeSystem, ID: id}, source)
 }
 
 type requestMeta struct{ ip, userAgent string }

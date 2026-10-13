@@ -27,9 +27,14 @@ const (
 	SourceConsumer       Source = "consumer"
 )
 
-// Actor identifies who made a change; Label is the human-readable name.
+// Actor identifies who made a change. It holds ids only; the activity read API resolves labels.
 type Actor struct {
-	Type  ActorType
-	ID    string
-	Label string
+	Type ActorType
+	ID   string
 }
+
+// Actor ids with no database row behind them.
+const (
+	ActorIDOperatorKey           = "config"
+	ActorIDCreditPurchaseBilling = "credit_purchase_billing"
+)

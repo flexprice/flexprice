@@ -26,9 +26,8 @@ type Entity struct {
 
 // Actor is who made the change.
 type Actor struct {
-	Type  string
-	ID    string
-	Label string
+	Type string
+	ID   string
 }
 
 // Request is where the change came from.

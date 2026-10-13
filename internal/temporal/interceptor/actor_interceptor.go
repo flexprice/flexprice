@@ -29,6 +29,6 @@ type actorActivityInterceptor struct {
 
 func (a *actorActivityInterceptor) ExecuteActivity(ctx context.Context, in *interceptor.ExecuteActivityInput) (interface{}, error) {
 	name := activity.GetInfo(ctx).WorkflowType.Name
-	ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeSystem, ID: name, Label: name}, types.SourceWorkflow)
+	ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeSystem, ID: name}, types.SourceWorkflow)
 	return a.Next.ExecuteActivity(ctx, in)
 }

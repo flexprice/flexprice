@@ -1250,7 +1250,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		var inv *dto.InvoiceResponse
 		var skipped bool
 		// The invoice is platform billing work on the user's behalf, so its entry is attributed to the system.
-		invCtx := types.SetDerivedSystemActor(ctx, "credit_purchase_billing", "Credit purchase billing")
+		invCtx := types.SetDerivedSystemActor(ctx, types.ActorIDCreditPurchaseBilling)
 		if isPayFirst {
 			// Pay-first: leave DRAFT until checkout complete finalizes + reconciles.
 			invReq.SourceType = types.InvoiceSourceTypeCheckout

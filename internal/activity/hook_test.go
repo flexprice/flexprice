@@ -44,7 +44,7 @@ func mutate(t *testing.T, sink Sink, ctx context.Context, m entgo.Mutation, resu
 
 func userCtx() context.Context {
 	ctx := types.SetTenantID(context.Background(), "t_ctx")
-	return types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: "user_1", Label: "Ada"}, types.SourceDashboard)
+	return types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: "user_1"}, types.SourceDashboard)
 }
 
 func invoiceUpdate(id string) entgo.Mutation {
@@ -107,7 +107,7 @@ func TestHook_TenantFromRow(t *testing.T) {
 func TestHook_UnknownActor(t *testing.T) {
 	sink := &recordingSink{}
 	mutate(t, sink, context.Background(), invoiceUpdate("inv_1"), invoiceRow("inv_1", "t"))
-	require.Equal(t, types.Actor{Type: types.ActorTypeSystem, ID: "unknown", Label: "unknown"}, sink.entries()[0].Actor)
+	require.Equal(t, types.Actor{Type: types.ActorTypeSystem, ID: "unknown"}, sink.entries()[0].Actor)
 }
 
 func TestHook_RedactAndDrop(t *testing.T) {

@@ -389,6 +389,10 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(secret.UserID(*f.UserID))
 	}
 
+	if len(f.SecretIDs) > 0 {
+		query = query.Where(secret.IDIn(f.SecretIDs...))
+	}
+
 	if f.NotExpiredAt != nil {
 		t := *f.NotExpiredAt
 		query = query.Where(secret.Or(

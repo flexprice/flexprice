@@ -240,6 +240,8 @@ An ent hook on the writer client records every write to a registered entity (`in
 - `activity:"redact"` for secrets and gateway data (tokens, provider payloads, payment details); the value is stored as `"[redacted]"`.
 - `activity:"drop"` for internal bookkeeping (`version`, sequences); the field is left out.
 
+**Actors are ids only.** `types.Actor` holds a type and an id, never a name or email; the read API resolves labels from Postgres. A new system actor whose id is not readable gets its label in `fixedActorLabel` (`internal/ee/service/activity.go`).
+
 #### Onboarding an Entity
 
 1. **Entity type:** add `SystemEntityType<Name>` in `internal/types/entity.go` if it does not exist.

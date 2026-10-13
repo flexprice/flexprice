@@ -188,7 +188,7 @@ func (r *Router) AddNoPublishHandler(
 			defer cancel()
 			ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-			ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeSystem, ID: handlerName, Label: handlerName}, types.SourceConsumer)
+			ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeSystem, ID: handlerName}, types.SourceConsumer)
 
 			err := handlerFunc(ctx, msg)
 			if err != nil {

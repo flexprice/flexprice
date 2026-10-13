@@ -87,6 +87,7 @@ type SecretFilter struct {
 	Prefix       *string         `json:"prefix,omitempty" form:"prefix"`
 	UserID       *string         `json:"user_id,omitempty" form:"user_id"`
 	NotExpiredAt *time.Time      `json:"-"` // exclude records expired before this time (expires_at IS NULL OR expires_at > value)
+	SecretIDs    []string        `json:"-"`
 }
 
 func NewSecretFilter() *SecretFilter {
