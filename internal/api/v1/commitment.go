@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -202,9 +204,10 @@ func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 		return
 	}
 
+	// An empty body, even one of unknown length, means terminate now.
 	var req dto.TerminateCommitmentRequest
 	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
 			c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 			return
 		}

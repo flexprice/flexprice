@@ -128,14 +128,9 @@ func sortLinesForFill(lines []*subscription.SubscriptionLineItem) {
 	})
 }
 
-func (s *commitmentService) validateAgainstSubscription(
-	ctx context.Context,
-	req *dto.CreateCommitmentRequest,
-	cc *commitmentContext,
-) error {
+func (s *commitmentService) validateAgainstSubscription(ctx context.Context, req *dto.CreateCommitmentRequest, cc *commitmentContext, opts commitmentCreateOptions) error {
 	sub := cc.Sub
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive &&
-		sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
+	if !commitmentAcceptsSubscriptionStatus(sub.SubscriptionStatus, opts) {
 		return invalidf("subscription %s must be active or trialing", sub.ID)
 	}
 
@@ -221,11 +216,17 @@ func errScopeCadence(priceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
-func invalid(msg string) error {
-	return ierr.NewError(msg).
-		WithHint(msg).
-		Mark(ierr.ErrValidation)
+func commitmentAcceptsSubscriptionStatus(status types.SubscriptionStatus, opts commitmentCreateOptions) bool {
+	switch status {
+	case types.SubscriptionStatusActive, types.SubscriptionStatusTrialing:
+		return true
+	case types.SubscriptionStatusIncomplete, types.SubscriptionStatusDraft:
+		return opts.allowPendingSubscription
+	}
+	return false
 }
+
+func invalid(msg string) error { return ierr.NewError(msg).WithHint(msg).Mark(ierr.ErrValidation) }
 
 // validateOverlaps requires active commitments sharing a line item to differ in priority and agree on
 // type, measurement and overage rate.
