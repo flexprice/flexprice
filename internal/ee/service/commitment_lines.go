@@ -50,6 +50,8 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 			alloc = &commitmentAllocation{UsedByLine: map[string]decimal.Decimal{}}
 		}
 		withinValue := decimal.Zero
+		usedValue := decimal.Zero
+		largest := -1
 		for _, lineID := range sc.LineIDs {
 			used := alloc.UsedByLine[lineID]
 			if !used.IsPositive() {
@@ -65,16 +67,28 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 				qty = proportionalQuantity(sl, used)
 				amount = used
 			}
-			withinValue = withinValue.Add(amount)
-			out = append(out, commitmentLine(in, sc, sl, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount))
+			line := commitmentLine(in, sc, sl, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount)
+			withinValue = withinValue.Add(line.Amount)
+			usedValue = usedValue.Add(amount)
+			if largest < 0 || line.Amount.GreaterThan(out[largest].Amount) {
+				largest = len(out)
+			}
+			out = append(out, line)
+		}
+		// Lines rounded one by one can drift from their rounded total; the largest line absorbs the drift.
+		if largest >= 0 {
+			drift := types.RoundToCurrencyPrecision(usedValue, in.Currency).Sub(withinValue)
+			out[largest].Amount = out[largest].Amount.Add(drift)
+			withinValue = withinValue.Add(drift)
 		}
 		if !sc.C.Binding {
 			continue
 		}
-		trueUp := alloc.Unused.Mul(sc.Rates.Committed)
+		// True-up is the rounded period amount minus the rounded within lines, so they sum exactly.
+		periodAmount := types.RoundToCurrencyPrecision(in.PeriodByCmt[sc.C.ID].Amount, in.Currency)
+		trueUp := decimal.Max(periodAmount.Sub(withinValue), decimal.Zero)
 		trueUpQty := alloc.Unused
 		if sc.C.Type == types.COMMITMENT_TYPE_AMOUNT {
-			trueUp = decimal.Max(in.PeriodByCmt[sc.C.ID].Amount.Sub(withinValue), decimal.Zero)
 			trueUpQty = decimal.NewFromInt(1)
 		}
 		if trueUp.IsPositive() {
@@ -166,7 +180,7 @@ func commitmentLine(in commitmentLineInput, sc *stackedCommitment, sl *scopedLin
 			types.MetadataKeyCommitmentID:       sc.C.ID,
 		},
 	}
-	if sc.C.InvoiceDescription != nil {
+	if sc.C.InvoiceDescription != nil && kind != types.CommitmentLineOnDemand {
 		line.Metadata[types.MetadataKeyDescription] = *sc.C.InvoiceDescription
 	}
 	if sl != nil {

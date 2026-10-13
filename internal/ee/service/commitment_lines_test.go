@@ -103,6 +103,130 @@ func TestBuildCommitmentLines_ConservationViolation(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestBuildCommitmentLines_RoundingReconcilesToPeriodAmount(t *testing.T) {
+	t0 := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Quantity: rate 0.045, capacity 24, used 21 → within 0.95 + true-up 0.13 == 1.08
+	p := &price.Price{ID: "p", Amount: dec("0.06"), DisplayName: "H100"}
+	li := &subscription.SubscriptionLineItem{ID: "li", PriceID: p.ID, PriceType: types.PRICE_TYPE_USAGE}
+	c := &commitment.Commitment{ID: "cmt_q", Type: types.COMMITMENT_TYPE_QUANTITY, Value: dec("24"), Binding: true, InvoiceLabel: "GPU"}
+	stack := []*stackedCommitment{{C: c, Rates: commitmentRates{Committed: dec("0.045")}, Capacity: fixedCap("24"), LineIDs: []string{"li"}}}
+	alloc := allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: map[string]decimal.Decimal{"li": dec("21")}}})
+	lines, err := buildCommitmentLines(commitmentLineInput{
+		Stack: stack, Alloc: alloc, Lines: map[string]*scopedLine{"li": {Item: li, Price: p, Quantity: dec("21"), Cost: dec("1.26")}},
+		PeriodByCmt: map[string]commitmentPeriod{"cmt_q": {Capacity: dec("24"), Amount: dec("1.08")}},
+		PeriodStart: t0, PeriodEnd: t0.AddDate(0, 1, 0), Currency: "usd", PriceCost: perUnitCost,
+	})
+	require.NoError(t, err)
+	total := linesByKind(lines, types.CommitmentLineWithin)[0].Amount.Add(linesByKind(lines, types.CommitmentLineTrueUp)[0].Amount)
+	require.True(t, total.Equal(dec("1.08")), total.String())
+
+	// Amount: two lines of 33.335 against 100 → sum exactly 100.00
+	mk := func(id string) (*subscription.SubscriptionLineItem, *price.Price) {
+		return &subscription.SubscriptionLineItem{ID: id, PriceID: "p_" + id, PriceType: types.PRICE_TYPE_USAGE}, &price.Price{ID: "p_" + id, Amount: dec("1")}
+	}
+	li1, p1 := mk("a")
+	li2, p2 := mk("b")
+	ca := &commitment.Commitment{ID: "cmt_a", Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Binding: true, InvoiceLabel: "Plat"}
+	stack = []*stackedCommitment{{C: ca, Rates: commitmentRates{Committed: dec("1")}, Capacity: fixedCap("100"), LineIDs: []string{"a", "b"}}}
+	use := map[string]decimal.Decimal{"a": dec("33.335"), "b": dec("33.335")}
+	alloc = allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: use}})
+	lines, err = buildCommitmentLines(commitmentLineInput{
+		Stack: stack, Alloc: alloc,
+		Lines: map[string]*scopedLine{"a": {Item: li1, Price: p1, Quantity: dec("33.335"), Cost: dec("33.335")}, "b": {Item: li2, Price: p2, Quantity: dec("33.335"), Cost: dec("33.335")}},
+		PeriodByCmt: map[string]commitmentPeriod{"cmt_a": {Amount: dec("100"), Capacity: dec("100")}},
+		PeriodStart: t0, PeriodEnd: t0.AddDate(0, 1, 0), Currency: "usd", PriceCost: perUnitCost,
+	})
+	require.NoError(t, err)
+	sum := decimal.Zero
+	for _, l := range lines {
+		sum = sum.Add(l.Amount)
+	}
+	require.True(t, sum.Equal(dec("100")), sum.String())
+}
+
+func TestBuildCommitmentLines_OnDemandOmitsInvoiceDescription(t *testing.T) {
+	in := amountInput("120", true)
+	in.Stack[0].C.InvoiceDescription = lo.ToPtr("desc")
+	lines, err := buildCommitmentLines(in)
+	require.NoError(t, err)
+	require.Equal(t, "desc", linesByKind(lines, types.CommitmentLineWithin)[0].Metadata[types.MetadataKeyDescription])
+	od := linesByKind(lines, types.CommitmentLineOnDemand)[0]
+	require.NotContains(t, od.Metadata, types.MetadataKeyDescription)
+	require.Equal(t, "cmt_1", lo.FromPtr(od.CommitmentID))
+
+	in = amountInput("60", true)
+	in.Stack[0].C.InvoiceDescription = lo.ToPtr("desc")
+	lines, err = buildCommitmentLines(in)
+	require.NoError(t, err)
+	require.Equal(t, "desc", linesByKind(lines, types.CommitmentLineTrueUp)[0].Metadata[types.MetadataKeyDescription])
+}
+
+func TestBuildCommitmentLines_RoundingNeverExceedsPeriodAmount(t *testing.T) {
+	// 24 units at 0.045 split 7/7/10: lines round to 0.32 + 0.32 + 0.45 = 1.09 against a 1.08 commitment
+	t0 := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	usage := map[string]decimal.Decimal{
+		"a": dec("7"),
+		"b": dec("7"),
+		"c": dec("10"),
+	}
+
+	lines := map[string]*scopedLine{}
+	for id, qty := range usage {
+		lines[id] = &scopedLine{
+			Item: &subscription.SubscriptionLineItem{
+				ID:        id,
+				PriceID:   "p_" + id,
+				PriceType: types.PRICE_TYPE_USAGE,
+			},
+			Price: &price.Price{
+				ID:     "p_" + id,
+				Amount: dec("0.06"),
+			},
+			Quantity: qty,
+			Cost:     qty.Mul(dec("0.06")),
+		}
+	}
+
+	stack := []*stackedCommitment{
+		{
+			C: &commitment.Commitment{
+				ID:           "cmt_q",
+				Type:         types.COMMITMENT_TYPE_QUANTITY,
+				Value:        dec("24"),
+				Binding:      true,
+				InvoiceLabel: "GPU",
+			},
+			Rates:    commitmentRates{Committed: dec("0.045")},
+			Capacity: fixedCap("24"),
+			LineIDs:  []string{"a", "b", "c"},
+		},
+	}
+
+	out, err := buildCommitmentLines(commitmentLineInput{
+		Stack: stack,
+		Alloc: allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: usage}}),
+		Lines: lines,
+		PeriodByCmt: map[string]commitmentPeriod{
+			"cmt_q": {
+				Capacity: dec("24"),
+				Amount:   dec("1.08"),
+			},
+		},
+		PeriodStart: t0,
+		PeriodEnd:   t0.AddDate(0, 1, 0),
+		Currency:    "usd",
+		PriceCost:   perUnitCost,
+	})
+	require.NoError(t, err)
+	require.Empty(t, linesByKind(out, types.CommitmentLineTrueUp))
+
+	total := decimal.Zero
+	for _, l := range linesByKind(out, types.CommitmentLineWithin) {
+		total = total.Add(l.Amount)
+	}
+	require.True(t, total.Equal(dec("1.08")), total.String())
+}
+
 func gpuLine(id string) *scopedLine {
 	return &scopedLine{
 		Item: &subscription.SubscriptionLineItem{
