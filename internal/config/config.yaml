@@ -551,7 +551,7 @@ activity:
   enabled: false
   topic: activity_logs
   topic_dlq: activity_logs_dlq
-  consumer_group: "v1_activity_log"
+  consumer_group: "activity_log"
   rate_limit: 50
   publisher:
     buffer_size: 10000
