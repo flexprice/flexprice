@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -23,6 +24,8 @@ type commitmentPass struct {
 	periods map[string]commitmentPeriod // each commitment's invoice period, cut at termination
 	buckets map[string]types.WindowSize
 	settle  map[string]decimal.Decimal // bill_remaining amount owed by commitments terminated in the period
+	// fromEvents reads bucketed usage from raw events instead of meter_usage, for the raw-events path.
+	fromEvents bool
 }
 
 // prepareCommitmentPass loads commitments overlapping the period and the line items they handle.
@@ -149,6 +152,30 @@ func (s *billingService) runCommitmentPass(
 	source types.UsageSource,
 	meters map[string]*meter.Meter,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	out, _, err := s.applyCommitmentPass(ctx, pass, sub, charges, periodStart, periodEnd, asOf, source, meters)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, l := range out {
+		total = total.Add(l.Amount)
+	}
+	s.Logger.Debug(ctx, "applied commitments to usage charges", "subscription_id", sub.ID,
+		"commitment_ids", lo.Map(pass.stack, func(sc *stackedCommitment, _ int) string { return sc.C.ID }),
+		"period_start", periodStart, "period_end", periodEnd, "lines", len(out), "total", total.String())
+	return out, total, nil
+}
+
+// applyCommitmentPass returns the commitment invoice lines with the allocation they were built from.
+func (s *billingService) applyCommitmentPass(
+	ctx context.Context,
+	pass *commitmentPass,
+	sub *subscription.Subscription,
+	charges map[string][]*dto.SubscriptionUsageByMetersResponse,
+	periodStart, periodEnd, asOf time.Time,
+	source types.UsageSource,
+	meters map[string]*meter.Meter,
+) ([]dto.CreateInvoiceLineItemRequest, *allocationResult, error) {
 	r := &commitmentRun{
 		s: s, pass: pass, sub: sub, charges: charges, periodStart: periodStart, periodEnd: periodEnd,
 		asOf: asOf, source: source, meters: meters, priceSvc: NewPriceService(s.ServiceParams),
@@ -164,7 +191,7 @@ func (s *billingService) runCommitmentPass(
 			windows, err = r.periodWindow(ctx, group)
 		}
 		if err != nil {
-			return nil, decimal.Zero, err
+			return nil, nil, err
 		}
 		res := allocateCommitments(group, windows)
 		for id, a := range res.ByCommitment {
@@ -182,7 +209,7 @@ func (s *billingService) runCommitmentPass(
 	}
 	out, err := buildCommitmentLines(in)
 	if err != nil {
-		return nil, decimal.Zero, err
+		return nil, nil, err
 	}
 	for _, sc := range pass.stack {
 		amount := types.RoundToCurrencyPrecision(pass.settle[sc.C.ID], sub.Currency)
@@ -194,15 +221,76 @@ func (s *billingService) runCommitmentPass(
 		line.PriceID = sc.C.CommittedPriceID
 		out = append(out, line)
 	}
+	return out, alloc, nil
+}
 
-	total := decimal.Zero
-	for _, l := range out {
-		total = total.Add(l.Amount)
+// commitmentUsageBreakdown runs the invoice preview's commitment pass for the usage window and reports each
+// commitment's usage value and billed amount; nil when no commitment applies.
+func (s *billingService) commitmentUsageBreakdown(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, start, end time.Time) ([]*dto.CommitmentUsageBreakdown, error) {
+	pass, err := s.prepareCommitmentPass(ctx, sub, start, end)
+	if err != nil || len(pass.stack) == 0 {
+		return nil, err
 	}
-	s.Logger.Debug(ctx, "applied commitments to usage charges", "subscription_id", sub.ID,
-		"commitment_ids", lo.Map(pass.stack, func(sc *stackedCommitment, _ int) string { return sc.C.ID }),
-		"period_start", periodStart, "period_end", periodEnd, "lines", len(out), "total", total.String())
-	return out, total, nil
+	pass.fromEvents = true
+	lines, alloc, err := s.applyCommitmentPass(ctx, pass, sub, rawChargesByLine(sub, usage), start, end, time.Now().UTC(), "", nil)
+	if err != nil {
+		return nil, err
+	}
+	return commitmentBreakdown(pass, lines, alloc, sub.Currency), nil
+}
+
+// commitmentBreakdown maps the allocation and lines of one pass to the usage API breakdown.
+// When usage exceeds capacity, ValueWithin reaches PeriodAmount and ValueUnused is 0.
+func commitmentBreakdown(pass *commitmentPass, lines []dto.CreateInvoiceLineItemRequest, alloc *allocationResult, currency string) []*dto.CommitmentUsageBreakdown {
+	out := make([]*dto.CommitmentUsageBreakdown, 0, len(pass.stack))
+	for _, sc := range pass.stack {
+		b := &dto.CommitmentUsageBreakdown{
+			CommitmentID: sc.C.ID,
+			InvoiceLabel: sc.C.InvoiceLabel,
+			PeriodAmount: types.RoundToCurrencyPrecision(pass.periods[sc.C.ID].Amount, currency),
+		}
+		if a := alloc.ByCommitment[sc.C.ID]; a != nil {
+			b.Capacity, b.Unused = a.Capacity, a.Unused
+			for _, used := range a.UsedByLine {
+				b.Used = b.Used.Add(used)
+			}
+		}
+		trueUp := decimal.Zero
+		for _, l := range lines {
+			if lo.FromPtr(l.CommitmentID) != sc.C.ID {
+				continue
+			}
+			switch types.CommitmentLineKind(l.Metadata[types.MetadataKeyCommitmentLineKind]) {
+			case types.CommitmentLineWithin:
+				b.ValueWithin = b.ValueWithin.Add(l.Amount)
+			case types.CommitmentLineTrueUp:
+				trueUp = trueUp.Add(l.Amount)
+			}
+		}
+		b.ValueUnused = decimal.Max(b.PeriodAmount.Sub(b.ValueWithin), decimal.Zero)
+		b.BilledAmount = b.ValueWithin.Add(trueUp)
+		out = append(out, b)
+	}
+	return out
+}
+
+// rawChargesByLine keys raw-events usage charges by line item, matching on price as the raw-events path does.
+func rawChargesByLine(sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse) map[string][]*dto.SubscriptionUsageByMetersResponse {
+	out := map[string][]*dto.SubscriptionUsageByMetersResponse{}
+	if usage == nil {
+		return out
+	}
+	for _, item := range sub.LineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+		for _, charge := range usage.Charges {
+			if charge.Price != nil && charge.Price.ID == item.PriceID {
+				out[item.ID] = append(out[item.ID], charge)
+			}
+		}
+	}
+	return out
 }
 
 // resolveCommitmentRates loads the committed and overage rates from the commitment's prices.
@@ -282,7 +370,7 @@ func (r *commitmentRun) periodTotals(ctx context.Context, sl *scopedLine, m *met
 			if err != nil {
 				return err
 			}
-			if result, err = r.s.queryBucketedMeterUsageDirect(ctx, m, sl.Price, sl.Item, r.sub, extIDs, r.periodStart, r.periodEnd, r.source); err != nil {
+			if result, err = r.bucketedUsage(ctx, m, sl.Price, sl.Item, extIDs, r.periodEnd); err != nil {
 				return err
 			}
 		}
@@ -366,7 +454,7 @@ func (r *commitmentRun) bucketQuantities(ctx context.Context, item *subscription
 		if err != nil {
 			return nil, err
 		}
-		if result, err = r.s.queryBucketedMeterUsageDirect(ctx, m, p, item, r.sub, extIDs, r.periodStart, minTime(r.periodEnd, r.asOf), r.source); err != nil {
+		if result, err = r.bucketedUsage(ctx, m, p, item, extIDs, minTime(r.periodEnd, r.asOf)); err != nil {
 			return nil, err
 		}
 	}
@@ -420,6 +508,27 @@ func (r *commitmentRun) lineDeps(ctx context.Context, lineID string) (*subscript
 			Mark(ierr.ErrNotFound)
 	}
 	return item, p, m, nil
+}
+
+// bucketedUsage reads the line's bucketed usage from [periodStart, end), from raw events on the raw-events path.
+func (r *commitmentRun) bucketedUsage(ctx context.Context, m *meter.Meter, p *price.Price, item *subscription.SubscriptionLineItem, extIDs []string, end time.Time) (*events.AggregationResult, error) {
+	if !r.pass.fromEvents {
+		return r.s.queryBucketedMeterUsageDirect(ctx, m, p, item, r.sub, extIDs, r.periodStart, end, r.source)
+	}
+	eventSvc := NewEventService(r.s.EventRepo, r.s.MeterRepo, r.s.EventPublisher, r.s.Logger, r.s.Config, r.s.TracingSvc)
+	return eventSvc.GetUsageByMeter(ctx, &dto.GetUsageByMeterRequest{
+		MeterID:             item.MeterID,
+		PriceID:             item.PriceID,
+		Price:               p,
+		ExternalCustomerIDs: extIDs,
+		StartTime:           item.GetPeriodStart(r.periodStart),
+		EndTime:             item.GetPeriodEnd(end),
+		WindowSize:          price.ResolveBucketSize(p, m),
+		BillingAnchor:       &r.sub.BillingAnchor,
+		Filters:             m.ToFilterMap(),
+		Meter:               m,
+		Timezone:            r.sub.Timezone,
+	})
 }
 
 func (r *commitmentRun) externalIDs(ctx context.Context) ([]string, error) {

@@ -609,3 +609,199 @@ func TestClipCommitmentPeriod_TerminatedBeforeStartEarnsNothing(t *testing.T) {
 			FullEnd: aug.AddDate(0, 1, 0), Amount: dec("100")}}, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug).Equal(dec("100")))
 	}
 }
+
+func (s *BillingServiceSuite) subscriptionSvc() SubscriptionService {
+	return NewSubscriptionService(s.service.(*billingService).ServiceParams)
+}
+
+func (s *BillingServiceSuite) rawUsage(from, to time.Time) *dto.GetUsageBySubscriptionResponse {
+	usage, err := s.subscriptionSvc().GetUsageBySubscription(s.GetContext(), &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: s.testData.subscription.ID, StartTime: from, EndTime: to,
+	})
+	s.Require().NoError(err)
+	return usage
+}
+
+func (s *BillingServiceSuite) rawUsageCharges(usage *dto.GetUsageBySubscriptionResponse, from, to time.Time) *dto.CalculateUsageChargesResult {
+	res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+		Subscription: s.testData.subscription, Usage: usage, PeriodStart: from, PeriodEnd: to,
+	})
+	s.Require().NoError(err)
+	return res
+}
+
+func commitmentLinesOf(lines []dto.CreateInvoiceLineItemRequest) []dto.CreateInvoiceLineItemRequest {
+	return lo.Filter(lines, func(l dto.CreateInvoiceLineItemRequest, _ int) bool {
+		return l.Metadata[types.MetadataKeyCommitmentLineKind] != ""
+	})
+}
+
+func (s *BillingServiceSuite) TestCommitmentV2_PreviewMatchesInvoice() {
+	tests := []struct {
+		name  string
+		setup func(periodStart time.Time)
+		kinds []types.CommitmentLineKind
+	}{
+		{
+			name: "amount commitment with true-up",
+			setup: func(periodStart time.Time) {
+				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+			},
+			kinds: []types.CommitmentLineKind{types.CommitmentLineWithin, types.CommitmentLineTrueUp},
+		},
+		{
+			name: "quantity commitment with on-demand",
+			setup: func(periodStart time.Time) {
+				committed := s.usagePriceFor("price_parity_committed", s.testData.meters.apiCalls, "0.01")
+				overage := s.usagePriceFor("price_parity_overage", s.testData.meters.apiCalls, "0.03")
+				c := s.newTestCommitment(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), s.testData.subscription,
+					types.COMMITMENT_TYPE_QUANTITY, "300", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+				c.CommittedPriceID, c.OveragePriceID = lo.ToPtr(committed.ID), lo.ToPtr(overage.ID)
+				s.storeCommitment(c)
+			},
+			kinds: []types.CommitmentLineKind{types.CommitmentLineWithin, types.CommitmentLineOnDemand},
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.setupTestData()
+			s.enableCommitmentsV2()
+			periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+			tt.setup(periodStart)
+
+			raw := s.rawUsageCharges(s.rawUsage(periodStart, periodEnd), periodStart, periodEnd)
+			meterUsage, err := s.subscriptionSvc().GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+				SubscriptionID: s.testData.subscription.ID, StartTime: periodStart, EndTime: periodEnd,
+			})
+			s.Require().NoError(err)
+			lines, total, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, meterUsage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+			s.Require().NoError(err)
+
+			preview, invoice := commitmentLinesOf(raw.LineItems), commitmentLinesOf(lines)
+			s.Require().Len(preview, len(tt.kinds))
+			s.Require().Len(invoice, len(preview))
+			for i := range preview {
+				s.Equal(string(tt.kinds[i]), preview[i].Metadata[types.MetadataKeyCommitmentLineKind])
+				s.Equal(invoice[i].Metadata, preview[i].Metadata)
+				s.Equal(lo.FromPtr(invoice[i].CommitmentID), lo.FromPtr(preview[i].CommitmentID))
+				s.Equal(lo.FromPtr(invoice[i].DisplayName), lo.FromPtr(preview[i].DisplayName))
+				s.True(invoice[i].Quantity.Equal(preview[i].Quantity), "quantity %s vs %s", invoice[i].Quantity, preview[i].Quantity)
+				s.True(invoice[i].Amount.Equal(preview[i].Amount), "amount %s vs %s", invoice[i].Amount, preview[i].Amount)
+			}
+			s.Len(raw.LineItems, len(preview), "in-scope usage is billed only through commitment lines")
+			s.True(raw.TotalAmount.Equal(total), "total %s vs %s", raw.TotalAmount, total)
+		})
+	}
+}
+
+func (s *BillingServiceSuite) TestCommitmentV2_UsageAPIBreakdown() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+	// $100 amount commitment; the 500 recorded api calls cost $10.
+	c := s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+
+	usage := s.rawUsage(periodStart, periodEnd)
+	s.Require().Len(usage.Commitments, 1)
+	b := usage.Commitments[0]
+	s.Equal(c.ID, b.CommitmentID)
+	s.Equal(c.InvoiceLabel, b.InvoiceLabel)
+	s.True(b.PeriodAmount.Equal(dec("100")), "period amount %s", b.PeriodAmount)
+	// The now-based fixture prorates capacity by a fraction of a second, so compare it rounded.
+	s.True(types.RoundToCurrencyPrecision(b.Capacity, "usd").Equal(dec("100")), "capacity %s", b.Capacity)
+	s.True(b.Used.Equal(dec("10")), "used %s", b.Used)
+	s.True(b.Used.Add(b.Unused).Equal(b.Capacity), "used %s + unused %s", b.Used, b.Unused)
+	s.True(b.ValueWithin.Equal(dec("10")), "value within %s", b.ValueWithin)
+	s.True(b.ValueUnused.Equal(dec("90")), "value unused %s", b.ValueUnused)
+	s.True(b.ValueWithin.Add(b.ValueUnused).Equal(b.PeriodAmount))
+	s.True(b.BilledAmount.Equal(dec("100")), "billed %s", b.BilledAmount)
+
+	// A mid-period window reports what the preview for that window bills.
+	now := time.Now().UTC()
+	partial := s.rawUsage(periodStart, now)
+	s.Require().Len(partial.Commitments, 1)
+	preview := s.rawUsageCharges(partial, periodStart, now)
+	within := linesByKind(preview.LineItems, types.CommitmentLineWithin)
+	trueUp := linesByKind(preview.LineItems, types.CommitmentLineTrueUp)
+	s.Require().Len(within, 1)
+	s.Require().Len(trueUp, 1)
+	s.True(partial.Commitments[0].ValueWithin.Equal(within[0].Amount))
+	s.True(partial.Commitments[0].ValueUnused.Equal(trueUp[0].Amount))
+	s.True(partial.Commitments[0].BilledAmount.Equal(preview.TotalAmount))
+}
+
+func (s *BillingServiceSuite) TestCommitmentV2_RawPathAndUsageAPIUnchangedWithoutCommitments() {
+	tests := []struct {
+		name  string
+		setup func(periodStart, periodEnd time.Time)
+	}{
+		{
+			name: "flag off",
+			setup: func(periodStart, _ time.Time) {
+				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+			},
+		},
+		{
+			name: "flag on, no overlapping commitment",
+			setup: func(_, periodEnd time.Time) {
+				s.enableCommitmentsV2()
+				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0))
+			},
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupTestData()
+			periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+			beforeUsage := s.rawUsage(periodStart, periodEnd)
+			before := s.rawUsageCharges(beforeUsage, periodStart, periodEnd)
+
+			tt.setup(periodStart, periodEnd)
+			afterUsage := s.rawUsage(periodStart, periodEnd)
+			after := s.rawUsageCharges(afterUsage, periodStart, periodEnd)
+
+			s.Nil(afterUsage.Commitments)
+			s.Equal(beforeUsage, afterUsage)
+			s.Equal(before, after)
+			s.NotEmpty(after.LineItems)
+		})
+	}
+}
+
+// The raw-events path shares the meter-usage path's line-item intersection and containment guard.
+func (s *BillingServiceSuite) TestCommitmentV2_RawPathScopeGuards() {
+	s.Run("lines outside the call", func() {
+		s.setupTestData()
+		s.enableCommitmentsV2()
+		periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+		s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+		callSub := *s.testData.subscription
+		callSub.LineItems = lo.Filter(s.testData.subscription.LineItems, func(li *subscription.SubscriptionLineItem, _ int) bool {
+			return li.PriceID != s.testData.prices.apiCalls.ID
+		})
+		res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+			Subscription: &callSub, Usage: s.usageResponse(s.testData.prices.apiCalls, "7000"), PeriodStart: periodStart, PeriodEnd: periodEnd,
+		})
+		s.Require().NoError(err)
+		s.Empty(res.LineItems)
+		s.True(res.TotalAmount.IsZero(), "total %s", res.TotalAmount)
+	})
+	s.Run("window across commitment periods", func() {
+		s.setupTestData()
+		s.enableCommitmentsV2()
+		p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
+		li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
+		sub := s.fixedDateSub("sub_span", li)
+		s.storeCommitment(s.newTestCommitment("cmt_span", sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(0, 3, 0)))
+		usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{Price: p, Quantity: 20, Amount: 20}}}
+		res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+			Subscription: sub, Usage: usage,
+			PeriodStart: time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC), PeriodEnd: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC),
+		})
+		s.Require().NoError(err)
+		s.Require().Len(res.LineItems, 1)
+		s.Empty(res.LineItems[0].Metadata[types.MetadataKeyCommitmentLineKind])
+		s.True(res.TotalAmount.Equal(dec("20")), "total %s", res.TotalAmount)
+	})
+}
