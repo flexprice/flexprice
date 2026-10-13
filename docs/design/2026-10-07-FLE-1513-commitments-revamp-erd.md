@@ -405,7 +405,7 @@ Examples:
   - `used = min(u, capacity)`
   - `unused += capacity − used`
   - `u −= used`
-   Whatever remains is on-demand. When a commitment covers several prices, capacity is filled in price `display_order`, then `price_id`.
+   Whatever remains is on-demand. When a commitment covers several prices, capacity is filled in price ID (creation order; prices have no display order).
 4. Price the result (§6.5).
 
 This runs for every commitment regardless of collection method. Under `billing_terms`, `unused` is reported for analytics only and never billed. `computeCommitmentMath` (`billing_commitment.go:222`) is extended, not forked. Step 3 is a pure function.
