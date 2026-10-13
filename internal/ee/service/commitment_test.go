@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -369,7 +370,7 @@ func (s *CommitmentServiceSuite) TestActiveForPeriod_IncludesTerminated() {
 	s.Empty(got)
 }
 
-// Validation rules that need stored subscription data (ERD §6.6).
+// Validation rules that need stored subscription data.
 
 func (s *CommitmentServiceSuite) requireValidation(err error, contains ...string) {
 	s.Require().Error(err)
@@ -559,4 +560,78 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsOverlappingCommitme
 	s.True(ierr.IsValidation(err), "got %v", err)
 	s.Contains(err.Error(), ca.ID)
 	s.Contains(err.Error(), cb.ID)
+}
+
+// recordingDB and recordingCommitmentRepo log the order of transactions, locks and reads.
+type recordingDB struct {
+	postgres.IClient
+	events *[]string
+}
+
+func (d *recordingDB) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	*d.events = append(*d.events, "tx")
+	return d.IClient.WithTx(ctx, fn)
+}
+
+func (d *recordingDB) LockWithWait(ctx context.Context, req postgres.LockRequest) error {
+	*d.events = append(*d.events, "lock:"+req.Key)
+	return d.IClient.LockWithWait(ctx, req)
+}
+
+type recordingCommitmentRepo struct {
+	commitment.Repository
+	events *[]string
+}
+
+func (r *recordingCommitmentRepo) Get(ctx context.Context, id string) (*commitment.Commitment, error) {
+	*r.events = append(*r.events, "get")
+	return r.Repository.Get(ctx, id)
+}
+
+func (s *CommitmentServiceSuite) TestUpdate_ReadsUnderCommitmentLockInTx() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	var events []string
+	stores := s.GetStores()
+	params := ServiceParams{
+		Logger: s.GetLogger(), Config: s.GetConfig(), DB: &recordingDB{IClient: s.GetDB(), events: &events},
+		CommitmentRepo: &recordingCommitmentRepo{Repository: stores.CommitmentRepo, events: &events},
+		SubRepo:        stores.SubscriptionRepo, PriceRepo: stores.PriceRepo, MeterRepo: stores.MeterRepo,
+		GroupRepo: stores.GroupRepo, SettingsRepo: stores.SettingsRepo,
+	}
+	_, err = NewCommitmentService(params).Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Name: lo.ToPtr("Renamed")})
+	s.Require().NoError(err)
+	s.Require().GreaterOrEqual(len(events), 3, "events %v", events)
+	s.Equal([]string{"tx", "lock:commitment:" + created.ID, "get"}, events[:3])
+}
+
+func (s *CommitmentServiceSuite) TestUpdate_AfterTerminateKeepsTerminated() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	at := created.StartDate.AddDate(0, 4, 0)
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+
+	updated, err := s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{InvoiceLabel: lo.ToPtr("Renamed")})
+	s.Require().NoError(err)
+	s.Equal("Renamed", updated.InvoiceLabel)
+	s.Equal(types.CommitmentStatusTerminated, updated.CommitmentStatus)
+	s.Require().NotNil(updated.TerminatedAt)
+	s.True(updated.TerminatedAt.Equal(at), "got %s", updated.TerminatedAt)
+}
+
+func (s *CommitmentServiceSuite) TestValidation_EndDateAfterSubscriptionEnd() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.EndDate = lo.ToPtr(sub.StartDate.AddDate(0, 6, 0))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID) // ends 12 months in, on a billing date
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.requireValidation(err, "subscription end")
+
+	req.EndDate = *sub.EndDate
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
 }

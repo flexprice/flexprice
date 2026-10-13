@@ -27,7 +27,8 @@ type CommitmentService interface {
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
 	IsEnabled(ctx context.Context) (bool, error)
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
-	// CheckPriceAttach re-runs C7, C8, C9 and C14 for active commitments whose scope would include the new price.
+	// CheckPriceAttach rejects a usage price that would join an active commitment's scope but break its rules:
+	// a single-meter commitment gaining a second meter, a bucket-size mismatch, or overlapping commitments that disagree.
 	CheckPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) error
 }
 
@@ -74,7 +75,8 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 		return err
 	})
 	if err != nil && req.IdempotencyKey != nil && ierr.IsAlreadyExists(err) {
-		// Lost a race with a concurrent retry carrying the same key; its rate prices rolled back with this tx.
+		// Lost a race with a concurrent retry on the same key. Only recoverable at top level: inside an
+		// outer transaction the failed insert has already aborted that transaction.
 		existing, getErr := s.CommitmentRepo.GetByIdempotencyKey(ctx, *req.IdempotencyKey)
 		if getErr != nil {
 			return nil, getErr
@@ -88,7 +90,7 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 	return s.toResponse(ctx, out)
 }
 
-// createLocked serialises creates per subscription so the overlap checks (C12, C14, C20) see committed rows,
+// createLocked serialises creates per subscription so the overlap checks see committed rows,
 // and must run inside a transaction. A replayed idempotency key returns the original commitment (first write wins).
 func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCommitmentRequest) (*commitment.Commitment, error) {
 	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
@@ -236,7 +238,8 @@ func (s *commitmentService) List(ctx context.Context, filter *commitment.Filter)
 	return &out, nil
 }
 
-// Update edits only the descriptive fields; economics are immutable (D10).
+// Update edits only the descriptive fields; the economic terms are immutable. It re-reads under the
+// commitment lock so a concurrent terminate is never overwritten.
 func (s *commitmentService) Update(ctx context.Context, id string, req dto.UpdateCommitmentRequest) (*dto.CommitmentResponse, error) {
 	if err := validator.ValidateRequest(req); err != nil {
 		return nil, err
@@ -244,24 +247,31 @@ func (s *commitmentService) Update(ctx context.Context, id string, req dto.Updat
 	if (req.Name != nil && *req.Name == "") || (req.InvoiceLabel != nil && *req.InvoiceLabel == "") {
 		return nil, invalid("name and invoice_label must be 1-255 characters")
 	}
-	c, err := s.CommitmentRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	b := commitment.NewCommitmentBuilder(c)
-	if req.Name != nil {
-		b.WithName(*req.Name)
-	}
-	if req.InvoiceLabel != nil {
-		b.WithInvoiceLabel(*req.InvoiceLabel)
-	}
-	if req.InvoiceDescription != nil {
-		b.WithInvoiceDescription(req.InvoiceDescription)
-	}
-	if req.Metadata != nil {
-		b.WithMetadata(req.Metadata)
-	}
-	updated, err := s.CommitmentRepo.Update(ctx, b.Build())
+	var updated *commitment.Commitment
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.lockCommitment(txCtx, id); err != nil {
+			return err
+		}
+		c, err := s.CommitmentRepo.Get(txCtx, id)
+		if err != nil {
+			return err
+		}
+		b := commitment.NewCommitmentBuilder(c)
+		if req.Name != nil {
+			b.WithName(*req.Name)
+		}
+		if req.InvoiceLabel != nil {
+			b.WithInvoiceLabel(*req.InvoiceLabel)
+		}
+		if req.InvoiceDescription != nil {
+			b.WithInvoiceDescription(req.InvoiceDescription)
+		}
+		if req.Metadata != nil {
+			b.WithMetadata(req.Metadata)
+		}
+		updated, err = s.CommitmentRepo.Update(txCtx, b.Build())
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -310,10 +320,18 @@ func (s *commitmentService) TerminateForSubscription(ctx context.Context, subscr
 	})
 }
 
-// terminate must run inside a transaction.
-func (s *commitmentService) terminate(ctx context.Context, id string, effectiveAt time.Time) (*commitment.Commitment, error) {
+// lockCommitment serialises writes to one commitment and must run inside a transaction.
+func (s *commitmentService) lockCommitment(ctx context.Context, id string) error {
 	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitment:" + id}); err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to lock commitment").Mark(ierr.ErrInternal)
+		return ierr.WithError(err).WithHint("Failed to lock commitment").Mark(ierr.ErrInternal)
+	}
+	return nil
+}
+
+// terminate re-reads the commitment under its lock and must run inside a transaction.
+func (s *commitmentService) terminate(ctx context.Context, id string, effectiveAt time.Time) (*commitment.Commitment, error) {
+	if err := s.lockCommitment(ctx, id); err != nil {
+		return nil, err
 	}
 	c, err := s.CommitmentRepo.Get(ctx, id)
 	if err != nil {
@@ -354,7 +372,7 @@ func (s *commitmentService) toResponse(ctx context.Context, c *commitment.Commit
 	return s.responseWithContext(ctx, c, cc)
 }
 
-// responseWithContext recomputes the commitment value (D15); the committed rate comes from the committed price.
+// responseWithContext recomputes the commitment value; the committed rate comes from the committed price.
 func (s *commitmentService) responseWithContext(ctx context.Context, c *commitment.Commitment, cc *commitmentContext) (*dto.CommitmentResponse, error) {
 	rates := commitmentRates{}
 	if c.CommittedPriceID != nil {
@@ -429,9 +447,9 @@ func (s *commitmentService) commitmentsInScope(ctx context.Context, subscription
 	}), nil
 }
 
-// checkAttachAgainst re-runs C7, C8 and C9 for one commitment that the new price joins.
+// checkAttachAgainst checks the meter and bucket-size rules for one commitment that the new price joins.
 func (s *commitmentService) checkAttachAgainst(ctx context.Context, c *commitment.Commitment, cc *commitmentContext, p *price.Price, at time.Time) error {
-	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, laterOf(at, c.StartDate))
+	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, maxTime(at, c.StartDate))
 	if len(lines) == 0 {
 		return nil
 	}
@@ -452,7 +470,8 @@ func (s *commitmentService) checkAttachAgainst(ctx context.Context, c *commitmen
 	return nil
 }
 
-// checkAttachPairs re-runs C14 and C20: commitments that now share the new price and overlap in time must agree.
+// checkAttachPairs requires commitments that now share the new price and overlap in time to agree on
+// type, measurement and overage rate.
 func (s *commitmentService) checkAttachPairs(ctx context.Context, inScope []*commitment.Commitment) error {
 	for i, a := range inScope {
 		for _, b := range inScope[i+1:] {
@@ -487,11 +506,4 @@ func (s *commitmentService) sameCommitmentOverage(ctx context.Context, a, b *com
 		return false, err
 	}
 	return pa.Amount.Equal(pb.Amount), nil
-}
-
-func laterOf(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	}
-	return b
 }
