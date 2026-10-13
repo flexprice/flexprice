@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -254,6 +255,7 @@ func (InvoiceLineItem) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
 		index.Fields("period_start", "period_end"),
 		index.Fields("subscription_id", "status"),
-		index.Fields("tenant_id", "environment_id", "commitment_id"),
+		index.Fields("tenant_id", "environment_id", "commitment_id").
+			Annotations(entsql.IndexWhere("(commitment_id IS NOT NULL)")),
 	}
 }

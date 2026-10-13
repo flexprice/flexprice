@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Commitment holds the schema definition for a first-class subscription commitment (FLE-1513).
+// Commitment holds the schema definition for a first-class subscription commitment.
 type Commitment struct{ ent.Schema }
 
 func (Commitment) Mixin() []ent.Mixin {

@@ -1,5 +1,5 @@
 -- migrate:up
--- First-class subscription commitments (FLE-1513). Brand-new table, so its indexes build
+-- First-class subscription commitments. Brand-new table, so its indexes build
 -- instantly inside this transactional migration; CONCURRENTLY is unnecessary.
 -- Base-mixin columns match ent/migrate/schema.go exactly (BaseMixin + EnvironmentMixin).
 -- Index names longer than 63 chars use Ent's truncated-plus-md5 form.
@@ -56,10 +56,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "commitment_tenant_id_environment_id_idempoten
 
 ALTER TABLE "invoice_line_items" ADD COLUMN IF NOT EXISTS "commitment_id" varchar(50) NULL;
 
-CREATE INDEX IF NOT EXISTS "invoicelineitem_tenant_id_environment_id_commitment_id"
-  ON "invoice_line_items" ("tenant_id","environment_id","commitment_id");
-
 -- migrate:down
-DROP INDEX IF EXISTS "invoicelineitem_tenant_id_environment_id_commitment_id";
 ALTER TABLE "invoice_line_items" DROP COLUMN IF EXISTS "commitment_id";
 DROP TABLE IF EXISTS "commitments";
