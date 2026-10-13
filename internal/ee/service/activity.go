@@ -20,7 +20,7 @@ import (
 
 const (
 	activityDefaultWindow = 30 * 24 * time.Hour
-	activityMaxWindow     = 90 * 24 * time.Hour
+	activityMaxWindow     = 30 * 24 * time.Hour
 	activityDefaultLimit  = 50
 )
 
@@ -187,7 +187,7 @@ func resolveWindow(now time.Time, start, end *time.Time) (from, to time.Time, er
 		return from, to, activityValidation("Activity is available for the last year. Set start_time on or after %s.", oldest.Format("2006-01-02"))
 	}
 	if to.Sub(from) > activityMaxWindow {
-		return from, to, activityValidation("The time range can be at most 90 days. Narrow start_time and end_time.")
+		return from, to, activityValidation("The time range can be at most 30 days. Narrow start_time and end_time.")
 	}
 	return from, to, nil
 }

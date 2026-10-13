@@ -32,25 +32,16 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs
     occurred_at     DateTime64(3, 'UTC'),
     ingested_at     DateTime64(3, 'UTC') DEFAULT now64(3),
 
-    -- Customer tab: everything for one customer, newest first.
-    PROJECTION by_customer
-    (
-        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, customer_id, occurred_at, id)
-    ),
-
-    -- One entity's timeline, newest first.
-    PROJECTION by_entity
-    (
-        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, entity_type, entity_id, occurred_at, id)
-    ),
-
-    INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 4,
-    INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 4
+    -- Customer tab and entity timeline: skip granules without that customer or entity.
+    INDEX idx_customer_id customer_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_entity_id entity_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 1,
+    INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, environment_id, occurred_at, id)
-SETTINGS index_granularity = 8192, deduplicate_merge_projection_mode = 'rebuild'
+SETTINGS index_granularity = 8192
 
 -- migrate:down
 -- Baseline object; no down. Recreating is a data-loss operation.

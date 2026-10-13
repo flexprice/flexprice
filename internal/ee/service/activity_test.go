@@ -36,7 +36,7 @@ func TestResolveWindow(t *testing.T) {
 		{"start only", at(-10 * day), nil, now.Add(-10 * day), now, ""},
 		{"end only", nil, at(-5 * day), now.Add(-35 * day), now.Add(-5 * day), ""},
 		{"both", at(-20 * day), at(-10 * day), now.Add(-20 * day), now.Add(-10 * day), ""},
-		{"window of 91 days", at(-91 * day), at(0), time.Time{}, time.Time{}, "at most 90 days"},
+		{"window of 31 days", at(-31 * day), at(0), time.Time{}, time.Time{}, "at most 30 days"},
 		{"start older than a year", at(-400 * day), at(-380 * day), time.Time{}, time.Time{}, "2025-10-11"},
 		{"end only older than a year", nil, at(-400 * day), time.Time{}, time.Time{}, "last year"},
 		{"end not after start", at(-5 * day), at(-5 * day), time.Time{}, time.Time{}, "end_time must be after start_time"},

@@ -90,14 +90,11 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 		where = append(where, "(occurred_at, id) < ("+millisParam+", ?)")
 		args = append(args, q.After.OccurredAt.UnixMilli(), q.After.ID)
 	}
-	args = append(args, q.Limit)
+	args = append(args, 2*q.Limit, q.Limit)
 
-	query := "SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
-		" ORDER BY occurred_at DESC, id DESC LIMIT 1 BY id LIMIT ?"
-	// An in-order read of the main sort key beats the by_customer / by_entity projections; turn it off so they are used.
-	if q.CustomerID != "" || q.EntityID != "" {
-		ctx = clickhouse_go.Context(ctx, clickhouse_go.WithSettings(clickhouse_go.Settings{"optimize_read_in_order": 0}))
-	}
+	// LIMIT BY blocks the early stop of an in-order read, so dedup runs on an inner page of 2×limit rows.
+	query := "SELECT * FROM (SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
+		" ORDER BY occurred_at DESC, id DESC LIMIT ?) ORDER BY occurred_at DESC, id DESC LIMIT 1 BY id LIMIT ?"
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to list activity").Mark(ierr.ErrDatabase)

@@ -444,24 +444,17 @@ CREATE TABLE activity_logs
     occurred_at     DateTime64(3, 'UTC'),       -- commit time
     ingested_at     DateTime64(3, 'UTC') DEFAULT now64(3),
 
-    -- Customer tab: everything for one customer, newest first.
-    -- Also serves customer_id + entity_type / action / actor filters.
-    PROJECTION by_customer
-    (
-        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, customer_id, occurred_at, id)
-    ),
+    -- Customer tab: skips granules without that customer.
+    INDEX idx_customer_id customer_id TYPE bloom_filter(0.01) GRANULARITY 1,
 
-    -- One entity's timeline: everything that happened to subs_01, newest first.
-    PROJECTION by_entity
-    (
-        SELECT * EXCEPT (state) ORDER BY (tenant_id, environment_id, entity_type, entity_id, occurred_at, id)
-    ),
+    -- One entity's timeline: skips granules without that entity.
+    INDEX idx_entity_id entity_id TYPE bloom_filter(0.01) GRANULARITY 1,
 
     -- What one user, API key or system actor did. Skips blocks without that actor.
-    INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 4,
+    INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 1,
 
     -- Related changes: every entry from one request, bounded to that request's day.
-    INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 4
+    INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 1
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(occurred_at)
@@ -471,10 +464,12 @@ SETTINGS index_granularity = 8192;
 ```
 
 - **Sort key** serves the tenant feed: one tenant and environment, newest first.
-- **Projections** serve the customer tab and an entity's own timeline. They leave out `state`,
-  because lists never return it, so they stay small.
+- **Bloom-filter skip indexes** on `customer_id` and `entity_id` serve the customer tab and an
+  entity's own timeline. Reads walk the sort key newest-first, skip granules without the customer
+  or entity, and stop once the page is full. The 30-day window caps the worst case at one month of
+  a tenant's rows.
 - **Skip indexes** on `actor_id` and `request_id` serve occasional lookups (an actor's history after
-  an incident, a request's related changes) without the storage cost of another projection.
+  an incident, a request's related changes).
 - **`MergeTree`**, because the table is append-only: rows are never updated, only dropped with their
   month or erased. Kafka delivers at least once, so a redelivered message can insert an entry twice.
   Reads deduplicate by id: list queries use `LIMIT 1 BY id`, and the detail lookup returns one row
@@ -486,7 +481,7 @@ SETTINGS index_granularity = 8192;
 The access paths are checked with `EXPLAIN` before rollout.
 
 **Replicated clusters.** Like `events` and `meter_usage`, the table ships in both ClickHouse
-baselines. The single-node form is above. The replicated form keeps the same columns, projections,
+baselines. The single-node form is above. The replicated form keeps the same columns,
 indexes, partitioning, ordering and settings, and changes only the statement and the engine:
 
 ```sql
@@ -529,7 +524,7 @@ flowchart LR
 
 | Field | Notes |
 | --- | --- |
-| `start_time`, `end_time` | Optional. Both omitted: the last 30 days. Only `start_time`: until now. Only `end_time`: the 30 days before it. At most 90 days, within the last year; the window is `[start, end)` |
+| `start_time`, `end_time` | Optional. Both omitted: the last 30 days. Only `start_time`: until now. Only `end_time`: the 30 days before it. At most 30 days, within the last year; the window is `[start, end)` |
 | `entity_type` + `entity_id` | One entity's timeline; `entity_id` needs `entity_type` |
 | `customer_id` | Everything for one customer |
 | `actor_types[]`, `actor_id` | Everything one kind of actor, or one user or key, did |
@@ -559,9 +554,9 @@ flowchart LR
 ```
 
 Empty optional fields are omitted. `next_cursor` is always present and is `null` on the last page.
-List queries that filter on a customer or an entity set `optimize_read_in_order = 0`, because
-ClickHouse otherwise reads the main sort key in order and skips the `by_customer` / `by_entity`
-projections.
+List queries take `LIMIT 1 BY id` in an outer query over an inner page of twice the limit.
+`LIMIT BY` stops ClickHouse from ending an in-order read early, so in the same query it would read
+the whole matching window.
 
 ### 7.2 Detail
 
