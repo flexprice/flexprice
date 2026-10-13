@@ -874,8 +874,8 @@ type CreateInvoiceLineItemRequest struct {
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
-	// commitment_id links this line item to the commitment it bills.
-	CommitmentID *string `json:"commitment_id,omitempty"`
+	// CommitmentID links this line item to the commitment it bills; server-set only.
+	CommitmentID *string `json:"-"`
 
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.

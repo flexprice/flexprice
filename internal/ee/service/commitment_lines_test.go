@@ -132,7 +132,7 @@ func TestBuildCommitmentLines_RoundingReconcilesToPeriodAmount(t *testing.T) {
 	alloc = allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: use}})
 	lines, err = buildCommitmentLines(commitmentLineInput{
 		Stack: stack, Alloc: alloc,
-		Lines: map[string]*scopedLine{"a": {Item: li1, Price: p1, Quantity: dec("33.335"), Cost: dec("33.335")}, "b": {Item: li2, Price: p2, Quantity: dec("33.335"), Cost: dec("33.335")}},
+		Lines:       map[string]*scopedLine{"a": {Item: li1, Price: p1, Quantity: dec("33.335"), Cost: dec("33.335")}, "b": {Item: li2, Price: p2, Quantity: dec("33.335"), Cost: dec("33.335")}},
 		PeriodByCmt: map[string]commitmentPeriod{"cmt_a": {Amount: dec("100"), Capacity: dec("100")}},
 		PeriodStart: t0, PeriodEnd: t0.AddDate(0, 1, 0), Currency: "usd", PriceCost: perUnitCost,
 	})

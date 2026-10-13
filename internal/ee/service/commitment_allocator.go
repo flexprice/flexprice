@@ -40,7 +40,7 @@ type allocationResult struct {
 	OnDemand     []onDemandUsage
 }
 
-// sortCommitmentStack orders by priority, then start date, then ID (ERD D5).
+// sortCommitmentStack orders by priority, then start date, then ID.
 func sortCommitmentStack(stack []*stackedCommitment) {
 	sort.SliceStable(stack, func(i, j int) bool {
 		a, b := stack[i].C, stack[j].C
@@ -54,7 +54,8 @@ func sortCommitmentStack(stack []*stackedCommitment) {
 	})
 }
 
-// allocateCommitments fills each window's usage through the stack as a waterfall; the rest is on-demand (ERD §6.4, D36).
+// allocateCommitments pours each window's usage through the stack in order as a waterfall.
+// Usage left over after every commitment is full is billed on-demand.
 func allocateCommitments(stack []*stackedCommitment, windows []windowUsage) *allocationResult {
 	res := &allocationResult{ByCommitment: map[string]*commitmentAllocation{}}
 	for _, sc := range stack {
