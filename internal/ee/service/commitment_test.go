@@ -31,6 +31,9 @@ type commitmentFixtures struct {
 	group        *group.Group
 	lineAPI      *subscription.SubscriptionLineItem
 	lineStorage  *subscription.SubscriptionLineItem
+
+	groupAPIOnly           *group.Group
+	priceOtherMeterInGroup *price.Price
 }
 
 // seedCommitmentFixtures stores a monthly subscription anchored 1 Jan 2027 with two usage prices in group grp_1,
@@ -94,6 +97,19 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 	fx.lineStorage = line("subs_line_storage", fx.priceStorage)
 	require.NoError(t, stores.SubscriptionRepo.CreateWithLineItems(ctx, fx.sub,
 		[]*subscription.SubscriptionLineItem{fx.lineAPI, fx.lineStorage}))
+
+	fx.groupAPIOnly = &group.Group{ID: "grp_api_only", Name: "API only", EntityType: types.GroupEntityTypePrice,
+		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	require.NoError(t, stores.GroupRepo.Create(ctx, fx.groupAPIOnly))
+	// price_api_only moves price_api's twin into the API-only group; the other-meter price joins it unattached.
+	apiOnly := usagePrice("price_api_only", fx.meterAPI.ID, dec("0.06"))
+	apiOnly.GroupID = fx.groupAPIOnly.ID
+	fx.priceOtherMeterInGroup = usagePrice("price_other_meter", fx.meterStorage.ID, dec("0.02"))
+	fx.priceOtherMeterInGroup.GroupID = fx.groupAPIOnly.ID
+	require.NoError(t, stores.PriceRepo.Create(ctx, apiOnly))
+	require.NoError(t, stores.PriceRepo.Create(ctx, fx.priceOtherMeterInGroup))
+	apiOnlyLine := line("subs_line_api_only", apiOnly)
+	require.NoError(t, stores.SubscriptionLineItemRepo.Create(ctx, apiOnlyLine))
 
 	setCommitmentsV2(t, ctx, stores, true)
 	return fx
@@ -222,6 +238,8 @@ func (s *CommitmentServiceSuite) TestPreview_RejectedWhenDisabled() {
 }
 
 func (s *CommitmentServiceSuite) TestPreview_DoesNotPersist() {
+	before, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
+	s.Require().NoError(err)
 	resp, err := s.svc.Preview(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	s.True(resp.CommitmentValue.Equal(dec("4.608")), "got %s", resp.CommitmentValue)
@@ -230,7 +248,7 @@ func (s *CommitmentServiceSuite) TestPreview_DoesNotPersist() {
 	s.Zero(n)
 	prices, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
 	s.Require().NoError(err)
-	s.Equal(2, prices)
+	s.Equal(before, prices)
 }
 
 func (s *CommitmentServiceSuite) TestGetAndList() {
@@ -428,4 +446,77 @@ func (s *CommitmentServiceSuite) TestValidation_C16_SubscriptionScopeWithLegacyC
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription, EntityID: s.fx.sub.ID}
 	_, err = s.svc.Create(s.GetContext(), req)
 	s.requireValidation(err, "legacy subscription-level commitment")
+}
+
+func (s *CommitmentServiceSuite) fullParams() ServiceParams {
+	st := s.GetStores()
+	return ServiceParams{
+		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
+		SubRepo: st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo: st.SubscriptionPhaseRepo, SubScheduleRepo: st.SubscriptionScheduleRepo,
+		PlanRepo: st.PlanRepo, PriceRepo: st.PriceRepo, PriceUnitRepo: st.PriceUnitRepo, MeterRepo: st.MeterRepo,
+		CustomerRepo: st.CustomerRepo, InvoiceRepo: st.InvoiceRepo, EntitlementRepo: st.EntitlementRepo,
+		FeatureRepo: st.FeatureRepo, AddonRepo: st.AddonRepo, AddonAssociationRepo: st.AddonAssociationRepo,
+		CreditGrantRepo: st.CreditGrantRepo, CreditGrantApplicationRepo: st.CreditGrantApplicationRepo,
+		GroupRepo: st.GroupRepo, SettingsRepo: st.SettingsRepo, CommitmentRepo: st.CommitmentRepo,
+		TaxAssociationRepo: st.TaxAssociationRepo, TaxRateRepo: st.TaxRateRepo, TaxAppliedRepo: st.TaxAppliedRepo,
+		WalletRepo: st.WalletRepo, CouponAssociationRepo: st.CouponAssociationRepo, ConnectionRepo: st.ConnectionRepo,
+		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo, MeterUsageRepo: st.MeterUsageRepo,
+		EventPublisher: s.GetPublisher(), WebhookPublisher: s.GetWebhookPublisher(),
+		ProrationCalculator: s.GetCalculator(), IntegrationFactory: s.GetIntegrationFactory(),
+	}
+}
+
+func (s *CommitmentServiceSuite) TestCancelSubscription_TerminatesCommitments() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	subSvc := NewSubscriptionService(s.fullParams())
+	at := created.StartDate.AddDate(0, 2, 0)
+	s.Require().NoError(subSvc.TerminateSubscriptionResources(s.GetContext(), dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID: s.fx.sub.ID, EffectiveDate: at,
+	}))
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+}
+
+func (s *CommitmentServiceSuite) TestTerminateResources_NoopWhenDisabled() {
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	subSvc := NewSubscriptionService(s.fullParams())
+	s.Require().NoError(subSvc.TerminateSubscriptionResources(s.GetContext(), dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID: s.fx.sub.ID, EffectiveDate: s.fx.sub.StartDate.AddDate(0, 2, 0),
+	}))
+}
+
+func (s *CommitmentServiceSuite) TestAttachPrice_RejectsSecondMeterInQuantityGroupScope() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	subSvc := NewSubscriptionService(s.fullParams())
+	_, err = subSvc.AddSubscriptionLineItem(s.GetContext(), s.fx.sub.ID, dto.CreateSubscriptionLineItemRequest{PriceID: s.fx.priceOtherMeterInGroup.ID})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_NoopCases() {
+	sub, p := s.fx.sub, s.fx.priceOtherMeterInGroup
+	at := sub.StartDate
+	// No commitments yet.
+	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, p, at))
+
+	req := validReq(sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	// A price outside the scoped group, and a fixed price, never trigger the check.
+	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceStorage, at))
+	fixed := *p
+	fixed.Type = types.PRICE_TYPE_FIXED
+	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, &fixed, at))
+
+	// Disabled feature is a no-op.
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, p, at))
 }

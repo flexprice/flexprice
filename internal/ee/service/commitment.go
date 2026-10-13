@@ -27,6 +27,8 @@ type CommitmentService interface {
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
 	IsEnabled(ctx context.Context) (bool, error)
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
+	// CheckPriceAttach re-runs C7, C9 and C14 for active commitments whose scope would include the new price.
+	CheckPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) error
 }
 
 type commitmentService struct{ ServiceParams }
@@ -368,4 +370,62 @@ func (s *commitmentService) responseWithContext(ctx context.Context, c *commitme
 	}
 	value := commitmentValue(periods)
 	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
+}
+
+func (s *commitmentService) CheckPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) error {
+	if p == nil || p.Type != types.PRICE_TYPE_USAGE {
+		return nil
+	}
+	enabled, err := s.IsEnabled(ctx)
+	if err != nil || !enabled {
+		return err
+	}
+	f := types.NewNoLimitCommitmentFilter()
+	f.SubscriptionIDs = []string{sub.ID}
+	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
+	active, err := s.CommitmentRepo.List(ctx, f)
+	if err != nil {
+		return err
+	}
+
+	var cc *commitmentContext
+	for _, c := range active {
+		// Meter and price scopes never include a newly attached price (it has a new ID).
+		inScope := c.ScopeEntityType == types.CommitmentScopeSubscription ||
+			(c.ScopeEntityType == types.CommitmentScopeGroup && p.GroupID == c.ScopeEntityID)
+		if !inScope || !at.Before(c.EndDate) {
+			continue
+		}
+		if cc == nil {
+			if cc, err = s.loadCommitmentContext(ctx, sub.ID); err != nil {
+				return err
+			}
+		}
+		lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, laterOf(at, c.StartDate))
+		if len(lines) == 0 {
+			continue
+		}
+		if (c.Type == types.COMMITMENT_TYPE_QUANTITY || c.OveragePriceID != nil) && p.MeterID != lines[0].MeterID {
+			return invalidf("commitment %s covers a single meter; price %s is on a different meter", c.ID, p.ID)
+		}
+		if c.Measurement != types.CommitmentMeasurementWindow {
+			continue
+		}
+		m, err := s.MeterRepo.GetMeter(ctx, p.MeterID)
+		if err != nil {
+			return err
+		}
+		want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+		if got := price.ResolveBucketSize(p, m); got != want {
+			return invalidf("commitment %s measures by window with bucket size %q; price %s has bucket size %q", c.ID, want, p.ID, got)
+		}
+	}
+	return nil
+}
+
+func laterOf(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }
