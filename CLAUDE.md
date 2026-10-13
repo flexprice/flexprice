@@ -238,7 +238,7 @@ An ent hook on the writer client records every write to a registered entity (`in
 
 **Keep the snapshot safe.** Every new field on a registered domain struct is stored in the snapshot unless tagged:
 - `activity:"redact"` for secrets and gateway data (tokens, provider payloads, payment details); the value is stored as `"[redacted]"`.
-- `activity:"drop"` for internal bookkeeping (`version`, sequences); the field is left out.
+- `activity:"drop"` for internal bookkeeping (`version`, sequences) and personal data (names, emails, phone numbers, addresses, free-form metadata); the field is left out.
 
 **Actors are ids only.** `types.Actor` holds a type and an id, never a name or email; the read API resolves labels from Postgres. A new system actor whose id is not readable gets its label in `fixedActorLabel` (`internal/ee/service/activity.go`).
 

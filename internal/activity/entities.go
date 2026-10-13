@@ -22,7 +22,7 @@ func Registrations() *Registry {
 		Registration{
 			EntityType: types.SystemEntityTypeCustomer, EntName: "Customer",
 			Snapshot: snapshotOf(customer.FromEnt),
-			Label:    []string{"name", "external_id"},
+			Label:    []string{"external_id"},
 			Actions:  []Action{CustomerArchived},
 		},
 		Registration{

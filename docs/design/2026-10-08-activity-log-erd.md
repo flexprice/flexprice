@@ -139,10 +139,10 @@ Each logged entity has one registration, next to its repository:
 | --- | --- |
 | Entity type | `types.SystemEntityType`, and the ent type the hook matches |
 | Snapshot | The entity's `FromEnt` conversion to its domain model |
-| Drop | Fields left out of the snapshot (for example `version`, `synced_price_sequence`) |
+| Drop | Fields left out of the snapshot: bookkeeping (`version`, `synced_price_sequence`) and customer personal data (`name`, `email`, `contact`, `contact_persons`, address lines, city, state, postal code, `metadata`) |
 | Redact | Fields stored as `"[redacted]"` (for example payment method details) |
 | Customer | The customer id field, the parent lookup the consumer uses (`Parent`, optionally `When` a column matches), or none |
-| Label | The entity's own name field shown in lists (for example invoice number, customer name); empty when it has none |
+| Label | The entity's own name field shown in lists (for example invoice number, customer external id); empty when it has none |
 
 Entities without a registration are never logged.
 
@@ -152,7 +152,7 @@ Twelve entities. The registrations and declared actions are in the table below.
 
 | Entity type | Customer | Label | Declared actions |
 | --- | --- | --- | --- |
-| `customer` | the row itself | `name`, else `external_id` | archived |
+| `customer` | the row itself | `external_id` | archived |
 | `subscription` | `customer_id` | none | archived, cancelled, plan_changed, activated |
 | `invoice` | `customer_id` | `invoice_number` | deleted, voided, finalized, refunded, paid |
 | `credit_note` | `customer_id` | `credit_note_number` | voided, finalized |
