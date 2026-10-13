@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/commitment"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -26,9 +27,17 @@ type commitmentAllocation struct {
 	Unused     decimal.Decimal
 }
 
+// onDemandUsage is a line's usage left in one window after every commitment there is full.
+type onDemandUsage struct {
+	Start    time.Time
+	LineID   string
+	Quantity decimal.Decimal
+	Owner    *stackedCommitment // the last commitment in force in the window; its overage rate applies
+}
+
 type allocationResult struct {
-	ByCommitment   map[string]*commitmentAllocation
-	OnDemandByLine map[string]decimal.Decimal
+	ByCommitment map[string]*commitmentAllocation
+	OnDemand     []onDemandUsage
 }
 
 // sortCommitmentStack orders by priority, then start date, then ID (ERD D5).
@@ -47,7 +56,7 @@ func sortCommitmentStack(stack []*stackedCommitment) {
 
 // allocateCommitments fills each window's usage through the stack as a waterfall; the rest is on-demand (ERD §6.4, D36).
 func allocateCommitments(stack []*stackedCommitment, windows []windowUsage) *allocationResult {
-	res := &allocationResult{ByCommitment: map[string]*commitmentAllocation{}, OnDemandByLine: map[string]decimal.Decimal{}}
+	res := &allocationResult{ByCommitment: map[string]*commitmentAllocation{}}
 	for _, sc := range stack {
 		res.ByCommitment[sc.C.ID] = &commitmentAllocation{UsedByLine: map[string]decimal.Decimal{}}
 	}
@@ -56,9 +65,15 @@ func allocateCommitments(stack []*stackedCommitment, windows []windowUsage) *all
 		for id, v := range w.ByLine {
 			remaining[id] = v
 		}
+		owners := map[string]*stackedCommitment{}
 		for _, sc := range stack {
 			alloc := res.ByCommitment[sc.C.ID]
 			capacity := sc.Capacity(w.Start)
+			if capacity.IsPositive() || sc.C.IsActiveAt(w.Start) {
+				for _, lineID := range sc.LineIDs {
+					owners[lineID] = sc
+				}
+			}
 			left := capacity
 			for _, lineID := range sc.LineIDs {
 				if !left.IsPositive() {
@@ -75,10 +90,17 @@ func allocateCommitments(stack []*stackedCommitment, windows []windowUsage) *all
 			alloc.Capacity = alloc.Capacity.Add(capacity)
 			alloc.Unused = alloc.Unused.Add(left)
 		}
-		for id, v := range remaining {
-			if v.IsPositive() {
-				res.OnDemandByLine[id] = res.OnDemandByLine[id].Add(v)
+		lineIDs := lo.Keys(remaining)
+		sort.Strings(lineIDs)
+		for _, lineID := range lineIDs {
+			if !remaining[lineID].IsPositive() {
+				continue
 			}
+			owner := owners[lineID]
+			if owner == nil {
+				owner = ownerOf(stack, lineID)
+			}
+			res.OnDemand = append(res.OnDemand, onDemandUsage{Start: w.Start, LineID: lineID, Quantity: remaining[lineID], Owner: owner})
 		}
 	}
 	return res

@@ -13,6 +13,17 @@ func fixedCap(v string) func(time.Time) decimal.Decimal {
 	return func(time.Time) decimal.Decimal { return dec(v) }
 }
 
+func onDemandOf(res *allocationResult, lineID string) decimal.Decimal {
+	total := decimal.Zero
+	for _, od := range res.OnDemand {
+		if od.LineID == lineID {
+			total = total.Add(od.Quantity)
+		}
+	}
+
+	return total
+}
+
 func TestAllocateCommitments_Waterfall(t *testing.T) {
 	t0 := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	newStack := func() []*stackedCommitment {
@@ -36,7 +47,7 @@ func TestAllocateCommitments_Waterfall(t *testing.T) {
 			res := allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: map[string]decimal.Decimal{"li_gpu": dec(tc.usage)}}})
 			require.True(t, res.ByCommitment["cmt_a"].UsedByLine["li_gpu"].Equal(dec(tc.wantA)))
 			require.True(t, res.ByCommitment["cmt_b"].UsedByLine["li_gpu"].Equal(dec(tc.wantB)))
-			require.True(t, res.OnDemandByLine["li_gpu"].Equal(dec(tc.wantOnDemand)))
+			require.True(t, onDemandOf(res, "li_gpu").Equal(dec(tc.wantOnDemand)))
 			require.True(t, res.ByCommitment["cmt_a"].Unused.Equal(dec("10").Sub(dec(tc.wantA))))
 		})
 	}
@@ -51,7 +62,7 @@ func TestAllocateCommitments_InactiveWindowSkipped(t *testing.T) {
 	res := allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: map[string]decimal.Decimal{"li": dec("12")}}})
 	require.True(t, res.ByCommitment["cmt_a"].UsedByLine["li"].Equal(dec("8")))
 	require.True(t, res.ByCommitment["cmt_b"].UsedByLine["li"].IsZero())
-	require.True(t, res.OnDemandByLine["li"].Equal(dec("4")))
+	require.True(t, onDemandOf(res, "li").Equal(dec("4")))
 }
 
 func TestAllocateCommitments_PooledFillsLinesInOrder(t *testing.T) {
@@ -60,8 +71,8 @@ func TestAllocateCommitments_PooledFillsLinesInOrder(t *testing.T) {
 	res := allocateCommitments(stack, []windowUsage{{Start: t0, ByLine: map[string]decimal.Decimal{"li_api": dec("70"), "li_storage": dec("50")}}})
 	require.True(t, res.ByCommitment["cmt"].UsedByLine["li_api"].Equal(dec("70")))
 	require.True(t, res.ByCommitment["cmt"].UsedByLine["li_storage"].Equal(dec("30")))
-	require.True(t, res.OnDemandByLine["li_storage"].Equal(dec("20")))
-	require.True(t, res.OnDemandByLine["li_api"].IsZero())
+	require.True(t, onDemandOf(res, "li_storage").Equal(dec("20")))
+	require.True(t, onDemandOf(res, "li_api").IsZero())
 }
 
 func TestAllocateCommitments_QuantityConservation(t *testing.T) {
@@ -75,6 +86,54 @@ func TestAllocateCommitments_QuantityConservation(t *testing.T) {
 	res := allocateCommitments(stack, windows)
 	require.True(t, res.ByCommitment["c"].UsedByLine["li"].Equal(dec("21")))
 	require.True(t, res.ByCommitment["c"].Unused.Equal(dec("3")))
-	require.True(t, res.OnDemandByLine["li"].Equal(dec("2")))
-	require.True(t, res.ByCommitment["c"].UsedByLine["li"].Add(res.OnDemandByLine["li"]).Equal(dec("23")))
+	require.True(t, onDemandOf(res, "li").Equal(dec("2")))
+	require.True(t, res.ByCommitment["c"].UsedByLine["li"].Add(onDemandOf(res, "li")).Equal(dec("23")))
+}
+
+func TestAllocateCommitments_OnDemandOwnerPerWindow(t *testing.T) {
+	t0 := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	switchAt := t0.Add(time.Hour)
+	terminated := &stackedCommitment{
+		C: &commitment.Commitment{
+			ID:           "cmt_old",
+			Priority:     1,
+			StartDate:    t0,
+			EndDate:      t0.AddDate(0, 1, 0),
+			TerminatedAt: &switchAt,
+		},
+		LineIDs: []string{"li"},
+	}
+	replacement := &stackedCommitment{
+		C: &commitment.Commitment{
+			ID:        "cmt_new",
+			Priority:  1,
+			StartDate: switchAt,
+			EndDate:   t0.AddDate(0, 1, 0),
+		},
+		LineIDs: []string{"li"},
+	}
+	for _, sc := range []*stackedCommitment{terminated, replacement} {
+		c := sc.C
+		sc.Capacity = func(t time.Time) decimal.Decimal {
+			if c.IsActiveAt(t) {
+				return dec("8")
+			}
+
+			return decimal.Zero
+		}
+	}
+
+	stack := []*stackedCommitment{terminated, replacement}
+	sortCommitmentStack(stack)
+
+	res := allocateCommitments(stack, []windowUsage{
+		{Start: t0, ByLine: map[string]decimal.Decimal{"li": dec("10")}},
+		{Start: switchAt, ByLine: map[string]decimal.Decimal{"li": dec("13")}},
+	})
+
+	require.Len(t, res.OnDemand, 2)
+	require.Equal(t, "cmt_old", res.OnDemand[0].Owner.C.ID)
+	require.True(t, res.OnDemand[0].Quantity.Equal(dec("2")))
+	require.Equal(t, "cmt_new", res.OnDemand[1].Owner.C.ID)
+	require.True(t, res.OnDemand[1].Quantity.Equal(dec("5")))
 }
