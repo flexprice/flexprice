@@ -1570,6 +1570,9 @@ var (
 				Name:    "invoicelineitem_tenant_id_environment_id_commitment_id",
 				Unique:  false,
 				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[32]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(commitment_id IS NOT NULL)",
+				},
 			},
 		},
 	}

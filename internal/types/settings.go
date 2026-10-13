@@ -948,7 +948,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		SettingKeyCommitmentsV2: {
 			Key:          SettingKeyCommitmentsV2,
 			DefaultValue: map[string]interface{}{"enabled": false},
-			Description:  "Enable first-class commitments (FLE-1513)",
+			Description:  "Enable first-class commitments",
 		},
 	}, nil
 }
