@@ -491,6 +491,9 @@ func (_u *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if _u.mutation.SubscriptionLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
 	}
+	if _u.mutation.CommitmentIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldCommitmentID, field.TypeString)
+	}
 	if value, ok := _u.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 	}
@@ -1066,6 +1069,9 @@ func (_u *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	}
 	if _u.mutation.SubscriptionLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
+	}
+	if _u.mutation.CommitmentIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldCommitmentID, field.TypeString)
 	}
 	if value, ok := _u.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
