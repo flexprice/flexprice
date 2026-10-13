@@ -41,7 +41,7 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 	if !enabled {
 		return pass, nil
 	}
-	commitments, err := svc.ActiveForPeriod(ctx, sub.ID, periodStart, periodEnd)
+	commitments, err := s.commitmentsForInvoice(ctx, sub, periodStart, periodEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -56,15 +56,19 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 
 	callLines := lo.SliceToMap(sub.LineItems, func(li *subscription.SubscriptionLineItem) (string, bool) { return li.ID, true })
 	for _, c := range commitments {
-		c = withSubscriptionEnd(c, sub, periodStart, periodEnd)
 		effectiveEnd := commitmentEffectiveEnd(c)
-		settles := owesRemaining(c, periodStart, periodEnd)
+		settles := owesRemaining(c, sub, periodStart, periodEnd)
 		if !effectiveEnd.After(periodStart) && !settles {
 			continue
 		}
 		// The call must carry one of the commitment's lines; other cadence groups and filtered items leave it alone.
-		from := maxTime(periodStart, c.StartDate)
-		if len(inCall(scopeLinesInPeriod(c, cc, from, minTime(periodEnd, c.EndDate)), callLines)) == 0 {
+		// A commitment that never runs in the period only settles, on the call for the subscription's own cadence.
+		from, termEnd := maxTime(periodStart, c.StartDate), minTime(periodEnd, c.EndDate)
+		settleOnly := !from.Before(termEnd)
+		switch {
+		case settleOnly && !carriesSubscriptionCadence(sub):
+			continue
+		case !settleOnly && len(inCall(scopeLinesInPeriod(c.ScopeEntityType, c.ScopeEntityID, cc, from, termEnd), callLines)) == 0:
 			continue
 		}
 		rates, err := s.resolveCommitmentRates(ctx, c)
@@ -81,15 +85,18 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 		if err != nil {
 			return nil, err
 		}
-		current, ok := containingPeriod(periods, periodStart, periodEnd)
-		if !ok {
-			s.Logger.Debug(ctx, "skipping commitment for a window outside its billing periods",
-				"commitment_id", c.ID, "subscription_id", sub.ID, "period_start", periodStart, "period_end", periodEnd)
-			continue
-		}
-		// A mid-period termination prorates this period; the invoice still covers the whole subscription period.
-		if c.TerminatedAt != nil {
-			current = clipCommitmentPeriod(c, current, *c.TerminatedAt, rates, bucket, sub.BillingAnchor)
+		var current commitmentPeriod
+		if !settleOnly {
+			var ok bool
+			if current, ok = containingPeriod(periods, periodStart, periodEnd); !ok {
+				s.Logger.Info(ctx, "skipping commitment for a window outside its billing periods",
+					"commitment_id", c.ID, "subscription_id", sub.ID, "period_start", periodStart, "period_end", periodEnd)
+				continue
+			}
+			// A mid-period termination prorates this period; the invoice still covers the whole subscription period.
+			if c.TerminatedAt != nil {
+				current = clipCommitmentPeriod(c, current, *c.TerminatedAt, rates, bucket, sub.BillingAnchor)
+			}
 		}
 		pass.periods[c.ID] = current
 		pass.buckets[c.ID] = bucket
@@ -97,8 +104,11 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 			pass.settle[c.ID] = remainingValue(c, periods, rates, bucket, sub.BillingAnchor)
 		}
 
-		lines := inCall(scopeLinesInPeriod(c, cc, from, minTime(periodEnd, effectiveEnd)), callLines)
-		ids := lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID })
+		var ids []string
+		if !settleOnly {
+			lines := inCall(scopeLinesInPeriod(c.ScopeEntityType, c.ScopeEntityID, cc, from, minTime(periodEnd, effectiveEnd)), callLines)
+			ids = lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID })
+		}
 		for _, id := range ids {
 			pass.lineIDs[id] = true
 		}
@@ -106,6 +116,27 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 	}
 	sortCommitmentStack(pass.stack)
 	return pass, nil
+}
+
+// commitmentsForInvoice returns the commitments running in [periodStart, periodEnd), plus those that have not started
+// but settle on this invoice; subscription end dates are applied as terminations.
+func (s *billingService) commitmentsForInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) ([]*commitment.Commitment, error) {
+	f := types.NewNoLimitCommitmentFilter()
+	f.SubscriptionIDs = []string{sub.ID}
+	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
+	f.ActiveFrom = &periodStart
+	all, err := s.CommitmentRepo.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*commitment.Commitment, 0, len(all))
+	for _, c := range all {
+		c = withSubscriptionEnd(c, sub, periodStart, periodEnd)
+		if c.StartDate.Before(periodEnd) || owesRemaining(c, sub, periodStart, periodEnd) {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // runCommitmentPass allocates in-scope usage across the stack and returns the commitment invoice lines and their total.
@@ -451,7 +482,7 @@ func groupLineIDs(group []*stackedCommitment) []string {
 }
 
 // scopeLinesInPeriod returns the line items in scope at any point of [from, to), ordered for fill.
-func scopeLinesInPeriod(c *commitment.Commitment, cc *commitmentContext, from, to time.Time) []*subscription.SubscriptionLineItem {
+func scopeLinesInPeriod(scopeType types.CommitmentScopeType, scopeID string, cc *commitmentContext, from, to time.Time) []*subscription.SubscriptionLineItem {
 	if !from.Before(to) {
 		return nil
 	}
@@ -464,7 +495,7 @@ func scopeLinesInPeriod(c *commitment.Commitment, cc *commitmentContext, from, t
 	seen := map[string]bool{}
 	var out []*subscription.SubscriptionLineItem
 	for _, t := range at {
-		for _, li := range resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, t) {
+		for _, li := range resolveScopeLines(scopeType, scopeID, cc, t) {
 			if !seen[li.ID] {
 				seen[li.ID] = true
 				out = append(out, li)
@@ -503,7 +534,25 @@ func withSubscriptionEnd(c *commitment.Commitment, sub *subscription.Subscriptio
 	}
 	terminated := *c
 	terminated.TerminatedAt = lo.ToPtr(maxTime(*endAt, c.StartDate))
+	terminated.Metadata = withTerminationEffectiveAt(c.Metadata, endAt.UTC().Format(time.RFC3339Nano))
 	return &terminated
+}
+
+// carriesSubscriptionCadence reports whether the call prices usage on the subscription's own cadence.
+func carriesSubscriptionCadence(sub *subscription.Subscription) bool {
+	return lo.SomeBy(sub.LineItems, func(li *subscription.SubscriptionLineItem) bool {
+		return li.PriceType == types.PRICE_TYPE_USAGE && billsEverySubscriptionPeriod(sub, li.BillingPeriod, li.BillingPeriodCount)
+	})
+}
+
+// settlementAnchor is the requested termination date, which terminated_at clamps to the start date.
+func settlementAnchor(c *commitment.Commitment) time.Time {
+	if v, ok := c.Metadata[metadataKeyTerminationEffectiveAt]; ok {
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			return t
+		}
+	}
+	return *c.TerminatedAt
 }
 
 func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
@@ -514,19 +563,19 @@ func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
 }
 
 // owesRemaining reports whether a binding per_period bill_remaining commitment settles on the invoice for
-// (start, end]; one terminated on its start date settles on its first invoice, [start, end).
-func owesRemaining(c *commitment.Commitment, start, end time.Time) bool {
+// (start, end]: the period holding its requested termination, or the first period when that is the subscription start.
+func owesRemaining(c *commitment.Commitment, sub *subscription.Subscription, start, end time.Time) bool {
 	if c.TerminatedAt == nil || !c.Binding || lo.FromPtr(c.OnEarlyTermination) != types.CommitmentTerminationBillRemaining {
 		return false
 	}
 	if c.CollectionMethod != nil && *c.CollectionMethod != types.CommitmentCollectionPerPeriod {
 		return false
 	}
-	t := *c.TerminatedAt
-	if t.Equal(c.StartDate) {
-		return !t.Before(start) && t.Before(end)
+	at := settlementAnchor(c)
+	if at.Equal(start) && start.Equal(sub.StartDate) {
+		return true
 	}
-	return t.After(start) && !t.After(end)
+	return at.After(start) && !at.After(end) && end.After(sub.StartDate)
 }
 
 // remainingValue is the commitment value minus what was earned up to termination.

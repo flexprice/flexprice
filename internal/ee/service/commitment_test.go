@@ -668,3 +668,26 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsPriceOnAnotherCaden
 	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, &weekly, s.fx.sub.StartDate)
 	s.requireValidation(err, "commitments require scope prices billed every subscription period")
 }
+
+func (s *CommitmentServiceSuite) TestValidation_FutureScopeLineOnAnotherCadence() {
+	future := *s.fx.lineAPI
+	future.ID, future.BillingPeriod = "subs_line_api_weekly", types.BILLING_PERIOD_WEEKLY
+	future.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &future))
+
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_KeepsRequestedDateThroughMetadataEdits() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	at := created.StartDate.AddDate(0, -1, 0)
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+
+	resp, err := s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Metadata: types.Metadata{"owner": "sales"}})
+	s.Require().NoError(err)
+	s.Equal("sales", resp.Metadata["owner"])
+	s.Equal(at.UTC().Format(time.RFC3339Nano), resp.Metadata[metadataKeyTerminationEffectiveAt])
+}

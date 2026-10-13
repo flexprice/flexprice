@@ -34,6 +34,22 @@ type CommitmentService interface {
 
 type commitmentService struct{ ServiceParams }
 
+// metadataKeyTerminationEffectiveAt keeps the requested termination date, which terminated_at clamps to the start
+// date; a bill_remaining settlement lands on the invoice for the period ending at or after it.
+const metadataKeyTerminationEffectiveAt = "termination_effective_at"
+
+// withTerminationEffectiveAt returns a copy of m carrying the termination date, when there is one.
+func withTerminationEffectiveAt(m types.Metadata, effectiveAt string) types.Metadata {
+	out := make(types.Metadata, len(m)+1)
+	for k, v := range m {
+		out[k] = v
+	}
+	if effectiveAt != "" {
+		out[metadataKeyTerminationEffectiveAt] = effectiveAt
+	}
+	return out
+}
+
 func NewCommitmentService(params ServiceParams) CommitmentService {
 	return &commitmentService{ServiceParams: params}
 }
@@ -267,7 +283,7 @@ func (s *commitmentService) Update(ctx context.Context, id string, req dto.Updat
 			b.WithInvoiceDescription(req.InvoiceDescription)
 		}
 		if req.Metadata != nil {
-			b.WithMetadata(req.Metadata)
+			b.WithMetadata(withTerminationEffectiveAt(req.Metadata, c.Metadata[metadataKeyTerminationEffectiveAt]))
 		}
 		updated, err = s.CommitmentRepo.Update(txCtx, b.Build())
 		return err
@@ -344,12 +360,14 @@ func (s *commitmentService) terminate(ctx context.Context, id string, effectiveA
 	if !effectiveAt.Before(c.EndDate) {
 		return nil, invalidf("effective_at must be before the commitment end %s", c.EndDate.Format(time.RFC3339))
 	}
-	if effectiveAt.Before(c.StartDate) {
-		effectiveAt = c.StartDate
+	terminatedAt := effectiveAt
+	if terminatedAt.Before(c.StartDate) {
+		terminatedAt = c.StartDate
 	}
 	terminated := commitment.NewCommitmentBuilder(c).
 		WithStatus(types.CommitmentStatusTerminated).
-		WithTerminatedAt(effectiveAt).
+		WithTerminatedAt(terminatedAt).
+		WithMetadata(withTerminationEffectiveAt(c.Metadata, effectiveAt.UTC().Format(time.RFC3339Nano))).
 		Build()
 	return s.CommitmentRepo.Update(ctx, terminated)
 }

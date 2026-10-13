@@ -149,6 +149,8 @@ func (s *commitmentService) validateAgainstSubscription(ctx context.Context, req
 		if li.HasAnyCommitment() {
 			return invalidf("price %s already has a legacy line-item commitment", li.PriceID)
 		}
+	}
+	for _, li := range scopeLinesInPeriod(req.Scope.EntityType, req.Scope.EntityID, cc, req.StartDate, req.EndDate) {
 		if !billsEverySubscriptionPeriod(sub, li.BillingPeriod, li.BillingPeriodCount) {
 			return errScopeCadence(li.PriceID)
 		}
