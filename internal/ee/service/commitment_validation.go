@@ -185,29 +185,35 @@ func (s *commitmentService) validateAgainstSubscription(
 			return invalid("window measurement needs bucketed prices that all share one bucket size")
 		}
 	}
-
-	if sub.CommitmentAmount != nil &&
-		sub.CommitmentAmount.IsPositive() &&
-		req.Scope.EntityType == types.CommitmentScopeSubscription {
-		return invalid(
-			"subscription has a legacy subscription-level commitment; remove it before adding a subscription-scoped commitment",
-		)
+	if sub.CommitmentAmount != nil && sub.CommitmentAmount.IsPositive() {
+		return invalid("subscription has a legacy subscription-level commitment; remove it before adding a commitment")
 	}
 
 	for _, li := range lines {
 		if li.HasAnyCommitment() {
 			return invalidf("price %s already has a legacy line-item commitment", li.PriceID)
 		}
+		if !billsEverySubscriptionPeriod(sub, li.BillingPeriod, li.BillingPeriodCount) {
+			return errScopeCadence(li.PriceID)
+		}
 	}
 
 	return s.validateOverlaps(ctx, req, cc, lines)
 }
 
-func invalid(msg string) error {
-	return ierr.NewError(msg).
-		WithHint(msg).
+// billsEverySubscriptionPeriod reports whether a price bills on the subscription's own cadence, so its invoice
+// window is the subscription period.
+func billsEverySubscriptionPeriod(sub *subscription.Subscription, period types.BillingPeriod, count int) bool {
+	return period == sub.BillingPeriod && max(count, 1) == max(sub.BillingPeriodCount, 1)
+}
+
+func errScopeCadence(priceID string) error {
+	return ierr.NewErrorf("commitments require scope prices billed every subscription period; price %s bills on another cadence", priceID).
+		WithHint("commitments require scope prices billed every subscription period").
 		Mark(ierr.ErrValidation)
 }
+
+func invalid(msg string) error { return ierr.NewError(msg).WithHint(msg).Mark(ierr.ErrValidation) }
 
 // validateOverlaps requires active commitments sharing a line item to differ in priority and agree on
 // type, measurement and overage rate.

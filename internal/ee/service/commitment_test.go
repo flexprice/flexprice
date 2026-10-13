@@ -861,3 +861,36 @@ func (s *CommitmentServiceSuite) TestValidation_EndDateAfterSubscriptionEnd() {
 	_, err = s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 }
+
+func (s *CommitmentServiceSuite) TestValidation_C16_AnyScopeWithLegacyCommitment() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(500))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "legacy subscription-level commitment")
+}
+
+func (s *CommitmentServiceSuite) TestValidation_ScopePriceMustBillEverySubscriptionPeriod() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsPriceOnAnotherCadence() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	req.Type, req.CommittedRate, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	weekly := *s.fx.priceOtherMeterInGroup
+	weekly.ID, weekly.BillingPeriod = "price_other_meter_weekly", types.BILLING_PERIOD_WEEKLY
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, &weekly, s.fx.sub.StartDate)
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}

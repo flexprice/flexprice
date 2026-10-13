@@ -421,7 +421,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// --- Post-loop: commitments (FLE-1513), cumulative commitment or non-cumulative true-up ---
+	// --- Post-loop: commitments, cumulative commitment or non-cumulative true-up ---
 
 	var commitmentLines []dto.CreateInvoiceLineItemRequest
 	commitmentTotal := decimal.Zero
