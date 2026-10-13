@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -86,15 +87,46 @@ func (r *activityRepository) List(ctx context.Context, q *activity.ListQuery) ([
 	eq("request_id", q.RequestID)
 	in("actor_type", q.ActorTypes)
 	in("action", q.Actions)
-	if q.After != nil {
-		where = append(where, "(occurred_at, id) < ("+millisParam+", ?)")
-		args = append(args, q.After.OccurredAt.UnixMilli(), q.After.ID)
-	}
-	args = append(args, 2*q.Limit, q.Limit)
 
-	// LIMIT BY blocks the early stop of an in-order read, so dedup runs on an inner page of 2×limit rows.
-	query := "SELECT * FROM (SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
-		" ORDER BY occurred_at DESC, id DESC LIMIT ?) ORDER BY occurred_at DESC, id DESC LIMIT 1 BY id LIMIT ?"
+	return uniqueEntries(q.Limit, q.After, func(after *activity.Cursor) ([]*activity.Log, error) {
+		return r.listBatch(ctx, where, args, after, q.Limit)
+	})
+}
+
+// uniqueEntries reads batches until it has limit distinct entries or the rows run out.
+// Unmerged copies of an entry share (occurred_at, id), so they arrive next to each other.
+func uniqueEntries(limit int, after *activity.Cursor, fetch func(after *activity.Cursor) ([]*activity.Log, error)) ([]*activity.Log, error) {
+	var logs []*activity.Log
+	for {
+		batch, err := fetch(after)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range batch {
+			if n := len(logs); n > 0 && logs[n-1].ID == l.ID {
+				continue
+			}
+			logs = append(logs, l)
+		}
+		if len(batch) < limit || len(logs) >= limit {
+			return logs[:min(len(logs), limit)], nil
+		}
+		last := batch[len(batch)-1]
+		after = &activity.Cursor{OccurredAt: last.OccurredAt, ID: last.ID}
+	}
+}
+
+// listBatch reads up to limit rows after the cursor, newest first. A plain LIMIT lets the in-order read stop early.
+func (r *activityRepository) listBatch(ctx context.Context, where []string, args []any, after *activity.Cursor, limit int) ([]*activity.Log, error) {
+	where, args = slices.Clip(where), slices.Clip(args)
+	if after != nil {
+		where = append(where, "(occurred_at, id) < ("+millisParam+", ?)")
+		args = append(args, after.OccurredAt.UnixMilli(), after.ID)
+	}
+	args = append(args, limit)
+
+	query := "SELECT " + activityListColumns + " FROM activity_logs WHERE " + strings.Join(where, " AND ") +
+		" ORDER BY occurred_at DESC, id DESC LIMIT ?"
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to list activity").Mark(ierr.ErrDatabase)

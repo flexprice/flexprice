@@ -472,7 +472,7 @@ SETTINGS index_granularity = 8192;
   an incident, a request's related changes).
 - **`MergeTree`**, because the table is append-only: rows are never updated, only dropped with their
   month or erased. Kafka delivers at least once, so a redelivered message can insert an entry twice.
-  Reads deduplicate by id: list queries use `LIMIT 1 BY id`, and the detail lookup returns one row
+  Reads deduplicate by id: list queries drop adjacent copies, and the detail lookup returns one row
   for the id.
 - **`state`** is JSON text compressed with ZSTD. It is never filtered on, only returned when an
   entry is opened.
@@ -554,9 +554,10 @@ flowchart LR
 ```
 
 Empty optional fields are omitted. `next_cursor` is always present and is `null` on the last page.
-List queries take `LIMIT 1 BY id` in an outer query over an inner page of twice the limit.
-`LIMIT BY` stops ClickHouse from ending an in-order read early, so in the same query it would read
-the whole matching window.
+List queries read newest first with a plain `LIMIT`, so ClickHouse stops once the page is full.
+Copies of an entry that are not merged yet share `occurred_at` and `id`, so they arrive next to
+each other; the repository drops them and reads the next batch from the last row when copies leave
+the page short.
 
 ### 7.2 Detail
 
