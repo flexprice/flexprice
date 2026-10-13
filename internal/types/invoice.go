@@ -18,6 +18,7 @@ const (
 	InvoiceLineItemEntityTypePlan         InvoiceLineItemEntityType = "plan"
 	InvoiceLineItemEntityTypeAddon        InvoiceLineItemEntityType = "addon"
 	InvoiceLineItemEntityTypeSubscription InvoiceLineItemEntityType = "subscription"
+	InvoiceLineItemEntityTypeCommitment   InvoiceLineItemEntityType = "commitment"
 )
 
 // InvoiceLineItemMetadataKey represents well-known metadata keys on invoice line items.

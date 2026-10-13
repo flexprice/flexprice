@@ -47,6 +47,8 @@ const (
 	MetadataKeyOverageFactor      = "overage_factor"
 	MetadataKeyCommitmentAmount   = "commitment_amount"
 	MetadataKeyCommitmentUtilized = "commitment_utilized"
+	MetadataKeyCommitmentLineKind = "commitment_line_kind"
+	MetadataKeyCommitmentID       = "commitment_id"
 	MetadataKeyUsageResetPeriod   = "usage_reset_period"
 	MetadataKeyIsPreview          = "is_preview"
 	MetadataKeyDescription        = "description"
