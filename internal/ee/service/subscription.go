@@ -5276,6 +5276,10 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		return err
 	}
 
+	if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
+		return err
+	}
+
 	return nil
 }
 

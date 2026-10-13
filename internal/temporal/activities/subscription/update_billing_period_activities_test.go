@@ -129,6 +129,7 @@ func (s *BillingActivitiesSuite) newServiceParams() service.ServiceParams {
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
+		CommitmentRepo:             s.GetStores().CommitmentRepo,
 	}
 }
 
