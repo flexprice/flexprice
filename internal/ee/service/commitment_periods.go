@@ -39,11 +39,6 @@ func commitmentPeriods(c *commitment.Commitment, sub *subscription.Subscription,
 		return nil, ierr.WithError(err).WithHint("Failed to compute billing periods for commitment").Mark(ierr.ErrInternal)
 	}
 
-	rate := rates.Committed
-	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
-		rate = decimal.NewFromInt(1)
-	}
-	loc := c.Location()
 	out := make([]commitmentPeriod, 0, len(full))
 	for _, p := range full {
 		start, end := maxTime(p.Start, c.StartDate), minTime(p.End, c.EndDate)
@@ -51,21 +46,43 @@ func commitmentPeriods(c *commitment.Commitment, sub *subscription.Subscription,
 			continue
 		}
 		cp := commitmentPeriod{Start: start, End: end, FullStart: p.Start, FullEnd: p.End}
-		if c.Measurement == types.CommitmentMeasurementWindow {
-			for _, b := range generateBucketStarts(start, end, bucket, &sub.BillingAnchor) {
-				if c.ActiveWindows.Contains(b, loc) {
-					cp.ActiveBuckets++
-				}
-			}
-			cp.Capacity = c.Value.Mul(decimal.NewFromInt(cp.ActiveBuckets))
-		} else {
-			fraction := decimal.NewFromInt(int64(end.Sub(start))).Div(decimal.NewFromInt(int64(p.End.Sub(p.Start))))
-			cp.Capacity = c.Value.Mul(fraction)
-		}
-		cp.Amount = cp.Capacity.Mul(rate)
+		fillPeriodValue(c, &cp, rates, bucket, sub.BillingAnchor)
 		out = append(out, cp)
 	}
 	return out, nil
+}
+
+// clipCommitmentPeriod returns p cut to end at until, with its capacity and amount recomputed.
+func clipCommitmentPeriod(c *commitment.Commitment, p commitmentPeriod, until time.Time, rates commitmentRates, bucket types.WindowSize, anchor time.Time) commitmentPeriod {
+	if !until.Before(p.End) {
+		return p
+	}
+	out := p
+	out.End = maxTime(until, p.Start)
+	fillPeriodValue(c, &out, rates, bucket, anchor)
+	return out
+}
+
+// fillPeriodValue sets the capacity and money value of cp from its Start and End.
+func fillPeriodValue(c *commitment.Commitment, cp *commitmentPeriod, rates commitmentRates, bucket types.WindowSize, anchor time.Time) {
+	rate := rates.Committed
+	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
+		rate = decimal.NewFromInt(1)
+	}
+	cp.ActiveBuckets = 0
+	if c.Measurement == types.CommitmentMeasurementWindow {
+		loc := c.Location()
+		for _, b := range generateBucketStarts(cp.Start, cp.End, bucket, &anchor) {
+			if c.ActiveWindows.Contains(b, loc) {
+				cp.ActiveBuckets++
+			}
+		}
+		cp.Capacity = c.Value.Mul(decimal.NewFromInt(cp.ActiveBuckets))
+	} else {
+		fraction := decimal.NewFromInt(int64(cp.End.Sub(cp.Start))).Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
+		cp.Capacity = c.Value.Mul(fraction)
+	}
+	cp.Amount = cp.Capacity.Mul(rate)
 }
 
 // commitmentValue sums the money value of all periods.

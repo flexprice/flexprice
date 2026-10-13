@@ -108,6 +108,11 @@ func (s *billingService) CalculateMeterUsageCharges(
 		asOf = *asOfOverride
 	}
 
+	pass, err := s.prepareCommitmentPass(ctx, sub, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
 	// --- Setup: resolve meters, entitlements, customer IDs ---
 
 	commitmentAmount := lo.FromPtr(sub.CommitmentAmount)
@@ -194,7 +199,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 	totalUsageCost := decimal.Zero
 
 	for _, item := range sub.LineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
+		if item.PriceType != types.PRICE_TYPE_USAGE || pass.lineIDs[item.ID] {
 			continue
 		}
 
@@ -416,12 +421,26 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// --- Post-loop: cumulative commitment or non-cumulative true-up ---
+	// --- Post-loop: commitments (FLE-1513), cumulative commitment or non-cumulative true-up ---
+
+	var commitmentLines []dto.CreateInvoiceLineItemRequest
+	commitmentTotal := decimal.Zero
+	if len(pass.stack) > 0 {
+		commitmentLines, commitmentTotal, err = s.runCommitmentPass(ctx, pass, sub, chargesByLineItemID,
+			periodStart, periodEnd, asOf, querySource, meterMap)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+	}
 
 	if useCumulativePath {
-		return s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
+		lines, total, err := s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
 			commitmentAmount, overageFactor, totalPriorBase, commitmentEnd,
 			periodStart, periodEnd)
+		if err != nil || len(pass.stack) == 0 {
+			return lines, total, err
+		}
+		return append(lines, commitmentLines...), total.Add(commitmentTotal), nil
 	}
 
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
@@ -454,6 +473,10 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
+	if len(pass.stack) > 0 {
+		usageCharges = append(usageCharges, commitmentLines...)
+		totalUsageCost = totalUsageCost.Add(commitmentTotal)
+	}
 	return usageCharges, totalUsageCost, nil
 }
 
