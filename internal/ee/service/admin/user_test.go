@@ -488,7 +488,7 @@ func (s *recordingUserStore) ListByFilter(ctx context.Context, filter *types.Use
 	return s.InMemoryUserStore.ListByFilter(ctx, filter)
 }
 
-func TestListUsers(t *testing.T) {
+func TestListUsersForTenant(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "tenant_acme"
 
@@ -508,7 +508,7 @@ func TestListUsers(t *testing.T) {
 		store := &recordingUserStore{InMemoryUserStore: d.users}
 		d.params.UserRepo = store
 
-		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+		resp, err := NewUserService(d.params).ListUsersForTenant(ctx, tenantID)
 
 		require.NoError(t, err)
 		ids := lo.Map(resp.Items, func(item *admindto.TenantUserResponse, _ int) string { return item.ID })
@@ -522,7 +522,7 @@ func TestListUsers(t *testing.T) {
 		d := newTenantTestDeps(t)
 		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 
-		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+		resp, err := NewUserService(d.params).ListUsersForTenant(ctx, tenantID)
 
 		require.NoError(t, err)
 		require.NotNil(t, resp.Items, "an empty list must marshal as [], not null")
@@ -533,7 +533,7 @@ func TestListUsers(t *testing.T) {
 		d := newTenantTestDeps(t)
 		d.params.TenantRepo = notFoundTenantStore{InMemoryTenantStore: d.tenants}
 
-		resp, err := NewUserService(d.params).ListUsers(ctx, "tenant_missing")
+		resp, err := NewUserService(d.params).ListUsersForTenant(ctx, "tenant_missing")
 
 		require.Error(t, err)
 		assert.True(t, ierr.IsNotFound(err))
@@ -545,7 +545,7 @@ func TestListUsers(t *testing.T) {
 		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: tenantID, Name: "Acme"}))
 		d.params.UserRepo = failingCountStore{InMemoryUserStore: d.users}
 
-		resp, err := NewUserService(d.params).ListUsers(ctx, tenantID)
+		resp, err := NewUserService(d.params).ListUsersForTenant(ctx, tenantID)
 
 		require.Error(t, err)
 		assert.True(t, ierr.IsDatabase(err))

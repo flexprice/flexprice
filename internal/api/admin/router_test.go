@@ -415,7 +415,7 @@ func (f *fakeUserService) RemoveUser(_ context.Context, req admindto.RemoveUserR
 	return f.removeResp, f.removeErr
 }
 
-func (f *fakeUserService) ListUsers(_ context.Context, tenantID string) (*admindto.ListUsersResponse, error) {
+func (f *fakeUserService) ListUsersForTenant(_ context.Context, tenantID string) (*admindto.ListUsersResponse, error) {
 	f.listTenantID = tenantID
 	return f.listResp, f.listErr
 }
@@ -521,7 +521,7 @@ func TestAddUserErrors(t *testing.T) {
 	}
 }
 
-func TestListUsersRoute(t *testing.T) {
+func TestListUsersForTenantRoute(t *testing.T) {
 	tests := []struct {
 		name         string
 		secret       string

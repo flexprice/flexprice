@@ -18,8 +18,8 @@ import (
 type UserService interface {
 	AddUser(ctx context.Context, req admindto.AddUserRequest) (*admindto.UserResponse, error)
 	RemoveUser(ctx context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error)
-	// ListUsers returns every published user and service account of a tenant, newest first.
-	ListUsers(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error)
+	// ListUsersForTenant returns every published user and service account of a tenant, newest first.
+	ListUsersForTenant(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error)
 }
 
 type userService struct {
@@ -143,7 +143,7 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 	return admindto.NewRemoveUserResponse(target), nil
 }
 
-func (s *userService) ListUsers(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error) {
+func (s *userService) ListUsersForTenant(ctx context.Context, tenantID string) (*admindto.ListUsersResponse, error) {
 	if _, err := s.TenantRepo.GetByID(ctx, tenantID); err != nil {
 		return nil, err
 	}
