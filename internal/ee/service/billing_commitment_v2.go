@@ -54,10 +54,17 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 	}
 	pass.cc = cc
 
+	callLines := lo.SliceToMap(sub.LineItems, func(li *subscription.SubscriptionLineItem) (string, bool) { return li.ID, true })
 	for _, c := range commitments {
+		c = withSubscriptionEnd(c, sub, periodStart, periodEnd)
 		effectiveEnd := commitmentEffectiveEnd(c)
 		settles := owesRemaining(c, periodStart, periodEnd)
 		if !effectiveEnd.After(periodStart) && !settles {
+			continue
+		}
+		// The call must carry one of the commitment's lines; other cadence groups and filtered items leave it alone.
+		from := maxTime(periodStart, c.StartDate)
+		if len(inCall(scopeLinesInPeriod(c, cc, from, minTime(periodEnd, c.EndDate)), callLines)) == 0 {
 			continue
 		}
 		rates, err := s.resolveCommitmentRates(ctx, c)
@@ -74,8 +81,14 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 		if err != nil {
 			return nil, err
 		}
-		current := overlappingPeriod(periods, periodStart, periodEnd)
-		if c.TerminatedAt != nil && current.End.After(current.Start) {
+		current, ok := containingPeriod(periods, periodStart, periodEnd)
+		if !ok {
+			s.Logger.Debug(ctx, "skipping commitment for a window outside its billing periods",
+				"commitment_id", c.ID, "subscription_id", sub.ID, "period_start", periodStart, "period_end", periodEnd)
+			continue
+		}
+		// A mid-period termination prorates this period; the invoice still covers the whole subscription period.
+		if c.TerminatedAt != nil {
 			current = clipCommitmentPeriod(c, current, *c.TerminatedAt, rates, bucket, sub.BillingAnchor)
 		}
 		pass.periods[c.ID] = current
@@ -84,7 +97,7 @@ func (s *billingService) prepareCommitmentPass(ctx context.Context, sub *subscri
 			pass.settle[c.ID] = remainingValue(c, periods, rates, bucket, sub.BillingAnchor)
 		}
 
-		lines := scopeLinesInPeriod(c, cc, maxTime(periodStart, c.StartDate), minTime(periodEnd, effectiveEnd))
+		lines := inCall(scopeLinesInPeriod(c, cc, from, minTime(periodEnd, effectiveEnd)), callLines)
 		ids := lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string { return li.ID })
 		for _, id := range ids {
 			pass.lineIDs[id] = true
@@ -415,7 +428,7 @@ func spreadWindowCosts(quantities []decimal.Decimal, total decimal.Decimal, unit
 }
 
 // groupCommitmentStack splits the stack by type and measurement, keeping stack order; commitments that share a
-// line always agree on both (C14), so groups never share lines.
+// line always agree on both, so groups never share lines.
 func groupCommitmentStack(stack []*stackedCommitment) [][]*stackedCommitment {
 	var keys []string
 	groups := map[string][]*stackedCommitment{}
@@ -462,17 +475,35 @@ func scopeLinesInPeriod(c *commitment.Commitment, cc *commitmentContext, from, t
 	return out
 }
 
-// overlappingPeriod returns the commitment period that overlaps [start, end) the most.
-func overlappingPeriod(periods []commitmentPeriod, start, end time.Time) commitmentPeriod {
-	var best commitmentPeriod
-	var bestOverlap time.Duration
+// containingPeriod returns the commitment period whose uncut billing period contains [start, end).
+// Compared at whole seconds, because computed billing dates drop sub-second precision.
+func containingPeriod(periods []commitmentPeriod, start, end time.Time) (commitmentPeriod, bool) {
+	start, end = start.Truncate(time.Second), end.Truncate(time.Second)
 	for _, p := range periods {
-		overlap := minTime(p.End, end).Sub(maxTime(p.Start, start))
-		if overlap > bestOverlap {
-			best, bestOverlap = p, overlap
+		if !p.FullStart.Truncate(time.Second).After(start) && !end.After(p.FullEnd.Truncate(time.Second)) {
+			return p, true
 		}
 	}
-	return best
+	return commitmentPeriod{}, false
+}
+
+func inCall(lines []*subscription.SubscriptionLineItem, callLines map[string]bool) []*subscription.SubscriptionLineItem {
+	return lo.Filter(lines, func(li *subscription.SubscriptionLineItem, _ int) bool { return callLines[li.ID] })
+}
+
+// withSubscriptionEnd treats a subscription end or cancel date in (start, end] as the termination of an active
+// commitment that would otherwise run past it, so the final invoice settles it.
+func withSubscriptionEnd(c *commitment.Commitment, sub *subscription.Subscription, start, end time.Time) *commitment.Commitment {
+	endAt := sub.EndDate
+	if sub.CancelAt != nil && (endAt == nil || sub.CancelAt.Before(*endAt)) {
+		endAt = sub.CancelAt
+	}
+	if c.TerminatedAt != nil || endAt == nil || !endAt.After(start) || endAt.After(end) || !endAt.Before(c.EndDate) {
+		return c
+	}
+	terminated := *c
+	terminated.TerminatedAt = lo.ToPtr(maxTime(*endAt, c.StartDate))
+	return &terminated
 }
 
 func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
@@ -482,7 +513,8 @@ func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
 	return c.EndDate
 }
 
-// owesRemaining reports whether a binding per_period commitment was terminated in [start, end) with bill_remaining.
+// owesRemaining reports whether a binding per_period bill_remaining commitment settles on the invoice for
+// (start, end]; one terminated on its start date settles on its first invoice, [start, end).
 func owesRemaining(c *commitment.Commitment, start, end time.Time) bool {
 	if c.TerminatedAt == nil || !c.Binding || lo.FromPtr(c.OnEarlyTermination) != types.CommitmentTerminationBillRemaining {
 		return false
@@ -490,10 +522,14 @@ func owesRemaining(c *commitment.Commitment, start, end time.Time) bool {
 	if c.CollectionMethod != nil && *c.CollectionMethod != types.CommitmentCollectionPerPeriod {
 		return false
 	}
-	return !c.TerminatedAt.Before(start) && c.TerminatedAt.Before(end)
+	t := *c.TerminatedAt
+	if t.Equal(c.StartDate) {
+		return !t.Before(start) && t.Before(end)
+	}
+	return t.After(start) && !t.After(end)
 }
 
-// remainingValue is the commitment value minus what was earned up to termination (ERD §8, Value - Earned).
+// remainingValue is the commitment value minus what was earned up to termination.
 func remainingValue(c *commitment.Commitment, periods []commitmentPeriod, rates commitmentRates, bucket types.WindowSize, anchor time.Time) decimal.Decimal {
 	remaining := decimal.Zero
 	for _, p := range periods {

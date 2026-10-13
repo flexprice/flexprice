@@ -409,6 +409,9 @@ func (s *commitmentService) CheckPriceAttach(ctx context.Context, sub *subscript
 	if inScope, err = s.commitmentsInScope(ctx, sub.ID, p, at); err != nil || len(inScope) == 0 {
 		return err
 	}
+	if !billsEverySubscriptionPeriod(sub, p.BillingPeriod, p.BillingPeriodCount) {
+		return errScopeCadence(p.ID)
+	}
 	cc, err := s.loadCommitmentContext(ctx, sub.ID)
 	if err != nil {
 		return err
