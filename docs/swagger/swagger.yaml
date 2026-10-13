@@ -27,6 +27,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCommitmentsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CommitmentResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCouponsResponse:
     properties:
       items:
@@ -1578,6 +1587,114 @@ definitions:
       true_up_enabled:
         type: boolean
     type: object
+  CommitmentResponse:
+    properties:
+      active_windows:
+        items:
+          $ref: '#/definitions/types.ActiveWindow'
+        type: array
+      binding:
+        type: boolean
+      collection_method:
+        $ref: '#/definitions/types.CommitmentCollectionMethod'
+      commitment_status:
+        $ref: '#/definitions/types.CommitmentStatus'
+      commitment_value:
+        type: string
+      committed_price_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      end_date:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      instalment_invoicing:
+        type: string
+      invoice_description:
+        type: string
+      invoice_label:
+        type: string
+      measurement:
+        $ref: '#/definitions/types.CommitmentMeasurement'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+      on_early_termination:
+        $ref: '#/definitions/types.CommitmentEarlyTermination'
+      overage_price_id:
+        type: string
+      priority:
+        type: integer
+      scope_entity_id:
+        type: string
+      scope_entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      terminated_at:
+        type: string
+      timezone:
+        type: string
+      total_amount:
+        type: string
+      type:
+        $ref: '#/definitions/types.CommitmentType'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      value:
+        type: string
+    type: object
+  CommitmentScopeInput:
+    properties:
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+    required:
+    - entity_id
+    - entity_type
+    type: object
+  CommitmentUsageBreakdown:
+    properties:
+      billed_amount:
+        type: string
+      capacity:
+        type: string
+      commitment_id:
+        type: string
+      invoice_label:
+        type: string
+      period_amount:
+        type: string
+      unused:
+        type: string
+      used:
+        type: string
+      value_unused:
+        type: string
+      value_within:
+        type: string
+    type: object
   ConfigurationDetails:
     properties:
       plan_change:
@@ -1997,6 +2114,64 @@ definitions:
     - customer_external_id
     - payment_provider
     type: object
+  CreateCommitmentRequest:
+    properties:
+      active_windows:
+        items:
+          $ref: '#/definitions/types.ActiveWindow'
+        type: array
+      binding:
+        description: default true
+        type: boolean
+      collection_method:
+        $ref: '#/definitions/types.CommitmentCollectionMethod'
+      committed_rate:
+        type: string
+      end_date:
+        type: string
+      idempotency_key:
+        maxLength: 128
+        type: string
+      invoice_description:
+        maxLength: 500
+        type: string
+      invoice_label:
+        maxLength: 255
+        type: string
+      measurement:
+        $ref: '#/definitions/types.CommitmentMeasurement'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        maxLength: 255
+        type: string
+      on_early_termination:
+        $ref: '#/definitions/types.CommitmentEarlyTermination'
+      overage_rate:
+        type: string
+      priority:
+        type: integer
+      scope:
+        $ref: '#/definitions/CommitmentScopeInput'
+      start_date:
+        type: string
+      subscription_id:
+        type: string
+      timezone:
+        type: string
+      type:
+        $ref: '#/definitions/types.CommitmentType'
+      value:
+        type: string
+    required:
+    - end_date
+    - measurement
+    - name
+    - scope
+    - start_date
+    - subscription_id
+    - type
+    type: object
   CreateCostsheetRequest:
     properties:
       description:
@@ -2298,6 +2473,7 @@ definitions:
           Defaults to "UTC" if not provided
         type: string
     required:
+    - contact_persons
     - external_id
     - name
     type: object
@@ -2457,6 +2633,9 @@ definitions:
         type: string
       amount:
         description: amount is the monetary amount for this line item
+        type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
         type: string
       commitment_info:
         allOf:
@@ -3044,6 +3223,12 @@ definitions:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration allows a different commitment period than
           billing (e.g. ANNUAL on MONTHLY).
+      commitments:
+        description: Commitments are created with the subscription; their subscription_id
+          is set server-side.
+        items:
+          $ref: '#/definitions/CreateCommitmentRequest'
+        type: array
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
@@ -4638,6 +4823,12 @@ definitions:
       commitment_utilized:
         description: Amount of commitment used
         type: number
+      commitments:
+        description: Commitments is the per-commitment usage breakdown for the window;
+          nil when commitments v2 is off or none apply.
+        items:
+          $ref: '#/definitions/CommitmentUsageBreakdown'
+        type: array
       currency:
         type: string
       display_amount:
@@ -5029,6 +5220,9 @@ definitions:
           Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
         type: string
       amount:
+        type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
         type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
@@ -8556,6 +8750,11 @@ definitions:
       updated_at:
         type: string
     type: object
+  TerminateCommitmentRequest:
+    properties:
+      effective_at:
+        type: string
+    type: object
   TopUpCoupon:
     properties:
       coupon_code:
@@ -8700,6 +8899,20 @@ definitions:
     required:
     - config
     type: object
+  UpdateCommitmentRequest:
+    properties:
+      invoice_description:
+        maxLength: 500
+        type: string
+      invoice_label:
+        maxLength: 255
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        maxLength: 255
+        type: string
+    type: object
   UpdateCostsheetRequest:
     properties:
       description:
@@ -8819,6 +9032,8 @@ definitions:
         description: timezone is the updated IANA timezone name for the customer (e.g.
           "Asia/Kolkata", "America/New_York")
         type: string
+    required:
+    - contact_persons
     type: object
   UpdateEntitlementRequest:
     properties:
@@ -13758,6 +13973,9 @@ definitions:
         type: string
       amount:
         type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
+        type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       created_at:
@@ -16116,6 +16334,232 @@ paths:
       summary: Cancel checkout session
       tags:
       - Checkout
+  /commitments:
+    post:
+      consumes:
+      - application/json
+      description: 'Creates a commitment on a subscription: a minimum spend or quantity
+        over a term, with optional committed and overage rates.'
+      operationId: createCommitment
+      parameters:
+      - description: Commitment
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/CreateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create commitment
+      tags:
+      - Commitments
+  /commitments/{id}:
+    get:
+      description: Loads a single commitment by ID.
+      operationId: getCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get commitment
+      tags:
+      - Commitments
+    put:
+      consumes:
+      - application/json
+      description: Updates the descriptive fields of a commitment. Economic terms
+        are immutable.
+      operationId: updateCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Commitment update
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update commitment
+      tags:
+      - Commitments
+  /commitments/{id}/terminate:
+    post:
+      consumes:
+      - application/json
+      description: Ends a commitment early, effective at the given time or now.
+      operationId: terminateCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Termination request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/TerminateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Terminate commitment
+      tags:
+      - Commitments
+      x-scope: delete
+  /commitments/preview:
+    post:
+      consumes:
+      - application/json
+      description: Validates a commitment and returns its computed value without creating
+        it.
+      operationId: previewCommitment
+      parameters:
+      - description: Commitment
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/CreateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Preview commitment
+      tags:
+      - Commitments
+      x-scope: read
+  /commitments/search:
+    post:
+      consumes:
+      - application/json
+      description: Lists commitments with filtering and sorting. Returns a paginated
+        list.
+      operationId: queryCommitment
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.CommitmentFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCommitmentsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query commitments
+      tags:
+      - Commitments
+      x-scope: read
   /costs:
     post:
       consumes:

@@ -1345,6 +1345,351 @@
                 }
             }
         },
+        "/commitments": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a commitment on a subscription: a minimum spend or quantity over a term, with optional committed and overage rates.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Create commitment",
+                "operationId": "createCommitment",
+                "parameters": [
+                    {
+                        "description": "Commitment",
+                        "name": "commitment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateCommitmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/CommitmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/commitments/preview": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Validates a commitment and returns its computed value without creating it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Preview commitment",
+                "operationId": "previewCommitment",
+                "parameters": [
+                    {
+                        "description": "Commitment",
+                        "name": "commitment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateCommitmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CommitmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists commitments with filtering and sorting. Returns a paginated list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Query commitments",
+                "operationId": "queryCommitment",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CommitmentFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCommitmentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Loads a single commitment by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Get commitment",
+                "operationId": "getCommitment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CommitmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates the descriptive fields of a commitment. Economic terms are immutable.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Update commitment",
+                "operationId": "updateCommitment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Commitment update",
+                        "name": "commitment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateCommitmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CommitmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/commitments/{id}/terminate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Ends a commitment early, effective at the given time or now.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Terminate commitment",
+                "operationId": "terminateCommitment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Termination request",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/TerminateCommitmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CommitmentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
         "/costs": {
             "post": {
                 "security": [
@@ -14672,6 +15017,20 @@
                 }
             }
         },
+        "ListCommitmentsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListCouponsResponse": {
             "type": "object",
             "properties": {
@@ -16832,6 +17191,169 @@
                 }
             }
         },
+        "CommitmentResponse": {
+            "type": "object",
+            "properties": {
+                "active_windows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ActiveWindow"
+                    }
+                },
+                "binding": {
+                    "type": "boolean"
+                },
+                "collection_method": {
+                    "$ref": "#/definitions/types.CommitmentCollectionMethod"
+                },
+                "commitment_status": {
+                    "$ref": "#/definitions/types.CommitmentStatus"
+                },
+                "commitment_value": {
+                    "type": "string"
+                },
+                "committed_price_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "instalment_invoicing": {
+                    "type": "string"
+                },
+                "invoice_description": {
+                    "type": "string"
+                },
+                "invoice_label": {
+                    "type": "string"
+                },
+                "measurement": {
+                    "$ref": "#/definitions/types.CommitmentMeasurement"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "on_early_termination": {
+                    "$ref": "#/definitions/types.CommitmentEarlyTermination"
+                },
+                "overage_price_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scope_entity_id": {
+                    "type": "string"
+                },
+                "scope_entity_type": {
+                    "$ref": "#/definitions/types.CommitmentScopeType"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "terminated_at": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "CommitmentScopeInput": {
+            "type": "object",
+            "required": [
+                "entity_id",
+                "entity_type"
+            ],
+            "properties": {
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.CommitmentScopeType"
+                }
+            }
+        },
+        "CommitmentUsageBreakdown": {
+            "type": "object",
+            "properties": {
+                "billed_amount": {
+                    "type": "string"
+                },
+                "capacity": {
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "type": "string"
+                },
+                "invoice_label": {
+                    "type": "string"
+                },
+                "period_amount": {
+                    "type": "string"
+                },
+                "unused": {
+                    "type": "string"
+                },
+                "used": {
+                    "type": "string"
+                },
+                "value_unused": {
+                    "type": "string"
+                },
+                "value_within": {
+                    "type": "string"
+                }
+            }
+        },
         "ConfigurationDetails": {
             "type": "object",
             "properties": {
@@ -17430,6 +17952,88 @@
                 }
             }
         },
+        "CreateCommitmentRequest": {
+            "type": "object",
+            "required": [
+                "end_date",
+                "measurement",
+                "name",
+                "scope",
+                "start_date",
+                "subscription_id",
+                "type"
+            ],
+            "properties": {
+                "active_windows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ActiveWindow"
+                    }
+                },
+                "binding": {
+                    "description": "default true",
+                    "type": "boolean"
+                },
+                "collection_method": {
+                    "$ref": "#/definitions/types.CommitmentCollectionMethod"
+                },
+                "committed_rate": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "invoice_description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "invoice_label": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "measurement": {
+                    "$ref": "#/definitions/types.CommitmentMeasurement"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "on_early_termination": {
+                    "$ref": "#/definitions/types.CommitmentEarlyTermination"
+                },
+                "overage_rate": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scope": {
+                    "$ref": "#/definitions/CommitmentScopeInput"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "CreateCostsheetRequest": {
             "type": "object",
             "required": [
@@ -17676,6 +18280,7 @@
             "description": "Request object for creating a new customer in the system",
             "type": "object",
             "required": [
+                "contact_persons",
                 "external_id",
                 "name"
             ],
@@ -18002,6 +18607,10 @@
                 },
                 "amount": {
                     "description": "amount is the monetary amount for this line item",
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
                 },
                 "commitment_info": {
@@ -18700,6 +19309,13 @@
                 "commitment_duration": {
                     "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
                     "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "commitments": {
+                    "description": "Commitments are created with the subscription; their subscription_id is set server-side.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateCommitmentRequest"
+                    }
                 },
                 "coupons": {
                     "description": "Deprecated: use SubscriptionCoupons instead.",
@@ -20769,6 +21385,13 @@
                     "description": "Amount of commitment used",
                     "type": "number"
                 },
+                "commitments": {
+                    "description": "Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentUsageBreakdown"
+                    }
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -21286,6 +21909,10 @@
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
                 },
                 "commitment_info": {
@@ -25820,6 +26447,14 @@
                 }
             }
         },
+        "TerminateCommitmentRequest": {
+            "type": "object",
+            "properties": {
+                "effective_at": {
+                    "type": "string"
+                }
+            }
+        },
         "TopUpCoupon": {
             "type": "object",
             "required": [
@@ -25985,6 +26620,26 @@
                 }
             }
         },
+        "UpdateCommitmentRequest": {
+            "type": "object",
+            "properties": {
+                "invoice_description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "invoice_label": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
         "UpdateCostsheetRequest": {
             "type": "object",
             "properties": {
@@ -26048,6 +26703,9 @@
         "UpdateCustomerRequest": {
             "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated",
             "type": "object",
+            "required": [
+                "contact_persons"
+            ],
             "properties": {
                 "address_city": {
                     "description": "address_city is the updated city name with maximum 100 characters",
@@ -32615,6 +33273,10 @@
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "commitment_id": {
+                    "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
                 },
                 "commitment_info": {
