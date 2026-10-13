@@ -311,23 +311,24 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsEffectiveAtAfterEnd() {
 	s.True(ierr.IsValidation(err), "got %v", err)
 }
 
-func (s *CommitmentServiceSuite) TestTerminate_ClampsTerminatedAtToStartDate() {
+func (s *CommitmentServiceSuite) TestTerminate_KeepsRequestedDateBeforeStart() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	at := created.StartDate.AddDate(0, -1, 0)
 	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.Require().NoError(err)
-	s.True(resp.TerminatedAt.Equal(created.StartDate), "got %s", resp.TerminatedAt)
+	s.True(resp.TerminatedAt.Equal(at), "got %s", resp.TerminatedAt)
+	s.True(resp.CommitmentValue.IsPositive(), "value is still reported for a commitment terminated before start")
 }
 
-func (s *CommitmentServiceSuite) TestTerminateForSubscription_ClampsAndIsIdempotent() {
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_KeepsRequestedDateAndIsIdempotent() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	at := created.StartDate.AddDate(0, -1, 0)
 	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at))
 	first, err := s.svc.Get(s.GetContext(), created.ID)
 	s.Require().NoError(err)
-	s.True(first.TerminatedAt.Equal(created.StartDate), "got %s", first.TerminatedAt)
+	s.True(first.TerminatedAt.Equal(at), "got %s", first.TerminatedAt)
 
 	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at.AddDate(0, 2, 0)))
 	second, err := s.svc.Get(s.GetContext(), created.ID)
@@ -634,4 +635,47 @@ func (s *CommitmentServiceSuite) TestValidation_EndDateAfterSubscriptionEnd() {
 	req.EndDate = *sub.EndDate
 	_, err = s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
+}
+
+func (s *CommitmentServiceSuite) TestValidation_C16_AnyScopeWithLegacyCommitment() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(500))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "legacy subscription-level commitment")
+}
+
+func (s *CommitmentServiceSuite) TestValidation_ScopePriceMustBillEverySubscriptionPeriod() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsPriceOnAnotherCadence() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	req.Type, req.CommittedRate, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	weekly := *s.fx.priceOtherMeterInGroup
+	weekly.ID, weekly.BillingPeriod = "price_other_meter_weekly", types.BILLING_PERIOD_WEEKLY
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, &weekly, s.fx.sub.StartDate)
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}
+
+func (s *CommitmentServiceSuite) TestValidation_FutureScopeLineOnAnotherCadence() {
+	future := *s.fx.lineAPI
+	future.ID, future.BillingPeriod = "subs_line_api_weekly", types.BILLING_PERIOD_WEEKLY
+	future.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &future))
+
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "commitments require scope prices billed every subscription period")
 }
