@@ -4,7 +4,7 @@
 # Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
 # Docs: generate uploads the spec plus the Go, Python and TypeScript code samples to the Speakeasy registry and promotes
 # them to the main tag, which rebuilds https://spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples.
-# refresh-docs waits for that URL to match the release, then pushes an empty commit to the docs repo so Mintlify redeploys.
+# refresh-docs waits for that URL to match the release, then adds the release to version.mdx in the docs repo so Mintlify redeploys.
 #
 # Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
@@ -257,33 +257,21 @@ jobs:
       - name: Wait for the hosted docs spec to match this release
         run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json
 
-      # Mintlify redeploys on every push to the docs repo's branch, so an empty commit makes it
-      # re-read the hosted spec. Created through the GitHub API; the commit is authored by the token's owner.
-      - name: Redeploy docs with an empty commit
+      # The release is recorded as a new row in the docs repo's version.mdx.
+      - name: Redeploy docs
         env:
           DOCS_REPO_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
           DOCS_REPO: ${{ vars.DOCS_REPO || 'flexprice/flexprice-docs' }}
           DOCS_BRANCH: ${{ vars.DOCS_BRANCH || 'main' }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
         run: |
           if [ -z "$DOCS_REPO_TOKEN" ]; then
             echo "::error::DOCS_REPO_TOKEN is not set; docs were not redeployed."
             exit 1
           fi
-          api() {
-            curl -fsS -H "Authorization: Bearer ${DOCS_REPO_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "Content-Type: application/json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" "$@"
-          }
-          repo_api="https://api.github.com/repos/${DOCS_REPO}"
-          head=$(api "${repo_api}/git/ref/heads/${DOCS_BRANCH}" | jq -r .object.sha)
-          tree=$(api "${repo_api}/git/commits/${head}" | jq -r .tree.sha)
-          # Reusing the head's tree means the commit changes no files.
-          commit=$(jq -n --arg m "chore: redeploy docs for flexprice ${RELEASE_TAG}" --arg t "$tree" --arg p "$head" \
-            '{message: $m, tree: $t, parents: [$p]}' | api -X POST "${repo_api}/git/commits" --data @- | jq -r .sha)
-          jq -n --arg s "$commit" '{sha: $s}' | api -X PATCH "${repo_api}/git/refs/heads/${DOCS_BRANCH}" --data @- > /dev/null
-          echo "Pushed empty commit ${commit} to ${DOCS_REPO}@${DOCS_BRANCH}"
+          python3 scripts/redeploy_docs.py --repo "$DOCS_REPO" --branch "$DOCS_BRANCH" \
+            --tag "$RELEASE_TAG" --release-url "$RELEASE_URL"
 
   # ---------------------------------------------------------------------------
   # Publish: one matrix cell per SDK/MCP (parallel push to GitHub repos)
