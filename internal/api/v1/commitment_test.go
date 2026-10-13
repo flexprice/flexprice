@@ -22,7 +22,8 @@ import (
 )
 
 type stubCommitmentService struct {
-	err error
+	err   error
+	gotID string
 }
 
 func (s *stubCommitmentService) Preview(context.Context, dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
@@ -33,7 +34,8 @@ func (s *stubCommitmentService) Create(context.Context, dto.CreateCommitmentRequ
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
 }
 
-func (s *stubCommitmentService) Get(context.Context, string) (*dto.CommitmentResponse, error) {
+func (s *stubCommitmentService) Get(_ context.Context, id string) (*dto.CommitmentResponse, error) {
+	s.gotID = id
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
 }
 
@@ -41,11 +43,13 @@ func (s *stubCommitmentService) List(context.Context, *types.CommitmentFilter) (
 	return &dto.ListCommitmentsResponse{}, s.err
 }
 
-func (s *stubCommitmentService) Update(context.Context, string, dto.UpdateCommitmentRequest) (*dto.CommitmentResponse, error) {
+func (s *stubCommitmentService) Update(_ context.Context, id string, _ dto.UpdateCommitmentRequest) (*dto.CommitmentResponse, error) {
+	s.gotID = id
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
 }
 
-func (s *stubCommitmentService) Terminate(context.Context, string, dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error) {
+func (s *stubCommitmentService) Terminate(_ context.Context, id string, _ dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error) {
+	s.gotID = id
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
 }
 
@@ -76,6 +80,7 @@ func setupCommitmentRouter(t *testing.T, svc *stubCommitmentService) *gin.Engine
 	router.POST("/v1/commitments/preview", h.PreviewCommitment)
 	router.POST("/v1/commitments/search", h.QueryCommitments)
 	router.GET("/v1/commitments/:id", h.GetCommitment)
+	router.PUT("/v1/commitments/:id", h.UpdateCommitment)
 	router.POST("/v1/commitments/:id/terminate", h.TerminateCommitment)
 	return router
 }
@@ -96,22 +101,40 @@ func TestCommitmentHandler(t *testing.T) {
 		path   string
 		body   string
 		want   int
+		wantID string
 	}{
-		{"create ok", nil, http.MethodPost, "/v1/commitments", `{}`, http.StatusCreated},
-		{"create bad json", nil, http.MethodPost, "/v1/commitments", `{`, http.StatusBadRequest},
-		{"preview ok", nil, http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusOK},
-		{"preview bad json", nil, http.MethodPost, "/v1/commitments/preview", `not json`, http.StatusBadRequest},
-		{"preview disabled", ierr.NewError("off").Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusBadRequest},
-		{"search ok", nil, http.MethodPost, "/v1/commitments/search", `{}`, http.StatusOK},
-		{"get ok", nil, http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusOK},
-		{"get not found", ierr.NewError("missing").Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound},
-		{"terminate empty body", nil, http.MethodPost, "/v1/commitments/cmt_1/terminate", ``, http.StatusOK},
+		{"create ok", nil, http.MethodPost, "/v1/commitments", `{}`, http.StatusCreated, ""},
+		{"create bad json", nil, http.MethodPost, "/v1/commitments", `{`, http.StatusBadRequest, ""},
+		{"preview ok", nil, http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusOK, ""},
+		{"preview bad json", nil, http.MethodPost, "/v1/commitments/preview", `not json`, http.StatusBadRequest, ""},
+		{"preview disabled", ierr.NewError("off").Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusBadRequest, ""},
+		{"search ok", nil, http.MethodPost, "/v1/commitments/search", `{}`, http.StatusOK, ""},
+		{"get ok", nil, http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusOK, "cmt_1"},
+		{"update ok", nil, http.MethodPut, "/v1/commitments/cmt_2", `{"name":"Renamed"}`, http.StatusOK, "cmt_2"},
+		{"get not found", ierr.NewError("missing").Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound, ""},
+		{"terminate empty body", nil, http.MethodPost, "/v1/commitments/cmt_1/terminate", ``, http.StatusOK, "cmt_1"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			router := setupCommitmentRouter(t, &stubCommitmentService{err: tc.svcErr})
+			svc := &stubCommitmentService{err: tc.svcErr}
+			router := setupCommitmentRouter(t, svc)
 			w := doCommitmentRequest(router, tc.method, tc.path, tc.body)
 			require.Equal(t, tc.want, w.Code, w.Body.String())
+			if tc.wantID != "" {
+				require.Equal(t, tc.wantID, svc.gotID)
+			}
 		})
 	}
+}
+
+func TestCommitmentHandler_TerminateEmptyBodyOfUnknownLength(t *testing.T) {
+	svc := &stubCommitmentService{}
+	router := setupCommitmentRouter(t, svc)
+	req := httptest.NewRequest(http.MethodPost, "/v1/commitments/cmt_3/terminate", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = -1
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "cmt_3", svc.gotID)
 }

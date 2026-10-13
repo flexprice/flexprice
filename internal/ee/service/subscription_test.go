@@ -2126,6 +2126,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitment() {
 	s.Equal(resp.ID, items[0].SubscriptionID)
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentOnIncompleteSubscription() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+
+	req := s.inlineCommitmentRequest()
+	req.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
+	req.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusIncomplete, resp.SubscriptionStatus)
+
+	items, err := s.GetStores().CommitmentRepo.List(ctx, types.NewNoLimitCommitmentFilter())
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(resp.ID, items[0].SubscriptionID)
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscription_InlineCommitmentRejectedWhenDisabled() {
 	ctx := s.GetContext()
 	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)

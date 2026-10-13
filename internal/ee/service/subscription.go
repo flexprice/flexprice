@@ -426,10 +426,10 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 	}
-	commitmentService := NewCommitmentService(s.ServiceParams)
+	commitmentService := &commitmentService{ServiceParams: s.ServiceParams}
 	for _, commitmentReq := range req.Commitments {
 		commitmentReq.SubscriptionID = sub.ID
-		if _, err = commitmentService.Create(ctx, commitmentReq); err != nil {
+		if _, err = commitmentService.createInline(ctx, commitmentReq); err != nil {
 			return nil, err
 		}
 	}
