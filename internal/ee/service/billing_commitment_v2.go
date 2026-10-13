@@ -533,8 +533,7 @@ func withSubscriptionEnd(c *commitment.Commitment, sub *subscription.Subscriptio
 		return c
 	}
 	terminated := *c
-	terminated.TerminatedAt = lo.ToPtr(maxTime(*endAt, c.StartDate))
-	terminated.Metadata = withTerminationEffectiveAt(c.Metadata, endAt.UTC().Format(time.RFC3339Nano))
+	terminated.TerminatedAt = lo.ToPtr(*endAt)
 	return &terminated
 }
 
@@ -545,16 +544,6 @@ func carriesSubscriptionCadence(sub *subscription.Subscription) bool {
 	})
 }
 
-// settlementAnchor is the requested termination date, which terminated_at clamps to the start date.
-func settlementAnchor(c *commitment.Commitment) time.Time {
-	if v, ok := c.Metadata[metadataKeyTerminationEffectiveAt]; ok {
-		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
-			return t
-		}
-	}
-	return *c.TerminatedAt
-}
-
 func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
 	if c.TerminatedAt != nil {
 		return minTime(c.EndDate, *c.TerminatedAt)
@@ -563,7 +552,7 @@ func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
 }
 
 // owesRemaining reports whether a binding per_period bill_remaining commitment settles on the invoice for
-// (start, end]: the period holding its requested termination, or the first period when that is the subscription start.
+// (start, end] holding terminated_at; a termination at or before the subscription start settles on the first period.
 func owesRemaining(c *commitment.Commitment, sub *subscription.Subscription, start, end time.Time) bool {
 	if c.TerminatedAt == nil || !c.Binding || lo.FromPtr(c.OnEarlyTermination) != types.CommitmentTerminationBillRemaining {
 		return false
@@ -571,7 +560,7 @@ func owesRemaining(c *commitment.Commitment, sub *subscription.Subscription, sta
 	if c.CollectionMethod != nil && *c.CollectionMethod != types.CommitmentCollectionPerPeriod {
 		return false
 	}
-	at := settlementAnchor(c)
+	at := maxTime(*c.TerminatedAt, sub.StartDate)
 	if at.Equal(start) && start.Equal(sub.StartDate) {
 		return true
 	}
