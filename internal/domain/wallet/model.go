@@ -20,7 +20,7 @@ type Wallet struct {
 	WalletStatus  types.WalletStatus `db:"wallet_status" json:"wallet_status"`
 	Name          string             `db:"name" json:"name,omitempty"`
 	Description   string             `db:"description" json:"description"`
-	Metadata      types.Metadata     `db:"metadata" json:"metadata"`
+	Metadata      types.Metadata     `db:"metadata" json:"metadata" activity:"drop"`
 	AutoTopup     *types.AutoTopup   `db:"auto_topup" json:"auto_topup,omitempty"`
 	WalletType    types.WalletType   `db:"wallet_type" json:"wallet_type"`
 	Config        types.WalletConfig `db:"config" json:"config"`

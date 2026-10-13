@@ -44,7 +44,7 @@ type CreditNote struct {
 	Currency string `json:"currency"`
 
 	// metadata contains additional custom key-value pairs for storing extra information
-	Metadata types.Metadata `json:"metadata"`
+	Metadata types.Metadata `json:"metadata" activity:"drop"`
 
 	// line_items contains all of the line items associated with this credit note
 	LineItems []*CreditNoteLineItem `json:"line_items"`

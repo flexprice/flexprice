@@ -139,7 +139,7 @@ Each logged entity has one registration, next to its repository:
 | --- | --- |
 | Entity type | `types.SystemEntityType`, and the ent type the hook matches |
 | Snapshot | The entity's `FromEnt` conversion to its domain model |
-| Drop | Fields left out of the snapshot: bookkeeping (`version`, `synced_price_sequence`) and customer personal data (`name`, `email`, `contact`, `contact_persons`, address lines, city, state, postal code, `metadata`) |
+| Drop | Fields left out of the snapshot: bookkeeping (`version`, `synced_price_sequence`), free-form `metadata` on every entity, and customer personal data (`name`, `email`, `contact`, `contact_persons`, address lines, city, state, postal code) |
 | Redact | Fields stored as `"[redacted]"` (for example payment method details) |
 | Customer | The customer id field, the parent lookup the consumer uses (`Parent`, optionally `When` a column matches), or none |
 | Label | The entity's own name field shown in lists (for example invoice number, customer external id); empty when it has none |

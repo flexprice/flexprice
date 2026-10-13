@@ -113,7 +113,7 @@ type Price struct {
 
 	TransformQuantity JSONBTransformQuantity `db:"transform_quantity,jsonb" json:"transform_quantity"`
 
-	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata"`
+	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the price
 	EnvironmentID string `db:"environment_id" json:"environment_id"`

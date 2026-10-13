@@ -15,7 +15,7 @@ type Feature struct {
 	LookupKey     string               `json:"lookup_key"`
 	Description   string               `json:"description"`
 	MeterID       string               `json:"meter_id"`
-	Metadata      types.Metadata       `json:"metadata"`
+	Metadata      types.Metadata       `json:"metadata" activity:"drop"`
 	Type          types.FeatureType    `json:"type"`
 	UnitSingular  string               `json:"unit_singular"`
 	UnitPlural    string               `json:"unit_plural"`

@@ -81,7 +81,7 @@ type Subscription struct {
 	// Version is used for optimistic locking
 	Version int `db:"version" json:"version" activity:"drop"`
 
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
+	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the subscription
 	EnvironmentID string `db:"environment_id" json:"environment_id"`

@@ -204,7 +204,7 @@ type CheckoutSession struct {
 
 	// FailureReason is a human-readable string set on failed sessions.
 	FailureReason *string        `db:"failure_reason" json:"failure_reason,omitempty"`
-	Metadata      types.Metadata `db:"metadata,jsonb" json:"metadata,omitempty"`
+	Metadata      types.Metadata `db:"metadata,jsonb" json:"metadata,omitempty" activity:"drop"`
 
 	types.BaseModel
 }

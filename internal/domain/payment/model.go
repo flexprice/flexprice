@@ -41,7 +41,7 @@ type Payment struct {
 	// The track_attempts flag indicates whether payment processing attempts are being monitored
 	TrackAttempts bool `json:"track_attempts"`
 	// The metadata field contains additional custom key-value pairs for this payment (optional)
-	Metadata types.Metadata `json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 	// The succeeded_at timestamp shows when this payment was successfully completed (optional)
 	SucceededAt *time.Time `json:"succeeded_at,omitempty"`
 	// The failed_at timestamp indicates when this payment failed (optional)

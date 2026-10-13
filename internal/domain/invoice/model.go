@@ -108,7 +108,7 @@ type Invoice struct {
 	BillingReason string `json:"billing_reason,omitempty"`
 
 	// metadata contains custom key-value pairs for storing additional information about this invoice
-	Metadata types.Metadata `json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
 	// line_items contains the individual items and charges that make up this invoice
 	LineItems []*InvoiceLineItem `json:"line_items,omitempty"`
