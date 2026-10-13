@@ -27,7 +27,7 @@ type CommitmentService interface {
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
 	IsEnabled(ctx context.Context) (bool, error)
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
-	// CheckPriceAttach re-runs C7, C9 and C14 for active commitments whose scope would include the new price.
+	// CheckPriceAttach re-runs C7, C8, C9 and C14 for active commitments whose scope would include the new price.
 	CheckPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) error
 }
 
@@ -380,47 +380,113 @@ func (s *commitmentService) CheckPriceAttach(ctx context.Context, sub *subscript
 	if err != nil || !enabled {
 		return err
 	}
-	f := commitment.NewNoLimitFilter()
-	f.SubscriptionIDs = []string{sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
-	active, err := s.CommitmentRepo.List(ctx, f)
+	inScope, err := s.commitmentsInScope(ctx, sub.ID, p, at)
+	if err != nil || len(inScope) == 0 {
+		return err
+	}
+	// Serialise with createLocked, then re-read so a concurrent create is seen.
+	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + sub.ID}); err != nil {
+		return ierr.WithError(err).WithHint("Failed to lock subscription commitments").Mark(ierr.ErrInternal)
+	}
+	if inScope, err = s.commitmentsInScope(ctx, sub.ID, p, at); err != nil || len(inScope) == 0 {
+		return err
+	}
+	cc, err := s.loadCommitmentContext(ctx, sub.ID)
 	if err != nil {
 		return err
 	}
-
-	var cc *commitmentContext
-	for _, c := range active {
-		// Meter and price scopes never include a newly attached price (it has a new ID).
-		inScope := c.ScopeEntityType == types.CommitmentScopeSubscription ||
-			(c.ScopeEntityType == types.CommitmentScopeGroup && p.GroupID == c.ScopeEntityID)
-		if !inScope || !at.Before(c.EndDate) {
-			continue
-		}
-		if cc == nil {
-			if cc, err = s.loadCommitmentContext(ctx, sub.ID); err != nil {
-				return err
-			}
-		}
-		lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, laterOf(at, c.StartDate))
-		if len(lines) == 0 {
-			continue
-		}
-		if (c.Type == types.COMMITMENT_TYPE_QUANTITY || c.OveragePriceID != nil) && p.MeterID != lines[0].MeterID {
-			return invalidf("commitment %s covers a single meter; price %s is on a different meter", c.ID, p.ID)
-		}
-		if c.Measurement != types.CommitmentMeasurementWindow {
-			continue
-		}
-		m, err := s.MeterRepo.GetMeter(ctx, p.MeterID)
-		if err != nil {
+	for _, c := range inScope {
+		if err := s.checkAttachAgainst(ctx, c, cc, p, at); err != nil {
 			return err
 		}
-		want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
-		if got := price.ResolveBucketSize(p, m); got != want {
-			return invalidf("commitment %s measures by window with bucket size %q; price %s has bucket size %q", c.ID, want, p.ID, got)
+	}
+	return s.checkAttachPairs(ctx, inScope)
+}
+
+// commitmentsInScope returns active commitments, still running at `at`, whose scope includes the new usage price.
+func (s *commitmentService) commitmentsInScope(ctx context.Context, subscriptionID string, p *price.Price, at time.Time) ([]*commitment.Commitment, error) {
+	f := commitment.NewNoLimitFilter()
+	f.SubscriptionIDs = []string{subscriptionID}
+	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
+	active, err := s.CommitmentRepo.List(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	// A price-scoped commitment never includes a newly attached price (new ID).
+	return lo.Filter(active, func(c *commitment.Commitment, _ int) bool {
+		if !at.Before(c.EndDate) {
+			return false
+		}
+		switch c.ScopeEntityType {
+		case types.CommitmentScopeSubscription:
+			return true
+		case types.CommitmentScopeGroup:
+			return p.GroupID == c.ScopeEntityID
+		case types.CommitmentScopeMeter:
+			return p.MeterID == c.ScopeEntityID
+		}
+		return false
+	}), nil
+}
+
+// checkAttachAgainst re-runs C7, C8 and C9 for one commitment that the new price joins.
+func (s *commitmentService) checkAttachAgainst(ctx context.Context, c *commitment.Commitment, cc *commitmentContext, p *price.Price, at time.Time) error {
+	lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, laterOf(at, c.StartDate))
+	if len(lines) == 0 {
+		return nil
+	}
+	if (c.Type == types.COMMITMENT_TYPE_QUANTITY || c.OveragePriceID != nil) && p.MeterID != lines[0].MeterID {
+		return invalidf("commitment %s covers a single meter; price %s is on a different meter", c.ID, p.ID)
+	}
+	if c.Measurement != types.CommitmentMeasurementWindow {
+		return nil
+	}
+	m, err := s.MeterRepo.GetMeter(ctx, p.MeterID)
+	if err != nil {
+		return err
+	}
+	want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+	if got := price.ResolveBucketSize(p, m); got != want {
+		return invalidf("commitment %s measures by window with bucket size %q; price %s has bucket size %q", c.ID, want, p.ID, got)
+	}
+	return nil
+}
+
+// checkAttachPairs re-runs C14 and C20: commitments that now share the new price and overlap in time must agree.
+func (s *commitmentService) checkAttachPairs(ctx context.Context, inScope []*commitment.Commitment) error {
+	for i, a := range inScope {
+		for _, b := range inScope[i+1:] {
+			if !a.StartDate.Before(b.EndDate) || !b.StartDate.Before(a.EndDate) {
+				continue
+			}
+			if a.Type != b.Type || a.Measurement != b.Measurement {
+				return invalidf("commitments %s and %s overlap on the new price but differ in type or measurement", a.ID, b.ID)
+			}
+			same, err := s.sameCommitmentOverage(ctx, a, b)
+			if err != nil {
+				return err
+			}
+			if !same {
+				return invalidf("commitments %s and %s overlap on the new price but have different overage rates", a.ID, b.ID)
+			}
 		}
 	}
 	return nil
+}
+
+func (s *commitmentService) sameCommitmentOverage(ctx context.Context, a, b *commitment.Commitment) (bool, error) {
+	if a.OveragePriceID == nil || b.OveragePriceID == nil {
+		return a.OveragePriceID == nil && b.OveragePriceID == nil, nil
+	}
+	pa, err := s.PriceRepo.Get(ctx, *a.OveragePriceID)
+	if err != nil {
+		return false, err
+	}
+	pb, err := s.PriceRepo.Get(ctx, *b.OveragePriceID)
+	if err != nil {
+		return false, err
+	}
+	return pa.Amount.Equal(pb.Amount), nil
 }
 
 func laterOf(a, b time.Time) time.Time {
