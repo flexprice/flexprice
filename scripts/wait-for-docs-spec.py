@@ -5,7 +5,7 @@ The hosted spec is the base spec plus x-codeSamples from each SDK, rebuilt after
 `speakeasy run` uploads. Mintlify only re-reads it on deploy, so redeploy the
 docs after this passes.
 
-Usage: scripts/wait-for-docs-spec.py docs/swagger/swagger-3-0.json [--url URL] [--timeout SECONDS] [--save PATH]
+Usage: scripts/wait-for-docs-spec.py SPEC [--url URL] [--timeout SECONDS] [--save PATH] [--exact]
 """
 
 import argparse
@@ -63,10 +63,13 @@ def fetch(url):
         return resp.read()
 
 
-def check(body, expected):
+def check(body, expected, *, exact=False):
     """Returns (why the hosted spec is stale or None, operations with samples per language)."""
     hosted = json.loads(body)
-    if strip_added(hosted) != expected:
+    if exact:
+        if hosted != expected:
+            return "full spec does not match the saved spec yet", None
+    elif strip_added(hosted) != expected:
         return "base spec does not match this release yet", None
     missing = operations_missing_samples(hosted)
     if missing:
@@ -83,21 +86,24 @@ def write_step_summary(message):
 
 def main():
     parser = argparse.ArgumentParser(description="Wait for the hosted docs spec to match a local OpenAPI spec.")
-    parser.add_argument("spec", help="local OpenAPI spec that this release uploaded")
+    parser.add_argument("spec", help="local OpenAPI spec to compare against")
     parser.add_argument("--url", default=DEFAULT_URL, help="hosted spec URL (default: %(default)s)")
     parser.add_argument("--timeout", type=int, default=300, help="seconds to wait (default: %(default)s)")
     parser.add_argument("--interval", type=int, default=30, help="seconds between checks (default: %(default)s)")
     parser.add_argument("--save", help="once the hosted spec matches, write it to this path unchanged")
+    parser.add_argument("--exact", action="store_true", help="compare the full JSON document, including code samples and SDK overlays")
     args = parser.parse_args()
 
     with open(args.spec) as f:
-        expected = strip_added(json.load(f))
+        expected = json.load(f)
+    if not args.exact:
+        expected = strip_added(expected)
 
     deadline = time.monotonic() + args.timeout
     while True:
         try:
             body = fetch(args.url)
-            reason, counts = check(body, expected)
+            reason, counts = check(body, expected, exact=args.exact)
         except Exception as err:  # transient fetch or parse errors: keep polling until the deadline
             reason, counts = f"fetch failed: {err}", None
         if reason is None:

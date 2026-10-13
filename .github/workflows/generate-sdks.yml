@@ -11,7 +11,8 @@
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Docs redeploy: secret DOCS_REPO_TOKEN (fine-grained PAT: Contents R/W on the docs repo); optional variables DOCS_REPO
 # (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
-# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution"}; skipped while unset. The role needs
+# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution"}; skipped while unset.
+# When set, secret AWS_ACCOUNT_ID is required to construct the role ARN. The role needs
 # s3:PutObject on <bucket>/openapi.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
@@ -247,6 +248,16 @@ jobs:
             exit 1
           fi
 
+      - name: Check AWS account ID for S3 publication
+        if: vars.OPENAPI_SPEC_S3 != ''
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          if ! [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::AWS_ACCOUNT_ID must be set to a 12-digit AWS account ID when OPENAPI_SPEC_S3 is set. Configure the secret in repository Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -285,7 +296,7 @@ jobs:
 
       - name: Check swagger.flexprice.io serves this release
         if: vars.OPENAPI_SPEC_S3 != ''
-        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --url https://swagger.flexprice.io
+        run: python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url https://swagger.flexprice.io --exact
 
       # The release is recorded as a new row in the docs repo's version.mdx.
       - name: Redeploy docs
