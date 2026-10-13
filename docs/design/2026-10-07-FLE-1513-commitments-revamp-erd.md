@@ -130,7 +130,7 @@ A non-binding commitment has no collection method. Usage within it is billed at 
 | **Advance / arrear**                | On a recurring billing term: `advance` bills each step at its **start**, and `arrear` bills it at its **end**. Same meaning as `invoice_cadence` on line items today.                                                                                                                                                                            |
 | **Step**                            | One instalment's span in a recurring row: `interval_count × interval`, e.g. 1 × QUARTERLY = 3 months.                                                                                                                                                                                                                                            |
 | **Billed / earned / deferred**      | Billed = commitment money invoiced. Earned = period amounts of periods that have ended. Deferred = billed − earned (§9).                                                                                                                                                                                                                         |
-| **Usage value vs billed amount** | Usage value is what usage was worth under the commitment (used, unused and on-demand, at committed and overage rates). Billed amount is what was actually invoiced in a period. They are equal under `per_period` and differ under `billing_terms` (§9). |
+| **Usage value vs billed amount**    | Usage value is what usage was worth under the commitment (used, unused and on-demand, at committed and overage rates). Billed amount is what was actually invoiced in a period. They are equal under `per_period` and differ under `billing_terms` (§9).                                                                                         |
 | **Payment terms**                   | Not used here. In finance this means an invoice's due date (Net 30), which existing invoice settings already handle.                                                                                                                                                                                                                             |
 
 
@@ -143,18 +143,18 @@ A non-binding commitment has no collection method. Usage within it is billed at 
 ### Commitments
 
 
-| #   | Decision                                                                                                                                                                                                                                                                              | Why                                                                                                                                                                                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Scope is two columns: `scope_entity_type` (subscription, group, meter or price) and `scope_entity_id`. A group must be a price group. A subscription scope covers every usage price on it, including prices added later. Fixed charges are never in scope.                            | Price groups already model "several prices". Feature groups are deferred.                                                                                                                                           |
-| D2  | A quantity commitment's scope must resolve to exactly one meter.                                                                                                                                                                                                                      | A quantity needs a single unit.                                                                                                                                                                                     |
-| D3  | `measurement` is `billing_period` or `window`. A window is one bucket of the scoped prices (`price.ResolveBucketSize`); all scoped prices must resolve to the same bucket size.                                                                                                       | Reuses the existing bucketed-usage path.                                                                                                                                                                            |
-| D4  | `active_windows` is a list of time ranges in `timezone` (defaulting to the subscription's), all sharing one capacity and rate.                                                                                                                                                        | One rate per commitment.                                                                                                                                                                                            |
-| D5  | Commitments stack. They are applied by `priority`, lowest number first; ties go to the earlier `start_date`, then the lower `id`.                                                                                                                                                     | Simplismart needs a rate per layer.                                                                                                                                                                                 |
-| D6  | Commitments that overlap in time and share a usage line item must have the same `type` and `measurement`.                                                                                                                                                                             | Stacking hands units from one commitment to the next. Money and units, or minutes and periods, can't be combined in a defined order.                                                                                |
-| D7  | Rates: `committed_price_id`, and `overage_price_id` (NULL means the line item's own price). New commitments don't use `overage_factor`. A custom overage price needs a single-meter scope.                                                                                            | Explicit and auditable.                                                                                                                                                                                             |
-| D8  | `end_date` is required and falls on a billing boundary or on the subscription's `end_date`. `start_date` may be mid-period. Stopping mid-period means terminating.                                                                                                                    | No contract is truly open-ended.                                                                                                                                                                                    |
-| D9  | No renewal in v1.                                                                                                                                                                                                                                                                     | Smaller v1. A follow-on contract is a new commitment.                                                                                                                                                               |
-| D10 | A commitment's economics are immutable: scope, type, value, rates (including the committed price), measurement, windows, priority, dates, binding, collection method and billing terms. Only `display_name` and `metadata` can be edited; anything else means terminate and recreate. | Past invoices and instalments always match the commitment that produced them. A price change on the line item can only affect on-demand usage when no `overage_rate` is set. It never affects the commitment value. |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Why                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Scope is two columns: `scope_entity_type` (subscription, group, meter or price) and `scope_entity_id`. A group must be a price group. A subscription scope covers every usage price on it, including prices added later. Fixed charges are never in scope.                                                                                                                                                                                                                     | Price groups already model "several prices". Feature groups are deferred.                                                                                                                                           |
+| D2  | A quantity commitment's scope must resolve to exactly one meter.                                                                                                                                                                                                                                                                                                                                                                                                               | A quantity needs a single unit.                                                                                                                                                                                     |
+| D3  | `measurement` is `billing_period` or `window`. A window is one bucket of the scoped prices (`price.ResolveBucketSize`); all scoped prices must resolve to the same bucket size.                                                                                                                                                                                                                                                                                                | Reuses the existing bucketed-usage path.                                                                                                                                                                            |
+| D4  | `active_windows` is a list of time ranges in `timezone` (defaulting to the subscription's), all sharing one capacity and rate.                                                                                                                                                                                                                                                                                                                                                 | One rate per commitment.                                                                                                                                                                                            |
+| D5  | Commitments stack as a **waterfall**. In each window, usage fills the active commitments in `priority` order (lowest number first; ties go to the earlier `start_date`, then the lower `id`). Each commitment is filled to its capacity before the next one receives anything. Example: two 10-GPU commitments with usage of 15 leaves the first fully used (10 of 10), the second 50% used (5 of 10), and no on-demand. Pro-rata filling across commitments is not supported. | Deterministic and easy to explain. It lets the tenant decide which reservation is consumed first, e.g. the cheaper one.                                                                                             |
+| D6  | Commitments that overlap in time and share a usage line item must have the same `type` and `measurement`.                                                                                                                                                                                                                                                                                                                                                                      | Stacking hands units from one commitment to the next. Money and units, or minutes and periods, can't be combined in a defined order.                                                                                |
+| D7  | Rates: `committed_price_id`, and `overage_price_id` (NULL means the line item's own price). New commitments don't use `overage_factor`. A custom overage price needs a single-meter scope.                                                                                                                                                                                                                                                                                     | Explicit and auditable.                                                                                                                                                                                             |
+| D8  | `end_date` is required and falls on a billing boundary or on the subscription's `end_date`. `start_date` may be mid-period. Stopping mid-period means terminating.                                                                                                                                                                                                                                                                                                             | No contract is truly open-ended.                                                                                                                                                                                    |
+| D9  | No renewal in v1.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Smaller v1. A follow-on contract is a new commitment.                                                                                                                                                               |
+| D10 | A commitment's economics are immutable: scope, type, value, rates (including the committed price), measurement, windows, priority, dates, binding, collection method and billing terms. Only `name`, `invoice_label`, `invoice_description` and `metadata` can be edited; anything else means terminate and recreate.                                                                                                                                                          | Past invoices and instalments always match the commitment that produced them. A price change on the line item can only affect on-demand usage when no `overage_rate` is set. It never affects the commitment value. |
 
 
 
@@ -196,17 +196,20 @@ A non-binding commitment has no collection method. Usage within it is billed at 
 ### Lifecycle and accounting
 
 
-| #   | Decision                                                                                                                                                                                                                                                                   | Why                                         |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| D27 | Early termination follows `on_early_termination`: `forfeit` (default) keeps money billed but not yet earned; `credit_note` (billing_terms only) credits it back; `bill_remaining` bills the rest of the commitment value. Earned-but-unbilled money is always billed (§8). | Covers the contracts we have seen.          |
-| D28 | Plan change and subscription cancellation terminate commitments under their own rule.                                                                                                                                                                                      | Carry-over is deferred.                     |
-| D29 | Revenue: commitment money billed ahead of its period is deferred, and recognised when that period ends. Under `per_period`, a period is billed and earned on the same invoice. Forfeits are recognised at termination; credit notes reverse.                               | Billing and recognition stay separate.      |
-| D30 | No ledger in v1 (§9).                                                                                                                                                                                                                                                      | Commitments are not drawn down by usage.    |
-| D31 | Commitment invoice lines carry `commitment_id` and `commitment_line_kind`. Instalment lines also carry `billing_instalment_id`, `entity_type=commitment`, `entity_id`, and no price.                                                                                       | Every line can be traced to its commitment. |
-| D32 | Create is idempotent via `idempotency_key`.                                                                                                                                                                                                                                | Safe client retries.                        |
-| D33 | Legacy commitment fields and new commitments never price the same usage (C15, C16).                                                                                                                                                                                        | Two engines never price one usage.          |
-| D34 | Analytics and revenue are computed from the commitment engine's allocation (used, unused, on-demand per commitment, price and period), never from invoice amounts. Under `billing_terms`, unused capacity is reported as "unused commitment (prepaid)" even though it is not billed. | A meter's usage and revenue look the same whichever collection method the tenant chose. |
-| D35 | Every consumer reads exactly one of two measures: usage value (dashboards, usage analytics, earned revenue) or billed amount (invoice preview, spend alerts, wallet pending charges, billings view). APIs return both, side by side and labelled. | Prevents counting a commitment twice (once as usage, once as instalments) in anything that predicts or controls spend. |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                           | Why                                                                                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D27 | Early termination follows `on_early_termination`: `forfeit` (default) keeps money billed but not yet earned; `credit_note` (billing_terms only) credits it back; `bill_remaining` bills the rest of the commitment value. Earned-but-unbilled money is always billed (§8).                                                                                                                                                                         | Covers the contracts we have seen.                                                                                                                                                                                                                  |
+| D28 | Plan change and subscription cancellation terminate commitments under their own rule.                                                                                                                                                                                                                                                                                                                                                              | Carry-over is deferred.                                                                                                                                                                                                                             |
+| D29 | Revenue: commitment money billed ahead of its period is deferred, and recognised when that period ends. Under `per_period`, a period is billed and earned on the same invoice. Forfeits are recognised at termination; credit notes reverse.                                                                                                                                                                                                       | Billing and recognition stay separate.                                                                                                                                                                                                              |
+| D30 | No ledger in v1 (§9).                                                                                                                                                                                                                                                                                                                                                                                                                              | Commitments are not drawn down by usage.                                                                                                                                                                                                            |
+| D31 | Commitment invoice lines carry `commitment_id` and `commitment_line_kind`. Instalment lines also carry `billing_instalment_id`, `entity_type=commitment`, `entity_id`, and no price.                                                                                                                                                                                                                                                               | Every line can be traced to its commitment.                                                                                                                                                                                                         |
+| D32 | Create is idempotent via `idempotency_key`.                                                                                                                                                                                                                                                                                                                                                                                                        | Safe client retries.                                                                                                                                                                                                                                |
+| D33 | Legacy commitment fields and new commitments never price the same usage (C15, C16).                                                                                                                                                                                                                                                                                                                                                                | Two engines never price one usage.                                                                                                                                                                                                                  |
+| D34 | Analytics and revenue are computed from the commitment engine's allocation (used, unused, on-demand per commitment, price and period), never from invoice amounts. Under `billing_terms`, unused capacity is reported as "unused commitment (prepaid)" even though it is not billed.                                                                                                                                                               | A meter's usage and revenue look the same whichever collection method the tenant chose.                                                                                                                                                             |
+| D35 | Every consumer reads exactly one of two measures: usage value (dashboards, usage analytics, earned revenue) or billed amount (invoice preview, spend alerts, wallet pending charges, billings view). APIs return both, side by side and labelled.                                                                                                                                                                                                  | Prevents counting a commitment twice (once as usage, once as instalments) in anything that predicts or controls spend.                                                                                                                              |
+| D36 | **On-demand belongs to the stack, not to a commitment.** Usage becomes on-demand only after every active commitment in that window is full. Its rate is the overage price, which all commitments that overlap on the same usage must agree on (C20): either all NULL (the line item price) or the same price. On-demand quantities are attributed to the price and meter, and to the scope shared by the stack, never to an individual commitment. | A commitment that has been filled has no overage of its own: its excess flows to the next commitment. Requiring one overage price per stack removes any ambiguity about which commitment's overage applies.                                         |
+| D37 | Each commitment has `name` (shown in the dashboard and API), `invoice_label` (the invoice line title) and an optional `invoice_description` (the line's second row). All three can be edited and apply to invoices generated afterwards.                                                                                                                                                                                                           | Tenants control exactly how commitments read on invoices, e.g. "1× H100 reserved GPU" with "8 GPUs reserved at $2.88/hr (744 hrs/GPU)".                                                                                                             |
+| D38 | Commitment utilisation and cost-explorer style views are served from **revenue facts**, which hold the engine's allocation per commitment, price and time bucket. The events / meter-usage analytics API keeps serving raw quantities and does not split usage by commitment (§9.6–9.7).                                                                                                                                                           | Whether a unit of usage is within a commitment or on-demand depends on all other usage in the same window and on the stack order. It cannot be decided per event, so splitting it in the events API would mean reimplementing the allocator in SQL. |
 
 
 
@@ -235,7 +238,9 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 | `id`                   | varchar(50)   | no   | `cmt_…`                                                                                                                                                                                                                             |
 | `subscription_id`      | varchar(50)   | no   | The subscription it belongs to                                                                                                                                                                                                      |
 | `customer_id`          | varchar(50)   | no   | Copied from the subscription, for list filters                                                                                                                                                                                      |
-| `display_name`         | varchar(255)  | no   | Shown on invoice lines, e.g. "8-GPU reservation"                                                                                                                                                                                    |
+| `name`                 | varchar(255)  | no   | Shown in the dashboard and API, e.g. "H100 base reservation"                                                                                                                                                                        |
+| `invoice_label`        | varchar(255)  | no   | Title of this commitment's invoice lines (D37). Defaults to `name`. e.g. "1× H100 reserved GPU"                                                                                                                                     |
+| `invoice_description`  | varchar(500)  | yes  | Optional second row under the title, e.g. "8 GPUs reserved at $2.88/hr (744 hrs/GPU)". Plain text.                                                                                                                                  |
 | `currency`             | varchar(10)   | no   | Same as the subscription's currency                                                                                                                                                                                                 |
 | `scope_entity_type`    | varchar(20)   | no   | One of `subscription`, `group`, `meter`, `price` (§6.1)                                                                                                                                                                             |
 | `scope_entity_id`      | varchar(50)   | no   | ID of that entity. For `subscription`, equals `subscription_id`.                                                                                                                                                                    |
@@ -274,26 +279,26 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 Each row says how one part of the owner's value is billed. Rows are created with the owner and never change.
 
 
-| Column           | Type          | Null | Used by                  | Meaning                                                                                                                            |
-| ---------------- | ------------- | ---- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | varchar(50)   | no   | all                      | `bterm_…`                                                                                                                          |
-| `owner_type`     | varchar(30)   | no   | all                      | v1: `commitment`                                                                                                                   |
-| `owner_id`       | varchar(50)   | no   | all                      | e.g. `cmt_…`                                                                                                                       |
-| `kind`           | varchar(20)   | no   | all                      | `once`: one instalment. `recurring`: one instalment per step between `starts_on` and `ends_on`.                                    |
-| `value_type`     | varchar(20)   | no   | all                      | `fixed`: `value` is money. `remainder`: the owner's `total_amount` minus every other row (D18).                                    |
-| `value`          | numeric(20,8) | yes  | all                      | When `fixed`: on `once`, the instalment's amount; on `recurring`, the amount per instalment. NULL for `remainder`.                 |
-| `bill_on`        | timestamptz   | yes  | once                     | Billing date, within `[start_date, end_date]`. Default `start_date`. NULL when `on_trigger`.                                       |
-| `on_trigger`     | bool          | no   | once                     | True: a milestone with an unknown date, billed when triggered through the API, or at `end_date` if never triggered. Default false. |
+| Column           | Type          | Null | Used by                  | Meaning                                                                                                                                            |
+| ---------------- | ------------- | ---- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | varchar(50)   | no   | all                      | `bterm_…`                                                                                                                                          |
+| `owner_type`     | varchar(30)   | no   | all                      | v1: `commitment`                                                                                                                                   |
+| `owner_id`       | varchar(50)   | no   | all                      | e.g. `cmt_…`                                                                                                                                       |
+| `kind`           | varchar(20)   | no   | all                      | `once`: one instalment. `recurring`: one instalment per step between `starts_on` and `ends_on`.                                                    |
+| `value_type`     | varchar(20)   | no   | all                      | `fixed`: `value` is money. `remainder`: the owner's `total_amount` minus every other row (D18).                                                    |
+| `value`          | numeric(20,8) | yes  | all                      | When `fixed`: on `once`, the instalment's amount; on `recurring`, the amount per instalment. NULL for `remainder`.                                 |
+| `bill_on`        | timestamptz   | yes  | once                     | Billing date, within `[start_date, end_date]`. Default `start_date`. NULL when `on_trigger`.                                                       |
+| `on_trigger`     | bool          | no   | once                     | True: a milestone with an unknown date, billed when triggered through the API, or at `end_date` if never triggered. Default false.                 |
 | `covers_from`    | timestamptz   | yes  | once                     | Start of the service this instalment pays for. Default `start_date`. Used for the instalment's service period and the "covered by" display (§7.6). |
-| `covers_to`      | timestamptz   | yes  | once                     | End of that service. Default `end_date`. |
-| `starts_on`      | timestamptz   | yes  | recurring                | First step's start: the commitment's `start_date` or a billing boundary in the term. Default `start_date`.                         |
-| `ends_on`        | timestamptz   | yes  | recurring                | Last step's end: a billing boundary in the term, or `end_date`. Default `end_date`.                                                |
-| `interval`       | varchar(20)   | yes  | recurring                | Step unit, from the price billing period enum: `MONTHLY`, `QUARTERLY`, `ANNUAL`, …                                                 |
-| `interval_count` | int           | yes  | recurring                | Units per step: 1 × QUARTERLY means every quarter; 2 × MONTHLY means every two months.                                             |
-| `bill_at`        | varchar(20)   | yes  | recurring                | `advance`: each step is billed at its start. `arrear`: each step is billed at its end.                                             |
-| `split`          | varchar(20)   | yes  | recurring with remainder | `even`: equal instalments. `proportional`: each instalment matches its step's period amounts (§7.4).                               |
-| `description`    | varchar(255)  | yes  | all                      | Invoice line label. May use `{n}` and `{of}`. Defaults: "Commitment payment" (once), "Instalment {n} of {of}" (recurring).         |
-| `metadata`       | jsonb         | yes  | all                      | Free-form. When a percentage was given in the request, it is recorded here as `input_percent` for audit.                           |
+| `covers_to`      | timestamptz   | yes  | once                     | End of that service. Default `end_date`.                                                                                                           |
+| `starts_on`      | timestamptz   | yes  | recurring                | First step's start: the commitment's `start_date` or a billing boundary in the term. Default `start_date`.                                         |
+| `ends_on`        | timestamptz   | yes  | recurring                | Last step's end: a billing boundary in the term, or `end_date`. Default `end_date`.                                                                |
+| `interval`       | varchar(20)   | yes  | recurring                | Step unit, from the price billing period enum: `MONTHLY`, `QUARTERLY`, `ANNUAL`, …                                                                 |
+| `interval_count` | int           | yes  | recurring                | Units per step: 1 × QUARTERLY means every quarter; 2 × MONTHLY means every two months.                                                             |
+| `bill_at`        | varchar(20)   | yes  | recurring                | `advance`: each step is billed at its start. `arrear`: each step is billed at its end.                                                             |
+| `split`          | varchar(20)   | yes  | recurring with remainder | `even`: equal instalments. `proportional`: each instalment matches its step's period amounts (§7.4).                                               |
+| `description`    | varchar(255)  | yes  | all                      | Invoice line label. May use `{n}` and `{of}`. Defaults: "Commitment payment" (once), "Instalment {n} of {of}" (recurring).                         |
+| `metadata`       | jsonb         | yes  | all                      | Free-form. When a percentage was given in the request, it is recorded here as `input_percent` for audit.                                           |
 
 
 **Index:** `(tenant_id, environment_id, owner_type, owner_id)`. Rows are ordered by `id`.
@@ -303,24 +308,24 @@ Each row says how one part of the owner's value is billed. Rows are created with
 One row per dated charge. Only owners whose `collection_method` is `billing_terms` have them.
 
 
-| Column                                       | Type          | Null | Meaning                                                                                                          |
-| -------------------------------------------- | ------------- | ---- | ---------------------------------------------------------------------------------------------------------------- |
-| `id`                                         | varchar(50)   | no   | `binst_…`. Time-sortable; used for ordering (D26).                                                               |
-| `owner_type`, `owner_id`                     | varchar       | no   | The owner (the commitment)                                                                                       |
-| `billing_term_id`                            | varchar(50)   | yes  | The row that produced it. NULL for instalments created by re-plan or bring-forward, and for settlements.         |
-| `customer_id`                                | varchar(50)   | no   | Copied from the owner: who is invoiced                                                                           |
-| `subscription_id`                            | varchar(50)   | yes  | Copied from the owner. Required for `subscription_invoice` delivery.                                             |
-| `currency`                                   | varchar(10)   | no   | Copied from the owner                                                                                            |
-| `kind`                                       | varchar(20)   | no   | `instalment` (planned) or `settlement` (added at termination, §8)                                                |
-| `bill_trigger`                               | varchar(20)   | no   | `on_date`: billed when `bill_on` is reached. `manual`: waits for a trigger (D23).                                |
-| `bill_on`                                    | timestamptz   | yes  | When it becomes billable. NULL only for an untriggered manual instalment.                                        |
-| `amount`                                     | numeric(20,8) | no   | Greater than 0, in `currency`                                                                                    |
-| `description`                                | varchar(255)  | no   | Rendered label, e.g. "Instalment 3 of 10"                                                                        |
-| `service_period_start`, `service_period_end` | timestamptz | no | What the instalment pays for. Once: the row's `covers_from` to `covers_to` (default the term). Recurring: its step. Settlement: the term up to termination. Used for display and revenue recognition timing; billing never depends on it. |
-| `delivery`                                   | varchar(30)   | no   | `subscription_invoice` or `separate_invoice`, copied from the owner's `instalment_invoicing`                     |
-| `instalment_status`                          | varchar(20)   | no   | `scheduled`, `invoiced` or `canceled`                                                                            |
-| `invoice_id`, `invoice_line_item_id`         | varchar(50)   | yes  | Set when invoiced. The instalment is locked from then on.                                                        |
-| `metadata`                                   | jsonb         | yes  | Free-form                                                                                                        |
+| Column                                       | Type          | Null | Meaning                                                                                                                                                                                                                                   |
+| -------------------------------------------- | ------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                         | varchar(50)   | no   | `binst_…`. Time-sortable; used for ordering (D26).                                                                                                                                                                                        |
+| `owner_type`, `owner_id`                     | varchar       | no   | The owner (the commitment)                                                                                                                                                                                                                |
+| `billing_term_id`                            | varchar(50)   | yes  | The row that produced it. NULL for instalments created by re-plan or bring-forward, and for settlements.                                                                                                                                  |
+| `customer_id`                                | varchar(50)   | no   | Copied from the owner: who is invoiced                                                                                                                                                                                                    |
+| `subscription_id`                            | varchar(50)   | yes  | Copied from the owner. Required for `subscription_invoice` delivery.                                                                                                                                                                      |
+| `currency`                                   | varchar(10)   | no   | Copied from the owner                                                                                                                                                                                                                     |
+| `kind`                                       | varchar(20)   | no   | `instalment` (planned) or `settlement` (added at termination, §8)                                                                                                                                                                         |
+| `bill_trigger`                               | varchar(20)   | no   | `on_date`: billed when `bill_on` is reached. `manual`: waits for a trigger (D23).                                                                                                                                                         |
+| `bill_on`                                    | timestamptz   | yes  | When it becomes billable. NULL only for an untriggered manual instalment.                                                                                                                                                                 |
+| `amount`                                     | numeric(20,8) | no   | Greater than 0, in `currency`                                                                                                                                                                                                             |
+| `description`                                | varchar(255)  | no   | Rendered label, e.g. "Instalment 3 of 10"                                                                                                                                                                                                 |
+| `service_period_start`, `service_period_end` | timestamptz   | no   | What the instalment pays for. Once: the row's `covers_from` to `covers_to` (default the term). Recurring: its step. Settlement: the term up to termination. Used for display and revenue recognition timing; billing never depends on it. |
+| `delivery`                                   | varchar(30)   | no   | `subscription_invoice` or `separate_invoice`, copied from the owner's `instalment_invoicing`                                                                                                                                              |
+| `instalment_status`                          | varchar(20)   | no   | `scheduled`, `invoiced` or `canceled`                                                                                                                                                                                                     |
+| `invoice_id`, `invoice_line_item_id`         | varchar(50)   | yes  | Set when invoiced. The instalment is locked from then on.                                                                                                                                                                                 |
+| `metadata`                                   | jsonb         | yes  | Free-form                                                                                                                                                                                                                                 |
 
 
 **Indexes**
@@ -405,6 +410,18 @@ Examples:
 
 This runs for every commitment regardless of collection method. Under `billing_terms`, `unused` is reported for analytics only and never billed. `computeCommitmentMath` (`billing_commitment.go:222`) is extended, not forked. Step 3 is a pure function.
 
+**Stacking example.** C1 and C2 both reserve 10 GPUs on the same price, C1 with priority 1 and C2 with priority 2.
+
+
+| Usage in the window | C1 used  | C2 used  | On-demand                             |
+| ------------------- | -------- | -------- | ------------------------------------- |
+| 6                   | 6 of 10  | 0 of 10  | 0                                     |
+| 15                  | 10 of 10 | 5 of 10  | 0                                     |
+| 24                  | 10 of 10 | 10 of 10 | 4, at the stack's overage price (D36) |
+
+
+A commitment that is full has no overage of its own: the excess flows to the next commitment. Only what is left after the last one is on-demand. If a commitment is not active in that window (outside its `active_windows`, or before its `start_date`), it is skipped.
+
 ### 6.5 Invoice lines from usage
 
 The usage lines in scope are replaced by:
@@ -418,6 +435,7 @@ The usage lines in scope are replaced by:
 
 
 - Every line carries `commitment_id`, `commitment_line_kind` and `commitment_info`.
+- **Line titles.** Within-commitment and true-up lines are titled with the commitment's `invoice_label` and carry its `invoice_description` (D37). They get a short suffix when needed to tell them apart: "(unused)" for true-ups, "(covered)" under billing terms. On-demand lines keep the price's own name, because on-demand belongs to the stack (D36). Instalment lines use the `invoice_label` plus the billing term's description, e.g. "Instalment 3 of 10".
 - **Invariant:** per price, within quantity + on-demand quantity = the original usage quantity. A mismatch is a hard error.
 - Under `per_period`, within + true-up always equals the period amount.
 
@@ -449,6 +467,8 @@ All failures return `ErrValidation`, with a hint naming the field.
 | C17 | `billing_terms` requires the `billing_terms` input (T1–T15). `per_period` rejects both `billing_terms` and `instalment_invoicing`.                                          |
 | C18 | `on_early_termination = credit_note` requires `billing_terms`.                                                                                                              |
 | C19 | `idempotency_key`, if given, is ≤ 128 characters. A repeated key returns the existing commitment unchanged.                                                                 |
+| C20 | Commitments that overlap in time and share a line item have the same `overage_price_id`: all NULL, or rates that resolve to the same price (D36).                           |
+| C21 | `name` and `invoice_label` are 1–255 characters. `invoice_description` is at most 500 characters.                                                                           |
 
 
 **On price attach:** attaching a price re-checks C7, C9 and C14 for every active commitment whose group or subscription scope would now include it.
@@ -485,7 +505,7 @@ With `collection_method = billing_terms`, the create request carries `billing_te
 | `value_type`, `value`        | required (`value` absent for remainder)                  | required (`value` absent for remainder)                             |
 | `bill_on`                    | optional, default `start_date`; absent when `on_trigger` | not allowed                                                         |
 | `on_trigger`                 | optional, default false                                  | not allowed                                                         |
-| `covers_from`, `covers_to` | optional, default the term | not allowed (each instalment covers its step) |
+| `covers_from`, `covers_to`   | optional, default the term                               | not allowed (each instalment covers its step)                       |
 | `starts_on`, `ends_on`       | not allowed                                              | optional, default the term                                          |
 | `interval`, `interval_count` | not allowed                                              | optional, default the subscription's period × 1 (stored explicitly) |
 | `bill_at`                    | not allowed                                              | required: advance or arrear                                         |
@@ -526,12 +546,12 @@ With `collection_method = billing_terms`, the create request carries `billing_te
 **Step 3: generate instalments.**
 
 
-| Row                                 | `bill_on`                                                                 | Service period | Amount                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| Row                                 | `bill_on`                                                                 | Service period                                  | Amount                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------- |
 | once                                | the row's `bill_on`; or NULL with `bill_trigger = manual` if `on_trigger` | `covers_from` to `covers_to` (default the term) | the row amount                                                                    |
-| recurring + fixed                   | step start (advance) or step end (arrear)                                 | the step       | `value`                                                                           |
-| recurring + remainder, even         | same                                                                      | the step       | row amount ÷ number of steps                                                      |
-| recurring + remainder, proportional | same                                                                      | the step       | row amount × (step's period amounts ÷ sum of period amounts over the row's steps) |
+| recurring + fixed                   | step start (advance) or step end (arrear)                                 | the step                                        | `value`                                                                           |
+| recurring + remainder, even         | same                                                                      | the step                                        | row amount ÷ number of steps                                                      |
+| recurring + remainder, proportional | same                                                                      | the step                                        | row amount × (step's period amounts ÷ sum of period amounts over the row's steps) |
 
 
 **Step 4: round.** Every instalment is rounded to currency precision. In a remainder row, the last instalment absorbs that row's rounding difference.
@@ -570,22 +590,22 @@ With `collection_method = billing_terms`, the create request carries `billing_te
 All failures return `ErrValidation`, naming the row (its index in the request) and the field.
 
 
-| #   | Rule                                                                                                                                                                                    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T1  | 1 to 20 rows.                                                                                                                                                                           |
-| T2  | `kind` is once or recurring. Fields not used by the kind (§7.2) must be absent.                                                                                                         |
-| T3  | `value_type` is fixed or remainder. Fixed requires `value` > 0. Remainder requires `value` to be absent. Percent input must satisfy 0 < percent ≤ 100 before conversion.                |
-| T4  | At most one remainder row.                                                                                                                                                              |
-| T5  | The sum of resolved fixed amounts (§7.4 step 2) is less than `total_amount` when there is a remainder row, and exactly equal to it when there isn't.                                    |
-| T6  | Once: `bill_on` is within `[start_date, end_date]`. `on_trigger = true` requires `bill_on` to be absent. |
-| T7  | Recurring: `starts_on` is the commitment's `start_date` or a billing boundary inside the term. `ends_on` is a billing boundary inside the term, or `end_date`. `starts_on` < `ends_on`. |
-| T8  | Recurring: `interval` is a valid billing period, `interval_count` ≥ 1, and `interval × interval_count` is a whole multiple of the subscription's billing period (D20).                  |
-| T9  | Recurring: `bill_at` is advance or arrear.                                                                                                                                              |
-| T10 | `split` (even or proportional) is present only on a recurring remainder row, and required there.                                                                                        |
-| T11 | `description` is ≤ 255 characters after rendering.                                                                                                                                      |
-| T12 | After expansion: every instalment amount > 0, every `bill_on` within `[start_date, end_date]`, and the sum equals `total_amount`.                                                       |
-| T13 | At most 500 instalments per owner.                                                                                                                                                      |
-| T14 | Presets: required preset fields are present, and the rows they expand to pass T1–T13.                                                                                                   |
+| #   | Rule                                                                                                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | 1 to 20 rows.                                                                                                                                                                                                                                 |
+| T2  | `kind` is once or recurring. Fields not used by the kind (§7.2) must be absent.                                                                                                                                                               |
+| T3  | `value_type` is fixed or remainder. Fixed requires `value` > 0. Remainder requires `value` to be absent. Percent input must satisfy 0 < percent ≤ 100 before conversion.                                                                      |
+| T4  | At most one remainder row.                                                                                                                                                                                                                    |
+| T5  | The sum of resolved fixed amounts (§7.4 step 2) is less than `total_amount` when there is a remainder row, and exactly equal to it when there isn't.                                                                                          |
+| T6  | Once: `bill_on` is within `[start_date, end_date]`. `on_trigger = true` requires `bill_on` to be absent.                                                                                                                                      |
+| T7  | Recurring: `starts_on` is the commitment's `start_date` or a billing boundary inside the term. `ends_on` is a billing boundary inside the term, or `end_date`. `starts_on` < `ends_on`.                                                       |
+| T8  | Recurring: `interval` is a valid billing period, `interval_count` ≥ 1, and `interval × interval_count` is a whole multiple of the subscription's billing period (D20).                                                                        |
+| T9  | Recurring: `bill_at` is advance or arrear.                                                                                                                                                                                                    |
+| T10 | `split` (even or proportional) is present only on a recurring remainder row, and required there.                                                                                                                                              |
+| T11 | `description` is ≤ 255 characters after rendering.                                                                                                                                                                                            |
+| T12 | After expansion: every instalment amount > 0, every `bill_on` within `[start_date, end_date]`, and the sum equals `total_amount`.                                                                                                             |
+| T13 | At most 500 instalments per owner.                                                                                                                                                                                                            |
+| T14 | Presets: required preset fields are present, and the rows they expand to pass T1–T13.                                                                                                                                                         |
 | T15 | Once: `covers_from` and `covers_to`, if given, lie within `[start_date, end_date]` with `covers_from` < `covers_to`. Recurring rows must not set them. Coverage ranges of different rows may overlap or leave gaps; they affect display only. |
 
 
@@ -668,12 +688,12 @@ Future owners (phase 5, each with its own ERD): fixed subscription line items, a
 | Event          | What happens                                                                                                                                                                                                                                       |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Preview        | `POST /v1/commitments/preview`: the same validation and expansion as create, but nothing is saved (D22).                                                                                                                                           |
-| Create         | One transaction: validate (C1–C19, T1–T15); create the committed and overage prices; insert the commitment. For `billing_terms`, also compute and store `total_amount`, convert percent inputs, insert the rows, and expand them into instalments. |
+| Create         | One transaction: validate (C1–C21, T1–T15); create the committed and overage prices; insert the commitment. For `billing_terms`, also compute and store `total_amount`, convert percent inputs, insert the rows, and expand them into instalments. |
 | Period invoice | §6.5 for usage lines, §7.7 for instalments.                                                                                                                                                                                                        |
 | Invoice voided | Its instalments return to scheduled. Under `per_period`, the regenerated invoice recomputes the within and true-up lines.                                                                                                                          |
 | Term ends      | Runs in the step that advances subscription periods. Untriggered instalments get `bill_on = end_date`. The commitment becomes `ended`.                                                                                                             |
 | Terminate      | Via `POST /v1/commitments/{id}/terminate {effective_at}`, subscription cancellation (`subscription.go:1871`), or plan change. See below.                                                                                                           |
-| Edit           | Only `display_name` and `metadata` (D10).                                                                                                                                                                                                          |
+| Edit           | Only `name`, `invoice_label`, `invoice_description` and `metadata` (D10, D37). Label changes apply to invoices generated afterwards.                                                                                                               |
 
 
 **Termination of a binding commitment.** A non-binding commitment simply stops.
@@ -699,6 +719,8 @@ Scenarios A15 and A16 work through the numbers.
 
 ## 9. Billed, earned, deferred and analytics
 
+
+
 ### 9.1 Billed, earned, deferred
 
 For a binding commitment at time *t*:
@@ -712,16 +734,19 @@ For a binding commitment at time *t*:
 ### 9.2 Analytics are computed from the engine, not the invoice (D34)
 
 Under `billing_terms`, the invoice cannot answer usage questions:
+
 - within-commitment usage lines are $0;
 - instalment lines carry no price or meter.
 
 So analytics never read commitment money from invoice amounts. For every commitment, price and period, the engine (§6.4) produces the same split under both collection methods:
 
-| Measure | Value | Attributed to |
-|---|---|---|
-| Used within commitment | within quantity × committed rate (quantity commitments), or at the line-item price (amount commitments) | each price and meter, by its within quantity |
-| Unused commitment | period amount − used value | the commitment. Analytics may optionally spread it across the scoped meters; that is an analytics setting and does not affect billing. |
-| On-demand | on-demand quantity × overage price | each price and meter |
+
+| Measure                | Value                                                                                                   | Attributed to                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Used within commitment | within quantity × committed rate (quantity commitments), or at the line-item price (amount commitments) | each price and meter, by its within quantity                                                                                           |
+| Unused commitment      | period amount − used value                                                                              | the commitment. Analytics may optionally spread it across the scoped meters; that is an analytics setting and does not affect billing. |
+| On-demand              | on-demand quantity × overage price                                                                      | each price and meter                                                                                                                   |
+
 
 Under `per_period`, "unused commitment" equals the true-up that was billed. Under `billing_terms` it is not billed, but it is still reported, labelled "unused commitment (prepaid)". A meter's usage and revenue therefore look the same whichever collection method the tenant chose.
 
@@ -731,24 +756,31 @@ Under `per_period`, "unused commitment" equals the true-up that was billed. Unde
 
 Example. A $100/month commitment, January, with $80 of usage and the deposit from §7.4:
 
-| | Usage value | Billed amount (January invoice) |
-|---|---|---|
-| Used within commitment | $80 | $0 (covered by the deposit) |
-| Unused commitment | $20 | $0 |
-| On-demand | $0 | $0 |
-| Deposit instalment | — | $300, at commitment level, covering Jan–Mar |
 
-| Consumer | Reads |
-|---|---|
-| Customer usage dashboards, per-meter usage analytics, usage API | usage value (and billed amount alongside, labelled) |
-| Revenue analytics, earned view | usage value: used + unused + on-demand per period |
-| Revenue analytics, billings view | billed amount, with deferred = billed − earned |
-| Invoice preview, "current bill" | billed amount |
-| Spend alerts, wallet ongoing balance and pending charges | billed amount: covered usage counts as $0, and only on-demand usage and due instalments count |
+|                        | Usage value | Billed amount (January invoice)             |
+| ---------------------- | ----------- | ------------------------------------------- |
+| Used within commitment | $80         | $0 (covered by the deposit)                 |
+| Unused commitment      | $20         | $0                                          |
+| On-demand              | $0          | $0                                          |
+| Deposit instalment     | —           | $300, at commitment level, covering Jan–Mar |
+
+
+
+| Consumer                                                        | Reads                                                                                         |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Customer usage dashboards, per-meter usage analytics, usage API | usage value (and billed amount alongside, labelled)                                           |
+| Revenue analytics, earned view                                  | usage value: used + unused + on-demand per period                                             |
+| Revenue analytics, billings view                                | billed amount, with deferred = billed − earned                                                |
+| Invoice preview, "current bill"                                 | billed amount                                                                                 |
+| Spend alerts, wallet ongoing balance and pending charges        | billed amount: covered usage counts as $0, and only on-demand usage and due instalments count |
+
+
+
 
 ### 9.4 API fields
 
 The usage API (`GetUsageBySubscription`) returns, per commitment, price and period:
+
 - `quantity_within`, `quantity_on_demand`;
 - `value_within` (at the committed rate), `value_on_demand`;
 - `billed_amount` (0 for covered usage under `billing_terms`);
@@ -760,32 +792,99 @@ Within-commitment invoice lines also carry the used value in `commitment_info`, 
 
 ### 9.5 Revenue rollup and reconciliation
 
-The revenue rollup re-runs the commitment engine per period in non-billing mode. This follows the analytics platform ERD's rule: re-run the engine, never reimplement pricing. It records used, unused and on-demand as revenue facts per commitment, price and period.
+The revenue rollup re-runs the commitment engine per period in non-billing mode. This follows the analytics platform ERD's rule: re-run the engine, never reimplement pricing. It records used, unused and on-demand as revenue facts per commitment, price, meter and time bucket. The bucket is one day, or one hour for window-measured commitments, so hourly reservation charts can be drawn. Each fact carries quantity, capacity, usage value and billed amount (§9.7).
 
 Instalments are recorded as billings when invoiced. Each period's facts are recognised when the period ends. Forfeits are recognised at termination, and credit notes reverse.
 
 Reconciliation checks:
 
-| Collection | Check |
-|---|---|
-| `per_period` | unchanged: revenue facts for a period sum to that period's invoiced commitment and on-demand lines |
+
+| Collection      | Check                                                                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `per_period`    | unchanged: revenue facts for a period sum to that period's invoiced commitment and on-demand lines                                       |
 | `billing_terms` | per period, used + unused = period amount; at any date, billed − earned = deferred; over the term, invoiced instalments = `total_amount` |
+
+
+
+
+### 9.6 Commitment utilisation
+
+For each commitment and each bucket (an hour, a day, or a whole period):
+
+
+| Measure     | Quantity commitment                                                                            | Amount commitment                |
+| ----------- | ---------------------------------------------------------------------------------------------- | -------------------------------- |
+| Capacity    | `value × active windows` in the bucket                                                         | `value`, prorated to the bucket  |
+| Used        | within-commitment quantity                                                                     | within-commitment value          |
+| Unused      | capacity − used                                                                                | capacity − used                  |
+| Utilisation | used ÷ capacity, as a percentage                                                               | used ÷ capacity, as a percentage |
+| On-demand   | reported next to the stack it overflowed (D36), never inside a single commitment's utilisation | same                             |
+
+
+Example. In the §6.4 stacking example with 15 GPUs used: C1 is at 100% utilisation, C2 at 50%, and on-demand is 0.
+
+**Where the numbers come from**
+
+- **Closed periods** are read from revenue facts. These are final and reconciled with invoices.
+- **The open period** is calculated live by running the engine for the period so far, the same path as the invoice preview. The result is cached for a few minutes and flagged `provisional: true`.
+
+**API:** `GET /v1/commitments/{id}/utilisation?from=…&to=…&granularity=hour|day|period`. For each bucket it returns:
+
+- `capacity`, `used`, `unused` and `utilisation_pct`;
+- `on_demand` for the stack;
+- `usage_value` and `billed_amount` (D35);
+- `provisional`.
+
+
+
+### 9.7 Cost-explorer view: why revenue facts and not the events API
+
+
+|                                                       | Events / meter-usage analytics API                                                                                                                                            | Revenue facts                                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| What it holds                                         | raw quantities per event, with event properties                                                                                                                               | the engine's allocation per commitment, price, meter and bucket                         |
+| Can it split usage into within, unused and on-demand? | No. A unit's status depends on all other usage in the same window and on the stack order (D5), so it cannot be decided per event without reimplementing the allocator in SQL. | Yes, because it is produced by the same engine that bills                               |
+| Matches invoices                                      | No                                                                                                                                                                            | Yes, by the reconciliation checks in §9.5                                               |
+| Handles billing terms                                 | No (instalments are not usage)                                                                                                                                                | Yes: instalments are billed facts with service periods; earned and deferred are derived |
+| Use it for                                            | exploring raw usage: volumes, trends, event dimensions                                                                                                                        | utilisation, commitment reporting, revenue, the cost explorer                           |
+
+
+**The cost explorer** is a query layer over revenue facts. It lets tenants filter and group by any of these dimensions:
+
+- customer, subscription, commitment, price, meter;
+- line kind (within, unused, on-demand, instalment, settlement);
+- time, at hour, day, month or period.
+
+It shows these measures:
+
+- quantity and capacity;
+- usage value, billed amount, earned and deferred.
+
+Because every fact comes from the billing engine, the totals for a closed period match the invoices, whichever collection method each commitment uses.
+
+**Splitting by event properties** (e.g. per deployment) is computed in the rollup, not in the events API:
+
+1. The rollup reads each window's usage already split by the chosen property.
+2. It applies the stack allocation to those shares, using an analytics setting: priority order by a property such as creation time, or a proportional split.
+3. It writes facts with that property as an extra dimension.
+
+Invoice totals are unaffected. This attribution setting belongs to the analytics design and ships in phase 3 (§14).
 
 ## 10. Interaction with existing features
 
 
-| Feature                  | Behaviour                                                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tax                      | Instalments, within lines and true-up lines are taxed when invoiced. Each dollar of commitment money is billed once, so it is taxed once.                                                        |
-| Coupons                  | Invoice-level coupons apply as usual. Line-level coupons target prices: they apply to priced within and true-up lines, and never to instalment lines, which have no price.                       |
-| Wallet / prepaid credits | Unchanged rule (usage lines only): credits apply to within and on-demand lines, never to instalments or true-up lines.                                                                           |
-| Entitlement grants       | `GrantPricingGuard` treats prices in a commitment's scope like legacy committed prices (amount grants rejected). Grants and commitments stay separate: a grant is free usage with no obligation. |
-| Legacy commitments       | C15, C16                                                                                                                                                                                         |
-| Usage API | `GetUsageBySubscription` returns usage value and billed amount side by side per commitment, price and period (§9.4). |
-| Analytics | Computed from the engine, not invoice amounts (§9.2). Revenue facts gain `commitment_id` and `commitment_line_kind`. |
-| Invoice preview / current bill | Billed amount: covered usage $0 under `billing_terms`, plus due instalments. |
-| Spend alerts, wallet ongoing balance and pending charges | Billed amount only (D35). Under `billing_terms`, covered usage adds nothing; only on-demand usage and due instalments count. |
-| Integrations             | Stripe, QuickBooks, Razorpay, HubSpot and Chargebee sync must accept $0 lines and fixed lines without a price. Verified in each sandbox.                                                         |
+| Feature                                                  | Behaviour                                                                                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tax                                                      | Instalments, within lines and true-up lines are taxed when invoiced. Each dollar of commitment money is billed once, so it is taxed once.                                                        |
+| Coupons                                                  | Invoice-level coupons apply as usual. Line-level coupons target prices: they apply to priced within and true-up lines, and never to instalment lines, which have no price.                       |
+| Wallet / prepaid credits                                 | Unchanged rule (usage lines only): credits apply to within and on-demand lines, never to instalments or true-up lines.                                                                           |
+| Entitlement grants                                       | `GrantPricingGuard` treats prices in a commitment's scope like legacy committed prices (amount grants rejected). Grants and commitments stay separate: a grant is free usage with no obligation. |
+| Legacy commitments                                       | C15, C16                                                                                                                                                                                         |
+| Usage API                                                | `GetUsageBySubscription` returns usage value and billed amount side by side per commitment, price and period (§9.4).                                                                             |
+| Analytics                                                | Computed from the engine, not invoice amounts (§9.2). Revenue facts gain `commitment_id` and `commitment_line_kind`.                                                                             |
+| Invoice preview / current bill                           | Billed amount: covered usage $0 under `billing_terms`, plus due instalments.                                                                                                                     |
+| Spend alerts, wallet ongoing balance and pending charges | Billed amount only (D35). Under `billing_terms`, covered usage adds nothing; only on-demand usage and due instalments count.                                                                     |
+| Integrations                                             | Stripe, QuickBooks, Razorpay, HubSpot and Chargebee sync must accept $0 lines and fixed lines without a price. Verified in each sandbox.                                                         |
 
 
 
@@ -793,19 +892,20 @@ Reconciliation checks:
 ## 11. API
 
 
-| Method | Path                                                       | Scope                                                             |
-| ------ | ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| POST   | `/v1/commitments/preview`                                  | read (override): validation and expansion, nothing saved          |
-| POST   | `/v1/commitments`                                          | write                                                             |
-| GET    | `/v1/commitments/{id}`                                     | read: includes billing terms, instalments and the billing summary |
-| POST   | `/v1/commitments/search`                                   | read (override)                                                   |
-| PUT    | `/v1/commitments/{id}`                                     | write: `display_name`, `metadata`                                 |
-| POST   | `/v1/commitments/{id}/terminate`                           | delete (override)                                                 |
-| GET    | `/v1/commitments/{id}/instalments`                         | read                                                              |
-| PUT    | `/v1/commitments/{id}/instalments`                         | write: re-plan                                                    |
-| POST   | `/v1/commitments/{id}/instalments/bring-forward`           | write                                                             |
-| POST   | `/v1/commitments/{id}/instalments/{instalment_id}/trigger` | write                                                             |
-| —      | `CreateSubscriptionRequest.commitments[]`                  | inline, in the same transaction                                   |
+| Method | Path                                                       | Scope                                                                     |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| POST   | `/v1/commitments/preview`                                  | read (override): validation and expansion, nothing saved                  |
+| POST   | `/v1/commitments`                                          | write                                                                     |
+| GET    | `/v1/commitments/{id}`                                     | read: includes billing terms, instalments and the billing summary         |
+| POST   | `/v1/commitments/search`                                   | read (override)                                                           |
+| PUT    | `/v1/commitments/{id}`                                     | write: `name`, `invoice_label`, `invoice_description`, `metadata`         |
+| POST   | `/v1/commitments/{id}/terminate`                           | delete (override)                                                         |
+| GET    | `/v1/commitments/{id}/instalments`                         | read                                                                      |
+| GET    | `/v1/commitments/{id}/utilisation`                         | read: capacity, used, unused, utilisation and on-demand per bucket (§9.6) |
+| PUT    | `/v1/commitments/{id}/instalments`                         | write: re-plan                                                            |
+| POST   | `/v1/commitments/{id}/instalments/bring-forward`           | write                                                                     |
+| POST   | `/v1/commitments/{id}/instalments/{instalment_id}/trigger` | write                                                                     |
+| —      | `CreateSubscriptionRequest.commitments[]`                  | inline, in the same transaction                                           |
 
 
 **Per-period commitment (today's behaviour)**
@@ -813,7 +913,8 @@ Reconciliation checks:
 ```json
 {
   "subscription_id": "subs_…",
-  "display_name": "8-GPU reservation",
+  "name": "H100 base reservation", "invoice_label": "1× H100 reserved GPU",
+  "invoice_description": "8 GPUs reserved at $2.88/hr",
   "scope": {"entity_type": "price", "entity_id": "price_h100"},
   "type": "quantity", "value": "8", "committed_rate": "0.048",
   "measurement": "window", "timezone": "Asia/Kolkata", "priority": 1,
@@ -827,7 +928,7 @@ Reconciliation checks:
 ```json
 {
   "subscription_id": "subs_…", "idempotency_key": "contract-8812-c1",
-  "display_name": "Platform commitment",
+  "name": "Platform commitment", "invoice_label": "Platform commitment",
   "scope": {"entity_type": "group", "entity_id": "grp_api_storage"},
   "type": "amount", "value": "100", "measurement": "billing_period",
   "binding": true, "collection_method": "billing_terms",
@@ -894,21 +995,21 @@ internal/api/v1/commitment.go, internal/api/dto/{commitment,billing_terms}.go
 ```
 
 
-| Area                    | File(s)                                                   | Change                                                                                              | Must verify                                     |
-| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Invoice calculation     | `billing.go` `CalculateAllCharges` (:1487)                | Due-instalments step and `CommitmentEngine.Apply`                                                   | Invoices without commitments are byte-identical |
-| Commitment maths        | `billing_commitment.go`                                   | Committed vs overage price; true-up at the committed price                                          | Legacy tests pass                               |
-| Invoice create and void | invoice service                                           | Claim and release instalments                                                                       | Exactly-once under retries                      |
-| One-off invoices        | invoice service                                           | `separate_invoice`                                                                                  | Tax and payments as for any `ONE_OFF`           |
-| Period advance          | subscription billing-period update                        | Term end, untriggered instalments                                                                   | Idempotent re-runs                              |
-| Price attach            | `subscription_line_item.go`                               | Re-check C7, C9, C14                                                                                | Error messages                                  |
-| Cancel and plan change  | `subscription.go:1871`, plan change flow                  | Terminate commitments                                                                               | Every rule × both methods                       |
-| Credit notes            | `creditnote.go`                                           | Credit against instalment lines                                                                     | Amount ≤ creditable per line                    |
-| Grants                  | `billing_meter_usage_grants.go`                           | `GrantPricingGuard`                                                                                 | Amount grants rejected                          |
-| Revenue rollup | `revenue/rollup.go` | Re-run the engine per period; used, unused and on-demand facts; instalment billings; reconciliation per §9.5 | Both reconciliation checks |
-| Usage API | `subscription.go` `GetUsageBySubscription` | Usage value and billed amount fields (§9.4) | Matches invoice preview (billed) and revenue (value) |
-| Wallet balance and spend alerts | `wallet.go` `pendingCharges`, alert evaluation | Read billed amounts only | Covered usage not counted twice |
-| PDF, webhooks, SDK      | typst template; system events; swagger and `make sdk-all` | New line kinds and coverage text; `commitment.*` and `billing_instalment.invoiced` events; new tags | Snapshot; payloads; MCP allowed tags            |
+| Area                            | File(s)                                                   | Change                                                                                                       | Must verify                                          |
+| ------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Invoice calculation             | `billing.go` `CalculateAllCharges` (:1487)                | Due-instalments step and `CommitmentEngine.Apply`                                                            | Invoices without commitments are byte-identical      |
+| Commitment maths                | `billing_commitment.go`                                   | Committed vs overage price; true-up at the committed price                                                   | Legacy tests pass                                    |
+| Invoice create and void         | invoice service                                           | Claim and release instalments                                                                                | Exactly-once under retries                           |
+| One-off invoices                | invoice service                                           | `separate_invoice`                                                                                           | Tax and payments as for any `ONE_OFF`                |
+| Period advance                  | subscription billing-period update                        | Term end, untriggered instalments                                                                            | Idempotent re-runs                                   |
+| Price attach                    | `subscription_line_item.go`                               | Re-check C7, C9, C14                                                                                         | Error messages                                       |
+| Cancel and plan change          | `subscription.go:1871`, plan change flow                  | Terminate commitments                                                                                        | Every rule × both methods                            |
+| Credit notes                    | `creditnote.go`                                           | Credit against instalment lines                                                                              | Amount ≤ creditable per line                         |
+| Grants                          | `billing_meter_usage_grants.go`                           | `GrantPricingGuard`                                                                                          | Amount grants rejected                               |
+| Revenue rollup                  | `revenue/rollup.go`                                       | Re-run the engine per period; used, unused and on-demand facts; instalment billings; reconciliation per §9.5 | Both reconciliation checks                           |
+| Usage API                       | `subscription.go` `GetUsageBySubscription`                | Usage value and billed amount fields (§9.4)                                                                  | Matches invoice preview (billed) and revenue (value) |
+| Wallet balance and spend alerts | `wallet.go` `pendingCharges`, alert evaluation            | Read billed amounts only                                                                                     | Covered usage not counted twice                      |
+| PDF, webhooks, SDK              | typst template; system events; swagger and `make sdk-all` | New line kinds and coverage text; `commitment.*` and `billing_instalment.invoiced` events; new tags          | Snapshot; payloads; MCP allowed tags                 |
 
 
 
@@ -920,24 +1021,26 @@ internal/api/v1/commitment.go, internal/api/dto/{commitment,billing_terms}.go
 ### 13.1 Allocation engine and usage lines (`commitment_engine_test.go`, pure)
 
 
-| #   | Scenario                                                      | Expected                                                              |
-| --- | ------------------------------------------------------------- | --------------------------------------------------------------------- |
-| E1  | per_period, amount $100, usage $120                           | within $100, on-demand $20, no true-up                                |
-| E2  | per_period, amount $100, usage $60                            | within $60, true-up $40                                               |
-| E3  | per_period, quantity 8/min, usage 10, 5, 8                    | within 8+5+8 at committed rate; true-up 3 × rate; on-demand 2         |
-| E4  | billing_terms, same as E2                                     | within $0 (covered), no true-up; unused reported for analytics only   |
-| E5  | Non-binding, committed rate below list                        | within at committed rate, no true-up                                  |
-| E6  | Group scope, $70 + $50 vs $100                                | second price shows $20 on-demand                                      |
-| E7  | Subscription scope, price added mid-period                    | included from its start                                               |
-| E8  | Meter scope across two prices                                 | one shared capacity                                                   |
-| E9  | C1 + C2 stacked, per_period                       | used, unused (true-up) and on-demand match the Linear doc to the cent |
-| E10 | `active_windows`: two ranges, a midnight wrap, a DST timezone | correct bucket assignment                                             |
-| E11 | Term starts 25 Aug                                            | earlier buckets ignored; prorated true-up                             |
-| E12 | Custom overage price                                          | on-demand at that price                                               |
-| E13 | Forced break of quantity conservation                         | hard error                                                            |
-| E14 | per_period: within + true-up per period                       | equals the period amount                                              |
-| E15 | billing_terms: `covered_by_instalment_ids`                    | exactly the instalments overlapping the invoice period                |
-| E16 | Same usage under `per_period` and `billing_terms` | identical used, unused and on-demand values; only the billed amounts differ |
+| #   | Scenario                                                          | Expected                                                                    |
+| --- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| E1  | per_period, amount $100, usage $120                               | within $100, on-demand $20, no true-up                                      |
+| E2  | per_period, amount $100, usage $60                                | within $60, true-up $40                                                     |
+| E3  | per_period, quantity 8/min, usage 10, 5, 8                        | within 8+5+8 at committed rate; true-up 3 × rate; on-demand 2               |
+| E4  | billing_terms, same as E2                                         | within $0 (covered), no true-up; unused reported for analytics only         |
+| E5  | Non-binding, committed rate below list                            | within at committed rate, no true-up                                        |
+| E6  | Group scope, $70 + $50 vs $100                                    | second price shows $20 on-demand                                            |
+| E7  | Subscription scope, price added mid-period                        | included from its start                                                     |
+| E8  | Meter scope across two prices                                     | one shared capacity                                                         |
+| E9  | C1 + C2 stacked, per_period                                       | used, unused (true-up) and on-demand match the Linear doc to the cent       |
+| E10 | `active_windows`: two ranges, a midnight wrap, a DST timezone     | correct bucket assignment                                                   |
+| E11 | Term starts 25 Aug                                                | earlier buckets ignored; prorated true-up                                   |
+| E12 | Custom overage price                                              | on-demand at that price                                                     |
+| E13 | Forced break of quantity conservation                             | hard error                                                                  |
+| E14 | per_period: within + true-up per period                           | equals the period amount                                                    |
+| E15 | billing_terms: `covered_by_instalment_ids`                        | exactly the instalments overlapping the invoice period                      |
+| E16 | Same usage under `per_period` and `billing_terms`                 | identical used, unused and on-demand values; only the billed amounts differ |
+| E17 | Two 10-GPU commitments (priority 1, 2) with usage of 6, 15 and 24 | 6/0/0, 10/5/0, 10/10/4 (C1/C2/on-demand)                                    |
+| E18 | Stacked commitments where C2 is outside its active window         | C2 skipped; the overflow from C1 goes to on-demand                          |
 
 
 
@@ -967,7 +1070,7 @@ internal/api/v1/commitment.go, internal/api/dto/{commitment,billing_terms}.go
 | X4  | `spread` advance, MONTHLY×1, proportional                                                                  | 12 instalments, at each period start                       |
 | X5  | `recurring(fixed 300, advance, QUARTERLY×1)` on a monthly subscription                                     | 4 × 300, on 1 Jan, 1 Apr, 1 Jul, 1 Oct                     |
 | X6  | `recurring(remainder, arrear, MONTHLY×5)` over 12 months                                                   | steps of 5, 5, 2; amounts per split                        |
-| X7  | Deposit: once 300 covering 1 Jan–1 Apr + `recurring(fixed 100, arrear, starts_on 1 Apr)` | 300 + 9 × 100; the deposit's service period is Jan–Mar |
+| X7  | Deposit: once 300 covering 1 Jan–1 Apr + `recurring(fixed 100, arrear, starts_on 1 Apr)`                   | 300 + 9 × 100; the deposit's service period is Jan–Mar     |
 | X8  | Once fixed 120 + recurring remainder, $1,200 / 12 months                                                   | 120 + 12 × 90 (§7.4 example)                               |
 | X9  | Ramp: `recurring(fixed 50, arrear, ends_on 1 Jul)` + `recurring(remainder, arrear, starts_on 1 Jul, even)` | 6 × 50, then 6 equal                                       |
 | X10 | `once(remainder, on_trigger)`                                                                              | manual, `bill_on` NULL                                     |
@@ -981,28 +1084,30 @@ internal/api/v1/commitment.go, internal/api/dto/{commitment,billing_terms}.go
 
 ### 13.4 Validation
 
-Every rule C1–C19 and T1–T15 gets at least one failing case and one passing case, in table-driven tests (`commitment_validation_test.go`, `billingterms/validate_test.go`). Key cases:
+Every rule C1–C21 and T1–T15 gets at least one failing case and one passing case, in table-driven tests (`commitment_validation_test.go`, `billingterms/validate_test.go`). Key cases:
 
 
-| #   | Case                                                                        | Rule                                      |
-| --- | --------------------------------------------------------------------------- | ----------------------------------------- |
-| V1  | `end_date` 23 Apr on a monthly subscription anchored on the 1st             | C3, with the error naming 1 Apr and 1 May |
-| V2  | Quantity commitment over a group spanning two meters                        | C7                                        |
-| V3  | Amount and quantity commitments overlapping on one price                    | C14                                       |
-| V4  | Same priority on overlapping commitments                                    | C12                                       |
-| V5  | Scope touching a legacy line-item commitment                                | C15                                       |
-| V6  | Non-binding with `collection_method`                                        | C13                                       |
-| V7  | per_period with `billing_terms`                                             | C17                                       |
-| V8  | `credit_note` with per_period                                               | C18                                       |
-| V9  | Two remainder rows                                                          | T4                                        |
-| V10 | Fixed rows exceeding the total; no remainder and sum ≠ total                | T5                                        |
-| V11 | Fixed rows exactly equal to the total, plus a remainder row (resolves to 0) | T5 (D19)                                  |
-| V12 | Once `bill_on` outside the term; `on_trigger` together with `bill_on`       | T6                                        |
-| V13 | Recurring `starts_on` 17 Mar on a monthly subscription                      | T7                                        |
-| V14 | `interval` MONTHLY on a quarterly subscription                              | T8                                        |
-| V15 | `split` on a recurring fixed row                                            | T10                                       |
-| V16 | Percent input of 0 or above 100                                             | T3                                        |
-| V17 | `covers_from` after `covers_to`; covers on a recurring row; covers outside the term | T15 |
+| #   | Case                                                                                | Rule                                      |
+| --- | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| V1  | `end_date` 23 Apr on a monthly subscription anchored on the 1st                     | C3, with the error naming 1 Apr and 1 May |
+| V2  | Quantity commitment over a group spanning two meters                                | C7                                        |
+| V3  | Amount and quantity commitments overlapping on one price                            | C14                                       |
+| V4  | Same priority on overlapping commitments                                            | C12                                       |
+| V5  | Scope touching a legacy line-item commitment                                        | C15                                       |
+| V6  | Non-binding with `collection_method`                                                | C13                                       |
+| V7  | per_period with `billing_terms`                                                     | C17                                       |
+| V8  | `credit_note` with per_period                                                       | C18                                       |
+| V9  | Two remainder rows                                                                  | T4                                        |
+| V10 | Fixed rows exceeding the total; no remainder and sum ≠ total                        | T5                                        |
+| V11 | Fixed rows exactly equal to the total, plus a remainder row (resolves to 0)         | T5 (D19)                                  |
+| V12 | Once `bill_on` outside the term; `on_trigger` together with `bill_on`               | T6                                        |
+| V13 | Recurring `starts_on` 17 Mar on a monthly subscription                              | T7                                        |
+| V14 | `interval` MONTHLY on a quarterly subscription                                      | T8                                        |
+| V15 | `split` on a recurring fixed row                                                    | T10                                       |
+| V16 | Percent input of 0 or above 100                                                     | T3                                        |
+| V17 | `covers_from` after `covers_to`; covers on a recurring row; covers outside the term | T15                                       |
+| V18 | Overlapping commitments with different overage rates                                | C20                                       |
+| V19 | Empty `invoice_label`; `invoice_description` over 500 characters                    | C21                                       |
 
 
 
@@ -1010,31 +1115,34 @@ Every rule C1–C19 and T1–T15 gets at least one failing case and one passing 
 ### 13.5 Integration (real DB via `testutil`)
 
 
-| #   | Scenario                                                                         | Expected                                                    |
-| --- | -------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| I1  | Preview, then create with the same request                                       | identical instalments; preview saved nothing                |
-| I2  | Create a billing_terms commitment with a preset, then replay the idempotency key | one transaction; same commitment returned                   |
-| I3  | A create step fails                                                              | full rollback                                               |
-| I4  | `subscription_invoice` delivery across 3 boundaries                              | each instalment on the right invoice, exactly once          |
-| I5  | `separate_invoice` with `bill_on` in the past                                    | `ONE_OFF` issued immediately                                |
-| I6  | Invoice retried or regenerated                                                   | no double billing                                           |
-| I7  | Invoice voided                                                                   | instalment billed again; per_period lines recomputed        |
-| I8  | Manual trigger, triggered vs never triggered                                     | billed on trigger vs at term end                            |
-| I9  | Re-plan with a wrong total, then a valid one                                     | first rejected; second replaces scheduled instalments       |
-| I10 | Bring forward 300                                                                | new instalment; earliest scheduled reduced; total unchanged |
-| I11 | Terminate under every rule × (per_period, upfront, partial upfront, back-loaded) | numbers in scenarios A15 / A16                              |
-| I12 | Subscription without commitments                                                 | invoice unchanged (golden fixtures)                         |
-| I13 | Tax enabled                                                                      | commitment money taxed once                                 |
-| I14 | Two concurrent invoice generations                                               | each instalment claimed once                                |
-| I15 | Re-plan concurrent with invoicing                                                | serialised by the owner lock                                |
-| I16 | Multi-tenant isolation                                                           | no cross-environment access                                 |
-| I17 | Usage API vs invoice preview vs final invoice                                    | same breakdown                                              |
-| I18 | Revenue rollup over X2 and a termination                                         | billed, earned and deferred reconcile                       |
-| I19 | Price attach that breaks C14                                                     | rejected                                                    |
-| I20 | Usage API under `billing_terms` (deposit, January, $80 used) | value_within 80, value_unused 20, billed_amount 0, covered_by the deposit |
-| I21 | Wallet pending charges and spend alerts under `billing_terms` | covered usage counted as $0; on-demand counted |
-| I22 | Invoice preview under `billing_terms` | matches the final invoice's billed amounts |
-| I23 | Revenue rollup reconciliation for a `billing_terms` commitment over a full term | used + unused = period amount each period; billed − earned = deferred; instalments = total |
+| #   | Scenario                                                                         | Expected                                                                                   |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| I1  | Preview, then create with the same request                                       | identical instalments; preview saved nothing                                               |
+| I2  | Create a billing_terms commitment with a preset, then replay the idempotency key | one transaction; same commitment returned                                                  |
+| I3  | A create step fails                                                              | full rollback                                                                              |
+| I4  | `subscription_invoice` delivery across 3 boundaries                              | each instalment on the right invoice, exactly once                                         |
+| I5  | `separate_invoice` with `bill_on` in the past                                    | `ONE_OFF` issued immediately                                                               |
+| I6  | Invoice retried or regenerated                                                   | no double billing                                                                          |
+| I7  | Invoice voided                                                                   | instalment billed again; per_period lines recomputed                                       |
+| I8  | Manual trigger, triggered vs never triggered                                     | billed on trigger vs at term end                                                           |
+| I9  | Re-plan with a wrong total, then a valid one                                     | first rejected; second replaces scheduled instalments                                      |
+| I10 | Bring forward 300                                                                | new instalment; earliest scheduled reduced; total unchanged                                |
+| I11 | Terminate under every rule × (per_period, upfront, partial upfront, back-loaded) | numbers in scenarios A15 / A16                                                             |
+| I12 | Subscription without commitments                                                 | invoice unchanged (golden fixtures)                                                        |
+| I13 | Tax enabled                                                                      | commitment money taxed once                                                                |
+| I14 | Two concurrent invoice generations                                               | each instalment claimed once                                                               |
+| I15 | Re-plan concurrent with invoicing                                                | serialised by the owner lock                                                               |
+| I16 | Multi-tenant isolation                                                           | no cross-environment access                                                                |
+| I17 | Usage API vs invoice preview vs final invoice                                    | same breakdown                                                                             |
+| I18 | Revenue rollup over X2 and a termination                                         | billed, earned and deferred reconcile                                                      |
+| I19 | Price attach that breaks C14                                                     | rejected                                                                                   |
+| I20 | Usage API under `billing_terms` (deposit, January, $80 used)                     | value_within 80, value_unused 20, billed_amount 0, covered_by the deposit                  |
+| I21 | Wallet pending charges and spend alerts under `billing_terms`                    | covered usage counted as $0; on-demand counted                                             |
+| I22 | Invoice preview under `billing_terms`                                            | matches the final invoice's billed amounts                                                 |
+| I23 | Revenue rollup reconciliation for a `billing_terms` commitment over a full term  | used + unused = period amount each period; billed − earned = deferred; instalments = total |
+| I24 | Utilisation API for a closed period and for the open period                      | closed matches revenue facts; open is flagged provisional and matches the invoice preview  |
+| I25 | Cost-explorer group-by (commitment × kind × month) for a closed period           | totals equal the invoices of that period                                                   |
+| I26 | Editing `invoice_label` mid-term                                                 | already issued invoices unchanged; later invoices use the new label                        |
 
 
 
@@ -1046,13 +1154,13 @@ Every rule C1–C19 and T1–T15 gets at least one failing case and one passing 
 ## 14. Rollout
 
 
-| Phase | Ships                                                                                                                                                             | Gate                                                                                                       |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 1     | Commitments (§6) with `per_period`                                                                                                                                | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged.             |
-| 2     | `billing_terms`: rows, presets, percent input, preview, expansion, both deliveries, claim and void, re-plan, bring forward, trigger; termination for both methods | I1–I15 green; integration sync verified                                                                    |
-| 3     | Revenue rollup and analytics                                                                                                                                      | Reconciliation invariant                                                                                   |
-| 4     | Migrate legacy commitments                                                                                                                                        | Per-tenant dry-run shows no invoice difference                                                             |
-| 5     | More owners (§7.9)                                                                                                                                                | A separate ERD per owner                                                                                   |
+| Phase | Ships                                                                                                                                                             | Gate                                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | Commitments (§6) with `per_period`                                                                                                                                | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged. |
+| 2     | `billing_terms`: rows, presets, percent input, preview, expansion, both deliveries, claim and void, re-plan, bring forward, trigger; termination for both methods | I1–I15 green; integration sync verified                                                        |
+| 3     | Revenue rollup and analytics                                                                                                                                      | Reconciliation invariant                                                                       |
+| 4     | Migrate legacy commitments                                                                                                                                        | Per-tenant dry-run shows no invoice difference                                                 |
+| 5     | More owners (§7.9)                                                                                                                                                | A separate ERD per owner                                                                       |
 
 
 Migrations are additive: three new tables and two nullable columns, via `make generate-ent` and `make generate-migration`.
