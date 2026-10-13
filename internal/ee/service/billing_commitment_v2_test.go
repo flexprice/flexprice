@@ -471,3 +471,109 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancel_SettlesO
 	s.Require().Len(settle, 1)
 	s.True(settle[0].Equal(dec("251.61")), "settlement %s", settle[0])
 }
+
+// futureSettleFixture stores an Aug 2026 subscription with a $100/month bill_remaining commitment from Sep to Dec.
+func (s *BillingServiceSuite) futureSettleFixture(id string) (*subscription.Subscription, *commitment.Commitment, *dto.GetUsageBySubscriptionResponse) {
+	sub, c, usage := s.settleFixture(id)
+	c.StartDate, c.EndDate = sub.CurrentPeriodEnd, sub.CurrentPeriodEnd.AddDate(0, 3, 0)
+	_, err := s.GetStores().CommitmentRepo.Update(s.GetContext(), c)
+	s.Require().NoError(err)
+	return sub, c, usage
+}
+
+// Cancelled mid-August before the commitment starts: the final invoice settles the whole value once.
+func (s *BillingServiceSuite) TestCommitmentV2_ImmediateCancelBeforeStart_SettlesOnce() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub, c, usage := s.futureSettleFixture("sub_pre_imm")
+	aug, cancelAt := sub.CurrentPeriodStart, time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+
+	s.Require().NoError(NewCommitmentService(s.service.(*billingService).ServiceParams).TerminateForSubscription(ctx, sub.ID, cancelAt))
+	stored, err := s.GetStores().CommitmentRepo.Get(ctx, c.ID)
+	s.Require().NoError(err)
+	s.True(stored.TerminatedAt.Equal(c.StartDate), "termination clamps to the start date")
+
+	// Built before the subscription records its end, then recomputed after.
+	first := s.settlementsFor(sub, usage, aug, cancelAt)
+	s.Require().Len(first, 1)
+	s.True(first[0].Amount.Equal(dec("300")), "settlement %s", first[0].Amount)
+	sub.EndDate, sub.CancelAt = lo.ToPtr(cancelAt), lo.ToPtr(cancelAt)
+	again := s.settlementsFor(sub, usage, aug, cancelAt)
+	s.Require().Len(again, 1)
+	s.True(again[0].Amount.Equal(first[0].Amount))
+}
+
+// A period-end cancel at 1 Sep for a commitment starting 1 Sep settles on the August invoice only.
+func (s *BillingServiceSuite) TestCommitmentV2_PeriodEndCancelAtStart_SettlesOnce() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub, _, usage := s.futureSettleFixture("sub_pre_eop")
+	aug, sep := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	sub.CancelAt, sub.CancelAtPeriodEnd = lo.ToPtr(sep), true
+
+	before := s.settlementsFor(sub, usage, aug, sep)
+	s.Require().Len(before, 1)
+	s.True(before[0].Amount.Equal(dec("300")), "settlement %s", before[0].Amount)
+
+	s.Require().NoError(NewCommitmentService(s.service.(*billingService).ServiceParams).TerminateForSubscription(ctx, sub.ID, sep))
+	after := s.settlementsFor(sub, usage, aug, sep)
+	s.Require().Len(after, 1)
+	s.True(after[0].Amount.Equal(before[0].Amount))
+	s.Empty(s.settlementsFor(sub, usage, sep, sep.AddDate(0, 1, 0)))
+}
+
+// An immediate cancel before a commitment starts bills its whole value as a settlement on the final invoice.
+func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancelBeforeStart_SettlesOnFinalInvoice() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	sub := &subscription.Subscription{
+		ID: "sub_cmt_cancel_pre", PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: aug,
+		BillingAnchor: aug, CurrentPeriodStart: aug, CurrentPeriodEnd: aug.AddDate(0, 1, 0), Currency: "usd",
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	li := *s.testData.usageSubLineItem
+	li.ID, li.SubscriptionID, li.StartDate = "subs_line_cmt_cancel_pre", sub.ID, aug
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{&li}))
+
+	sep := aug.AddDate(0, 1, 0)
+	c := &commitment.Commitment{
+		ID: "cmt_cancel_pre", SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Name: "Platform", InvoiceLabel: "Platform",
+		Currency: "usd", ScopeEntityType: types.CommitmentScopePrice, ScopeEntityID: li.PriceID,
+		Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone: "UTC", Priority: 1, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		StartDate: sep, EndDate: sep.AddDate(0, 3, 0), CommitmentStatus: types.CommitmentStatusActive,
+		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationBillRemaining),
+		EnvironmentID:      types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
+	s.Require().NoError(err)
+
+	_, err = s.subService.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType:               types.CancellationTypeImmediate,
+		CancelAt:                       lo.ToPtr(time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)),
+		CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+	})
+	s.Require().NoError(err)
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	var settlements []decimal.Decimal
+	for _, inv := range invoices {
+		resp, err := s.invoiceSvc.GetInvoice(ctx, inv.ID)
+		s.Require().NoError(err)
+		for _, l := range resp.LineItems {
+			if l.Metadata[types.MetadataKeyCommitmentLineKind] == string(types.CommitmentLineSettlement) {
+				s.Equal(types.InvoiceTypeSubscription, inv.InvoiceType)
+				settlements = append(settlements, l.Amount)
+			}
+		}
+	}
+	s.Require().Len(settlements, 1)
+	s.True(settlements[0].Equal(dec("300")), "settlement %s", settlements[0])
+}
