@@ -198,6 +198,29 @@ func (s *CommitmentServiceSuite) TestCreate_IdempotencyKeyReturnsExisting() {
 	s.Equal(1, n)
 }
 
+func (s *CommitmentServiceSuite) TestCreateLocked_ReplayedKeyReturnsOriginalWithoutWrites() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.IdempotencyKey = lo.ToPtr("contract-2")
+	first, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	pricesBefore, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
+	s.Require().NoError(err)
+
+	got, err := s.svc.(*commitmentService).createLocked(s.GetContext(), &req)
+	s.Require().NoError(err)
+	s.Equal(first.ID, got.ID)
+	pricesAfter, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
+	s.Require().NoError(err)
+	s.Equal(pricesBefore, pricesAfter)
+}
+
+func (s *CommitmentServiceSuite) TestPreview_RejectedWhenDisabled() {
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	_, err := s.svc.Preview(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().Error(err)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+}
+
 func (s *CommitmentServiceSuite) TestPreview_DoesNotPersist() {
 	resp, err := s.svc.Preview(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
@@ -266,6 +289,31 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsEffectiveAtAfterEnd() {
 	at := created.EndDate.AddDate(0, 1, 0)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.True(ierr.IsValidation(err), "got %v", err)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_ClampsTerminatedAtToStartDate() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	at := created.StartDate.AddDate(0, -1, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+	s.True(resp.TerminatedAt.Equal(created.StartDate), "got %s", resp.TerminatedAt)
+}
+
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_ClampsAndIsIdempotent() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	at := created.StartDate.AddDate(0, -1, 0)
+	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at))
+	first, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.True(first.TerminatedAt.Equal(created.StartDate), "got %s", first.TerminatedAt)
+
+	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at.AddDate(0, 2, 0)))
+	second, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, second.CommitmentStatus)
+	s.True(second.TerminatedAt.Equal(*first.TerminatedAt))
 }
 
 func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveCommitments() {
