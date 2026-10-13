@@ -33,6 +33,17 @@ Temporal integration points noted in hotspots: **`internal/api/v1/invoice`** dir
 
 Accounting / invoicing PSP sync partners; PDF generation subsystem (`internal/pdf`) + optional object storage (`internal/s3`).
 
+## Netted subscription-update invoices (Paddle)
+
+Plan-change and proration invoices can carry negative unused-time lines while `amount_due` is the
+net. Paddle prices cannot be negative, so those credits cannot be sent as their own items.
+
+- Invoice builders set `metadata.collapsed_invoice_display_name` (`types.InvoiceMetadataKeyCollapsedInvoiceDisplayName`).
+- Paddle `SyncInvoice` bills `amount_due` as one non-catalog price on the existing catalog product
+  when the positive lines do not sum to due, and names that charge with the metadata label.
+- The catalog product keeps the line item's own name; only the charge is relabelled.
+- Bootstrap `$0` recurring prices in `EnsureSubscriptionSynced` are unrelated and stay catalog prices.
+
 ## Async operations
 
 Workflows synchronize external bookkeeping; webhook dispatch after major state changes (`internal/webhook`).

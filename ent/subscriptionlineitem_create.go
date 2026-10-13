@@ -25,499 +25,499 @@ type SubscriptionLineItemCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (slic *SubscriptionLineItemCreate) SetTenantID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetTenantID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetTenantID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (slic *SubscriptionLineItemCreate) SetStatus(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetStatus(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetStatus(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableStatus(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetStatus(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableStatus(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (slic *SubscriptionLineItemCreate) SetCreatedAt(t time.Time) *SubscriptionLineItemCreate {
-	slic.mutation.SetCreatedAt(t)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCreatedAt(v time.Time) *SubscriptionLineItemCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCreatedAt(t *time.Time) *SubscriptionLineItemCreate {
-	if t != nil {
-		slic.SetCreatedAt(*t)
+func (_c *SubscriptionLineItemCreate) SetNillableCreatedAt(v *time.Time) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (slic *SubscriptionLineItemCreate) SetUpdatedAt(t time.Time) *SubscriptionLineItemCreate {
-	slic.mutation.SetUpdatedAt(t)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetUpdatedAt(v time.Time) *SubscriptionLineItemCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableUpdatedAt(t *time.Time) *SubscriptionLineItemCreate {
-	if t != nil {
-		slic.SetUpdatedAt(*t)
+func (_c *SubscriptionLineItemCreate) SetNillableUpdatedAt(v *time.Time) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (slic *SubscriptionLineItemCreate) SetCreatedBy(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetCreatedBy(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCreatedBy(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCreatedBy(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetCreatedBy(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableCreatedBy(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (slic *SubscriptionLineItemCreate) SetUpdatedBy(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetUpdatedBy(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetUpdatedBy(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableUpdatedBy(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetUpdatedBy(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableUpdatedBy(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (slic *SubscriptionLineItemCreate) SetEnvironmentID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetEnvironmentID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetEnvironmentID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableEnvironmentID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetEnvironmentID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableEnvironmentID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (slic *SubscriptionLineItemCreate) SetSubscriptionID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetSubscriptionID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetSubscriptionID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (slic *SubscriptionLineItemCreate) SetCustomerID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetCustomerID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCustomerID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (slic *SubscriptionLineItemCreate) SetEntityID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetEntityID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetEntityID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableEntityID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetEntityID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableEntityID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetEntityID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (slic *SubscriptionLineItemCreate) SetEntityType(tliet types.InvoiceLineItemEntityType) *SubscriptionLineItemCreate {
-	slic.mutation.SetEntityType(tliet)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetEntityType(v types.InvoiceLineItemEntityType) *SubscriptionLineItemCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableEntityType(tliet *types.InvoiceLineItemEntityType) *SubscriptionLineItemCreate {
-	if tliet != nil {
-		slic.SetEntityType(*tliet)
+func (_c *SubscriptionLineItemCreate) SetNillableEntityType(v *types.InvoiceLineItemEntityType) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetEntityType(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetPlanDisplayName sets the "plan_display_name" field.
-func (slic *SubscriptionLineItemCreate) SetPlanDisplayName(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetPlanDisplayName(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetPlanDisplayName(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetPlanDisplayName(v)
+	return _c
 }
 
 // SetNillablePlanDisplayName sets the "plan_display_name" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillablePlanDisplayName(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetPlanDisplayName(*s)
+func (_c *SubscriptionLineItemCreate) SetNillablePlanDisplayName(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetPlanDisplayName(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetPriceID sets the "price_id" field.
-func (slic *SubscriptionLineItemCreate) SetPriceID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetPriceID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetPriceID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetPriceID(v)
+	return _c
 }
 
 // SetPriceType sets the "price_type" field.
-func (slic *SubscriptionLineItemCreate) SetPriceType(tt types.PriceType) *SubscriptionLineItemCreate {
-	slic.mutation.SetPriceType(tt)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetPriceType(v types.PriceType) *SubscriptionLineItemCreate {
+	_c.mutation.SetPriceType(v)
+	return _c
 }
 
 // SetNillablePriceType sets the "price_type" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillablePriceType(tt *types.PriceType) *SubscriptionLineItemCreate {
-	if tt != nil {
-		slic.SetPriceType(*tt)
+func (_c *SubscriptionLineItemCreate) SetNillablePriceType(v *types.PriceType) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetPriceType(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetMeterID sets the "meter_id" field.
-func (slic *SubscriptionLineItemCreate) SetMeterID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetMeterID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetMeterID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetMeterID(v)
+	return _c
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableMeterID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetMeterID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableMeterID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetMeterID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetMeterDisplayName sets the "meter_display_name" field.
-func (slic *SubscriptionLineItemCreate) SetMeterDisplayName(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetMeterDisplayName(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetMeterDisplayName(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetMeterDisplayName(v)
+	return _c
 }
 
 // SetNillableMeterDisplayName sets the "meter_display_name" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableMeterDisplayName(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetMeterDisplayName(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableMeterDisplayName(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetMeterDisplayName(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetPriceUnitID sets the "price_unit_id" field.
-func (slic *SubscriptionLineItemCreate) SetPriceUnitID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetPriceUnitID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetPriceUnitID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetPriceUnitID(v)
+	return _c
 }
 
 // SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillablePriceUnitID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetPriceUnitID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillablePriceUnitID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetPriceUnitID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetPriceUnit sets the "price_unit" field.
-func (slic *SubscriptionLineItemCreate) SetPriceUnit(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetPriceUnit(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetPriceUnit(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetPriceUnit(v)
+	return _c
 }
 
 // SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillablePriceUnit(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetPriceUnit(*s)
+func (_c *SubscriptionLineItemCreate) SetNillablePriceUnit(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetPriceUnit(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetDisplayName sets the "display_name" field.
-func (slic *SubscriptionLineItemCreate) SetDisplayName(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetDisplayName(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetDisplayName(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetDisplayName(v)
+	return _c
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableDisplayName(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetDisplayName(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableDisplayName(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetDisplayName(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetQuantity sets the "quantity" field.
-func (slic *SubscriptionLineItemCreate) SetQuantity(d decimal.Decimal) *SubscriptionLineItemCreate {
-	slic.mutation.SetQuantity(d)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetQuantity(v decimal.Decimal) *SubscriptionLineItemCreate {
+	_c.mutation.SetQuantity(v)
+	return _c
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableQuantity(d *decimal.Decimal) *SubscriptionLineItemCreate {
-	if d != nil {
-		slic.SetQuantity(*d)
+func (_c *SubscriptionLineItemCreate) SetNillableQuantity(v *decimal.Decimal) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetQuantity(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (slic *SubscriptionLineItemCreate) SetCurrency(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetCurrency(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCurrency(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (slic *SubscriptionLineItemCreate) SetBillingPeriod(tp types.BillingPeriod) *SubscriptionLineItemCreate {
-	slic.mutation.SetBillingPeriod(tp)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetBillingPeriod(v types.BillingPeriod) *SubscriptionLineItemCreate {
+	_c.mutation.SetBillingPeriod(v)
+	return _c
 }
 
 // SetBillingPeriodCount sets the "billing_period_count" field.
-func (slic *SubscriptionLineItemCreate) SetBillingPeriodCount(i int) *SubscriptionLineItemCreate {
-	slic.mutation.SetBillingPeriodCount(i)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetBillingPeriodCount(v int) *SubscriptionLineItemCreate {
+	_c.mutation.SetBillingPeriodCount(v)
+	return _c
 }
 
 // SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemCreate {
-	if i != nil {
-		slic.SetBillingPeriodCount(*i)
+func (_c *SubscriptionLineItemCreate) SetNillableBillingPeriodCount(v *int) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetBillingPeriodCount(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetInvoiceCadence sets the "invoice_cadence" field.
-func (slic *SubscriptionLineItemCreate) SetInvoiceCadence(tc types.InvoiceCadence) *SubscriptionLineItemCreate {
-	slic.mutation.SetInvoiceCadence(tc)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetInvoiceCadence(v types.InvoiceCadence) *SubscriptionLineItemCreate {
+	_c.mutation.SetInvoiceCadence(v)
+	return _c
 }
 
 // SetNillableInvoiceCadence sets the "invoice_cadence" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableInvoiceCadence(tc *types.InvoiceCadence) *SubscriptionLineItemCreate {
-	if tc != nil {
-		slic.SetInvoiceCadence(*tc)
+func (_c *SubscriptionLineItemCreate) SetNillableInvoiceCadence(v *types.InvoiceCadence) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetInvoiceCadence(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (slic *SubscriptionLineItemCreate) SetStartDate(t time.Time) *SubscriptionLineItemCreate {
-	slic.mutation.SetStartDate(t)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetStartDate(v time.Time) *SubscriptionLineItemCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableStartDate(t *time.Time) *SubscriptionLineItemCreate {
-	if t != nil {
-		slic.SetStartDate(*t)
+func (_c *SubscriptionLineItemCreate) SetNillableStartDate(v *time.Time) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (slic *SubscriptionLineItemCreate) SetEndDate(t time.Time) *SubscriptionLineItemCreate {
-	slic.mutation.SetEndDate(t)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetEndDate(v time.Time) *SubscriptionLineItemCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableEndDate(t *time.Time) *SubscriptionLineItemCreate {
-	if t != nil {
-		slic.SetEndDate(*t)
+func (_c *SubscriptionLineItemCreate) SetNillableEndDate(v *time.Time) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetSubscriptionPhaseID sets the "subscription_phase_id" field.
-func (slic *SubscriptionLineItemCreate) SetSubscriptionPhaseID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetSubscriptionPhaseID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetSubscriptionPhaseID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetSubscriptionPhaseID(v)
+	return _c
 }
 
 // SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableSubscriptionPhaseID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetSubscriptionPhaseID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableSubscriptionPhaseID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetSubscriptionPhaseID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetAddonAssociationID sets the "addon_association_id" field.
-func (slic *SubscriptionLineItemCreate) SetAddonAssociationID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetAddonAssociationID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetAddonAssociationID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetAddonAssociationID(v)
+	return _c
 }
 
 // SetNillableAddonAssociationID sets the "addon_association_id" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableAddonAssociationID(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetAddonAssociationID(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableAddonAssociationID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetAddonAssociationID(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (slic *SubscriptionLineItemCreate) SetMetadata(m map[string]string) *SubscriptionLineItemCreate {
-	slic.mutation.SetMetadata(m)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetMetadata(v map[string]string) *SubscriptionLineItemCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetCommitmentAmount sets the "commitment_amount" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentAmount(d)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentAmount(v decimal.Decimal) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentAmount(v)
+	return _c
 }
 
 // SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionLineItemCreate {
-	if d != nil {
-		slic.SetCommitmentAmount(*d)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentAmount(v *decimal.Decimal) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentAmount(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentQuantity sets the "commitment_quantity" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentQuantity(d decimal.Decimal) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentQuantity(d)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentQuantity(v decimal.Decimal) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentQuantity(v)
+	return _c
 }
 
 // SetNillableCommitmentQuantity sets the "commitment_quantity" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentQuantity(d *decimal.Decimal) *SubscriptionLineItemCreate {
-	if d != nil {
-		slic.SetCommitmentQuantity(*d)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentQuantity(v *decimal.Decimal) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentQuantity(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentType sets the "commitment_type" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentType(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentType(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentType(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentType(v)
+	return _c
 }
 
 // SetNillableCommitmentType sets the "commitment_type" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentType(s *string) *SubscriptionLineItemCreate {
-	if s != nil {
-		slic.SetCommitmentType(*s)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentType(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentType(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentOverageFactor sets the "commitment_overage_factor" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentOverageFactor(d decimal.Decimal) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentOverageFactor(d)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentOverageFactor(v decimal.Decimal) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentOverageFactor(v)
+	return _c
 }
 
 // SetNillableCommitmentOverageFactor sets the "commitment_overage_factor" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentOverageFactor(d *decimal.Decimal) *SubscriptionLineItemCreate {
-	if d != nil {
-		slic.SetCommitmentOverageFactor(*d)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentOverageFactor(v *decimal.Decimal) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentOverageFactor(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentTrueUpEnabled(b bool) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentTrueUpEnabled(b)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentTrueUpEnabled(v bool) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentTrueUpEnabled(v)
+	return _c
 }
 
 // SetNillableCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentTrueUpEnabled(b *bool) *SubscriptionLineItemCreate {
-	if b != nil {
-		slic.SetCommitmentTrueUpEnabled(*b)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentTrueUpEnabled(v *bool) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentTrueUpEnabled(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentWindowed sets the "commitment_windowed" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentWindowed(b bool) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentWindowed(b)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentWindowed(v bool) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentWindowed(v)
+	return _c
 }
 
 // SetNillableCommitmentWindowed sets the "commitment_windowed" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentWindowed(b *bool) *SubscriptionLineItemCreate {
-	if b != nil {
-		slic.SetCommitmentWindowed(*b)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentWindowed(v *bool) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentWindowed(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentDuration(tp)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentDuration(v types.BillingPeriod) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentDuration(v)
+	return _c
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemCreate {
-	if tp != nil {
-		slic.SetCommitmentDuration(*tp)
+func (_c *SubscriptionLineItemCreate) SetNillableCommitmentDuration(v *types.BillingPeriod) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentDuration(*v)
 	}
-	return slic
+	return _c
 }
 
 // SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentTimeBuckets(todb)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetCommitmentTimeBuckets(v types.TimeOfDayBuckets) *SubscriptionLineItemCreate {
+	_c.mutation.SetCommitmentTimeBuckets(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
-	slic.mutation.SetID(s)
-	return slic
+func (_c *SubscriptionLineItemCreate) SetID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (slic *SubscriptionLineItemCreate) SetSubscription(s *Subscription) *SubscriptionLineItemCreate {
-	return slic.SetSubscriptionID(s.ID)
+func (_c *SubscriptionLineItemCreate) SetSubscription(v *Subscription) *SubscriptionLineItemCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (slic *SubscriptionLineItemCreate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemCreate {
-	slic.mutation.AddCouponAssociationIDs(ids...)
-	return slic
+func (_c *SubscriptionLineItemCreate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemCreate {
+	_c.mutation.AddCouponAssociationIDs(ids...)
+	return _c
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (slic *SubscriptionLineItemCreate) AddCouponAssociations(c ...*CouponAssociation) *SubscriptionLineItemCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *SubscriptionLineItemCreate) AddCouponAssociations(v ...*CouponAssociation) *SubscriptionLineItemCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return slic.AddCouponAssociationIDs(ids...)
+	return _c.AddCouponAssociationIDs(ids...)
 }
 
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
-func (slic *SubscriptionLineItemCreate) Mutation() *SubscriptionLineItemMutation {
-	return slic.mutation
+func (_c *SubscriptionLineItemCreate) Mutation() *SubscriptionLineItemMutation {
+	return _c.mutation
 }
 
 // Save creates the SubscriptionLineItem in the database.
-func (slic *SubscriptionLineItemCreate) Save(ctx context.Context) (*SubscriptionLineItem, error) {
-	slic.defaults()
-	return withHooks(ctx, slic.sqlSave, slic.mutation, slic.hooks)
+func (_c *SubscriptionLineItemCreate) Save(ctx context.Context) (*SubscriptionLineItem, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (slic *SubscriptionLineItemCreate) SaveX(ctx context.Context) *SubscriptionLineItem {
-	v, err := slic.Save(ctx)
+func (_c *SubscriptionLineItemCreate) SaveX(ctx context.Context) *SubscriptionLineItem {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -525,159 +525,159 @@ func (slic *SubscriptionLineItemCreate) SaveX(ctx context.Context) *Subscription
 }
 
 // Exec executes the query.
-func (slic *SubscriptionLineItemCreate) Exec(ctx context.Context) error {
-	_, err := slic.Save(ctx)
+func (_c *SubscriptionLineItemCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (slic *SubscriptionLineItemCreate) ExecX(ctx context.Context) {
-	if err := slic.Exec(ctx); err != nil {
+func (_c *SubscriptionLineItemCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (slic *SubscriptionLineItemCreate) defaults() {
-	if _, ok := slic.mutation.Status(); !ok {
+func (_c *SubscriptionLineItemCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := subscriptionlineitem.DefaultStatus
-		slic.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := slic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := subscriptionlineitem.DefaultCreatedAt()
-		slic.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := slic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := subscriptionlineitem.DefaultUpdatedAt()
-		slic.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := slic.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := subscriptionlineitem.DefaultEnvironmentID
-		slic.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := slic.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		v := subscriptionlineitem.DefaultEntityType
-		slic.mutation.SetEntityType(v)
+		_c.mutation.SetEntityType(v)
 	}
-	if _, ok := slic.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		v := subscriptionlineitem.DefaultQuantity
-		slic.mutation.SetQuantity(v)
+		_c.mutation.SetQuantity(v)
 	}
-	if _, ok := slic.mutation.BillingPeriodCount(); !ok {
+	if _, ok := _c.mutation.BillingPeriodCount(); !ok {
 		v := subscriptionlineitem.DefaultBillingPeriodCount
-		slic.mutation.SetBillingPeriodCount(v)
+		_c.mutation.SetBillingPeriodCount(v)
 	}
-	if _, ok := slic.mutation.CommitmentTrueUpEnabled(); !ok {
+	if _, ok := _c.mutation.CommitmentTrueUpEnabled(); !ok {
 		v := subscriptionlineitem.DefaultCommitmentTrueUpEnabled
-		slic.mutation.SetCommitmentTrueUpEnabled(v)
+		_c.mutation.SetCommitmentTrueUpEnabled(v)
 	}
-	if _, ok := slic.mutation.CommitmentWindowed(); !ok {
+	if _, ok := _c.mutation.CommitmentWindowed(); !ok {
 		v := subscriptionlineitem.DefaultCommitmentWindowed
-		slic.mutation.SetCommitmentWindowed(v)
+		_c.mutation.SetCommitmentWindowed(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (slic *SubscriptionLineItemCreate) check() error {
-	if _, ok := slic.mutation.TenantID(); !ok {
+func (_c *SubscriptionLineItemCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "SubscriptionLineItem.tenant_id"`)}
 	}
-	if v, ok := slic.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := subscriptionlineitem.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "SubscriptionLineItem.status"`)}
 	}
-	if _, ok := slic.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "SubscriptionLineItem.created_at"`)}
 	}
-	if _, ok := slic.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SubscriptionLineItem.updated_at"`)}
 	}
-	if _, ok := slic.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "SubscriptionLineItem.subscription_id"`)}
 	}
-	if v, ok := slic.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := subscriptionlineitem.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "SubscriptionLineItem.customer_id"`)}
 	}
-	if v, ok := slic.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := subscriptionlineitem.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "SubscriptionLineItem.entity_type"`)}
 	}
-	if _, ok := slic.mutation.PriceID(); !ok {
+	if _, ok := _c.mutation.PriceID(); !ok {
 		return &ValidationError{Name: "price_id", err: errors.New(`ent: missing required field "SubscriptionLineItem.price_id"`)}
 	}
-	if v, ok := slic.mutation.PriceID(); ok {
+	if v, ok := _c.mutation.PriceID(); ok {
 		if err := subscriptionlineitem.PriceIDValidator(v); err != nil {
 			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_id": %w`, err)}
 		}
 	}
-	if v, ok := slic.mutation.PriceType(); ok {
+	if v, ok := _c.mutation.PriceType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "price_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.price_type": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		return &ValidationError{Name: "quantity", err: errors.New(`ent: missing required field "SubscriptionLineItem.quantity"`)}
 	}
-	if _, ok := slic.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "SubscriptionLineItem.currency"`)}
 	}
-	if v, ok := slic.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := subscriptionlineitem.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.currency": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.BillingPeriod(); !ok {
+	if _, ok := _c.mutation.BillingPeriod(); !ok {
 		return &ValidationError{Name: "billing_period", err: errors.New(`ent: missing required field "SubscriptionLineItem.billing_period"`)}
 	}
-	if v, ok := slic.mutation.BillingPeriod(); ok {
+	if v, ok := _c.mutation.BillingPeriod(); ok {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.BillingPeriodCount(); !ok {
+	if _, ok := _c.mutation.BillingPeriodCount(); !ok {
 		return &ValidationError{Name: "billing_period_count", err: errors.New(`ent: missing required field "SubscriptionLineItem.billing_period_count"`)}
 	}
-	if v, ok := slic.mutation.InvoiceCadence(); ok {
+	if v, ok := _c.mutation.InvoiceCadence(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "invoice_cadence", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.invoice_cadence": %w`, err)}
 		}
 	}
-	if _, ok := slic.mutation.CommitmentTrueUpEnabled(); !ok {
+	if _, ok := _c.mutation.CommitmentTrueUpEnabled(); !ok {
 		return &ValidationError{Name: "commitment_true_up_enabled", err: errors.New(`ent: missing required field "SubscriptionLineItem.commitment_true_up_enabled"`)}
 	}
-	if _, ok := slic.mutation.CommitmentWindowed(); !ok {
+	if _, ok := _c.mutation.CommitmentWindowed(); !ok {
 		return &ValidationError{Name: "commitment_windowed", err: errors.New(`ent: missing required field "SubscriptionLineItem.commitment_windowed"`)}
 	}
-	if v, ok := slic.mutation.CommitmentDuration(); ok {
+	if v, ok := _c.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
 		}
 	}
-	if len(slic.mutation.SubscriptionIDs()) == 0 {
+	if len(_c.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionLineItem.subscription"`)}
 	}
 	return nil
 }
 
-func (slic *SubscriptionLineItemCreate) sqlSave(ctx context.Context) (*SubscriptionLineItem, error) {
-	if err := slic.check(); err != nil {
+func (_c *SubscriptionLineItemCreate) sqlSave(ctx context.Context) (*SubscriptionLineItem, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := slic.createSpec()
-	if err := sqlgraph.CreateNode(ctx, slic.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -690,165 +690,165 @@ func (slic *SubscriptionLineItemCreate) sqlSave(ctx context.Context) (*Subscript
 			return nil, fmt.Errorf("unexpected SubscriptionLineItem.ID type: %T", _spec.ID.Value)
 		}
 	}
-	slic.mutation.id = &_node.ID
-	slic.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sqlgraph.CreateSpec) {
+func (_c *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sqlgraph.CreateSpec) {
 	var (
-		_node = &SubscriptionLineItem{config: slic.config}
+		_node = &SubscriptionLineItem{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(subscriptionlineitem.Table, sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString))
 	)
-	if id, ok := slic.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := slic.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := slic.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := slic.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := slic.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := slic.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := slic.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionlineitem.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := slic.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := slic.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := slic.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEntityID, field.TypeString, value)
 		_node.EntityID = &value
 	}
-	if value, ok := slic.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := slic.mutation.PlanDisplayName(); ok {
+	if value, ok := _c.mutation.PlanDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPlanDisplayName, field.TypeString, value)
 		_node.PlanDisplayName = &value
 	}
-	if value, ok := slic.mutation.PriceID(); ok {
+	if value, ok := _c.mutation.PriceID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceID, field.TypeString, value)
 		_node.PriceID = value
 	}
-	if value, ok := slic.mutation.PriceType(); ok {
+	if value, ok := _c.mutation.PriceType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceType, field.TypeString, value)
 		_node.PriceType = &value
 	}
-	if value, ok := slic.mutation.MeterID(); ok {
+	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
 	}
-	if value, ok := slic.mutation.MeterDisplayName(); ok {
+	if value, ok := _c.mutation.MeterDisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMeterDisplayName, field.TypeString, value)
 		_node.MeterDisplayName = &value
 	}
-	if value, ok := slic.mutation.PriceUnitID(); ok {
+	if value, ok := _c.mutation.PriceUnitID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnitID, field.TypeString, value)
 		_node.PriceUnitID = &value
 	}
-	if value, ok := slic.mutation.PriceUnit(); ok {
+	if value, ok := _c.mutation.PriceUnit(); ok {
 		_spec.SetField(subscriptionlineitem.FieldPriceUnit, field.TypeString, value)
 		_node.PriceUnit = &value
 	}
-	if value, ok := slic.mutation.DisplayName(); ok {
+	if value, ok := _c.mutation.DisplayName(); ok {
 		_spec.SetField(subscriptionlineitem.FieldDisplayName, field.TypeString, value)
 		_node.DisplayName = &value
 	}
-	if value, ok := slic.mutation.Quantity(); ok {
+	if value, ok := _c.mutation.Quantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldQuantity, field.TypeOther, value)
 		_node.Quantity = value
 	}
-	if value, ok := slic.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := slic.mutation.BillingPeriod(); ok {
+	if value, ok := _c.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
 		_node.BillingPeriod = value
 	}
-	if value, ok := slic.mutation.BillingPeriodCount(); ok {
+	if value, ok := _c.mutation.BillingPeriodCount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 		_node.BillingPeriodCount = value
 	}
-	if value, ok := slic.mutation.InvoiceCadence(); ok {
+	if value, ok := _c.mutation.InvoiceCadence(); ok {
 		_spec.SetField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString, value)
 		_node.InvoiceCadence = value
 	}
-	if value, ok := slic.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = &value
 	}
-	if value, ok := slic.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := slic.mutation.SubscriptionPhaseID(); ok {
+	if value, ok := _c.mutation.SubscriptionPhaseID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString, value)
 		_node.SubscriptionPhaseID = &value
 	}
-	if value, ok := slic.mutation.AddonAssociationID(); ok {
+	if value, ok := _c.mutation.AddonAssociationID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString, value)
 		_node.AddonAssociationID = &value
 	}
-	if value, ok := slic.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := slic.mutation.CommitmentAmount(); ok {
+	if value, ok := _c.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther, value)
 		_node.CommitmentAmount = &value
 	}
-	if value, ok := slic.mutation.CommitmentQuantity(); ok {
+	if value, ok := _c.mutation.CommitmentQuantity(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther, value)
 		_node.CommitmentQuantity = &value
 	}
-	if value, ok := slic.mutation.CommitmentType(); ok {
+	if value, ok := _c.mutation.CommitmentType(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentType, field.TypeString, value)
 		_node.CommitmentType = &value
 	}
-	if value, ok := slic.mutation.CommitmentOverageFactor(); ok {
+	if value, ok := _c.mutation.CommitmentOverageFactor(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentOverageFactor, field.TypeOther, value)
 		_node.CommitmentOverageFactor = &value
 	}
-	if value, ok := slic.mutation.CommitmentTrueUpEnabled(); ok {
+	if value, ok := _c.mutation.CommitmentTrueUpEnabled(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTrueUpEnabled, field.TypeBool, value)
 		_node.CommitmentTrueUpEnabled = value
 	}
-	if value, ok := slic.mutation.CommitmentWindowed(); ok {
+	if value, ok := _c.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
 		_node.CommitmentWindowed = value
 	}
-	if value, ok := slic.mutation.CommitmentDuration(); ok {
+	if value, ok := _c.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
 		_node.CommitmentDuration = &value
 	}
-	if value, ok := slic.mutation.CommitmentTimeBuckets(); ok {
+	if value, ok := _c.mutation.CommitmentTimeBuckets(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
 		_node.CommitmentTimeBuckets = value
 	}
-	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -865,7 +865,7 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 		_node.SubscriptionID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := slic.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -892,16 +892,16 @@ type SubscriptionLineItemCreateBulk struct {
 }
 
 // Save creates the SubscriptionLineItem entities in the database.
-func (slicb *SubscriptionLineItemCreateBulk) Save(ctx context.Context) ([]*SubscriptionLineItem, error) {
-	if slicb.err != nil {
-		return nil, slicb.err
+func (_c *SubscriptionLineItemCreateBulk) Save(ctx context.Context) ([]*SubscriptionLineItem, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(slicb.builders))
-	nodes := make([]*SubscriptionLineItem, len(slicb.builders))
-	mutators := make([]Mutator, len(slicb.builders))
-	for i := range slicb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*SubscriptionLineItem, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := slicb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SubscriptionLineItemMutation)
@@ -915,11 +915,11 @@ func (slicb *SubscriptionLineItemCreateBulk) Save(ctx context.Context) ([]*Subsc
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, slicb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, slicb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -939,7 +939,7 @@ func (slicb *SubscriptionLineItemCreateBulk) Save(ctx context.Context) ([]*Subsc
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, slicb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -947,8 +947,8 @@ func (slicb *SubscriptionLineItemCreateBulk) Save(ctx context.Context) ([]*Subsc
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (slicb *SubscriptionLineItemCreateBulk) SaveX(ctx context.Context) []*SubscriptionLineItem {
-	v, err := slicb.Save(ctx)
+func (_c *SubscriptionLineItemCreateBulk) SaveX(ctx context.Context) []*SubscriptionLineItem {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -956,14 +956,14 @@ func (slicb *SubscriptionLineItemCreateBulk) SaveX(ctx context.Context) []*Subsc
 }
 
 // Exec executes the query.
-func (slicb *SubscriptionLineItemCreateBulk) Exec(ctx context.Context) error {
-	_, err := slicb.Save(ctx)
+func (_c *SubscriptionLineItemCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (slicb *SubscriptionLineItemCreateBulk) ExecX(ctx context.Context) {
-	if err := slicb.Exec(ctx); err != nil {
+func (_c *SubscriptionLineItemCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

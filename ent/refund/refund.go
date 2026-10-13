@@ -30,6 +30,10 @@ const (
 	FieldEnvironmentID = "environment_id"
 	// FieldPaymentID holds the string denoting the payment_id field in the database.
 	FieldPaymentID = "payment_id"
+	// FieldInvoiceID holds the string denoting the invoice_id field in the database.
+	FieldInvoiceID = "invoice_id"
+	// FieldCreditNoteID holds the string denoting the credit_note_id field in the database.
+	FieldCreditNoteID = "credit_note_id"
 	// FieldPaymentGateway holds the string denoting the payment_gateway field in the database.
 	FieldPaymentGateway = "payment_gateway"
 	// FieldGatewayRefundID holds the string denoting the gateway_refund_id field in the database.
@@ -38,12 +42,20 @@ const (
 	FieldGatewayTrackingID = "gateway_tracking_id"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
+	// FieldSettledAmount holds the string denoting the settled_amount field in the database.
+	FieldSettledAmount = "settled_amount"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
 	// FieldRefundStatus holds the string denoting the refund_status field in the database.
 	FieldRefundStatus = "refund_status"
 	// FieldRefundReason holds the string denoting the refund_reason field in the database.
 	FieldRefundReason = "refund_reason"
+	// FieldRefundDestination holds the string denoting the refund_destination field in the database.
+	FieldRefundDestination = "refund_destination"
+	// FieldRefundDestinationID holds the string denoting the refund_destination_id field in the database.
+	FieldRefundDestinationID = "refund_destination_id"
+	// FieldAttempt holds the string denoting the attempt field in the database.
+	FieldAttempt = "attempt"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldGatewayIdempotencyToken holds the string denoting the gateway_idempotency_token field in the database.
@@ -77,13 +89,19 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldEnvironmentID,
 	FieldPaymentID,
+	FieldInvoiceID,
+	FieldCreditNoteID,
 	FieldPaymentGateway,
 	FieldGatewayRefundID,
 	FieldGatewayTrackingID,
 	FieldAmount,
+	FieldSettledAmount,
 	FieldCurrency,
 	FieldRefundStatus,
 	FieldRefundReason,
+	FieldRefundDestination,
+	FieldRefundDestinationID,
+	FieldAttempt,
 	FieldIdempotencyKey,
 	FieldGatewayIdempotencyToken,
 	FieldFailureReason,
@@ -118,22 +136,24 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// PaymentIDValidator is a validator for the "payment_id" field. It is called by the builders before save.
-	PaymentIDValidator func(string) error
-	// PaymentGatewayValidator is a validator for the "payment_gateway" field. It is called by the builders before save.
-	PaymentGatewayValidator func(string) error
+	// InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	InvoiceIDValidator func(string) error
 	// DefaultAmount holds the default value on creation for the "amount" field.
 	DefaultAmount decimal.Decimal
+	// DefaultSettledAmount holds the default value on creation for the "settled_amount" field.
+	DefaultSettledAmount decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// RefundStatusValidator is a validator for the "refund_status" field. It is called by the builders before save.
 	RefundStatusValidator func(string) error
 	// RefundReasonValidator is a validator for the "refund_reason" field. It is called by the builders before save.
 	RefundReasonValidator func(string) error
+	// DefaultRefundDestination holds the default value on creation for the "refund_destination" field.
+	DefaultRefundDestination string
+	// DefaultAttempt holds the default value on creation for the "attempt" field.
+	DefaultAttempt int
 	// IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	IdempotencyKeyValidator func(string) error
-	// GatewayIdempotencyTokenValidator is a validator for the "gateway_idempotency_token" field. It is called by the builders before save.
-	GatewayIdempotencyTokenValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Refund queries.
@@ -184,6 +204,16 @@ func ByPaymentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPaymentID, opts...).ToFunc()
 }
 
+// ByInvoiceID orders the results by the invoice_id field.
+func ByInvoiceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceID, opts...).ToFunc()
+}
+
+// ByCreditNoteID orders the results by the credit_note_id field.
+func ByCreditNoteID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreditNoteID, opts...).ToFunc()
+}
+
 // ByPaymentGateway orders the results by the payment_gateway field.
 func ByPaymentGateway(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPaymentGateway, opts...).ToFunc()
@@ -204,6 +234,11 @@ func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
 }
 
+// BySettledAmount orders the results by the settled_amount field.
+func BySettledAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSettledAmount, opts...).ToFunc()
+}
+
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
@@ -217,6 +252,21 @@ func ByRefundStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByRefundReason orders the results by the refund_reason field.
 func ByRefundReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRefundReason, opts...).ToFunc()
+}
+
+// ByRefundDestination orders the results by the refund_destination field.
+func ByRefundDestination(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRefundDestination, opts...).ToFunc()
+}
+
+// ByRefundDestinationID orders the results by the refund_destination_id field.
+func ByRefundDestinationID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRefundDestinationID, opts...).ToFunc()
+}
+
+// ByAttempt orders the results by the attempt field.
+func ByAttempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAttempt, opts...).ToFunc()
 }
 
 // ByIdempotencyKey orders the results by the idempotency_key field.

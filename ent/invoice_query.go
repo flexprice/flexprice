@@ -33,44 +33,44 @@ type InvoiceQuery struct {
 }
 
 // Where adds a new predicate for the InvoiceQuery builder.
-func (iq *InvoiceQuery) Where(ps ...predicate.Invoice) *InvoiceQuery {
-	iq.predicates = append(iq.predicates, ps...)
-	return iq
+func (_q *InvoiceQuery) Where(ps ...predicate.Invoice) *InvoiceQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (iq *InvoiceQuery) Limit(limit int) *InvoiceQuery {
-	iq.ctx.Limit = &limit
-	return iq
+func (_q *InvoiceQuery) Limit(limit int) *InvoiceQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (iq *InvoiceQuery) Offset(offset int) *InvoiceQuery {
-	iq.ctx.Offset = &offset
-	return iq
+func (_q *InvoiceQuery) Offset(offset int) *InvoiceQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (iq *InvoiceQuery) Unique(unique bool) *InvoiceQuery {
-	iq.ctx.Unique = &unique
-	return iq
+func (_q *InvoiceQuery) Unique(unique bool) *InvoiceQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (iq *InvoiceQuery) Order(o ...invoice.OrderOption) *InvoiceQuery {
-	iq.order = append(iq.order, o...)
-	return iq
+func (_q *InvoiceQuery) Order(o ...invoice.OrderOption) *InvoiceQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryLineItems chains the current query on the "line_items" edge.
-func (iq *InvoiceQuery) QueryLineItems() *InvoiceLineItemQuery {
-	query := (&InvoiceLineItemClient{config: iq.config}).Query()
+func (_q *InvoiceQuery) QueryLineItems() *InvoiceLineItemQuery {
+	query := (&InvoiceLineItemClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := iq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := iq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -79,20 +79,20 @@ func (iq *InvoiceQuery) QueryLineItems() *InvoiceLineItemQuery {
 			sqlgraph.To(invoicelineitem.Table, invoicelineitem.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, invoice.LineItemsTable, invoice.LineItemsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(iq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCouponApplications chains the current query on the "coupon_applications" edge.
-func (iq *InvoiceQuery) QueryCouponApplications() *CouponApplicationQuery {
-	query := (&CouponApplicationClient{config: iq.config}).Query()
+func (_q *InvoiceQuery) QueryCouponApplications() *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := iq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := iq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (iq *InvoiceQuery) QueryCouponApplications() *CouponApplicationQuery {
 			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, invoice.CouponApplicationsTable, invoice.CouponApplicationsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(iq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -109,8 +109,8 @@ func (iq *InvoiceQuery) QueryCouponApplications() *CouponApplicationQuery {
 
 // First returns the first Invoice entity from the query.
 // Returns a *NotFoundError when no Invoice was found.
-func (iq *InvoiceQuery) First(ctx context.Context) (*Invoice, error) {
-	nodes, err := iq.Limit(1).All(setContextOp(ctx, iq.ctx, ent.OpQueryFirst))
+func (_q *InvoiceQuery) First(ctx context.Context) (*Invoice, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +121,8 @@ func (iq *InvoiceQuery) First(ctx context.Context) (*Invoice, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (iq *InvoiceQuery) FirstX(ctx context.Context) *Invoice {
-	node, err := iq.First(ctx)
+func (_q *InvoiceQuery) FirstX(ctx context.Context) *Invoice {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -131,9 +131,9 @@ func (iq *InvoiceQuery) FirstX(ctx context.Context) *Invoice {
 
 // FirstID returns the first Invoice ID from the query.
 // Returns a *NotFoundError when no Invoice ID was found.
-func (iq *InvoiceQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *InvoiceQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = iq.Limit(1).IDs(setContextOp(ctx, iq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -144,8 +144,8 @@ func (iq *InvoiceQuery) FirstID(ctx context.Context) (id string, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (iq *InvoiceQuery) FirstIDX(ctx context.Context) string {
-	id, err := iq.FirstID(ctx)
+func (_q *InvoiceQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -155,8 +155,8 @@ func (iq *InvoiceQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single Invoice entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one Invoice entity is found.
 // Returns a *NotFoundError when no Invoice entities are found.
-func (iq *InvoiceQuery) Only(ctx context.Context) (*Invoice, error) {
-	nodes, err := iq.Limit(2).All(setContextOp(ctx, iq.ctx, ent.OpQueryOnly))
+func (_q *InvoiceQuery) Only(ctx context.Context) (*Invoice, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +171,8 @@ func (iq *InvoiceQuery) Only(ctx context.Context) (*Invoice, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (iq *InvoiceQuery) OnlyX(ctx context.Context) *Invoice {
-	node, err := iq.Only(ctx)
+func (_q *InvoiceQuery) OnlyX(ctx context.Context) *Invoice {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -182,9 +182,9 @@ func (iq *InvoiceQuery) OnlyX(ctx context.Context) *Invoice {
 // OnlyID is like Only, but returns the only Invoice ID in the query.
 // Returns a *NotSingularError when more than one Invoice ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (iq *InvoiceQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *InvoiceQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = iq.Limit(2).IDs(setContextOp(ctx, iq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -199,8 +199,8 @@ func (iq *InvoiceQuery) OnlyID(ctx context.Context) (id string, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (iq *InvoiceQuery) OnlyIDX(ctx context.Context) string {
-	id, err := iq.OnlyID(ctx)
+func (_q *InvoiceQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -208,18 +208,18 @@ func (iq *InvoiceQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of Invoices.
-func (iq *InvoiceQuery) All(ctx context.Context) ([]*Invoice, error) {
-	ctx = setContextOp(ctx, iq.ctx, ent.OpQueryAll)
-	if err := iq.prepareQuery(ctx); err != nil {
+func (_q *InvoiceQuery) All(ctx context.Context) ([]*Invoice, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*Invoice, *InvoiceQuery]()
-	return withInterceptors[[]*Invoice](ctx, iq, qr, iq.inters)
+	return withInterceptors[[]*Invoice](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (iq *InvoiceQuery) AllX(ctx context.Context) []*Invoice {
-	nodes, err := iq.All(ctx)
+func (_q *InvoiceQuery) AllX(ctx context.Context) []*Invoice {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -227,20 +227,20 @@ func (iq *InvoiceQuery) AllX(ctx context.Context) []*Invoice {
 }
 
 // IDs executes the query and returns a list of Invoice IDs.
-func (iq *InvoiceQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if iq.ctx.Unique == nil && iq.path != nil {
-		iq.Unique(true)
+func (_q *InvoiceQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, iq.ctx, ent.OpQueryIDs)
-	if err = iq.Select(invoice.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(invoice.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (iq *InvoiceQuery) IDsX(ctx context.Context) []string {
-	ids, err := iq.IDs(ctx)
+func (_q *InvoiceQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -248,17 +248,17 @@ func (iq *InvoiceQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (iq *InvoiceQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, iq.ctx, ent.OpQueryCount)
-	if err := iq.prepareQuery(ctx); err != nil {
+func (_q *InvoiceQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, iq, querierCount[*InvoiceQuery](), iq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*InvoiceQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (iq *InvoiceQuery) CountX(ctx context.Context) int {
-	count, err := iq.Count(ctx)
+func (_q *InvoiceQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -266,9 +266,9 @@ func (iq *InvoiceQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (iq *InvoiceQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, iq.ctx, ent.OpQueryExist)
-	switch _, err := iq.FirstID(ctx); {
+func (_q *InvoiceQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -279,8 +279,8 @@ func (iq *InvoiceQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (iq *InvoiceQuery) ExistX(ctx context.Context) bool {
-	exist, err := iq.Exist(ctx)
+func (_q *InvoiceQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -289,44 +289,44 @@ func (iq *InvoiceQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the InvoiceQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (iq *InvoiceQuery) Clone() *InvoiceQuery {
-	if iq == nil {
+func (_q *InvoiceQuery) Clone() *InvoiceQuery {
+	if _q == nil {
 		return nil
 	}
 	return &InvoiceQuery{
-		config:                 iq.config,
-		ctx:                    iq.ctx.Clone(),
-		order:                  append([]invoice.OrderOption{}, iq.order...),
-		inters:                 append([]Interceptor{}, iq.inters...),
-		predicates:             append([]predicate.Invoice{}, iq.predicates...),
-		withLineItems:          iq.withLineItems.Clone(),
-		withCouponApplications: iq.withCouponApplications.Clone(),
+		config:                 _q.config,
+		ctx:                    _q.ctx.Clone(),
+		order:                  append([]invoice.OrderOption{}, _q.order...),
+		inters:                 append([]Interceptor{}, _q.inters...),
+		predicates:             append([]predicate.Invoice{}, _q.predicates...),
+		withLineItems:          _q.withLineItems.Clone(),
+		withCouponApplications: _q.withCouponApplications.Clone(),
 		// clone intermediate query.
-		sql:  iq.sql.Clone(),
-		path: iq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithLineItems tells the query-builder to eager-load the nodes that are connected to
 // the "line_items" edge. The optional arguments are used to configure the query builder of the edge.
-func (iq *InvoiceQuery) WithLineItems(opts ...func(*InvoiceLineItemQuery)) *InvoiceQuery {
-	query := (&InvoiceLineItemClient{config: iq.config}).Query()
+func (_q *InvoiceQuery) WithLineItems(opts ...func(*InvoiceLineItemQuery)) *InvoiceQuery {
+	query := (&InvoiceLineItemClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	iq.withLineItems = query
-	return iq
+	_q.withLineItems = query
+	return _q
 }
 
 // WithCouponApplications tells the query-builder to eager-load the nodes that are connected to
 // the "coupon_applications" edge. The optional arguments are used to configure the query builder of the edge.
-func (iq *InvoiceQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *InvoiceQuery {
-	query := (&CouponApplicationClient{config: iq.config}).Query()
+func (_q *InvoiceQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *InvoiceQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	iq.withCouponApplications = query
-	return iq
+	_q.withCouponApplications = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -343,10 +343,10 @@ func (iq *InvoiceQuery) WithCouponApplications(opts ...func(*CouponApplicationQu
 //		GroupBy(invoice.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (iq *InvoiceQuery) GroupBy(field string, fields ...string) *InvoiceGroupBy {
-	iq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &InvoiceGroupBy{build: iq}
-	grbuild.flds = &iq.ctx.Fields
+func (_q *InvoiceQuery) GroupBy(field string, fields ...string) *InvoiceGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &InvoiceGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = invoice.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -364,59 +364,59 @@ func (iq *InvoiceQuery) GroupBy(field string, fields ...string) *InvoiceGroupBy 
 //	client.Invoice.Query().
 //		Select(invoice.FieldTenantID).
 //		Scan(ctx, &v)
-func (iq *InvoiceQuery) Select(fields ...string) *InvoiceSelect {
-	iq.ctx.Fields = append(iq.ctx.Fields, fields...)
-	sbuild := &InvoiceSelect{InvoiceQuery: iq}
+func (_q *InvoiceQuery) Select(fields ...string) *InvoiceSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &InvoiceSelect{InvoiceQuery: _q}
 	sbuild.label = invoice.Label
-	sbuild.flds, sbuild.scan = &iq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a InvoiceSelect configured with the given aggregations.
-func (iq *InvoiceQuery) Aggregate(fns ...AggregateFunc) *InvoiceSelect {
-	return iq.Select().Aggregate(fns...)
+func (_q *InvoiceQuery) Aggregate(fns ...AggregateFunc) *InvoiceSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (iq *InvoiceQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range iq.inters {
+func (_q *InvoiceQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, iq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range iq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !invoice.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if iq.path != nil {
-		prev, err := iq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		iq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (iq *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invoice, error) {
+func (_q *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invoice, error) {
 	var (
 		nodes       = []*Invoice{}
-		_spec       = iq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [2]bool{
-			iq.withLineItems != nil,
-			iq.withCouponApplications != nil,
+			_q.withLineItems != nil,
+			_q.withCouponApplications != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Invoice).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Invoice{config: iq.config}
+		node := &Invoice{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -424,21 +424,21 @@ func (iq *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invo
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, iq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := iq.withLineItems; query != nil {
-		if err := iq.loadLineItems(ctx, query, nodes,
+	if query := _q.withLineItems; query != nil {
+		if err := _q.loadLineItems(ctx, query, nodes,
 			func(n *Invoice) { n.Edges.LineItems = []*InvoiceLineItem{} },
 			func(n *Invoice, e *InvoiceLineItem) { n.Edges.LineItems = append(n.Edges.LineItems, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := iq.withCouponApplications; query != nil {
-		if err := iq.loadCouponApplications(ctx, query, nodes,
+	if query := _q.withCouponApplications; query != nil {
+		if err := _q.loadCouponApplications(ctx, query, nodes,
 			func(n *Invoice) { n.Edges.CouponApplications = []*CouponApplication{} },
 			func(n *Invoice, e *CouponApplication) {
 				n.Edges.CouponApplications = append(n.Edges.CouponApplications, e)
@@ -449,7 +449,7 @@ func (iq *InvoiceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Invo
 	return nodes, nil
 }
 
-func (iq *InvoiceQuery) loadLineItems(ctx context.Context, query *InvoiceLineItemQuery, nodes []*Invoice, init func(*Invoice), assign func(*Invoice, *InvoiceLineItem)) error {
+func (_q *InvoiceQuery) loadLineItems(ctx context.Context, query *InvoiceLineItemQuery, nodes []*Invoice, init func(*Invoice), assign func(*Invoice, *InvoiceLineItem)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Invoice)
 	for i := range nodes {
@@ -479,7 +479,7 @@ func (iq *InvoiceQuery) loadLineItems(ctx context.Context, query *InvoiceLineIte
 	}
 	return nil
 }
-func (iq *InvoiceQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*Invoice, init func(*Invoice), assign func(*Invoice, *CouponApplication)) error {
+func (_q *InvoiceQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*Invoice, init func(*Invoice), assign func(*Invoice, *CouponApplication)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Invoice)
 	for i := range nodes {
@@ -510,24 +510,24 @@ func (iq *InvoiceQuery) loadCouponApplications(ctx context.Context, query *Coupo
 	return nil
 }
 
-func (iq *InvoiceQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := iq.querySpec()
-	_spec.Node.Columns = iq.ctx.Fields
-	if len(iq.ctx.Fields) > 0 {
-		_spec.Unique = iq.ctx.Unique != nil && *iq.ctx.Unique
+func (_q *InvoiceQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, iq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (iq *InvoiceQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *InvoiceQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(invoice.Table, invoice.Columns, sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeString))
-	_spec.From = iq.sql
-	if unique := iq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if iq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := iq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, invoice.FieldID)
 		for i := range fields {
@@ -536,20 +536,20 @@ func (iq *InvoiceQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := iq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := iq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := iq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := iq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -559,33 +559,33 @@ func (iq *InvoiceQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (iq *InvoiceQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(iq.driver.Dialect())
+func (_q *InvoiceQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(invoice.Table)
-	columns := iq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = invoice.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if iq.sql != nil {
-		selector = iq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if iq.ctx.Unique != nil && *iq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range iq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range iq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := iq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := iq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -598,41 +598,41 @@ type InvoiceGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (igb *InvoiceGroupBy) Aggregate(fns ...AggregateFunc) *InvoiceGroupBy {
-	igb.fns = append(igb.fns, fns...)
-	return igb
+func (_g *InvoiceGroupBy) Aggregate(fns ...AggregateFunc) *InvoiceGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (igb *InvoiceGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, igb.build.ctx, ent.OpQueryGroupBy)
-	if err := igb.build.prepareQuery(ctx); err != nil {
+func (_g *InvoiceGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*InvoiceQuery, *InvoiceGroupBy](ctx, igb.build, igb, igb.build.inters, v)
+	return scanWithInterceptors[*InvoiceQuery, *InvoiceGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (igb *InvoiceGroupBy) sqlScan(ctx context.Context, root *InvoiceQuery, v any) error {
+func (_g *InvoiceGroupBy) sqlScan(ctx context.Context, root *InvoiceQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(igb.fns))
-	for _, fn := range igb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*igb.flds)+len(igb.fns))
-		for _, f := range *igb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*igb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := igb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -646,27 +646,27 @@ type InvoiceSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (is *InvoiceSelect) Aggregate(fns ...AggregateFunc) *InvoiceSelect {
-	is.fns = append(is.fns, fns...)
-	return is
+func (_s *InvoiceSelect) Aggregate(fns ...AggregateFunc) *InvoiceSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (is *InvoiceSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, is.ctx, ent.OpQuerySelect)
-	if err := is.prepareQuery(ctx); err != nil {
+func (_s *InvoiceSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*InvoiceQuery, *InvoiceSelect](ctx, is.InvoiceQuery, is, is.inters, v)
+	return scanWithInterceptors[*InvoiceQuery, *InvoiceSelect](ctx, _s.InvoiceQuery, _s, _s.inters, v)
 }
 
-func (is *InvoiceSelect) sqlScan(ctx context.Context, root *InvoiceQuery, v any) error {
+func (_s *InvoiceSelect) sqlScan(ctx context.Context, root *InvoiceQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(is.fns))
-	for _, fn := range is.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*is.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -674,7 +674,7 @@ func (is *InvoiceSelect) sqlScan(ctx context.Context, root *InvoiceQuery, v any)
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := is.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

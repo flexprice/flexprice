@@ -344,7 +344,23 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateMidPeriod() 
 
 // Test 7: ONETIME ARREAR — StartDate == period start (exclusive lower bound for ARREAR)
 func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateAtPeriodStart() {
-	// Jan 1 == period start, exclusive for ARREAR → should NOT be classified
+	// Feb 1 == period start, exclusive for ARREAR (the Jan period-end invoice owns it) → should NOT be classified
+	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.feb1)
+	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
+
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.feb1,
+		CurrentPeriodEnd:   s.mar1,
+		NextPeriodStart:    s.mar1,
+		NextPeriodEnd:      s.mar1.AddDate(0, 1, 0),
+	})
+
+	s.Empty(result.CurrentPeriodArrear, "period start is exclusive for ARREAR")
+}
+
+// ONETIME ARREAR — StartDate == subscription start: no earlier period exists, so the first period bills it.
+func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateAtSubscriptionStart() {
 	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.jan1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
@@ -356,7 +372,23 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateAtPeriodStar
 		NextPeriodEnd:      s.mar1,
 	})
 
-	s.Empty(result.CurrentPeriodArrear, "period start is exclusive for ARREAR")
+	s.Len(result.CurrentPeriodArrear, 1, "the first period owns an arrear charge dated on the subscription start")
+}
+
+// ONETIME ARREAR — StartDate == subscription start: later periods do not pick it up again.
+func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_SubscriptionStartNotInLaterPeriod() {
+	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.jan1)
+	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
+
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.feb1,
+		CurrentPeriodEnd:   s.mar1,
+		NextPeriodStart:    s.mar1,
+		NextPeriodEnd:      s.mar1.AddDate(0, 1, 0),
+	})
+
+	s.Empty(result.CurrentPeriodArrear, "only the first period owns an arrear charge dated on the subscription start")
 }
 
 // Test 8: ONETIME ARREAR — StartDate == period end (inclusive upper bound for ARREAR)

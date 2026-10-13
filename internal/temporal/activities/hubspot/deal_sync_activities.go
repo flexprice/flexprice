@@ -53,7 +53,7 @@ func (a *DealSyncActivities) CreateLineItems(
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}
@@ -104,7 +104,7 @@ func (a *DealSyncActivities) UpdateDealAmount(
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"HubSpot connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

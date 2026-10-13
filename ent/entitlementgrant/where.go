@@ -138,6 +138,11 @@ func Quota(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldQuota, v))
 }
 
+// Unlimited applies equality check predicate on the "unlimited" field. It's identical to UnlimitedEQ.
+func Unlimited(v bool) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldEQ(FieldUnlimited, v))
+}
+
 // Usage applies equality check predicate on the "usage" field. It's identical to UsageEQ.
 func Usage(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldEQ(FieldUsage, v))
@@ -1075,6 +1080,16 @@ func QuotaLT(v decimal.Decimal) predicate.EntitlementGrant {
 // QuotaLTE applies the LTE predicate on the "quota" field.
 func QuotaLTE(v decimal.Decimal) predicate.EntitlementGrant {
 	return predicate.EntitlementGrant(sql.FieldLTE(FieldQuota, v))
+}
+
+// UnlimitedEQ applies the EQ predicate on the "unlimited" field.
+func UnlimitedEQ(v bool) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldEQ(FieldUnlimited, v))
+}
+
+// UnlimitedNEQ applies the NEQ predicate on the "unlimited" field.
+func UnlimitedNEQ(v bool) predicate.EntitlementGrant {
+	return predicate.EntitlementGrant(sql.FieldNEQ(FieldUnlimited, v))
 }
 
 // UsageEQ applies the EQ predicate on the "usage" field.

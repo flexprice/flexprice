@@ -49,6 +49,8 @@ jobs:
 
       - name: Extract Chart Version
         id: chart-version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
           CHART_VERSION=$(grep -E '^version:' internal/ee/infrastructure/helm/flexprice/Chart.yaml | awk '{print $2}' | tr -d '"')
@@ -61,10 +63,10 @@ jobs:
             echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
             echo "trigger=chart-tag" >> "$GITHUB_OUTPUT"
             echo "Chart version (chart-tag): $CHART_VERSION"
-          elif [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "$INPUT_VERSION" ]; then
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
             echo "trigger=manual" >> "$GITHUB_OUTPUT"
-            echo "Chart version (manual): ${{ github.event.inputs.version }}"
+            echo "Chart version (manual): $INPUT_VERSION"
           else
             echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
             echo "trigger=branch-or-app" >> "$GITHUB_OUTPUT"

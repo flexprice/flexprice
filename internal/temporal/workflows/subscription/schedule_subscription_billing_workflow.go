@@ -24,9 +24,9 @@ func ScheduleSubscriptionBillingWorkflow(ctx workflow.Context, input subscriptio
 
 	logger := workflow.GetLogger(ctx)
 
-	// Define activity options with extended timeouts for large batch processing
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Hour * 24,
+		StartToCloseTimeout: time.Hour,
+		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,

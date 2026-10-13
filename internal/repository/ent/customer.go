@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -63,6 +64,8 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetName(c.Name).
 		SetEmail(c.Email).
 		SetNillableContact(c.Contact).
+		SetNillableBillingCurrency(c.BillingCurrency).
+		SetContactPersons(c.ToEntContactPersons()).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
 		SetAddressCity(c.AddressCity).
@@ -329,7 +332,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Customer.Update().
+	update := client.Customer.Update().
 		Where(
 			customer.ID(c.ID),
 			customer.TenantID(c.TenantID),
@@ -339,6 +342,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetName(c.Name).
 		SetEmail(c.Email).
 		SetNillableContact(c.Contact).
+		SetContactPersons(c.ToEntContactPersons()).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
 		SetAddressCity(c.AddressCity).
@@ -349,8 +353,17 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// SetNillable is a no-op on nil, so it cannot clear a column. Callers load the customer before
+	// mutating, so a nil billing currency here means "clear it" — issue an explicit clear.
+	if c.BillingCurrency != nil {
+		update.SetBillingCurrency(*c.BillingCurrency)
+	} else {
+		update.ClearBillingCurrency()
+	}
+
+	_, err := update.SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -397,6 +410,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
+	ctx = activity.WithAction(ctx, domainCustomer.ID, activity.CustomerArchived)
 	_, err := client.Customer.Update().
 		Where(
 			customer.ID(domainCustomer.ID),
@@ -406,7 +420,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -449,7 +463,10 @@ func (o CustomerQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query 
 
 func (o CustomerQueryOptions) ApplyStatusFilter(query CustomerQuery, status string) CustomerQuery {
 	if status == "" {
-		return query.Where(customer.StatusEQ(string(types.StatusPublished)))
+		return query.Where(customer.StatusIn(
+			string(types.StatusPublished),
+			string(types.StatusArchived),
+		))
 	}
 	return query.Where(customer.Status(status))
 }

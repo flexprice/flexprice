@@ -110,11 +110,6 @@ func (s *CustomerService) GetOrCreateChargebeeCustomer(ctx context.Context, flex
 
 // SyncCustomerToChargebee syncs FlexPrice customer to Chargebee
 func (s *CustomerService) SyncCustomerToChargebee(ctx context.Context, flexpriceCustomer *customerDomain.Customer) (*CustomerResponse, error) {
-	// Initialize Chargebee SDK
-	if err := s.Client.(*Client).InitializeChargebeeSDK(ctx); err != nil {
-		return nil, err
-	}
-
 	s.Logger.Info(ctx, "syncing customer to Chargebee",
 		"customer_id", flexpriceCustomer.ID,
 		"email", flexpriceCustomer.Email)

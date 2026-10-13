@@ -1,0 +1,177 @@
+{{ define "returning" }}
+{{ with extend $ "Package" "ent" }}{{ template "header" . }}{{ end }}
+
+import (
+	"context"
+	stdsql "database/sql"
+	"strings"
+
+	"entgo.io/ent/dialect"
+	"entgo.io/ent/dialect/sql"
+	{{- range $n := $.Nodes }}
+	"{{ $.Config.Package }}/{{ $n.Package }}"
+	{{- end }}
+)
+
+// returningDriver turns the one UPDATE or DELETE statement on table into
+// "… RETURNING cols" and hands the returned rows to collect.
+type returningDriver struct {
+	dialect.Driver
+	*returningCapture
+}
+
+type returningTx struct {
+	dialect.Tx
+	*returningCapture
+}
+
+type returningCapture struct {
+	dialect  string
+	prefixes []string
+	columns  []string
+	collect  func(*sql.Rows) (int, error)
+}
+
+func newReturning(drv dialect.Driver, verb, table string, columns []string, collect func(*sql.Rows) (int, error)) *returningDriver {
+	b := &sql.Builder{}
+	b.SetDialect(drv.Dialect())
+	ident := b.Ident(table).String()
+	return &returningDriver{Driver: drv, returningCapture: &returningCapture{
+		dialect:  drv.Dialect(),
+		prefixes: []string{verb + " " + ident},
+		columns:  columns,
+		collect:  collect,
+	}}
+}
+
+func (c *returningCapture) matches(query string) bool {
+	for _, p := range c.prefixes {
+		if strings.HasPrefix(query, p) && (len(query) == len(p) || query[len(p)] == ' ') {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *returningCapture) returning(ctx context.Context, drv dialect.ExecQuerier, query string, args, v any) (bool, error) {
+	res, ok := v.(*sql.Result)
+	if !ok || !c.matches(query) {
+		return false, nil
+	}
+	b := &sql.Builder{}
+	b.SetDialect(c.dialect)
+	b.IdentComma(c.columns...)
+	rows := &sql.Rows{}
+	if err := drv.Query(ctx, query+" RETURNING "+b.String(), args, rows); err != nil {
+		return true, err
+	}
+	defer rows.Close()
+	n, err := c.collect(rows)
+	if err != nil {
+		return true, err
+	}
+	*res = returnedResult(n)
+	return true, nil
+}
+
+type returnedResult int64
+
+func (returnedResult) LastInsertId() (int64, error) { return 0, nil }
+func (r returnedResult) RowsAffected() (int64, error) { return int64(r), nil }
+
+var _ stdsql.Result = returnedResult(0)
+
+func (d *returningDriver) Exec(ctx context.Context, query string, args, v any) error {
+	if done, err := d.returning(ctx, d.Driver, query, args, v); done {
+		return err
+	}
+	return d.Driver.Exec(ctx, query, args, v)
+}
+
+func (d *returningDriver) Tx(ctx context.Context) (dialect.Tx, error) {
+	tx, err := d.Driver.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &returningTx{Tx: tx, returningCapture: d.returningCapture}, nil
+}
+
+func (t *returningTx) Exec(ctx context.Context, query string, args, v any) error {
+	if done, err := t.returning(ctx, t.Tx, query, args, v); done {
+		return err
+	}
+	return t.Tx.Exec(ctx, query, args, v)
+}
+
+{{ range $n := $.Nodes }}
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*{{ $n.Name }}.
+func (_u *{{ $n.UpdateName }}) SaveReturning(ctx context.Context) ([]*{{ $n.Name }}, error) {
+	{{- if $n.HasUpdateDefault }}
+		{{- if or $n.NumHooks $n.NumPolicy }}
+			if err := _u.defaults(); err != nil {
+				return nil, err
+			}
+		{{- else }}
+			_u.defaults()
+		{{- end }}
+	{{- end }}
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *{{ $n.UpdateName }}) sqlSaveReturning(ctx context.Context) ([]*{{ $n.Name }}, error) {
+	var out []*{{ $n.Name }}
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", {{ $n.Package }}.Table, {{ $n.Package }}.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturning{{ $n.Name }}(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*{{ $n.Name }}.
+func (_d *{{ $n.DeleteName }}) ExecReturning(ctx context.Context) ([]*{{ $n.Name }}, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *{{ $n.DeleteName }}) sqlExecReturning(ctx context.Context) ([]*{{ $n.Name }}, error) {
+	var out []*{{ $n.Name }}
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", {{ $n.Package }}.Table, {{ $n.Package }}.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturning{{ $n.Name }}(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturning{{ $n.Name }}(rows *sql.Rows) ([]*{{ $n.Name }}, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*{{ $n.Name }}
+	for rows.Next() {
+		node := &{{ $n.Name }}{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+{{ end }}
+{{ end }}

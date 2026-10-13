@@ -82,7 +82,7 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return nil, temporal.NewNonRetryableApplicationError(
 				"QuickBooks connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				ierr.NewError("QuickBooks connection not configured").
 					WithHint("QuickBooks connection must be configured before syncing prices").
 					WithReportableDetails(map[string]interface{}{

@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -276,4 +277,123 @@ func (s *TenantServiceSuite) TestGetTenantWithBillingDetails() {
 			}
 		})
 	}
+}
+
+func (s *TenantServiceSuite) TestUpdateTenantBillingDetails() {
+	stored := tenant.TenantBillingDetails{
+		Email:     "billing@example.com",
+		HelpEmail: "help@example.com",
+		Phone:     "+1-555-987-6543",
+		Address: tenant.TenantAddress{
+			Line1:      "456 Market Street",
+			Line2:      "Floor 3",
+			City:       "San Francisco",
+			State:      "CA",
+			PostalCode: "94105",
+			Country:    "US",
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		request  dto.UpdateTenantRequest
+		expected func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails
+	}{
+		{
+			name:     "nil_billing_details_keeps_stored_values",
+			request:  dto.UpdateTenantRequest{Name: lo.ToPtr("Renamed")},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails { return b },
+		},
+		{
+			name: "omitted_email_is_kept",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Phone: lo.ToPtr("+1-555-000-0000"),
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Phone = "+1-555-000-0000"
+				return b
+			},
+		},
+		{
+			name: "new_email_replaces_stored_email",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Email: lo.ToPtr("finance@example.com"),
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Email = "finance@example.com"
+				return b
+			},
+		},
+		{
+			name: "empty_email_clears_stored_email",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Email: lo.ToPtr(""),
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Email = ""
+				return b
+			},
+		},
+		{
+			name: "omitted_address_fields_are_kept",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Address: &dto.UpdateTenantAddress{City: lo.ToPtr("Oakland")},
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Address.City = "Oakland"
+				return b
+			},
+		},
+		{
+			name: "empty_address_line_clears_only_that_line",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Address: &dto.UpdateTenantAddress{Line2: lo.ToPtr("")},
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Address.Line2 = ""
+				return b
+			},
+		},
+		{
+			name: "empty_country_clears_country",
+			request: dto.UpdateTenantRequest{BillingDetails: &dto.UpdateTenantBillingDetails{
+				Address: &dto.UpdateTenantAddress{Country: lo.ToPtr("")},
+			}},
+			expected: func(b tenant.TenantBillingDetails) tenant.TenantBillingDetails {
+				b.Address.Country = ""
+				return b
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			id := "tenant-update-" + tc.name
+			s.NoError(s.tenantRepo.Create(s.GetContext(), &tenant.Tenant{
+				ID:             id,
+				Name:           "Billing Tenant",
+				BillingDetails: stored,
+			}))
+
+			resp, err := s.tenantService.UpdateTenant(s.GetContext(), id, tc.request)
+			s.NoError(err)
+			s.NotNil(resp)
+
+			updated, err := s.tenantRepo.GetByID(s.GetContext(), id)
+			s.NoError(err)
+			s.Equal(tc.expected(stored), updated.BillingDetails)
+		})
+	}
+}
+
+func (s *TenantServiceSuite) TestUpdateTenantRejectsInvalidCountry() {
+	id := "tenant-update-invalid-country"
+	s.NoError(s.tenantRepo.Create(s.GetContext(), &tenant.Tenant{ID: id, Name: "Tenant"}))
+
+	_, err := s.tenantService.UpdateTenant(s.GetContext(), id, dto.UpdateTenantRequest{
+		BillingDetails: &dto.UpdateTenantBillingDetails{
+			Address: &dto.UpdateTenantAddress{Country: lo.ToPtr("USA")},
+		},
+	})
+	s.Error(err)
 }

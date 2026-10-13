@@ -49,6 +49,12 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		t.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	// Rows never store a null behavior; absent means exclusive.
+	taxBehavior := lo.FromPtr(t.TaxBehavior)
+	if taxBehavior == "" {
+		taxBehavior = types.TaxBehaviorExclusive
+	}
+
 	_, err := client.TaxAssociation.Create().
 		SetID(t.ID).
 		SetTaxRateID(t.TaxRateID).
@@ -56,7 +62,7 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetNillableCurrency(lo.EmptyableToPtr(t.Currency)).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
-		SetNillableTaxBehavior(t.TaxBehavior).
+		SetTaxBehavior(taxBehavior).
 		SetMetadata(t.Metadata).
 		SetEnvironmentID(t.EnvironmentID).
 		SetEntityID(t.EntityID).
@@ -148,6 +154,12 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 	})
 	defer FinishSpan(span)
 
+	// Rows never store a null behavior; absent means exclusive.
+	taxBehavior := lo.FromPtr(t.TaxBehavior)
+	if taxBehavior == "" {
+		taxBehavior = types.TaxBehaviorExclusive
+	}
+
 	update := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
@@ -157,7 +169,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetEntityID(t.EntityID).
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
-		SetNillableTaxBehavior(t.TaxBehavior).
+		SetTaxBehavior(taxBehavior).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableEndDate(t.EndDate).

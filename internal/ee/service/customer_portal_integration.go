@@ -28,6 +28,7 @@ func (s *customerPortalService) GetIntegrations(ctx context.Context) (*dto.Integ
 			Capabilities: p.Capabilities,
 		})
 	}
+
 	return resp, nil
 }
 

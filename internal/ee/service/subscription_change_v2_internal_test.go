@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -14,39 +15,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func planChangeMove(amount int64, quantity int64) *lineItemChange {
-	return &lineItemChange{
-		lineItem: &subscription.SubscriptionLineItem{
+func planChangeMove(amount int64, quantity int64) LineItemProrationEntry {
+	return LineItemProrationEntry{
+		LineItem: &subscription.SubscriptionLineItem{
 			ID:       "subs_line_" + decimal.NewFromInt(amount).String(),
 			Quantity: decimal.NewFromInt(quantity),
 		},
-		price: &price.Price{Amount: decimal.NewFromInt(amount)},
+		CurrentPrice:    &price.Price{Amount: decimal.NewFromInt(amount)},
+		CurrentQuantity: decimal.NewFromInt(quantity),
+		NewPrice:        &price.Price{Amount: decimal.NewFromInt(amount)},
+		NewQuantity:     decimal.NewFromInt(quantity),
 	}
 }
 
 func TestPlanChangeType_CountsQuantity(t *testing.T) {
 	tests := []struct {
 		name    string
-		closing []*lineItemChange
-		opening []*lineItemChange
+		closing []LineItemProrationEntry
+		opening []LineItemProrationEntry
 		want    types.SubscriptionChangeType
 	}{
 		{
 			name:    "ten seats at $5 out, one $20 line in, is a downgrade",
-			closing: []*lineItemChange{planChangeMove(5, 10)},
-			opening: []*lineItemChange{planChangeMove(20, 1)},
+			closing: []LineItemProrationEntry{planChangeMove(5, 10)},
+			opening: []LineItemProrationEntry{planChangeMove(20, 1)},
 			want:    types.SubscriptionChangeTypeDowngrade,
 		},
 		{
 			name:    "same unit price, more seats, is an upgrade",
-			closing: []*lineItemChange{planChangeMove(5, 2)},
-			opening: []*lineItemChange{planChangeMove(5, 3)},
+			closing: []LineItemProrationEntry{planChangeMove(5, 2)},
+			opening: []LineItemProrationEntry{planChangeMove(5, 3)},
 			want:    types.SubscriptionChangeTypeUpgrade,
 		},
 		{
 			name:    "same money either side is lateral",
-			closing: []*lineItemChange{planChangeMove(10, 3)},
-			opening: []*lineItemChange{planChangeMove(30, 1)},
+			closing: []LineItemProrationEntry{planChangeMove(10, 3)},
+			opening: []LineItemProrationEntry{planChangeMove(30, 1)},
 			want:    types.SubscriptionChangeTypeLateral,
 		},
 	}
@@ -109,15 +113,17 @@ func TestPlanChangeIdempotencyKey(t *testing.T) {
 
 func TestCreditBasis(t *testing.T) {
 	item := &subscription.SubscriptionLineItem{ID: "subs_line_1", Quantity: decimal.NewFromInt(2)}
-	p := &price.Price{Amount: decimal.NewFromInt(20)}
-	listPrice := decimal.NewFromInt(40)
+	p := &price.Price{Amount: decimal.NewFromInt(20), BillingModel: types.BILLING_MODEL_FLAT_FEE}
+	priceSvc := NewPriceService(ServiceParams{})
+	listPrice := priceSvc.CalculateCost(context.Background(), p, item.Quantity)
+	assert.True(t, listPrice.Equal(decimal.NewFromInt(40)), "list total is the price's cost for the item's quantity")
 
 	t.Run("a billed row caps the credit at what was charged", func(t *testing.T) {
 		billed := map[string]*invoice.BilledAmounts{
 			item.ID: invoice.NewBilledAmounts(decimal.NewFromInt(5), decimal.NewFromInt(1)),
 		}
 
-		paid, credits := creditBasis(item, p, billed)
+		paid, credits := creditBasis(item, billed, listPrice)
 		assert.True(t, paid.Equal(decimal.NewFromInt(5)))
 		assert.True(t, credits.Equal(decimal.NewFromInt(1)))
 	})
@@ -127,7 +133,7 @@ func TestCreditBasis(t *testing.T) {
 			item.ID: invoice.NewBilledAmounts(decimal.Zero, decimal.Zero),
 		}
 
-		paid, credits := creditBasis(item, p, billed)
+		paid, credits := creditBasis(item, billed, listPrice)
 		assert.True(t, paid.IsZero(), "an invoice that charged nothing is evidence, not absence")
 		assert.True(t, credits.IsZero())
 	})
@@ -137,7 +143,7 @@ func TestCreditBasis(t *testing.T) {
 			"subs_line_other": invoice.NewBilledAmounts(decimal.NewFromInt(5), decimal.Zero),
 		}
 
-		paid, credits := creditBasis(item, p, billed)
+		paid, credits := creditBasis(item, billed, listPrice)
 		assert.True(t, paid.Equal(listPrice))
 		assert.True(t, credits.IsZero())
 	})
@@ -145,16 +151,52 @@ func TestCreditBasis(t *testing.T) {
 	// A transient repo failure must not change the money: it hands creditBasis a
 	// nil map, which has to land on the same basis as a lookup that found nothing.
 	t.Run("a failed lookup credits the same as an empty one", func(t *testing.T) {
-		failed, _ := creditBasis(item, p, nil)
-		empty, _ := creditBasis(item, p, map[string]*invoice.BilledAmounts{})
+		failed, _ := creditBasis(item, nil, listPrice)
+		empty, _ := creditBasis(item, map[string]*invoice.BilledAmounts{}, listPrice)
 
 		assert.True(t, failed.Equal(empty))
 		assert.True(t, failed.Equal(listPrice))
 	})
 
 	t.Run("a missing price cannot invent a basis", func(t *testing.T) {
-		paid, credits := creditBasis(item, nil, nil)
+		paid, credits := creditBasis(item, nil, priceSvc.CalculateCost(context.Background(), nil, item.Quantity))
 		assert.True(t, paid.IsZero())
 		assert.True(t, credits.IsZero())
 	})
+}
+
+func TestPlanChangeInvoiceRequest_SetsCollapsedInvoiceDisplayName(t *testing.T) {
+	tests := []struct {
+		name       string
+		fromPlan   string
+		toPlan     string
+		changeType types.SubscriptionChangeType
+		want       string
+	}{
+		{name: "upgrade", fromPlan: "Team", toPlan: "Team Starter", changeType: types.SubscriptionChangeTypeUpgrade, want: "Upgrade: Team → Team Starter"},
+		{name: "downgrade", fromPlan: "Team Starter", toPlan: "Team", changeType: types.SubscriptionChangeTypeDowngrade, want: "Downgrade: Team Starter → Team"},
+		{name: "lateral", fromPlan: "A", toPlan: "B", changeType: types.SubscriptionChangeTypeLateral, want: "Plan change: A → B"},
+		{name: "missing plan names", changeType: types.SubscriptionChangeTypeLateral, want: "Plan change: Plan → Plan"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &planChangeRequest{
+				currentSub: &subscription.Subscription{ID: "sub_1", CustomerID: "cust_1", Currency: "usd"},
+				updatedSub: &subscription.Subscription{
+					BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+					CurrentPeriodEnd: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC),
+				},
+				fromPlan:    &plan.Plan{Name: tt.fromPlan},
+				toPlan:      &plan.Plan{Name: tt.toPlan},
+				effectiveAt: time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC),
+				changeType:  tt.changeType,
+			}
+
+			req := buildNettedProrationInvoiceRequest(NewSettleProrationRequest(
+				r.currentSub, &LineItemProrationSummary{}, r.effectiveAt, r.updatedSub.CurrentPeriodEnd,
+				planChangeCollapsedInvoiceDisplayName(r), "", SettleModeIssue,
+			))
+			assert.Equal(t, tt.want, types.CollapsedInvoiceDisplayName(req.Metadata))
+		})
+	}
 }

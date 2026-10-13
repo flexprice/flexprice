@@ -14,6 +14,11 @@ const (
 	EventPaymentFailed     RazorpayEventType = "payment.failed"
 	EventPaymentAuthorized RazorpayEventType = "payment.authorized"
 
+	// Refund events
+	EventRefundCreated   RazorpayEventType = "refund.created"
+	EventRefundProcessed RazorpayEventType = "refund.processed"
+	EventRefundFailed    RazorpayEventType = "refund.failed"
+
 	// Payment link events
 	EventPaymentLinkPaid      RazorpayEventType = "payment_link.paid"
 	EventPaymentLinkCancelled RazorpayEventType = "payment_link.cancelled"
@@ -47,11 +52,29 @@ type RazorpayWebhookEvent struct {
 type RazorpayWebhookPayload struct {
 	Payment     PayloadPayment     `json:"payment"`
 	PaymentLink PayloadPaymentLink `json:"payment_link"`
+	Refund      PayloadRefund      `json:"refund"`
 }
 
 // PayloadPayment represents the payment entity in the webhook payload
 type PayloadPayment struct {
 	Entity Payment `json:"entity"`
+}
+
+// PayloadRefund represents the refund entity in the webhook payload
+type PayloadRefund struct {
+	Entity Refund `json:"entity"`
+}
+
+// Refund represents a Razorpay refund
+type Refund struct {
+	ID        string        `json:"id"`
+	Entity    string        `json:"entity"`
+	Amount    int64         `json:"amount"` // Amount in the smallest currency unit (paise)
+	Currency  string        `json:"currency"`
+	PaymentID string        `json:"payment_id"`
+	Status    string        `json:"status"` // pending, processed, failed
+	Notes     FlexibleNotes `json:"notes"`
+	CreatedAt int64         `json:"created_at"`
 }
 
 // PayloadPaymentLink represents the payment_link entity in the webhook payload

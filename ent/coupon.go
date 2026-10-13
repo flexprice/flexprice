@@ -120,7 +120,7 @@ func (*Coupon) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Coupon fields.
-func (c *Coupon) assignValues(columns []string, values []any) error {
+func (_m *Coupon) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -130,88 +130,88 @@ func (c *Coupon) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				c.ID = value.String
+				_m.ID = value.String
 			}
 		case coupon.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				c.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case coupon.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				c.Status = value.String
+				_m.Status = value.String
 			}
 		case coupon.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				c.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case coupon.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				c.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case coupon.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				c.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case coupon.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				c.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case coupon.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				c.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case coupon.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				c.Name = value.String
+				_m.Name = value.String
 			}
 		case coupon.FieldRedeemAfter:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field redeem_after", values[i])
 			} else if value.Valid {
-				c.RedeemAfter = new(time.Time)
-				*c.RedeemAfter = value.Time
+				_m.RedeemAfter = new(time.Time)
+				*_m.RedeemAfter = value.Time
 			}
 		case coupon.FieldRedeemBefore:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field redeem_before", values[i])
 			} else if value.Valid {
-				c.RedeemBefore = new(time.Time)
-				*c.RedeemBefore = value.Time
+				_m.RedeemBefore = new(time.Time)
+				*_m.RedeemBefore = value.Time
 			}
 		case coupon.FieldMaxRedemptions:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field max_redemptions", values[i])
 			} else if value.Valid {
-				c.MaxRedemptions = new(int)
-				*c.MaxRedemptions = int(value.Int64)
+				_m.MaxRedemptions = new(int)
+				*_m.MaxRedemptions = int(value.Int64)
 			}
 		case coupon.FieldTotalRedemptions:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field total_redemptions", values[i])
 			} else if value.Valid {
-				c.TotalRedemptions = int(value.Int64)
+				_m.TotalRedemptions = int(value.Int64)
 			}
 		case coupon.FieldRules:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field rules", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &c.Rules); err != nil {
+				if err := json.Unmarshal(*value, &_m.Rules); err != nil {
 					return fmt.Errorf("unmarshal field rules: %w", err)
 				}
 			}
@@ -219,45 +219,45 @@ func (c *Coupon) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount_off", values[i])
 			} else if value != nil {
-				c.AmountOff = *value
+				_m.AmountOff = *value
 			}
 		case coupon.FieldPercentageOff:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field percentage_off", values[i])
 			} else if value != nil {
-				c.PercentageOff = *value
+				_m.PercentageOff = *value
 			}
 		case coupon.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				c.Type = value.String
+				_m.Type = value.String
 			}
 		case coupon.FieldCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field cadence", values[i])
 			} else if value.Valid {
-				c.Cadence = value.String
+				_m.Cadence = value.String
 			}
 		case coupon.FieldDurationInPeriods:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field duration_in_periods", values[i])
 			} else if value.Valid {
-				c.DurationInPeriods = new(int)
-				*c.DurationInPeriods = int(value.Int64)
+				_m.DurationInPeriods = new(int)
+				*_m.DurationInPeriods = int(value.Int64)
 			}
 		case coupon.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				c.Currency = new(string)
-				*c.Currency = value.String
+				_m.Currency = new(string)
+				*_m.Currency = value.String
 			}
 		case coupon.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &c.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -265,11 +265,11 @@ func (c *Coupon) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field coupon_code", values[i])
 			} else if value.Valid {
-				c.CouponCode = new(string)
-				*c.CouponCode = value.String
+				_m.CouponCode = new(string)
+				*_m.CouponCode = value.String
 			}
 		default:
-			c.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -277,114 +277,114 @@ func (c *Coupon) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Coupon.
 // This includes values selected through modifiers, order, etc.
-func (c *Coupon) Value(name string) (ent.Value, error) {
-	return c.selectValues.Get(name)
+func (_m *Coupon) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryCouponAssociations queries the "coupon_associations" edge of the Coupon entity.
-func (c *Coupon) QueryCouponAssociations() *CouponAssociationQuery {
-	return NewCouponClient(c.config).QueryCouponAssociations(c)
+func (_m *Coupon) QueryCouponAssociations() *CouponAssociationQuery {
+	return NewCouponClient(_m.config).QueryCouponAssociations(_m)
 }
 
 // QueryCouponApplications queries the "coupon_applications" edge of the Coupon entity.
-func (c *Coupon) QueryCouponApplications() *CouponApplicationQuery {
-	return NewCouponClient(c.config).QueryCouponApplications(c)
+func (_m *Coupon) QueryCouponApplications() *CouponApplicationQuery {
+	return NewCouponClient(_m.config).QueryCouponApplications(_m)
 }
 
 // Update returns a builder for updating this Coupon.
 // Note that you need to call Coupon.Unwrap() before calling this method if this Coupon
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (c *Coupon) Update() *CouponUpdateOne {
-	return NewCouponClient(c.config).UpdateOne(c)
+func (_m *Coupon) Update() *CouponUpdateOne {
+	return NewCouponClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Coupon entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (c *Coupon) Unwrap() *Coupon {
-	_tx, ok := c.config.driver.(*txDriver)
+func (_m *Coupon) Unwrap() *Coupon {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Coupon is not a transactional entity")
 	}
-	c.config.driver = _tx.drv
-	return c
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (c *Coupon) String() string {
+func (_m *Coupon) String() string {
 	var builder strings.Builder
 	builder.WriteString("Coupon(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", c.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(c.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(c.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(c.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(c.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(c.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(c.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(c.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(c.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	if v := c.RedeemAfter; v != nil {
+	if v := _m.RedeemAfter; v != nil {
 		builder.WriteString("redeem_after=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := c.RedeemBefore; v != nil {
+	if v := _m.RedeemBefore; v != nil {
 		builder.WriteString("redeem_before=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := c.MaxRedemptions; v != nil {
+	if v := _m.MaxRedemptions; v != nil {
 		builder.WriteString("max_redemptions=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("total_redemptions=")
-	builder.WriteString(fmt.Sprintf("%v", c.TotalRedemptions))
+	builder.WriteString(fmt.Sprintf("%v", _m.TotalRedemptions))
 	builder.WriteString(", ")
 	builder.WriteString("rules=")
-	builder.WriteString(fmt.Sprintf("%v", c.Rules))
+	builder.WriteString(fmt.Sprintf("%v", _m.Rules))
 	builder.WriteString(", ")
 	builder.WriteString("amount_off=")
-	builder.WriteString(fmt.Sprintf("%v", c.AmountOff))
+	builder.WriteString(fmt.Sprintf("%v", _m.AmountOff))
 	builder.WriteString(", ")
 	builder.WriteString("percentage_off=")
-	builder.WriteString(fmt.Sprintf("%v", c.PercentageOff))
+	builder.WriteString(fmt.Sprintf("%v", _m.PercentageOff))
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(c.Type)
+	builder.WriteString(_m.Type)
 	builder.WriteString(", ")
 	builder.WriteString("cadence=")
-	builder.WriteString(c.Cadence)
+	builder.WriteString(_m.Cadence)
 	builder.WriteString(", ")
-	if v := c.DurationInPeriods; v != nil {
+	if v := _m.DurationInPeriods; v != nil {
 		builder.WriteString("duration_in_periods=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := c.Currency; v != nil {
+	if v := _m.Currency; v != nil {
 		builder.WriteString("currency=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", c.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := c.CouponCode; v != nil {
+	if v := _m.CouponCode; v != nil {
 		builder.WriteString("coupon_code=")
 		builder.WriteString(*v)
 	}

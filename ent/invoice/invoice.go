@@ -62,6 +62,10 @@ const (
 	FieldTotalDiscount = "total_discount"
 	// FieldTotal holds the string denoting the total field in the database.
 	FieldTotal = "total"
+	// FieldCustomCurrency holds the string denoting the custom_currency field in the database.
+	FieldCustomCurrency = "custom_currency"
+	// FieldFxConversion holds the string denoting the fx_conversion field in the database.
+	FieldFxConversion = "fx_conversion"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
 	// FieldDueDate holds the string denoting the due_date field in the database.
@@ -100,6 +104,8 @@ const (
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldRecalculatedInvoiceID holds the string denoting the recalculated_invoice_id field in the database.
 	FieldRecalculatedInvoiceID = "recalculated_invoice_id"
+	// FieldSourceType holds the string denoting the source_type field in the database.
+	FieldSourceType = "source_type"
 	// FieldIsManuallyEdited holds the string denoting the is_manually_edited field in the database.
 	FieldIsManuallyEdited = "is_manually_edited"
 	// FieldTaxExemptionReasonCode holds the string denoting the tax_exemption_reason_code field in the database.
@@ -152,6 +158,8 @@ var Columns = []string{
 	FieldTotalTax,
 	FieldTotalDiscount,
 	FieldTotal,
+	FieldCustomCurrency,
+	FieldFxConversion,
 	FieldDescription,
 	FieldDueDate,
 	FieldPaidAt,
@@ -171,6 +179,7 @@ var Columns = []string{
 	FieldTotalPrepaidCreditsApplied,
 	FieldIdempotencyKey,
 	FieldRecalculatedInvoiceID,
+	FieldSourceType,
 	FieldIsManuallyEdited,
 	FieldTaxExemptionReasonCode,
 }
@@ -445,6 +454,11 @@ func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 // ByRecalculatedInvoiceID orders the results by the recalculated_invoice_id field.
 func ByRecalculatedInvoiceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRecalculatedInvoiceID, opts...).ToFunc()
+}
+
+// BySourceType orders the results by the source_type field.
+func BySourceType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceType, opts...).ToFunc()
 }
 
 // ByIsManuallyEdited orders the results by the is_manually_edited field.

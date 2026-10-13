@@ -2,12 +2,15 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,19 +20,23 @@ import (
 const (
 	defaultEventsCSVPath = "scripts/internal/events.csv"
 	defaultAPIBaseURL    = "https://api.cloud.flexprice.io/v1"
-	replayTimeoutSeconds = 15
+	defaultReplayBatch   = 100
+	// maxReplayBatch mirrors the API cap on dto.BulkIngestEventRequest.Events.
+	maxReplayBatch       = 1000
+	replayTimeoutSeconds = 60
 	replayMaxRetries     = 2
 	replayInitialBackoff = 200 * time.Millisecond
 )
 
-// ReplayEventsFromCSV reads events from a CSV and POSTs each to POST /v1/events.
+// ReplayEventsFromCSV reads events from a CSV and POSTs them in batches to POST /v1/events/bulk.
 //
 // Usage:
 //
 //	go run scripts/main.go -cmd replay-events-csv \
 //	  -api-key "sk_..." \
 //	  -file-path "scripts/internal/events.csv" \
-//	  -api-base-url "https://api.cloud.flexprice.io/v1"
+//	  -api-base-url "https://api.cloud.flexprice.io/v1" \
+//	  -batch-size 100
 //
 // Optional: -dry-run true (parse + print first few payloads, no HTTP calls)
 func ReplayEventsFromCSV() error {
@@ -50,11 +57,23 @@ func ReplayEventsFromCSV() error {
 	if baseURL == "" {
 		baseURL = defaultAPIBaseURL
 	}
-	endpoint := baseURL + "/events"
+	endpoint := baseURL + "/events/bulk"
+
+	batchSize := defaultReplayBatch
+	if raw := strings.TrimSpace(os.Getenv("BATCH_SIZE")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid batch size %q: must be a positive integer", raw)
+		}
+		if parsed > maxReplayBatch {
+			return fmt.Errorf("invalid batch size %d: maximum is %d", parsed, maxReplayBatch)
+		}
+		batchSize = parsed
+	}
 
 	dryRun := strings.EqualFold(os.Getenv("DRY_RUN"), "true")
 
-	f, err := os.Open(filePath)
+	f, err := os.Open(filePath) // #nosec G703,G304 -- CLI/env file path, dev tooling
 	if err != nil {
 		return fmt.Errorf("open csv %s: %w", filePath, err)
 	}
@@ -82,12 +101,43 @@ func ReplayEventsFromCSV() error {
 		success   int
 		failed    int
 		skipped   int
+		batches   int
 		start     = time.Now()
 		dryShown  int
 		firstErrs []string
+		batch     []*dto.IngestEventRequest
+		batchRows []int
 	)
 
-	fmt.Printf("Replaying events from %s → %s (dry_run=%v)\n", filePath, endpoint, dryRun)
+	recordErr := func(msg string) {
+		if len(firstErrs) < 10 {
+			firstErrs = append(firstErrs, msg)
+		}
+		fmt.Println(msg)
+	}
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		batches++
+		firstRow, lastRow := batchRows[0], batchRows[len(batchRows)-1]
+		if err := postEventBatch(client, endpoint, apiKey, batch); err != nil {
+			if errors.Is(err, errAmbiguousBatchOutcome) {
+				fmt.Printf("batch %d (rows %d-%d, %d events) outcome uncertain: %v\n", batches, firstRow, lastRow, len(batch), err)
+			} else {
+				failed += len(batch)
+				recordErr(fmt.Sprintf("batch %d (rows %d-%d, %d events) failed: %v", batches, firstRow, lastRow, len(batch), err))
+			}
+		} else {
+			success += len(batch)
+			fmt.Printf("progress: %d accepted / %d processed (batch %d, rows %d-%d)\n", success, total, batches, firstRow, lastRow)
+		}
+		batch = batch[:0]
+		batchRows = batchRows[:0]
+	}
+
+	fmt.Printf("Replaying events from %s → %s (batch_size=%d dry_run=%v)\n", filePath, endpoint, batchSize, dryRun)
 
 	for {
 		row, err := reader.Read()
@@ -95,6 +145,7 @@ func ReplayEventsFromCSV() error {
 			break
 		}
 		if err != nil {
+			flush()
 			return fmt.Errorf("read csv row %d: %w", total+1, err)
 		}
 		total++
@@ -102,11 +153,7 @@ func ReplayEventsFromCSV() error {
 		event, err := csvRowToIngestEvent(row, col)
 		if err != nil {
 			failed++
-			msg := fmt.Sprintf("row %d: parse error: %v", total, err)
-			if len(firstErrs) < 10 {
-				firstErrs = append(firstErrs, msg)
-			}
-			fmt.Println(msg)
+			recordErr(fmt.Sprintf("row %d: parse error: %v", total, err))
 			continue
 		}
 
@@ -126,24 +173,16 @@ func ReplayEventsFromCSV() error {
 			continue
 		}
 
-		if err := postSingleEvent(client, endpoint, apiKey, event); err != nil {
-			failed++
-			msg := fmt.Sprintf("row %d: event_id=%s failed: %v", total, event.EventID, err)
-			if len(firstErrs) < 10 {
-				firstErrs = append(firstErrs, msg)
-			}
-			fmt.Println(msg)
-			continue
-		}
-
-		success++
-		if success%100 == 0 {
-			fmt.Printf("progress: %d accepted / %d processed\n", success, total)
+		batch = append(batch, event)
+		batchRows = append(batchRows, total)
+		if len(batch) >= batchSize {
+			flush()
 		}
 	}
+	flush()
 
 	fmt.Printf("\nDone in %s\n", time.Since(start).Round(time.Millisecond))
-	fmt.Printf("total=%d success=%d failed=%d skipped=%d\n", total, success, failed, skipped)
+	fmt.Printf("total=%d success=%d failed=%d skipped=%d batches=%d\n", total, success, failed, skipped, batches)
 	if len(firstErrs) > 0 {
 		fmt.Println("first errors:")
 		for _, e := range firstErrs {
@@ -230,8 +269,12 @@ func parseEventTimestamp(raw string) (time.Time, error) {
 	return time.Time{}, lastErr
 }
 
-func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.IngestEventRequest) error {
-	body, err := json.Marshal(event)
+// errAmbiguousBatchOutcome is returned after retries when the last attempt was a
+// transport error, 429, or 5xx. The request may already have been accepted.
+var errAmbiguousBatchOutcome = errors.New("batch outcome ambiguous")
+
+func postEventBatch(client *http.Client, endpoint, apiKey string, batch []*dto.IngestEventRequest) error {
+	body, err := json.Marshal(dto.BulkIngestEventRequest{Events: batch})
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -242,7 +285,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 			time.Sleep(replayInitialBackoff * time.Duration(attempt))
 		}
 
-		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpoint, bytes.NewReader(body)) // #nosec G704 -- endpoint from env, replays to own API
 		if err != nil {
 			return fmt.Errorf("create request: %w", err)
 		}
@@ -250,7 +293,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("x-api-key", apiKey)
 
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) // #nosec G704 -- endpoint from env, replays to own API
 		if err != nil {
 			lastErr = fmt.Errorf("http: %w", err)
 			continue
@@ -260,7 +303,7 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 		if err != nil {
 			return fmt.Errorf("read response body: %w", err)
 		}
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- seed tooling, non-prod
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil
@@ -273,5 +316,8 @@ func postSingleEvent(client *http.Client, endpoint, apiKey string, event *dto.In
 		}
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
-	return lastErr
+	if lastErr != nil {
+		return fmt.Errorf("%w: %w", errAmbiguousBatchOutcome, lastErr)
+	}
+	return nil
 }

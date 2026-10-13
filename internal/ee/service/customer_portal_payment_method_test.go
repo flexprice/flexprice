@@ -3,20 +3,26 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type PortalPaymentMethodSuite struct {
 	testutil.BaseServiceTestSuite
-	svc CustomerPortalService
-	ctx context.Context
+	svc        CustomerPortalService
+	paymentSvc PaymentService
+	ctx        context.Context
 }
 
 func TestPortalPaymentMethodSuite(t *testing.T) {
@@ -35,8 +41,15 @@ func (s *PortalPaymentMethodSuite) SetupTest() {
 		CustomerRepo:       s.GetStores().CustomerRepo,
 		IntegrationFactory: s.GetIntegrationFactory(),
 	}
+	s.paymentSvc = NewPaymentService(params)
 	s.svc = NewCustomerPortalService(params, NewCustomerService(params), nil)
 	s.ctx = types.SetCustomerID(s.GetContext(), "cust_portal")
+	s.NoError(s.GetStores().CustomerRepo.Create(s.ctx, &customer.Customer{
+		ID:         "cust_portal",
+		ExternalID: "ext_cust_portal",
+		Name:       "Portal Customer",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
+	}))
 }
 
 func (s *PortalPaymentMethodSuite) TearDownTest() {
@@ -72,7 +85,14 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 	s.Contains(byProvider, types.PaymentGatewayTypeStripe)
 
 	s.ElementsMatch([]dto.IntegrationCapability{
+		{Type: types.IntegrationCapabilityCheckout},
 		{Type: types.IntegrationCapabilityPaymentLink},
+		{Type: types.IntegrationCapabilityAutoCharge},
+		{Type: types.IntegrationCapabilityPaymentMethodManagement},
+		{Type: types.IntegrationCapabilitySetDefaultMethod},
+		{Type: types.IntegrationCapabilityListPaymentMethods},
+		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeStripe])
 	s.ElementsMatch([]dto.IntegrationCapability{
 		{Type: types.IntegrationCapabilityCheckout},
@@ -80,6 +100,9 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 		{Type: types.IntegrationCapabilityAutoCharge},
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
+		{Type: types.IntegrationCapabilityListPaymentMethods},
+		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeChargebee])
 }
 
@@ -116,20 +139,18 @@ func (s *PortalPaymentMethodSuite) TestListPaymentMethodsUnsyncedCustomerIsNotAn
 // The failure branch: a gateway the factory cannot build a provider for reports
 // ProviderError instead of blanking the group or failing the whole response.
 func (s *PortalPaymentMethodSuite) TestReadSavedMethodsReportsProviderFailure() {
-	portal := s.svc.(*customerPortalService)
+	group := s.paymentSvc.(*paymentService).readSavedMethods(s.ctx, "cust_portal", types.PaymentGatewayTypeNomod)
 
-	group := portal.readSavedMethods(s.ctx, "cust_portal", types.PaymentGatewayTypeRazorpay)
-
-	s.Equal(types.PaymentGatewayTypeRazorpay, group.Provider)
+	s.Equal(types.PaymentGatewayTypeNomod, group.Provider)
 	s.Require().NotNil(group.Error, "an unavailable provider must report an error, not an empty list")
 	s.NotEmpty(group.Error.Message)
 	s.Empty(group.Items)
 }
 
-// Stripe has no payment_method_management capability yet, so it must not appear
+// Nomod has no list_payment_methods capability, so it must not appear
 // in the fan-out even though it is connected.
 func (s *PortalPaymentMethodSuite) TestListPaymentMethodsSkipsIncapableProviders() {
-	s.connect(types.SecretProviderStripe)
+	s.connect(types.SecretProviderNomod)
 
 	resp, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{})
 	s.NoError(err)
@@ -140,17 +161,17 @@ func (s *PortalPaymentMethodSuite) TestListPaymentMethodsRejectsUnconnectedProvi
 	s.connect(types.SecretProviderChargebee)
 
 	_, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{
-		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeRazorpay},
+		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeNomod},
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
 }
 
 func (s *PortalPaymentMethodSuite) TestListPaymentMethodsRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderNomod)
 
 	_, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{
-		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeStripe},
+		Providers: []types.PaymentGatewayType{types.PaymentGatewayTypeNomod},
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
@@ -162,6 +183,90 @@ func (s *PortalPaymentMethodSuite) TestListPaymentMethodsRequiresPortalCustomer(
 	_, err := s.svc.ListPaymentMethods(s.GetContext(), &dto.ListSavedPaymentMethodsRequest{})
 	s.Error(err)
 	s.True(ierr.IsPermissionDenied(err))
+}
+
+func (s *PortalPaymentMethodSuite) TestPaymentListPaymentMethodsUnknownCustomer() {
+	s.connect(types.SecretProviderChargebee)
+
+	_, err := s.paymentSvc.ListPaymentMethods(s.GetContext(), "cust_missing", &dto.ListSavedPaymentMethodsRequest{})
+	s.Error(err)
+	s.True(ierr.IsNotFound(err))
+}
+
+func (s *PortalPaymentMethodSuite) TestPaymentListPaymentMethodsFansOut() {
+	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+
+	resp, err := s.paymentSvc.ListPaymentMethods(s.GetContext(), "cust_portal", &dto.ListSavedPaymentMethodsRequest{})
+	s.NoError(err)
+	s.Require().Len(resp.Providers, 2)
+	s.Equal(types.PaymentGatewayTypeChargebee, resp.Providers[0].Provider)
+	s.Equal(types.PaymentGatewayTypeStripe, resp.Providers[1].Provider)
+	s.Nil(resp.Providers[0].Error)
+	s.Nil(resp.Providers[1].Error)
+}
+
+func TestToSavedPaymentMethodRecurring(t *testing.T) {
+	past := time.Now().UTC().Add(-time.Hour)
+	future := time.Now().UTC().Add(24 * time.Hour)
+	ceiling := decimal.NewFromInt(15000)
+
+	t.Run("mandate details and UPI are mapped", func(t *testing.T) {
+		got := toSavedPaymentMethod(interfaces.ProviderPaymentMethod{
+			GatewayMethodID: "token_upi",
+			Method:          types.PaymentMethodTypeUPI,
+			Active:          true,
+			UPI:             &interfaces.ProviderUPIDetails{VPA: "gaurav.kumar@upi"},
+			Recurring: &interfaces.ProviderRecurringPaymentDetails{
+				Status:             types.RecurringPaymentStatusActive,
+				AutoChargeableTill: &future,
+				MaxAmount:          &ceiling,
+			},
+		}, types.PaymentGatewayTypeRazorpay, true)
+
+		require.NotNil(t, got.UPI)
+		assert.Equal(t, "gaurav.kumar@upi", got.UPI.VPA)
+		require.NotNil(t, got.Recurring)
+		assert.Equal(t, types.RecurringPaymentStatusActive, got.Recurring.Status)
+		assert.False(t, got.InstantlyChargeable)
+		assert.Equal(t, &future, got.Recurring.AutoChargeableTill)
+		assert.True(t, ceiling.Equal(*got.Recurring.MaxAmount))
+		assert.Equal(t, types.PaymentMethodStatusActive, got.Status)
+		assert.True(t, got.CanAutoCharge)
+	})
+
+	t.Run("lapsed mandate does not change method status", func(t *testing.T) {
+		got := toSavedPaymentMethod(interfaces.ProviderPaymentMethod{
+			GatewayMethodID: "token_old",
+			Method:          types.PaymentMethodTypeCard,
+			Active:          true,
+			Recurring: &interfaces.ProviderRecurringPaymentDetails{
+				Status:             types.RecurringPaymentStatusExpired,
+				AutoChargeableTill: &past,
+			},
+		}, types.PaymentGatewayTypeRazorpay, true)
+
+		assert.Equal(t, types.PaymentMethodStatusActive, got.Status)
+		require.NotNil(t, got.Recurring)
+		assert.Equal(t, types.RecurringPaymentStatusExpired, got.Recurring.Status)
+	})
+
+	t.Run("razorpay token without a mandate cannot auto-charge", func(t *testing.T) {
+		got := toSavedPaymentMethod(interfaces.ProviderPaymentMethod{
+			GatewayMethodID: "token_vaulted",
+			Method:          types.PaymentMethodTypeCard,
+			Active:          true,
+		}, types.PaymentGatewayTypeRazorpay, true)
+
+		assert.Nil(t, got.Recurring)
+		assert.False(t, got.CanAutoCharge)
+	})
+
+	t.Run("no recurring facet leaves it nil", func(t *testing.T) {
+		got := toSavedPaymentMethod(interfaces.ProviderPaymentMethod{GatewayMethodID: "pm_1", Active: true},
+			types.PaymentGatewayTypeChargebee, true)
+		assert.Nil(t, got.Recurring)
+		assert.Nil(t, got.UPI)
+	})
 }
 
 func TestToSavedPaymentMethod(t *testing.T) {
@@ -273,10 +378,10 @@ func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnconnectedProvide
 }
 
 func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
 
 	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeStripe,
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
@@ -324,12 +429,39 @@ func (s *PortalPaymentMethodSuite) TestMutateRequiresPortalCustomer() {
 }
 
 func (s *PortalPaymentMethodSuite) TestMutateRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
 
 	_, err := s.svc.SetDefaultPaymentMethod(s.ctx, &dto.PortalSetDefaultPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeStripe,
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
 		PaymentMethodID: "pm_x",
 	})
 	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+func (s *PortalPaymentMethodSuite) TestRazorpayIsListOnly() {
+	s.connect(types.SecretProviderRazorpay)
+
+	resp, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{})
+	s.NoError(err)
+	s.Require().Len(resp.Providers, 1)
+	s.Equal(types.PaymentGatewayTypeRazorpay, resp.Providers[0].Provider)
+	s.Nil(resp.Providers[0].Error)
+
+	_, err = s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
+	})
+	s.True(ierr.IsValidation(err))
+
+	_, err = s.svc.DeletePaymentMethod(s.ctx, &dto.PortalDeletePaymentMethodRequest{
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
+		PaymentMethodID: "token_x",
+	})
+	s.True(ierr.IsValidation(err))
+
+	_, err = s.svc.SetDefaultPaymentMethod(s.ctx, &dto.PortalSetDefaultPaymentMethodRequest{
+		PaymentProvider: types.PaymentGatewayTypeRazorpay,
+		PaymentMethodID: "token_x",
+	})
 	s.True(ierr.IsValidation(err))
 }

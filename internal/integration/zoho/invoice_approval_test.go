@@ -12,7 +12,11 @@ import (
 
 func syncConfigWithApproval(enabled bool) *types.SyncConfig {
 	return &types.SyncConfig{
-		InvoiceSyncSettings: &types.InvoiceSyncSettings{SubmitForApproval: enabled},
+		InvoiceSyncSettings: &types.InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+				SubmitForApproval: enabled,
+			},
+		},
 	}
 }
 

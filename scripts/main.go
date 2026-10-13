@@ -131,7 +131,7 @@ var commands = []Command{
 	},
 	{
 		Name:        "replay-events-csv",
-		Description: "Replay events from a CSV via POST /v1/events (preserves event_id, timestamp, event_name, source, properties)",
+		Description: "Replay events from a CSV via POST /v1/events/bulk in batches of -batch-size (preserves event_id, timestamp, event_name, source, properties)",
 		Run:         internal.ReplayEventsFromCSV,
 	},
 }
@@ -196,7 +196,7 @@ func main() {
 	flag.StringVar(&eventName, "event-name", "", "Event name filter for reprocessing")
 	flag.StringVar(&startTime, "start-time", "", "Start time for reprocessing (ISO-8601 format)")
 	flag.StringVar(&endTime, "end-time", "", "End time for reprocessing (ISO-8601 format)")
-	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
+	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing and event replay (max 1000)")
 	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
 	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
@@ -221,95 +221,95 @@ func main() {
 
 	// Set command-specific environment variables
 	if email != "" {
-		os.Setenv("USER_EMAIL", email)
+		os.Setenv("USER_EMAIL", email) // #nosec G104 -- seed tooling, non-prod
 	}
 	if tenant != "" {
-		os.Setenv("TENANT_NAME", tenant)
+		os.Setenv("TENANT_NAME", tenant) // #nosec G104 -- seed tooling, non-prod
 	}
 	if metersFile != "" {
-		os.Setenv("METERS_FILE", metersFile)
+		os.Setenv("METERS_FILE", metersFile) // #nosec G104 -- seed tooling, non-prod
 	}
 	if plansFile != "" {
-		os.Setenv("PLANS_FILE", plansFile)
+		os.Setenv("PLANS_FILE", plansFile) // #nosec G104 -- seed tooling, non-prod
 	}
 	if tenantID != "" {
-		os.Setenv("TENANT_ID", tenantID)
+		os.Setenv("TENANT_ID", tenantID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if userID != "" {
-		os.Setenv("USER_ID", userID)
+		os.Setenv("USER_ID", userID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if password != "" {
-		os.Setenv("USER_PASSWORD", password)
+		os.Setenv("USER_PASSWORD", password) // #nosec G104 -- seed tooling, non-prod
 	}
 	if environmentID != "" {
-		os.Setenv("ENVIRONMENT_ID", environmentID)
+		os.Setenv("ENVIRONMENT_ID", environmentID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if environmentName != "" {
-		os.Setenv("ENVIRONMENT_NAME", environmentName)
+		os.Setenv("ENVIRONMENT_NAME", environmentName) // #nosec G104 -- seed tooling, non-prod
 	}
 	if environmentType != "" {
-		os.Setenv("ENVIRONMENT_TYPE", environmentType)
+		os.Setenv("ENVIRONMENT_TYPE", environmentType) // #nosec G104 -- seed tooling, non-prod
 	}
 	if filePath != "" {
-		os.Setenv("FILE_PATH", filePath)
+		os.Setenv("FILE_PATH", filePath) // #nosec G104 -- seed tooling, non-prod
 	}
 	if planID != "" {
-		os.Setenv("PLAN_ID", planID)
+		os.Setenv("PLAN_ID", planID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if meterID != "" {
-		os.Setenv("METER_ID", meterID)
+		os.Setenv("METER_ID", meterID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if startDate != "" {
-		os.Setenv("START_DATE", startDate)
+		os.Setenv("START_DATE", startDate) // #nosec G104 -- seed tooling, non-prod
 	}
 	if billingCycle != "" {
-		os.Setenv("BILLING_CYCLE", billingCycle)
+		os.Setenv("BILLING_CYCLE", billingCycle) // #nosec G104 -- seed tooling, non-prod
 	}
 	if customerCount != "" {
-		os.Setenv("CUSTOMER_COUNT", customerCount)
+		os.Setenv("CUSTOMER_COUNT", customerCount) // #nosec G104 -- seed tooling, non-prod
 	}
 	if addonID != "" {
-		os.Setenv("ADDON_ID", addonID)
+		os.Setenv("ADDON_ID", addonID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if apiKey != "" {
-		os.Setenv("SCRIPT_FLEXPRICE_API_KEY", apiKey)
-		os.Setenv("FLEXPRICE_API_KEY", apiKey)
+		os.Setenv("SCRIPT_FLEXPRICE_API_KEY", apiKey) // #nosec G104 -- seed tooling, non-prod
+		os.Setenv("FLEXPRICE_API_KEY", apiKey) // #nosec G104 -- seed tooling, non-prod
 	}
 	if externalCustomerID != "" {
-		os.Setenv("EXTERNAL_CUSTOMER_ID", externalCustomerID)
+		os.Setenv("EXTERNAL_CUSTOMER_ID", externalCustomerID) // #nosec G104 -- seed tooling, non-prod
 	}
 	if eventName != "" {
-		os.Setenv("EVENT_NAME", eventName)
+		os.Setenv("EVENT_NAME", eventName) // #nosec G104 -- seed tooling, non-prod
 	}
 	if startTime != "" {
-		os.Setenv("START_TIME", startTime)
+		os.Setenv("START_TIME", startTime) // #nosec G104 -- seed tooling, non-prod
 	}
 	if endTime != "" {
-		os.Setenv("END_TIME", endTime)
+		os.Setenv("END_TIME", endTime) // #nosec G104 -- seed tooling, non-prod
 	}
 	if batchSize != "" {
-		os.Setenv("BATCH_SIZE", batchSize)
+		os.Setenv("BATCH_SIZE", batchSize) // #nosec G104 -- seed tooling, non-prod
 	}
 	if dryRun != "" {
-		os.Setenv("DRY_RUN", dryRun)
+		os.Setenv("DRY_RUN", dryRun) // #nosec G104 -- seed tooling, non-prod
 	}
 	if workerCount != "" {
-		os.Setenv("WORKER_COUNT", workerCount)
+		os.Setenv("WORKER_COUNT", workerCount) // #nosec G104 -- seed tooling, non-prod
 	}
 	if apiBaseURL != "" {
-		os.Setenv("API_BASE_URL", apiBaseURL)
+		os.Setenv("API_BASE_URL", apiBaseURL) // #nosec G104 -- seed tooling, non-prod
 	}
 	if effectiveDate != "" {
-		os.Setenv("EFFECTIVE_DATE", effectiveDate)
+		os.Setenv("EFFECTIVE_DATE", effectiveDate) // #nosec G104 -- seed tooling, non-prod
 	}
 	if failedOutput != "" {
-		os.Setenv("FAILED_OUTPUT_PATH", failedOutput)
+		os.Setenv("FAILED_OUTPUT_PATH", failedOutput) // #nosec G104 -- seed tooling, non-prod
 	}
 	if successOutput != "" {
-		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput)
+		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput) // #nosec G104 -- seed tooling, non-prod
 	}
 	if expiryHours != "" {
-		os.Setenv("EXPIRY_HOURS", expiryHours)
+		os.Setenv("EXPIRY_HOURS", expiryHours) // #nosec G104 -- seed tooling, non-prod
 	}
 
 	// Find and run the command

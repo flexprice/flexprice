@@ -24,276 +24,276 @@ type CreditNoteCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cnc *CreditNoteCreate) SetTenantID(s string) *CreditNoteCreate {
-	cnc.mutation.SetTenantID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetTenantID(v string) *CreditNoteCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cnc *CreditNoteCreate) SetStatus(s string) *CreditNoteCreate {
-	cnc.mutation.SetStatus(s)
-	return cnc
+func (_c *CreditNoteCreate) SetStatus(v string) *CreditNoteCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableStatus(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetStatus(*s)
+func (_c *CreditNoteCreate) SetNillableStatus(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cnc *CreditNoteCreate) SetCreatedAt(t time.Time) *CreditNoteCreate {
-	cnc.mutation.SetCreatedAt(t)
-	return cnc
+func (_c *CreditNoteCreate) SetCreatedAt(v time.Time) *CreditNoteCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableCreatedAt(t *time.Time) *CreditNoteCreate {
-	if t != nil {
-		cnc.SetCreatedAt(*t)
+func (_c *CreditNoteCreate) SetNillableCreatedAt(v *time.Time) *CreditNoteCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cnc *CreditNoteCreate) SetUpdatedAt(t time.Time) *CreditNoteCreate {
-	cnc.mutation.SetUpdatedAt(t)
-	return cnc
+func (_c *CreditNoteCreate) SetUpdatedAt(v time.Time) *CreditNoteCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableUpdatedAt(t *time.Time) *CreditNoteCreate {
-	if t != nil {
-		cnc.SetUpdatedAt(*t)
+func (_c *CreditNoteCreate) SetNillableUpdatedAt(v *time.Time) *CreditNoteCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cnc *CreditNoteCreate) SetCreatedBy(s string) *CreditNoteCreate {
-	cnc.mutation.SetCreatedBy(s)
-	return cnc
+func (_c *CreditNoteCreate) SetCreatedBy(v string) *CreditNoteCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableCreatedBy(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetCreatedBy(*s)
+func (_c *CreditNoteCreate) SetNillableCreatedBy(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cnc *CreditNoteCreate) SetUpdatedBy(s string) *CreditNoteCreate {
-	cnc.mutation.SetUpdatedBy(s)
-	return cnc
+func (_c *CreditNoteCreate) SetUpdatedBy(v string) *CreditNoteCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableUpdatedBy(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetUpdatedBy(*s)
+func (_c *CreditNoteCreate) SetNillableUpdatedBy(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cnc *CreditNoteCreate) SetEnvironmentID(s string) *CreditNoteCreate {
-	cnc.mutation.SetEnvironmentID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetEnvironmentID(v string) *CreditNoteCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableEnvironmentID(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetEnvironmentID(*s)
+func (_c *CreditNoteCreate) SetNillableEnvironmentID(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (cnc *CreditNoteCreate) SetInvoiceID(s string) *CreditNoteCreate {
-	cnc.mutation.SetInvoiceID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetInvoiceID(v string) *CreditNoteCreate {
+	_c.mutation.SetInvoiceID(v)
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (cnc *CreditNoteCreate) SetCustomerID(s string) *CreditNoteCreate {
-	cnc.mutation.SetCustomerID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetCustomerID(v string) *CreditNoteCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cnc *CreditNoteCreate) SetSubscriptionID(s string) *CreditNoteCreate {
-	cnc.mutation.SetSubscriptionID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetSubscriptionID(v string) *CreditNoteCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableSubscriptionID(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetSubscriptionID(*s)
+func (_c *CreditNoteCreate) SetNillableSubscriptionID(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetCreditNoteNumber sets the "credit_note_number" field.
-func (cnc *CreditNoteCreate) SetCreditNoteNumber(s string) *CreditNoteCreate {
-	cnc.mutation.SetCreditNoteNumber(s)
-	return cnc
+func (_c *CreditNoteCreate) SetCreditNoteNumber(v string) *CreditNoteCreate {
+	_c.mutation.SetCreditNoteNumber(v)
+	return _c
 }
 
 // SetCreditNoteStatus sets the "credit_note_status" field.
-func (cnc *CreditNoteCreate) SetCreditNoteStatus(tns types.CreditNoteStatus) *CreditNoteCreate {
-	cnc.mutation.SetCreditNoteStatus(tns)
-	return cnc
+func (_c *CreditNoteCreate) SetCreditNoteStatus(v types.CreditNoteStatus) *CreditNoteCreate {
+	_c.mutation.SetCreditNoteStatus(v)
+	return _c
 }
 
 // SetNillableCreditNoteStatus sets the "credit_note_status" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableCreditNoteStatus(tns *types.CreditNoteStatus) *CreditNoteCreate {
-	if tns != nil {
-		cnc.SetCreditNoteStatus(*tns)
+func (_c *CreditNoteCreate) SetNillableCreditNoteStatus(v *types.CreditNoteStatus) *CreditNoteCreate {
+	if v != nil {
+		_c.SetCreditNoteStatus(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetCreditNoteType sets the "credit_note_type" field.
-func (cnc *CreditNoteCreate) SetCreditNoteType(tnt types.CreditNoteType) *CreditNoteCreate {
-	cnc.mutation.SetCreditNoteType(tnt)
-	return cnc
+func (_c *CreditNoteCreate) SetCreditNoteType(v types.CreditNoteType) *CreditNoteCreate {
+	_c.mutation.SetCreditNoteType(v)
+	return _c
 }
 
 // SetRefundStatus sets the "refund_status" field.
-func (cnc *CreditNoteCreate) SetRefundStatus(ts types.PaymentStatus) *CreditNoteCreate {
-	cnc.mutation.SetRefundStatus(ts)
-	return cnc
+func (_c *CreditNoteCreate) SetRefundStatus(v types.PaymentStatus) *CreditNoteCreate {
+	_c.mutation.SetRefundStatus(v)
+	return _c
 }
 
 // SetNillableRefundStatus sets the "refund_status" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableRefundStatus(ts *types.PaymentStatus) *CreditNoteCreate {
-	if ts != nil {
-		cnc.SetRefundStatus(*ts)
+func (_c *CreditNoteCreate) SetNillableRefundStatus(v *types.PaymentStatus) *CreditNoteCreate {
+	if v != nil {
+		_c.SetRefundStatus(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetReason sets the "reason" field.
-func (cnc *CreditNoteCreate) SetReason(tnr types.CreditNoteReason) *CreditNoteCreate {
-	cnc.mutation.SetReason(tnr)
-	return cnc
+func (_c *CreditNoteCreate) SetReason(v types.CreditNoteReason) *CreditNoteCreate {
+	_c.mutation.SetReason(v)
+	return _c
 }
 
 // SetMemo sets the "memo" field.
-func (cnc *CreditNoteCreate) SetMemo(s string) *CreditNoteCreate {
-	cnc.mutation.SetMemo(s)
-	return cnc
+func (_c *CreditNoteCreate) SetMemo(v string) *CreditNoteCreate {
+	_c.mutation.SetMemo(v)
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (cnc *CreditNoteCreate) SetCurrency(s string) *CreditNoteCreate {
-	cnc.mutation.SetCurrency(s)
-	return cnc
+func (_c *CreditNoteCreate) SetCurrency(v string) *CreditNoteCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (cnc *CreditNoteCreate) SetIdempotencyKey(s string) *CreditNoteCreate {
-	cnc.mutation.SetIdempotencyKey(s)
-	return cnc
+func (_c *CreditNoteCreate) SetIdempotencyKey(v string) *CreditNoteCreate {
+	_c.mutation.SetIdempotencyKey(v)
+	return _c
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableIdempotencyKey(s *string) *CreditNoteCreate {
-	if s != nil {
-		cnc.SetIdempotencyKey(*s)
+func (_c *CreditNoteCreate) SetNillableIdempotencyKey(v *string) *CreditNoteCreate {
+	if v != nil {
+		_c.SetIdempotencyKey(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetVoidedAt sets the "voided_at" field.
-func (cnc *CreditNoteCreate) SetVoidedAt(t time.Time) *CreditNoteCreate {
-	cnc.mutation.SetVoidedAt(t)
-	return cnc
+func (_c *CreditNoteCreate) SetVoidedAt(v time.Time) *CreditNoteCreate {
+	_c.mutation.SetVoidedAt(v)
+	return _c
 }
 
 // SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableVoidedAt(t *time.Time) *CreditNoteCreate {
-	if t != nil {
-		cnc.SetVoidedAt(*t)
+func (_c *CreditNoteCreate) SetNillableVoidedAt(v *time.Time) *CreditNoteCreate {
+	if v != nil {
+		_c.SetVoidedAt(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetFinalizedAt sets the "finalized_at" field.
-func (cnc *CreditNoteCreate) SetFinalizedAt(t time.Time) *CreditNoteCreate {
-	cnc.mutation.SetFinalizedAt(t)
-	return cnc
+func (_c *CreditNoteCreate) SetFinalizedAt(v time.Time) *CreditNoteCreate {
+	_c.mutation.SetFinalizedAt(v)
+	return _c
 }
 
 // SetNillableFinalizedAt sets the "finalized_at" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableFinalizedAt(t *time.Time) *CreditNoteCreate {
-	if t != nil {
-		cnc.SetFinalizedAt(*t)
+func (_c *CreditNoteCreate) SetNillableFinalizedAt(v *time.Time) *CreditNoteCreate {
+	if v != nil {
+		_c.SetFinalizedAt(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cnc *CreditNoteCreate) SetMetadata(m map[string]string) *CreditNoteCreate {
-	cnc.mutation.SetMetadata(m)
-	return cnc
+func (_c *CreditNoteCreate) SetMetadata(v map[string]string) *CreditNoteCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetTotalAmount sets the "total_amount" field.
-func (cnc *CreditNoteCreate) SetTotalAmount(d decimal.Decimal) *CreditNoteCreate {
-	cnc.mutation.SetTotalAmount(d)
-	return cnc
+func (_c *CreditNoteCreate) SetTotalAmount(v decimal.Decimal) *CreditNoteCreate {
+	_c.mutation.SetTotalAmount(v)
+	return _c
 }
 
 // SetNillableTotalAmount sets the "total_amount" field if the given value is not nil.
-func (cnc *CreditNoteCreate) SetNillableTotalAmount(d *decimal.Decimal) *CreditNoteCreate {
-	if d != nil {
-		cnc.SetTotalAmount(*d)
+func (_c *CreditNoteCreate) SetNillableTotalAmount(v *decimal.Decimal) *CreditNoteCreate {
+	if v != nil {
+		_c.SetTotalAmount(*v)
 	}
-	return cnc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cnc *CreditNoteCreate) SetID(s string) *CreditNoteCreate {
-	cnc.mutation.SetID(s)
-	return cnc
+func (_c *CreditNoteCreate) SetID(v string) *CreditNoteCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // AddLineItemIDs adds the "line_items" edge to the CreditNoteLineItem entity by IDs.
-func (cnc *CreditNoteCreate) AddLineItemIDs(ids ...string) *CreditNoteCreate {
-	cnc.mutation.AddLineItemIDs(ids...)
-	return cnc
+func (_c *CreditNoteCreate) AddLineItemIDs(ids ...string) *CreditNoteCreate {
+	_c.mutation.AddLineItemIDs(ids...)
+	return _c
 }
 
 // AddLineItems adds the "line_items" edges to the CreditNoteLineItem entity.
-func (cnc *CreditNoteCreate) AddLineItems(c ...*CreditNoteLineItem) *CreditNoteCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *CreditNoteCreate) AddLineItems(v ...*CreditNoteLineItem) *CreditNoteCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cnc.AddLineItemIDs(ids...)
+	return _c.AddLineItemIDs(ids...)
 }
 
 // Mutation returns the CreditNoteMutation object of the builder.
-func (cnc *CreditNoteCreate) Mutation() *CreditNoteMutation {
-	return cnc.mutation
+func (_c *CreditNoteCreate) Mutation() *CreditNoteMutation {
+	return _c.mutation
 }
 
 // Save creates the CreditNote in the database.
-func (cnc *CreditNoteCreate) Save(ctx context.Context) (*CreditNote, error) {
-	cnc.defaults()
-	return withHooks(ctx, cnc.sqlSave, cnc.mutation, cnc.hooks)
+func (_c *CreditNoteCreate) Save(ctx context.Context) (*CreditNote, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cnc *CreditNoteCreate) SaveX(ctx context.Context) *CreditNote {
-	v, err := cnc.Save(ctx)
+func (_c *CreditNoteCreate) SaveX(ctx context.Context) *CreditNote {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -301,131 +301,131 @@ func (cnc *CreditNoteCreate) SaveX(ctx context.Context) *CreditNote {
 }
 
 // Exec executes the query.
-func (cnc *CreditNoteCreate) Exec(ctx context.Context) error {
-	_, err := cnc.Save(ctx)
+func (_c *CreditNoteCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnc *CreditNoteCreate) ExecX(ctx context.Context) {
-	if err := cnc.Exec(ctx); err != nil {
+func (_c *CreditNoteCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cnc *CreditNoteCreate) defaults() {
-	if _, ok := cnc.mutation.Status(); !ok {
+func (_c *CreditNoteCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := creditnote.DefaultStatus
-		cnc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cnc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := creditnote.DefaultCreatedAt()
-		cnc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cnc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := creditnote.DefaultUpdatedAt()
-		cnc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cnc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := creditnote.DefaultEnvironmentID
-		cnc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cnc.mutation.CreditNoteStatus(); !ok {
+	if _, ok := _c.mutation.CreditNoteStatus(); !ok {
 		v := creditnote.DefaultCreditNoteStatus
-		cnc.mutation.SetCreditNoteStatus(v)
+		_c.mutation.SetCreditNoteStatus(v)
 	}
-	if _, ok := cnc.mutation.TotalAmount(); !ok {
+	if _, ok := _c.mutation.TotalAmount(); !ok {
 		v := creditnote.DefaultTotalAmount
-		cnc.mutation.SetTotalAmount(v)
+		_c.mutation.SetTotalAmount(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cnc *CreditNoteCreate) check() error {
-	if _, ok := cnc.mutation.TenantID(); !ok {
+func (_c *CreditNoteCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "CreditNote.tenant_id"`)}
 	}
-	if v, ok := cnc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := creditnote.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "CreditNote.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "CreditNote.status"`)}
 	}
-	if _, ok := cnc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CreditNote.created_at"`)}
 	}
-	if _, ok := cnc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "CreditNote.updated_at"`)}
 	}
-	if _, ok := cnc.mutation.InvoiceID(); !ok {
+	if _, ok := _c.mutation.InvoiceID(); !ok {
 		return &ValidationError{Name: "invoice_id", err: errors.New(`ent: missing required field "CreditNote.invoice_id"`)}
 	}
-	if v, ok := cnc.mutation.InvoiceID(); ok {
+	if v, ok := _c.mutation.InvoiceID(); ok {
 		if err := creditnote.InvoiceIDValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_id", err: fmt.Errorf(`ent: validator failed for field "CreditNote.invoice_id": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "CreditNote.customer_id"`)}
 	}
-	if v, ok := cnc.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := creditnote.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "CreditNote.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.CreditNoteNumber(); !ok {
+	if _, ok := _c.mutation.CreditNoteNumber(); !ok {
 		return &ValidationError{Name: "credit_note_number", err: errors.New(`ent: missing required field "CreditNote.credit_note_number"`)}
 	}
-	if _, ok := cnc.mutation.CreditNoteStatus(); !ok {
+	if _, ok := _c.mutation.CreditNoteStatus(); !ok {
 		return &ValidationError{Name: "credit_note_status", err: errors.New(`ent: missing required field "CreditNote.credit_note_status"`)}
 	}
-	if v, ok := cnc.mutation.CreditNoteStatus(); ok {
+	if v, ok := _c.mutation.CreditNoteStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "credit_note_status", err: fmt.Errorf(`ent: validator failed for field "CreditNote.credit_note_status": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.CreditNoteType(); !ok {
+	if _, ok := _c.mutation.CreditNoteType(); !ok {
 		return &ValidationError{Name: "credit_note_type", err: errors.New(`ent: missing required field "CreditNote.credit_note_type"`)}
 	}
-	if v, ok := cnc.mutation.CreditNoteType(); ok {
+	if v, ok := _c.mutation.CreditNoteType(); ok {
 		if err := creditnote.CreditNoteTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "credit_note_type", err: fmt.Errorf(`ent: validator failed for field "CreditNote.credit_note_type": %w`, err)}
 		}
 	}
-	if v, ok := cnc.mutation.RefundStatus(); ok {
+	if v, ok := _c.mutation.RefundStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "refund_status", err: fmt.Errorf(`ent: validator failed for field "CreditNote.refund_status": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.Reason(); !ok {
+	if _, ok := _c.mutation.Reason(); !ok {
 		return &ValidationError{Name: "reason", err: errors.New(`ent: missing required field "CreditNote.reason"`)}
 	}
-	if v, ok := cnc.mutation.Reason(); ok {
+	if v, ok := _c.mutation.Reason(); ok {
 		if err := creditnote.ReasonValidator(string(v)); err != nil {
 			return &ValidationError{Name: "reason", err: fmt.Errorf(`ent: validator failed for field "CreditNote.reason": %w`, err)}
 		}
 	}
-	if _, ok := cnc.mutation.Memo(); !ok {
+	if _, ok := _c.mutation.Memo(); !ok {
 		return &ValidationError{Name: "memo", err: errors.New(`ent: missing required field "CreditNote.memo"`)}
 	}
-	if _, ok := cnc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "CreditNote.currency"`)}
 	}
-	if _, ok := cnc.mutation.TotalAmount(); !ok {
+	if _, ok := _c.mutation.TotalAmount(); !ok {
 		return &ValidationError{Name: "total_amount", err: errors.New(`ent: missing required field "CreditNote.total_amount"`)}
 	}
 	return nil
 }
 
-func (cnc *CreditNoteCreate) sqlSave(ctx context.Context) (*CreditNote, error) {
-	if err := cnc.check(); err != nil {
+func (_c *CreditNoteCreate) sqlSave(ctx context.Context) (*CreditNote, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cnc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cnc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -438,109 +438,109 @@ func (cnc *CreditNoteCreate) sqlSave(ctx context.Context) (*CreditNote, error) {
 			return nil, fmt.Errorf("unexpected CreditNote.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cnc.mutation.id = &_node.ID
-	cnc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cnc *CreditNoteCreate) createSpec() (*CreditNote, *sqlgraph.CreateSpec) {
+func (_c *CreditNoteCreate) createSpec() (*CreditNote, *sqlgraph.CreateSpec) {
 	var (
-		_node = &CreditNote{config: cnc.config}
+		_node = &CreditNote{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(creditnote.Table, sqlgraph.NewFieldSpec(creditnote.FieldID, field.TypeString))
 	)
-	if id, ok := cnc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cnc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(creditnote.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cnc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(creditnote.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cnc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(creditnote.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cnc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditnote.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cnc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(creditnote.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cnc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditnote.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cnc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(creditnote.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cnc.mutation.InvoiceID(); ok {
+	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(creditnote.FieldInvoiceID, field.TypeString, value)
 		_node.InvoiceID = value
 	}
-	if value, ok := cnc.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(creditnote.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := cnc.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(creditnote.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
-	if value, ok := cnc.mutation.CreditNoteNumber(); ok {
+	if value, ok := _c.mutation.CreditNoteNumber(); ok {
 		_spec.SetField(creditnote.FieldCreditNoteNumber, field.TypeString, value)
 		_node.CreditNoteNumber = value
 	}
-	if value, ok := cnc.mutation.CreditNoteStatus(); ok {
+	if value, ok := _c.mutation.CreditNoteStatus(); ok {
 		_spec.SetField(creditnote.FieldCreditNoteStatus, field.TypeString, value)
 		_node.CreditNoteStatus = value
 	}
-	if value, ok := cnc.mutation.CreditNoteType(); ok {
+	if value, ok := _c.mutation.CreditNoteType(); ok {
 		_spec.SetField(creditnote.FieldCreditNoteType, field.TypeString, value)
 		_node.CreditNoteType = value
 	}
-	if value, ok := cnc.mutation.RefundStatus(); ok {
+	if value, ok := _c.mutation.RefundStatus(); ok {
 		_spec.SetField(creditnote.FieldRefundStatus, field.TypeString, value)
 		_node.RefundStatus = &value
 	}
-	if value, ok := cnc.mutation.Reason(); ok {
+	if value, ok := _c.mutation.Reason(); ok {
 		_spec.SetField(creditnote.FieldReason, field.TypeString, value)
 		_node.Reason = value
 	}
-	if value, ok := cnc.mutation.Memo(); ok {
+	if value, ok := _c.mutation.Memo(); ok {
 		_spec.SetField(creditnote.FieldMemo, field.TypeString, value)
 		_node.Memo = value
 	}
-	if value, ok := cnc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(creditnote.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := cnc.mutation.IdempotencyKey(); ok {
+	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(creditnote.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = &value
 	}
-	if value, ok := cnc.mutation.VoidedAt(); ok {
+	if value, ok := _c.mutation.VoidedAt(); ok {
 		_spec.SetField(creditnote.FieldVoidedAt, field.TypeTime, value)
 		_node.VoidedAt = &value
 	}
-	if value, ok := cnc.mutation.FinalizedAt(); ok {
+	if value, ok := _c.mutation.FinalizedAt(); ok {
 		_spec.SetField(creditnote.FieldFinalizedAt, field.TypeTime, value)
 		_node.FinalizedAt = &value
 	}
-	if value, ok := cnc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(creditnote.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := cnc.mutation.TotalAmount(); ok {
+	if value, ok := _c.mutation.TotalAmount(); ok {
 		_spec.SetField(creditnote.FieldTotalAmount, field.TypeOther, value)
 		_node.TotalAmount = value
 	}
-	if nodes := cnc.mutation.LineItemsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -567,16 +567,16 @@ type CreditNoteCreateBulk struct {
 }
 
 // Save creates the CreditNote entities in the database.
-func (cncb *CreditNoteCreateBulk) Save(ctx context.Context) ([]*CreditNote, error) {
-	if cncb.err != nil {
-		return nil, cncb.err
+func (_c *CreditNoteCreateBulk) Save(ctx context.Context) ([]*CreditNote, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(cncb.builders))
-	nodes := make([]*CreditNote, len(cncb.builders))
-	mutators := make([]Mutator, len(cncb.builders))
-	for i := range cncb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*CreditNote, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := cncb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CreditNoteMutation)
@@ -590,11 +590,11 @@ func (cncb *CreditNoteCreateBulk) Save(ctx context.Context) ([]*CreditNote, erro
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, cncb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, cncb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -614,7 +614,7 @@ func (cncb *CreditNoteCreateBulk) Save(ctx context.Context) ([]*CreditNote, erro
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, cncb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -622,8 +622,8 @@ func (cncb *CreditNoteCreateBulk) Save(ctx context.Context) ([]*CreditNote, erro
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cncb *CreditNoteCreateBulk) SaveX(ctx context.Context) []*CreditNote {
-	v, err := cncb.Save(ctx)
+func (_c *CreditNoteCreateBulk) SaveX(ctx context.Context) []*CreditNote {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -631,14 +631,14 @@ func (cncb *CreditNoteCreateBulk) SaveX(ctx context.Context) []*CreditNote {
 }
 
 // Exec executes the query.
-func (cncb *CreditNoteCreateBulk) Exec(ctx context.Context) error {
-	_, err := cncb.Save(ctx)
+func (_c *CreditNoteCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cncb *CreditNoteCreateBulk) ExecX(ctx context.Context) {
-	if err := cncb.Exec(ctx); err != nil {
+func (_c *CreditNoteCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

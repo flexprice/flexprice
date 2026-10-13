@@ -13,10 +13,11 @@ const (
 	Idx_refund_tenant_payment         = "idx_refund_tenant_payment"
 	Idx_refund_tenant_status          = "idx_refund_tenant_status"
 	Idx_refund_gateway_refund_id      = "idx_refund_gateway_refund_id"
+	Idx_refund_tenant_invoice         = "idx_refund_tenant_invoice"
 )
 
 // Refund holds the schema definition for the Refund entity.
-// One row per gateway refund attempt, child of Payment.
+// One row per settlement attempt of refunded value.
 type Refund struct {
 	ent.Schema
 }
@@ -42,13 +43,28 @@ func (Refund) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
+			Optional().
+			Nillable().
+			Immutable(),
+		field.String("invoice_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
 			NotEmpty().
+			Immutable(),
+		field.String("credit_note_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
 			Immutable(),
 		field.String("payment_gateway").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
+			Optional().
+			Nillable().
 			Immutable(),
 		field.String("gateway_refund_id").
 			SchemaType(map[string]string{
@@ -63,6 +79,11 @@ func (Refund) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.Other("amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Default(decimal.Zero),
+		field.Other("settled_amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
@@ -83,6 +104,19 @@ func (Refund) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty(),
+		field.String("refund_destination").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(""),
+		field.String("refund_destination_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.Int("attempt").
+			Default(1),
 		field.String("idempotency_key").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
@@ -93,7 +127,8 @@ func (Refund) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty().
+			Optional().
+			Nillable().
 			Immutable(),
 		field.String("failure_reason").
 			SchemaType(map[string]string{
@@ -143,5 +178,7 @@ func (Refund) Indexes() []ent.Index {
 			StorageKey(Idx_refund_tenant_status),
 		index.Fields("gateway_refund_id").
 			StorageKey(Idx_refund_gateway_refund_id),
+		index.Fields("tenant_id", "environment_id", "invoice_id").
+			StorageKey(Idx_refund_tenant_invoice),
 	}
 }

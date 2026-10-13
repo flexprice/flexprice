@@ -21,167 +21,167 @@ type IncomingWebhookEventCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (iwec *IncomingWebhookEventCreate) SetTenantID(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetTenantID(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetTenantID(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (iwec *IncomingWebhookEventCreate) SetStatus(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetStatus(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetStatus(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableStatus(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetStatus(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableStatus(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (iwec *IncomingWebhookEventCreate) SetCreatedAt(t time.Time) *IncomingWebhookEventCreate {
-	iwec.mutation.SetCreatedAt(t)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetCreatedAt(v time.Time) *IncomingWebhookEventCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableCreatedAt(t *time.Time) *IncomingWebhookEventCreate {
-	if t != nil {
-		iwec.SetCreatedAt(*t)
+func (_c *IncomingWebhookEventCreate) SetNillableCreatedAt(v *time.Time) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (iwec *IncomingWebhookEventCreate) SetUpdatedAt(t time.Time) *IncomingWebhookEventCreate {
-	iwec.mutation.SetUpdatedAt(t)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetUpdatedAt(v time.Time) *IncomingWebhookEventCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableUpdatedAt(t *time.Time) *IncomingWebhookEventCreate {
-	if t != nil {
-		iwec.SetUpdatedAt(*t)
+func (_c *IncomingWebhookEventCreate) SetNillableUpdatedAt(v *time.Time) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (iwec *IncomingWebhookEventCreate) SetCreatedBy(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetCreatedBy(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetCreatedBy(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableCreatedBy(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetCreatedBy(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableCreatedBy(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (iwec *IncomingWebhookEventCreate) SetUpdatedBy(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetUpdatedBy(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetUpdatedBy(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableUpdatedBy(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetUpdatedBy(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableUpdatedBy(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (iwec *IncomingWebhookEventCreate) SetEnvironmentID(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetEnvironmentID(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetEnvironmentID(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableEnvironmentID(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetEnvironmentID(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableEnvironmentID(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetProvider sets the "provider" field.
-func (iwec *IncomingWebhookEventCreate) SetProvider(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetProvider(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetProvider(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetProvider(v)
+	return _c
 }
 
 // SetMethod sets the "method" field.
-func (iwec *IncomingWebhookEventCreate) SetMethod(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetMethod(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetMethod(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetMethod(v)
+	return _c
 }
 
 // SetPath sets the "path" field.
-func (iwec *IncomingWebhookEventCreate) SetPath(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetPath(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetPath(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetPath(v)
+	return _c
 }
 
 // SetRequestID sets the "request_id" field.
-func (iwec *IncomingWebhookEventCreate) SetRequestID(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetRequestID(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetRequestID(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetRequestID(v)
+	return _c
 }
 
 // SetNillableRequestID sets the "request_id" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableRequestID(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetRequestID(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableRequestID(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetRequestID(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetHeaders sets the "headers" field.
-func (iwec *IncomingWebhookEventCreate) SetHeaders(m map[string][]string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetHeaders(m)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetHeaders(v map[string][]string) *IncomingWebhookEventCreate {
+	_c.mutation.SetHeaders(v)
+	return _c
 }
 
 // SetBody sets the "body" field.
-func (iwec *IncomingWebhookEventCreate) SetBody(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetBody(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetBody(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetBody(v)
+	return _c
 }
 
 // SetNillableBody sets the "body" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableBody(s *string) *IncomingWebhookEventCreate {
-	if s != nil {
-		iwec.SetBody(*s)
+func (_c *IncomingWebhookEventCreate) SetNillableBody(v *string) *IncomingWebhookEventCreate {
+	if v != nil {
+		_c.SetBody(*v)
 	}
-	return iwec
+	return _c
 }
 
 // SetID sets the "id" field.
-func (iwec *IncomingWebhookEventCreate) SetID(s string) *IncomingWebhookEventCreate {
-	iwec.mutation.SetID(s)
-	return iwec
+func (_c *IncomingWebhookEventCreate) SetID(v string) *IncomingWebhookEventCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the IncomingWebhookEventMutation object of the builder.
-func (iwec *IncomingWebhookEventCreate) Mutation() *IncomingWebhookEventMutation {
-	return iwec.mutation
+func (_c *IncomingWebhookEventCreate) Mutation() *IncomingWebhookEventMutation {
+	return _c.mutation
 }
 
 // Save creates the IncomingWebhookEvent in the database.
-func (iwec *IncomingWebhookEventCreate) Save(ctx context.Context) (*IncomingWebhookEvent, error) {
-	iwec.defaults()
-	return withHooks(ctx, iwec.sqlSave, iwec.mutation, iwec.hooks)
+func (_c *IncomingWebhookEventCreate) Save(ctx context.Context) (*IncomingWebhookEvent, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (iwec *IncomingWebhookEventCreate) SaveX(ctx context.Context) *IncomingWebhookEvent {
-	v, err := iwec.Save(ctx)
+func (_c *IncomingWebhookEventCreate) SaveX(ctx context.Context) *IncomingWebhookEvent {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -189,77 +189,77 @@ func (iwec *IncomingWebhookEventCreate) SaveX(ctx context.Context) *IncomingWebh
 }
 
 // Exec executes the query.
-func (iwec *IncomingWebhookEventCreate) Exec(ctx context.Context) error {
-	_, err := iwec.Save(ctx)
+func (_c *IncomingWebhookEventCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iwec *IncomingWebhookEventCreate) ExecX(ctx context.Context) {
-	if err := iwec.Exec(ctx); err != nil {
+func (_c *IncomingWebhookEventCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (iwec *IncomingWebhookEventCreate) defaults() {
-	if _, ok := iwec.mutation.Status(); !ok {
+func (_c *IncomingWebhookEventCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := incomingwebhookevent.DefaultStatus
-		iwec.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := iwec.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := incomingwebhookevent.DefaultCreatedAt()
-		iwec.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := iwec.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := incomingwebhookevent.DefaultUpdatedAt()
-		iwec.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := iwec.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := incomingwebhookevent.DefaultEnvironmentID
-		iwec.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (iwec *IncomingWebhookEventCreate) check() error {
-	if _, ok := iwec.mutation.TenantID(); !ok {
+func (_c *IncomingWebhookEventCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "IncomingWebhookEvent.tenant_id"`)}
 	}
-	if v, ok := iwec.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := incomingwebhookevent.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := iwec.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "IncomingWebhookEvent.status"`)}
 	}
-	if _, ok := iwec.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "IncomingWebhookEvent.created_at"`)}
 	}
-	if _, ok := iwec.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "IncomingWebhookEvent.updated_at"`)}
 	}
-	if _, ok := iwec.mutation.Provider(); !ok {
+	if _, ok := _c.mutation.Provider(); !ok {
 		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "IncomingWebhookEvent.provider"`)}
 	}
-	if v, ok := iwec.mutation.Provider(); ok {
+	if v, ok := _c.mutation.Provider(); ok {
 		if err := incomingwebhookevent.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.provider": %w`, err)}
 		}
 	}
-	if _, ok := iwec.mutation.Method(); !ok {
+	if _, ok := _c.mutation.Method(); !ok {
 		return &ValidationError{Name: "method", err: errors.New(`ent: missing required field "IncomingWebhookEvent.method"`)}
 	}
-	if v, ok := iwec.mutation.Method(); ok {
+	if v, ok := _c.mutation.Method(); ok {
 		if err := incomingwebhookevent.MethodValidator(v); err != nil {
 			return &ValidationError{Name: "method", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.method": %w`, err)}
 		}
 	}
-	if _, ok := iwec.mutation.Path(); !ok {
+	if _, ok := _c.mutation.Path(); !ok {
 		return &ValidationError{Name: "path", err: errors.New(`ent: missing required field "IncomingWebhookEvent.path"`)}
 	}
-	if v, ok := iwec.mutation.Path(); ok {
+	if v, ok := _c.mutation.Path(); ok {
 		if err := incomingwebhookevent.PathValidator(v); err != nil {
 			return &ValidationError{Name: "path", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.path": %w`, err)}
 		}
@@ -267,12 +267,12 @@ func (iwec *IncomingWebhookEventCreate) check() error {
 	return nil
 }
 
-func (iwec *IncomingWebhookEventCreate) sqlSave(ctx context.Context) (*IncomingWebhookEvent, error) {
-	if err := iwec.check(); err != nil {
+func (_c *IncomingWebhookEventCreate) sqlSave(ctx context.Context) (*IncomingWebhookEvent, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := iwec.createSpec()
-	if err := sqlgraph.CreateNode(ctx, iwec.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -285,69 +285,69 @@ func (iwec *IncomingWebhookEventCreate) sqlSave(ctx context.Context) (*IncomingW
 			return nil, fmt.Errorf("unexpected IncomingWebhookEvent.ID type: %T", _spec.ID.Value)
 		}
 	}
-	iwec.mutation.id = &_node.ID
-	iwec.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (iwec *IncomingWebhookEventCreate) createSpec() (*IncomingWebhookEvent, *sqlgraph.CreateSpec) {
+func (_c *IncomingWebhookEventCreate) createSpec() (*IncomingWebhookEvent, *sqlgraph.CreateSpec) {
 	var (
-		_node = &IncomingWebhookEvent{config: iwec.config}
+		_node = &IncomingWebhookEvent{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incomingwebhookevent.Table, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
 	)
-	if id, ok := iwec.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := iwec.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(incomingwebhookevent.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := iwec.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := iwec.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(incomingwebhookevent.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := iwec.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := iwec.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(incomingwebhookevent.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := iwec.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := iwec.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(incomingwebhookevent.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := iwec.mutation.Provider(); ok {
+	if value, ok := _c.mutation.Provider(); ok {
 		_spec.SetField(incomingwebhookevent.FieldProvider, field.TypeString, value)
 		_node.Provider = value
 	}
-	if value, ok := iwec.mutation.Method(); ok {
+	if value, ok := _c.mutation.Method(); ok {
 		_spec.SetField(incomingwebhookevent.FieldMethod, field.TypeString, value)
 		_node.Method = value
 	}
-	if value, ok := iwec.mutation.Path(); ok {
+	if value, ok := _c.mutation.Path(); ok {
 		_spec.SetField(incomingwebhookevent.FieldPath, field.TypeString, value)
 		_node.Path = value
 	}
-	if value, ok := iwec.mutation.RequestID(); ok {
+	if value, ok := _c.mutation.RequestID(); ok {
 		_spec.SetField(incomingwebhookevent.FieldRequestID, field.TypeString, value)
 		_node.RequestID = value
 	}
-	if value, ok := iwec.mutation.Headers(); ok {
+	if value, ok := _c.mutation.Headers(); ok {
 		_spec.SetField(incomingwebhookevent.FieldHeaders, field.TypeJSON, value)
 		_node.Headers = value
 	}
-	if value, ok := iwec.mutation.Body(); ok {
+	if value, ok := _c.mutation.Body(); ok {
 		_spec.SetField(incomingwebhookevent.FieldBody, field.TypeString, value)
 		_node.Body = value
 	}
@@ -362,16 +362,16 @@ type IncomingWebhookEventCreateBulk struct {
 }
 
 // Save creates the IncomingWebhookEvent entities in the database.
-func (iwecb *IncomingWebhookEventCreateBulk) Save(ctx context.Context) ([]*IncomingWebhookEvent, error) {
-	if iwecb.err != nil {
-		return nil, iwecb.err
+func (_c *IncomingWebhookEventCreateBulk) Save(ctx context.Context) ([]*IncomingWebhookEvent, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(iwecb.builders))
-	nodes := make([]*IncomingWebhookEvent, len(iwecb.builders))
-	mutators := make([]Mutator, len(iwecb.builders))
-	for i := range iwecb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*IncomingWebhookEvent, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := iwecb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*IncomingWebhookEventMutation)
@@ -385,11 +385,11 @@ func (iwecb *IncomingWebhookEventCreateBulk) Save(ctx context.Context) ([]*Incom
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, iwecb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, iwecb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -409,7 +409,7 @@ func (iwecb *IncomingWebhookEventCreateBulk) Save(ctx context.Context) ([]*Incom
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, iwecb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -417,8 +417,8 @@ func (iwecb *IncomingWebhookEventCreateBulk) Save(ctx context.Context) ([]*Incom
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iwecb *IncomingWebhookEventCreateBulk) SaveX(ctx context.Context) []*IncomingWebhookEvent {
-	v, err := iwecb.Save(ctx)
+func (_c *IncomingWebhookEventCreateBulk) SaveX(ctx context.Context) []*IncomingWebhookEvent {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -426,14 +426,14 @@ func (iwecb *IncomingWebhookEventCreateBulk) SaveX(ctx context.Context) []*Incom
 }
 
 // Exec executes the query.
-func (iwecb *IncomingWebhookEventCreateBulk) Exec(ctx context.Context) error {
-	_, err := iwecb.Save(ctx)
+func (_c *IncomingWebhookEventCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iwecb *IncomingWebhookEventCreateBulk) ExecX(ctx context.Context) {
-	if err := iwecb.Exec(ctx); err != nil {
+func (_c *IncomingWebhookEventCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

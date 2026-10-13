@@ -14,7 +14,7 @@ type Plan struct {
 	LookupKey     string         `db:"lookup_key" json:"lookup_key"`
 	Description   string         `db:"description" json:"description"`
 	EnvironmentID string         `db:"environment_id" json:"environment_id"`
-	Metadata      types.Metadata `db:"metadata" json:"metadata"`
+	Metadata      types.Metadata `db:"metadata" json:"metadata" activity:"drop"`
 	DisplayOrder  *int           `db:"display_order" json:"display_order,omitempty"`
 	types.BaseModel
 }

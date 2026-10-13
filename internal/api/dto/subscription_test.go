@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,26 @@ func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "overage_factor must be at least 1.0") {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("defaults overage factor when only time buckets are set", func(t *testing.T) {
+		c := &LineItemCommitmentConfig{
+			IsWindowCommitment: lo.ToPtr(true),
+			CommitmentTimeBuckets: []CommitmentBucketRequest{{
+				ID:              "bkt_existing",
+				Start:           types.Bucket{Hour: 8},
+				End:             types.Bucket{Hour: 20},
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(10),
+			}},
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if c.OverageFactor == nil || !c.OverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default overage factor 1, got: %v", c.OverageFactor)
 		}
 	})
 }
@@ -350,6 +371,95 @@ func TestCreateSubscriptionRequestValidate_IncludePriceIDs(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_LineItemGrouping(t *testing.T) {
+	tests := []struct {
+		name     string
+		grouping types.LineItemGrouping
+		wantErr  bool
+	}{
+		{"omitted is valid", types.LineItemGrouping(""), false},
+		{"per charge period", types.LineItemGroupingPerChargePeriod, false},
+		{"per billing period", types.LineItemGroupingPerBillingPeriod, false},
+		{"unknown rejected", types.LineItemGrouping("PER_FORTNIGHT"), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.LineItemGrouping = tc.grouping
+			err := req.Validate()
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected validation error for %q, got nil", tc.grouping)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected no error for %q, got: %v", tc.grouping, err)
+			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestToSubscription_CarriesLineItemGrouping(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+	req.LineItemGrouping = types.LineItemGroupingPerBillingPeriod
+
+	sub := req.ToSubscription(context.Background())
+
+	if sub.LineItemGrouping != types.LineItemGroupingPerBillingPeriod {
+		t.Errorf("LineItemGrouping = %q, want %q", sub.LineItemGrouping, types.LineItemGroupingPerBillingPeriod)
+	}
+}
+
+func TestCreateSubscriptionRequestToSubscription_DefaultsLineItemGrouping(t *testing.T) {
+	req := baseCreateSubscriptionRequest()
+
+	sub := req.ToSubscription(context.Background())
+
+	if sub.LineItemGrouping != types.LineItemGroupingPerChargePeriod {
+		t.Errorf("LineItemGrouping = %q, want %q when omitted", sub.LineItemGrouping, types.LineItemGroupingPerChargePeriod)
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_FxRates(t *testing.T) {
+	at := func(day int) *time.Time {
+		v := time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC)
+		return &v
+	}
+	rate := func(r string, from, to *time.Time) InlineFXRate {
+		return InlineFXRate{Rate: decimal.RequireFromString(r), StartDate: from, EndDate: to}
+	}
+	cases := []struct {
+		name    string
+		rates   []InlineFXRate
+		wantErr string
+	}{
+		{name: "none"},
+		{name: "single open-ended", rates: []InlineFXRate{rate("83", nil, nil)}},
+		{name: "consecutive windows", rates: []InlineFXRate{rate("83", nil, at(5)), rate("84", at(5), nil)}},
+		{name: "zero rate", rates: []InlineFXRate{rate("0", nil, nil)}, wantErr: "fx_rates[0].rate"},
+		{name: "start not before end", rates: []InlineFXRate{rate("83", at(5), at(5))}, wantErr: "fx_rates[0].start_date"},
+		{name: "two open-ended rows overlap", rates: []InlineFXRate{rate("83", nil, nil), rate("84", nil, nil)}, wantErr: "overlap"},
+		{name: "partial overlap", rates: []InlineFXRate{rate("83", at(1), at(6)), rate("84", at(5), at(9))}, wantErr: "overlap"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.FxRates = tc.rates
+			err := req.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
 			}
 		})
 	}

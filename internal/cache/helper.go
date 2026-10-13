@@ -78,6 +78,9 @@ func StartInMemoryCacheSpan(ctx context.Context, cacheEntity, operation string, 
 
 // FinishSpan safely finishes a span, handling nil spans.
 func FinishSpan(span *tracing.Span) {
+	if span == nil {
+		return
+	}
 	span.Finish()
 }
 

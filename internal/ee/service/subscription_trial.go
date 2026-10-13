@@ -51,9 +51,9 @@ func setCreateSubscriptionTrialWindow(req *dto.CreateSubscriptionRequest, sub *s
 		return nil
 	}
 
-	// Window starts on subscription start, N full days (AddDate(0,0,N)).
+	// Window starts on subscription start, N local days.
 	sub.TrialStart = lo.ToPtr(sub.StartDate)
-	sub.TrialEnd = lo.ToPtr(sub.StartDate.AddDate(0, 0, effectiveTrialDays))
+	sub.TrialEnd = lo.ToPtr(types.AdvanceDays(sub.StartDate, effectiveTrialDays, sub.Timezone))
 	return nil
 }
 
@@ -167,10 +167,15 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, nil
 	}
 
-	// Billing really starts at trial end. Anchor there so the first paid period isn't short-changed
-	// (same idea as trial end becomes the new cycle anchor).
+	// Billing starts at trial end. Calendar subs keep calendar boundaries (short first paid period);
+	// anniversary subs re-anchor at trial end so the first paid period is full.
+	// e.g. trial Jan 15 → Jan 29: calendar bills [Jan 29, Feb 1) for 3/31; anniversary bills [Jan 29, Feb 28) in full.
 	firstPeriodStart := lo.FromPtr(sub.TrialEnd)
-	sub.BillingAnchor = firstPeriodStart
+	if sub.BillingCycle == types.BillingCycleCalendar {
+		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(firstPeriodStart, sub.BillingPeriod, sub.Timezone)
+	} else {
+		sub.BillingAnchor = firstPeriodStart
+	}
 	firstPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart:  firstPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,

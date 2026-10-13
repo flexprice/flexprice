@@ -13,6 +13,7 @@ func (c *Client) env(ctx context.Context) (chargebeeSDK.Environment, error) {
 	if err != nil {
 		return chargebeeSDK.Environment{}, err
 	}
+
 	return chargebeeSDK.Environment{Key: cfg.APIKey, SiteName: cfg.Site}, nil
 }
 

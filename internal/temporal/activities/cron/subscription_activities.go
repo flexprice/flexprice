@@ -42,6 +42,16 @@ func (a *SubscriptionCronActivities) ProcessAutoCancellationActivity(ctx context
 	return result, nil
 }
 
+// ProcessOverdueSubscriptionInvoicesActivity marks subscriptions with overdue renewal invoices incomplete.
+func (a *SubscriptionCronActivities) ProcessOverdueSubscriptionInvoicesActivity(ctx context.Context) error {
+	if err := a.subscriptionService.ProcessOverdueSubscriptionInvoices(ctx); err != nil {
+		a.logger.Error(ctx, "ProcessOverdueSubscriptionInvoicesActivity failed", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // UpdateBillingPeriodsActivity runs the same work as POST /v1/cron/subscriptions/update-periods.
 func (a *SubscriptionCronActivities) UpdateBillingPeriodsActivity(ctx context.Context) (*cronModels.SubscriptionBillingPeriodsWorkflowResult, error) {
 	log := activity.GetLogger(ctx)

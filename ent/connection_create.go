@@ -22,145 +22,145 @@ type ConnectionCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cc *ConnectionCreate) SetTenantID(s string) *ConnectionCreate {
-	cc.mutation.SetTenantID(s)
-	return cc
+func (_c *ConnectionCreate) SetTenantID(v string) *ConnectionCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cc *ConnectionCreate) SetStatus(s string) *ConnectionCreate {
-	cc.mutation.SetStatus(s)
-	return cc
+func (_c *ConnectionCreate) SetStatus(v string) *ConnectionCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableStatus(s *string) *ConnectionCreate {
-	if s != nil {
-		cc.SetStatus(*s)
+func (_c *ConnectionCreate) SetNillableStatus(v *string) *ConnectionCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cc *ConnectionCreate) SetCreatedAt(t time.Time) *ConnectionCreate {
-	cc.mutation.SetCreatedAt(t)
-	return cc
+func (_c *ConnectionCreate) SetCreatedAt(v time.Time) *ConnectionCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableCreatedAt(t *time.Time) *ConnectionCreate {
-	if t != nil {
-		cc.SetCreatedAt(*t)
+func (_c *ConnectionCreate) SetNillableCreatedAt(v *time.Time) *ConnectionCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cc *ConnectionCreate) SetUpdatedAt(t time.Time) *ConnectionCreate {
-	cc.mutation.SetUpdatedAt(t)
-	return cc
+func (_c *ConnectionCreate) SetUpdatedAt(v time.Time) *ConnectionCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableUpdatedAt(t *time.Time) *ConnectionCreate {
-	if t != nil {
-		cc.SetUpdatedAt(*t)
+func (_c *ConnectionCreate) SetNillableUpdatedAt(v *time.Time) *ConnectionCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cc *ConnectionCreate) SetCreatedBy(s string) *ConnectionCreate {
-	cc.mutation.SetCreatedBy(s)
-	return cc
+func (_c *ConnectionCreate) SetCreatedBy(v string) *ConnectionCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableCreatedBy(s *string) *ConnectionCreate {
-	if s != nil {
-		cc.SetCreatedBy(*s)
+func (_c *ConnectionCreate) SetNillableCreatedBy(v *string) *ConnectionCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cc *ConnectionCreate) SetUpdatedBy(s string) *ConnectionCreate {
-	cc.mutation.SetUpdatedBy(s)
-	return cc
+func (_c *ConnectionCreate) SetUpdatedBy(v string) *ConnectionCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableUpdatedBy(s *string) *ConnectionCreate {
-	if s != nil {
-		cc.SetUpdatedBy(*s)
+func (_c *ConnectionCreate) SetNillableUpdatedBy(v *string) *ConnectionCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cc *ConnectionCreate) SetEnvironmentID(s string) *ConnectionCreate {
-	cc.mutation.SetEnvironmentID(s)
-	return cc
+func (_c *ConnectionCreate) SetEnvironmentID(v string) *ConnectionCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cc *ConnectionCreate) SetNillableEnvironmentID(s *string) *ConnectionCreate {
-	if s != nil {
-		cc.SetEnvironmentID(*s)
+func (_c *ConnectionCreate) SetNillableEnvironmentID(v *string) *ConnectionCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cc
+	return _c
 }
 
 // SetName sets the "name" field.
-func (cc *ConnectionCreate) SetName(s string) *ConnectionCreate {
-	cc.mutation.SetName(s)
-	return cc
+func (_c *ConnectionCreate) SetName(v string) *ConnectionCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetProviderType sets the "provider_type" field.
-func (cc *ConnectionCreate) SetProviderType(s string) *ConnectionCreate {
-	cc.mutation.SetProviderType(s)
-	return cc
+func (_c *ConnectionCreate) SetProviderType(v string) *ConnectionCreate {
+	_c.mutation.SetProviderType(v)
+	return _c
 }
 
 // SetEncryptedSecretData sets the "encrypted_secret_data" field.
-func (cc *ConnectionCreate) SetEncryptedSecretData(m map[string]interface{}) *ConnectionCreate {
-	cc.mutation.SetEncryptedSecretData(m)
-	return cc
+func (_c *ConnectionCreate) SetEncryptedSecretData(v map[string]interface{}) *ConnectionCreate {
+	_c.mutation.SetEncryptedSecretData(v)
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cc *ConnectionCreate) SetMetadata(m map[string]interface{}) *ConnectionCreate {
-	cc.mutation.SetMetadata(m)
-	return cc
+func (_c *ConnectionCreate) SetMetadata(v map[string]interface{}) *ConnectionCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetSyncConfig sets the "sync_config" field.
-func (cc *ConnectionCreate) SetSyncConfig(tc *types.SyncConfig) *ConnectionCreate {
-	cc.mutation.SetSyncConfig(tc)
-	return cc
+func (_c *ConnectionCreate) SetSyncConfig(v *types.SyncConfig) *ConnectionCreate {
+	_c.mutation.SetSyncConfig(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cc *ConnectionCreate) SetID(s string) *ConnectionCreate {
-	cc.mutation.SetID(s)
-	return cc
+func (_c *ConnectionCreate) SetID(v string) *ConnectionCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the ConnectionMutation object of the builder.
-func (cc *ConnectionCreate) Mutation() *ConnectionMutation {
-	return cc.mutation
+func (_c *ConnectionCreate) Mutation() *ConnectionMutation {
+	return _c.mutation
 }
 
 // Save creates the Connection in the database.
-func (cc *ConnectionCreate) Save(ctx context.Context) (*Connection, error) {
-	cc.defaults()
-	return withHooks(ctx, cc.sqlSave, cc.mutation, cc.hooks)
+func (_c *ConnectionCreate) Save(ctx context.Context) (*Connection, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cc *ConnectionCreate) SaveX(ctx context.Context) *Connection {
-	v, err := cc.Save(ctx)
+func (_c *ConnectionCreate) SaveX(ctx context.Context) *Connection {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -168,74 +168,74 @@ func (cc *ConnectionCreate) SaveX(ctx context.Context) *Connection {
 }
 
 // Exec executes the query.
-func (cc *ConnectionCreate) Exec(ctx context.Context) error {
-	_, err := cc.Save(ctx)
+func (_c *ConnectionCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cc *ConnectionCreate) ExecX(ctx context.Context) {
-	if err := cc.Exec(ctx); err != nil {
+func (_c *ConnectionCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cc *ConnectionCreate) defaults() {
-	if _, ok := cc.mutation.Status(); !ok {
+func (_c *ConnectionCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := connection.DefaultStatus
-		cc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := connection.DefaultCreatedAt()
-		cc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := connection.DefaultUpdatedAt()
-		cc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := connection.DefaultEnvironmentID
-		cc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cc *ConnectionCreate) check() error {
-	if _, ok := cc.mutation.TenantID(); !ok {
+func (_c *ConnectionCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Connection.tenant_id"`)}
 	}
-	if v, ok := cc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := connection.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Connection.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Connection.status"`)}
 	}
-	if _, ok := cc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Connection.created_at"`)}
 	}
-	if _, ok := cc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Connection.updated_at"`)}
 	}
-	if _, ok := cc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Connection.name"`)}
 	}
-	if v, ok := cc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := connection.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Connection.name": %w`, err)}
 		}
 	}
-	if _, ok := cc.mutation.ProviderType(); !ok {
+	if _, ok := _c.mutation.ProviderType(); !ok {
 		return &ValidationError{Name: "provider_type", err: errors.New(`ent: missing required field "Connection.provider_type"`)}
 	}
-	if v, ok := cc.mutation.ProviderType(); ok {
+	if v, ok := _c.mutation.ProviderType(); ok {
 		if err := connection.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "Connection.provider_type": %w`, err)}
 		}
 	}
-	if v, ok := cc.mutation.SyncConfig(); ok {
+	if v, ok := _c.mutation.SyncConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "sync_config", err: fmt.Errorf(`ent: validator failed for field "Connection.sync_config": %w`, err)}
 		}
@@ -243,12 +243,12 @@ func (cc *ConnectionCreate) check() error {
 	return nil
 }
 
-func (cc *ConnectionCreate) sqlSave(ctx context.Context) (*Connection, error) {
-	if err := cc.check(); err != nil {
+func (_c *ConnectionCreate) sqlSave(ctx context.Context) (*Connection, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -261,65 +261,65 @@ func (cc *ConnectionCreate) sqlSave(ctx context.Context) (*Connection, error) {
 			return nil, fmt.Errorf("unexpected Connection.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cc.mutation.id = &_node.ID
-	cc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cc *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
+func (_c *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Connection{config: cc.config}
+		_node = &Connection{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(connection.Table, sqlgraph.NewFieldSpec(connection.FieldID, field.TypeString))
 	)
-	if id, ok := cc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(connection.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(connection.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(connection.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(connection.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(connection.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(connection.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(connection.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(connection.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := cc.mutation.ProviderType(); ok {
+	if value, ok := _c.mutation.ProviderType(); ok {
 		_spec.SetField(connection.FieldProviderType, field.TypeString, value)
 		_node.ProviderType = value
 	}
-	if value, ok := cc.mutation.EncryptedSecretData(); ok {
+	if value, ok := _c.mutation.EncryptedSecretData(); ok {
 		_spec.SetField(connection.FieldEncryptedSecretData, field.TypeJSON, value)
 		_node.EncryptedSecretData = value
 	}
-	if value, ok := cc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := cc.mutation.SyncConfig(); ok {
+	if value, ok := _c.mutation.SyncConfig(); ok {
 		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
 		_node.SyncConfig = value
 	}
@@ -334,16 +334,16 @@ type ConnectionCreateBulk struct {
 }
 
 // Save creates the Connection entities in the database.
-func (ccb *ConnectionCreateBulk) Save(ctx context.Context) ([]*Connection, error) {
-	if ccb.err != nil {
-		return nil, ccb.err
+func (_c *ConnectionCreateBulk) Save(ctx context.Context) ([]*Connection, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(ccb.builders))
-	nodes := make([]*Connection, len(ccb.builders))
-	mutators := make([]Mutator, len(ccb.builders))
-	for i := range ccb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Connection, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := ccb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*ConnectionMutation)
@@ -357,11 +357,11 @@ func (ccb *ConnectionCreateBulk) Save(ctx context.Context) ([]*Connection, error
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, ccb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, ccb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -381,7 +381,7 @@ func (ccb *ConnectionCreateBulk) Save(ctx context.Context) ([]*Connection, error
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, ccb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -389,8 +389,8 @@ func (ccb *ConnectionCreateBulk) Save(ctx context.Context) ([]*Connection, error
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (ccb *ConnectionCreateBulk) SaveX(ctx context.Context) []*Connection {
-	v, err := ccb.Save(ctx)
+func (_c *ConnectionCreateBulk) SaveX(ctx context.Context) []*Connection {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -398,14 +398,14 @@ func (ccb *ConnectionCreateBulk) SaveX(ctx context.Context) []*Connection {
 }
 
 // Exec executes the query.
-func (ccb *ConnectionCreateBulk) Exec(ctx context.Context) error {
-	_, err := ccb.Save(ctx)
+func (_c *ConnectionCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ccb *ConnectionCreateBulk) ExecX(ctx context.Context) {
-	if err := ccb.Exec(ctx); err != nil {
+func (_c *ConnectionCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

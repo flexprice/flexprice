@@ -179,7 +179,7 @@ func (c *Client) GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, 
 		config.APIKey,
 		paddle.WithBaseURL(baseURL),
 		// Instrument outbound Paddle API calls for SigNoz External API Monitoring.
-		paddle.WithClient(httpclient.NewOtelHTTPClient(0)),
+		paddle.WithClient(httpclient.NewProviderHTTPClient(0, c.logger, string(types.SecretProviderPaddle))),
 	)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create Paddle SDK client", "error", err)

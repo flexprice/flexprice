@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -605,7 +606,29 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 
 	// Step 4: Ensure products synced.
-	syncable := syncableInvoiceLineItems(flexInvoice.LineItems)
+	// Paddle catalog prices cannot be negative, so unused-time credits cannot be
+	// sent as their own items. Charge the net AmountDue when it differs from the
+	// positive lines (plan-change invoices); otherwise itemise as today.
+	syncable, collapsed := paddleChargeLineItems(flexInvoice)
+
+	// Credits, discounts or prepaid credits can settle an invoice in full. Nothing is owed, so
+	// there is no charge to raise and no product worth creating — a no-op, not a failure.
+	if !flexInvoice.AmountDue.IsPositive() {
+		s.logger.Info(ctx, "invoice has nothing to collect, skipping Paddle charge",
+			"invoice_id", flexInvoice.ID,
+			"amount_due", flexInvoice.AmountDue.String())
+		return &SyncInvoiceResponse{}, nil
+	}
+	if len(syncable) == 0 {
+		return nil, ierr.NewError("invoice has no syncable line items").
+			WithHint("Invoice amount is due but no line item can be charged to Paddle").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": flexInvoice.ID,
+				"amount_due": flexInvoice.AmountDue.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	productItems := make([]EnsureBulkProductSyncedItem, len(syncable))
 	for i, li := range syncable {
 		priceID := lo.FromPtr(li.PriceID)
@@ -639,8 +662,8 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 			Mark(ierr.ErrValidation)
 	}
 
-	// Step 6: Build charge items — create an ephemeral one-time catalog price per line item,
-	// then reference it by ID so Paddle treats this as a catalog-price charge.
+	// Step 6: Build charge items as non-catalog prices on the existing catalog product,
+	// so invoice charges never add throwaway prices to the Paddle catalog.
 	chargeItems := make([]paddlesdk.CreateSubscriptionChargeItems, 0, len(syncable))
 	for _, li := range syncable {
 		priceID := lo.FromPtr(li.PriceID)
@@ -651,28 +674,25 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 				Mark(ierr.ErrValidation)
 		}
 		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
-		displayName := lo.FromPtrOr(li.DisplayName, priceID)
-
-		catalogPrice, priceErr := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
-			ProductID:   paddleProductID,
-			Description: displayName,
-			Name:        paddlesdk.PtrTo(displayName),
-			UnitPrice: paddlesdk.Money{
-				Amount:       fmt.Sprintf("%d", amountSmallest),
-				CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
-			},
-			TaxMode:  paddlesdk.PtrTo(paddlesdk.TaxModeAccountSetting),
-			Quantity: &paddlesdk.PriceQuantity{Minimum: 1, Maximum: 100000},
-			// No BillingCycle = one-time price.
-		})
-		if priceErr != nil {
-			return nil, fmt.Errorf("creating catalog price for line item %s: %w", priceID, priceErr)
+		displayName := truncatePaddlePriceName(lo.FromPtrOr(li.DisplayName, priceID))
+		if collapsed {
+			displayName = paddleCollapsedInvoiceDisplayName(flexInvoice, displayName)
 		}
 
-		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemFromCatalog(
-			&paddlesdk.SubscriptionChargeItemFromCatalog{
-				PriceID:  catalogPrice.ID,
+		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
+			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
 				Quantity: 1,
+				Price: paddlesdk.SubscriptionChargeCreateWithPrice{
+					ProductID:   paddleProductID,
+					Description: displayName,
+					Name:        paddlesdk.PtrTo(displayName),
+					TaxMode:     paddlesdk.TaxModeAccountSetting,
+					UnitPrice: paddlesdk.Money{
+						Amount:       fmt.Sprintf("%d", amountSmallest),
+						CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
+					},
+					Quantity: paddlesdk.PriceQuantity{Minimum: 1, Maximum: 100000},
+				},
 			},
 		))
 	}
@@ -1218,11 +1238,57 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {
 	out := make([]*invoice.InvoiceLineItem, 0, len(items))
 	for _, li := range items {
-		if li != nil && lo.FromPtr(li.PriceID) != "" {
+		if li != nil && lo.FromPtr(li.PriceID) != "" && li.Amount.IsPositive() {
 			out = append(out, li)
 		}
 	}
 	return out
+}
+
+// The second return reports whether the lines were clubbed into a single amount due item,
+// in which case the charge is labelled for the whole invoice rather than the first line.
+func paddleChargeLineItems(inv *invoice.Invoice) ([]*invoice.InvoiceLineItem, bool) {
+	positive := syncableInvoiceLineItems(inv.LineItems)
+	if len(positive) == 0 || !inv.AmountDue.IsPositive() {
+		return nil, false
+	}
+
+	sum := decimal.Zero
+	for _, li := range positive {
+		sum = sum.Add(li.Amount)
+	}
+	if sum.Equal(inv.AmountDue) {
+		return positive, false
+	}
+
+	collapsed := *positive[0]
+	collapsed.Amount = inv.AmountDue
+	return []*invoice.InvoiceLineItem{&collapsed}, true
+}
+
+// Paddle price names are customer-visible; keep them short enough for invoice display.
+const paddlePriceNameMaxRunes = 50
+
+func truncatePaddlePriceName(name string) string {
+	name = strings.TrimSpace(name)
+	r := []rune(name)
+	if len(r) <= paddlePriceNameMaxRunes {
+		return name
+	}
+
+	return string(r[:paddlePriceNameMaxRunes])
+}
+
+// Only an explicit label replaces the line name: lines also collapse on ordinary taxed
+// invoices, where the line's own name is still the right thing to show the customer.
+func paddleCollapsedInvoiceDisplayName(inv *invoice.Invoice, fallback string) string {
+	if inv != nil {
+		if name := types.CollapsedInvoiceDisplayName(inv.Metadata); name != "" {
+			return truncatePaddlePriceName(name)
+		}
+	}
+
+	return truncatePaddlePriceName(fallback)
 }
 
 // mapToUpdateCustomerAddressRequest maps Paddle AddressNotification to Flexprice UpdateCustomerRequest.

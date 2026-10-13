@@ -25,194 +25,194 @@ type CreditGrantApplicationUpdate struct {
 }
 
 // Where appends a list predicates to the CreditGrantApplicationUpdate builder.
-func (cgau *CreditGrantApplicationUpdate) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationUpdate {
-	cgau.mutation.Where(ps...)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cgau *CreditGrantApplicationUpdate) SetStatus(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetStatus(s)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetStatus(v string) *CreditGrantApplicationUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableStatus(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetStatus(*s)
+func (_u *CreditGrantApplicationUpdate) SetNillableStatus(v *string) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cgau
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cgau *CreditGrantApplicationUpdate) SetUpdatedAt(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetUpdatedAt(t)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetUpdatedAt(v time.Time) *CreditGrantApplicationUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cgau *CreditGrantApplicationUpdate) SetUpdatedBy(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetUpdatedBy(s)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetUpdatedBy(v string) *CreditGrantApplicationUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableUpdatedBy(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetUpdatedBy(*s)
+func (_u *CreditGrantApplicationUpdate) SetNillableUpdatedBy(v *string) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cgau
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cgau *CreditGrantApplicationUpdate) ClearUpdatedBy() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearUpdatedBy()
-	return cgau
+func (_u *CreditGrantApplicationUpdate) ClearUpdatedBy() *CreditGrantApplicationUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetScheduledFor sets the "scheduled_for" field.
-func (cgau *CreditGrantApplicationUpdate) SetScheduledFor(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetScheduledFor(t)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetScheduledFor(v time.Time) *CreditGrantApplicationUpdate {
+	_u.mutation.SetScheduledFor(v)
+	return _u
 }
 
 // SetNillableScheduledFor sets the "scheduled_for" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableScheduledFor(t *time.Time) *CreditGrantApplicationUpdate {
-	if t != nil {
-		cgau.SetScheduledFor(*t)
+func (_u *CreditGrantApplicationUpdate) SetNillableScheduledFor(v *time.Time) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetScheduledFor(*v)
 	}
-	return cgau
+	return _u
 }
 
 // SetAppliedAt sets the "applied_at" field.
-func (cgau *CreditGrantApplicationUpdate) SetAppliedAt(t time.Time) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetAppliedAt(t)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetAppliedAt(v time.Time) *CreditGrantApplicationUpdate {
+	_u.mutation.SetAppliedAt(v)
+	return _u
 }
 
 // SetNillableAppliedAt sets the "applied_at" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableAppliedAt(t *time.Time) *CreditGrantApplicationUpdate {
-	if t != nil {
-		cgau.SetAppliedAt(*t)
+func (_u *CreditGrantApplicationUpdate) SetNillableAppliedAt(v *time.Time) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetAppliedAt(*v)
 	}
-	return cgau
+	return _u
 }
 
 // ClearAppliedAt clears the value of the "applied_at" field.
-func (cgau *CreditGrantApplicationUpdate) ClearAppliedAt() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearAppliedAt()
-	return cgau
+func (_u *CreditGrantApplicationUpdate) ClearAppliedAt() *CreditGrantApplicationUpdate {
+	_u.mutation.ClearAppliedAt()
+	return _u
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgau *CreditGrantApplicationUpdate) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetApplicationStatus(ts)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetApplicationStatus(v types.ApplicationStatus) *CreditGrantApplicationUpdate {
+	_u.mutation.SetApplicationStatus(v)
+	return _u
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationUpdate {
-	if ts != nil {
-		cgau.SetApplicationStatus(*ts)
+func (_u *CreditGrantApplicationUpdate) SetNillableApplicationStatus(v *types.ApplicationStatus) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetApplicationStatus(*v)
 	}
-	return cgau
+	return _u
 }
 
 // SetCredits sets the "credits" field.
-func (cgau *CreditGrantApplicationUpdate) SetCredits(d decimal.Decimal) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetCredits(d)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetCredits(v decimal.Decimal) *CreditGrantApplicationUpdate {
+	_u.mutation.SetCredits(v)
+	return _u
 }
 
 // SetNillableCredits sets the "credits" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableCredits(d *decimal.Decimal) *CreditGrantApplicationUpdate {
-	if d != nil {
-		cgau.SetCredits(*d)
+func (_u *CreditGrantApplicationUpdate) SetNillableCredits(v *decimal.Decimal) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetCredits(*v)
 	}
-	return cgau
+	return _u
 }
 
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgau *CreditGrantApplicationUpdate) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetSubscriptionStatusAtApplication(ts)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetSubscriptionStatusAtApplication(v types.SubscriptionStatus) *CreditGrantApplicationUpdate {
+	_u.mutation.SetSubscriptionStatusAtApplication(v)
+	return _u
 }
 
 // SetNillableSubscriptionStatusAtApplication sets the "subscription_status_at_application" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableSubscriptionStatusAtApplication(ts *types.SubscriptionStatus) *CreditGrantApplicationUpdate {
-	if ts != nil {
-		cgau.SetSubscriptionStatusAtApplication(*ts)
+func (_u *CreditGrantApplicationUpdate) SetNillableSubscriptionStatusAtApplication(v *types.SubscriptionStatus) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetSubscriptionStatusAtApplication(*v)
 	}
-	return cgau
+	return _u
 }
 
 // SetRetryCount sets the "retry_count" field.
-func (cgau *CreditGrantApplicationUpdate) SetRetryCount(i int) *CreditGrantApplicationUpdate {
-	cgau.mutation.ResetRetryCount()
-	cgau.mutation.SetRetryCount(i)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetRetryCount(v int) *CreditGrantApplicationUpdate {
+	_u.mutation.ResetRetryCount()
+	_u.mutation.SetRetryCount(v)
+	return _u
 }
 
 // SetNillableRetryCount sets the "retry_count" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableRetryCount(i *int) *CreditGrantApplicationUpdate {
-	if i != nil {
-		cgau.SetRetryCount(*i)
+func (_u *CreditGrantApplicationUpdate) SetNillableRetryCount(v *int) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetRetryCount(*v)
 	}
-	return cgau
+	return _u
 }
 
-// AddRetryCount adds i to the "retry_count" field.
-func (cgau *CreditGrantApplicationUpdate) AddRetryCount(i int) *CreditGrantApplicationUpdate {
-	cgau.mutation.AddRetryCount(i)
-	return cgau
+// AddRetryCount adds value to the "retry_count" field.
+func (_u *CreditGrantApplicationUpdate) AddRetryCount(v int) *CreditGrantApplicationUpdate {
+	_u.mutation.AddRetryCount(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (cgau *CreditGrantApplicationUpdate) SetFailureReason(s string) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetFailureReason(s)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetFailureReason(v string) *CreditGrantApplicationUpdate {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (cgau *CreditGrantApplicationUpdate) SetNillableFailureReason(s *string) *CreditGrantApplicationUpdate {
-	if s != nil {
-		cgau.SetFailureReason(*s)
+func (_u *CreditGrantApplicationUpdate) SetNillableFailureReason(v *string) *CreditGrantApplicationUpdate {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return cgau
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (cgau *CreditGrantApplicationUpdate) ClearFailureReason() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearFailureReason()
-	return cgau
+func (_u *CreditGrantApplicationUpdate) ClearFailureReason() *CreditGrantApplicationUpdate {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cgau *CreditGrantApplicationUpdate) SetMetadata(t types.Metadata) *CreditGrantApplicationUpdate {
-	cgau.mutation.SetMetadata(t)
-	return cgau
+func (_u *CreditGrantApplicationUpdate) SetMetadata(v types.Metadata) *CreditGrantApplicationUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cgau *CreditGrantApplicationUpdate) ClearMetadata() *CreditGrantApplicationUpdate {
-	cgau.mutation.ClearMetadata()
-	return cgau
+func (_u *CreditGrantApplicationUpdate) ClearMetadata() *CreditGrantApplicationUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CreditGrantApplicationMutation object of the builder.
-func (cgau *CreditGrantApplicationUpdate) Mutation() *CreditGrantApplicationMutation {
-	return cgau.mutation
+func (_u *CreditGrantApplicationUpdate) Mutation() *CreditGrantApplicationMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cgau *CreditGrantApplicationUpdate) Save(ctx context.Context) (int, error) {
-	cgau.defaults()
-	return withHooks(ctx, cgau.sqlSave, cgau.mutation, cgau.hooks)
+func (_u *CreditGrantApplicationUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cgau *CreditGrantApplicationUpdate) SaveX(ctx context.Context) int {
-	affected, err := cgau.Save(ctx)
+func (_u *CreditGrantApplicationUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -220,34 +220,34 @@ func (cgau *CreditGrantApplicationUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cgau *CreditGrantApplicationUpdate) Exec(ctx context.Context) error {
-	_, err := cgau.Save(ctx)
+func (_u *CreditGrantApplicationUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgau *CreditGrantApplicationUpdate) ExecX(ctx context.Context) {
-	if err := cgau.Exec(ctx); err != nil {
+func (_u *CreditGrantApplicationUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cgau *CreditGrantApplicationUpdate) defaults() {
-	if _, ok := cgau.mutation.UpdatedAt(); !ok {
+func (_u *CreditGrantApplicationUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditgrantapplication.UpdateDefaultUpdatedAt()
-		cgau.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cgau *CreditGrantApplicationUpdate) check() error {
-	if v, ok := cgau.mutation.ApplicationStatus(); ok {
+func (_u *CreditGrantApplicationUpdate) check() error {
+	if v, ok := _u.mutation.ApplicationStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "application_status", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.application_status": %w`, err)}
 		}
 	}
-	if v, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
+	if v, ok := _u.mutation.SubscriptionStatusAtApplication(); ok {
 		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
 			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
 		}
@@ -255,76 +255,76 @@ func (cgau *CreditGrantApplicationUpdate) check() error {
 	return nil
 }
 
-func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cgau.check(); err != nil {
-		return n, err
+func (_u *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrantapplication.Table, creditgrantapplication.Columns, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
-	if ps := cgau.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cgau.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditgrantapplication.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cgau.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cgau.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditgrantapplication.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cgau.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cgau.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditgrantapplication.FieldUpdatedBy, field.TypeString)
 	}
-	if cgau.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditgrantapplication.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cgau.mutation.ScheduledFor(); ok {
+	if value, ok := _u.mutation.ScheduledFor(); ok {
 		_spec.SetField(creditgrantapplication.FieldScheduledFor, field.TypeTime, value)
 	}
-	if value, ok := cgau.mutation.AppliedAt(); ok {
+	if value, ok := _u.mutation.AppliedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldAppliedAt, field.TypeTime, value)
 	}
-	if cgau.mutation.AppliedAtCleared() {
+	if _u.mutation.AppliedAtCleared() {
 		_spec.ClearField(creditgrantapplication.FieldAppliedAt, field.TypeTime)
 	}
-	if cgau.mutation.PeriodEndCleared() {
+	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(creditgrantapplication.FieldPeriodEnd, field.TypeTime)
 	}
-	if value, ok := cgau.mutation.ApplicationStatus(); ok {
+	if value, ok := _u.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 	}
-	if value, ok := cgau.mutation.Credits(); ok {
+	if value, ok := _u.mutation.Credits(); ok {
 		_spec.SetField(creditgrantapplication.FieldCredits, field.TypeOther, value)
 	}
-	if value, ok := cgau.mutation.SubscriptionStatusAtApplication(); ok {
+	if value, ok := _u.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 	}
-	if value, ok := cgau.mutation.RetryCount(); ok {
+	if value, ok := _u.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
 	}
-	if value, ok := cgau.mutation.AddedRetryCount(); ok {
+	if value, ok := _u.mutation.AddedRetryCount(); ok {
 		_spec.AddField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
 	}
-	if value, ok := cgau.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldFailureReason, field.TypeString, value)
 	}
-	if cgau.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(creditgrantapplication.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := cgau.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)
 	}
-	if cgau.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrantapplication.FieldMetadata, field.TypeOther)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cgau.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditgrantapplication.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -332,8 +332,8 @@ func (cgau *CreditGrantApplicationUpdate) sqlSave(ctx context.Context) (n int, e
 		}
 		return 0, err
 	}
-	cgau.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CreditGrantApplicationUpdateOne is the builder for updating a single CreditGrantApplication entity.
@@ -345,201 +345,201 @@ type CreditGrantApplicationUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetStatus(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetStatus(s)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetStatus(v string) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableStatus(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetStatus(*s)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableStatus(v *string) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetUpdatedAt(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetUpdatedAt(t)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetUpdatedAt(v time.Time) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetUpdatedBy(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetUpdatedBy(s)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetUpdatedBy(v string) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableUpdatedBy(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetUpdatedBy(*s)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableUpdatedBy(v *string) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearUpdatedBy() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearUpdatedBy()
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) ClearUpdatedBy() *CreditGrantApplicationUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetScheduledFor sets the "scheduled_for" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetScheduledFor(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetScheduledFor(t)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetScheduledFor(v time.Time) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetScheduledFor(v)
+	return _u
 }
 
 // SetNillableScheduledFor sets the "scheduled_for" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableScheduledFor(t *time.Time) *CreditGrantApplicationUpdateOne {
-	if t != nil {
-		cgauo.SetScheduledFor(*t)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableScheduledFor(v *time.Time) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetScheduledFor(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // SetAppliedAt sets the "applied_at" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetAppliedAt(t time.Time) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetAppliedAt(t)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetAppliedAt(v time.Time) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetAppliedAt(v)
+	return _u
 }
 
 // SetNillableAppliedAt sets the "applied_at" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableAppliedAt(t *time.Time) *CreditGrantApplicationUpdateOne {
-	if t != nil {
-		cgauo.SetAppliedAt(*t)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableAppliedAt(v *time.Time) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetAppliedAt(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // ClearAppliedAt clears the value of the "applied_at" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearAppliedAt() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearAppliedAt()
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) ClearAppliedAt() *CreditGrantApplicationUpdateOne {
+	_u.mutation.ClearAppliedAt()
+	return _u
 }
 
 // SetApplicationStatus sets the "application_status" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetApplicationStatus(ts types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetApplicationStatus(ts)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetApplicationStatus(v types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetApplicationStatus(v)
+	return _u
 }
 
 // SetNillableApplicationStatus sets the "application_status" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableApplicationStatus(ts *types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
-	if ts != nil {
-		cgauo.SetApplicationStatus(*ts)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableApplicationStatus(v *types.ApplicationStatus) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetApplicationStatus(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // SetCredits sets the "credits" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetCredits(d decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetCredits(d)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetCredits(v decimal.Decimal) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetCredits(v)
+	return _u
 }
 
 // SetNillableCredits sets the "credits" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableCredits(d *decimal.Decimal) *CreditGrantApplicationUpdateOne {
-	if d != nil {
-		cgauo.SetCredits(*d)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableCredits(v *decimal.Decimal) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetCredits(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // SetSubscriptionStatusAtApplication sets the "subscription_status_at_application" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetSubscriptionStatusAtApplication(ts types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetSubscriptionStatusAtApplication(ts)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetSubscriptionStatusAtApplication(v types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetSubscriptionStatusAtApplication(v)
+	return _u
 }
 
 // SetNillableSubscriptionStatusAtApplication sets the "subscription_status_at_application" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableSubscriptionStatusAtApplication(ts *types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
-	if ts != nil {
-		cgauo.SetSubscriptionStatusAtApplication(*ts)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableSubscriptionStatusAtApplication(v *types.SubscriptionStatus) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionStatusAtApplication(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // SetRetryCount sets the "retry_count" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetRetryCount(i int) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ResetRetryCount()
-	cgauo.mutation.SetRetryCount(i)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetRetryCount(v int) *CreditGrantApplicationUpdateOne {
+	_u.mutation.ResetRetryCount()
+	_u.mutation.SetRetryCount(v)
+	return _u
 }
 
 // SetNillableRetryCount sets the "retry_count" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableRetryCount(i *int) *CreditGrantApplicationUpdateOne {
-	if i != nil {
-		cgauo.SetRetryCount(*i)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableRetryCount(v *int) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetRetryCount(*v)
 	}
-	return cgauo
+	return _u
 }
 
-// AddRetryCount adds i to the "retry_count" field.
-func (cgauo *CreditGrantApplicationUpdateOne) AddRetryCount(i int) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.AddRetryCount(i)
-	return cgauo
+// AddRetryCount adds value to the "retry_count" field.
+func (_u *CreditGrantApplicationUpdateOne) AddRetryCount(v int) *CreditGrantApplicationUpdateOne {
+	_u.mutation.AddRetryCount(v)
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetFailureReason(s string) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetFailureReason(s)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetFailureReason(v string) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (cgauo *CreditGrantApplicationUpdateOne) SetNillableFailureReason(s *string) *CreditGrantApplicationUpdateOne {
-	if s != nil {
-		cgauo.SetFailureReason(*s)
+func (_u *CreditGrantApplicationUpdateOne) SetNillableFailureReason(v *string) *CreditGrantApplicationUpdateOne {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return cgauo
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearFailureReason() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearFailureReason()
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) ClearFailureReason() *CreditGrantApplicationUpdateOne {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cgauo *CreditGrantApplicationUpdateOne) SetMetadata(t types.Metadata) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.SetMetadata(t)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) SetMetadata(v types.Metadata) *CreditGrantApplicationUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cgauo *CreditGrantApplicationUpdateOne) ClearMetadata() *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.ClearMetadata()
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) ClearMetadata() *CreditGrantApplicationUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CreditGrantApplicationMutation object of the builder.
-func (cgauo *CreditGrantApplicationUpdateOne) Mutation() *CreditGrantApplicationMutation {
-	return cgauo.mutation
+func (_u *CreditGrantApplicationUpdateOne) Mutation() *CreditGrantApplicationMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the CreditGrantApplicationUpdate builder.
-func (cgauo *CreditGrantApplicationUpdateOne) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationUpdateOne {
-	cgauo.mutation.Where(ps...)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cgauo *CreditGrantApplicationUpdateOne) Select(field string, fields ...string) *CreditGrantApplicationUpdateOne {
-	cgauo.fields = append([]string{field}, fields...)
-	return cgauo
+func (_u *CreditGrantApplicationUpdateOne) Select(field string, fields ...string) *CreditGrantApplicationUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CreditGrantApplication entity.
-func (cgauo *CreditGrantApplicationUpdateOne) Save(ctx context.Context) (*CreditGrantApplication, error) {
-	cgauo.defaults()
-	return withHooks(ctx, cgauo.sqlSave, cgauo.mutation, cgauo.hooks)
+func (_u *CreditGrantApplicationUpdateOne) Save(ctx context.Context) (*CreditGrantApplication, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cgauo *CreditGrantApplicationUpdateOne) SaveX(ctx context.Context) *CreditGrantApplication {
-	node, err := cgauo.Save(ctx)
+func (_u *CreditGrantApplicationUpdateOne) SaveX(ctx context.Context) *CreditGrantApplication {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -547,34 +547,34 @@ func (cgauo *CreditGrantApplicationUpdateOne) SaveX(ctx context.Context) *Credit
 }
 
 // Exec executes the query on the entity.
-func (cgauo *CreditGrantApplicationUpdateOne) Exec(ctx context.Context) error {
-	_, err := cgauo.Save(ctx)
+func (_u *CreditGrantApplicationUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgauo *CreditGrantApplicationUpdateOne) ExecX(ctx context.Context) {
-	if err := cgauo.Exec(ctx); err != nil {
+func (_u *CreditGrantApplicationUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cgauo *CreditGrantApplicationUpdateOne) defaults() {
-	if _, ok := cgauo.mutation.UpdatedAt(); !ok {
+func (_u *CreditGrantApplicationUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := creditgrantapplication.UpdateDefaultUpdatedAt()
-		cgauo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cgauo *CreditGrantApplicationUpdateOne) check() error {
-	if v, ok := cgauo.mutation.ApplicationStatus(); ok {
+func (_u *CreditGrantApplicationUpdateOne) check() error {
+	if v, ok := _u.mutation.ApplicationStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "application_status", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.application_status": %w`, err)}
 		}
 	}
-	if v, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
+	if v, ok := _u.mutation.SubscriptionStatusAtApplication(); ok {
 		if err := creditgrantapplication.SubscriptionStatusAtApplicationValidator(string(v)); err != nil {
 			return &ValidationError{Name: "subscription_status_at_application", err: fmt.Errorf(`ent: validator failed for field "CreditGrantApplication.subscription_status_at_application": %w`, err)}
 		}
@@ -582,17 +582,17 @@ func (cgauo *CreditGrantApplicationUpdateOne) check() error {
 	return nil
 }
 
-func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_node *CreditGrantApplication, err error) {
-	if err := cgauo.check(); err != nil {
+func (_u *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_node *CreditGrantApplication, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(creditgrantapplication.Table, creditgrantapplication.Columns, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
-	id, ok := cgauo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CreditGrantApplication.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cgauo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, creditgrantapplication.FieldID)
 		for _, f := range fields {
@@ -604,74 +604,74 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 			}
 		}
 	}
-	if ps := cgauo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cgauo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(creditgrantapplication.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cgauo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cgauo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(creditgrantapplication.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cgauo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrantapplication.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cgauo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(creditgrantapplication.FieldUpdatedBy, field.TypeString)
 	}
-	if cgauo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(creditgrantapplication.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cgauo.mutation.ScheduledFor(); ok {
+	if value, ok := _u.mutation.ScheduledFor(); ok {
 		_spec.SetField(creditgrantapplication.FieldScheduledFor, field.TypeTime, value)
 	}
-	if value, ok := cgauo.mutation.AppliedAt(); ok {
+	if value, ok := _u.mutation.AppliedAt(); ok {
 		_spec.SetField(creditgrantapplication.FieldAppliedAt, field.TypeTime, value)
 	}
-	if cgauo.mutation.AppliedAtCleared() {
+	if _u.mutation.AppliedAtCleared() {
 		_spec.ClearField(creditgrantapplication.FieldAppliedAt, field.TypeTime)
 	}
-	if cgauo.mutation.PeriodEndCleared() {
+	if _u.mutation.PeriodEndCleared() {
 		_spec.ClearField(creditgrantapplication.FieldPeriodEnd, field.TypeTime)
 	}
-	if value, ok := cgauo.mutation.ApplicationStatus(); ok {
+	if value, ok := _u.mutation.ApplicationStatus(); ok {
 		_spec.SetField(creditgrantapplication.FieldApplicationStatus, field.TypeString, value)
 	}
-	if value, ok := cgauo.mutation.Credits(); ok {
+	if value, ok := _u.mutation.Credits(); ok {
 		_spec.SetField(creditgrantapplication.FieldCredits, field.TypeOther, value)
 	}
-	if value, ok := cgauo.mutation.SubscriptionStatusAtApplication(); ok {
+	if value, ok := _u.mutation.SubscriptionStatusAtApplication(); ok {
 		_spec.SetField(creditgrantapplication.FieldSubscriptionStatusAtApplication, field.TypeString, value)
 	}
-	if value, ok := cgauo.mutation.RetryCount(); ok {
+	if value, ok := _u.mutation.RetryCount(); ok {
 		_spec.SetField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
 	}
-	if value, ok := cgauo.mutation.AddedRetryCount(); ok {
+	if value, ok := _u.mutation.AddedRetryCount(); ok {
 		_spec.AddField(creditgrantapplication.FieldRetryCount, field.TypeInt, value)
 	}
-	if value, ok := cgauo.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(creditgrantapplication.FieldFailureReason, field.TypeString, value)
 	}
-	if cgauo.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(creditgrantapplication.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := cgauo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(creditgrantapplication.FieldMetadata, field.TypeOther, value)
 	}
-	if cgauo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrantapplication.FieldMetadata, field.TypeOther)
 	}
-	_node = &CreditGrantApplication{config: cgauo.config}
+	_node = &CreditGrantApplication{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cgauo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{creditgrantapplication.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -679,6 +679,6 @@ func (cgauo *CreditGrantApplicationUpdateOne) sqlSave(ctx context.Context) (_nod
 		}
 		return nil, err
 	}
-	cgauo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

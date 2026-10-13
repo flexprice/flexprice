@@ -134,7 +134,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 				"customer_id", customerID)
 			return temporal.NewNonRetryableApplicationError(
 				"Paddle connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

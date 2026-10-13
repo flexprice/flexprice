@@ -35,6 +35,14 @@ type Transaction struct {
 	// (the purchase tx, for a bonus grant). Empty for ordinary transactions.
 	ParentTransactionID string `db:"parent_transaction_id" json:"parent_transaction_id,omitempty"`
 
+	// SourceType/SourceID identify the entity this transaction's value comes from or goes to
+	// (e.g. an invoice). Empty when there is none.
+	SourceType types.WalletTxSourceType `db:"source_type" json:"source_type,omitempty"`
+	SourceID   string                   `db:"source_id" json:"source_id,omitempty"`
+
+	// ConsumptionBreakdown is set on debits: the credits drawn from each credit batch.
+	ConsumptionBreakdown []*types.WalletTxConsumption `db:"consumption_breakdown" json:"consumption_breakdown,omitempty"`
+
 	// conversion_rate is the conversion rate for the transaction to the currency
 	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
 
@@ -85,34 +93,37 @@ func (t *Transaction) ComputeCreditsAvailable() (decimal.Decimal, error) {
 // ToEnt converts a domain transaction to an ent transaction
 func (t *Transaction) ToEnt() *ent.WalletTransaction {
 	return &ent.WalletTransaction{
-		ID:                  t.ID,
-		WalletID:            t.WalletID,
-		CustomerID:          t.CustomerID,
-		Type:                t.Type,
-		Amount:              t.Amount,
-		CreditAmount:        t.CreditAmount,
-		CreditBalanceBefore: t.CreditBalanceBefore,
-		CreditBalanceAfter:  t.CreditBalanceAfter,
-		TransactionStatus:   t.TxStatus,
-		ReferenceType:       t.ReferenceType,
-		ReferenceID:         t.ReferenceID,
-		Description:         t.Description,
-		Metadata:            t.Metadata,
-		ExpiryDate:          t.ExpiryDate,
-		CreditsAvailable:    t.CreditsAvailable,
-		TransactionReason:   t.TransactionReason,
-		Priority:            t.Priority,
-		Currency:            t.Currency,
-		ConversionRate:      t.ConversionRate,
-		TopupConversionRate: t.TopupConversionRate,
-		ParentTransactionID: t.ParentTransactionID,
-		EnvironmentID:       t.EnvironmentID,
-		TenantID:            t.TenantID,
-		Status:              string(t.Status),
-		CreatedBy:           t.CreatedBy,
-		UpdatedBy:           t.UpdatedBy,
-		CreatedAt:           t.CreatedAt,
-		UpdatedAt:           t.UpdatedAt,
+		ID:                   t.ID,
+		WalletID:             t.WalletID,
+		CustomerID:           t.CustomerID,
+		Type:                 t.Type,
+		Amount:               t.Amount,
+		CreditAmount:         t.CreditAmount,
+		CreditBalanceBefore:  t.CreditBalanceBefore,
+		CreditBalanceAfter:   t.CreditBalanceAfter,
+		TransactionStatus:    t.TxStatus,
+		ReferenceType:        t.ReferenceType,
+		ReferenceID:          t.ReferenceID,
+		Description:          t.Description,
+		Metadata:             t.Metadata,
+		ExpiryDate:           t.ExpiryDate,
+		CreditsAvailable:     t.CreditsAvailable,
+		TransactionReason:    t.TransactionReason,
+		Priority:             t.Priority,
+		Currency:             t.Currency,
+		ConversionRate:       t.ConversionRate,
+		TopupConversionRate:  t.TopupConversionRate,
+		ParentTransactionID:  t.ParentTransactionID,
+		SourceType:           lo.EmptyableToPtr(t.SourceType),
+		SourceID:             lo.EmptyableToPtr(t.SourceID),
+		ConsumptionBreakdown: t.ConsumptionBreakdown,
+		EnvironmentID:        t.EnvironmentID,
+		TenantID:             t.TenantID,
+		Status:               string(t.Status),
+		CreatedBy:            t.CreatedBy,
+		UpdatedBy:            t.UpdatedBy,
+		CreatedAt:            t.CreatedAt,
+		UpdatedAt:            t.UpdatedAt,
 	}
 }
 
@@ -123,29 +134,32 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 	}
 
 	return &Transaction{
-		ID:                  e.ID,
-		WalletID:            e.WalletID,
-		CustomerID:          e.CustomerID,
-		Type:                e.Type,
-		Amount:              e.Amount,
-		CreditAmount:        e.CreditAmount,
-		TxStatus:            e.TransactionStatus,
-		ReferenceType:       e.ReferenceType,
-		ReferenceID:         e.ReferenceID,
-		IdempotencyKey:      lo.FromPtr(e.IdempotencyKey),
-		Description:         e.Description,
-		Metadata:            types.Metadata(e.Metadata),
-		ExpiryDate:          e.ExpiryDate,
-		CreditsAvailable:    e.CreditsAvailable,
-		CreditBalanceBefore: e.CreditBalanceBefore,
-		CreditBalanceAfter:  e.CreditBalanceAfter,
-		Currency:            e.Currency,
-		TransactionReason:   e.TransactionReason,
-		Priority:            e.Priority,
-		ConversionRate:      e.ConversionRate,
-		TopupConversionRate: e.TopupConversionRate,
-		ParentTransactionID: e.ParentTransactionID,
-		EnvironmentID:       e.EnvironmentID,
+		ID:                   e.ID,
+		WalletID:             e.WalletID,
+		CustomerID:           e.CustomerID,
+		Type:                 e.Type,
+		Amount:               e.Amount,
+		CreditAmount:         e.CreditAmount,
+		TxStatus:             e.TransactionStatus,
+		ReferenceType:        e.ReferenceType,
+		ReferenceID:          e.ReferenceID,
+		IdempotencyKey:       lo.FromPtr(e.IdempotencyKey),
+		Description:          e.Description,
+		Metadata:             types.Metadata(e.Metadata),
+		ExpiryDate:           e.ExpiryDate,
+		CreditsAvailable:     e.CreditsAvailable,
+		CreditBalanceBefore:  e.CreditBalanceBefore,
+		CreditBalanceAfter:   e.CreditBalanceAfter,
+		Currency:             e.Currency,
+		TransactionReason:    e.TransactionReason,
+		Priority:             e.Priority,
+		ConversionRate:       e.ConversionRate,
+		TopupConversionRate:  e.TopupConversionRate,
+		ParentTransactionID:  e.ParentTransactionID,
+		SourceType:           lo.FromPtr(e.SourceType),
+		SourceID:             lo.FromPtr(e.SourceID),
+		ConsumptionBreakdown: e.ConsumptionBreakdown,
+		EnvironmentID:        e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -181,7 +195,50 @@ type CreditTopupsExportData struct {
 	CreditBalanceAfter  decimal.Decimal
 	ReferenceID         string
 	TransactionReason   types.TransactionReason
+	Credits             decimal.Decimal
+	Currency            string
+	InvoiceID           string
+	// AmountPaid is what the credits were bought for: the invoice after discount, before tax, for
+	// an invoiced purchase, and zero for free and bonus grants. Not set for other credits.
+	AmountPaid *decimal.Decimal
+	CreatedAt  time.Time
+}
+
+// WalletDebitsExportData is one credit batch a debit drew from. A debit with no recorded
+// breakdown is a single row with no batch.
+type WalletDebitsExportData struct {
+	DebitID             string
+	ExternalID          string
+	CustomerName        string
+	WalletID            string
+	Currency            string
+	TransactionReason   types.TransactionReason
+	InvoiceID           string
+	CreditTransactionID string
+	Credits             decimal.Decimal
+	// The wallet balance around this row. A debit drawing from several credits steps down row by row.
+	CreditBalanceBefore decimal.Decimal
+	CreditBalanceAfter  decimal.Decimal
+	// The credit balance in the wallet currency, at the conversion rate the debit used.
+	WalletBalanceBefore decimal.Decimal
+	WalletBalanceAfter  decimal.Decimal
+	// What is left of what was paid for the wallet's credits around this row. Credits with no
+	// paid amount, such as refunds and adjustments, add nothing. Unrounded, so rounding for
+	// display never builds up from row to row.
+	TopUpAmountRemainingBefore decimal.Decimal
+	TopUpAmountRemainingAfter  decimal.Decimal
+	// The size and paid amount of the credit drawn from, for spreading the paid amount over the
+	// credits drawn.
+	WalletTxnCredits    *decimal.Decimal
+	WalletTxnAmountPaid *decimal.Decimal
 	CreatedAt           time.Time
+}
+
+// WalletDebitsExportCursor is the last debit of the previous page. The first page starts from
+// the export window's start time with an empty DebitID.
+type WalletDebitsExportCursor struct {
+	CreatedAt time.Time
+	DebitID   string
 }
 
 // CreditUsageCSVHeaders represents the column header strings for the credit usage CSV export

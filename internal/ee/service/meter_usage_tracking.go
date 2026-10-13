@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- dedup salt, not security-sensitive
 	"strings"
 	"time"
 
@@ -121,7 +121,7 @@ func (s *meterUsageTrackingService) PublishEvent(ctx context.Context, event *eve
 		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63())
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
@@ -730,7 +730,11 @@ func (s *meterUsageTrackingService) convertToDecimal(val interface{}) decimal.De
 	case int32:
 		return decimal.NewFromInt(int64(v))
 	case uint:
-		return decimal.NewFromInt(int64(v))
+		d, err := decimal.NewFromString(fmt.Sprintf("%d", v))
+		if err != nil {
+			return decimal.Zero
+		}
+		return d
 	case uint64:
 		d, err := decimal.NewFromString(fmt.Sprintf("%d", v))
 		if err != nil {

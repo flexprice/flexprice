@@ -6,6 +6,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
+	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -84,28 +86,57 @@ func (s *WalletServiceSuite) TestTopUpWallet_CheckoutWrongReason_Rejected() {
 	s.Empty(sessions)
 }
 
-func (s *WalletServiceSuite) TestTopUpWallet_CheckoutConcurrentGuard() {
+func (s *WalletServiceSuite) TestTopUpWallet_CheckoutExistingSessionReportsAlreadyExists() {
 	s.seedAutoComplete(false)
 	ctx := s.GetContext()
-	s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
+	existing := s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
 
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = s.testData.customer.ID
 	before, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.Require().NoError(err)
 
-	_, err = s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
+	resp, err := s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
 		CreditsToAdd:      decimal.NewFromInt(100),
 		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
 		Checkout:          s.checkoutParamsRazorpay(),
 		IdempotencyKey:    lo.ToPtr("topup-checkout-concurrent"),
 	})
-	s.Require().Error(err)
-	s.True(ierr.IsAlreadyExists(err), "expected concurrent guard AlreadyExists, got %v", err)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CheckoutSession)
+	s.Require().NotNil(resp.CheckoutSession.EntityCreationResult)
+	s.Equal(types.EntityCreationStatusFailedAlreadyExists, resp.CheckoutSession.EntityCreationResult.Status)
+	s.Equal(existing.ID, resp.CheckoutSession.EntityCreationResult.EntityId)
 
 	after, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	s.Require().NoError(err)
-	s.Equal(len(before), len(after), "guard must reject before creating a credit-purchase draft")
+	s.Equal(len(before), len(after), "a blocked top-up must not create a credit-purchase draft")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_CheckoutExistingSessionSuperseded() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+	existing := s.seedPendingWalletTopupCheckout(s.testData.wallet.ID, nil)
+
+	checkout := s.checkoutParamsRazorpay()
+	checkout.EntityCreationOptions = &dto.EntityCreationOptions{
+		EntityCreationConflictPolicies: &dto.EntityCreationConflictPolicies{
+			OnExistingEntity: types.OnExistingEntityPolicySupersede,
+		},
+	}
+
+	// The provider call cannot succeed in the test env, so this asserts the supersede
+	// itself: the in-flight session is retired before the replacement is attempted.
+	_, _ = s.service.TopUpWallet(ctx, s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(100),
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		Checkout:          checkout,
+		IdempotencyKey:    lo.ToPtr("topup-checkout-supersede"),
+	})
+
+	superseded, err := s.GetStores().CheckoutSessionRepo.Get(ctx, existing.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, superseded.CheckoutStatus)
 }
 
 func (s *WalletServiceSuite) TestTopUpWallet_CheckoutSessionCreateFailureArchivesDraft() {
@@ -183,6 +214,58 @@ func (s *WalletServiceSuite) TestHandlePurchasedCreditInvoiced_PayFirstForcesPen
 	w, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.testData.wallet.ID)
 	s.Require().NoError(err)
 	s.True(balanceBefore.Equal(w.CreditBalance), "pay-first must not credit before payment")
+}
+
+func (s *WalletServiceSuite) TestHandlePurchasedCreditInvoiced_PayFirstAppliesCustomerTax() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	pct := decimal.NewFromInt(10)
+	tr := &taxrate.TaxRate{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_RATE),
+		Name:            "Wallet Topup Tax",
+		Code:            "wallet_topup_tax_" + types.GenerateUUIDWithPrefix("code"),
+		TaxRateStatus:   types.TaxRateStatusActive,
+		TaxRateType:     types.TaxRateTypePercentage,
+		PercentageValue: &pct,
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().TaxRateRepo.Create(ctx, tr))
+	s.Require().NoError(s.GetStores().TaxAssociationRepo.Create(ctx, &taxassociation.TaxAssociation{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
+		TaxRateID:     tr.ID,
+		EntityType:    types.TaxRateEntityTypeCustomer,
+		EntityID:      s.testData.customer.ID,
+		Priority:      100,
+		AutoApply:     true,
+		Currency:      "usd",
+		StartDate:     time.Now().UTC().Add(-24 * time.Hour),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	ws := s.service.(*walletService)
+	topup := func(key string, checkout *dto.CheckoutParams) *dto.InvoiceResponse {
+		_, invID, err := ws.handlePurchasedCreditInvoicedTransaction(ctx, s.testData.wallet.ID, lo.ToPtr(key), &dto.TopUpWalletRequest{
+			CreditsToAdd:      decimal.NewFromInt(100),
+			TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+			Checkout:          checkout,
+		})
+		s.Require().NoError(err)
+		inv, err := NewInvoiceService(s.buildServiceParams()).GetInvoice(ctx, invID)
+		s.Require().NoError(err)
+		return inv
+	}
+
+	payFirst := topup("payfirst-tax", s.checkoutParamsRazorpay())
+	payLater := topup("paylater-tax", nil)
+
+	s.Equal(types.InvoiceStatusDraft, payFirst.InvoiceStatus)
+	s.True(payFirst.TotalTax.Equal(decimal.NewFromInt(10)), "pay-first draft must carry customer tax, got %s", payFirst.TotalTax)
+	s.True(payFirst.AmountDue.Equal(decimal.NewFromInt(110)), "amount due must include tax, got %s", payFirst.AmountDue)
+	s.True(payFirst.TotalTax.Equal(payLater.TotalTax), "pay-first and pay-later tax must match")
+	s.True(payFirst.Total.Equal(payLater.Total), "pay-first and pay-later total must match")
 }
 
 func (s *WalletServiceSuite) TestCompleteWalletTopupCheckout_CreditsWalletAndBonus() {

@@ -65,6 +65,49 @@ func (e *Entitlement) HasGrantConfig() bool {
 	return e.GrantQuota != nil || e.GrantDurationValue != nil || e.GrantMeasure != "" || e.GrantDurationUnit != ""
 }
 
+func (e *Entitlement) IsUnlimitedGrant() bool {
+	return e != nil && e.HasGrantConfig() && e.GrantQuota == nil
+}
+
+func (e *Entitlement) IsSubscriptionOverride() bool {
+	return e != nil &&
+		e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION &&
+		lo.FromPtr(e.ParentEntitlementID) != ""
+}
+
+// GrantConfigEquals reports whether two entitlements describe the same allowance —
+// the same amount, measured the same way, over the same window, stacking the same way.
+// Everything else about an entitlement can differ.
+func (e *Entitlement) GrantConfigEquals(other *Entitlement) bool {
+	if e == nil || other == nil {
+		return e == other
+	}
+	return e.GrantMeasure == other.GrantMeasure &&
+		e.GrantDurationUnit == other.GrantDurationUnit &&
+		e.GrantAllocationBehavior == other.GrantAllocationBehavior &&
+		e.AggregationMode == other.AggregationMode &&
+		lo.FromPtr(e.GrantDurationValue) == lo.FromPtr(other.GrantDurationValue) &&
+		QuotaEquals(e.GrantQuota, other.GrantQuota)
+}
+
+// QuotaEquals compares two optional quotas. Nil is unlimited, so it equals only nil.
+func QuotaEquals(a, b *decimal.Decimal) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
+}
+
+func (e *Entitlement) ApplyGrantDefaults() {
+	if !e.HasGrantConfig() || e.GrantAllocationBehavior != "" {
+		return
+	}
+	if e.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		return
+	}
+	e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehaviorFirstUsage
+}
+
 func (e *Entitlement) GrantDuration() (time.Duration, error) {
 	if e == nil {
 		return 0, ierr.NewError("grant_duration_value is required for grant-based entitlements").
@@ -260,7 +303,16 @@ func (e *Entitlement) validateGrantConfig() error {
 		}
 	}
 
-	if e.GrantQuota == nil || !e.GrantQuota.IsPositive() {
+	if e.GrantQuota == nil {
+		if e.GrantDurationUnit != types.EntitlementGrantDurationUnitSubscriptionPeriod {
+			return ierr.NewError("unlimited allowances require grant_duration_unit=subscription_period").
+				WithHint("Leave grant_quota unset only for a cycle-length allowance; a recurring window needs a finite quota").
+				WithReportableDetails(map[string]interface{}{
+					"grant_duration_unit": e.GrantDurationUnit,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if !e.GrantQuota.IsPositive() {
 		return ierr.NewError("grant_quota must be positive for grant-based entitlements").
 			Mark(ierr.ErrValidation)
 	}

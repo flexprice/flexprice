@@ -121,7 +121,7 @@ func (*Payment) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Payment fields.
-func (pa *Payment) assignValues(columns []string, values []any) error {
+func (_m *Payment) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -131,106 +131,106 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				pa.ID = value.String
+				_m.ID = value.String
 			}
 		case payment.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				pa.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case payment.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				pa.Status = value.String
+				_m.Status = value.String
 			}
 		case payment.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				pa.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case payment.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				pa.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case payment.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				pa.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case payment.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				pa.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case payment.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				pa.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case payment.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
-				pa.IdempotencyKey = value.String
+				_m.IdempotencyKey = value.String
 			}
 		case payment.FieldDestinationType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field destination_type", values[i])
 			} else if value.Valid {
-				pa.DestinationType = value.String
+				_m.DestinationType = value.String
 			}
 		case payment.FieldDestinationID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field destination_id", values[i])
 			} else if value.Valid {
-				pa.DestinationID = value.String
+				_m.DestinationID = value.String
 			}
 		case payment.FieldPaymentMethodType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_method_type", values[i])
 			} else if value.Valid {
-				pa.PaymentMethodType = value.String
+				_m.PaymentMethodType = value.String
 			}
 		case payment.FieldPaymentMethodID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_method_id", values[i])
 			} else if value.Valid {
-				pa.PaymentMethodID = value.String
+				_m.PaymentMethodID = value.String
 			}
 		case payment.FieldPaymentGateway:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_gateway", values[i])
 			} else if value.Valid {
-				pa.PaymentGateway = new(string)
-				*pa.PaymentGateway = value.String
+				_m.PaymentGateway = new(string)
+				*_m.PaymentGateway = value.String
 			}
 		case payment.FieldGatewayPaymentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_payment_id", values[i])
 			} else if value.Valid {
-				pa.GatewayPaymentID = new(string)
-				*pa.GatewayPaymentID = value.String
+				_m.GatewayPaymentID = new(string)
+				*_m.GatewayPaymentID = value.String
 			}
 		case payment.FieldGatewayTrackingID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_tracking_id", values[i])
 			} else if value.Valid {
-				pa.GatewayTrackingID = new(string)
-				*pa.GatewayTrackingID = value.String
+				_m.GatewayTrackingID = new(string)
+				*_m.GatewayTrackingID = value.String
 			}
 		case payment.FieldGatewayMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pa.GatewayMetadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.GatewayMetadata); err != nil {
 					return fmt.Errorf("unmarshal field gateway_metadata: %w", err)
 				}
 			}
@@ -238,31 +238,31 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				pa.Amount = *value
+				_m.Amount = *value
 			}
 		case payment.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				pa.Currency = value.String
+				_m.Currency = value.String
 			}
 		case payment.FieldPaymentStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_status", values[i])
 			} else if value.Valid {
-				pa.PaymentStatus = value.String
+				_m.PaymentStatus = value.String
 			}
 		case payment.FieldTrackAttempts:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field track_attempts", values[i])
 			} else if value.Valid {
-				pa.TrackAttempts = value.Bool
+				_m.TrackAttempts = value.Bool
 			}
 		case payment.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pa.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -270,46 +270,46 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field succeeded_at", values[i])
 			} else if value.Valid {
-				pa.SucceededAt = new(time.Time)
-				*pa.SucceededAt = value.Time
+				_m.SucceededAt = new(time.Time)
+				*_m.SucceededAt = value.Time
 			}
 		case payment.FieldFailedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field failed_at", values[i])
 			} else if value.Valid {
-				pa.FailedAt = new(time.Time)
-				*pa.FailedAt = value.Time
+				_m.FailedAt = new(time.Time)
+				*_m.FailedAt = value.Time
 			}
 		case payment.FieldRefundedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field refunded_at", values[i])
 			} else if value.Valid {
-				pa.RefundedAt = new(time.Time)
-				*pa.RefundedAt = value.Time
+				_m.RefundedAt = new(time.Time)
+				*_m.RefundedAt = value.Time
 			}
 		case payment.FieldVoidedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field voided_at", values[i])
 			} else if value.Valid {
-				pa.VoidedAt = new(time.Time)
-				*pa.VoidedAt = value.Time
+				_m.VoidedAt = new(time.Time)
+				*_m.VoidedAt = value.Time
 			}
 		case payment.FieldRecordedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field recorded_at", values[i])
 			} else if value.Valid {
-				pa.RecordedAt = new(time.Time)
-				*pa.RecordedAt = value.Time
+				_m.RecordedAt = new(time.Time)
+				*_m.RecordedAt = value.Time
 			}
 		case payment.FieldErrorMessage:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field error_message", values[i])
 			} else if value.Valid {
-				pa.ErrorMessage = new(string)
-				*pa.ErrorMessage = value.String
+				_m.ErrorMessage = new(string)
+				*_m.ErrorMessage = value.String
 			}
 		default:
-			pa.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -317,133 +317,133 @@ func (pa *Payment) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Payment.
 // This includes values selected through modifiers, order, etc.
-func (pa *Payment) Value(name string) (ent.Value, error) {
-	return pa.selectValues.Get(name)
+func (_m *Payment) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryAttempts queries the "attempts" edge of the Payment entity.
-func (pa *Payment) QueryAttempts() *PaymentAttemptQuery {
-	return NewPaymentClient(pa.config).QueryAttempts(pa)
+func (_m *Payment) QueryAttempts() *PaymentAttemptQuery {
+	return NewPaymentClient(_m.config).QueryAttempts(_m)
 }
 
 // Update returns a builder for updating this Payment.
 // Note that you need to call Payment.Unwrap() before calling this method if this Payment
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (pa *Payment) Update() *PaymentUpdateOne {
-	return NewPaymentClient(pa.config).UpdateOne(pa)
+func (_m *Payment) Update() *PaymentUpdateOne {
+	return NewPaymentClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Payment entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (pa *Payment) Unwrap() *Payment {
-	_tx, ok := pa.config.driver.(*txDriver)
+func (_m *Payment) Unwrap() *Payment {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Payment is not a transactional entity")
 	}
-	pa.config.driver = _tx.drv
-	return pa
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (pa *Payment) String() string {
+func (_m *Payment) String() string {
 	var builder strings.Builder
 	builder.WriteString("Payment(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", pa.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(pa.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(pa.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(pa.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(pa.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(pa.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(pa.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(pa.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("idempotency_key=")
-	builder.WriteString(pa.IdempotencyKey)
+	builder.WriteString(_m.IdempotencyKey)
 	builder.WriteString(", ")
 	builder.WriteString("destination_type=")
-	builder.WriteString(pa.DestinationType)
+	builder.WriteString(_m.DestinationType)
 	builder.WriteString(", ")
 	builder.WriteString("destination_id=")
-	builder.WriteString(pa.DestinationID)
+	builder.WriteString(_m.DestinationID)
 	builder.WriteString(", ")
 	builder.WriteString("payment_method_type=")
-	builder.WriteString(pa.PaymentMethodType)
+	builder.WriteString(_m.PaymentMethodType)
 	builder.WriteString(", ")
 	builder.WriteString("payment_method_id=")
-	builder.WriteString(pa.PaymentMethodID)
+	builder.WriteString(_m.PaymentMethodID)
 	builder.WriteString(", ")
-	if v := pa.PaymentGateway; v != nil {
+	if v := _m.PaymentGateway; v != nil {
 		builder.WriteString("payment_gateway=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pa.GatewayPaymentID; v != nil {
+	if v := _m.GatewayPaymentID; v != nil {
 		builder.WriteString("gateway_payment_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := pa.GatewayTrackingID; v != nil {
+	if v := _m.GatewayTrackingID; v != nil {
 		builder.WriteString("gateway_tracking_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("gateway_metadata=")
-	builder.WriteString(fmt.Sprintf("%v", pa.GatewayMetadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.GatewayMetadata))
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", pa.Amount))
+	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(pa.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("payment_status=")
-	builder.WriteString(pa.PaymentStatus)
+	builder.WriteString(_m.PaymentStatus)
 	builder.WriteString(", ")
 	builder.WriteString("track_attempts=")
-	builder.WriteString(fmt.Sprintf("%v", pa.TrackAttempts))
+	builder.WriteString(fmt.Sprintf("%v", _m.TrackAttempts))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", pa.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := pa.SucceededAt; v != nil {
+	if v := _m.SucceededAt; v != nil {
 		builder.WriteString("succeeded_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pa.FailedAt; v != nil {
+	if v := _m.FailedAt; v != nil {
 		builder.WriteString("failed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pa.RefundedAt; v != nil {
+	if v := _m.RefundedAt; v != nil {
 		builder.WriteString("refunded_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pa.VoidedAt; v != nil {
+	if v := _m.VoidedAt; v != nil {
 		builder.WriteString("voided_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pa.RecordedAt; v != nil {
+	if v := _m.RecordedAt; v != nil {
 		builder.WriteString("recorded_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := pa.ErrorMessage; v != nil {
+	if v := _m.ErrorMessage; v != nil {
 		builder.WriteString("error_message=")
 		builder.WriteString(*v)
 	}

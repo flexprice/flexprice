@@ -372,7 +372,7 @@ func (r *planPriceSyncRepository) ReanchorSubSyncedSequence(
 		SetSyncedPriceSequence(seq).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(userID).
-		Save(ctx); err != nil {
+		SaveReturning(ctx); err != nil {
 		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to re-anchor subscription price sequence").

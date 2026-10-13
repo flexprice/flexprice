@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,7 +65,8 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 			wantErr: true, errSub: "hour",
 		},
 		{
-			name: "rejects missing overage factor",
+			// overage_factor is optional on the wire and defaults to 1.0.
+			name: "accepts missing overage factor",
 			req: CommitmentBucketRequest{
 				Start:           types.Bucket{Hour: 9, Minute: 0},
 				End:             types.Bucket{Hour: 10, Minute: 0},
@@ -72,7 +74,6 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(100),
 			},
-			wantErr: true, errSub: "overage_factor is required",
 		},
 		{
 			// Exactly 1.0 is valid for buckets: overage bills at base rate.
@@ -287,6 +288,24 @@ func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_QuantityDefaul
 	}
 }
 
+// The line item keeps the price's period count; billing reads it to find the item's cadence.
+func TestCreateSubscriptionLineItemRequest_ToSubscriptionLineItem_KeepsPeriodCount(t *testing.T) {
+	params := LineItemParams{
+		Subscription: &SubscriptionResponse{Subscription: &subscription.Subscription{ID: "sub_test", Currency: "usd"}},
+		Price: &PriceResponse{Price: &price.Price{
+			Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 6,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+		}},
+		EntityType: types.SubscriptionLineItemEntityTypeSubscription,
+	}
+
+	lineItem := (&CreateSubscriptionLineItemRequest{PriceID: "price_test", Quantity: decimal.NewFromInt(1)}).ToSubscriptionLineItem(context.Background(), params)
+	assert.Equal(t, 6, lineItem.BillingPeriodCount)
+
+	updated := (&UpdateSubscriptionLineItemRequest{}).ToSubscriptionLineItem(context.Background(), lineItem, "price_new")
+	assert.Equal(t, 6, updated.BillingPeriodCount)
+}
+
 func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
 	amount := decimal.NewFromInt(100)
 
@@ -306,7 +325,7 @@ func TestValidateCommitmentFieldsCommon_OverageFactor(t *testing.T) {
 	})
 }
 
-func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *testing.T) {
+func TestCreateSubscriptionLineItemRequest_Validate_CadenceDividesOrMultiplies(t *testing.T) {
 	sub := &subscription.Subscription{
 		StartDate:          time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
@@ -324,8 +343,9 @@ func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *test
 		{"monthly-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_MONTHLY, 1, false},
 		{"quarterly-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_QUARTER, 1, false},
 		{"onetime-always-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_ONETIME, 1, false},
-		{"annual-on-quarterly-rejected", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_ANNUAL, 1, true},
-		{"halfyear-on-quarterly-rejected", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_HALF_YEAR, 1, true},
+		{"annual-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_ANNUAL, 1, false},
+		{"halfyear-on-quarterly-ok", types.BILLING_PERIOD_QUARTER, 1, types.BILLING_PERIOD_HALF_YEAR, 1, false},
+		{"weekly-on-monthly-rejected", types.BILLING_PERIOD_MONTHLY, 1, types.BILLING_PERIOD_WEEKLY, 1, true},
 		// Count-aware cases: 2-monthly (2mo) on quarterly (3mo) — periods look
 		// compatible (both MONTHLY-family), but effective months 3 % 2 = 1, so
 		// splitInvoicePeriodByLineItemCadence would fail at invoice time.
@@ -370,4 +390,112 @@ func TestCreateSubscriptionLineItemRequest_Validate_CadenceMustDivideSub(t *test
 			}
 		})
 	}
+}
+
+func TestCreateSubscriptionLineItemRequest_DefaultsCommitmentOverageFactor(t *testing.T) {
+	t.Run("defaults to 1.0 when omitted", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:          "price_test",
+			CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100)),
+		}
+		req.ApplyDefaults()
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if req.CommitmentOverageFactor == nil {
+			t.Fatal("expected commitment_overage_factor to be defaulted")
+		}
+		if !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default of 1, got: %s", req.CommitmentOverageFactor)
+		}
+	})
+
+	t.Run("keeps an explicit factor", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:                 "price_test",
+			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
+			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(1.5)),
+		}
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if !req.CommitmentOverageFactor.Equal(decimal.NewFromFloat(1.5)) {
+			t.Fatalf("expected 1.5, got: %s", req.CommitmentOverageFactor)
+		}
+	})
+
+	t.Run("still rejects a factor below 1.0", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:                 "price_test",
+			CommitmentAmount:        lo.ToPtr(decimal.NewFromInt(100)),
+			CommitmentOverageFactor: lo.ToPtr(decimal.NewFromFloat(0.5)),
+		}
+		err := req.Validate(nil, nil)
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(err.Error(), "commitment_overage_factor must be at least 1.0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("defaults to 1.0 when only time buckets are set", func(t *testing.T) {
+		req := CreateSubscriptionLineItemRequest{
+			PriceID:            "price_test",
+			CommitmentWindowed: true,
+			CommitmentTimeBuckets: []CommitmentBucketRequest{{
+				ID:              "bkt_existing",
+				Start:           types.Bucket{Hour: 8},
+				End:             types.Bucket{Hour: 20},
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(10),
+			}},
+		}
+		req.ApplyDefaults()
+		if err := req.Validate(nil, nil); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if req.CommitmentOverageFactor == nil || !req.CommitmentOverageFactor.Equal(decimal.NewFromInt(1)) {
+			t.Fatalf("expected default of 1, got: %v", req.CommitmentOverageFactor)
+		}
+	})
+}
+
+func TestCommitmentBucketRequest_ToTimeOfDayBucket_DefaultsOverageFactor(t *testing.T) {
+	b := CommitmentBucketRequest{
+		Start:           types.Bucket{Hour: 9, Minute: 0},
+		End:             types.Bucket{Hour: 10, Minute: 0},
+		CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentValue: decimal.NewFromInt(100),
+	}.ToTimeOfDayBucket()
+
+	if b.OverageFactor == nil || !b.OverageFactor.Equal(decimal.NewFromInt(1)) {
+		t.Fatalf("expected overage factor to default to 1, got: %v", b.OverageFactor)
+	}
+}
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_KeepsLinks(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{
+		ID:                  "subs_line_old",
+		AddonAssociationID:  lo.ToPtr("addon_assoc_1"),
+		SubscriptionPhaseID: lo.ToPtr("phase_1"),
+		PriceUnitID:         lo.ToPtr("pu_1"),
+		PriceUnit:           lo.ToPtr("crd"),
+	}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(10))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Equal(t, existing.AddonAssociationID, successor.AddonAssociationID)
+	assert.Equal(t, existing.SubscriptionPhaseID, successor.SubscriptionPhaseID)
+	assert.Equal(t, existing.PriceUnitID, successor.PriceUnitID)
+	assert.Equal(t, existing.PriceUnit, successor.PriceUnit)
+}
+
+func TestUpdateSubscriptionLineItemRequest_ToSubscriptionLineItem_CommitmentTypeSwitch(t *testing.T) {
+	existing := &subscription.SubscriptionLineItem{CommitmentType: types.COMMITMENT_TYPE_AMOUNT, CommitmentAmount: lo.ToPtr(decimal.NewFromInt(100))}
+	req := UpdateSubscriptionLineItemRequest{CommitmentType: types.COMMITMENT_TYPE_QUANTITY, CommitmentQuantity: lo.ToPtr(decimal.NewFromInt(12))}
+
+	successor := req.ToSubscriptionLineItem(context.Background(), existing, "price_new")
+	assert.Nil(t, successor.CommitmentAmount)
+	assert.True(t, successor.CommitmentQuantity.Equal(decimal.NewFromInt(12)))
 }

@@ -66,11 +66,7 @@ type MeterUsageService interface {
 
 	// DebugEvent powers GET /events/:id — reports processing status and
 	// per-lookup diagnostics for a single event under the meter-usage pipeline.
-	DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error)
-
-	// GetHuggingFaceBillingData resolves per-event cost (nano-USD) for the
-	// requested event IDs. Powers POST /events/huggingface-billing.
-	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
+	DebugEvent(ctx context.Context, externalCustomerID, eventID string, window events.TimeRange) (*dto.GetEventByIDResponse, error)
 }
 
 type meterUsageService struct {
@@ -1015,8 +1011,9 @@ var analyticsGroupByPropertyName = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // validateAnalyticsGroupBy rejects entries the SQL builder would silently drop.
 // Accepted forms:
-//   - "meter_id"          (no-op at SQL level; implicit at the meter)
+//   - "meter_id"              (no-op at SQL level; implicit at the meter)
 //   - "source"
+//   - "external_customer_id"  (real, indexed column — groups usage per customer)
 //   - "properties.<name>" where name matches a safe identifier pattern
 //
 // Anything else (empty string, "properties." with no name, unknown tokens) is
@@ -1026,7 +1023,7 @@ var analyticsGroupByPropertyName = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 func validateAnalyticsGroupBy(groupBy []string) error {
 	for _, g := range groupBy {
 		switch {
-		case g == "meter_id" || g == "source":
+		case g == "meter_id" || g == "source" || g == "external_customer_id":
 			// ok
 		case strings.HasPrefix(g, "properties."):
 			name := strings.TrimPrefix(g, "properties.")
@@ -1040,7 +1037,7 @@ func validateAnalyticsGroupBy(groupBy []string) error {
 			}
 		default:
 			return ierr.NewError("invalid group_by entry").
-				WithHintf("group_by entry %q is not recognized (allowed: 'meter_id', 'source', 'properties.<name>')", g).
+				WithHintf("group_by entry %q is not recognized (allowed: 'meter_id', 'source', 'external_customer_id', 'properties.<name>')", g).
 				WithReportableDetails(map[string]interface{}{
 					"group_by_entry": g,
 				}).
@@ -1372,6 +1369,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 			if lu.AnalyticsResult != nil {
 				analytic.Source = lu.AnalyticsResult.Source
 				analytic.Sources = lu.AnalyticsResult.Sources
+				analytic.ExternalCustomerID = lu.AnalyticsResult.ExternalCustomerID
 				analytic.Properties = lu.AnalyticsResult.Properties
 			} else if lu.BucketedResult != nil && len(lu.BucketedResult.Sources) > 0 {
 				analytic.Sources = lu.BucketedResult.Sources
@@ -1704,15 +1702,16 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	// per-aggregation routing is needed here.
 	for _, r := range allResults {
 		analytic := &events.DetailedUsageAnalytic{
-			MeterID:          r.MeterID,
-			TotalUsage:       r.TotalUsage,
-			MaxUsage:         r.MaxUsage,
-			LatestUsage:      r.LatestUsage,
-			CountUniqueUsage: r.CountUniqueUsage,
-			EventCount:       r.EventCount,
-			Source:           r.Source,
-			Sources:          r.Sources,
-			Properties:       r.Properties,
+			MeterID:            r.MeterID,
+			TotalUsage:         r.TotalUsage,
+			MaxUsage:           r.MaxUsage,
+			LatestUsage:        r.LatestUsage,
+			CountUniqueUsage:   r.CountUniqueUsage,
+			EventCount:         r.EventCount,
+			Source:             r.Source,
+			Sources:            r.Sources,
+			ExternalCustomerID: r.ExternalCustomerID,
+			Properties:         r.Properties,
 		}
 		if m, ok := meterMap[r.MeterID]; ok {
 			analytic.EventName = m.EventName
@@ -1785,26 +1784,27 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 	for _, analytic := range data.Analytics {
 		item := dto.UsageAnalyticItem{
-			FeatureID:       analytic.FeatureID,
-			PriceID:         analytic.PriceID,
-			MeterID:         analytic.MeterID,
-			SubLineItemID:   analytic.SubLineItemID,
-			SubscriptionID:  analytic.SubscriptionID,
-			FeatureName:     analytic.FeatureName,
-			EventName:       analytic.EventName,
-			Source:          analytic.Source,
-			Unit:            analytic.Unit,
-			UnitPlural:      analytic.UnitPlural,
-			AggregationType: analytic.AggregationType,
-			TotalUsage:      analytic.TotalUsage,
-			Subtotal:        analytic.TotalCost,
-			TotalCost:       analytic.TotalCost,
-			TotalDiscount:   decimal.Zero,
-			Currency:        analytic.Currency,
-			EventCount:      analytic.EventCount,
-			Properties:      analytic.Properties,
-			CommitmentInfo:  analytic.CommitmentInfo,
-			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
+			FeatureID:          analytic.FeatureID,
+			PriceID:            analytic.PriceID,
+			MeterID:            analytic.MeterID,
+			SubLineItemID:      analytic.SubLineItemID,
+			SubscriptionID:     analytic.SubscriptionID,
+			FeatureName:        analytic.FeatureName,
+			EventName:          analytic.EventName,
+			Source:             analytic.Source,
+			ExternalCustomerID: analytic.ExternalCustomerID,
+			Unit:               analytic.Unit,
+			UnitPlural:         analytic.UnitPlural,
+			AggregationType:    analytic.AggregationType,
+			TotalUsage:         analytic.TotalUsage,
+			Subtotal:           analytic.TotalCost,
+			TotalCost:          analytic.TotalCost,
+			TotalDiscount:      decimal.Zero,
+			Currency:           analytic.Currency,
+			EventCount:         analytic.EventCount,
+			Properties:         analytic.Properties,
+			CommitmentInfo:     analytic.CommitmentInfo,
+			Points:             make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
 		}
 
 		// Apply percentage-coupon discounts inline (folded from the former separate

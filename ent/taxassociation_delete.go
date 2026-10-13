@@ -20,56 +20,56 @@ type TaxAssociationDelete struct {
 }
 
 // Where appends a list predicates to the TaxAssociationDelete builder.
-func (tad *TaxAssociationDelete) Where(ps ...predicate.TaxAssociation) *TaxAssociationDelete {
-	tad.mutation.Where(ps...)
-	return tad
+func (_d *TaxAssociationDelete) Where(ps ...predicate.TaxAssociation) *TaxAssociationDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (tad *TaxAssociationDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, tad.sqlExec, tad.mutation, tad.hooks)
+func (_d *TaxAssociationDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tad *TaxAssociationDelete) ExecX(ctx context.Context) int {
-	n, err := tad.Exec(ctx)
+func (_d *TaxAssociationDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (tad *TaxAssociationDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *TaxAssociationDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(taxassociation.Table, sqlgraph.NewFieldSpec(taxassociation.FieldID, field.TypeString))
-	if ps := tad.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, tad.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	tad.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // TaxAssociationDeleteOne is the builder for deleting a single TaxAssociation entity.
 type TaxAssociationDeleteOne struct {
-	tad *TaxAssociationDelete
+	_d *TaxAssociationDelete
 }
 
 // Where appends a list predicates to the TaxAssociationDelete builder.
-func (tado *TaxAssociationDeleteOne) Where(ps ...predicate.TaxAssociation) *TaxAssociationDeleteOne {
-	tado.tad.mutation.Where(ps...)
-	return tado
+func (_d *TaxAssociationDeleteOne) Where(ps ...predicate.TaxAssociation) *TaxAssociationDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (tado *TaxAssociationDeleteOne) Exec(ctx context.Context) error {
-	n, err := tado.tad.Exec(ctx)
+func (_d *TaxAssociationDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (tado *TaxAssociationDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tado *TaxAssociationDeleteOne) ExecX(ctx context.Context) {
-	if err := tado.Exec(ctx); err != nil {
+func (_d *TaxAssociationDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -52,7 +52,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		item.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	_, err := r.client.Writer(ctx).InvoiceLineItem.Create().
+	builder := r.client.Writer(ctx).InvoiceLineItem.Create().
 		SetID(item.ID).
 		SetTenantID(types.GetTenantID(ctx)).
 		SetInvoiceID(item.InvoiceID).
@@ -77,6 +77,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetMetadata(item.Metadata).
 		SetEnvironmentID(item.EnvironmentID).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetCustomCurrency(item.CustomCurrency).
 		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetNillableParentLineItemID(item.ParentLineItemID).
@@ -87,8 +88,12 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetCreatedBy(item.CreatedBy).
 		SetUpdatedBy(item.UpdatedBy).
 		SetCreatedAt(item.CreatedAt).
-		SetUpdatedAt(item.UpdatedAt).
-		Save(ctx)
+		SetUpdatedAt(item.UpdatedAt)
+	// fx_conversion stays SQL NULL until conversion.
+	if item.FxConversion != nil {
+		builder = builder.SetFxConversion(item.FxConversion)
+	}
+	_, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -164,6 +169,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetMetadata(item.Metadata).
 				SetEnvironmentID(item.EnvironmentID).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetCustomCurrency(item.CustomCurrency).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableParentLineItemID(item.ParentLineItemID).
@@ -175,6 +181,9 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetUpdatedBy(item.UpdatedBy).
 				SetCreatedAt(item.CreatedAt).
 				SetUpdatedAt(item.UpdatedAt)
+			if item.FxConversion != nil {
+				bulk[i].SetFxConversion(item.FxConversion)
+			}
 		}
 
 		for i := 0; i < len(bulk); i += invoiceLineItemBatchSize {
@@ -265,15 +274,20 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		).
 		SetAmount(item.Amount).
 		SetQuantity(item.Quantity).
+		SetCurrency(item.Currency).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetCustomCurrency(item.CustomCurrency).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
+	if item.FxConversion != nil {
+		q = q.SetFxConversion(item.FxConversion)
+	}
 	if item.AdjustedEntitlementQuantity != nil {
 		q = q.SetAdjustedEntitlementQuantity(*item.AdjustedEntitlementQuantity)
 	} else {
@@ -576,7 +590,7 @@ func (r *invoiceLineItemRepository) GetBilledAmountsBySubscriptionLineItem(
 	query := fmt.Sprintf(`
 		SELECT
 			ili.subscription_line_item_id,
-			COALESCE(SUM(ili.amount) FILTER (WHERE ili.amount > 0), 0)::text  AS charged,
+			COALESCE(SUM(ili.amount - COALESCE(ili.line_item_discount, 0) - COALESCE(ili.invoice_level_discount, 0)) FILTER (WHERE ili.amount > 0), 0)::text AS charged,
 			COALESCE(SUM(-ili.amount) FILTER (WHERE ili.amount < 0), 0)::text AS credited
 		FROM invoice_line_items ili
 		INNER JOIN invoices inv

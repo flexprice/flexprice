@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -325,6 +327,7 @@ func (s *MeterUsageTrackingSuite) TestConvertToDecimal_AllTypes() {
 		{"int32", int32(50), decimal.NewFromInt(50)},
 		{"uint", uint(7), decimal.NewFromInt(7)},
 		{"uint64", uint64(999), decimal.NewFromInt(999)},
+		{"uint_above_maxint64", uint(math.MaxUint64), decimal.RequireFromString("18446744073709551615")},
 		{"string", "123.456", decimal.RequireFromString("123.456")},
 		{"invalid_string", "not_a_number", decimal.Zero},
 		{"bool", true, decimal.Zero},
@@ -492,4 +495,60 @@ func TestRunMeterUsagePostInsertSideEffects(t *testing.T) {
 
 	svc.runMeterUsagePostInsertSideEffects(ctx, event, []*events.MeterUsage{})
 	assert.Equal(t, existing.ID, event.CustomerID)
+}
+
+func (s *MeterUsageTrackingSuite) TestEffectiveUsageAlertTiming() {
+	const globalDelay, globalStale = 5*time.Minute + 30*time.Second, time.Hour
+
+	tests := []struct {
+		name      string
+		stored    map[string]interface{}
+		wantDelay time.Duration
+		wantStale time.Duration
+	}{
+		{name: "no setting uses deployment config", wantDelay: globalDelay, wantStale: globalStale},
+		{
+			name:      "zero fields use deployment config",
+			stored:    map[string]interface{}{"schedule_delay_seconds": 0, "stale_after_seconds": 0},
+			wantDelay: globalDelay, wantStale: globalStale,
+		},
+		{
+			name:      "delay only overrides delay",
+			stored:    map[string]interface{}{"schedule_delay_seconds": 60},
+			wantDelay: time.Minute, wantStale: globalStale,
+		},
+		{
+			name:      "both override",
+			stored:    map[string]interface{}{"schedule_delay_seconds": 120, "stale_after_seconds": 900},
+			wantDelay: 2 * time.Minute, wantStale: 15 * time.Minute,
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			s.WithEnvironment("env_usage_alert")
+			ctx := s.GetContext()
+			if tt.stored != nil {
+				s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, &settings.Setting{
+					ID:            "setting_usage_alert",
+					Key:           types.SettingKeyUsageAlertConfig,
+					Value:         tt.stored,
+					EnvironmentID: types.GetEnvironmentID(ctx),
+					BaseModel:     types.GetDefaultBaseModel(ctx),
+				}))
+			}
+			svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger:       logger.NewNoopLogger(),
+				SettingsRepo: s.GetStores().SettingsRepo,
+				Config: &config.Configuration{UsageAlerts: config.UsageAlertsConfig{
+					ScheduleDelay: globalDelay,
+					StaleAfter:    globalStale,
+				}},
+			}}
+
+			delay, stale := svc.effectiveUsageAlertTiming(ctx)
+			s.Equal(tt.wantDelay, delay)
+			s.Equal(tt.wantStale, stale)
+		})
+	}
 }

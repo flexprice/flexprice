@@ -23,265 +23,265 @@ type FeatureCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (fc *FeatureCreate) SetTenantID(s string) *FeatureCreate {
-	fc.mutation.SetTenantID(s)
-	return fc
+func (_c *FeatureCreate) SetTenantID(v string) *FeatureCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (fc *FeatureCreate) SetStatus(s string) *FeatureCreate {
-	fc.mutation.SetStatus(s)
-	return fc
+func (_c *FeatureCreate) SetStatus(v string) *FeatureCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableStatus(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetStatus(*s)
+func (_c *FeatureCreate) SetNillableStatus(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (fc *FeatureCreate) SetCreatedAt(t time.Time) *FeatureCreate {
-	fc.mutation.SetCreatedAt(t)
-	return fc
+func (_c *FeatureCreate) SetCreatedAt(v time.Time) *FeatureCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableCreatedAt(t *time.Time) *FeatureCreate {
-	if t != nil {
-		fc.SetCreatedAt(*t)
+func (_c *FeatureCreate) SetNillableCreatedAt(v *time.Time) *FeatureCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (fc *FeatureCreate) SetUpdatedAt(t time.Time) *FeatureCreate {
-	fc.mutation.SetUpdatedAt(t)
-	return fc
+func (_c *FeatureCreate) SetUpdatedAt(v time.Time) *FeatureCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableUpdatedAt(t *time.Time) *FeatureCreate {
-	if t != nil {
-		fc.SetUpdatedAt(*t)
+func (_c *FeatureCreate) SetNillableUpdatedAt(v *time.Time) *FeatureCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (fc *FeatureCreate) SetCreatedBy(s string) *FeatureCreate {
-	fc.mutation.SetCreatedBy(s)
-	return fc
+func (_c *FeatureCreate) SetCreatedBy(v string) *FeatureCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableCreatedBy(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetCreatedBy(*s)
+func (_c *FeatureCreate) SetNillableCreatedBy(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (fc *FeatureCreate) SetUpdatedBy(s string) *FeatureCreate {
-	fc.mutation.SetUpdatedBy(s)
-	return fc
+func (_c *FeatureCreate) SetUpdatedBy(v string) *FeatureCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableUpdatedBy(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetUpdatedBy(*s)
+func (_c *FeatureCreate) SetNillableUpdatedBy(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (fc *FeatureCreate) SetEnvironmentID(s string) *FeatureCreate {
-	fc.mutation.SetEnvironmentID(s)
-	return fc
+func (_c *FeatureCreate) SetEnvironmentID(v string) *FeatureCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableEnvironmentID(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetEnvironmentID(*s)
+func (_c *FeatureCreate) SetNillableEnvironmentID(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (fc *FeatureCreate) SetLookupKey(s string) *FeatureCreate {
-	fc.mutation.SetLookupKey(s)
-	return fc
+func (_c *FeatureCreate) SetLookupKey(v string) *FeatureCreate {
+	_c.mutation.SetLookupKey(v)
+	return _c
 }
 
 // SetName sets the "name" field.
-func (fc *FeatureCreate) SetName(s string) *FeatureCreate {
-	fc.mutation.SetName(s)
-	return fc
+func (_c *FeatureCreate) SetName(v string) *FeatureCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetDescription sets the "description" field.
-func (fc *FeatureCreate) SetDescription(s string) *FeatureCreate {
-	fc.mutation.SetDescription(s)
-	return fc
+func (_c *FeatureCreate) SetDescription(v string) *FeatureCreate {
+	_c.mutation.SetDescription(v)
+	return _c
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableDescription(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetDescription(*s)
+func (_c *FeatureCreate) SetNillableDescription(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetDescription(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetType sets the "type" field.
-func (fc *FeatureCreate) SetType(s string) *FeatureCreate {
-	fc.mutation.SetType(s)
-	return fc
+func (_c *FeatureCreate) SetType(v string) *FeatureCreate {
+	_c.mutation.SetType(v)
+	return _c
 }
 
 // SetMeterID sets the "meter_id" field.
-func (fc *FeatureCreate) SetMeterID(s string) *FeatureCreate {
-	fc.mutation.SetMeterID(s)
-	return fc
+func (_c *FeatureCreate) SetMeterID(v string) *FeatureCreate {
+	_c.mutation.SetMeterID(v)
+	return _c
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableMeterID(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetMeterID(*s)
+func (_c *FeatureCreate) SetNillableMeterID(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetMeterID(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (fc *FeatureCreate) SetMetadata(m map[string]string) *FeatureCreate {
-	fc.mutation.SetMetadata(m)
-	return fc
+func (_c *FeatureCreate) SetMetadata(v map[string]string) *FeatureCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetUnitSingular sets the "unit_singular" field.
-func (fc *FeatureCreate) SetUnitSingular(s string) *FeatureCreate {
-	fc.mutation.SetUnitSingular(s)
-	return fc
+func (_c *FeatureCreate) SetUnitSingular(v string) *FeatureCreate {
+	_c.mutation.SetUnitSingular(v)
+	return _c
 }
 
 // SetNillableUnitSingular sets the "unit_singular" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableUnitSingular(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetUnitSingular(*s)
+func (_c *FeatureCreate) SetNillableUnitSingular(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetUnitSingular(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetUnitPlural sets the "unit_plural" field.
-func (fc *FeatureCreate) SetUnitPlural(s string) *FeatureCreate {
-	fc.mutation.SetUnitPlural(s)
-	return fc
+func (_c *FeatureCreate) SetUnitPlural(v string) *FeatureCreate {
+	_c.mutation.SetUnitPlural(v)
+	return _c
 }
 
 // SetNillableUnitPlural sets the "unit_plural" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableUnitPlural(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetUnitPlural(*s)
+func (_c *FeatureCreate) SetNillableUnitPlural(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetUnitPlural(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetReportingUnitSingular sets the "reporting_unit_singular" field.
-func (fc *FeatureCreate) SetReportingUnitSingular(s string) *FeatureCreate {
-	fc.mutation.SetReportingUnitSingular(s)
-	return fc
+func (_c *FeatureCreate) SetReportingUnitSingular(v string) *FeatureCreate {
+	_c.mutation.SetReportingUnitSingular(v)
+	return _c
 }
 
 // SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableReportingUnitSingular(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetReportingUnitSingular(*s)
+func (_c *FeatureCreate) SetNillableReportingUnitSingular(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetReportingUnitSingular(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetReportingUnitPlural sets the "reporting_unit_plural" field.
-func (fc *FeatureCreate) SetReportingUnitPlural(s string) *FeatureCreate {
-	fc.mutation.SetReportingUnitPlural(s)
-	return fc
+func (_c *FeatureCreate) SetReportingUnitPlural(v string) *FeatureCreate {
+	_c.mutation.SetReportingUnitPlural(v)
+	return _c
 }
 
 // SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableReportingUnitPlural(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetReportingUnitPlural(*s)
+func (_c *FeatureCreate) SetNillableReportingUnitPlural(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetReportingUnitPlural(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
-func (fc *FeatureCreate) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureCreate {
-	fc.mutation.SetReportingUnitConversionRate(d)
-	return fc
+func (_c *FeatureCreate) SetReportingUnitConversionRate(v decimal.Decimal) *FeatureCreate {
+	_c.mutation.SetReportingUnitConversionRate(v)
+	return _c
 }
 
 // SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureCreate {
-	if d != nil {
-		fc.SetReportingUnitConversionRate(*d)
+func (_c *FeatureCreate) SetNillableReportingUnitConversionRate(v *decimal.Decimal) *FeatureCreate {
+	if v != nil {
+		_c.SetReportingUnitConversionRate(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetAlertSettings sets the "alert_settings" field.
-func (fc *FeatureCreate) SetAlertSettings(ts types.AlertSettings) *FeatureCreate {
-	fc.mutation.SetAlertSettings(ts)
-	return fc
+func (_c *FeatureCreate) SetAlertSettings(v types.AlertSettings) *FeatureCreate {
+	_c.mutation.SetAlertSettings(v)
+	return _c
 }
 
 // SetNillableAlertSettings sets the "alert_settings" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableAlertSettings(ts *types.AlertSettings) *FeatureCreate {
-	if ts != nil {
-		fc.SetAlertSettings(*ts)
+func (_c *FeatureCreate) SetNillableAlertSettings(v *types.AlertSettings) *FeatureCreate {
+	if v != nil {
+		_c.SetAlertSettings(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetGroupID sets the "group_id" field.
-func (fc *FeatureCreate) SetGroupID(s string) *FeatureCreate {
-	fc.mutation.SetGroupID(s)
-	return fc
+func (_c *FeatureCreate) SetGroupID(v string) *FeatureCreate {
+	_c.mutation.SetGroupID(v)
+	return _c
 }
 
 // SetNillableGroupID sets the "group_id" field if the given value is not nil.
-func (fc *FeatureCreate) SetNillableGroupID(s *string) *FeatureCreate {
-	if s != nil {
-		fc.SetGroupID(*s)
+func (_c *FeatureCreate) SetNillableGroupID(v *string) *FeatureCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
 	}
-	return fc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (fc *FeatureCreate) SetID(s string) *FeatureCreate {
-	fc.mutation.SetID(s)
-	return fc
+func (_c *FeatureCreate) SetID(v string) *FeatureCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the FeatureMutation object of the builder.
-func (fc *FeatureCreate) Mutation() *FeatureMutation {
-	return fc.mutation
+func (_c *FeatureCreate) Mutation() *FeatureMutation {
+	return _c.mutation
 }
 
 // Save creates the Feature in the database.
-func (fc *FeatureCreate) Save(ctx context.Context) (*Feature, error) {
-	fc.defaults()
-	return withHooks(ctx, fc.sqlSave, fc.mutation, fc.hooks)
+func (_c *FeatureCreate) Save(ctx context.Context) (*Feature, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (fc *FeatureCreate) SaveX(ctx context.Context) *Feature {
-	v, err := fc.Save(ctx)
+func (_c *FeatureCreate) SaveX(ctx context.Context) *Feature {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -289,77 +289,77 @@ func (fc *FeatureCreate) SaveX(ctx context.Context) *Feature {
 }
 
 // Exec executes the query.
-func (fc *FeatureCreate) Exec(ctx context.Context) error {
-	_, err := fc.Save(ctx)
+func (_c *FeatureCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (fc *FeatureCreate) ExecX(ctx context.Context) {
-	if err := fc.Exec(ctx); err != nil {
+func (_c *FeatureCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (fc *FeatureCreate) defaults() {
-	if _, ok := fc.mutation.Status(); !ok {
+func (_c *FeatureCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := feature.DefaultStatus
-		fc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := fc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := feature.DefaultCreatedAt()
-		fc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := fc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := feature.DefaultUpdatedAt()
-		fc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := fc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := feature.DefaultEnvironmentID
-		fc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (fc *FeatureCreate) check() error {
-	if _, ok := fc.mutation.TenantID(); !ok {
+func (_c *FeatureCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Feature.tenant_id"`)}
 	}
-	if v, ok := fc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := feature.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Feature.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := fc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Feature.status"`)}
 	}
-	if _, ok := fc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Feature.created_at"`)}
 	}
-	if _, ok := fc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Feature.updated_at"`)}
 	}
-	if _, ok := fc.mutation.LookupKey(); !ok {
+	if _, ok := _c.mutation.LookupKey(); !ok {
 		return &ValidationError{Name: "lookup_key", err: errors.New(`ent: missing required field "Feature.lookup_key"`)}
 	}
-	if _, ok := fc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Feature.name"`)}
 	}
-	if v, ok := fc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := feature.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Feature.name": %w`, err)}
 		}
 	}
-	if _, ok := fc.mutation.GetType(); !ok {
+	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Feature.type"`)}
 	}
-	if v, ok := fc.mutation.GetType(); ok {
+	if v, ok := _c.mutation.GetType(); ok {
 		if err := feature.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Feature.type": %w`, err)}
 		}
 	}
-	if v, ok := fc.mutation.AlertSettings(); ok {
+	if v, ok := _c.mutation.AlertSettings(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "alert_settings", err: fmt.Errorf(`ent: validator failed for field "Feature.alert_settings": %w`, err)}
 		}
@@ -367,12 +367,12 @@ func (fc *FeatureCreate) check() error {
 	return nil
 }
 
-func (fc *FeatureCreate) sqlSave(ctx context.Context) (*Feature, error) {
-	if err := fc.check(); err != nil {
+func (_c *FeatureCreate) sqlSave(ctx context.Context) (*Feature, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := fc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, fc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -385,97 +385,97 @@ func (fc *FeatureCreate) sqlSave(ctx context.Context) (*Feature, error) {
 			return nil, fmt.Errorf("unexpected Feature.ID type: %T", _spec.ID.Value)
 		}
 	}
-	fc.mutation.id = &_node.ID
-	fc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (fc *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
+func (_c *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Feature{config: fc.config}
+		_node = &Feature{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(feature.Table, sqlgraph.NewFieldSpec(feature.FieldID, field.TypeString))
 	)
-	if id, ok := fc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := fc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(feature.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := fc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(feature.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := fc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(feature.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := fc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(feature.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := fc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(feature.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := fc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(feature.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := fc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(feature.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := fc.mutation.LookupKey(); ok {
+	if value, ok := _c.mutation.LookupKey(); ok {
 		_spec.SetField(feature.FieldLookupKey, field.TypeString, value)
 		_node.LookupKey = value
 	}
-	if value, ok := fc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(feature.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := fc.mutation.Description(); ok {
+	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(feature.FieldDescription, field.TypeString, value)
 		_node.Description = &value
 	}
-	if value, ok := fc.mutation.GetType(); ok {
+	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(feature.FieldType, field.TypeString, value)
 		_node.Type = value
 	}
-	if value, ok := fc.mutation.MeterID(); ok {
+	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(feature.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
 	}
-	if value, ok := fc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(feature.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := fc.mutation.UnitSingular(); ok {
+	if value, ok := _c.mutation.UnitSingular(); ok {
 		_spec.SetField(feature.FieldUnitSingular, field.TypeString, value)
 		_node.UnitSingular = &value
 	}
-	if value, ok := fc.mutation.UnitPlural(); ok {
+	if value, ok := _c.mutation.UnitPlural(); ok {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 		_node.UnitPlural = &value
 	}
-	if value, ok := fc.mutation.ReportingUnitSingular(); ok {
+	if value, ok := _c.mutation.ReportingUnitSingular(); ok {
 		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
 		_node.ReportingUnitSingular = &value
 	}
-	if value, ok := fc.mutation.ReportingUnitPlural(); ok {
+	if value, ok := _c.mutation.ReportingUnitPlural(); ok {
 		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
 		_node.ReportingUnitPlural = &value
 	}
-	if value, ok := fc.mutation.ReportingUnitConversionRate(); ok {
+	if value, ok := _c.mutation.ReportingUnitConversionRate(); ok {
 		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
 		_node.ReportingUnitConversionRate = &value
 	}
-	if value, ok := fc.mutation.AlertSettings(); ok {
+	if value, ok := _c.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 		_node.AlertSettings = value
 	}
-	if value, ok := fc.mutation.GroupID(); ok {
+	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
 		_node.GroupID = &value
 	}
@@ -490,16 +490,16 @@ type FeatureCreateBulk struct {
 }
 
 // Save creates the Feature entities in the database.
-func (fcb *FeatureCreateBulk) Save(ctx context.Context) ([]*Feature, error) {
-	if fcb.err != nil {
-		return nil, fcb.err
+func (_c *FeatureCreateBulk) Save(ctx context.Context) ([]*Feature, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(fcb.builders))
-	nodes := make([]*Feature, len(fcb.builders))
-	mutators := make([]Mutator, len(fcb.builders))
-	for i := range fcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Feature, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := fcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*FeatureMutation)
@@ -513,11 +513,11 @@ func (fcb *FeatureCreateBulk) Save(ctx context.Context) ([]*Feature, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, fcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, fcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -537,7 +537,7 @@ func (fcb *FeatureCreateBulk) Save(ctx context.Context) ([]*Feature, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, fcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -545,8 +545,8 @@ func (fcb *FeatureCreateBulk) Save(ctx context.Context) ([]*Feature, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (fcb *FeatureCreateBulk) SaveX(ctx context.Context) []*Feature {
-	v, err := fcb.Save(ctx)
+func (_c *FeatureCreateBulk) SaveX(ctx context.Context) []*Feature {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -554,14 +554,14 @@ func (fcb *FeatureCreateBulk) SaveX(ctx context.Context) []*Feature {
 }
 
 // Exec executes the query.
-func (fcb *FeatureCreateBulk) Exec(ctx context.Context) error {
-	_, err := fcb.Save(ctx)
+func (_c *FeatureCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (fcb *FeatureCreateBulk) ExecX(ctx context.Context) {
-	if err := fcb.Exec(ctx); err != nil {
+func (_c *FeatureCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

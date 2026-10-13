@@ -11,13 +11,16 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
-	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // ExportActivity handles the actual export operations
@@ -36,6 +39,7 @@ type ExportActivity struct {
 	usageAnalyticsGetter     syncExport.UsageAnalyticsGetter
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
+	revenueFactRepo          revenuefact.Repository
 }
 
 // NewExportActivity creates a new export activity
@@ -54,6 +58,7 @@ func NewExportActivity(
 	usageAnalyticsGetter syncExport.UsageAnalyticsGetter,
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
+	revenueFactRepo revenuefact.Repository,
 ) *ExportActivity {
 	return &ExportActivity{
 		meterUsageRepo:           meterUsageRepo,
@@ -70,6 +75,7 @@ func NewExportActivity(
 		usageAnalyticsGetter:     usageAnalyticsGetter,
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
+		revenueFactRepo:          revenueFactRepo,
 	}
 }
 
@@ -116,10 +122,13 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo)
+	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
+		if ierr.IsValidation(err) {
+			return nil, temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
+		}
 		return nil, err
 	}
 

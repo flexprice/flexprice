@@ -827,3 +827,150 @@ the bytes shipped — the workloads and the migration Job all resolve through he
 {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+flexprice.gceIngressName — object name for the parallel GCE Ingress stack.
+
+One name is shared by the Ingress, its Service, BackendConfig and FrontendConfig,
+because they are a single unit and a mismatch between them is the common failure
+(a BackendConfig the Service does not reference is silently ignored).
+
+Defaults to "<fullname>-api-gce". nameOverride pins it exactly.
+
+Matching an existing object's name is necessary but NOT sufficient to take it
+over: Helm rejects resources lacking its ownership metadata
+("missing key app.kubernetes.io/managed-by"), so objects created with kubectl
+must be labelled and annotated first or deleted. See the nameOverride comment in
+values.yaml. A name mismatch is worse than either -- it creates a SECOND load
+balancer and orphans the original.
+*/}}
+{{- define "flexprice.gceIngressName" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.nameOverride -}}
+{{ $gce.nameOverride }}
+{{- else -}}
+{{ printf "%s-api-%s" (include "flexprice.fullname" .) $gce.nameSuffix }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressHosts — hostnames the parallel GCE Ingress serves, as a
+YAML array. Defaults to the hosts already under ingress.hosts, so the parallel
+Defaults to ingress.hosts; ingress.gce.hosts overrides.
+*/}}
+{{- define "flexprice.gceIngressHosts" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.hosts -}}
+{{- range $gce.hosts }}
+{{- if kindIs "string" . }}
+- {{ . }}
+{{- else }}
+- {{ .host }}
+{{- end }}
+{{- end }}
+{{- else -}}
+{{ range .Values.ingress.hosts }}
+- {{ .host }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressRules — host/path structures for the parallel GCE Ingress.
+
+An ingress.gce.hosts entry may be a bare hostname or a map with paths. Bare
+hostnames yield one /* path to the parallel api Service, matching the shape
+before per-path backends existed.
+*/}}
+{{- define "flexprice.gceIngressRules" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- $svc := ternary (include "flexprice.gceIngressName" .) (printf "%s-api" (include "flexprice.fullname" .)) $gce.ownService }}
+{{- $port := .Values.service.port }}
+{{- $default := list (dict "path" "/*" "pathType" "ImplementationSpecific" "service" $svc "port" $port) }}
+{{- if $gce.hosts }}
+{{- range $gce.hosts }}
+{{- if kindIs "string" . }}
+- host: {{ . }}
+  paths:
+{{ toYaml $default | indent 4 }}
+{{- else }}
+- host: {{ .host }}
+  paths:
+{{- if .paths }}
+{{- range .paths }}
+    - path: {{ .path | default "/*" }}
+      pathType: {{ .pathType | default "ImplementationSpecific" }}
+      service: {{ .service | default $svc }}
+      port: {{ .port | default $port }}
+{{- end }}
+{{- else }}
+{{ toYaml $default | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- else }}
+{{- range .Values.ingress.hosts }}
+- host: {{ .host }}
+  paths:
+{{ toYaml $default | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressSecretName — TLS secret for the parallel GCE Ingress.
+
+Separate from the chart Ingress's secret by default. Sharing it would couple this
+load balancer's TLS renewal to the nginx Ingress's lifecycle; see
+ingress-gce/certificate.yaml.
+*/}}
+{{- define "flexprice.gceIngressSecretName" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.tls.secretName -}}
+{{ $gce.tls.secretName }}
+{{- else -}}
+{{ printf "%s-tls" (include "flexprice.gceIngressName" .) }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gceIngressCertName — Certificate / ManagedCertificate object name.
+Independent of the secret name so an out-of-band certificate can be adopted.
+*/}}
+{{- define "flexprice.gceIngressCertName" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.tls.certificateName -}}
+{{ $gce.tls.certificateName }}
+{{- else -}}
+{{ include "flexprice.gceIngressName" . }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+flexprice.gce — the GCE options under ingress.gce.
+*/}}
+{{- define "flexprice.gce" -}}
+{{- if .Values.gceIngress -}}
+{{- fail "gceIngress was removed. Move these values under ingress.gce." -}}
+{{- end -}}
+{{- toYaml ((.Values.ingress | default dict).gce | default dict) -}}
+{{- end -}}
+
+{{/*
+flexprice.ingressType — the effective ingress flavor: "nginx" or "gce".
+*/}}
+{{- define "flexprice.ingressType" -}}
+{{ .Values.ingress.type | default "nginx" }}
+{{- end -}}
+
+{{/*
+flexprice.gceParallelEnabled — whether the GCE objects render.
+*/}}
+{{- define "flexprice.gceParallelEnabled" -}}
+{{- $gce := fromYaml (include "flexprice.gce" .) -}}
+{{- if $gce.enabled -}}
+true
+{{- else if eq (.Values.ingress.type | default "") "gce" -}}
+true
+{{- end -}}
+{{- end -}}

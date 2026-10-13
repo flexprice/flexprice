@@ -73,7 +73,7 @@ func NewClient(
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
 		logger:            logger,
-		httpClient:        httpclient.NewDefaultClient(),
+		httpClient:        httpclient.NewProviderClient(logger, string(types.SecretProviderHubSpot)),
 	}
 }
 

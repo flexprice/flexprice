@@ -28,40 +28,40 @@ type IncomingWebhookEventQuery struct {
 }
 
 // Where adds a new predicate for the IncomingWebhookEventQuery builder.
-func (iweq *IncomingWebhookEventQuery) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventQuery {
-	iweq.predicates = append(iweq.predicates, ps...)
-	return iweq
+func (_q *IncomingWebhookEventQuery) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (iweq *IncomingWebhookEventQuery) Limit(limit int) *IncomingWebhookEventQuery {
-	iweq.ctx.Limit = &limit
-	return iweq
+func (_q *IncomingWebhookEventQuery) Limit(limit int) *IncomingWebhookEventQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (iweq *IncomingWebhookEventQuery) Offset(offset int) *IncomingWebhookEventQuery {
-	iweq.ctx.Offset = &offset
-	return iweq
+func (_q *IncomingWebhookEventQuery) Offset(offset int) *IncomingWebhookEventQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (iweq *IncomingWebhookEventQuery) Unique(unique bool) *IncomingWebhookEventQuery {
-	iweq.ctx.Unique = &unique
-	return iweq
+func (_q *IncomingWebhookEventQuery) Unique(unique bool) *IncomingWebhookEventQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (iweq *IncomingWebhookEventQuery) Order(o ...incomingwebhookevent.OrderOption) *IncomingWebhookEventQuery {
-	iweq.order = append(iweq.order, o...)
-	return iweq
+func (_q *IncomingWebhookEventQuery) Order(o ...incomingwebhookevent.OrderOption) *IncomingWebhookEventQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first IncomingWebhookEvent entity from the query.
 // Returns a *NotFoundError when no IncomingWebhookEvent was found.
-func (iweq *IncomingWebhookEventQuery) First(ctx context.Context) (*IncomingWebhookEvent, error) {
-	nodes, err := iweq.Limit(1).All(setContextOp(ctx, iweq.ctx, ent.OpQueryFirst))
+func (_q *IncomingWebhookEventQuery) First(ctx context.Context) (*IncomingWebhookEvent, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (iweq *IncomingWebhookEventQuery) First(ctx context.Context) (*IncomingWebh
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) FirstX(ctx context.Context) *IncomingWebhookEvent {
-	node, err := iweq.First(ctx)
+func (_q *IncomingWebhookEventQuery) FirstX(ctx context.Context) *IncomingWebhookEvent {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (iweq *IncomingWebhookEventQuery) FirstX(ctx context.Context) *IncomingWebh
 
 // FirstID returns the first IncomingWebhookEvent ID from the query.
 // Returns a *NotFoundError when no IncomingWebhookEvent ID was found.
-func (iweq *IncomingWebhookEventQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *IncomingWebhookEventQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = iweq.Limit(1).IDs(setContextOp(ctx, iweq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (iweq *IncomingWebhookEventQuery) FirstID(ctx context.Context) (id string, 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) FirstIDX(ctx context.Context) string {
-	id, err := iweq.FirstID(ctx)
+func (_q *IncomingWebhookEventQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (iweq *IncomingWebhookEventQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single IncomingWebhookEvent entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one IncomingWebhookEvent entity is found.
 // Returns a *NotFoundError when no IncomingWebhookEvent entities are found.
-func (iweq *IncomingWebhookEventQuery) Only(ctx context.Context) (*IncomingWebhookEvent, error) {
-	nodes, err := iweq.Limit(2).All(setContextOp(ctx, iweq.ctx, ent.OpQueryOnly))
+func (_q *IncomingWebhookEventQuery) Only(ctx context.Context) (*IncomingWebhookEvent, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (iweq *IncomingWebhookEventQuery) Only(ctx context.Context) (*IncomingWebho
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) OnlyX(ctx context.Context) *IncomingWebhookEvent {
-	node, err := iweq.Only(ctx)
+func (_q *IncomingWebhookEventQuery) OnlyX(ctx context.Context) *IncomingWebhookEvent {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (iweq *IncomingWebhookEventQuery) OnlyX(ctx context.Context) *IncomingWebho
 // OnlyID is like Only, but returns the only IncomingWebhookEvent ID in the query.
 // Returns a *NotSingularError when more than one IncomingWebhookEvent ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (iweq *IncomingWebhookEventQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *IncomingWebhookEventQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = iweq.Limit(2).IDs(setContextOp(ctx, iweq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (iweq *IncomingWebhookEventQuery) OnlyID(ctx context.Context) (id string, e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) OnlyIDX(ctx context.Context) string {
-	id, err := iweq.OnlyID(ctx)
+func (_q *IncomingWebhookEventQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (iweq *IncomingWebhookEventQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of IncomingWebhookEvents.
-func (iweq *IncomingWebhookEventQuery) All(ctx context.Context) ([]*IncomingWebhookEvent, error) {
-	ctx = setContextOp(ctx, iweq.ctx, ent.OpQueryAll)
-	if err := iweq.prepareQuery(ctx); err != nil {
+func (_q *IncomingWebhookEventQuery) All(ctx context.Context) ([]*IncomingWebhookEvent, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*IncomingWebhookEvent, *IncomingWebhookEventQuery]()
-	return withInterceptors[[]*IncomingWebhookEvent](ctx, iweq, qr, iweq.inters)
+	return withInterceptors[[]*IncomingWebhookEvent](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) AllX(ctx context.Context) []*IncomingWebhookEvent {
-	nodes, err := iweq.All(ctx)
+func (_q *IncomingWebhookEventQuery) AllX(ctx context.Context) []*IncomingWebhookEvent {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (iweq *IncomingWebhookEventQuery) AllX(ctx context.Context) []*IncomingWebh
 }
 
 // IDs executes the query and returns a list of IncomingWebhookEvent IDs.
-func (iweq *IncomingWebhookEventQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if iweq.ctx.Unique == nil && iweq.path != nil {
-		iweq.Unique(true)
+func (_q *IncomingWebhookEventQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, iweq.ctx, ent.OpQueryIDs)
-	if err = iweq.Select(incomingwebhookevent.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(incomingwebhookevent.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) IDsX(ctx context.Context) []string {
-	ids, err := iweq.IDs(ctx)
+func (_q *IncomingWebhookEventQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (iweq *IncomingWebhookEventQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (iweq *IncomingWebhookEventQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, iweq.ctx, ent.OpQueryCount)
-	if err := iweq.prepareQuery(ctx); err != nil {
+func (_q *IncomingWebhookEventQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, iweq, querierCount[*IncomingWebhookEventQuery](), iweq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*IncomingWebhookEventQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) CountX(ctx context.Context) int {
-	count, err := iweq.Count(ctx)
+func (_q *IncomingWebhookEventQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (iweq *IncomingWebhookEventQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (iweq *IncomingWebhookEventQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, iweq.ctx, ent.OpQueryExist)
-	switch _, err := iweq.FirstID(ctx); {
+func (_q *IncomingWebhookEventQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (iweq *IncomingWebhookEventQuery) Exist(ctx context.Context) (bool, error) 
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (iweq *IncomingWebhookEventQuery) ExistX(ctx context.Context) bool {
-	exist, err := iweq.Exist(ctx)
+func (_q *IncomingWebhookEventQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (iweq *IncomingWebhookEventQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the IncomingWebhookEventQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (iweq *IncomingWebhookEventQuery) Clone() *IncomingWebhookEventQuery {
-	if iweq == nil {
+func (_q *IncomingWebhookEventQuery) Clone() *IncomingWebhookEventQuery {
+	if _q == nil {
 		return nil
 	}
 	return &IncomingWebhookEventQuery{
-		config:     iweq.config,
-		ctx:        iweq.ctx.Clone(),
-		order:      append([]incomingwebhookevent.OrderOption{}, iweq.order...),
-		inters:     append([]Interceptor{}, iweq.inters...),
-		predicates: append([]predicate.IncomingWebhookEvent{}, iweq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]incomingwebhookevent.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.IncomingWebhookEvent{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  iweq.sql.Clone(),
-		path: iweq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (iweq *IncomingWebhookEventQuery) Clone() *IncomingWebhookEventQuery {
 //		GroupBy(incomingwebhookevent.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (iweq *IncomingWebhookEventQuery) GroupBy(field string, fields ...string) *IncomingWebhookEventGroupBy {
-	iweq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &IncomingWebhookEventGroupBy{build: iweq}
-	grbuild.flds = &iweq.ctx.Fields
+func (_q *IncomingWebhookEventQuery) GroupBy(field string, fields ...string) *IncomingWebhookEventGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &IncomingWebhookEventGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = incomingwebhookevent.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (iweq *IncomingWebhookEventQuery) GroupBy(field string, fields ...string) *
 //	client.IncomingWebhookEvent.Query().
 //		Select(incomingwebhookevent.FieldTenantID).
 //		Scan(ctx, &v)
-func (iweq *IncomingWebhookEventQuery) Select(fields ...string) *IncomingWebhookEventSelect {
-	iweq.ctx.Fields = append(iweq.ctx.Fields, fields...)
-	sbuild := &IncomingWebhookEventSelect{IncomingWebhookEventQuery: iweq}
+func (_q *IncomingWebhookEventQuery) Select(fields ...string) *IncomingWebhookEventSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &IncomingWebhookEventSelect{IncomingWebhookEventQuery: _q}
 	sbuild.label = incomingwebhookevent.Label
-	sbuild.flds, sbuild.scan = &iweq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a IncomingWebhookEventSelect configured with the given aggregations.
-func (iweq *IncomingWebhookEventQuery) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventSelect {
-	return iweq.Select().Aggregate(fns...)
+func (_q *IncomingWebhookEventQuery) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (iweq *IncomingWebhookEventQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range iweq.inters {
+func (_q *IncomingWebhookEventQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, iweq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range iweq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !incomingwebhookevent.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if iweq.path != nil {
-		prev, err := iweq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		iweq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (iweq *IncomingWebhookEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*IncomingWebhookEvent, error) {
+func (_q *IncomingWebhookEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*IncomingWebhookEvent, error) {
 	var (
 		nodes = []*IncomingWebhookEvent{}
-		_spec = iweq.querySpec()
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*IncomingWebhookEvent).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &IncomingWebhookEvent{config: iweq.config}
+		node := &IncomingWebhookEvent{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, iweq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (iweq *IncomingWebhookEventQuery) sqlAll(ctx context.Context, hooks ...quer
 	return nodes, nil
 }
 
-func (iweq *IncomingWebhookEventQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := iweq.querySpec()
-	_spec.Node.Columns = iweq.ctx.Fields
-	if len(iweq.ctx.Fields) > 0 {
-		_spec.Unique = iweq.ctx.Unique != nil && *iweq.ctx.Unique
+func (_q *IncomingWebhookEventQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, iweq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (iweq *IncomingWebhookEventQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *IncomingWebhookEventQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(incomingwebhookevent.Table, incomingwebhookevent.Columns, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
-	_spec.From = iweq.sql
-	if unique := iweq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if iweq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := iweq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, incomingwebhookevent.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (iweq *IncomingWebhookEventQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := iweq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := iweq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := iweq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := iweq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (iweq *IncomingWebhookEventQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (iweq *IncomingWebhookEventQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(iweq.driver.Dialect())
+func (_q *IncomingWebhookEventQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(incomingwebhookevent.Table)
-	columns := iweq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = incomingwebhookevent.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if iweq.sql != nil {
-		selector = iweq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if iweq.ctx.Unique != nil && *iweq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range iweq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range iweq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := iweq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := iweq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type IncomingWebhookEventGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (iwegb *IncomingWebhookEventGroupBy) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventGroupBy {
-	iwegb.fns = append(iwegb.fns, fns...)
-	return iwegb
+func (_g *IncomingWebhookEventGroupBy) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (iwegb *IncomingWebhookEventGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, iwegb.build.ctx, ent.OpQueryGroupBy)
-	if err := iwegb.build.prepareQuery(ctx); err != nil {
+func (_g *IncomingWebhookEventGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*IncomingWebhookEventQuery, *IncomingWebhookEventGroupBy](ctx, iwegb.build, iwegb, iwegb.build.inters, v)
+	return scanWithInterceptors[*IncomingWebhookEventQuery, *IncomingWebhookEventGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (iwegb *IncomingWebhookEventGroupBy) sqlScan(ctx context.Context, root *IncomingWebhookEventQuery, v any) error {
+func (_g *IncomingWebhookEventGroupBy) sqlScan(ctx context.Context, root *IncomingWebhookEventQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(iwegb.fns))
-	for _, fn := range iwegb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*iwegb.flds)+len(iwegb.fns))
-		for _, f := range *iwegb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*iwegb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := iwegb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type IncomingWebhookEventSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (iwes *IncomingWebhookEventSelect) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventSelect {
-	iwes.fns = append(iwes.fns, fns...)
-	return iwes
+func (_s *IncomingWebhookEventSelect) Aggregate(fns ...AggregateFunc) *IncomingWebhookEventSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (iwes *IncomingWebhookEventSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, iwes.ctx, ent.OpQuerySelect)
-	if err := iwes.prepareQuery(ctx); err != nil {
+func (_s *IncomingWebhookEventSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*IncomingWebhookEventQuery, *IncomingWebhookEventSelect](ctx, iwes.IncomingWebhookEventQuery, iwes, iwes.inters, v)
+	return scanWithInterceptors[*IncomingWebhookEventQuery, *IncomingWebhookEventSelect](ctx, _s.IncomingWebhookEventQuery, _s, _s.inters, v)
 }
 
-func (iwes *IncomingWebhookEventSelect) sqlScan(ctx context.Context, root *IncomingWebhookEventQuery, v any) error {
+func (_s *IncomingWebhookEventSelect) sqlScan(ctx context.Context, root *IncomingWebhookEventQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(iwes.fns))
-	for _, fn := range iwes.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*iwes.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (iwes *IncomingWebhookEventSelect) sqlScan(ctx context.Context, root *Incom
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := iwes.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

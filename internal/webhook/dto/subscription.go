@@ -3,6 +3,8 @@ package webhookDto
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -20,6 +22,7 @@ type InternalSubscriptionEvent struct {
 type Subscription struct {
 	ID                   string                   `json:"id"`
 	CustomerID           string                   `json:"customer_id"`
+	InvoicingCustomerID  *string                  `json:"invoicing_customer_id,omitempty"`
 	PlanID               string                   `json:"plan_id"`
 	LookupKey            string                   `json:"lookup_key,omitempty"`
 	SubscriptionStatus   types.SubscriptionStatus `json:"subscription_status"`
@@ -41,6 +44,35 @@ type Subscription struct {
 	ParentSubscriptionID *string                  `json:"parent_subscription_id,omitempty"`
 	Metadata             types.Metadata           `json:"metadata,omitempty"`
 	Customer             *Customer                `json:"customer,omitempty"`
+
+	// Plan, LineItems and CouponAssociations are populated only on the invoice
+	// webhook (newInvoiceSubscription), where a consumer needs to price a line.
+	Plan               *Plan                   `json:"plan,omitempty"`
+	LineItems          []*SubscriptionLineItem `json:"line_items,omitempty"`
+	CouponAssociations []*CouponAssociation    `json:"coupon_associations,omitempty"`
+}
+
+type SubscriptionLineItem struct {
+	ID                 string                               `json:"id"`
+	SubscriptionID     string                               `json:"subscription_id"`
+	EntityID           string                               `json:"entity_id,omitempty"`
+	EntityType         types.SubscriptionLineItemEntityType `json:"entity_type,omitempty"`
+	PlanDisplayName    string                               `json:"plan_display_name,omitempty"`
+	PriceID            string                               `json:"price_id"`
+	PriceType          types.PriceType                      `json:"price_type,omitempty"`
+	MeterID            string                               `json:"meter_id,omitempty"`
+	MeterDisplayName   string                               `json:"meter_display_name,omitempty"`
+	DisplayName        string                               `json:"display_name,omitempty"`
+	Quantity           decimal.Decimal                      `json:"quantity" swaggertype:"string"`
+	Currency           string                               `json:"currency"`
+	BillingPeriod      types.BillingPeriod                  `json:"billing_period"`
+	BillingPeriodCount int                                  `json:"billing_period_count"`
+	InvoiceCadence     types.InvoiceCadence                 `json:"invoice_cadence,omitempty"`
+	StartDate          time.Time                            `json:"start_date,omitempty"`
+	EndDate            time.Time                            `json:"end_date,omitempty"`
+	PriceUnit          *string                              `json:"price_unit,omitempty"`
+	Metadata           map[string]string                    `json:"metadata,omitempty"`
+	Price              *Price                               `json:"price,omitempty"`
 }
 
 func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
@@ -50,6 +82,7 @@ func NewSubscription(resp *dto.SubscriptionResponse) *Subscription {
 	return &Subscription{
 		ID:                   resp.ID,
 		CustomerID:           resp.CustomerID,
+		InvoicingCustomerID:  resp.InvoicingCustomerID,
 		PlanID:               resp.PlanID,
 		LookupKey:            resp.LookupKey,
 		SubscriptionStatus:   resp.SubscriptionStatus,
@@ -81,6 +114,7 @@ func NewSubscriptionFromV2(resp *dto.SubscriptionResponseV2) *Subscription {
 	return &Subscription{
 		ID:                   resp.ID,
 		CustomerID:           resp.CustomerID,
+		InvoicingCustomerID:  resp.InvoicingCustomerID,
 		PlanID:               resp.PlanID,
 		LookupKey:            resp.LookupKey,
 		SubscriptionStatus:   resp.SubscriptionStatus,

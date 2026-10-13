@@ -61,10 +61,12 @@ func TestValidate_QuotaAndUsageSigns(t *testing.T) {
 		t.Fatalf("negative quota should be rejected")
 	}
 
+	// Zero is a deliberate state: the successor of a spent pool carries no balance
+	// and exists only to hold the slot on a live config.
 	g = baseGrant()
 	g.Quota = decimal.Zero
-	if err := g.Validate(); err == nil {
-		t.Fatalf("zero quota should be rejected — grants must be positive")
+	if err := g.Validate(); err != nil {
+		t.Fatalf("zero quota must be accepted: %v", err)
 	}
 
 	g = baseGrant()
@@ -116,15 +118,15 @@ func TestOverage(t *testing.T) {
 func TestIsExhausted(t *testing.T) {
 	g := baseGrant()
 	g.Usage = decimal.NewFromInt(99)
-	if g.IsExhausted() {
+	if g.IsExhausted(g.Usage) {
 		t.Fatalf("99/100 should not be exhausted")
 	}
 	g.Usage = decimal.NewFromInt(100)
-	if !g.IsExhausted() {
+	if !g.IsExhausted(g.Usage) {
 		t.Fatalf("100/100 should be exhausted")
 	}
 	g.Usage = decimal.NewFromInt(101)
-	if !g.IsExhausted() {
+	if !g.IsExhausted(g.Usage) {
 		t.Fatalf("101/100 should be exhausted")
 	}
 }

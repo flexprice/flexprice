@@ -25,159 +25,173 @@ type EntitlementGrantUpdate struct {
 }
 
 // Where appends a list predicates to the EntitlementGrantUpdate builder.
-func (egu *EntitlementGrantUpdate) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantUpdate {
-	egu.mutation.Where(ps...)
-	return egu
+func (_u *EntitlementGrantUpdate) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (egu *EntitlementGrantUpdate) SetStatus(s string) *EntitlementGrantUpdate {
-	egu.mutation.SetStatus(s)
-	return egu
+func (_u *EntitlementGrantUpdate) SetStatus(v string) *EntitlementGrantUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableStatus(s *string) *EntitlementGrantUpdate {
-	if s != nil {
-		egu.SetStatus(*s)
+func (_u *EntitlementGrantUpdate) SetNillableStatus(v *string) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return egu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (egu *EntitlementGrantUpdate) SetUpdatedAt(t time.Time) *EntitlementGrantUpdate {
-	egu.mutation.SetUpdatedAt(t)
-	return egu
+func (_u *EntitlementGrantUpdate) SetUpdatedAt(v time.Time) *EntitlementGrantUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (egu *EntitlementGrantUpdate) SetUpdatedBy(s string) *EntitlementGrantUpdate {
-	egu.mutation.SetUpdatedBy(s)
-	return egu
+func (_u *EntitlementGrantUpdate) SetUpdatedBy(v string) *EntitlementGrantUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableUpdatedBy(s *string) *EntitlementGrantUpdate {
-	if s != nil {
-		egu.SetUpdatedBy(*s)
+func (_u *EntitlementGrantUpdate) SetNillableUpdatedBy(v *string) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return egu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (egu *EntitlementGrantUpdate) ClearUpdatedBy() *EntitlementGrantUpdate {
-	egu.mutation.ClearUpdatedBy()
-	return egu
+func (_u *EntitlementGrantUpdate) ClearUpdatedBy() *EntitlementGrantUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
+}
+
+// SetUnlimited sets the "unlimited" field.
+func (_u *EntitlementGrantUpdate) SetUnlimited(v bool) *EntitlementGrantUpdate {
+	_u.mutation.SetUnlimited(v)
+	return _u
+}
+
+// SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
+func (_u *EntitlementGrantUpdate) SetNillableUnlimited(v *bool) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetUnlimited(*v)
+	}
+	return _u
 }
 
 // SetUsage sets the "usage" field.
-func (egu *EntitlementGrantUpdate) SetUsage(d decimal.Decimal) *EntitlementGrantUpdate {
-	egu.mutation.SetUsage(d)
-	return egu
+func (_u *EntitlementGrantUpdate) SetUsage(v decimal.Decimal) *EntitlementGrantUpdate {
+	_u.mutation.SetUsage(v)
+	return _u
 }
 
 // SetNillableUsage sets the "usage" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableUsage(d *decimal.Decimal) *EntitlementGrantUpdate {
-	if d != nil {
-		egu.SetUsage(*d)
+func (_u *EntitlementGrantUpdate) SetNillableUsage(v *decimal.Decimal) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetUsage(*v)
 	}
-	return egu
+	return _u
 }
 
 // SetValidTo sets the "valid_to" field.
-func (egu *EntitlementGrantUpdate) SetValidTo(t time.Time) *EntitlementGrantUpdate {
-	egu.mutation.SetValidTo(t)
-	return egu
+func (_u *EntitlementGrantUpdate) SetValidTo(v time.Time) *EntitlementGrantUpdate {
+	_u.mutation.SetValidTo(v)
+	return _u
 }
 
 // SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableValidTo(t *time.Time) *EntitlementGrantUpdate {
-	if t != nil {
-		egu.SetValidTo(*t)
+func (_u *EntitlementGrantUpdate) SetNillableValidTo(v *time.Time) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetValidTo(*v)
 	}
-	return egu
+	return _u
 }
 
 // SetGrantStatus sets the "grant_status" field.
-func (egu *EntitlementGrantUpdate) SetGrantStatus(tgs types.EntitlementGrantStatus) *EntitlementGrantUpdate {
-	egu.mutation.SetGrantStatus(tgs)
-	return egu
+func (_u *EntitlementGrantUpdate) SetGrantStatus(v types.EntitlementGrantStatus) *EntitlementGrantUpdate {
+	_u.mutation.SetGrantStatus(v)
+	return _u
 }
 
 // SetNillableGrantStatus sets the "grant_status" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableGrantStatus(tgs *types.EntitlementGrantStatus) *EntitlementGrantUpdate {
-	if tgs != nil {
-		egu.SetGrantStatus(*tgs)
+func (_u *EntitlementGrantUpdate) SetNillableGrantStatus(v *types.EntitlementGrantStatus) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetGrantStatus(*v)
 	}
-	return egu
+	return _u
 }
 
 // SetLastComputedAt sets the "last_computed_at" field.
-func (egu *EntitlementGrantUpdate) SetLastComputedAt(t time.Time) *EntitlementGrantUpdate {
-	egu.mutation.SetLastComputedAt(t)
-	return egu
+func (_u *EntitlementGrantUpdate) SetLastComputedAt(v time.Time) *EntitlementGrantUpdate {
+	_u.mutation.SetLastComputedAt(v)
+	return _u
 }
 
 // SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableLastComputedAt(t *time.Time) *EntitlementGrantUpdate {
-	if t != nil {
-		egu.SetLastComputedAt(*t)
+func (_u *EntitlementGrantUpdate) SetNillableLastComputedAt(v *time.Time) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetLastComputedAt(*v)
 	}
-	return egu
+	return _u
 }
 
 // ClearLastComputedAt clears the value of the "last_computed_at" field.
-func (egu *EntitlementGrantUpdate) ClearLastComputedAt() *EntitlementGrantUpdate {
-	egu.mutation.ClearLastComputedAt()
-	return egu
+func (_u *EntitlementGrantUpdate) ClearLastComputedAt() *EntitlementGrantUpdate {
+	_u.mutation.ClearLastComputedAt()
+	return _u
 }
 
 // SetQuotaCrossedAt sets the "quota_crossed_at" field.
-func (egu *EntitlementGrantUpdate) SetQuotaCrossedAt(t time.Time) *EntitlementGrantUpdate {
-	egu.mutation.SetQuotaCrossedAt(t)
-	return egu
+func (_u *EntitlementGrantUpdate) SetQuotaCrossedAt(v time.Time) *EntitlementGrantUpdate {
+	_u.mutation.SetQuotaCrossedAt(v)
+	return _u
 }
 
 // SetNillableQuotaCrossedAt sets the "quota_crossed_at" field if the given value is not nil.
-func (egu *EntitlementGrantUpdate) SetNillableQuotaCrossedAt(t *time.Time) *EntitlementGrantUpdate {
-	if t != nil {
-		egu.SetQuotaCrossedAt(*t)
+func (_u *EntitlementGrantUpdate) SetNillableQuotaCrossedAt(v *time.Time) *EntitlementGrantUpdate {
+	if v != nil {
+		_u.SetQuotaCrossedAt(*v)
 	}
-	return egu
+	return _u
 }
 
 // ClearQuotaCrossedAt clears the value of the "quota_crossed_at" field.
-func (egu *EntitlementGrantUpdate) ClearQuotaCrossedAt() *EntitlementGrantUpdate {
-	egu.mutation.ClearQuotaCrossedAt()
-	return egu
+func (_u *EntitlementGrantUpdate) ClearQuotaCrossedAt() *EntitlementGrantUpdate {
+	_u.mutation.ClearQuotaCrossedAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (egu *EntitlementGrantUpdate) SetMetadata(t types.Metadata) *EntitlementGrantUpdate {
-	egu.mutation.SetMetadata(t)
-	return egu
+func (_u *EntitlementGrantUpdate) SetMetadata(v types.Metadata) *EntitlementGrantUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (egu *EntitlementGrantUpdate) ClearMetadata() *EntitlementGrantUpdate {
-	egu.mutation.ClearMetadata()
-	return egu
+func (_u *EntitlementGrantUpdate) ClearMetadata() *EntitlementGrantUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the EntitlementGrantMutation object of the builder.
-func (egu *EntitlementGrantUpdate) Mutation() *EntitlementGrantMutation {
-	return egu.mutation
+func (_u *EntitlementGrantUpdate) Mutation() *EntitlementGrantMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (egu *EntitlementGrantUpdate) Save(ctx context.Context) (int, error) {
-	egu.defaults()
-	return withHooks(ctx, egu.sqlSave, egu.mutation, egu.hooks)
+func (_u *EntitlementGrantUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (egu *EntitlementGrantUpdate) SaveX(ctx context.Context) int {
-	affected, err := egu.Save(ctx)
+func (_u *EntitlementGrantUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -185,81 +199,84 @@ func (egu *EntitlementGrantUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (egu *EntitlementGrantUpdate) Exec(ctx context.Context) error {
-	_, err := egu.Save(ctx)
+func (_u *EntitlementGrantUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (egu *EntitlementGrantUpdate) ExecX(ctx context.Context) {
-	if err := egu.Exec(ctx); err != nil {
+func (_u *EntitlementGrantUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (egu *EntitlementGrantUpdate) defaults() {
-	if _, ok := egu.mutation.UpdatedAt(); !ok {
+func (_u *EntitlementGrantUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entitlementgrant.UpdateDefaultUpdatedAt()
-		egu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *EntitlementGrantUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(entitlementgrant.Table, entitlementgrant.Columns, sqlgraph.NewFieldSpec(entitlementgrant.FieldID, field.TypeString))
-	if ps := egu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := egu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entitlementgrant.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := egu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if egu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entitlementgrant.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := egu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedBy, field.TypeString, value)
 	}
-	if egu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entitlementgrant.FieldUpdatedBy, field.TypeString)
 	}
-	if egu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := egu.mutation.Usage(); ok {
+	if value, ok := _u.mutation.Unlimited(); ok {
+		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
-	if value, ok := egu.mutation.ValidTo(); ok {
+	if value, ok := _u.mutation.ValidTo(); ok {
 		_spec.SetField(entitlementgrant.FieldValidTo, field.TypeTime, value)
 	}
-	if value, ok := egu.mutation.GrantStatus(); ok {
+	if value, ok := _u.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
 	}
-	if value, ok := egu.mutation.LastComputedAt(); ok {
+	if value, ok := _u.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)
 	}
-	if egu.mutation.LastComputedAtCleared() {
+	if _u.mutation.LastComputedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldLastComputedAt, field.TypeTime)
 	}
-	if value, ok := egu.mutation.QuotaCrossedAt(); ok {
+	if value, ok := _u.mutation.QuotaCrossedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime, value)
 	}
-	if egu.mutation.QuotaCrossedAtCleared() {
+	if _u.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
 	}
-	if value, ok := egu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
 	}
-	if egu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, egu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entitlementgrant.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -267,8 +284,8 @@ func (egu *EntitlementGrantUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		return 0, err
 	}
-	egu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // EntitlementGrantUpdateOne is the builder for updating a single EntitlementGrant entity.
@@ -280,166 +297,180 @@ type EntitlementGrantUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (eguo *EntitlementGrantUpdateOne) SetStatus(s string) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetStatus(s)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetStatus(v string) *EntitlementGrantUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableStatus(s *string) *EntitlementGrantUpdateOne {
-	if s != nil {
-		eguo.SetStatus(*s)
+func (_u *EntitlementGrantUpdateOne) SetNillableStatus(v *string) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return eguo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (eguo *EntitlementGrantUpdateOne) SetUpdatedAt(t time.Time) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetUpdatedAt(t)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetUpdatedAt(v time.Time) *EntitlementGrantUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (eguo *EntitlementGrantUpdateOne) SetUpdatedBy(s string) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetUpdatedBy(s)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetUpdatedBy(v string) *EntitlementGrantUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableUpdatedBy(s *string) *EntitlementGrantUpdateOne {
-	if s != nil {
-		eguo.SetUpdatedBy(*s)
+func (_u *EntitlementGrantUpdateOne) SetNillableUpdatedBy(v *string) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return eguo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (eguo *EntitlementGrantUpdateOne) ClearUpdatedBy() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearUpdatedBy()
-	return eguo
+func (_u *EntitlementGrantUpdateOne) ClearUpdatedBy() *EntitlementGrantUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
+}
+
+// SetUnlimited sets the "unlimited" field.
+func (_u *EntitlementGrantUpdateOne) SetUnlimited(v bool) *EntitlementGrantUpdateOne {
+	_u.mutation.SetUnlimited(v)
+	return _u
+}
+
+// SetNillableUnlimited sets the "unlimited" field if the given value is not nil.
+func (_u *EntitlementGrantUpdateOne) SetNillableUnlimited(v *bool) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetUnlimited(*v)
+	}
+	return _u
 }
 
 // SetUsage sets the "usage" field.
-func (eguo *EntitlementGrantUpdateOne) SetUsage(d decimal.Decimal) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetUsage(d)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetUsage(v decimal.Decimal) *EntitlementGrantUpdateOne {
+	_u.mutation.SetUsage(v)
+	return _u
 }
 
 // SetNillableUsage sets the "usage" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableUsage(d *decimal.Decimal) *EntitlementGrantUpdateOne {
-	if d != nil {
-		eguo.SetUsage(*d)
+func (_u *EntitlementGrantUpdateOne) SetNillableUsage(v *decimal.Decimal) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetUsage(*v)
 	}
-	return eguo
+	return _u
 }
 
 // SetValidTo sets the "valid_to" field.
-func (eguo *EntitlementGrantUpdateOne) SetValidTo(t time.Time) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetValidTo(t)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetValidTo(v time.Time) *EntitlementGrantUpdateOne {
+	_u.mutation.SetValidTo(v)
+	return _u
 }
 
 // SetNillableValidTo sets the "valid_to" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableValidTo(t *time.Time) *EntitlementGrantUpdateOne {
-	if t != nil {
-		eguo.SetValidTo(*t)
+func (_u *EntitlementGrantUpdateOne) SetNillableValidTo(v *time.Time) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetValidTo(*v)
 	}
-	return eguo
+	return _u
 }
 
 // SetGrantStatus sets the "grant_status" field.
-func (eguo *EntitlementGrantUpdateOne) SetGrantStatus(tgs types.EntitlementGrantStatus) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetGrantStatus(tgs)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetGrantStatus(v types.EntitlementGrantStatus) *EntitlementGrantUpdateOne {
+	_u.mutation.SetGrantStatus(v)
+	return _u
 }
 
 // SetNillableGrantStatus sets the "grant_status" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableGrantStatus(tgs *types.EntitlementGrantStatus) *EntitlementGrantUpdateOne {
-	if tgs != nil {
-		eguo.SetGrantStatus(*tgs)
+func (_u *EntitlementGrantUpdateOne) SetNillableGrantStatus(v *types.EntitlementGrantStatus) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetGrantStatus(*v)
 	}
-	return eguo
+	return _u
 }
 
 // SetLastComputedAt sets the "last_computed_at" field.
-func (eguo *EntitlementGrantUpdateOne) SetLastComputedAt(t time.Time) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetLastComputedAt(t)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetLastComputedAt(v time.Time) *EntitlementGrantUpdateOne {
+	_u.mutation.SetLastComputedAt(v)
+	return _u
 }
 
 // SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableLastComputedAt(t *time.Time) *EntitlementGrantUpdateOne {
-	if t != nil {
-		eguo.SetLastComputedAt(*t)
+func (_u *EntitlementGrantUpdateOne) SetNillableLastComputedAt(v *time.Time) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetLastComputedAt(*v)
 	}
-	return eguo
+	return _u
 }
 
 // ClearLastComputedAt clears the value of the "last_computed_at" field.
-func (eguo *EntitlementGrantUpdateOne) ClearLastComputedAt() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearLastComputedAt()
-	return eguo
+func (_u *EntitlementGrantUpdateOne) ClearLastComputedAt() *EntitlementGrantUpdateOne {
+	_u.mutation.ClearLastComputedAt()
+	return _u
 }
 
 // SetQuotaCrossedAt sets the "quota_crossed_at" field.
-func (eguo *EntitlementGrantUpdateOne) SetQuotaCrossedAt(t time.Time) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetQuotaCrossedAt(t)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetQuotaCrossedAt(v time.Time) *EntitlementGrantUpdateOne {
+	_u.mutation.SetQuotaCrossedAt(v)
+	return _u
 }
 
 // SetNillableQuotaCrossedAt sets the "quota_crossed_at" field if the given value is not nil.
-func (eguo *EntitlementGrantUpdateOne) SetNillableQuotaCrossedAt(t *time.Time) *EntitlementGrantUpdateOne {
-	if t != nil {
-		eguo.SetQuotaCrossedAt(*t)
+func (_u *EntitlementGrantUpdateOne) SetNillableQuotaCrossedAt(v *time.Time) *EntitlementGrantUpdateOne {
+	if v != nil {
+		_u.SetQuotaCrossedAt(*v)
 	}
-	return eguo
+	return _u
 }
 
 // ClearQuotaCrossedAt clears the value of the "quota_crossed_at" field.
-func (eguo *EntitlementGrantUpdateOne) ClearQuotaCrossedAt() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearQuotaCrossedAt()
-	return eguo
+func (_u *EntitlementGrantUpdateOne) ClearQuotaCrossedAt() *EntitlementGrantUpdateOne {
+	_u.mutation.ClearQuotaCrossedAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (eguo *EntitlementGrantUpdateOne) SetMetadata(t types.Metadata) *EntitlementGrantUpdateOne {
-	eguo.mutation.SetMetadata(t)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) SetMetadata(v types.Metadata) *EntitlementGrantUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (eguo *EntitlementGrantUpdateOne) ClearMetadata() *EntitlementGrantUpdateOne {
-	eguo.mutation.ClearMetadata()
-	return eguo
+func (_u *EntitlementGrantUpdateOne) ClearMetadata() *EntitlementGrantUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the EntitlementGrantMutation object of the builder.
-func (eguo *EntitlementGrantUpdateOne) Mutation() *EntitlementGrantMutation {
-	return eguo.mutation
+func (_u *EntitlementGrantUpdateOne) Mutation() *EntitlementGrantMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the EntitlementGrantUpdate builder.
-func (eguo *EntitlementGrantUpdateOne) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantUpdateOne {
-	eguo.mutation.Where(ps...)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (eguo *EntitlementGrantUpdateOne) Select(field string, fields ...string) *EntitlementGrantUpdateOne {
-	eguo.fields = append([]string{field}, fields...)
-	return eguo
+func (_u *EntitlementGrantUpdateOne) Select(field string, fields ...string) *EntitlementGrantUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated EntitlementGrant entity.
-func (eguo *EntitlementGrantUpdateOne) Save(ctx context.Context) (*EntitlementGrant, error) {
-	eguo.defaults()
-	return withHooks(ctx, eguo.sqlSave, eguo.mutation, eguo.hooks)
+func (_u *EntitlementGrantUpdateOne) Save(ctx context.Context) (*EntitlementGrant, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (eguo *EntitlementGrantUpdateOne) SaveX(ctx context.Context) *EntitlementGrant {
-	node, err := eguo.Save(ctx)
+func (_u *EntitlementGrantUpdateOne) SaveX(ctx context.Context) *EntitlementGrant {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -447,34 +478,34 @@ func (eguo *EntitlementGrantUpdateOne) SaveX(ctx context.Context) *EntitlementGr
 }
 
 // Exec executes the query on the entity.
-func (eguo *EntitlementGrantUpdateOne) Exec(ctx context.Context) error {
-	_, err := eguo.Save(ctx)
+func (_u *EntitlementGrantUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eguo *EntitlementGrantUpdateOne) ExecX(ctx context.Context) {
-	if err := eguo.Exec(ctx); err != nil {
+func (_u *EntitlementGrantUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (eguo *EntitlementGrantUpdateOne) defaults() {
-	if _, ok := eguo.mutation.UpdatedAt(); !ok {
+func (_u *EntitlementGrantUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entitlementgrant.UpdateDefaultUpdatedAt()
-		eguo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *EntitlementGrant, err error) {
+func (_u *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *EntitlementGrant, err error) {
 	_spec := sqlgraph.NewUpdateSpec(entitlementgrant.Table, entitlementgrant.Columns, sqlgraph.NewFieldSpec(entitlementgrant.FieldID, field.TypeString))
-	id, ok := eguo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "EntitlementGrant.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := eguo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, entitlementgrant.FieldID)
 		for _, f := range fields {
@@ -486,62 +517,65 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 			}
 		}
 	}
-	if ps := eguo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := eguo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entitlementgrant.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := eguo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if eguo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entitlementgrant.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := eguo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entitlementgrant.FieldUpdatedBy, field.TypeString, value)
 	}
-	if eguo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entitlementgrant.FieldUpdatedBy, field.TypeString)
 	}
-	if eguo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlementgrant.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := eguo.mutation.Usage(); ok {
+	if value, ok := _u.mutation.Unlimited(); ok {
+		_spec.SetField(entitlementgrant.FieldUnlimited, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Usage(); ok {
 		_spec.SetField(entitlementgrant.FieldUsage, field.TypeOther, value)
 	}
-	if value, ok := eguo.mutation.ValidTo(); ok {
+	if value, ok := _u.mutation.ValidTo(); ok {
 		_spec.SetField(entitlementgrant.FieldValidTo, field.TypeTime, value)
 	}
-	if value, ok := eguo.mutation.GrantStatus(); ok {
+	if value, ok := _u.mutation.GrantStatus(); ok {
 		_spec.SetField(entitlementgrant.FieldGrantStatus, field.TypeString, value)
 	}
-	if value, ok := eguo.mutation.LastComputedAt(); ok {
+	if value, ok := _u.mutation.LastComputedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldLastComputedAt, field.TypeTime, value)
 	}
-	if eguo.mutation.LastComputedAtCleared() {
+	if _u.mutation.LastComputedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldLastComputedAt, field.TypeTime)
 	}
-	if value, ok := eguo.mutation.QuotaCrossedAt(); ok {
+	if value, ok := _u.mutation.QuotaCrossedAt(); ok {
 		_spec.SetField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime, value)
 	}
-	if eguo.mutation.QuotaCrossedAtCleared() {
+	if _u.mutation.QuotaCrossedAtCleared() {
 		_spec.ClearField(entitlementgrant.FieldQuotaCrossedAt, field.TypeTime)
 	}
-	if value, ok := eguo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entitlementgrant.FieldMetadata, field.TypeOther, value)
 	}
-	if eguo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(entitlementgrant.FieldMetadata, field.TypeOther)
 	}
-	_node = &EntitlementGrant{config: eguo.config}
+	_node = &EntitlementGrant{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, eguo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entitlementgrant.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -549,6 +583,6 @@ func (eguo *EntitlementGrantUpdateOne) sqlSave(ctx context.Context) (_node *Enti
 		}
 		return nil, err
 	}
-	eguo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

@@ -94,7 +94,7 @@ consumer:
     limits:
       cpu: "2000m"
       memory: "2Gi"
-  # Drain in-flight Kafka messages on SIGTERM
+  # Covers preStop + the server.shutdown_timeout HTTP drain + dependency cleanup.
   terminationGracePeriodSeconds: 60
 
 # ── Worker ────────────────────────────────────────────────────────────────────

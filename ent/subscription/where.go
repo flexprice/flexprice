@@ -261,6 +261,12 @@ func ProrationBehavior(v types.ProrationBehavior) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldProrationBehavior, vc))
 }
 
+// LineItemGrouping applies equality check predicate on the "line_item_grouping" field. It's identical to LineItemGroupingEQ.
+func LineItemGrouping(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEQ(FieldLineItemGrouping, vc))
+}
+
 // EnableTrueUp applies equality check predicate on the "enable_true_up" field. It's identical to EnableTrueUpEQ.
 func EnableTrueUp(v bool) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldEnableTrueUp, v))
@@ -2592,6 +2598,90 @@ func ProrationBehaviorEqualFold(v types.ProrationBehavior) predicate.Subscriptio
 func ProrationBehaviorContainsFold(v types.ProrationBehavior) predicate.Subscription {
 	vc := string(v)
 	return predicate.Subscription(sql.FieldContainsFold(FieldProrationBehavior, vc))
+}
+
+// LineItemGroupingEQ applies the EQ predicate on the "line_item_grouping" field.
+func LineItemGroupingEQ(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEQ(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingNEQ applies the NEQ predicate on the "line_item_grouping" field.
+func LineItemGroupingNEQ(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldNEQ(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingIn applies the In predicate on the "line_item_grouping" field.
+func LineItemGroupingIn(vs ...types.LineItemGrouping) predicate.Subscription {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Subscription(sql.FieldIn(FieldLineItemGrouping, v...))
+}
+
+// LineItemGroupingNotIn applies the NotIn predicate on the "line_item_grouping" field.
+func LineItemGroupingNotIn(vs ...types.LineItemGrouping) predicate.Subscription {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Subscription(sql.FieldNotIn(FieldLineItemGrouping, v...))
+}
+
+// LineItemGroupingGT applies the GT predicate on the "line_item_grouping" field.
+func LineItemGroupingGT(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldGT(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingGTE applies the GTE predicate on the "line_item_grouping" field.
+func LineItemGroupingGTE(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldGTE(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingLT applies the LT predicate on the "line_item_grouping" field.
+func LineItemGroupingLT(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldLT(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingLTE applies the LTE predicate on the "line_item_grouping" field.
+func LineItemGroupingLTE(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldLTE(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingContains applies the Contains predicate on the "line_item_grouping" field.
+func LineItemGroupingContains(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldContains(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingHasPrefix applies the HasPrefix predicate on the "line_item_grouping" field.
+func LineItemGroupingHasPrefix(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldHasPrefix(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingHasSuffix applies the HasSuffix predicate on the "line_item_grouping" field.
+func LineItemGroupingHasSuffix(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldHasSuffix(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingEqualFold applies the EqualFold predicate on the "line_item_grouping" field.
+func LineItemGroupingEqualFold(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEqualFold(FieldLineItemGrouping, vc))
+}
+
+// LineItemGroupingContainsFold applies the ContainsFold predicate on the "line_item_grouping" field.
+func LineItemGroupingContainsFold(v types.LineItemGrouping) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldContainsFold(FieldLineItemGrouping, vc))
 }
 
 // EnableTrueUpEQ applies the EQ predicate on the "enable_true_up" field.

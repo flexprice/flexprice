@@ -11,8 +11,8 @@ import (
 )
 
 // addonAttachParams is a fully-resolved addon attach that has not been written yet, so it can be
-// priced before anyone decides whether to persist it. createAddonAttachParams builds it,
-// calculateAddonProration prices it, persistAddonAttach writes it.
+// priced before anyone decides whether to persist it. createAddonAttachParams builds it and
+// AddonChangeService prices and writes it.
 type addonAttachParams struct {
 	subscription   *subscription.Subscription
 	request        *dto.AddAddonToSubscriptionRequest
@@ -22,6 +22,8 @@ type addonAttachParams struct {
 	priceMap       map[string]*dto.PriceResponse
 	requestedStart time.Time
 	effectiveDate  time.Time
+	// coupons is keyed by line item ID: overrides repoint a line item's price after Resolve.
+	coupons map[string][]types.CouponRef
 
 	// isReplay marks a plan whose association is an existing pending row being activated
 	// rather than a new one being created.
@@ -85,6 +87,13 @@ func (p *addonAttachParams) getPriceMap() map[string]*dto.PriceResponse {
 	return p.priceMap
 }
 
+func (p *addonAttachParams) getCoupons() map[string][]types.CouponRef {
+	if p == nil {
+		return nil
+	}
+	return p.coupons
+}
+
 func (p *addonAttachParams) isReplayAttach() bool {
 	if p == nil {
 		return false
@@ -101,8 +110,8 @@ func (p *addonAttachParams) prorationIdempotencyKey() string {
 }
 
 // addonDetachParams is a fully-resolved addon removal that has not been written yet, so it can
-// be priced before anyone decides whether to persist it. createAddonDetachParams builds it,
-// calculateAddonDetachProration prices it, persistAddonDetach writes it.
+// be priced before anyone decides whether to persist it. createAddonDetachParams builds it and
+// AddonChangeService prices and writes it.
 type addonDetachParams struct {
 	subscription  *subscription.Subscription
 	association   *addonassociation.AddonAssociation

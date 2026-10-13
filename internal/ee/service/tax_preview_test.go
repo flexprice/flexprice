@@ -365,23 +365,17 @@ func TestApplyTaxResultToInvoice_Totals(t *testing.T) {
 			why: "1000 at 10% inclusive plus 18% exclusive, end to end",
 		},
 		{
-			name:     "exempt, exclusive only — nothing was ever added, so nothing comes off",
+			name:     "exempt — the charges are billed as priced, nothing added or backed out",
 			subtotal: "100", discount: "0", prepaid: "0",
-			inclusiveTax: "0", exclusiveTax: "10", exempt: true,
+			inclusiveTax: "0", exclusiveTax: "0", exempt: true,
 			wantTotal: "100", wantTotalTax: "0",
+			why: "an exempt customer is never taxed, so the total is the subtotal untouched",
 		},
 		{
-			name:     "exempt, inclusive only — the baked-in tax is backed out",
-			subtotal: "100", discount: "0", prepaid: "0",
-			inclusiveTax: "9.09", exclusiveTax: "0", exempt: true,
-			wantTotal: "90.91", wantTotalTax: "0",
-			why: "the one case where total drops BELOW the taxable amount — total = subtotal + total_tax no longer holds",
-		},
-		{
-			name:     "exempt, mixed — inclusive backed out, exclusive simply not added",
-			subtotal: "1000", discount: "0", prepaid: "0",
-			inclusiveTax: "90.91", exclusiveTax: "163.64", exempt: true,
-			wantTotal: "909.09", wantTotalTax: "0",
+			name:     "exempt — discount and prepaid credits still reduce the total",
+			subtotal: "100", discount: "10", prepaid: "20",
+			inclusiveTax: "0", exclusiveTax: "0", exempt: true,
+			wantTotal: "70", wantTotalTax: "0",
 		},
 		{
 			name:     "discount is subtracted before tax is applied on top",
@@ -405,9 +399,9 @@ func TestApplyTaxResultToInvoice_Totals(t *testing.T) {
 			why: "an invoice can never owe a negative amount",
 		},
 		{
-			name:     "exempt with a large inclusive tax still clamps at zero, never below",
+			name:     "exempt still clamps at zero, never below",
 			subtotal: "5", discount: "0", prepaid: "10",
-			inclusiveTax: "0.45", exclusiveTax: "0", exempt: true,
+			inclusiveTax: "0", exclusiveTax: "0", exempt: true,
 			wantTotal: "0", wantTotalTax: "0",
 		},
 	}
@@ -421,7 +415,7 @@ func TestApplyTaxResultToInvoice_Totals(t *testing.T) {
 				AmountPaid:                 decimal.Zero,
 			}
 
-			applyTaxResultToInvoice(inv, &TaxCalculationResult{
+			applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 				InclusiveTax:      decimal.RequireFromString(tt.inclusiveTax),
 				ExclusiveTax:      decimal.RequireFromString(tt.exclusiveTax),
 				TotalTaxAmount:    decimal.RequireFromString(tt.wantTotalTax),
@@ -446,7 +440,7 @@ func TestApplyTaxResultToInvoice_AmountRemainingSubtractsWhatWasPaid(t *testing.
 		AmountPaid: decimal.NewFromInt(40),
 	}
 
-	applyTaxResultToInvoice(inv, &TaxCalculationResult{
+	applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 		ExclusiveTax:      decimal.NewFromInt(10),
 		TotalTaxAmount:    decimal.NewFromInt(10),
 		TaxAppliedRecords: []*dto.TaxAppliedResponse{{}},
@@ -467,11 +461,6 @@ func TestApplyTaxResultToInvoice_ExemptionReasonCode(t *testing.T) {
 		want    *types.TaxExemptionReasonCode
 		why     string
 	}{
-		{
-			name:   "exempt customer, rates resolved and zeroed",
-			exempt: true, records: []*dto.TaxAppliedResponse{{}},
-			want: lo.ToPtr(types.TaxExemptionReasonCustomerExempt),
-		},
 		{
 			name:   "exempt customer, nothing resolved at all",
 			exempt: true, records: nil,
@@ -494,7 +483,7 @@ func TestApplyTaxResultToInvoice_ExemptionReasonCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := &invoice.Invoice{Subtotal: decimal.NewFromInt(100)}
-			applyTaxResultToInvoice(inv, &TaxCalculationResult{
+			applyTaxResultToInvoice(inv, &dto.TaxCalculationResult{
 				TotalTaxAmount:    decimal.Zero,
 				Exempt:            tt.exempt,
 				TaxAppliedRecords: tt.records,
@@ -514,7 +503,7 @@ func TestApplyTaxResultToInvoice_ExemptionReasonCode(t *testing.T) {
 // total from subtotal every time rather than adjusting whatever was already there.
 func TestApplyTaxResultToInvoice_IsIdempotent(t *testing.T) {
 	inv := &invoice.Invoice{Subtotal: decimal.NewFromInt(100)}
-	result := &TaxCalculationResult{
+	result := &dto.TaxCalculationResult{
 		ExclusiveTax:      decimal.NewFromInt(10),
 		TotalTaxAmount:    decimal.NewFromInt(10),
 		TaxAppliedRecords: []*dto.TaxAppliedResponse{{}},
@@ -554,6 +543,8 @@ func (s *TaxCalculationSuite) SetupTest() {
 		InvoiceRepo:        st.InvoiceRepo,
 		CustomerRepo:       st.CustomerRepo,
 		SubRepo:            st.SubscriptionRepo,
+		SettingsRepo:       st.SettingsRepo,
+		ConnectionRepo:     st.ConnectionRepo,
 	})
 }
 
@@ -795,22 +786,11 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_TaxableCustomer() {
 	}
 }
 
-// Nothing is charged, and the inclusive portion comes back out of what is owed. The gross
-// amounts are still computed: exemption is one override at the end, not a branch in the maths.
+// An exempt customer is never taxed: no rate is evaluated, inclusive tax is not backed out,
+// and the total is the net amount as priced, whatever rates were handed in.
 func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_ExemptCustomer() {
-	want := map[string]struct{ inclusive, total string }{
-		"no tax":            {"0", "900"},
-		"one inclusive":     {"81.82", "818.18"},
-		"one exclusive":     {"0", "900"},
-		"one of each":       {"81.82", "818.18"},
-		"several inclusive": {"110.53", "789.47"},
-		"several exclusive": {"0", "900"},
-		"several of each":   {"110.53", "789.47"},
-	}
-
 	for _, shape := range taxShapes() {
 		s.Run(shape.name, func() {
-			exp := want[shape.name]
 			inv := s.shapeInvoice(types.TaxTreatmentExempt)
 
 			result := s.svc.CalculateTaxesOnInvoice(s.GetContext(), inv,
@@ -818,10 +798,12 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_ExemptCustomer() {
 			applyTaxResultToInvoice(inv, result)
 
 			s.True(result.Exempt)
-			s.True(decimal.RequireFromString(exp.inclusive).Equal(result.InclusiveTax),
-				"inclusive_tax is still computed when exempt, got %s", result.InclusiveTax)
+			s.True(result.InclusiveTax.IsZero(), "inclusive_tax got %s", result.InclusiveTax)
+			s.True(result.ExclusiveTax.IsZero(), "exclusive_tax got %s", result.ExclusiveTax)
 			s.True(result.TotalTaxAmount.IsZero(), "charged %s", result.TotalTaxAmount)
-			s.True(decimal.RequireFromString(exp.total).Equal(inv.Total), "total got %s", inv.Total)
+			s.Empty(result.TaxAppliedRecords, "no rate is evaluated for an exempt customer")
+			s.True(decimal.NewFromInt(900).Equal(inv.Total), "total got %s", inv.Total)
+			s.True(inv.TotalTax.IsZero(), "total_tax got %s", inv.TotalTax)
 			s.Require().NotNil(inv.TaxExemptionReasonCode)
 			s.Equal(types.TaxExemptionReasonCustomerExempt, *inv.TaxExemptionReasonCode)
 		})
@@ -861,34 +843,6 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_DiscountReducesInclusi
 	}
 }
 
-// Stripe's exempt/reverse table: for an inclusive rate the customer pays the price minus the tax
-// that would have been due; for an exclusive rate they pay the price unchanged.
-// 10% on 100 -> 90.91 inclusive, 100 exclusive.
-func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_MatchesStripeExemptTable() {
-	tests := []struct {
-		behavior  types.TaxBehavior
-		wantTotal string
-	}{
-		{types.TaxBehaviorInclusive, "90.91"},
-		{types.TaxBehaviorExclusive, "100"},
-	}
-
-	for _, tt := range tests {
-		s.Run(string(tt.behavior), func() {
-			inv := s.invoiceFor(types.TaxTreatmentExempt, decimal.NewFromInt(100))
-
-			result := s.svc.CalculateTaxesOnInvoice(s.GetContext(), inv, &dto.InvoiceTaxRates{
-				Exempt: true,
-				Rates:  []*dto.TaxRateWithBehavior{s.rate("tax", 10, tt.behavior)},
-			})
-			applyTaxResultToInvoice(inv, result)
-
-			s.True(result.TotalTaxAmount.IsZero(), "tax due must be zero, got %s", result.TotalTaxAmount)
-			s.True(decimal.RequireFromString(tt.wantTotal).Equal(inv.Total), "total, got %s", inv.Total)
-		})
-	}
-}
-
 // Stripe's own worked example for inclusive + exclusive + discount, at invoice level:
 // 15.00 subtotal, 10%% discount, 5%% inclusive, 7%% exclusive.
 // https://docs.stripe.com/tax/tax-rates#both-inclusive-and-exclusive-tax-with-discount-example
@@ -917,24 +871,26 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_MatchesStripeWorkedExa
 	}
 }
 
-// an exempt customer's rows are written at zero, never omitted, so the audit trail
-// records which rates were evaluated rather than looking identical to "nothing configured".
-func (s *TaxCalculationSuite) TestApplyTaxesOnInvoice_ExemptCustomerPersistsZeroRows() {
-	inv := s.invoiceFor(types.TaxTreatmentExempt, decimal.NewFromInt(100))
-	rates := &dto.InvoiceTaxRates{Exempt: true, Rates: []*dto.TaxRateWithBehavior{
+// An exempt customer gets no tax_applied rows, and any rows left from before the customer
+// became exempt are archived.
+func (s *TaxCalculationSuite) TestApplyTaxesOnInvoice_ExemptCustomerPersistsNoRows() {
+	inv := s.invoiceFor(types.TaxTreatmentTaxable, decimal.NewFromInt(100))
+	rates := []*dto.TaxRateWithBehavior{
 		s.rate("vat", 10, types.TaxBehaviorExclusive),
 		s.rate("gst", 5, types.TaxBehaviorInclusive),
-	}}
+	}
 
-	charged, err := s.svc.ApplyTaxesOnInvoice(s.GetContext(), inv, rates)
+	_, err := s.svc.ApplyTaxesOnInvoice(s.GetContext(), inv, &dto.InvoiceTaxRates{Rates: rates})
+	s.Require().NoError(err)
+	s.Equal(2, s.countTaxApplied(), "taxable rows are written first")
+
+	charged, err := s.svc.ApplyTaxesOnInvoice(s.GetContext(), inv, &dto.InvoiceTaxRates{Exempt: true, Rates: rates})
 	s.Require().NoError(err)
 
-	s.Require().Len(charged.TaxAppliedRecords, 2, "both associations were evaluated, so both must have a row")
-	for _, record := range charged.TaxAppliedRecords {
-		s.True(record.TaxAmount.IsZero(), "exempt rows persist at zero, got %s", record.TaxAmount)
-		s.NotEmpty(record.TaxBehavior, "the row must still record which behavior was evaluated")
-	}
-	s.Equal(2, s.countTaxApplied(), "the zeroed rows must actually be persisted, not just returned")
+	s.True(charged.Exempt)
+	s.True(charged.TotalTaxAmount.IsZero(), "charged %s", charged.TotalTaxAmount)
+	s.Empty(charged.TaxAppliedRecords)
+	s.Equal(0, s.countTaxApplied(), "earlier rows must be archived, and no new ones written")
 }
 
 // The persisted row is the audit trail, so every field on it has to be right — not just the
@@ -950,7 +906,7 @@ func (s *TaxCalculationSuite) TestApplyTaxesOnInvoice_PersistedRowFields() {
 
 	byRateID := make(map[string]*dto.TaxAppliedResponse)
 	for _, r := range s.taxAppliedFor(inv.ID) {
-		byRateID[r.TaxRateID] = r
+		byRateID[r.GetTaxRateID()] = r
 	}
 	s.Require().Len(byRateID, 2)
 
@@ -1058,7 +1014,7 @@ func (s *TaxCalculationSuite) TestCalculateTaxesOnInvoice_SkipsRateMissingPercen
 		&dto.InvoiceTaxRates{Rates: []*dto.TaxRateWithBehavior{broken, good}})
 
 	s.Len(result.TaxAppliedRecords, 1, "the unusable rate must be dropped, not charged at zero")
-	s.Equal(good.ID, result.TaxAppliedRecords[0].TaxRateID)
+	s.Equal(good.ID, result.TaxAppliedRecords[0].GetTaxRateID())
 	s.True(decimal.NewFromInt(10).Equal(result.TotalTaxAmount), "the usable rate still applies, got %s", result.TotalTaxAmount)
 }
 
@@ -1122,18 +1078,15 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_OverridesWinOverSubscriptionAs
 	s.Equal(types.TaxBehaviorInclusive, resolved.GetRates()[0].TaxBehavior)
 }
 
-// an override with no explicit behavior falls back to the currency default, resolved
-// against the override's own currency.
-func (s *TaxCalculationSuite) TestPrepareTaxRates_OverrideWithoutBehaviorUsesCurrencyDefault() {
+// an override with no explicit behavior defaults to exclusive, regardless of currency.
+func (s *TaxCalculationSuite) TestPrepareTaxRates_OverrideWithoutBehaviorDefaultsToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
-		{name: "USD is in the exclusive list", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "CAD is in the exclusive list", currency: "cad", want: types.TaxBehaviorExclusive},
-		{name: "INR is not, so it defaults inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
-		{name: "EUR is not, so it defaults inclusive", currency: "eur", want: types.TaxBehaviorInclusive},
+		{name: "USD defaults exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
+		{name: "INR defaults exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1233,16 +1186,16 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_SubscriptionAssociationsKeepTh
 
 // a subscription-level row with a null tax_behavior should not exist (creation
 // always stamps one). If one is found anyway it is logged as an anomaly and falls back to the
-// same currency default every other unstamped resolution uses, rather than a value special to
+// same default every other unstamped resolution uses, rather than a value special to
 // this branch.
-func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFallsBackToCurrencyDefault() {
+func (s *TaxCalculationSuite) TestPrepareTaxRates_AssociationWithNullBehaviorFallsBackToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
 		{name: "USD falls back to exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "INR falls back to inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
+		{name: "INR falls back to exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1332,6 +1285,41 @@ func (s *TaxCalculationSuite) TestPrepareTaxRates_ExemptionFlagTracksTheCustomer
 	}
 }
 
+// An exempt customer resolves no rates on any path: overrides, raw rate IDs, or the
+// subscription's own associations.
+func (s *TaxCalculationSuite) TestPrepareTaxRates_ExemptCustomerResolvesNoRates() {
+	ctx := s.GetContext()
+	cust := s.newCustomer(types.TaxTreatmentExempt)
+	sub := s.newSubscription(cust.ID, "usd")
+	rate := s.persistedRate("exempt_resolve", 10)
+	s.association(rate.ID, sub.ID, lo.ToPtr(types.TaxBehaviorInclusive))
+
+	tests := []struct {
+		name string
+		req  dto.CreateInvoiceRequest
+	}{
+		{name: "tax rate overrides", req: dto.CreateInvoiceRequest{
+			CustomerID: cust.ID, Currency: "usd",
+			TaxRateOverrides: []*dto.TaxRateOverride{{TaxRateCode: rate.Code, Currency: "usd", AutoApply: true}},
+		}},
+		{name: "raw tax rate ids", req: dto.CreateInvoiceRequest{
+			CustomerID: cust.ID, Currency: "usd", TaxRates: []string{rate.ID},
+		}},
+		{name: "subscription associations", req: dto.CreateInvoiceRequest{
+			CustomerID: cust.ID, Currency: "usd", SubscriptionID: &sub.ID,
+		}},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resolved, err := s.svc.PrepareTaxRatesForInvoice(ctx, tt.req)
+			s.Require().NoError(err)
+			s.True(resolved.IsExempt())
+			s.Empty(resolved.GetRates())
+		})
+	}
+}
+
 // An unknown customer fails rather than quoting an invoice whose exemption status is unknown.
 func (s *TaxCalculationSuite) TestPrepareTaxRates_UnknownCustomerFails() {
 	_, err := s.svc.PrepareTaxRatesForInvoice(s.GetContext(), dto.CreateInvoiceRequest{
@@ -1367,17 +1355,16 @@ func (s *TaxCalculationSuite) TestInvoiceTaxRates_NilReceiverIsSafe() {
 // / / CreateTaxAssociation
 // =============================================================================
 
-// a subscription-level association with no explicit behavior is stamped from the
-// subscription's currency, at creation, once.
-func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefaultsFromCurrency() {
+// a subscription-level association with no explicit behavior is stamped exclusive at
+// creation, once, regardless of currency.
+func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefaultsToExclusive() {
 	tests := []struct {
 		name     string
 		currency string
 		want     types.TaxBehavior
 	}{
-		{name: "USD is in the exclusive list", currency: "usd", want: types.TaxBehaviorExclusive},
-		{name: "CAD is in the exclusive list", currency: "cad", want: types.TaxBehaviorExclusive},
-		{name: "INR is not, so it defaults inclusive", currency: "inr", want: types.TaxBehaviorInclusive},
+		{name: "USD defaults exclusive", currency: "usd", want: types.TaxBehaviorExclusive},
+		{name: "INR defaults exclusive too", currency: "inr", want: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1401,16 +1388,16 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_SubscriptionBehaviorDefau
 	}
 }
 
-// An explicit behavior on the request wins over the currency default, in both directions —
-// including the case where it contradicts what the currency would have chosen.
+// An explicit behavior on the request wins over the default, in both directions —
+// including the case where it contradicts what the default would have chosen.
 func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExplicitBehaviorOverridesCurrencyDefault() {
 	tests := []struct {
 		name     string
 		currency string
 		explicit types.TaxBehavior
 	}{
-		{name: "inclusive on USD, against the currency default", currency: "usd", explicit: types.TaxBehaviorInclusive},
-		{name: "exclusive on INR, against the currency default", currency: "inr", explicit: types.TaxBehaviorExclusive},
+		{name: "inclusive on USD, against the default", currency: "usd", explicit: types.TaxBehaviorInclusive},
+		{name: "exclusive on INR, against the default", currency: "inr", explicit: types.TaxBehaviorExclusive},
 	}
 
 	for _, tt := range tests {
@@ -1495,8 +1482,8 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExemptCustomerSubscriptio
 	}{
 		{name: "explicit inclusive", currency: "usd", behavior: lo.ToPtr(types.TaxBehaviorInclusive)},
 		{name: "explicit exclusive", currency: "usd", behavior: lo.ToPtr(types.TaxBehaviorExclusive)},
-		{name: "currency default resolving to exclusive", currency: "usd"},
-		{name: "currency default resolving to inclusive", currency: "inr"},
+		{name: "no explicit behavior, USD", currency: "usd"},
+		{name: "no explicit behavior, INR", currency: "inr"},
 	}
 
 	for _, tt := range tests {
@@ -1546,8 +1533,7 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_ExemptCustomerLevelTempla
 
 // an inclusive rate above 100% would mean the tax exceeds the tax-free price it is
 // derived from. The extraction still computes, so this is rejected as a configuration error
-// rather than because the math fails. Checked against the behavior that will actually be
-// stored, so a rate that resolves to inclusive from the currency default is caught too.
+// rather than because the math fails.
 func (s *TaxCalculationSuite) TestCreateTaxAssociation_InclusiveRateAboveHundredPercentIsRejected() {
 	tests := []struct {
 		name       string
@@ -1560,11 +1546,6 @@ func (s *TaxCalculationSuite) TestCreateTaxAssociation_InclusiveRateAboveHundred
 		{
 			name: "explicitly inclusive at 150%", currency: "usd",
 			behavior: lo.ToPtr(types.TaxBehaviorInclusive), percentage: 150, wantErr: true,
-		},
-		{
-			name: "inclusive via the currency default at 150%", currency: "inr",
-			percentage: 150, wantErr: true,
-			why: "INR resolves to inclusive with no explicit behavior — checking before the stamp would miss this",
 		},
 		{
 			name: "explicitly exclusive at 150%", currency: "usd",
@@ -1849,7 +1830,7 @@ func (s *TaxCalculationSuite) TestLinkTaxRatesToEntity_StampsEachOverride() {
 		EntityID:   sub.ID,
 		TaxRateOverrides: []*dto.TaxRateOverride{
 			{TaxRateCode: first.Code, Currency: "inr", AutoApply: true},
-			{TaxRateCode: second.Code, Currency: "inr", AutoApply: true, TaxBehavior: lo.ToPtr(types.TaxBehaviorExclusive)},
+			{TaxRateCode: second.Code, Currency: "inr", AutoApply: true, TaxBehavior: lo.ToPtr(types.TaxBehaviorInclusive)},
 		},
 	})
 	s.Require().NoError(err)
@@ -1866,8 +1847,8 @@ func (s *TaxCalculationSuite) TestLinkTaxRatesToEntity_StampsEachOverride() {
 	for _, r := range resolved.GetRates() {
 		behaviorByID[r.ID] = r.TaxBehavior
 	}
-	s.Equal(types.TaxBehaviorInclusive, behaviorByID[first.ID], "no explicit behavior on an INR subscription defaults inclusive")
-	s.Equal(types.TaxBehaviorExclusive, behaviorByID[second.ID], "the explicit behavior is kept")
+	s.Equal(types.TaxBehaviorExclusive, behaviorByID[first.ID], "no explicit behavior defaults exclusive")
+	s.Equal(types.TaxBehaviorInclusive, behaviorByID[second.ID], "the explicit behavior is kept")
 }
 
 // through the batch path: linking to an exempt customer's subscription is skipped,

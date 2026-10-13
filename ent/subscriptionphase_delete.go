@@ -20,56 +20,56 @@ type SubscriptionPhaseDelete struct {
 }
 
 // Where appends a list predicates to the SubscriptionPhaseDelete builder.
-func (spd *SubscriptionPhaseDelete) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseDelete {
-	spd.mutation.Where(ps...)
-	return spd
+func (_d *SubscriptionPhaseDelete) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (spd *SubscriptionPhaseDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, spd.sqlExec, spd.mutation, spd.hooks)
+func (_d *SubscriptionPhaseDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spd *SubscriptionPhaseDelete) ExecX(ctx context.Context) int {
-	n, err := spd.Exec(ctx)
+func (_d *SubscriptionPhaseDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (spd *SubscriptionPhaseDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *SubscriptionPhaseDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(subscriptionphase.Table, sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString))
-	if ps := spd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, spd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	spd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // SubscriptionPhaseDeleteOne is the builder for deleting a single SubscriptionPhase entity.
 type SubscriptionPhaseDeleteOne struct {
-	spd *SubscriptionPhaseDelete
+	_d *SubscriptionPhaseDelete
 }
 
 // Where appends a list predicates to the SubscriptionPhaseDelete builder.
-func (spdo *SubscriptionPhaseDeleteOne) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseDeleteOne {
-	spdo.spd.mutation.Where(ps...)
-	return spdo
+func (_d *SubscriptionPhaseDeleteOne) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (spdo *SubscriptionPhaseDeleteOne) Exec(ctx context.Context) error {
-	n, err := spdo.spd.Exec(ctx)
+func (_d *SubscriptionPhaseDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (spdo *SubscriptionPhaseDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spdo *SubscriptionPhaseDeleteOne) ExecX(ctx context.Context) {
-	if err := spdo.Exec(ctx); err != nil {
+func (_d *SubscriptionPhaseDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

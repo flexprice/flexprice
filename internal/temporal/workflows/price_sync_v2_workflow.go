@@ -34,7 +34,7 @@ func PriceSyncV2Workflow(ctx workflow.Context, in models.PriceSyncWorkflowInput)
 	}
 
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Hour * 2,
+		StartToCloseTimeout: time.Hour * 6,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second,
 			BackoffCoefficient: 2.0,

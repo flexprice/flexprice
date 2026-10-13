@@ -3,10 +3,12 @@ package repository
 import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
+	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
+	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -24,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -35,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -148,7 +152,7 @@ func NewEnvironmentRepository(p RepositoryParams) environment.Repository {
 }
 
 func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
-	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger)
 }
 
 func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
@@ -235,6 +239,10 @@ func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 	return entRepo.NewTaxRateRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
+func NewFXRateRepository(p RepositoryParams) fxrate.Repository {
+	return entRepo.NewFXRateRepository(p.EntClient, p.Logger)
+}
+
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
@@ -256,7 +264,7 @@ func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Reposito
 }
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
-	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.RedisCache)
+	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.InMemoryCache)
 }
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
@@ -283,12 +291,12 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }
 
-func NewCostSheetUsageRepository(p RepositoryParams) events.CostSheetUsageRepository {
-	return clickhouseRepo.NewCostSheetUsageRepository(p.ClickHouseDB, p.Logger)
-}
-
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewActivityRepository(p RepositoryParams) domainActivity.Repository {
+	return clickhouseRepo.NewActivityRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
@@ -301,4 +309,12 @@ func NewIncomingWebhookEventRepository(p RepositoryParams) incomingwebhookevent.
 
 func NewCheckoutSessionRepository(p RepositoryParams) checkout.Repository {
 	return entRepo.NewCheckoutSessionRepository(p.EntClient, p.Logger)
+}
+
+func NewAnalyticsViewRepository(p RepositoryParams) domainAnalytics.Repository {
+	return entRepo.NewAnalyticsViewRepository(p.EntClient, p.Logger)
+}
+
+func NewRevenueFactRepository(p RepositoryParams) revenuefact.Repository {
+	return entRepo.NewRevenueFactRepository(p.EntClient, p.Logger)
 }

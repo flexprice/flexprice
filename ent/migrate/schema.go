@@ -166,6 +166,33 @@ var (
 			},
 		},
 	}
+	// AnalyticsViewsColumns holds the columns for the "analytics_views" table.
+	AnalyticsViewsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "definition", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AnalyticsViewsTable holds the schema information for the "analytics_views" table.
+	AnalyticsViewsTable = &schema.Table{
+		Name:       "analytics_views",
+		Columns:    AnalyticsViewsColumns,
+		PrimaryKey: []*schema.Column{AnalyticsViewsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "analyticsview_tenant_id_environment_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{AnalyticsViewsColumns[1], AnalyticsViewsColumns[7], AnalyticsViewsColumns[2]},
+			},
+		},
+	}
 	// AuthsColumns holds the columns for the "auths" table.
 	AuthsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -277,6 +304,14 @@ var (
 				Name:    "idx_checkout_session_customer",
 				Unique:  false,
 				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[8]},
+			},
+			{
+				Name:    "idx_checkout_session_invoice_active",
+				Unique:  true,
+				Columns: []*schema.Column{CheckoutSessionsColumns[1], CheckoutSessionsColumns[7], CheckoutSessionsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((checkout_invoice_id IS NOT NULL) AND ((checkout_status)::text = ANY (ARRAY[('initiated'::character varying)::text, ('pending'::character varying)::text])))",
+				},
 			},
 			{
 				Name:    "idx_checkout_session_expiry",
@@ -802,6 +837,7 @@ var (
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "contact", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "billing_currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "address_line1", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "address_line2", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "address_city", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
@@ -810,6 +846,7 @@ var (
 		{Name: "address_country", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(2)"}},
 		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_treatment", Type: field.TypeString, Default: "taxable", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -876,7 +913,7 @@ var (
 		{Name: "grant_duration_value", Type: field.TypeInt, Nullable: true},
 		{Name: "grant_duration_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "grant_allocation_behavior", Type: field.TypeString, Nullable: true, Default: "first_usage", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "grant_quota", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "grant_quota", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
 		{Name: "aggregation_mode", Type: field.TypeString, Default: "additive", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -943,8 +980,9 @@ var (
 		{Name: "scope_entity_type", Type: field.TypeString, Default: "feature", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "scope_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "measure", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "quota", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
-		{Name: "usage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "quota", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
+		{Name: "unlimited", Type: field.TypeBool, Default: false},
+		{Name: "usage", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
 		{Name: "valid_from", Type: field.TypeTime},
 		{Name: "valid_to", Type: field.TypeTime},
 		{Name: "grant_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -961,12 +999,12 @@ var (
 			{
 				Name:    "entitlementgrant_tenant_id_environment_id_entitlement_config_id_customer_id_subscription_id_valid_from",
 				Unique:  true,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9], EntitlementGrantsColumns[10], EntitlementGrantsColumns[16]},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[8], EntitlementGrantsColumns[9], EntitlementGrantsColumns[10], EntitlementGrantsColumns[17]},
 			},
 			{
 				Name:    "entitlementgrant_tenant_id_environment_id_customer_id_valid_to_entitlement_config_id_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[17], EntitlementGrantsColumns[8], EntitlementGrantsColumns[10]},
+				Columns: []*schema.Column{EntitlementGrantsColumns[1], EntitlementGrantsColumns[7], EntitlementGrantsColumns[9], EntitlementGrantsColumns[18], EntitlementGrantsColumns[8], EntitlementGrantsColumns[10]},
 			},
 		},
 	}
@@ -1039,6 +1077,47 @@ var (
 				Name:    "idx_environment_tenant_created_at",
 				Unique:  false,
 				Columns: []*schema.Column{EnvironmentsColumns[1], EnvironmentsColumns[3]},
+			},
+		},
+	}
+	// FxRatesColumns holds the columns for the "fx_rates" table.
+	FxRatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "scope", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "scope_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "from_currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "to_currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(24,12)"}},
+		{Name: "source", Type: field.TypeString, Default: "fixed", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// FxRatesTable holds the schema information for the "fx_rates" table.
+	FxRatesTable = &schema.Table{
+		Name:       "fx_rates",
+		Columns:    FxRatesColumns,
+		PrimaryKey: []*schema.Column{FxRatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_fx_rate_tenant_live",
+				Unique:  true,
+				Columns: []*schema.Column{FxRatesColumns[1], FxRatesColumns[7], FxRatesColumns[8], FxRatesColumns[9], FxRatesColumns[10], FxRatesColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text) AND ((scope)::text = 'tenant'::text)",
+				},
+			},
+			{
+				Name:    "idx_fx_rate_override",
+				Unique:  false,
+				Columns: []*schema.Column{FxRatesColumns[1], FxRatesColumns[7], FxRatesColumns[8], FxRatesColumns[9], FxRatesColumns[10], FxRatesColumns[11], FxRatesColumns[14]},
 			},
 		},
 	}
@@ -1212,6 +1291,8 @@ var (
 		{Name: "total_tax", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "total_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "total", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "fx_conversion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "due_date", Type: field.TypeTime, Nullable: true},
 		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
@@ -1231,6 +1312,7 @@ var (
 		{Name: "total_prepaid_credits_applied", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "recalculated_invoice_id", Type: field.TypeString, Nullable: true},
+		{Name: "source_type", Type: field.TypeString, Nullable: true},
 		{Name: "is_manually_edited", Type: field.TypeBool, Default: false},
 		{Name: "tax_exemption_reason_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -1261,12 +1343,12 @@ var (
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[25], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[38]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[40]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((invoice_number IS NOT NULL) AND ((invoice_number)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
@@ -1274,7 +1356,7 @@ var (
 			{
 				Name:    "idx_tenant_environment_idempotency_key_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[41]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[43]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((idempotency_key IS NOT NULL) AND ((status)::text = 'published'::text) AND ((invoice_status)::text <> 'VOIDED'::text))",
 				},
@@ -1282,7 +1364,7 @@ var (
 			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[32], InvoicesColumns[33]},
+				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[34], InvoicesColumns[35]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))",
 				},
@@ -1325,6 +1407,8 @@ var (
 		{Name: "subscription_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "adjusted_entitlement_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "parent_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "fx_conversion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// InvoiceLineItemsTable holds the schema information for the "invoice_line_items" table.
@@ -1335,7 +1419,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "invoice_line_items_invoices_line_items",
-				Columns:    []*schema.Column{InvoiceLineItemsColumns[34]},
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[36]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1344,7 +1428,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[34], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[36], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_customer_id_status",
@@ -1766,16 +1850,22 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "payment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "payment_gateway", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "credit_note_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_gateway", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "gateway_refund_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "gateway_tracking_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "settled_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "refund_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "refund_reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "refund_destination", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "refund_destination_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "attempt", Type: field.TypeInt, Default: 1},
 		{Name: "idempotency_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "gateway_idempotency_token", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "gateway_idempotency_token", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "failure_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "gateway_metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1793,7 +1883,7 @@ var (
 			{
 				Name:    "idx_refund_tenant_env_idempotency",
 				Unique:  true,
-				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[16]},
+				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[22]},
 			},
 			{
 				Name:    "idx_refund_tenant_payment",
@@ -1803,12 +1893,79 @@ var (
 			{
 				Name:    "idx_refund_tenant_status",
 				Unique:  false,
-				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[14]},
+				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[17]},
 			},
 			{
 				Name:    "idx_refund_gateway_refund_id",
 				Unique:  false,
-				Columns: []*schema.Column{RefundsColumns[10]},
+				Columns: []*schema.Column{RefundsColumns[12]},
+			},
+			{
+				Name:    "idx_refund_tenant_invoice",
+				Unique:  false,
+				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[9]},
+			},
+		},
+	}
+	// RevenueFactsColumns holds the columns for the "revenue_facts" table.
+	RevenueFactsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "environment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "sub_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "aggregation_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "revenue_source", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "period_end", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "day", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "service_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "service_end", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "recognition_method", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "usage_at_list_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "tier_delta", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "entitlement_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "line_discount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "invoice_discount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "net_amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "billable_qty", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "entitlement_qty", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(38,9)"}},
+		{Name: "decomposition_mode", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "is_revert", Type: field.TypeBool, Default: false},
+		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "invoice_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "lock_adjusted_day", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "computed_at", Type: field.TypeTime, Default: "now()", SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "version", Type: field.TypeInt64, Default: 1},
+	}
+	// RevenueFactsTable holds the schema information for the "revenue_facts" table.
+	RevenueFactsTable = &schema.Table{
+		Name:       "revenue_facts",
+		Columns:    RevenueFactsColumns,
+		PrimaryKey: []*schema.Column{RevenueFactsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "revenue_facts_provisional_grain",
+				Unique:  true,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[4], RevenueFactsColumns[6], RevenueFactsColumns[5], RevenueFactsColumns[12], RevenueFactsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(status = 'PROVISIONAL'::text)",
+				},
+			},
+			{
+				Name:    "revenue_facts_read",
+				Unique:  false,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[12], RevenueFactsColumns[9]},
+			},
+			{
+				Name:    "revenue_facts_invoice",
+				Unique:  false,
+				Columns: []*schema.Column{RevenueFactsColumns[1], RevenueFactsColumns[2], RevenueFactsColumns[28]},
 			},
 		},
 	}
@@ -1972,6 +2129,7 @@ var (
 		{Name: "gateway_payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
+		{Name: "line_item_grouping", Type: field.TypeString, Default: "per_charge_period", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "enable_true_up", Type: field.TypeBool, Default: false},
 		{Name: "parent_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "payment_terms", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -1988,7 +2146,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[45]},
+				Columns:    []*schema.Column{SubscriptionsColumns[46]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -2020,9 +2178,17 @@ var (
 			{
 				Name:    "subscription_tenant_id_environment_id_plan_id_synced_price_sequence_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44], SubscriptionsColumns[0]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[45], SubscriptionsColumns[0]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))",
+				},
+			},
+			{
+				Name:    "idx_subscriptions_gated_active",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))",
 				},
 			},
 		},
@@ -2379,7 +2545,7 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tax_rate_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tax_rate_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_association_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2390,6 +2556,10 @@ var (
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_behavior", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tax_transaction_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "tax_transaction_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "external_tax_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// TaxAppliedsTable holds the schema information for the "tax_applieds" table.
 	TaxAppliedsTable = &schema.Table{
@@ -2401,11 +2571,14 @@ var (
 				Name:    "idx_entity_tax_rate_id",
 				Unique:  true,
 				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10], TaxAppliedsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
 			},
 			{
 				Name:    "idx_entity_tax_association_lookup",
 				Unique:  false,
-				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10]},
+				Columns: []*schema.Column{TaxAppliedsColumns[1], TaxAppliedsColumns[7], TaxAppliedsColumns[9], TaxAppliedsColumns[10], TaxAppliedsColumns[2]},
 			},
 		},
 	}
@@ -2666,6 +2839,9 @@ var (
 		{Name: "transaction_reason", Type: field.TypeString, Default: "FREE_CREDIT_GRANT", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "priority", Type: field.TypeInt, Nullable: true},
 		{Name: "parent_transaction_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "source_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "source_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "consumption_breakdown", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// WalletTransactionsTable holds the schema information for the "wallet_transactions" table.
 	WalletTransactionsTable = &schema.Table{
@@ -2812,6 +2988,7 @@ var (
 		AddonAssociationsTable,
 		AlertLogsTable,
 		AlertSettingsTable,
+		AnalyticsViewsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,
@@ -2829,6 +3006,7 @@ var (
 		EntitlementGrantsTable,
 		EntityIntegrationMappingsTable,
 		EnvironmentsTable,
+		FxRatesTable,
 		FeaturesTable,
 		GroupsTable,
 		IncomingWebhookEventsTable,
@@ -2843,6 +3021,7 @@ var (
 		PricesTable,
 		PriceUnitsTable,
 		RefundsTable,
+		RevenueFactsTable,
 		ScheduledTasksTable,
 		SecretsTable,
 		SettingsTable,

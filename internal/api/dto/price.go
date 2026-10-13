@@ -592,6 +592,45 @@ func (r *UpdatePriceRequest) Validate() error {
 	return nil
 }
 
+// ValidateAgainst checks that the requested billing-model fields fit the price the update produces.
+func (r *UpdatePriceRequest) ValidateAgainst(existingPrice *price.Price) error {
+	return validateBillingModelChange(existingPrice, r.BillingModel, r.TierMode,
+		r.Amount != nil || r.PriceUnitAmount != nil, len(r.Tiers) > 0 || len(r.PriceUnitTiers) > 0)
+}
+
+// validateBillingModelChange rejects an edit of existing whose target price would silently drop the requested pricing.
+func validateBillingModelChange(existing *price.Price, targetModel types.BillingModel, targetTierMode types.BillingTier, hasAmount, hasTiers bool) error {
+	target := lo.Ternary(targetModel != "", targetModel, existing.BillingModel)
+	switching := target != existing.BillingModel
+
+	switch target {
+	case types.BILLING_MODEL_TIERED:
+		if hasAmount && !hasTiers {
+			return ierr.NewError("amount cannot be set on a TIERED price").
+				WithHint("Tiered prices are priced by their tiers; send tiers, or set billing_model to FLAT_FEE or PACKAGE").
+				Mark(ierr.ErrValidation)
+		}
+		if switching && targetTierMode == "" {
+			return ierr.NewError("tier_mode is required for a TIERED price").
+				WithHint("Set tier_mode to SLAB or VOLUME").
+				Mark(ierr.ErrValidation)
+		}
+	case types.BILLING_MODEL_FLAT_FEE, types.BILLING_MODEL_PACKAGE:
+		if hasTiers {
+			return ierr.NewError("tiers can only be set on a TIERED price").
+				WithHint("Set billing_model to TIERED with tier_mode SLAB or VOLUME to apply tiers").
+				Mark(ierr.ErrValidation)
+		}
+		if switching && !hasAmount {
+			return ierr.NewError("amount is required when changing the billing model").
+				WithHint("Provide amount (or price_unit_amount for custom price units) for the new billing model").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // ShouldCreateNewPrice checks if the request contains any critical fields that require creating a new price
 func (r *UpdatePriceRequest) ShouldCreateNewPrice() bool {
 	return r.BillingModel != "" ||

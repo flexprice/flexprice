@@ -26,7 +26,7 @@ func (c *Client) ListPaymentSources(ctx context.Context, chargebeeCustomerID str
 		// Chargebee pages at 10 by default; ask for more so the customer's primary
 		// source cannot fall off the first page and get silently skipped.
 		Limit: lo.ToPtr(int32(50)),
-	}).ListRequestWithEnv(env)
+	}).Contexts(ctx).ListRequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to list Chargebee payment sources")
 	}
@@ -47,7 +47,7 @@ func (c *Client) RetrieveCustomer(ctx context.Context, chargebeeCustomerID strin
 		return nil, err
 	}
 
-	res, err := customer.Retrieve(chargebeeCustomerID).RequestWithEnv(env)
+	res, err := customer.Retrieve(chargebeeCustomerID).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to retrieve Chargebee customer")
 	}
@@ -65,7 +65,7 @@ func (c *Client) RetrieveTransaction(ctx context.Context, transactionID string) 
 		return nil, err
 	}
 
-	res, err := transaction.Retrieve(transactionID).RequestWithEnv(env)
+	res, err := transaction.Retrieve(transactionID).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to retrieve Chargebee transaction")
 	}
@@ -90,7 +90,7 @@ func (c *Client) RefundTransaction(ctx context.Context, transactionID string, am
 		req = req.SetIdempotencyKey(idempotencyKey)
 	}
 
-	res, err := req.RequestWithEnv(env)
+	res, err := req.Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
 		return nil, wrapAPIError(err, "Failed to refund Chargebee transaction")
 	}

@@ -286,6 +286,17 @@ func newCommitmentCalculatorWithPriceStore(t *testing.T) (*commitmentCalculator,
 	return newCommitmentCalculator(log, NewPriceService(params)), priceStore
 }
 
+func TestComputeCommitmentMath_ZeroCommitmentCharge(t *testing.T) {
+	usage := decimal.NewFromInt(10)
+	overage2x := decimal.NewFromInt(2)
+
+	charge, utilized, overage, trueUp := computeCommitmentMath(usage, decimal.Zero, overage2x, true)
+	assert.True(t, decimal.NewFromInt(20).Equal(charge), "charge %s", charge)
+	assert.True(t, utilized.IsZero(), "utilized %s", utilized)
+	assert.True(t, decimal.NewFromInt(20).Equal(overage), "overage %s", overage)
+	assert.True(t, trueUp.IsZero(), "true-up %s", trueUp)
+}
+
 // TestApplyWindowCommitment_PerBucket_PerWindow verifies that commitment is
 // applied PER WINDOW: each window inside a bucket uses that bucket's price +
 // commitment independently, and out-of-bucket windows use the line item's own
@@ -381,9 +392,8 @@ func TestApplyWindowCommitment_PerBucket_QuantityAndBaseRate(t *testing.T) {
 	require.NotNil(t, info)
 
 	assert.True(t, decimal.NewFromInt(31).Equal(total), "expected $31 got %s", total)
-	// utilized: $4 (bucket commit) + $15 (out-of-bucket base) = $19; overage: $12; true-up: 0
-	assert.True(t, decimal.NewFromInt(19).Equal(info.ComputedCommitmentUtilizedAmount), "utilized %s", info.ComputedCommitmentUtilizedAmount)
-	assert.True(t, decimal.NewFromInt(12).Equal(info.ComputedOverageAmount), "overage %s", info.ComputedOverageAmount)
+	assert.True(t, decimal.NewFromInt(4).Equal(info.ComputedCommitmentUtilizedAmount), "utilized %s", info.ComputedCommitmentUtilizedAmount)
+	assert.True(t, decimal.NewFromInt(27).Equal(info.ComputedOverageAmount), "overage %s", info.ComputedOverageAmount)
 	assert.True(t, info.ComputedTrueUpAmount.IsZero(), "true-up %s", info.ComputedTrueUpAmount)
 }
 
@@ -456,10 +466,10 @@ func TestApplyWindowCommitment_PerBucket_PriceOverrideFromWindowSize(t *testing.
 
 	assert.True(t, decimal.NewFromInt(530).Equal(total),
 		"expected $530 (bucket price override applied per window); got %s — $130 would mean the override was ignored", total)
-	assert.True(t, decimal.NewFromInt(400).Equal(info.ComputedOverageAmount),
-		"expected overage $400 from the $5 override base, got %s", info.ComputedOverageAmount)
-	assert.True(t, decimal.NewFromInt(130).Equal(info.ComputedCommitmentUtilizedAmount),
-		"expected utilized $130, got %s", info.ComputedCommitmentUtilizedAmount)
+	assert.True(t, decimal.NewFromInt(430).Equal(info.ComputedOverageAmount),
+		"expected overage $430 ($400 in-bucket + $30 out-of-bucket), got %s", info.ComputedOverageAmount)
+	assert.True(t, decimal.NewFromInt(100).Equal(info.ComputedCommitmentUtilizedAmount),
+		"expected utilized $100 (two in-bucket windows at $50; out-of-bucket has no commitment), got %s", info.ComputedCommitmentUtilizedAmount)
 	assert.True(t, info.ComputedTrueUpAmount.IsZero(),
 		"expected zero true-up, got %s", info.ComputedTrueUpAmount)
 }

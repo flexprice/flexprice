@@ -21,229 +21,229 @@ type SecretCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (sc *SecretCreate) SetTenantID(s string) *SecretCreate {
-	sc.mutation.SetTenantID(s)
-	return sc
+func (_c *SecretCreate) SetTenantID(v string) *SecretCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (sc *SecretCreate) SetStatus(s string) *SecretCreate {
-	sc.mutation.SetStatus(s)
-	return sc
+func (_c *SecretCreate) SetStatus(v string) *SecretCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableStatus(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetStatus(*s)
+func (_c *SecretCreate) SetNillableStatus(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (sc *SecretCreate) SetCreatedAt(t time.Time) *SecretCreate {
-	sc.mutation.SetCreatedAt(t)
-	return sc
+func (_c *SecretCreate) SetCreatedAt(v time.Time) *SecretCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableCreatedAt(t *time.Time) *SecretCreate {
-	if t != nil {
-		sc.SetCreatedAt(*t)
+func (_c *SecretCreate) SetNillableCreatedAt(v *time.Time) *SecretCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (sc *SecretCreate) SetUpdatedAt(t time.Time) *SecretCreate {
-	sc.mutation.SetUpdatedAt(t)
-	return sc
+func (_c *SecretCreate) SetUpdatedAt(v time.Time) *SecretCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableUpdatedAt(t *time.Time) *SecretCreate {
-	if t != nil {
-		sc.SetUpdatedAt(*t)
+func (_c *SecretCreate) SetNillableUpdatedAt(v *time.Time) *SecretCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (sc *SecretCreate) SetCreatedBy(s string) *SecretCreate {
-	sc.mutation.SetCreatedBy(s)
-	return sc
+func (_c *SecretCreate) SetCreatedBy(v string) *SecretCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableCreatedBy(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetCreatedBy(*s)
+func (_c *SecretCreate) SetNillableCreatedBy(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (sc *SecretCreate) SetUpdatedBy(s string) *SecretCreate {
-	sc.mutation.SetUpdatedBy(s)
-	return sc
+func (_c *SecretCreate) SetUpdatedBy(v string) *SecretCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableUpdatedBy(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetUpdatedBy(*s)
+func (_c *SecretCreate) SetNillableUpdatedBy(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (sc *SecretCreate) SetEnvironmentID(s string) *SecretCreate {
-	sc.mutation.SetEnvironmentID(s)
-	return sc
+func (_c *SecretCreate) SetEnvironmentID(v string) *SecretCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableEnvironmentID(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetEnvironmentID(*s)
+func (_c *SecretCreate) SetNillableEnvironmentID(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetName sets the "name" field.
-func (sc *SecretCreate) SetName(s string) *SecretCreate {
-	sc.mutation.SetName(s)
-	return sc
+func (_c *SecretCreate) SetName(v string) *SecretCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetType sets the "type" field.
-func (sc *SecretCreate) SetType(s string) *SecretCreate {
-	sc.mutation.SetType(s)
-	return sc
+func (_c *SecretCreate) SetType(v string) *SecretCreate {
+	_c.mutation.SetType(v)
+	return _c
 }
 
 // SetProvider sets the "provider" field.
-func (sc *SecretCreate) SetProvider(s string) *SecretCreate {
-	sc.mutation.SetProvider(s)
-	return sc
+func (_c *SecretCreate) SetProvider(v string) *SecretCreate {
+	_c.mutation.SetProvider(v)
+	return _c
 }
 
 // SetValue sets the "value" field.
-func (sc *SecretCreate) SetValue(s string) *SecretCreate {
-	sc.mutation.SetValue(s)
-	return sc
+func (_c *SecretCreate) SetValue(v string) *SecretCreate {
+	_c.mutation.SetValue(v)
+	return _c
 }
 
 // SetNillableValue sets the "value" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableValue(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetValue(*s)
+func (_c *SecretCreate) SetNillableValue(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetValue(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetDisplayID sets the "display_id" field.
-func (sc *SecretCreate) SetDisplayID(s string) *SecretCreate {
-	sc.mutation.SetDisplayID(s)
-	return sc
+func (_c *SecretCreate) SetDisplayID(v string) *SecretCreate {
+	_c.mutation.SetDisplayID(v)
+	return _c
 }
 
 // SetNillableDisplayID sets the "display_id" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableDisplayID(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetDisplayID(*s)
+func (_c *SecretCreate) SetNillableDisplayID(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetDisplayID(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetExpiresAt sets the "expires_at" field.
-func (sc *SecretCreate) SetExpiresAt(t time.Time) *SecretCreate {
-	sc.mutation.SetExpiresAt(t)
-	return sc
+func (_c *SecretCreate) SetExpiresAt(v time.Time) *SecretCreate {
+	_c.mutation.SetExpiresAt(v)
+	return _c
 }
 
 // SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableExpiresAt(t *time.Time) *SecretCreate {
-	if t != nil {
-		sc.SetExpiresAt(*t)
+func (_c *SecretCreate) SetNillableExpiresAt(v *time.Time) *SecretCreate {
+	if v != nil {
+		_c.SetExpiresAt(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetLastUsedAt sets the "last_used_at" field.
-func (sc *SecretCreate) SetLastUsedAt(t time.Time) *SecretCreate {
-	sc.mutation.SetLastUsedAt(t)
-	return sc
+func (_c *SecretCreate) SetLastUsedAt(v time.Time) *SecretCreate {
+	_c.mutation.SetLastUsedAt(v)
+	return _c
 }
 
 // SetNillableLastUsedAt sets the "last_used_at" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableLastUsedAt(t *time.Time) *SecretCreate {
-	if t != nil {
-		sc.SetLastUsedAt(*t)
+func (_c *SecretCreate) SetNillableLastUsedAt(v *time.Time) *SecretCreate {
+	if v != nil {
+		_c.SetLastUsedAt(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetProviderData sets the "provider_data" field.
-func (sc *SecretCreate) SetProviderData(m map[string]string) *SecretCreate {
-	sc.mutation.SetProviderData(m)
-	return sc
+func (_c *SecretCreate) SetProviderData(v map[string]string) *SecretCreate {
+	_c.mutation.SetProviderData(v)
+	return _c
 }
 
 // SetRoles sets the "roles" field.
-func (sc *SecretCreate) SetRoles(s []string) *SecretCreate {
-	sc.mutation.SetRoles(s)
-	return sc
+func (_c *SecretCreate) SetRoles(v []string) *SecretCreate {
+	_c.mutation.SetRoles(v)
+	return _c
 }
 
 // SetUserType sets the "user_type" field.
-func (sc *SecretCreate) SetUserType(s string) *SecretCreate {
-	sc.mutation.SetUserType(s)
-	return sc
+func (_c *SecretCreate) SetUserType(v string) *SecretCreate {
+	_c.mutation.SetUserType(v)
+	return _c
 }
 
 // SetNillableUserType sets the "user_type" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableUserType(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetUserType(*s)
+func (_c *SecretCreate) SetNillableUserType(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetUserType(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetUserID sets the "user_id" field.
-func (sc *SecretCreate) SetUserID(s string) *SecretCreate {
-	sc.mutation.SetUserID(s)
-	return sc
+func (_c *SecretCreate) SetUserID(v string) *SecretCreate {
+	_c.mutation.SetUserID(v)
+	return _c
 }
 
 // SetNillableUserID sets the "user_id" field if the given value is not nil.
-func (sc *SecretCreate) SetNillableUserID(s *string) *SecretCreate {
-	if s != nil {
-		sc.SetUserID(*s)
+func (_c *SecretCreate) SetNillableUserID(v *string) *SecretCreate {
+	if v != nil {
+		_c.SetUserID(*v)
 	}
-	return sc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (sc *SecretCreate) SetID(s string) *SecretCreate {
-	sc.mutation.SetID(s)
-	return sc
+func (_c *SecretCreate) SetID(v string) *SecretCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the SecretMutation object of the builder.
-func (sc *SecretCreate) Mutation() *SecretMutation {
-	return sc.mutation
+func (_c *SecretCreate) Mutation() *SecretMutation {
+	return _c.mutation
 }
 
 // Save creates the Secret in the database.
-func (sc *SecretCreate) Save(ctx context.Context) (*Secret, error) {
-	sc.defaults()
-	return withHooks(ctx, sc.sqlSave, sc.mutation, sc.hooks)
+func (_c *SecretCreate) Save(ctx context.Context) (*Secret, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (sc *SecretCreate) SaveX(ctx context.Context) *Secret {
-	v, err := sc.Save(ctx)
+func (_c *SecretCreate) SaveX(ctx context.Context) *Secret {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -251,85 +251,85 @@ func (sc *SecretCreate) SaveX(ctx context.Context) *Secret {
 }
 
 // Exec executes the query.
-func (sc *SecretCreate) Exec(ctx context.Context) error {
-	_, err := sc.Save(ctx)
+func (_c *SecretCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sc *SecretCreate) ExecX(ctx context.Context) {
-	if err := sc.Exec(ctx); err != nil {
+func (_c *SecretCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (sc *SecretCreate) defaults() {
-	if _, ok := sc.mutation.Status(); !ok {
+func (_c *SecretCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := secret.DefaultStatus
-		sc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := sc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := secret.DefaultCreatedAt()
-		sc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := sc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := secret.DefaultUpdatedAt()
-		sc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := sc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := secret.DefaultEnvironmentID
-		sc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := sc.mutation.Roles(); !ok {
+	if _, ok := _c.mutation.Roles(); !ok {
 		v := secret.DefaultRoles
-		sc.mutation.SetRoles(v)
+		_c.mutation.SetRoles(v)
 	}
-	if _, ok := sc.mutation.UserType(); !ok {
+	if _, ok := _c.mutation.UserType(); !ok {
 		v := secret.DefaultUserType
-		sc.mutation.SetUserType(v)
+		_c.mutation.SetUserType(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (sc *SecretCreate) check() error {
-	if _, ok := sc.mutation.TenantID(); !ok {
+func (_c *SecretCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Secret.tenant_id"`)}
 	}
-	if v, ok := sc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := secret.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Secret.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := sc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Secret.status"`)}
 	}
-	if _, ok := sc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Secret.created_at"`)}
 	}
-	if _, ok := sc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Secret.updated_at"`)}
 	}
-	if _, ok := sc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Secret.name"`)}
 	}
-	if v, ok := sc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := secret.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Secret.name": %w`, err)}
 		}
 	}
-	if _, ok := sc.mutation.GetType(); !ok {
+	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Secret.type"`)}
 	}
-	if v, ok := sc.mutation.GetType(); ok {
+	if v, ok := _c.mutation.GetType(); ok {
 		if err := secret.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Secret.type": %w`, err)}
 		}
 	}
-	if _, ok := sc.mutation.Provider(); !ok {
+	if _, ok := _c.mutation.Provider(); !ok {
 		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "Secret.provider"`)}
 	}
-	if v, ok := sc.mutation.Provider(); ok {
+	if v, ok := _c.mutation.Provider(); ok {
 		if err := secret.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Secret.provider": %w`, err)}
 		}
@@ -337,12 +337,12 @@ func (sc *SecretCreate) check() error {
 	return nil
 }
 
-func (sc *SecretCreate) sqlSave(ctx context.Context) (*Secret, error) {
-	if err := sc.check(); err != nil {
+func (_c *SecretCreate) sqlSave(ctx context.Context) (*Secret, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := sc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, sc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -355,89 +355,89 @@ func (sc *SecretCreate) sqlSave(ctx context.Context) (*Secret, error) {
 			return nil, fmt.Errorf("unexpected Secret.ID type: %T", _spec.ID.Value)
 		}
 	}
-	sc.mutation.id = &_node.ID
-	sc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (sc *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
+func (_c *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Secret{config: sc.config}
+		_node = &Secret{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(secret.Table, sqlgraph.NewFieldSpec(secret.FieldID, field.TypeString))
 	)
-	if id, ok := sc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := sc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(secret.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := sc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(secret.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := sc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(secret.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := sc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(secret.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := sc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(secret.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := sc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(secret.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := sc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(secret.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := sc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(secret.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := sc.mutation.GetType(); ok {
+	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(secret.FieldType, field.TypeString, value)
 		_node.Type = value
 	}
-	if value, ok := sc.mutation.Provider(); ok {
+	if value, ok := _c.mutation.Provider(); ok {
 		_spec.SetField(secret.FieldProvider, field.TypeString, value)
 		_node.Provider = value
 	}
-	if value, ok := sc.mutation.Value(); ok {
+	if value, ok := _c.mutation.Value(); ok {
 		_spec.SetField(secret.FieldValue, field.TypeString, value)
 		_node.Value = value
 	}
-	if value, ok := sc.mutation.DisplayID(); ok {
+	if value, ok := _c.mutation.DisplayID(); ok {
 		_spec.SetField(secret.FieldDisplayID, field.TypeString, value)
 		_node.DisplayID = value
 	}
-	if value, ok := sc.mutation.ExpiresAt(); ok {
+	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
 	}
-	if value, ok := sc.mutation.LastUsedAt(); ok {
+	if value, ok := _c.mutation.LastUsedAt(); ok {
 		_spec.SetField(secret.FieldLastUsedAt, field.TypeTime, value)
 		_node.LastUsedAt = &value
 	}
-	if value, ok := sc.mutation.ProviderData(); ok {
+	if value, ok := _c.mutation.ProviderData(); ok {
 		_spec.SetField(secret.FieldProviderData, field.TypeJSON, value)
 		_node.ProviderData = value
 	}
-	if value, ok := sc.mutation.Roles(); ok {
+	if value, ok := _c.mutation.Roles(); ok {
 		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
 		_node.Roles = value
 	}
-	if value, ok := sc.mutation.UserType(); ok {
+	if value, ok := _c.mutation.UserType(); ok {
 		_spec.SetField(secret.FieldUserType, field.TypeString, value)
 		_node.UserType = value
 	}
-	if value, ok := sc.mutation.UserID(); ok {
+	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(secret.FieldUserID, field.TypeString, value)
 		_node.UserID = value
 	}
@@ -452,16 +452,16 @@ type SecretCreateBulk struct {
 }
 
 // Save creates the Secret entities in the database.
-func (scb *SecretCreateBulk) Save(ctx context.Context) ([]*Secret, error) {
-	if scb.err != nil {
-		return nil, scb.err
+func (_c *SecretCreateBulk) Save(ctx context.Context) ([]*Secret, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(scb.builders))
-	nodes := make([]*Secret, len(scb.builders))
-	mutators := make([]Mutator, len(scb.builders))
-	for i := range scb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Secret, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := scb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*SecretMutation)
@@ -475,11 +475,11 @@ func (scb *SecretCreateBulk) Save(ctx context.Context) ([]*Secret, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, scb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, scb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -499,7 +499,7 @@ func (scb *SecretCreateBulk) Save(ctx context.Context) ([]*Secret, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, scb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -507,8 +507,8 @@ func (scb *SecretCreateBulk) Save(ctx context.Context) ([]*Secret, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (scb *SecretCreateBulk) SaveX(ctx context.Context) []*Secret {
-	v, err := scb.Save(ctx)
+func (_c *SecretCreateBulk) SaveX(ctx context.Context) []*Secret {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -516,14 +516,14 @@ func (scb *SecretCreateBulk) SaveX(ctx context.Context) []*Secret {
 }
 
 // Exec executes the query.
-func (scb *SecretCreateBulk) Exec(ctx context.Context) error {
-	_, err := scb.Save(ctx)
+func (_c *SecretCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (scb *SecretCreateBulk) ExecX(ctx context.Context) {
-	if err := scb.Exec(ctx); err != nil {
+func (_c *SecretCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

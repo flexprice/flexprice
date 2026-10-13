@@ -36,6 +36,7 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, cfg *config.Config
 // @Summary Create one-off invoice
 // @ID createInvoice
 // @Description Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.
+// @Description Pass a `checkout` object to gate the invoice behind a hosted payment session: the invoice stays DRAFT with no invoice number, and the response carries `checkout_session.payment_action.url` for the customer to pay. It finalizes only when the payment webhook lands; if the session expires the invoice is voided and archived. Poll `GET /checkout/sessions/{id}` until `terminal` is true. One-off invoices only.
 // @Tags Invoices
 // @Accept json
 // @Security ApiKeyAuth
@@ -157,7 +158,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 		return
 	}
 
-	if err := h.invoiceService.FinalizeInvoice(c.Request.Context(), id); err != nil {
+	if err := h.invoiceService.FinalizeInvoice(c.Request.Context(), id, dto.FinalizeInvoiceRequest{}); err != nil {
 		h.logger.Error(c.Request.Context(), "failed to finalize invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
@@ -310,7 +311,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 		}
 	}
 
-	if err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
+	if _, err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
 		h.logger.Error(c.Request.Context(), "failed to void invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
@@ -608,9 +609,13 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 		return
 	}
 
+	req := dto.InvoicePDFRequest{
+		InvoiceID:     id,
+		ForceGenerate: c.Query("force_generate") == "true",
+	}
+
 	if c.Query("url") == "true" {
-		forceGenerate := c.Query("force_generate") == "true"
-		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id, forceGenerate)
+		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), req)
 		if err != nil {
 			h.logger.Error(c.Request.Context(), "failed to get invoice pdf url", "error", err, "invoice_id", id)
 			c.Error(err)
@@ -620,7 +625,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 		return
 	}
 
-	pdf, err := h.invoiceService.GetInvoicePDF(c.Request.Context(), id)
+	pdf, err := h.invoiceService.GetInvoicePDF(c.Request.Context(), req)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to generate invoice pdf", "error", err, "invoice_id", id)
 		c.Error(err)

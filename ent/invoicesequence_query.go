@@ -28,40 +28,40 @@ type InvoiceSequenceQuery struct {
 }
 
 // Where adds a new predicate for the InvoiceSequenceQuery builder.
-func (isq *InvoiceSequenceQuery) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceQuery {
-	isq.predicates = append(isq.predicates, ps...)
-	return isq
+func (_q *InvoiceSequenceQuery) Where(ps ...predicate.InvoiceSequence) *InvoiceSequenceQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (isq *InvoiceSequenceQuery) Limit(limit int) *InvoiceSequenceQuery {
-	isq.ctx.Limit = &limit
-	return isq
+func (_q *InvoiceSequenceQuery) Limit(limit int) *InvoiceSequenceQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (isq *InvoiceSequenceQuery) Offset(offset int) *InvoiceSequenceQuery {
-	isq.ctx.Offset = &offset
-	return isq
+func (_q *InvoiceSequenceQuery) Offset(offset int) *InvoiceSequenceQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (isq *InvoiceSequenceQuery) Unique(unique bool) *InvoiceSequenceQuery {
-	isq.ctx.Unique = &unique
-	return isq
+func (_q *InvoiceSequenceQuery) Unique(unique bool) *InvoiceSequenceQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (isq *InvoiceSequenceQuery) Order(o ...invoicesequence.OrderOption) *InvoiceSequenceQuery {
-	isq.order = append(isq.order, o...)
-	return isq
+func (_q *InvoiceSequenceQuery) Order(o ...invoicesequence.OrderOption) *InvoiceSequenceQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first InvoiceSequence entity from the query.
 // Returns a *NotFoundError when no InvoiceSequence was found.
-func (isq *InvoiceSequenceQuery) First(ctx context.Context) (*InvoiceSequence, error) {
-	nodes, err := isq.Limit(1).All(setContextOp(ctx, isq.ctx, ent.OpQueryFirst))
+func (_q *InvoiceSequenceQuery) First(ctx context.Context) (*InvoiceSequence, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (isq *InvoiceSequenceQuery) First(ctx context.Context) (*InvoiceSequence, e
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) FirstX(ctx context.Context) *InvoiceSequence {
-	node, err := isq.First(ctx)
+func (_q *InvoiceSequenceQuery) FirstX(ctx context.Context) *InvoiceSequence {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (isq *InvoiceSequenceQuery) FirstX(ctx context.Context) *InvoiceSequence {
 
 // FirstID returns the first InvoiceSequence ID from the query.
 // Returns a *NotFoundError when no InvoiceSequence ID was found.
-func (isq *InvoiceSequenceQuery) FirstID(ctx context.Context) (id int, err error) {
+func (_q *InvoiceSequenceQuery) FirstID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = isq.Limit(1).IDs(setContextOp(ctx, isq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (isq *InvoiceSequenceQuery) FirstID(ctx context.Context) (id int, err error
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) FirstIDX(ctx context.Context) int {
-	id, err := isq.FirstID(ctx)
+func (_q *InvoiceSequenceQuery) FirstIDX(ctx context.Context) int {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (isq *InvoiceSequenceQuery) FirstIDX(ctx context.Context) int {
 // Only returns a single InvoiceSequence entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one InvoiceSequence entity is found.
 // Returns a *NotFoundError when no InvoiceSequence entities are found.
-func (isq *InvoiceSequenceQuery) Only(ctx context.Context) (*InvoiceSequence, error) {
-	nodes, err := isq.Limit(2).All(setContextOp(ctx, isq.ctx, ent.OpQueryOnly))
+func (_q *InvoiceSequenceQuery) Only(ctx context.Context) (*InvoiceSequence, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (isq *InvoiceSequenceQuery) Only(ctx context.Context) (*InvoiceSequence, er
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) OnlyX(ctx context.Context) *InvoiceSequence {
-	node, err := isq.Only(ctx)
+func (_q *InvoiceSequenceQuery) OnlyX(ctx context.Context) *InvoiceSequence {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (isq *InvoiceSequenceQuery) OnlyX(ctx context.Context) *InvoiceSequence {
 // OnlyID is like Only, but returns the only InvoiceSequence ID in the query.
 // Returns a *NotSingularError when more than one InvoiceSequence ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (isq *InvoiceSequenceQuery) OnlyID(ctx context.Context) (id int, err error) {
+func (_q *InvoiceSequenceQuery) OnlyID(ctx context.Context) (id int, err error) {
 	var ids []int
-	if ids, err = isq.Limit(2).IDs(setContextOp(ctx, isq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (isq *InvoiceSequenceQuery) OnlyID(ctx context.Context) (id int, err error)
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) OnlyIDX(ctx context.Context) int {
-	id, err := isq.OnlyID(ctx)
+func (_q *InvoiceSequenceQuery) OnlyIDX(ctx context.Context) int {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (isq *InvoiceSequenceQuery) OnlyIDX(ctx context.Context) int {
 }
 
 // All executes the query and returns a list of InvoiceSequences.
-func (isq *InvoiceSequenceQuery) All(ctx context.Context) ([]*InvoiceSequence, error) {
-	ctx = setContextOp(ctx, isq.ctx, ent.OpQueryAll)
-	if err := isq.prepareQuery(ctx); err != nil {
+func (_q *InvoiceSequenceQuery) All(ctx context.Context) ([]*InvoiceSequence, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*InvoiceSequence, *InvoiceSequenceQuery]()
-	return withInterceptors[[]*InvoiceSequence](ctx, isq, qr, isq.inters)
+	return withInterceptors[[]*InvoiceSequence](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) AllX(ctx context.Context) []*InvoiceSequence {
-	nodes, err := isq.All(ctx)
+func (_q *InvoiceSequenceQuery) AllX(ctx context.Context) []*InvoiceSequence {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (isq *InvoiceSequenceQuery) AllX(ctx context.Context) []*InvoiceSequence {
 }
 
 // IDs executes the query and returns a list of InvoiceSequence IDs.
-func (isq *InvoiceSequenceQuery) IDs(ctx context.Context) (ids []int, err error) {
-	if isq.ctx.Unique == nil && isq.path != nil {
-		isq.Unique(true)
+func (_q *InvoiceSequenceQuery) IDs(ctx context.Context) (ids []int, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, isq.ctx, ent.OpQueryIDs)
-	if err = isq.Select(invoicesequence.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(invoicesequence.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) IDsX(ctx context.Context) []int {
-	ids, err := isq.IDs(ctx)
+func (_q *InvoiceSequenceQuery) IDsX(ctx context.Context) []int {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (isq *InvoiceSequenceQuery) IDsX(ctx context.Context) []int {
 }
 
 // Count returns the count of the given query.
-func (isq *InvoiceSequenceQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, isq.ctx, ent.OpQueryCount)
-	if err := isq.prepareQuery(ctx); err != nil {
+func (_q *InvoiceSequenceQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, isq, querierCount[*InvoiceSequenceQuery](), isq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*InvoiceSequenceQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) CountX(ctx context.Context) int {
-	count, err := isq.Count(ctx)
+func (_q *InvoiceSequenceQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (isq *InvoiceSequenceQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (isq *InvoiceSequenceQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, isq.ctx, ent.OpQueryExist)
-	switch _, err := isq.FirstID(ctx); {
+func (_q *InvoiceSequenceQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (isq *InvoiceSequenceQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (isq *InvoiceSequenceQuery) ExistX(ctx context.Context) bool {
-	exist, err := isq.Exist(ctx)
+func (_q *InvoiceSequenceQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (isq *InvoiceSequenceQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the InvoiceSequenceQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (isq *InvoiceSequenceQuery) Clone() *InvoiceSequenceQuery {
-	if isq == nil {
+func (_q *InvoiceSequenceQuery) Clone() *InvoiceSequenceQuery {
+	if _q == nil {
 		return nil
 	}
 	return &InvoiceSequenceQuery{
-		config:     isq.config,
-		ctx:        isq.ctx.Clone(),
-		order:      append([]invoicesequence.OrderOption{}, isq.order...),
-		inters:     append([]Interceptor{}, isq.inters...),
-		predicates: append([]predicate.InvoiceSequence{}, isq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]invoicesequence.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.InvoiceSequence{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  isq.sql.Clone(),
-		path: isq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (isq *InvoiceSequenceQuery) Clone() *InvoiceSequenceQuery {
 //		GroupBy(invoicesequence.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (isq *InvoiceSequenceQuery) GroupBy(field string, fields ...string) *InvoiceSequenceGroupBy {
-	isq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &InvoiceSequenceGroupBy{build: isq}
-	grbuild.flds = &isq.ctx.Fields
+func (_q *InvoiceSequenceQuery) GroupBy(field string, fields ...string) *InvoiceSequenceGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &InvoiceSequenceGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = invoicesequence.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (isq *InvoiceSequenceQuery) GroupBy(field string, fields ...string) *Invoic
 //	client.InvoiceSequence.Query().
 //		Select(invoicesequence.FieldTenantID).
 //		Scan(ctx, &v)
-func (isq *InvoiceSequenceQuery) Select(fields ...string) *InvoiceSequenceSelect {
-	isq.ctx.Fields = append(isq.ctx.Fields, fields...)
-	sbuild := &InvoiceSequenceSelect{InvoiceSequenceQuery: isq}
+func (_q *InvoiceSequenceQuery) Select(fields ...string) *InvoiceSequenceSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &InvoiceSequenceSelect{InvoiceSequenceQuery: _q}
 	sbuild.label = invoicesequence.Label
-	sbuild.flds, sbuild.scan = &isq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a InvoiceSequenceSelect configured with the given aggregations.
-func (isq *InvoiceSequenceQuery) Aggregate(fns ...AggregateFunc) *InvoiceSequenceSelect {
-	return isq.Select().Aggregate(fns...)
+func (_q *InvoiceSequenceQuery) Aggregate(fns ...AggregateFunc) *InvoiceSequenceSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (isq *InvoiceSequenceQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range isq.inters {
+func (_q *InvoiceSequenceQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, isq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range isq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !invoicesequence.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if isq.path != nil {
-		prev, err := isq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		isq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (isq *InvoiceSequenceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*InvoiceSequence, error) {
+func (_q *InvoiceSequenceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*InvoiceSequence, error) {
 	var (
 		nodes = []*InvoiceSequence{}
-		_spec = isq.querySpec()
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*InvoiceSequence).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &InvoiceSequence{config: isq.config}
+		node := &InvoiceSequence{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, isq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (isq *InvoiceSequenceQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	return nodes, nil
 }
 
-func (isq *InvoiceSequenceQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := isq.querySpec()
-	_spec.Node.Columns = isq.ctx.Fields
-	if len(isq.ctx.Fields) > 0 {
-		_spec.Unique = isq.ctx.Unique != nil && *isq.ctx.Unique
+func (_q *InvoiceSequenceQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, isq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (isq *InvoiceSequenceQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *InvoiceSequenceQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(invoicesequence.Table, invoicesequence.Columns, sqlgraph.NewFieldSpec(invoicesequence.FieldID, field.TypeInt))
-	_spec.From = isq.sql
-	if unique := isq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if isq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := isq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, invoicesequence.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (isq *InvoiceSequenceQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := isq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := isq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := isq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := isq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (isq *InvoiceSequenceQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (isq *InvoiceSequenceQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(isq.driver.Dialect())
+func (_q *InvoiceSequenceQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(invoicesequence.Table)
-	columns := isq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = invoicesequence.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if isq.sql != nil {
-		selector = isq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if isq.ctx.Unique != nil && *isq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range isq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range isq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := isq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := isq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type InvoiceSequenceGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (isgb *InvoiceSequenceGroupBy) Aggregate(fns ...AggregateFunc) *InvoiceSequenceGroupBy {
-	isgb.fns = append(isgb.fns, fns...)
-	return isgb
+func (_g *InvoiceSequenceGroupBy) Aggregate(fns ...AggregateFunc) *InvoiceSequenceGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (isgb *InvoiceSequenceGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, isgb.build.ctx, ent.OpQueryGroupBy)
-	if err := isgb.build.prepareQuery(ctx); err != nil {
+func (_g *InvoiceSequenceGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*InvoiceSequenceQuery, *InvoiceSequenceGroupBy](ctx, isgb.build, isgb, isgb.build.inters, v)
+	return scanWithInterceptors[*InvoiceSequenceQuery, *InvoiceSequenceGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (isgb *InvoiceSequenceGroupBy) sqlScan(ctx context.Context, root *InvoiceSequenceQuery, v any) error {
+func (_g *InvoiceSequenceGroupBy) sqlScan(ctx context.Context, root *InvoiceSequenceQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(isgb.fns))
-	for _, fn := range isgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*isgb.flds)+len(isgb.fns))
-		for _, f := range *isgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*isgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := isgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type InvoiceSequenceSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (iss *InvoiceSequenceSelect) Aggregate(fns ...AggregateFunc) *InvoiceSequenceSelect {
-	iss.fns = append(iss.fns, fns...)
-	return iss
+func (_s *InvoiceSequenceSelect) Aggregate(fns ...AggregateFunc) *InvoiceSequenceSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (iss *InvoiceSequenceSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, iss.ctx, ent.OpQuerySelect)
-	if err := iss.prepareQuery(ctx); err != nil {
+func (_s *InvoiceSequenceSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*InvoiceSequenceQuery, *InvoiceSequenceSelect](ctx, iss.InvoiceSequenceQuery, iss, iss.inters, v)
+	return scanWithInterceptors[*InvoiceSequenceQuery, *InvoiceSequenceSelect](ctx, _s.InvoiceSequenceQuery, _s, _s.inters, v)
 }
 
-func (iss *InvoiceSequenceSelect) sqlScan(ctx context.Context, root *InvoiceSequenceQuery, v any) error {
+func (_s *InvoiceSequenceSelect) sqlScan(ctx context.Context, root *InvoiceSequenceQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(iss.fns))
-	for _, fn := range iss.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*iss.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (iss *InvoiceSequenceSelect) sqlScan(ctx context.Context, root *InvoiceSequ
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := iss.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

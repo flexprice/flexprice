@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/billingmatrix"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
 	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -148,7 +149,9 @@ func main() {
 	}()
 
 	reporters := []e2eprobe.Reporter{e2eprobe.NewLogReporter(lg)}
-	if cfg.Slack.WebhookURL != "" {
+	if cfg.Slack.BotToken != "" {
+		reporters = append(reporters, e2eprobe.NewSlackBotReporter(cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	} else if cfg.Slack.WebhookURL != "" {
 		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil, lg))
 	}
 	if tp != nil {
@@ -245,6 +248,15 @@ func main() {
 		runner.Add(ci, e2eprobe.NewTickerScheduler(ci, cfg.Checks["CYCLE_INVOICE_PROBE"].Interval))
 	}
 
+	var billingMatrix *billingmatrix.Engine
+	if cfg.BillingMatrix.Enabled {
+		billingMatrix = billingmatrix.NewEngine(client.Raw(), runID, cfg.BillingMatrix.AssertKnownIssues)
+		for _, family := range billingmatrix.Families {
+			bm := checks_pkg.NewBillingMatrixProbe(billingMatrix, family, cfg.BillingMatrix.ScenariosPerRun, lg)
+			runner.Add(bm, e2eprobe.NewTickerScheduler(bm, family.Interval()))
+		}
+	}
+
 	if cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Enabled {
 		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID, lg)
 		runner.Add(mci, e2eprobe.NewTickerScheduler(mci, cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Interval))
@@ -320,8 +332,36 @@ func main() {
 		runner.Add(lbap, e2eprobe.NewTickerScheduler(lbap, cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Interval))
 	}
 
+	// One instance of each payment probe per gateway connected to the probe
+	// environment, so Slack and heartbeats attribute failures to the gateway.
+	for _, provider := range cfg.Payments.Providers {
+		opts := checks_pkg.PaymentProbeOpts{
+			Provider:          provider,
+			SettleTimeout:     cfg.Payments.SettleTimeout,
+			AssertKnownIssues: cfg.Payments.AssertKnownIssues,
+		}
+		if provider.SettleTimeout > 0 {
+			opts.SettleTimeout = provider.SettleTimeout
+		}
+		if cfg.Checks["PAYMENT_LINK_PROBE"].Enabled {
+			plp := checks_pkg.NewPaymentLinkProbe(client, reg, runID, lg, opts)
+			runner.Add(plp, e2eprobe.NewTickerScheduler(plp, cfg.Checks["PAYMENT_LINK_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_METHOD_PROBE"].Enabled {
+			pmp := checks_pkg.NewPaymentMethodProbe(client, reg, runID, lg, opts)
+			runner.Add(pmp, e2eprobe.NewTickerScheduler(pmp, cfg.Checks["PAYMENT_METHOD_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && provider.FixedCustomerExternalID != "" {
+			pap := checks_pkg.NewPaymentAutoChargeProbe(client, reg, runID, lg, opts)
+			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, max(cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval, provider.AutoChargeInterval)))
+		}
+	}
+
 	if cfg.Checks["JANITOR"].Enabled {
 		jn := checks_pkg.NewJanitor(client, reg, cfg.JanitorMaxAge, runID)
+		if billingMatrix != nil {
+			jn.WithSweeper(billingMatrix)
+		}
 		runner.Add(jn, e2eprobe.NewTickerScheduler(jn, cfg.Checks["JANITOR"].Interval))
 	}
 

@@ -138,6 +138,10 @@ const (
 	IntegrationCapabilitySetDefaultMethod        = types.IntegrationCapabilitySetDefaultMethod
 	IntegrationCapabilityPaymentLink             = types.IntegrationCapabilityPaymentLink
 	IntegrationCapabilityPaymentMethodManagement = types.IntegrationCapabilityPaymentMethodManagement
+	IntegrationCapabilityInvoiceSync             = types.IntegrationCapabilityInvoiceSync
+	IntegrationCapabilityListPaymentMethods      = types.IntegrationCapabilityListPaymentMethods
+	IntegrationCapabilityAddPaymentMethod        = types.IntegrationCapabilityAddPaymentMethod
+	IntegrationCapabilityDeletePaymentMethod     = types.IntegrationCapabilityDeletePaymentMethod
 )
 
 type PaymentIntegration struct {

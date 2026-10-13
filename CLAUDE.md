@@ -231,6 +231,29 @@ flexprice/
 4. Stored in ClickHouse for analytics
 5. Triggers downstream workflows (metering, alerting, billing)
 
+### Activity Log
+
+An ent hook on the writer client records every write to a registered entity (`internal/activity/entities.go`) and publishes it to ClickHouse after commit.
+
+**Writes to registered entities must return their rows.** Use `Create…Save`, `UpdateOne…Save`, `CreateBulk…Save`, or for bulk writes `Update()…SaveReturning(ctx)` / `Delete()…ExecReturning(ctx)`. Never a count-only `Update()…Save/Exec` or `Delete()…Exec`: the hook cannot see those rows, so the change is missing from the activity log and only `activity.uncaptured` is counted.
+
+**Keep the snapshot safe.** Every new field on a registered domain struct is stored in the snapshot unless tagged:
+- `activity:"redact"` for secrets and gateway data (tokens, provider payloads, payment details); the value is stored as `"[redacted]"`.
+- `activity:"drop"` for internal bookkeeping (`version`, sequences) and personal data (names, emails, phone numbers, addresses, free-form metadata); the field is left out.
+
+**Actors are ids only.** `types.Actor` holds a type and an id, never a name or email; the read API resolves labels from Postgres. A new system actor whose id is not readable gets its label in `fixedActorLabel` (`internal/ee/service/activity.go`).
+
+#### Onboarding an Entity
+
+1. **Entity type:** add `SystemEntityType<Name>` in `internal/types/entity.go` if it does not exist.
+2. **Domain converter:** expose `FromEnt(*ent.<Name>) *<Name>` in `internal/domain/<name>/model.go`.
+3. **Tags:** add `activity:"redact"` / `activity:"drop"` on the domain struct fields as above.
+4. **Registration:** add a `Registration` in `internal/activity/entities.go`: `EntityType`, `EntName` (the ent type name), `Snapshot: snapshotOf(<name>.FromEnt)`, `Label` (snapshot keys that name the entity, first non-empty wins) and `Actions`.
+5. **Declared actions** (optional): add `<entity>.<past-tense verb>` constants in `internal/activity/actions.go`, list them in `Actions` highest priority first, and declare them in the service before the write: `ctx = activity.WithAction(ctx, id, activity.<Name>Voided)`. Without a declaration the entry is `<entity>.created`, `.updated` or `.deleted`.
+6. **Customer:** an entry takes `customer_id` from the snapshot. If the entity has no `customer_id`, add `GetLinkedCustomerID(ctx, id)` to its repository (reading rows in any status) and register it in `NewLinkedCustomers` (`internal/activity/linked_customer.go`).
+7. **Writes:** convert any count-only bulk update or delete of the entity to `SaveReturning` / `ExecReturning`.
+8. **Tests:** add the entity to `entColumns` and `bareRow` in `internal/activity/registry_test.go`; the registry tests skip entities missing there.
+
 ## Integration Journeys (API-level tests)
 
 YAML-defined customer workflows in `integration-testing-suite/journeys/` run
@@ -271,6 +294,7 @@ Set via `FLEXPRICE_DEPLOYMENT_MODE`:
 - `api` — HTTP API only
 - `consumer` — Kafka consumer only
 - `temporal_worker` — Temporal workers only
+- `admin` — Admin portal API only (`make run-local-admin`). `/v1` requires `FLEXPRICE_ADMIN_SECRET`. Does not serve the public API
 
 Docker Compose runs these as separate services: `flexprice-api`, `flexprice-consumer`, `flexprice-worker`.
 

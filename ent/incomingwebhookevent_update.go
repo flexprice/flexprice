@@ -23,65 +23,65 @@ type IncomingWebhookEventUpdate struct {
 }
 
 // Where appends a list predicates to the IncomingWebhookEventUpdate builder.
-func (iweu *IncomingWebhookEventUpdate) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventUpdate {
-	iweu.mutation.Where(ps...)
-	return iweu
+func (_u *IncomingWebhookEventUpdate) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (iweu *IncomingWebhookEventUpdate) SetStatus(s string) *IncomingWebhookEventUpdate {
-	iweu.mutation.SetStatus(s)
-	return iweu
+func (_u *IncomingWebhookEventUpdate) SetStatus(v string) *IncomingWebhookEventUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (iweu *IncomingWebhookEventUpdate) SetNillableStatus(s *string) *IncomingWebhookEventUpdate {
-	if s != nil {
-		iweu.SetStatus(*s)
+func (_u *IncomingWebhookEventUpdate) SetNillableStatus(v *string) *IncomingWebhookEventUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return iweu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (iweu *IncomingWebhookEventUpdate) SetUpdatedAt(t time.Time) *IncomingWebhookEventUpdate {
-	iweu.mutation.SetUpdatedAt(t)
-	return iweu
+func (_u *IncomingWebhookEventUpdate) SetUpdatedAt(v time.Time) *IncomingWebhookEventUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (iweu *IncomingWebhookEventUpdate) SetUpdatedBy(s string) *IncomingWebhookEventUpdate {
-	iweu.mutation.SetUpdatedBy(s)
-	return iweu
+func (_u *IncomingWebhookEventUpdate) SetUpdatedBy(v string) *IncomingWebhookEventUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (iweu *IncomingWebhookEventUpdate) SetNillableUpdatedBy(s *string) *IncomingWebhookEventUpdate {
-	if s != nil {
-		iweu.SetUpdatedBy(*s)
+func (_u *IncomingWebhookEventUpdate) SetNillableUpdatedBy(v *string) *IncomingWebhookEventUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return iweu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (iweu *IncomingWebhookEventUpdate) ClearUpdatedBy() *IncomingWebhookEventUpdate {
-	iweu.mutation.ClearUpdatedBy()
-	return iweu
+func (_u *IncomingWebhookEventUpdate) ClearUpdatedBy() *IncomingWebhookEventUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // Mutation returns the IncomingWebhookEventMutation object of the builder.
-func (iweu *IncomingWebhookEventUpdate) Mutation() *IncomingWebhookEventMutation {
-	return iweu.mutation
+func (_u *IncomingWebhookEventUpdate) Mutation() *IncomingWebhookEventMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (iweu *IncomingWebhookEventUpdate) Save(ctx context.Context) (int, error) {
-	iweu.defaults()
-	return withHooks(ctx, iweu.sqlSave, iweu.mutation, iweu.hooks)
+func (_u *IncomingWebhookEventUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iweu *IncomingWebhookEventUpdate) SaveX(ctx context.Context) int {
-	affected, err := iweu.Save(ctx)
+func (_u *IncomingWebhookEventUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -89,63 +89,63 @@ func (iweu *IncomingWebhookEventUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (iweu *IncomingWebhookEventUpdate) Exec(ctx context.Context) error {
-	_, err := iweu.Save(ctx)
+func (_u *IncomingWebhookEventUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iweu *IncomingWebhookEventUpdate) ExecX(ctx context.Context) {
-	if err := iweu.Exec(ctx); err != nil {
+func (_u *IncomingWebhookEventUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (iweu *IncomingWebhookEventUpdate) defaults() {
-	if _, ok := iweu.mutation.UpdatedAt(); !ok {
+func (_u *IncomingWebhookEventUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := incomingwebhookevent.UpdateDefaultUpdatedAt()
-		iweu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (iweu *IncomingWebhookEventUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *IncomingWebhookEventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(incomingwebhookevent.Table, incomingwebhookevent.Columns, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
-	if ps := iweu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := iweu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := iweu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if iweu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := iweu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
 	}
-	if iweu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldUpdatedBy, field.TypeString)
 	}
-	if iweu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldEnvironmentID, field.TypeString)
 	}
-	if iweu.mutation.RequestIDCleared() {
+	if _u.mutation.RequestIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldRequestID, field.TypeString)
 	}
-	if iweu.mutation.HeadersCleared() {
+	if _u.mutation.HeadersCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldHeaders, field.TypeJSON)
 	}
-	if iweu.mutation.BodyCleared() {
+	if _u.mutation.BodyCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldBody, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, iweu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{incomingwebhookevent.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -153,8 +153,8 @@ func (iweu *IncomingWebhookEventUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		return 0, err
 	}
-	iweu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // IncomingWebhookEventUpdateOne is the builder for updating a single IncomingWebhookEvent entity.
@@ -166,72 +166,72 @@ type IncomingWebhookEventUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (iweuo *IncomingWebhookEventUpdateOne) SetStatus(s string) *IncomingWebhookEventUpdateOne {
-	iweuo.mutation.SetStatus(s)
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) SetStatus(v string) *IncomingWebhookEventUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (iweuo *IncomingWebhookEventUpdateOne) SetNillableStatus(s *string) *IncomingWebhookEventUpdateOne {
-	if s != nil {
-		iweuo.SetStatus(*s)
+func (_u *IncomingWebhookEventUpdateOne) SetNillableStatus(v *string) *IncomingWebhookEventUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return iweuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (iweuo *IncomingWebhookEventUpdateOne) SetUpdatedAt(t time.Time) *IncomingWebhookEventUpdateOne {
-	iweuo.mutation.SetUpdatedAt(t)
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) SetUpdatedAt(v time.Time) *IncomingWebhookEventUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (iweuo *IncomingWebhookEventUpdateOne) SetUpdatedBy(s string) *IncomingWebhookEventUpdateOne {
-	iweuo.mutation.SetUpdatedBy(s)
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) SetUpdatedBy(v string) *IncomingWebhookEventUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (iweuo *IncomingWebhookEventUpdateOne) SetNillableUpdatedBy(s *string) *IncomingWebhookEventUpdateOne {
-	if s != nil {
-		iweuo.SetUpdatedBy(*s)
+func (_u *IncomingWebhookEventUpdateOne) SetNillableUpdatedBy(v *string) *IncomingWebhookEventUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return iweuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (iweuo *IncomingWebhookEventUpdateOne) ClearUpdatedBy() *IncomingWebhookEventUpdateOne {
-	iweuo.mutation.ClearUpdatedBy()
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) ClearUpdatedBy() *IncomingWebhookEventUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // Mutation returns the IncomingWebhookEventMutation object of the builder.
-func (iweuo *IncomingWebhookEventUpdateOne) Mutation() *IncomingWebhookEventMutation {
-	return iweuo.mutation
+func (_u *IncomingWebhookEventUpdateOne) Mutation() *IncomingWebhookEventMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the IncomingWebhookEventUpdate builder.
-func (iweuo *IncomingWebhookEventUpdateOne) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventUpdateOne {
-	iweuo.mutation.Where(ps...)
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (iweuo *IncomingWebhookEventUpdateOne) Select(field string, fields ...string) *IncomingWebhookEventUpdateOne {
-	iweuo.fields = append([]string{field}, fields...)
-	return iweuo
+func (_u *IncomingWebhookEventUpdateOne) Select(field string, fields ...string) *IncomingWebhookEventUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated IncomingWebhookEvent entity.
-func (iweuo *IncomingWebhookEventUpdateOne) Save(ctx context.Context) (*IncomingWebhookEvent, error) {
-	iweuo.defaults()
-	return withHooks(ctx, iweuo.sqlSave, iweuo.mutation, iweuo.hooks)
+func (_u *IncomingWebhookEventUpdateOne) Save(ctx context.Context) (*IncomingWebhookEvent, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iweuo *IncomingWebhookEventUpdateOne) SaveX(ctx context.Context) *IncomingWebhookEvent {
-	node, err := iweuo.Save(ctx)
+func (_u *IncomingWebhookEventUpdateOne) SaveX(ctx context.Context) *IncomingWebhookEvent {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -239,34 +239,34 @@ func (iweuo *IncomingWebhookEventUpdateOne) SaveX(ctx context.Context) *Incoming
 }
 
 // Exec executes the query on the entity.
-func (iweuo *IncomingWebhookEventUpdateOne) Exec(ctx context.Context) error {
-	_, err := iweuo.Save(ctx)
+func (_u *IncomingWebhookEventUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iweuo *IncomingWebhookEventUpdateOne) ExecX(ctx context.Context) {
-	if err := iweuo.Exec(ctx); err != nil {
+func (_u *IncomingWebhookEventUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (iweuo *IncomingWebhookEventUpdateOne) defaults() {
-	if _, ok := iweuo.mutation.UpdatedAt(); !ok {
+func (_u *IncomingWebhookEventUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := incomingwebhookevent.UpdateDefaultUpdatedAt()
-		iweuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (iweuo *IncomingWebhookEventUpdateOne) sqlSave(ctx context.Context) (_node *IncomingWebhookEvent, err error) {
+func (_u *IncomingWebhookEventUpdateOne) sqlSave(ctx context.Context) (_node *IncomingWebhookEvent, err error) {
 	_spec := sqlgraph.NewUpdateSpec(incomingwebhookevent.Table, incomingwebhookevent.Columns, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
-	id, ok := iweuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "IncomingWebhookEvent.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := iweuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, incomingwebhookevent.FieldID)
 		for _, f := range fields {
@@ -278,44 +278,44 @@ func (iweuo *IncomingWebhookEventUpdateOne) sqlSave(ctx context.Context) (_node 
 			}
 		}
 	}
-	if ps := iweuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := iweuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := iweuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if iweuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := iweuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
 	}
-	if iweuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldUpdatedBy, field.TypeString)
 	}
-	if iweuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldEnvironmentID, field.TypeString)
 	}
-	if iweuo.mutation.RequestIDCleared() {
+	if _u.mutation.RequestIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldRequestID, field.TypeString)
 	}
-	if iweuo.mutation.HeadersCleared() {
+	if _u.mutation.HeadersCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldHeaders, field.TypeJSON)
 	}
-	if iweuo.mutation.BodyCleared() {
+	if _u.mutation.BodyCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldBody, field.TypeString)
 	}
-	_node = &IncomingWebhookEvent{config: iweuo.config}
+	_node = &IncomingWebhookEvent{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, iweuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{incomingwebhookevent.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -323,6 +323,6 @@ func (iweuo *IncomingWebhookEventUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		return nil, err
 	}
-	iweuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

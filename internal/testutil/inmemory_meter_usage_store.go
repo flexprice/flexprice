@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -365,7 +366,7 @@ func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.Met
 
 	if params.WindowSize == "" {
 		result.TotalValue = aggregateScalar(matched, params.AggregationType)
-		result.EventCount = uint64(distinctIDCount(matched))
+		result.EventCount = uint64(distinctIDCount(matched)) // #nosec G115 -- test store, bounded
 		return result, nil
 	}
 
@@ -376,7 +377,7 @@ func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.Met
 		points = append(points, events.MeterUsageResult{
 			WindowStart: b.start,
 			Value:       aggregateScalar(b.records, params.AggregationType),
-			EventCount:  uint64(distinctIDCount(b.records)),
+			EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
 		})
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
@@ -410,7 +411,7 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 
 		if params.WindowSize == "" {
 			res.TotalValue = aggregateScalar(recs, params.AggregationType)
-			res.EventCount = uint64(distinctIDCount(recs))
+			res.EventCount = uint64(distinctIDCount(recs)) // #nosec G115 -- test store, bounded
 			results = append(results, res)
 			continue
 		}
@@ -421,7 +422,7 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 			points = append(points, events.MeterUsageResult{
 				WindowStart: b.start,
 				Value:       aggregateScalar(b.records, params.AggregationType),
-				EventCount:  uint64(distinctIDCount(b.records)),
+				EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
 			})
 		}
 		sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
@@ -529,7 +530,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 					bucket:     bucket,
 					groupKey:   k,
 					value:      aggFn(crecs),
-					eventCount: uint64(distinctIDCount(crecs)),
+					eventCount: uint64(distinctIDCount(crecs)), // #nosec G115 -- test store, bounded
 				})
 			}
 		}
@@ -544,7 +545,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 			entries = append(entries, entry{
 				bucket:     bucket,
 				value:      aggFn(recs),
-				eventCount: uint64(distinctIDCount(recs)),
+				eventCount: uint64(distinctIDCount(recs)), // #nosec G115 -- test store, bounded
 			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].bucket.Before(entries[j].bucket) })
@@ -654,7 +655,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMetersDetailed(_ context.Co
 				combos[ck] = cs
 			}
 			v := aggFn(crecs)
-			ec := uint64(distinctIDCount(crecs))
+			ec := uint64(distinctIDCount(crecs)) // #nosec G115 -- test store, bounded
 			cs.cells[bucket] = &bucketCell{value: v, eventCount: ec}
 			cs.buckets = append(cs.buckets, bucket)
 			cs.total = cs.total.Add(v)
@@ -828,9 +829,10 @@ func (s *InMemoryMeterUsageStore) GetSourcesForBucketedMeter(_ context.Context, 
 // detailedGroupKey is the composite key produced by params.GroupBy for one record.
 // It's used as a map key (so each field is positional and stringly-encoded).
 type detailedGroupKey struct {
-	meterID    string
-	source     string
-	properties string // joined "k=v|k=v" of all property dims, in GroupBy order
+	meterID            string
+	source             string
+	externalCustomerID string
+	properties         string // joined "k=v|k=v" of all property dims, in GroupBy order
 }
 
 // buildDetailedGroupKey extracts the group dims for a record matching params.GroupBy.
@@ -845,6 +847,8 @@ func buildDetailedGroupKey(r *events.MeterUsage, groupBy []string) (detailedGrou
 			k.meterID = r.MeterID
 		case g == "source":
 			k.source = r.Source
+		case g == "external_customer_id":
+			k.externalCustomerID = r.ExternalCustomerID
 		case strings.HasPrefix(g, "properties."):
 			name := strings.TrimPrefix(g, "properties.")
 			v := propertyValue(r.Properties, name)
@@ -870,11 +874,12 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 	sourceInGroupBy := containsString(params.GroupBy, "source")
 
 	type group struct {
-		key        detailedGroupKey
-		meterID    string
-		source     string
-		properties map[string]string
-		records    []*events.MeterUsage
+		key                detailedGroupKey
+		meterID            string
+		source             string
+		externalCustomerID string
+		properties         map[string]string
+		records            []*events.MeterUsage
 	}
 	byKey := make(map[detailedGroupKey]*group)
 	for _, r := range matched {
@@ -882,10 +887,11 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 		g, ok := byKey[key]
 		if !ok {
 			g = &group{
-				key:        key,
-				meterID:    key.meterID,
-				source:     key.source,
-				properties: props,
+				key:                key,
+				meterID:            key.meterID,
+				source:             key.source,
+				externalCustomerID: key.externalCustomerID,
+				properties:         props,
 			}
 			byKey[key] = g
 		}
@@ -894,17 +900,18 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 
 	results := make([]*events.MeterUsageDetailedResult, 0, len(byKey))
 	for _, g := range byKey {
-		eventCount := uint64(distinctIDCount(g.records))
-		countUnique := uint64(distinctUniqueHashCount(g.records))
+		eventCount := uint64(distinctIDCount(g.records))          // #nosec G115 -- test store, bounded
+		countUnique := uint64(distinctUniqueHashCount(g.records)) // #nosec G115 -- test store, bounded
 		res := &events.MeterUsageDetailedResult{
-			MeterID:          g.meterID,
-			Source:           g.source,
-			Properties:       g.properties,
-			TotalUsage:       primaryAggregationValue(g.records, params.AggregationTypes, eventCount, countUnique),
-			MaxUsage:         aggregateScalar(g.records, types.AggregationMax),
-			LatestUsage:      aggregateScalar(g.records, types.AggregationLatest),
-			CountUniqueUsage: countUnique,
-			EventCount:       eventCount,
+			MeterID:            g.meterID,
+			Source:             g.source,
+			ExternalCustomerID: g.externalCustomerID,
+			Properties:         g.properties,
+			TotalUsage:         primaryAggregationValue(g.records, params.AggregationTypes, eventCount, countUnique),
+			MaxUsage:           aggregateScalar(g.records, types.AggregationMax),
+			LatestUsage:        aggregateScalar(g.records, types.AggregationLatest),
+			CountUniqueUsage:   countUnique,
+			EventCount:         eventCount,
 		}
 
 		// When source isn't a group dimension, ClickHouse returns groupUniqArray(source)
@@ -937,6 +944,9 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 		if results[i].Source != results[j].Source {
 			return results[i].Source < results[j].Source
 		}
+		if results[i].ExternalCustomerID != results[j].ExternalCustomerID {
+			return results[i].ExternalCustomerID < results[j].ExternalCustomerID
+		}
 		return propertiesString(results[i].Properties) < propertiesString(results[j].Properties)
 	})
 
@@ -950,8 +960,8 @@ func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, an
 	buckets := bucketRecords(records, ws, anchor)
 	points := make([]events.MeterUsageDetailedPoint, 0, len(buckets))
 	for _, b := range buckets {
-		eventCount := uint64(distinctIDCount(b.records))
-		countUnique := uint64(distinctUniqueHashCount(b.records))
+		eventCount := uint64(distinctIDCount(b.records))          // #nosec G115 -- test store, bounded
+		countUnique := uint64(distinctUniqueHashCount(b.records)) // #nosec G115 -- test store, bounded
 		points = append(points, events.MeterUsageDetailedPoint{
 			WindowStart:      b.start,
 			TotalUsage:       primaryAggregationValue(b.records, aggTypes, eventCount, countUnique),
@@ -977,9 +987,9 @@ func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.Aggr
 	case aggSet[types.AggregationSum]:
 		return aggregateScalar(records, types.AggregationSum)
 	case aggSet[types.AggregationCount]:
-		return decimal.NewFromInt(int64(eventCount))
+		return decimal.NewFromInt(int64(eventCount)) // #nosec G115 -- test store, bounded
 	case aggSet[types.AggregationCountUnique]:
-		return decimal.NewFromInt(int64(countUnique))
+		return decimal.NewFromInt(int64(countUnique)) // #nosec G115 -- test store, bounded
 	case aggSet[types.AggregationMax]:
 		return aggregateScalar(records, types.AggregationMax)
 	case aggSet[types.AggregationAvg]:
@@ -1041,18 +1051,20 @@ func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, st
 	return filtered[offset:end], nil
 }
 
-// GetByEventID returns the meter_usage record for a single event, or nil if not found.
-func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.
+func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, r := range s.records {
-		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ID == eventID {
-			// Return minimal copy with only the fields needed for debug response
+		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
 			return &events.MeterUsage{
 				Event: events.Event{
 					ID:                 eventID,
 					ExternalCustomerID: r.ExternalCustomerID,
+					IngestedAt:         r.IngestedAt,
+					Properties:         r.Properties,
+					Timestamp:          r.Timestamp,
 				},
 				MeterID:  r.MeterID,
 				QtyTotal: r.QtyTotal,
@@ -1060,6 +1072,113 @@ func (s *InMemoryMeterUsageStore) GetByEventID(_ context.Context, tenantID, envi
 		}
 	}
 	return nil, nil
+}
+
+// GetUsageActivitySince mirrors the ClickHouse activity query: distinct
+// customers with usage ingested after the given time.
+func (s *InMemoryMeterUsageStore) GetUsageActivitySince(_ context.Context, params *events.UsageActivityParams) (*events.UsageActivity, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	seen := map[string]struct{}{}
+	activity := &events.UsageActivity{}
+	for _, r := range s.records {
+		if r.TenantID != params.TenantID || r.EnvironmentID != params.EnvironmentID {
+			continue
+		}
+		if r.IngestedAt.Before(params.IngestedAfter) {
+			continue
+		}
+		if !params.TimestampAfter.IsZero() && r.Timestamp.Before(params.TimestampAfter) {
+			continue
+		}
+		// external_customer_id, mirroring the ClickHouse column. MeterUsage
+		// embeds an Event with a CustomerID field that the table does not have,
+		// so keying on it here would pass in tests and fail in production.
+		if r.ExternalCustomerID == "" {
+			activity.Unattributed = true
+			continue
+		}
+		if _, ok := seen[r.ExternalCustomerID]; ok {
+			continue
+		}
+		seen[r.ExternalCustomerID] = struct{}{}
+		activity.ExternalCustomerIDs = append(activity.ExternalCustomerIDs, r.ExternalCustomerID)
+	}
+	sort.Strings(activity.ExternalCustomerIDs)
+	return activity, nil
+}
+
+// GetDailyUsageByMeter mirrors BuildDailyUsageQuery: per-day SUM(qty_total)
+// over [StartTime, EndTime) for every meter in MeterIDs, keyed by meter id.
+// Day bucketing honors params.Timezone (an IANA name), falling back to UTC
+// when empty or unresolvable, mirroring the ClickHouse path's
+// normalizeCHTimezone default.
+func (s *InMemoryMeterUsageStore) GetDailyUsageByMeter(_ context.Context, params *events.DailyUsageParams) (map[string][]events.DailyUsagePoint, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return map[string][]events.DailyUsagePoint{}, nil
+	}
+
+	loc := time.UTC
+	if params.Timezone != "" {
+		if l, err := time.LoadLocation(params.Timezone); err == nil {
+			loc = l
+		}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type meterDay struct {
+		meterID string
+		day     time.Time
+	}
+	dayTotals := make(map[meterDay]decimal.Decimal)
+	for _, r := range s.records {
+		if r.TenantID != params.TenantID || r.EnvironmentID != params.EnvironmentID {
+			continue
+		}
+		if !lo.Contains(params.MeterIDs, r.MeterID) {
+			continue
+		}
+		if len(params.ExternalCustomerIDs) > 0 && !lo.Contains(params.ExternalCustomerIDs, r.ExternalCustomerID) {
+			continue
+		}
+		if !params.StartTime.IsZero() && r.Timestamp.Before(params.StartTime) {
+			continue
+		}
+		if !params.EndTime.IsZero() && !r.Timestamp.Before(params.EndTime) {
+			continue
+		}
+		local := r.Timestamp.In(loc)
+		day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+		key := meterDay{meterID: r.MeterID, day: day}
+		dayTotals[key] = dayTotals[key].Add(r.QtyTotal)
+	}
+
+	keys := make([]meterDay, 0, len(dayTotals))
+	for k := range dayTotals {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].meterID != keys[j].meterID {
+			return keys[i].meterID < keys[j].meterID
+		}
+		return keys[i].day.Before(keys[j].day)
+	})
+
+	byMeter := make(map[string][]events.DailyUsagePoint, len(params.MeterIDs))
+	for _, k := range keys {
+		byMeter[k.meterID] = append(byMeter[k.meterID], events.DailyUsagePoint{Day: k.day, Qty: dayTotals[k]})
+	}
+	return byMeter, nil
 }
 
 // Ensure interface compliance

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -124,6 +123,9 @@ func apiImmutableSettingFields(key types.SettingKey) []string {
 		// A tenant that could set it would be approving itself.
 		return []string{"active"}
 	}
+	if key == types.SettingKeyUsageAlertConfig {
+		return []string{types.UsageAlertConfigFieldScheduleDelaySeconds, types.UsageAlertConfigFieldStaleAfterSeconds}
+	}
 	return nil
 }
 
@@ -226,7 +228,7 @@ func GetSetting[T any](s *settingsService, ctx context.Context, key types.Settin
 	var zero T
 
 	setting, err := s.fetchSetting(ctx, key)
-	if ent.IsNotFound(err) {
+	if ierr.IsNotFound(err) {
 		// Return default value if setting doesn't exist
 		return getDefaultValue[T](key)
 	}
@@ -288,7 +290,7 @@ func UpdateSetting[T types.SettingConfig](s *settingsService, ctx context.Contex
 	// Fetch existing setting to check if it exists
 	setting, err := s.fetchSetting(ctx, key)
 
-	if ent.IsNotFound(err) {
+	if ierr.IsNotFound(err) {
 		// Create new setting
 		newSetting := &settings.Setting{
 			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
@@ -352,6 +354,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.CustomAnalyticsConfig](s, ctx, key)
 	case types.SettingKeyWalletBalanceAlertConfig:
 		return getSettingByKey[types.AlertSettings](s, ctx, key)
+	case types.SettingKeySubscriptionAlertConfig, types.SettingKeyEntitlementAlertConfig:
+		return getSettingByKey[types.AlertToggleConfig](s, ctx, key)
 	case types.SettingKeyCustomerPortalConfig:
 		return getSettingByKey[types.CustomerPortalConfig](s, ctx, key)
 	case types.SettingKeyEventIngestionFilter:
@@ -362,10 +366,16 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return getSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key)
+	case types.SettingKeyUsageAlertConfig:
+		return getSettingByKey[types.UsageAlertConfig](s, ctx, key)
 	case types.SettingKeySAMLConfig:
 		return getSettingByKey[types.SAMLConfig](s, ctx, key)
 	case types.SettingKeyWalletTopupConfig:
 		return getSettingByKey[types.WalletTopupConfig](s, ctx, key)
+	case types.SettingKeyCustomCurrencyConfig:
+		return getSettingByKey[types.CustomCurrencyConfig](s, ctx, key)
+	case types.SettingKeyTaxConfig:
+		return getSettingByKey[types.TaxConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -410,6 +420,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.CustomAnalyticsConfig](s, ctx, key, req)
 	case types.SettingKeyWalletBalanceAlertConfig:
 		return updateSettingByKey[*types.AlertSettings](s, ctx, key, req)
+	case types.SettingKeySubscriptionAlertConfig, types.SettingKeyEntitlementAlertConfig:
+		return updateSettingByKey[*types.AlertToggleConfig](s, ctx, key, req)
 	case types.SettingKeyCustomerPortalConfig:
 		return updateSettingByKey[types.CustomerPortalConfig](s, ctx, key, req)
 	case types.SettingKeyEventIngestionFilter:
@@ -420,10 +432,16 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.BonusCreditsTopupConfig](s, ctx, key, req)
 	case types.SettingKeyDraftInvoiceRecomputeConfig:
 		return updateSettingByKey[types.DraftInvoiceRecomputeConfig](s, ctx, key, req)
+	case types.SettingKeyUsageAlertConfig:
+		return updateSettingByKey[types.UsageAlertConfig](s, ctx, key, req)
 	case types.SettingKeySAMLConfig:
 		return updateSettingByKey[types.SAMLConfig](s, ctx, key, req)
 	case types.SettingKeyWalletTopupConfig:
 		return updateSettingByKey[types.WalletTopupConfig](s, ctx, key, req)
+	case types.SettingKeyCustomCurrencyConfig:
+		return updateSettingByKey[*types.CustomCurrencyConfig](s, ctx, key, req)
+	case types.SettingKeyTaxConfig:
+		return updateSettingByKey[types.TaxConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -446,7 +464,7 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 
 	// Check if setting exists
 	_, err := s.fetchSetting(ctx, key)
-	if ent.IsNotFound(err) {
+	if ierr.IsNotFound(err) {
 		return ierr.NewErrorf("setting with key '%s' not found", key).
 			WithHintf("Setting with key %s not found", key).
 			Mark(ierr.ErrNotFound)
@@ -467,7 +485,7 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 // If setting exists: returns default merged with fetched (fetched keys overwrite default).
 func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
 	setting, err := s.fetchSetting(ctx, key)
-	if err != nil && !ent.IsNotFound(err) {
+	if err != nil && !ierr.IsNotFound(err) {
 		return nil, err
 	}
 

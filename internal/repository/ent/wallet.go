@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -206,7 +207,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 		SetWalletStatus(status).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -219,7 +220,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 			Mark(ierr.ErrDatabase)
 	}
 
-	if count == 0 {
+	if len(count) == 0 {
 		// Create an error to pass to SetSpanError instead of using ErrorBuilder directly
 		notFoundErr := fmt.Errorf("wallet not found or already updated")
 		SetSpanError(span, notFoundErr)
@@ -266,6 +267,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 					wallettransaction.ExpiryDateIsNil(),
 					wallettransaction.ExpiryDateGTE(timeReference),
 				),
+				wallettransaction.CreatedAtLT(timeReference),
 				wallettransaction.StatusEQ(string(types.StatusPublished)),
 				wallettransaction.TransactionStatusEQ(types.TransactionStatusCompleted),
 			).
@@ -324,7 +326,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 	defer FinishSpan(span)
 
 	remainingAmount := amount
-	consumedCreditTransactions := make([]*walletdomain.Transaction, 0)
+	consumedCreditTransactions := make([]*walletdomain.Transaction, 0, len(credits))
 
 	for _, credit := range credits {
 		if remainingAmount.IsZero() {
@@ -335,7 +337,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		newAvailable := credit.CreditsAvailable.Sub(toConsume)
 
 		// Update credit's available amount
-		_, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
+		updated, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
 			ID: credit.ID,
 		}).
 			SetCreditsAvailable(newAvailable).
@@ -354,7 +356,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
-		consumedCreditTransactions = append(consumedCreditTransactions, credit)
+		consumedCreditTransactions = append(consumedCreditTransactions, walletdomain.TransactionFromEnt(updated))
 	}
 
 	return consumedCreditTransactions, nil
@@ -383,7 +385,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		parentTransactionID = &tx.ParentTransactionID
 	}
 
-	transaction, err := client.WalletTransaction.Create().
+	create := client.WalletTransaction.Create().
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
 		SetWalletID(tx.WalletID).
@@ -413,7 +415,14 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetIdempotencyKey(tx.IdempotencyKey).
 		SetNillablePriority(tx.Priority).
 		SetNillableParentTransactionID(parentTransactionID).
-		Save(ctx)
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID))
+	// Left unset when empty so the column is SQL NULL; ent would otherwise store JSON null.
+	if len(tx.ConsumptionBreakdown) > 0 {
+		create.SetConsumptionBreakdown(tx.ConsumptionBreakdown)
+	}
+
+	transaction, err := create.Save(ctx)
 
 	if err != nil {
 		if ent.IsConstraintError(err) {
@@ -451,13 +460,13 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	})
 	defer FinishSpan(span)
 
-	err := r.client.Writer(ctx).Wallet.Update().
+	_, err := r.client.Writer(ctx).Wallet.Update().
 		Where(wallet.ID(walletID)).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Exec(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		return ierr.WithError(err).
@@ -735,6 +744,55 @@ func (r *walletRepository) CountWalletTransactions(ctx context.Context, f *types
 	return count, nil
 }
 
+func (r *walletRepository) SumCreditAmountsByFilter(ctx context.Context, f *types.WalletTransactionFilter) (decimal.Decimal, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "wallet", "sum_wallet_transactions_credit_amount", map[string]interface{}{
+		"filter": f,
+	})
+	defer FinishSpan(span)
+
+	if f == nil {
+		f = types.NewNoLimitWalletTransactionFilter()
+	}
+
+	client := r.client.Reader(ctx)
+	query := client.WalletTransaction.Query()
+	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	var err error
+	if f != nil {
+		query, err = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		if err != nil {
+			return decimal.Zero, err
+		}
+	}
+
+	// COALESCE guards the zero-rows case: SUM() over no rows is NULL, and decimal.Decimal
+	// has no NULL representation to scan it into. The alias is required — the scanner maps
+	// result columns onto struct fields by name, and an unaliased expression comes back as
+	// "coalesce", matching nothing.
+	sumCreditAmount := func(s *sql.Selector) string {
+		return sql.As(fmt.Sprintf("COALESCE(%s, 0)", sql.Sum(s.C(wallettransaction.FieldCreditAmount))), "sum")
+	}
+
+	var result []struct {
+		Sum decimal.Decimal `json:"sum"`
+	}
+	if err := query.Aggregate(sumCreditAmount).Scan(ctx, &result); err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithHint("Failed to sum wallet transactions").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": f.WalletID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(result) == 0 {
+		return decimal.Zero, nil
+	}
+
+	return result[0].Sum, nil
+}
+
 func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id string, status types.TransactionStatus) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "update_transaction_status", map[string]interface{}{
@@ -799,6 +857,8 @@ func (r *walletRepository) UpdateTransaction(ctx context.Context, tx *walletdoma
 		SetCreditBalanceBefore(tx.CreditBalanceBefore).
 		SetCreditBalanceAfter(tx.CreditBalanceAfter).
 		SetCreditsAvailable(tx.CreditsAvailable).
+		SetNillableSourceType(lo.EmptyableToPtr(tx.SourceType)).
+		SetNillableSourceID(lo.EmptyableToPtr(tx.SourceID)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(tx.UpdatedAt).
 		Save(ctx)
@@ -1002,7 +1062,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	update.SetUpdatedAt(time.Now().UTC())
 	update.SetUpdatedBy(types.GetUserID(ctx))
 
-	count, err := update.Save(ctx)
+	count, err := update.SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to update wallet").
@@ -1012,7 +1072,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			Mark(ierr.ErrDatabase)
 	}
 
-	if count == 0 {
+	if len(count) == 0 {
 		return ierr.NewError("wallet not found or already updated").
 			WithHint("The wallet may not exist or has already been updated").
 			Mark(ierr.ErrNotFound)
@@ -1116,11 +1176,16 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			wt.credit_balance_after,
 			wt.reference_id,
 			wt.transaction_reason,
+			wt.credit_amount,
+			wt.currency,
+			CASE WHEN wt.source_type = 'INVOICE' THEN wt.source_id END,
+			` + amountPaidSQL("wt", "i") + `,
 			wt.created_at
 		FROM
 			wallet_transactions wt
 			INNER JOIN wallets w ON w.id = wt.wallet_id
 			INNER JOIN customers c ON c.id = w.customer_id
+			LEFT JOIN invoices i ON i.id = wt.source_id AND wt.source_type = 'INVOICE'
 		WHERE
 			wt.tenant_id = $1
 			AND wt.environment_id = $2
@@ -1161,6 +1226,7 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 	result := make([]*walletdomain.CreditTopupsExportData, 0)
 	for rows.Next() {
 		exportData := &walletdomain.CreditTopupsExportData{}
+		var invoiceID *string
 		err := rows.Scan(
 			&exportData.TopupID,
 			&exportData.ExternalID,
@@ -1171,12 +1237,19 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.CreditBalanceAfter,
 			&exportData.ReferenceID,
 			&exportData.TransactionReason,
+			&exportData.Credits,
+			&exportData.Currency,
+			&invoiceID,
+			&exportData.AmountPaid,
 			&exportData.CreatedAt,
 		)
 		if err != nil {
-			r.logger.Error(ctx, "failed to scan credit topup export data", "error", err)
-			continue
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read credit topup row").
+				Mark(ierr.ErrDatabase)
 		}
+		exportData.InvoiceID = lo.FromPtr(invoiceID)
 
 		result = append(result, exportData)
 	}
@@ -1185,6 +1258,222 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to iterate credit topup rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return result, nil
+}
+
+// amountPaidSQL is what a credit batch was bought for: the invoice after discount and before tax
+// for an invoiced purchase, zero for free and bonus grants, and NULL for any other credit.
+func amountPaidSQL(tx, inv string) string {
+	return fmt.Sprintf(`CASE
+				WHEN %[1]s.transaction_reason = '%[3]s' THEN %[2]s.total - %[2]s.total_tax
+				WHEN %[1]s.transaction_reason IN ('%[4]s', '%[5]s') THEN 0
+			END`, tx, inv,
+		types.TransactionReasonPurchasedCreditInvoiced,
+		types.TransactionReasonFreeCredit,
+		types.TransactionReasonPurchasedCreditBonus)
+}
+
+// drawnSQL expands a debit's consumption_breakdown into one row per credit drawn from, with the
+// credit and its invoice. A debit with no breakdown keeps a single row with no credit.
+func drawnSQL(debit string) string {
+	return fmt.Sprintf(`LEFT JOIN LATERAL ROWS FROM (
+				jsonb_to_recordset(CASE WHEN jsonb_typeof(%[1]s.consumption_breakdown) = 'array' THEN %[1]s.consumption_breakdown END)
+					AS (credit_transaction_id text, credits numeric)
+			) WITH ORDINALITY AS drawn(credit_transaction_id, credits, ord) ON true
+			LEFT JOIN wallet_transactions batch ON batch.id = drawn.credit_transaction_id
+			LEFT JOIN invoices invoice ON invoice.id = batch.source_id AND batch.source_type = 'INVOICE'`, debit)
+}
+
+// drawnValueSQL is the share of what was paid for the credit drawn from that the drawn credits
+// take, or 0 when the credit has no paid amount.
+func drawnValueSQL() string {
+	return `COALESCE(drawn.credits * ` + amountPaidSQL("batch", "invoice") + ` / NULLIF(batch.credit_amount, 0), 0)`
+}
+
+func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after walletdomain.WalletDebitsExportCursor, endTime time.Time, limit int) ([]*walletdomain.WalletDebitsExportData, error) {
+	span := StartRepositorySpan(ctx, "wallet", "get_wallet_debits_for_export", map[string]interface{}{
+		"tenant_id":        tenantID,
+		"env_id":           envID,
+		"after_created_at": after.CreatedAt,
+		"after_debit_id":   after.DebitID,
+		"end":              endTime,
+		"limit":            limit,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+
+	// Pages are keyed on the last debit seen rather than an offset, so each page is an index range
+	// read from where the previous one stopped, and a debit's batch rows never straddle two pages.
+	// Each debit expands to one row per credit batch in its consumption_breakdown; a debit without
+	// one (written before breakdowns were recorded) keeps a single row with no batch.
+	query := `
+		WITH page AS (
+			SELECT debit.*
+			FROM wallet_transactions debit
+			WHERE
+				debit.tenant_id = $1
+				AND debit.environment_id = $2
+				AND debit.type = $3
+				AND debit.transaction_status = $4
+				AND debit.status = $5
+				AND debit.created_at >= $6
+				AND (debit.created_at, debit.id) > ($6, $7)
+				AND debit.created_at < $8
+			ORDER BY debit.created_at ASC, debit.id ASC
+			LIMIT $9
+		),
+		-- The wallet's value after each step of its history up to the page: a credit adds what was
+		-- paid for it, and each credit a debit draws from takes away its share. Credits come before
+		-- debits made at the same time.
+		wallet_value AS (
+			SELECT
+				step.debit_id,
+				step.ord,
+				SUM(step.change) OVER (PARTITION BY step.wallet_id ORDER BY step.created_at, step.kind, step.tx_id, step.ord) AS value_after
+			FROM (
+				SELECT
+					credit.wallet_id,
+					credit.created_at,
+					0 AS kind,
+					credit.id AS tx_id,
+					0::bigint AS ord,
+					NULL::text AS debit_id,
+					COALESCE(` + amountPaidSQL("credit", "credit_invoice") + `, 0) AS change
+				FROM
+					wallet_transactions credit
+					LEFT JOIN invoices credit_invoice ON credit_invoice.id = credit.source_id AND credit.source_type = 'INVOICE'
+				WHERE
+					credit.tenant_id = $1
+					AND credit.environment_id = $2
+					AND credit.wallet_id IN (SELECT wallet_id FROM page)
+					AND credit.type = $10
+					AND credit.transaction_status = $4
+					AND credit.status = $5
+					AND credit.created_at <= (SELECT MAX(created_at) FROM page)
+				UNION ALL
+				SELECT
+					debit.wallet_id,
+					debit.created_at,
+					1,
+					debit.id,
+					COALESCE(drawn.ord, 0),
+					debit.id,
+					-` + drawnValueSQL() + `
+				FROM
+					wallet_transactions debit
+					` + drawnSQL("debit") + `
+				WHERE
+					debit.tenant_id = $1
+					AND debit.environment_id = $2
+					AND debit.wallet_id IN (SELECT wallet_id FROM page)
+					AND debit.type = $3
+					AND debit.transaction_status = $4
+					AND debit.status = $5
+					AND debit.created_at <= (SELECT MAX(created_at) FROM page)
+			) step
+		)
+		SELECT
+			debit.id,
+			customer.external_id,
+			customer.name,
+			debit.wallet_id,
+			debit.currency,
+			debit.transaction_reason,
+			CASE WHEN debit.source_type = 'INVOICE' THEN debit.source_id END,
+			drawn.credit_transaction_id,
+			COALESCE(drawn.credits, debit.credit_amount),
+			debit.credit_balance_before - COALESCE(SUM(drawn.credits) OVER drawn_so_far - drawn.credits, 0),
+			debit.credit_balance_before - COALESCE(SUM(drawn.credits) OVER drawn_so_far, debit.credit_amount),
+			debit.amount / NULLIF(debit.credit_amount, 0),
+			value.value_after + ` + drawnValueSQL() + `,
+			value.value_after,
+			batch.credit_amount,
+			` + amountPaidSQL("batch", "invoice") + `,
+			debit.created_at
+		FROM
+			page debit
+			INNER JOIN wallets wallet ON wallet.id = debit.wallet_id
+			INNER JOIN customers customer ON customer.id = wallet.customer_id
+			` + drawnSQL("debit") + `
+			LEFT JOIN wallet_value value ON value.debit_id = debit.id AND value.ord = COALESCE(drawn.ord, 0)
+		WINDOW drawn_so_far AS (PARTITION BY debit.id ORDER BY drawn.ord)
+		ORDER BY debit.created_at ASC, debit.id ASC, drawn.ord ASC
+	`
+
+	rows, err := client.QueryContext(ctx, query,
+		tenantID,
+		envID,
+		string(types.TransactionTypeDebit),
+		string(types.TransactionStatusCompleted),
+		string(types.StatusPublished),
+		after.CreatedAt,
+		after.DebitID,
+		endTime,
+		limit,
+		string(types.TransactionTypeCredit),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch wallet debits for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id":      tenantID,
+				"env_id":         envID,
+				"after_debit_id": after.DebitID,
+				"limit":          limit,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	result := make([]*walletdomain.WalletDebitsExportData, 0)
+	for rows.Next() {
+		exportData := &walletdomain.WalletDebitsExportData{}
+		var invoiceID, creditTransactionID *string
+		var conversionRate *decimal.Decimal
+		err := rows.Scan(
+			&exportData.DebitID,
+			&exportData.ExternalID,
+			&exportData.CustomerName,
+			&exportData.WalletID,
+			&exportData.Currency,
+			&exportData.TransactionReason,
+			&invoiceID,
+			&creditTransactionID,
+			&exportData.Credits,
+			&exportData.CreditBalanceBefore,
+			&exportData.CreditBalanceAfter,
+			&conversionRate,
+			&exportData.TopUpAmountRemainingBefore,
+			&exportData.TopUpAmountRemainingAfter,
+			&exportData.WalletTxnCredits,
+			&exportData.WalletTxnAmountPaid,
+			&exportData.CreatedAt,
+		)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read wallet debit row").
+				Mark(ierr.ErrDatabase)
+		}
+		exportData.InvoiceID = lo.FromPtr(invoiceID)
+		exportData.CreditTransactionID = lo.FromPtr(creditTransactionID)
+		if conversionRate != nil {
+			exportData.WalletBalanceBefore = exportData.CreditBalanceBefore.Mul(*conversionRate)
+			exportData.WalletBalanceAfter = exportData.CreditBalanceAfter.Mul(*conversionRate)
+		}
+
+		result = append(result, exportData)
+	}
+
+	if err = rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate wallet debit rows").
 			Mark(ierr.ErrDatabase)
 	}
 

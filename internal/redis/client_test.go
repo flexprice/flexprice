@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"context"
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -125,6 +127,49 @@ func TestBuildOptions_CredentialSplit(t *testing.T) {
 	}
 }
 
+// TestBuildOptions_TLS guards the TLS wiring: skip-verify is configurable (not
+// hardcoded), ServerName is honoured, and MinVersion is TLS 1.2.
+func TestBuildOptions_TLS(t *testing.T) {
+	t.Run("no TLS -> nil config", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if opts.TLSConfig != nil {
+			t.Fatalf("TLSConfig = %v, want nil when UseTLS is false", opts.TLSConfig)
+		}
+	})
+
+	t.Run("verify opt-in wires ServerName", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379, UseTLS: true, TLSSkipVerify: false, TLSServerName: "cache.example.com"})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if opts.TLSConfig == nil {
+			t.Fatal("TLSConfig = nil, want set when UseTLS is true")
+		}
+		if opts.TLSConfig.InsecureSkipVerify {
+			t.Error("InsecureSkipVerify = true, want false when TLSSkipVerify is false")
+		}
+		if opts.TLSConfig.ServerName != "cache.example.com" {
+			t.Errorf("ServerName = %q, want cache.example.com", opts.TLSConfig.ServerName)
+		}
+		if opts.TLSConfig.MinVersion != tls.VersionTLS12 {
+			t.Errorf("MinVersion = %d, want TLS 1.2", opts.TLSConfig.MinVersion)
+		}
+	})
+
+	t.Run("skip-verify honoured", func(t *testing.T) {
+		opts, _, err := buildOptions(config.RedisConfig{Host: "r", Port: 6379, UseTLS: true, TLSSkipVerify: true})
+		if err != nil {
+			t.Fatalf("buildOptions() error: %v", err)
+		}
+		if !opts.TLSConfig.InsecureSkipVerify {
+			t.Error("InsecureSkipVerify = false, want true when TLSSkipVerify is set")
+		}
+	})
+}
+
 // TestBuildOptions_UsernameOptional guards backward compatibility: an unset
 // Username must stay empty so go-redis keeps using plain AUTH <password>.
 func TestBuildOptions_UsernameOptional(t *testing.T) {
@@ -163,8 +208,6 @@ func TestNewClient_SentinelMissingAddrsErrors(t *testing.T) {
 		// Empty addrs must be rejected up front — go-redis would otherwise
 		// substitute 127.0.0.1:26379 and connect to a phantom local sentinel.
 		{name: "empty addrs", addrs: nil},
-		// Unreachable addrs must surface a connection error, not hang.
-		{name: "unreachable addr", addrs: []string{"127.0.0.1:1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -183,6 +226,50 @@ func TestNewClient_SentinelMissingAddrsErrors(t *testing.T) {
 					_ = client.Close()
 				}
 				t.Fatal("expected an error, got nil")
+			}
+		})
+	}
+}
+
+// TestNewClient_UnreachableKeepsClient: an unreachable Redis at startup still yields a
+// client whose calls fail fast, so dependents never see a nil client.
+func TestNewClient_UnreachableKeepsClient(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  func(cfg *config.Configuration)
+	}{
+		{name: "standalone", cfg: func(cfg *config.Configuration) {
+			cfg.Redis.Host = "127.0.0.1"
+			cfg.Redis.Port = 1
+		}},
+		{name: "sentinel", cfg: func(cfg *config.Configuration) {
+			cfg.Redis.SentinelMasterName = "mymaster"
+			cfg.Redis.SentinelAddrs = []string{"127.0.0.1:1"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.GetDefaultConfig()
+			cfg.Redis.Timeout = 500 * time.Millisecond
+			tt.cfg(cfg)
+
+			log, err := logger.NewLogger(cfg)
+			if err != nil {
+				t.Fatalf("logger: %v", err)
+			}
+			client, err := NewClient(cfg, log)
+			if err != nil {
+				t.Fatalf("expected a client, got error: %v", err)
+			}
+			if client == nil {
+				t.Fatal("expected a client, got nil")
+			}
+			defer client.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := client.Ping(ctx); err == nil {
+				t.Fatal("expected ping to fail against unreachable redis")
 			}
 		})
 	}

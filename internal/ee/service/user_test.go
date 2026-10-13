@@ -203,7 +203,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 			errContains: "",
 		})
 
-		// reader is a person's access level, so a service account must not hold it.
 		tests = append(tests, struct {
 			name        string
 			req         dto.CreateUserRequest
@@ -211,8 +210,29 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 			wantErr     bool
 			errContains string
 		}{
-			name: "type_service_account_with_user_role_rejected",
+			name: "type_service_account_with_all_reader_success",
 			req:  dto.CreateUserRequest{Type: types.UserTypeServiceAccount, Roles: []string{types.RoleAllReader.String()}},
+			setup: func() *userService {
+				return &userService{
+					userRepo:        s.userRepo,
+					tenantRepo:      s.tenantRepo,
+					rbacService:     rbacSvc,
+					settingsService: nil,
+				}
+			},
+			wantErr:     false,
+			errContains: "",
+		})
+
+		tests = append(tests, struct {
+			name        string
+			req         dto.CreateUserRequest
+			setup       func() *userService
+			wantErr     bool
+			errContains string
+		}{
+			name: "type_service_account_with_writer_role_rejected",
+			req:  dto.CreateUserRequest{Type: types.UserTypeServiceAccount, Roles: []string{types.RoleAllWriter.String()}},
 			setup: func() *userService {
 				return &userService{
 					userRepo:        s.userRepo,
@@ -275,6 +295,11 @@ func (s *UserServiceSuite) TestCreateUser_CannotGrantBeyondCallerAccess() {
 			name:        "writer can create a write-scoped service account",
 			callerRoles: []string{types.RoleAllWriter.String()},
 			saRoles:     []string{types.RoleEventIngestor.String()},
+		},
+		{
+			name:        "reader can create a read-only service account",
+			callerRoles: []string{types.RoleAllReader.String()},
+			saRoles:     []string{types.RoleAllReader.String()},
 		},
 		{
 			name:        "reader cannot create a write-scoped service account",
@@ -1039,6 +1064,11 @@ func (s *RBACPermissionSuite) TestCanGrantRoles() {
 			callerRoles: []string{types.RoleAllReader.String()},
 			requested:   []string{types.RoleEventReader.String()},
 		},
+		{
+			name:        "reader can grant all_reader",
+			callerRoles: []string{types.RoleAllReader.String()},
+			requested:   []string{types.RoleAllReader.String()},
+		},
 
 		{
 			name:        "reader cannot grant a write scope",
@@ -1112,11 +1142,12 @@ func (s *RBACPermissionSuite) TestValidateRoles() {
 		{name: "user_may_hold_writer", userType: types.UserTypeUser, roles: []string{types.RoleAllWriter.String()}},
 		{name: "user_may_hold_reader_and_writer", userType: types.UserTypeUser, roles: []string{types.RoleAllReader.String(), types.RoleAllWriter.String()}},
 
-		// A service account holds full access or a narrow machine scope.
+		// A service account holds full access, tenant-wide read, or a narrow event scope.
 		{name: "service_account_may_hold_super_admin", userType: types.UserTypeServiceAccount, roles: []string{types.RoleSuperAdmin.String()}},
+		{name: "service_account_may_hold_reader", userType: types.UserTypeServiceAccount, roles: []string{types.RoleAllReader.String()}},
 		{name: "service_account_may_hold_event_scopes", userType: types.UserTypeServiceAccount, roles: []string{types.RoleEventIngestor.String(), types.RoleEventReader.String()}},
 
-		// The two sets are disjoint apart from super_admin.
+		// Event scopes stay service-account-only; all_writer stays user-only.
 		{
 			name:        "user_may_not_hold_event_ingestor",
 			userType:    types.UserTypeUser,
@@ -1128,13 +1159,6 @@ func (s *RBACPermissionSuite) TestValidateRoles() {
 			name:        "user_may_not_hold_event_reader",
 			userType:    types.UserTypeUser,
 			roles:       []string{types.RoleEventReader.String()},
-			wantErr:     true,
-			errContains: "not assignable to this user type",
-		},
-		{
-			name:        "service_account_may_not_hold_reader",
-			userType:    types.UserTypeServiceAccount,
-			roles:       []string{types.RoleAllReader.String()},
 			wantErr:     true,
 			errContains: "not assignable to this user type",
 		},

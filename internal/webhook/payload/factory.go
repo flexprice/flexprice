@@ -37,6 +37,26 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewInvoicePayloadBuilder(f.services)
 	}
 
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventInvoiceSyncSuccess,
+		types.WebhookEventInvoiceSyncFailed,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewInvoiceSyncPayloadBuilder(f.services)
+		}
+	}
+
+	// Register refund builders
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventRefundCreated,
+		types.WebhookEventRefundSucceeded,
+		types.WebhookEventRefundFailed,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewRefundPayloadBuilder(f.services)
+		}
+	}
+
 	// Register communication builder
 	f.builders[types.WebhookEventInvoiceCommunicationTriggered] = func() PayloadBuilder {
 		return NewCommunicationPayloadBuilder(f.services)

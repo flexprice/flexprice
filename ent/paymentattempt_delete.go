@@ -20,56 +20,56 @@ type PaymentAttemptDelete struct {
 }
 
 // Where appends a list predicates to the PaymentAttemptDelete builder.
-func (pad *PaymentAttemptDelete) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptDelete {
-	pad.mutation.Where(ps...)
-	return pad
+func (_d *PaymentAttemptDelete) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (pad *PaymentAttemptDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, pad.sqlExec, pad.mutation, pad.hooks)
+func (_d *PaymentAttemptDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pad *PaymentAttemptDelete) ExecX(ctx context.Context) int {
-	n, err := pad.Exec(ctx)
+func (_d *PaymentAttemptDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (pad *PaymentAttemptDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *PaymentAttemptDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(paymentattempt.Table, sqlgraph.NewFieldSpec(paymentattempt.FieldID, field.TypeString))
-	if ps := pad.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, pad.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	pad.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // PaymentAttemptDeleteOne is the builder for deleting a single PaymentAttempt entity.
 type PaymentAttemptDeleteOne struct {
-	pad *PaymentAttemptDelete
+	_d *PaymentAttemptDelete
 }
 
 // Where appends a list predicates to the PaymentAttemptDelete builder.
-func (pado *PaymentAttemptDeleteOne) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptDeleteOne {
-	pado.pad.mutation.Where(ps...)
-	return pado
+func (_d *PaymentAttemptDeleteOne) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (pado *PaymentAttemptDeleteOne) Exec(ctx context.Context) error {
-	n, err := pado.pad.Exec(ctx)
+func (_d *PaymentAttemptDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (pado *PaymentAttemptDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pado *PaymentAttemptDeleteOne) ExecX(ctx context.Context) {
-	if err := pado.Exec(ctx); err != nil {
+func (_d *PaymentAttemptDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

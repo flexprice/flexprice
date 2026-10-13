@@ -9,7 +9,7 @@ import (
 // OAuth credential field names (used in Credentials map)
 const (
 	// Common OAuth credentials
-	OAuthCredentialClientID     = "client_id"
+	OAuthCredentialClientID     = "client_id" // #nosec G101 -- map key name, not a secret
 	OAuthCredentialClientSecret = "client_secret"
 
 	// OAuth tokens (managed by backend after auth code exchange)
@@ -18,7 +18,7 @@ const (
 	OAuthCredentialAuthCode     = "auth_code" // Temporary during OAuth flow
 
 	// Webhook security
-	OAuthCredentialWebhookVerifierToken = "webhook_verifier_token"
+	OAuthCredentialWebhookVerifierToken = "webhook_verifier_token" // #nosec G101 -- field name constant, not a secret
 	// OAuthCredentialWebhookSecret is the Zoho Books webhook signing secret (optional at OAuth init; stored encrypted).
 	OAuthCredentialWebhookSecret = "webhook_secret"
 

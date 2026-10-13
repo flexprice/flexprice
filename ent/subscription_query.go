@@ -45,44 +45,44 @@ type SubscriptionQuery struct {
 }
 
 // Where adds a new predicate for the SubscriptionQuery builder.
-func (sq *SubscriptionQuery) Where(ps ...predicate.Subscription) *SubscriptionQuery {
-	sq.predicates = append(sq.predicates, ps...)
-	return sq
+func (_q *SubscriptionQuery) Where(ps ...predicate.Subscription) *SubscriptionQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (sq *SubscriptionQuery) Limit(limit int) *SubscriptionQuery {
-	sq.ctx.Limit = &limit
-	return sq
+func (_q *SubscriptionQuery) Limit(limit int) *SubscriptionQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (sq *SubscriptionQuery) Offset(offset int) *SubscriptionQuery {
-	sq.ctx.Offset = &offset
-	return sq
+func (_q *SubscriptionQuery) Offset(offset int) *SubscriptionQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (sq *SubscriptionQuery) Unique(unique bool) *SubscriptionQuery {
-	sq.ctx.Unique = &unique
-	return sq
+func (_q *SubscriptionQuery) Unique(unique bool) *SubscriptionQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (sq *SubscriptionQuery) Order(o ...subscription.OrderOption) *SubscriptionQuery {
-	sq.order = append(sq.order, o...)
-	return sq
+func (_q *SubscriptionQuery) Order(o ...subscription.OrderOption) *SubscriptionQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryLineItems chains the current query on the "line_items" edge.
-func (sq *SubscriptionQuery) QueryLineItems() *SubscriptionLineItemQuery {
-	query := (&SubscriptionLineItemClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryLineItems() *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -91,20 +91,20 @@ func (sq *SubscriptionQuery) QueryLineItems() *SubscriptionLineItemQuery {
 			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.LineItemsTable, subscription.LineItemsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryPauses chains the current query on the "pauses" edge.
-func (sq *SubscriptionQuery) QueryPauses() *SubscriptionPauseQuery {
-	query := (&SubscriptionPauseClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryPauses() *SubscriptionPauseQuery {
+	query := (&SubscriptionPauseClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -113,20 +113,20 @@ func (sq *SubscriptionQuery) QueryPauses() *SubscriptionPauseQuery {
 			sqlgraph.To(subscriptionpause.Table, subscriptionpause.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.PausesTable, subscription.PausesColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryPhases chains the current query on the "phases" edge.
-func (sq *SubscriptionQuery) QueryPhases() *SubscriptionPhaseQuery {
-	query := (&SubscriptionPhaseClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryPhases() *SubscriptionPhaseQuery {
+	query := (&SubscriptionPhaseClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -135,20 +135,20 @@ func (sq *SubscriptionQuery) QueryPhases() *SubscriptionPhaseQuery {
 			sqlgraph.To(subscriptionphase.Table, subscriptionphase.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.PhasesTable, subscription.PhasesColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QuerySchedules chains the current query on the "schedules" edge.
-func (sq *SubscriptionQuery) QuerySchedules() *SubscriptionScheduleQuery {
-	query := (&SubscriptionScheduleClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QuerySchedules() *SubscriptionScheduleQuery {
+	query := (&SubscriptionScheduleClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -157,20 +157,20 @@ func (sq *SubscriptionQuery) QuerySchedules() *SubscriptionScheduleQuery {
 			sqlgraph.To(subscriptionschedule.Table, subscriptionschedule.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.SchedulesTable, subscription.SchedulesColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCreditGrants chains the current query on the "credit_grants" edge.
-func (sq *SubscriptionQuery) QueryCreditGrants() *CreditGrantQuery {
-	query := (&CreditGrantClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryCreditGrants() *CreditGrantQuery {
+	query := (&CreditGrantClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -179,20 +179,20 @@ func (sq *SubscriptionQuery) QueryCreditGrants() *CreditGrantQuery {
 			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CreditGrantsTable, subscription.CreditGrantsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCouponAssociations chains the current query on the "coupon_associations" edge.
-func (sq *SubscriptionQuery) QueryCouponAssociations() *CouponAssociationQuery {
-	query := (&CouponAssociationClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryCouponAssociations() *CouponAssociationQuery {
+	query := (&CouponAssociationClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -201,20 +201,20 @@ func (sq *SubscriptionQuery) QueryCouponAssociations() *CouponAssociationQuery {
 			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CouponAssociationsTable, subscription.CouponAssociationsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryCouponApplications chains the current query on the "coupon_applications" edge.
-func (sq *SubscriptionQuery) QueryCouponApplications() *CouponApplicationQuery {
-	query := (&CouponApplicationClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryCouponApplications() *CouponApplicationQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -223,20 +223,20 @@ func (sq *SubscriptionQuery) QueryCouponApplications() *CouponApplicationQuery {
 			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CouponApplicationsTable, subscription.CouponApplicationsColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
 }
 
 // QueryInvoicingCustomer chains the current query on the "invoicing_customer" edge.
-func (sq *SubscriptionQuery) QueryInvoicingCustomer() *CustomerQuery {
-	query := (&CustomerClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) QueryInvoicingCustomer() *CustomerQuery {
+	query := (&CustomerClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := sq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func (sq *SubscriptionQuery) QueryInvoicingCustomer() *CustomerQuery {
 			sqlgraph.To(customer.Table, customer.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, subscription.InvoicingCustomerTable, subscription.InvoicingCustomerColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -253,8 +253,8 @@ func (sq *SubscriptionQuery) QueryInvoicingCustomer() *CustomerQuery {
 
 // First returns the first Subscription entity from the query.
 // Returns a *NotFoundError when no Subscription was found.
-func (sq *SubscriptionQuery) First(ctx context.Context) (*Subscription, error) {
-	nodes, err := sq.Limit(1).All(setContextOp(ctx, sq.ctx, ent.OpQueryFirst))
+func (_q *SubscriptionQuery) First(ctx context.Context) (*Subscription, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -265,8 +265,8 @@ func (sq *SubscriptionQuery) First(ctx context.Context) (*Subscription, error) {
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (sq *SubscriptionQuery) FirstX(ctx context.Context) *Subscription {
-	node, err := sq.First(ctx)
+func (_q *SubscriptionQuery) FirstX(ctx context.Context) *Subscription {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -275,9 +275,9 @@ func (sq *SubscriptionQuery) FirstX(ctx context.Context) *Subscription {
 
 // FirstID returns the first Subscription ID from the query.
 // Returns a *NotFoundError when no Subscription ID was found.
-func (sq *SubscriptionQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = sq.Limit(1).IDs(setContextOp(ctx, sq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -288,8 +288,8 @@ func (sq *SubscriptionQuery) FirstID(ctx context.Context) (id string, err error)
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (sq *SubscriptionQuery) FirstIDX(ctx context.Context) string {
-	id, err := sq.FirstID(ctx)
+func (_q *SubscriptionQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -299,8 +299,8 @@ func (sq *SubscriptionQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single Subscription entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one Subscription entity is found.
 // Returns a *NotFoundError when no Subscription entities are found.
-func (sq *SubscriptionQuery) Only(ctx context.Context) (*Subscription, error) {
-	nodes, err := sq.Limit(2).All(setContextOp(ctx, sq.ctx, ent.OpQueryOnly))
+func (_q *SubscriptionQuery) Only(ctx context.Context) (*Subscription, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +315,8 @@ func (sq *SubscriptionQuery) Only(ctx context.Context) (*Subscription, error) {
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (sq *SubscriptionQuery) OnlyX(ctx context.Context) *Subscription {
-	node, err := sq.Only(ctx)
+func (_q *SubscriptionQuery) OnlyX(ctx context.Context) *Subscription {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -326,9 +326,9 @@ func (sq *SubscriptionQuery) OnlyX(ctx context.Context) *Subscription {
 // OnlyID is like Only, but returns the only Subscription ID in the query.
 // Returns a *NotSingularError when more than one Subscription ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (sq *SubscriptionQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = sq.Limit(2).IDs(setContextOp(ctx, sq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -343,8 +343,8 @@ func (sq *SubscriptionQuery) OnlyID(ctx context.Context) (id string, err error) 
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (sq *SubscriptionQuery) OnlyIDX(ctx context.Context) string {
-	id, err := sq.OnlyID(ctx)
+func (_q *SubscriptionQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -352,18 +352,18 @@ func (sq *SubscriptionQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of Subscriptions.
-func (sq *SubscriptionQuery) All(ctx context.Context) ([]*Subscription, error) {
-	ctx = setContextOp(ctx, sq.ctx, ent.OpQueryAll)
-	if err := sq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionQuery) All(ctx context.Context) ([]*Subscription, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*Subscription, *SubscriptionQuery]()
-	return withInterceptors[[]*Subscription](ctx, sq, qr, sq.inters)
+	return withInterceptors[[]*Subscription](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (sq *SubscriptionQuery) AllX(ctx context.Context) []*Subscription {
-	nodes, err := sq.All(ctx)
+func (_q *SubscriptionQuery) AllX(ctx context.Context) []*Subscription {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -371,20 +371,20 @@ func (sq *SubscriptionQuery) AllX(ctx context.Context) []*Subscription {
 }
 
 // IDs executes the query and returns a list of Subscription IDs.
-func (sq *SubscriptionQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if sq.ctx.Unique == nil && sq.path != nil {
-		sq.Unique(true)
+func (_q *SubscriptionQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, sq.ctx, ent.OpQueryIDs)
-	if err = sq.Select(subscription.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(subscription.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (sq *SubscriptionQuery) IDsX(ctx context.Context) []string {
-	ids, err := sq.IDs(ctx)
+func (_q *SubscriptionQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -392,17 +392,17 @@ func (sq *SubscriptionQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (sq *SubscriptionQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, sq.ctx, ent.OpQueryCount)
-	if err := sq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, sq, querierCount[*SubscriptionQuery](), sq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*SubscriptionQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (sq *SubscriptionQuery) CountX(ctx context.Context) int {
-	count, err := sq.Count(ctx)
+func (_q *SubscriptionQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -410,9 +410,9 @@ func (sq *SubscriptionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (sq *SubscriptionQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, sq.ctx, ent.OpQueryExist)
-	switch _, err := sq.FirstID(ctx); {
+func (_q *SubscriptionQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -423,8 +423,8 @@ func (sq *SubscriptionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (sq *SubscriptionQuery) ExistX(ctx context.Context) bool {
-	exist, err := sq.Exist(ctx)
+func (_q *SubscriptionQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -433,116 +433,116 @@ func (sq *SubscriptionQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the SubscriptionQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (sq *SubscriptionQuery) Clone() *SubscriptionQuery {
-	if sq == nil {
+func (_q *SubscriptionQuery) Clone() *SubscriptionQuery {
+	if _q == nil {
 		return nil
 	}
 	return &SubscriptionQuery{
-		config:                 sq.config,
-		ctx:                    sq.ctx.Clone(),
-		order:                  append([]subscription.OrderOption{}, sq.order...),
-		inters:                 append([]Interceptor{}, sq.inters...),
-		predicates:             append([]predicate.Subscription{}, sq.predicates...),
-		withLineItems:          sq.withLineItems.Clone(),
-		withPauses:             sq.withPauses.Clone(),
-		withPhases:             sq.withPhases.Clone(),
-		withSchedules:          sq.withSchedules.Clone(),
-		withCreditGrants:       sq.withCreditGrants.Clone(),
-		withCouponAssociations: sq.withCouponAssociations.Clone(),
-		withCouponApplications: sq.withCouponApplications.Clone(),
-		withInvoicingCustomer:  sq.withInvoicingCustomer.Clone(),
+		config:                 _q.config,
+		ctx:                    _q.ctx.Clone(),
+		order:                  append([]subscription.OrderOption{}, _q.order...),
+		inters:                 append([]Interceptor{}, _q.inters...),
+		predicates:             append([]predicate.Subscription{}, _q.predicates...),
+		withLineItems:          _q.withLineItems.Clone(),
+		withPauses:             _q.withPauses.Clone(),
+		withPhases:             _q.withPhases.Clone(),
+		withSchedules:          _q.withSchedules.Clone(),
+		withCreditGrants:       _q.withCreditGrants.Clone(),
+		withCouponAssociations: _q.withCouponAssociations.Clone(),
+		withCouponApplications: _q.withCouponApplications.Clone(),
+		withInvoicingCustomer:  _q.withInvoicingCustomer.Clone(),
 		// clone intermediate query.
-		sql:  sq.sql.Clone(),
-		path: sq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithLineItems tells the query-builder to eager-load the nodes that are connected to
 // the "line_items" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithLineItems(opts ...func(*SubscriptionLineItemQuery)) *SubscriptionQuery {
-	query := (&SubscriptionLineItemClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithLineItems(opts ...func(*SubscriptionLineItemQuery)) *SubscriptionQuery {
+	query := (&SubscriptionLineItemClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withLineItems = query
-	return sq
+	_q.withLineItems = query
+	return _q
 }
 
 // WithPauses tells the query-builder to eager-load the nodes that are connected to
 // the "pauses" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithPauses(opts ...func(*SubscriptionPauseQuery)) *SubscriptionQuery {
-	query := (&SubscriptionPauseClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithPauses(opts ...func(*SubscriptionPauseQuery)) *SubscriptionQuery {
+	query := (&SubscriptionPauseClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withPauses = query
-	return sq
+	_q.withPauses = query
+	return _q
 }
 
 // WithPhases tells the query-builder to eager-load the nodes that are connected to
 // the "phases" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithPhases(opts ...func(*SubscriptionPhaseQuery)) *SubscriptionQuery {
-	query := (&SubscriptionPhaseClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithPhases(opts ...func(*SubscriptionPhaseQuery)) *SubscriptionQuery {
+	query := (&SubscriptionPhaseClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withPhases = query
-	return sq
+	_q.withPhases = query
+	return _q
 }
 
 // WithSchedules tells the query-builder to eager-load the nodes that are connected to
 // the "schedules" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithSchedules(opts ...func(*SubscriptionScheduleQuery)) *SubscriptionQuery {
-	query := (&SubscriptionScheduleClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithSchedules(opts ...func(*SubscriptionScheduleQuery)) *SubscriptionQuery {
+	query := (&SubscriptionScheduleClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withSchedules = query
-	return sq
+	_q.withSchedules = query
+	return _q
 }
 
 // WithCreditGrants tells the query-builder to eager-load the nodes that are connected to
 // the "credit_grants" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithCreditGrants(opts ...func(*CreditGrantQuery)) *SubscriptionQuery {
-	query := (&CreditGrantClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithCreditGrants(opts ...func(*CreditGrantQuery)) *SubscriptionQuery {
+	query := (&CreditGrantClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withCreditGrants = query
-	return sq
+	_q.withCreditGrants = query
+	return _q
 }
 
 // WithCouponAssociations tells the query-builder to eager-load the nodes that are connected to
 // the "coupon_associations" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithCouponAssociations(opts ...func(*CouponAssociationQuery)) *SubscriptionQuery {
-	query := (&CouponAssociationClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithCouponAssociations(opts ...func(*CouponAssociationQuery)) *SubscriptionQuery {
+	query := (&CouponAssociationClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withCouponAssociations = query
-	return sq
+	_q.withCouponAssociations = query
+	return _q
 }
 
 // WithCouponApplications tells the query-builder to eager-load the nodes that are connected to
 // the "coupon_applications" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *SubscriptionQuery {
-	query := (&CouponApplicationClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithCouponApplications(opts ...func(*CouponApplicationQuery)) *SubscriptionQuery {
+	query := (&CouponApplicationClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withCouponApplications = query
-	return sq
+	_q.withCouponApplications = query
+	return _q
 }
 
 // WithInvoicingCustomer tells the query-builder to eager-load the nodes that are connected to
 // the "invoicing_customer" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithInvoicingCustomer(opts ...func(*CustomerQuery)) *SubscriptionQuery {
-	query := (&CustomerClient{config: sq.config}).Query()
+func (_q *SubscriptionQuery) WithInvoicingCustomer(opts ...func(*CustomerQuery)) *SubscriptionQuery {
+	query := (&CustomerClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	sq.withInvoicingCustomer = query
-	return sq
+	_q.withInvoicingCustomer = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -559,10 +559,10 @@ func (sq *SubscriptionQuery) WithInvoicingCustomer(opts ...func(*CustomerQuery))
 //		GroupBy(subscription.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (sq *SubscriptionQuery) GroupBy(field string, fields ...string) *SubscriptionGroupBy {
-	sq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SubscriptionGroupBy{build: sq}
-	grbuild.flds = &sq.ctx.Fields
+func (_q *SubscriptionQuery) GroupBy(field string, fields ...string) *SubscriptionGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &SubscriptionGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = subscription.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -580,65 +580,65 @@ func (sq *SubscriptionQuery) GroupBy(field string, fields ...string) *Subscripti
 //	client.Subscription.Query().
 //		Select(subscription.FieldTenantID).
 //		Scan(ctx, &v)
-func (sq *SubscriptionQuery) Select(fields ...string) *SubscriptionSelect {
-	sq.ctx.Fields = append(sq.ctx.Fields, fields...)
-	sbuild := &SubscriptionSelect{SubscriptionQuery: sq}
+func (_q *SubscriptionQuery) Select(fields ...string) *SubscriptionSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &SubscriptionSelect{SubscriptionQuery: _q}
 	sbuild.label = subscription.Label
-	sbuild.flds, sbuild.scan = &sq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a SubscriptionSelect configured with the given aggregations.
-func (sq *SubscriptionQuery) Aggregate(fns ...AggregateFunc) *SubscriptionSelect {
-	return sq.Select().Aggregate(fns...)
+func (_q *SubscriptionQuery) Aggregate(fns ...AggregateFunc) *SubscriptionSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (sq *SubscriptionQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range sq.inters {
+func (_q *SubscriptionQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, sq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range sq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !subscription.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if sq.path != nil {
-		prev, err := sq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		sq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Subscription, error) {
+func (_q *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Subscription, error) {
 	var (
 		nodes       = []*Subscription{}
-		_spec       = sq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [8]bool{
-			sq.withLineItems != nil,
-			sq.withPauses != nil,
-			sq.withPhases != nil,
-			sq.withSchedules != nil,
-			sq.withCreditGrants != nil,
-			sq.withCouponAssociations != nil,
-			sq.withCouponApplications != nil,
-			sq.withInvoicingCustomer != nil,
+			_q.withLineItems != nil,
+			_q.withPauses != nil,
+			_q.withPhases != nil,
+			_q.withSchedules != nil,
+			_q.withCreditGrants != nil,
+			_q.withCouponAssociations != nil,
+			_q.withCouponApplications != nil,
+			_q.withInvoicingCustomer != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Subscription).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Subscription{config: sq.config}
+		node := &Subscription{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -646,49 +646,49 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, sq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := sq.withLineItems; query != nil {
-		if err := sq.loadLineItems(ctx, query, nodes,
+	if query := _q.withLineItems; query != nil {
+		if err := _q.loadLineItems(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.LineItems = []*SubscriptionLineItem{} },
 			func(n *Subscription, e *SubscriptionLineItem) { n.Edges.LineItems = append(n.Edges.LineItems, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sq.withPauses; query != nil {
-		if err := sq.loadPauses(ctx, query, nodes,
+	if query := _q.withPauses; query != nil {
+		if err := _q.loadPauses(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.Pauses = []*SubscriptionPause{} },
 			func(n *Subscription, e *SubscriptionPause) { n.Edges.Pauses = append(n.Edges.Pauses, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sq.withPhases; query != nil {
-		if err := sq.loadPhases(ctx, query, nodes,
+	if query := _q.withPhases; query != nil {
+		if err := _q.loadPhases(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.Phases = []*SubscriptionPhase{} },
 			func(n *Subscription, e *SubscriptionPhase) { n.Edges.Phases = append(n.Edges.Phases, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sq.withSchedules; query != nil {
-		if err := sq.loadSchedules(ctx, query, nodes,
+	if query := _q.withSchedules; query != nil {
+		if err := _q.loadSchedules(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.Schedules = []*SubscriptionSchedule{} },
 			func(n *Subscription, e *SubscriptionSchedule) { n.Edges.Schedules = append(n.Edges.Schedules, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sq.withCreditGrants; query != nil {
-		if err := sq.loadCreditGrants(ctx, query, nodes,
+	if query := _q.withCreditGrants; query != nil {
+		if err := _q.loadCreditGrants(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.CreditGrants = []*CreditGrant{} },
 			func(n *Subscription, e *CreditGrant) { n.Edges.CreditGrants = append(n.Edges.CreditGrants, e) }); err != nil {
 			return nil, err
 		}
 	}
-	if query := sq.withCouponAssociations; query != nil {
-		if err := sq.loadCouponAssociations(ctx, query, nodes,
+	if query := _q.withCouponAssociations; query != nil {
+		if err := _q.loadCouponAssociations(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.CouponAssociations = []*CouponAssociation{} },
 			func(n *Subscription, e *CouponAssociation) {
 				n.Edges.CouponAssociations = append(n.Edges.CouponAssociations, e)
@@ -696,8 +696,8 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			return nil, err
 		}
 	}
-	if query := sq.withCouponApplications; query != nil {
-		if err := sq.loadCouponApplications(ctx, query, nodes,
+	if query := _q.withCouponApplications; query != nil {
+		if err := _q.loadCouponApplications(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.CouponApplications = []*CouponApplication{} },
 			func(n *Subscription, e *CouponApplication) {
 				n.Edges.CouponApplications = append(n.Edges.CouponApplications, e)
@@ -705,8 +705,8 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			return nil, err
 		}
 	}
-	if query := sq.withInvoicingCustomer; query != nil {
-		if err := sq.loadInvoicingCustomer(ctx, query, nodes, nil,
+	if query := _q.withInvoicingCustomer; query != nil {
+		if err := _q.loadInvoicingCustomer(ctx, query, nodes, nil,
 			func(n *Subscription, e *Customer) { n.Edges.InvoicingCustomer = e }); err != nil {
 			return nil, err
 		}
@@ -714,7 +714,7 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	return nodes, nil
 }
 
-func (sq *SubscriptionQuery) loadLineItems(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionLineItem)) error {
+func (_q *SubscriptionQuery) loadLineItems(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionLineItem)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -744,7 +744,7 @@ func (sq *SubscriptionQuery) loadLineItems(ctx context.Context, query *Subscript
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadPauses(ctx context.Context, query *SubscriptionPauseQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionPause)) error {
+func (_q *SubscriptionQuery) loadPauses(ctx context.Context, query *SubscriptionPauseQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionPause)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -774,7 +774,7 @@ func (sq *SubscriptionQuery) loadPauses(ctx context.Context, query *Subscription
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadPhases(ctx context.Context, query *SubscriptionPhaseQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionPhase)) error {
+func (_q *SubscriptionQuery) loadPhases(ctx context.Context, query *SubscriptionPhaseQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionPhase)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -804,7 +804,7 @@ func (sq *SubscriptionQuery) loadPhases(ctx context.Context, query *Subscription
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadSchedules(ctx context.Context, query *SubscriptionScheduleQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionSchedule)) error {
+func (_q *SubscriptionQuery) loadSchedules(ctx context.Context, query *SubscriptionScheduleQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionSchedule)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -834,7 +834,7 @@ func (sq *SubscriptionQuery) loadSchedules(ctx context.Context, query *Subscript
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadCreditGrants(ctx context.Context, query *CreditGrantQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CreditGrant)) error {
+func (_q *SubscriptionQuery) loadCreditGrants(ctx context.Context, query *CreditGrantQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CreditGrant)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -867,7 +867,7 @@ func (sq *SubscriptionQuery) loadCreditGrants(ctx context.Context, query *Credit
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadCouponAssociations(ctx context.Context, query *CouponAssociationQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CouponAssociation)) error {
+func (_q *SubscriptionQuery) loadCouponAssociations(ctx context.Context, query *CouponAssociationQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CouponAssociation)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -897,7 +897,7 @@ func (sq *SubscriptionQuery) loadCouponAssociations(ctx context.Context, query *
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CouponApplication)) error {
+func (_q *SubscriptionQuery) loadCouponApplications(ctx context.Context, query *CouponApplicationQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CouponApplication)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
 	for i := range nodes {
@@ -930,7 +930,7 @@ func (sq *SubscriptionQuery) loadCouponApplications(ctx context.Context, query *
 	}
 	return nil
 }
-func (sq *SubscriptionQuery) loadInvoicingCustomer(ctx context.Context, query *CustomerQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *Customer)) error {
+func (_q *SubscriptionQuery) loadInvoicingCustomer(ctx context.Context, query *CustomerQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *Customer)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Subscription)
 	for i := range nodes {
@@ -963,24 +963,24 @@ func (sq *SubscriptionQuery) loadInvoicingCustomer(ctx context.Context, query *C
 	return nil
 }
 
-func (sq *SubscriptionQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := sq.querySpec()
-	_spec.Node.Columns = sq.ctx.Fields
-	if len(sq.ctx.Fields) > 0 {
-		_spec.Unique = sq.ctx.Unique != nil && *sq.ctx.Unique
+func (_q *SubscriptionQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, sq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (sq *SubscriptionQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *SubscriptionQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
-	_spec.From = sq.sql
-	if unique := sq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if sq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := sq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscription.FieldID)
 		for i := range fields {
@@ -988,24 +988,24 @@ func (sq *SubscriptionQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if sq.withInvoicingCustomer != nil {
+		if _q.withInvoicingCustomer != nil {
 			_spec.Node.AddColumnOnce(subscription.FieldInvoicingCustomerID)
 		}
 	}
-	if ps := sq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := sq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := sq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := sq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -1015,33 +1015,33 @@ func (sq *SubscriptionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (sq *SubscriptionQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(sq.driver.Dialect())
+func (_q *SubscriptionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(subscription.Table)
-	columns := sq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = subscription.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if sq.sql != nil {
-		selector = sq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if sq.ctx.Unique != nil && *sq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range sq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range sq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := sq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := sq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -1054,41 +1054,41 @@ type SubscriptionGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (sgb *SubscriptionGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionGroupBy {
-	sgb.fns = append(sgb.fns, fns...)
-	return sgb
+func (_g *SubscriptionGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (sgb *SubscriptionGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, sgb.build.ctx, ent.OpQueryGroupBy)
-	if err := sgb.build.prepareQuery(ctx); err != nil {
+func (_g *SubscriptionGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionQuery, *SubscriptionGroupBy](ctx, sgb.build, sgb, sgb.build.inters, v)
+	return scanWithInterceptors[*SubscriptionQuery, *SubscriptionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (sgb *SubscriptionGroupBy) sqlScan(ctx context.Context, root *SubscriptionQuery, v any) error {
+func (_g *SubscriptionGroupBy) sqlScan(ctx context.Context, root *SubscriptionQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(sgb.fns))
-	for _, fn := range sgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*sgb.flds)+len(sgb.fns))
-		for _, f := range *sgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*sgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := sgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -1102,27 +1102,27 @@ type SubscriptionSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (ss *SubscriptionSelect) Aggregate(fns ...AggregateFunc) *SubscriptionSelect {
-	ss.fns = append(ss.fns, fns...)
-	return ss
+func (_s *SubscriptionSelect) Aggregate(fns ...AggregateFunc) *SubscriptionSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (ss *SubscriptionSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, ss.ctx, ent.OpQuerySelect)
-	if err := ss.prepareQuery(ctx); err != nil {
+func (_s *SubscriptionSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionQuery, *SubscriptionSelect](ctx, ss.SubscriptionQuery, ss, ss.inters, v)
+	return scanWithInterceptors[*SubscriptionQuery, *SubscriptionSelect](ctx, _s.SubscriptionQuery, _s, _s.inters, v)
 }
 
-func (ss *SubscriptionSelect) sqlScan(ctx context.Context, root *SubscriptionQuery, v any) error {
+func (_s *SubscriptionSelect) sqlScan(ctx context.Context, root *SubscriptionQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(ss.fns))
-	for _, fn := range ss.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*ss.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -1130,7 +1130,7 @@ func (ss *SubscriptionSelect) sqlScan(ctx context.Context, root *SubscriptionQue
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := ss.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

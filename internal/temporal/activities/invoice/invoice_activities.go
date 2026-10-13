@@ -3,10 +3,12 @@ package invoice
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -101,9 +103,12 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 	}
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
-	draft, err := invoiceService.CreateDraftInvoiceForSubscription(
-		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
-	)
+	draft, err := invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: input.SubscriptionID,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		ReferencePoint: types.ReferencePointPeriodEnd,
+	})
 	if err != nil {
 		if input.SkipIfAlreadyInvoiced && ierr.IsAlreadyExists(err) {
 			s.logger.Info(ctx, "current period already invoiced, skipping (SkipIfAlreadyInvoiced=true)",
@@ -152,7 +157,7 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true, Skipped: true}, nil
 	}
 
-	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
+	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID, dto.FinalizeInvoiceRequest{}); err != nil {
 		// Business-condition failures (insufficient balance, invoice not in draft) are
 		// marked ErrInvalidOperation and won't clear by the time Temporal's activity
 		// RetryPolicy expires (currently 3 attempts, up to 5-min backoff). Wrap as
@@ -358,6 +363,7 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 			result.FinalizedCount++
 		}
 
+		activity.RecordHeartbeat(ctx, offset+len(drafts))
 		if len(drafts) < batchSize {
 			break
 		}
@@ -371,4 +377,12 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 		"failed", result.FailedCount)
 
 	return result, nil
+}
+
+// PublishInvoiceSyncWebhookActivity publishes an invoice sync's final outcome as a webhook.
+func (s *InvoiceActivities) PublishInvoiceSyncWebhookActivity(ctx context.Context, input models.InvoiceSyncWebhookInput) error {
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	service.NewInvoiceService(s.serviceParams).PublishInvoiceSyncWebhook(ctx, input.InvoiceID, input.Provider, input.Error)
+	return nil
 }

@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -36,6 +37,9 @@ type CreateCustomerRequest struct {
 	// contact is an optional contact number for the customer (e.g. phone)
 	Contact *string `json:"contact,omitempty" validate:"omitempty,max=20"`
 
+	// billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is
+	BillingCurrency *string `json:"billing_currency,omitempty" validate:"omitempty,max=10"`
+
 	// address_line1 is the primary address line with maximum 255 characters
 	AddressLine1 string `json:"address_line1" validate:"omitempty,max=255"`
 
@@ -60,6 +64,9 @@ type CreateCustomerRequest struct {
 
 	// tax_treatment is the customer's tax treatment. Defaults to "taxable" if not provided.
 	TaxTreatment types.TaxTreatment `json:"tax_treatment,omitempty"`
+
+	// contact_persons are people at the customer; at most one may be primary
+	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive,required"`
 
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -94,6 +101,9 @@ type UpdateCustomerRequest struct {
 	// contact is the updated contact number for the customer (e.g. phone)
 	Contact *string `json:"contact" validate:"omitempty,max=20"`
 
+	// billing_currency updates the invoicing currency; send "" to clear it back to the charge currency
+	BillingCurrency *string `json:"billing_currency" validate:"omitempty,max=10"`
+
 	// address_line1 is the updated primary address line with maximum 255 characters
 	AddressLine1 *string `json:"address_line1" validate:"omitempty,max=255"`
 
@@ -117,6 +127,9 @@ type UpdateCustomerRequest struct {
 
 	// tax_treatment is the updated tax treatment for the customer
 	TaxTreatment *types.TaxTreatment `json:"tax_treatment,omitempty"`
+
+	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
+	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive,required"`
 
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -189,7 +202,20 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
-	return nil
+	return customer.ValidatePersons(r.ContactPersons)
+}
+
+// NormalizeBillingCurrency lowercases a billing currency, returning nil for a nil or empty value
+// so an unset or cleared currency stores as NULL.
+func NormalizeBillingCurrency(code *string) *string {
+	if code == nil {
+		return nil
+	}
+	trimmed := strings.ToLower(strings.TrimSpace(*code))
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
@@ -207,6 +233,8 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		Name:              r.Name,
 		Email:             r.Email,
 		Contact:           r.Contact,
+		BillingCurrency:   NormalizeBillingCurrency(r.BillingCurrency),
+		ContactPersons:    r.ContactPersons,
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
 		AddressCity:       r.AddressCity,
@@ -245,7 +273,7 @@ func (r *UpdateCustomerRequest) Validate() error {
 		}
 	}
 
-	return nil
+	return customer.ValidatePersons(r.ContactPersons)
 }
 
 // PortalSessionResponse is the response containing the portal URL

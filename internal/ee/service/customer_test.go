@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -30,32 +31,34 @@ func (s *CustomerServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ctx = context.Background()
 	s.service = NewCustomerService(ServiceParams{
-		Logger:             s.GetLogger(),
-		Config:             s.GetConfig(),
-		DB:                 s.GetDB(),
-		SubRepo:            s.GetStores().SubscriptionRepo,
-		PlanRepo:           s.GetStores().PlanRepo,
-		PriceRepo:          s.GetStores().PriceRepo,
-		EventRepo:          s.GetStores().EventRepo,
-		MeterRepo:          s.GetStores().MeterRepo,
-		CustomerRepo:       s.GetStores().CustomerRepo,
-		InvoiceRepo:        s.GetStores().InvoiceRepo,
-		EntitlementRepo:    s.GetStores().EntitlementRepo,
-		EnvironmentRepo:    s.GetStores().EnvironmentRepo,
-		FeatureRepo:        s.GetStores().FeatureRepo,
-		TenantRepo:         s.GetStores().TenantRepo,
-		UserRepo:           s.GetStores().UserRepo,
-		AuthRepo:           s.GetStores().AuthRepo,
-		WalletRepo:         s.GetStores().WalletRepo,
-		PaymentRepo:        s.GetStores().PaymentRepo,
-		EventPublisher:     s.GetPublisher(),
-		WebhookPublisher:   s.GetWebhookPublisher(),
-		TaxRateRepo:        s.GetStores().TaxRateRepo,
-		TaxAppliedRepo:     s.GetStores().TaxAppliedRepo,
-		TaxAssociationRepo: s.GetStores().TaxAssociationRepo,
-		ConnectionRepo:     s.GetStores().ConnectionRepo,
-		AlertLogsRepo:      s.GetStores().AlertLogsRepo,
-		SettingsRepo:       s.GetStores().SettingsRepo,
+		Logger:              s.GetLogger(),
+		Config:              s.GetConfig(),
+		DB:                  s.GetDB(),
+		SubRepo:             s.GetStores().SubscriptionRepo,
+		PlanRepo:            s.GetStores().PlanRepo,
+		PriceRepo:           s.GetStores().PriceRepo,
+		EventRepo:           s.GetStores().EventRepo,
+		MeterRepo:           s.GetStores().MeterRepo,
+		CustomerRepo:        s.GetStores().CustomerRepo,
+		InvoiceRepo:         s.GetStores().InvoiceRepo,
+		EntitlementRepo:     s.GetStores().EntitlementRepo,
+		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
+		FeatureRepo:         s.GetStores().FeatureRepo,
+		TenantRepo:          s.GetStores().TenantRepo,
+		UserRepo:            s.GetStores().UserRepo,
+		AuthRepo:            s.GetStores().AuthRepo,
+		WalletRepo:          s.GetStores().WalletRepo,
+		PaymentRepo:         s.GetStores().PaymentRepo,
+		EventPublisher:      s.GetPublisher(),
+		WebhookPublisher:    s.GetWebhookPublisher(),
+		TaxRateRepo:         s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:      s.GetStores().TaxAppliedRepo,
+		TaxAssociationRepo:  s.GetStores().TaxAssociationRepo,
+		ConnectionRepo:      s.GetStores().ConnectionRepo,
+		AlertLogsRepo:       s.GetStores().AlertLogsRepo,
+		SettingsRepo:        s.GetStores().SettingsRepo,
+		FXRateRepo:          s.GetStores().FXRateRepo,
+		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
 	})
 
 }
@@ -264,6 +267,106 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 	}
 }
 
+func (s *CustomerServiceSuite) TestGetCustomersStatusFilter() {
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:    "cust-published",
+		Name:  "Published Customer",
+		Email: "published@example.com",
+		BaseModel: types.BaseModel{
+			Status: types.StatusPublished,
+		},
+	})
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:    "cust-archived",
+		Name:  "Archived Customer",
+		Email: "archived@example.com",
+		BaseModel: types.BaseModel{
+			Status: types.StatusArchived,
+		},
+	})
+
+	statusIn := func(values ...string) []*types.FilterCondition {
+		return []*types.FilterCondition{
+			{
+				Field:    lo.ToPtr("status"),
+				Operator: lo.ToPtr(types.IN),
+				DataType: lo.ToPtr(types.DataTypeArray),
+				Value:    &types.Value{Array: values},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		filter        *types.CustomerFilter
+		expectedIDs   []string
+		expectedCount int
+	}{
+		{
+			name: "default_excludes_archived",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+			},
+			expectedIDs:   []string{"cust-published"},
+			expectedCount: 1,
+		},
+		{
+			name: "empty_dsl_filters_include_archived",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: []*types.FilterCondition{},
+			},
+			expectedIDs:   []string{"cust-published", "cust-archived"},
+			expectedCount: 2,
+		},
+		{
+			name: "dsl_in_published_and_archived_returns_both",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: statusIn(string(types.StatusPublished), string(types.StatusArchived)),
+			},
+			expectedIDs:   []string{"cust-published", "cust-archived"},
+			expectedCount: 2,
+		},
+		{
+			name: "dsl_in_archived_only",
+			filter: &types.CustomerFilter{
+				QueryFilter: &types.QueryFilter{
+					Limit:  lo.ToPtr(10),
+					Offset: lo.ToPtr(0),
+				},
+				Filters: statusIn(string(types.StatusArchived)),
+			},
+			expectedIDs:   []string{"cust-archived"},
+			expectedCount: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			resp, err := s.service.GetCustomers(s.ctx, tc.filter)
+			s.NoError(err)
+			s.NotNil(resp)
+			s.Equal(tc.expectedCount, len(resp.Items))
+			s.Equal(tc.expectedCount, resp.Pagination.Total)
+
+			gotIDs := lo.Map(resp.Items, func(item *dto.CustomerResponse, _ int) string {
+				return item.Customer.ID
+			})
+			s.ElementsMatch(tc.expectedIDs, gotIDs)
+		})
+	}
+}
+
 func (s *CustomerServiceSuite) TestUpdateCustomer() {
 	// Prepopulate the repository with a customer
 	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
@@ -280,6 +383,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 		setup         func()
 		expectedError bool
 		errorCode     ierr.ErrorCode
+		wantPersons   int
 	}{
 		{
 			name: "valid_update",
@@ -307,6 +411,42 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 					AddressCountry: "US",
 				})
 			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeValidation,
+		},
+		{
+			name: "contact_persons_replaced",
+			id:   "cust-1",
+			request: dto.UpdateCustomerRequest{
+				ContactPersons: []*domainCustomer.ContactPerson{
+					{IsPrimary: true, FirstName: "Ravi", Email: "ravi@example.com"},
+					{FirstName: "Fin", Email: "fin@example.com"},
+				},
+			},
+			wantPersons: 2,
+		},
+		{
+			name:        "contact_persons_kept_when_omitted",
+			id:          "cust-1",
+			request:     dto.UpdateCustomerRequest{Name: lo.ToPtr("Renamed")},
+			wantPersons: 2,
+		},
+		{
+			name: "contact_persons_two_primaries",
+			id:   "cust-1",
+			request: dto.UpdateCustomerRequest{
+				ContactPersons: []*domainCustomer.ContactPerson{
+					{IsPrimary: true, FirstName: "A"},
+					{IsPrimary: true, FirstName: "B"},
+				},
+			},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeValidation,
+		},
+		{
+			name:          "contact_persons_null_entry",
+			id:            "cust-1",
+			request:       dto.UpdateCustomerRequest{ContactPersons: []*domainCustomer.ContactPerson{nil}},
 			expectedError: true,
 			errorCode:     ierr.ErrCodeValidation,
 		},
@@ -344,6 +484,12 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 				}
 				if tc.request.AddressCity != nil {
 					s.Equal(*tc.request.AddressCity, resp.Customer.AddressCity)
+				}
+				if tc.wantPersons > 0 {
+					s.Len(resp.Customer.ContactPersons, tc.wantPersons)
+					for _, p := range resp.Customer.ContactPersons {
+						s.True(strings.HasPrefix(p.ID, types.UUID_PREFIX_CONTACT_PERSON+"_"), p.ID)
+					}
 				}
 			}
 		})

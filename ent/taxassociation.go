@@ -80,7 +80,7 @@ func (*TaxAssociation) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the TaxAssociation fields.
-func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
+func (_m *TaxAssociation) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -90,91 +90,91 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				ta.ID = value.String
+				_m.ID = value.String
 			}
 		case taxassociation.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				ta.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case taxassociation.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ta.Status = value.String
+				_m.Status = value.String
 			}
 		case taxassociation.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ta.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case taxassociation.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				ta.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case taxassociation.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				ta.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case taxassociation.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				ta.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case taxassociation.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				ta.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case taxassociation.FieldTaxRateID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_rate_id", values[i])
 			} else if value.Valid {
-				ta.TaxRateID = value.String
+				_m.TaxRateID = value.String
 			}
 		case taxassociation.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				ta.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case taxassociation.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				ta.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case taxassociation.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
-				ta.Priority = int(value.Int64)
+				_m.Priority = int(value.Int64)
 			}
 		case taxassociation.FieldAutoApply:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field auto_apply", values[i])
 			} else if value.Valid {
-				ta.AutoApply = value.Bool
+				_m.AutoApply = value.Bool
 			}
 		case taxassociation.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				ta.Currency = value.String
+				_m.Currency = value.String
 			}
 		case taxassociation.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ta.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -182,25 +182,25 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				ta.StartDate = new(time.Time)
-				*ta.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case taxassociation.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				ta.EndDate = new(time.Time)
-				*ta.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case taxassociation.FieldTaxBehavior:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tax_behavior", values[i])
 			} else if value.Valid {
-				ta.TaxBehavior = new(types.TaxBehavior)
-				*ta.TaxBehavior = types.TaxBehavior(value.String)
+				_m.TaxBehavior = new(types.TaxBehavior)
+				*_m.TaxBehavior = types.TaxBehavior(value.String)
 			}
 		default:
-			ta.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -208,86 +208,86 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the TaxAssociation.
 // This includes values selected through modifiers, order, etc.
-func (ta *TaxAssociation) Value(name string) (ent.Value, error) {
-	return ta.selectValues.Get(name)
+func (_m *TaxAssociation) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this TaxAssociation.
 // Note that you need to call TaxAssociation.Unwrap() before calling this method if this TaxAssociation
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (ta *TaxAssociation) Update() *TaxAssociationUpdateOne {
-	return NewTaxAssociationClient(ta.config).UpdateOne(ta)
+func (_m *TaxAssociation) Update() *TaxAssociationUpdateOne {
+	return NewTaxAssociationClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the TaxAssociation entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (ta *TaxAssociation) Unwrap() *TaxAssociation {
-	_tx, ok := ta.config.driver.(*txDriver)
+func (_m *TaxAssociation) Unwrap() *TaxAssociation {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: TaxAssociation is not a transactional entity")
 	}
-	ta.config.driver = _tx.drv
-	return ta
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (ta *TaxAssociation) String() string {
+func (_m *TaxAssociation) String() string {
 	var builder strings.Builder
 	builder.WriteString("TaxAssociation(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", ta.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(ta.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(ta.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(ta.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(ta.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(ta.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(ta.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(ta.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("tax_rate_id=")
-	builder.WriteString(ta.TaxRateID)
+	builder.WriteString(_m.TaxRateID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(ta.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(ta.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
-	builder.WriteString(fmt.Sprintf("%v", ta.Priority))
+	builder.WriteString(fmt.Sprintf("%v", _m.Priority))
 	builder.WriteString(", ")
 	builder.WriteString("auto_apply=")
-	builder.WriteString(fmt.Sprintf("%v", ta.AutoApply))
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoApply))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(ta.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", ta.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := ta.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := ta.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := ta.TaxBehavior; v != nil {
+	if v := _m.TaxBehavior; v != nil {
 		builder.WriteString("tax_behavior=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}

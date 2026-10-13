@@ -37,11 +37,23 @@ type CreateCreditNoteRequest struct {
 
 	// process_credit_note is a flag to process the credit note after creation
 	ProcessCreditNote bool `json:"process_credit_note" validate:"omitempty" default:"true"`
+
+	// refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE
+	// returns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.
+	// Only honoured when the credit note is processed by this same call; a separately
+	// finalized credit note takes it from the finalize request instead.
+	RefundTarget *types.RefundTarget `json:"refund_target" validate:"omitempty"`
 }
 
 func (r *CreateCreditNoteRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.RefundTarget != nil {
+		if err := r.RefundTarget.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if err := r.Reason.Validate(); err != nil {
@@ -92,6 +104,28 @@ func (r *CreateCreditNoteRequest) ToCreditNote(ctx context.Context, inv *invoice
 	return cn
 }
 
+// CreditNotePreviewResponse is what a credit note would come to if it were issued now. The tax
+// on a credit is only known once the engine has been asked, so the tenant sees what the customer
+// will actually get back before committing to it. Nothing is written to produce this.
+type CreditNotePreviewResponse struct {
+	// Subtotal is the sum of the requested line items, before tax.
+	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
+
+	// TotalTax is the tax on that subtotal. Zero when no external engine is configured.
+	TotalTax decimal.Decimal `json:"total_tax" swaggertype:"string"`
+
+	// TotalAmount is what the customer gets back, tax included.
+	TotalAmount decimal.Decimal `json:"total_amount" swaggertype:"string"`
+
+	Currency string `json:"currency"`
+
+	// CreditNoteType is what this would be issued as, which follows the invoice's payment state.
+	CreditNoteType types.CreditNoteType `json:"credit_note_type"`
+
+	// Taxes are the individual taxes making up TotalTax, for display.
+	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
+}
+
 // CreateCreditNoteLineItemRequest represents a single line item in a credit note creation request
 type CreateCreditNoteLineItemRequest struct {
 	// invoice_line_item_id is the unique identifier of the invoice line item being credited
@@ -128,6 +162,20 @@ func (r *CreateCreditNoteLineItemRequest) ToCreditNoteLineItem(ctx context.Conte
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 	}
+}
+
+// FinalizeCreditNoteRequest is the optional body of the finalize call.
+type FinalizeCreditNoteRequest struct {
+	// refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE
+	// returns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.
+	RefundTarget *types.RefundTarget `json:"refund_target" validate:"omitempty"`
+}
+
+func (r *FinalizeCreditNoteRequest) Validate() error {
+	if r == nil || r.RefundTarget == nil {
+		return nil
+	}
+	return r.RefundTarget.Validate()
 }
 
 // CreditNoteResponse represents the response payload containing credit note information

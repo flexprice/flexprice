@@ -9,7 +9,10 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
+
+var _ refund.Repository = (*InMemoryRefundStore)(nil)
 
 // InMemoryRefundStore implements refund.Repository
 type InMemoryRefundStore struct {
@@ -115,7 +118,36 @@ func refundFilterFn(ctx context.Context, r *refund.Refund, filter interface{}) b
 		return false
 	}
 
-	if f.PaymentIDs != nil && !slices.Contains(f.PaymentIDs, r.PaymentID) {
+	// Mirrors RefundQueryOptions.ApplyStatusFilter: an empty status means published only.
+	if f.GetStatus() == "" {
+		if r.Status != types.StatusPublished {
+			return false
+		}
+	} else if string(r.Status) != f.GetStatus() {
+		return false
+	}
+
+	if f.PaymentIDs != nil {
+		if r.PaymentID == nil || !slices.Contains(f.PaymentIDs, *r.PaymentID) {
+			return false
+		}
+	}
+
+	if f.CreditNoteIDs != nil {
+		if r.CreditNoteID == nil || !slices.Contains(f.CreditNoteIDs, *r.CreditNoteID) {
+			return false
+		}
+	}
+
+	if f.InvoiceIDs != nil && !slices.Contains(f.InvoiceIDs, r.InvoiceID) {
+		return false
+	}
+
+	if f.RefundDestinations != nil && !slices.Contains(f.RefundDestinations, r.RefundDestination) {
+		return false
+	}
+
+	if f.OnlySettled != nil && *f.OnlySettled && !r.IsSettled() {
 		return false
 	}
 
@@ -123,8 +155,10 @@ func refundFilterFn(ctx context.Context, r *refund.Refund, filter interface{}) b
 		return false
 	}
 
-	if f.Gateway != nil && r.PaymentGateway != *f.Gateway {
-		return false
+	if f.Gateway != nil {
+		if r.PaymentGateway == nil || *r.PaymentGateway != *f.Gateway {
+			return false
+		}
 	}
 
 	// Filter by time range
@@ -156,4 +190,119 @@ func (m *InMemoryRefundStore) List(ctx context.Context, filter *types.RefundFilt
 // Count returns the number of refunds matching the filter
 func (m *InMemoryRefundStore) Count(ctx context.Context, filter *types.RefundFilter) (int, error) {
 	return m.InMemoryStore.Count(ctx, filter, refundFilterFn)
+}
+
+func (m *InMemoryRefundStore) CreateBulk(ctx context.Context, refunds []*refund.Refund) error {
+	for _, r := range refunds {
+		if err := m.Create(ctx, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// The in-memory store takes no locks.
+func (m *InMemoryRefundStore) GetForUpdate(ctx context.Context, id string) (*refund.Refund, error) {
+	return m.Get(ctx, id)
+}
+
+func (m *InMemoryRefundStore) GetByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*refund.Refund, error) {
+	refunds, err := m.List(ctx, &types.RefundFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range refunds {
+		if r.PaymentGateway == nil || *r.PaymentGateway != gateway {
+			continue
+		}
+		if r.GatewayRefundID != nil && *r.GatewayRefundID == gatewayRefundID {
+			return r, nil
+		}
+	}
+
+	return nil, ierr.NewError("refund not found").
+		WithHint(fmt.Sprintf("Refund not found for gateway refund id: %s", gatewayRefundID)).
+		Mark(ierr.ErrNotFound)
+}
+
+func (m *InMemoryRefundStore) ListByInvoice(ctx context.Context, invoiceID string) ([]*refund.Refund, error) {
+	return m.List(ctx, &types.RefundFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		InvoiceIDs:  []string{invoiceID},
+	})
+}
+
+func (m *InMemoryRefundStore) SumSettledByPaymentIDs(ctx context.Context, invoiceID string, paymentIDs []string) (map[string]decimal.Decimal, error) {
+	settled := true
+	return m.sumByPaymentIDs(ctx, invoiceID, paymentIDs,
+		&types.RefundFilter{QueryFilter: types.NewNoLimitQueryFilter(), OnlySettled: &settled},
+		func(r *refund.Refund) decimal.Decimal { return r.SettledAmount })
+}
+
+func (m *InMemoryRefundStore) SumInFlightByPaymentIDs(ctx context.Context, invoiceID string, paymentIDs []string) (map[string]decimal.Decimal, error) {
+	return m.sumByPaymentIDs(ctx, invoiceID, paymentIDs,
+		&types.RefundFilter{
+			QueryFilter:    types.NewNoLimitQueryFilter(),
+			RefundStatuses: []types.RefundStatus{types.RefundStatusPending, types.RefundStatusProcessing},
+		},
+		func(r *refund.Refund) decimal.Decimal { return r.Amount })
+}
+
+func (m *InMemoryRefundStore) SumSettledToWalletByInvoice(ctx context.Context, invoiceID, currency string) (decimal.Decimal, error) {
+	refunds, err := m.List(ctx, &types.RefundFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		InvoiceIDs:         []string{invoiceID},
+		RefundStatuses:     []types.RefundStatus{types.RefundStatusSucceeded},
+		RefundDestinations: []types.RefundDestination{types.RefundDestinationWallet},
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	total := decimal.Zero
+	for _, r := range refunds {
+		if types.IsMatchingCurrency(r.Currency, currency) {
+			total = total.Add(r.SettledAmount)
+		}
+	}
+	return total, nil
+}
+
+func (m *InMemoryRefundStore) sumByPaymentIDs(
+	ctx context.Context,
+	invoiceID string,
+	paymentIDs []string,
+	filter *types.RefundFilter,
+	amount func(*refund.Refund) decimal.Decimal,
+) (map[string]decimal.Decimal, error) {
+	result := make(map[string]decimal.Decimal, len(paymentIDs))
+	if len(paymentIDs) == 0 {
+		return result, nil
+	}
+
+	refunds, err := m.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range refunds {
+		if r.InvoiceID != invoiceID || r.PaymentID == nil {
+			continue
+		}
+		if !slices.Contains(paymentIDs, *r.PaymentID) {
+			continue
+		}
+		result[*r.PaymentID] = result[*r.PaymentID].Add(amount(r))
+	}
+
+	return result, nil
+}
+
+func (m *InMemoryRefundStore) GetLinkedCustomerID(_ context.Context, _ string) (string, error) {
+	return "", ierr.NewError("not implemented").
+		WithHint("not implemented").
+		Mark(ierr.ErrSystem)
 }

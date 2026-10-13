@@ -21,73 +21,73 @@ type BillingSequenceCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (bsc *BillingSequenceCreate) SetTenantID(s string) *BillingSequenceCreate {
-	bsc.mutation.SetTenantID(s)
-	return bsc
+func (_c *BillingSequenceCreate) SetTenantID(v string) *BillingSequenceCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (bsc *BillingSequenceCreate) SetSubscriptionID(s string) *BillingSequenceCreate {
-	bsc.mutation.SetSubscriptionID(s)
-	return bsc
+func (_c *BillingSequenceCreate) SetSubscriptionID(v string) *BillingSequenceCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetLastSequence sets the "last_sequence" field.
-func (bsc *BillingSequenceCreate) SetLastSequence(i int) *BillingSequenceCreate {
-	bsc.mutation.SetLastSequence(i)
-	return bsc
+func (_c *BillingSequenceCreate) SetLastSequence(v int) *BillingSequenceCreate {
+	_c.mutation.SetLastSequence(v)
+	return _c
 }
 
 // SetNillableLastSequence sets the "last_sequence" field if the given value is not nil.
-func (bsc *BillingSequenceCreate) SetNillableLastSequence(i *int) *BillingSequenceCreate {
-	if i != nil {
-		bsc.SetLastSequence(*i)
+func (_c *BillingSequenceCreate) SetNillableLastSequence(v *int) *BillingSequenceCreate {
+	if v != nil {
+		_c.SetLastSequence(*v)
 	}
-	return bsc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (bsc *BillingSequenceCreate) SetCreatedAt(t time.Time) *BillingSequenceCreate {
-	bsc.mutation.SetCreatedAt(t)
-	return bsc
+func (_c *BillingSequenceCreate) SetCreatedAt(v time.Time) *BillingSequenceCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (bsc *BillingSequenceCreate) SetNillableCreatedAt(t *time.Time) *BillingSequenceCreate {
-	if t != nil {
-		bsc.SetCreatedAt(*t)
+func (_c *BillingSequenceCreate) SetNillableCreatedAt(v *time.Time) *BillingSequenceCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return bsc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (bsc *BillingSequenceCreate) SetUpdatedAt(t time.Time) *BillingSequenceCreate {
-	bsc.mutation.SetUpdatedAt(t)
-	return bsc
+func (_c *BillingSequenceCreate) SetUpdatedAt(v time.Time) *BillingSequenceCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (bsc *BillingSequenceCreate) SetNillableUpdatedAt(t *time.Time) *BillingSequenceCreate {
-	if t != nil {
-		bsc.SetUpdatedAt(*t)
+func (_c *BillingSequenceCreate) SetNillableUpdatedAt(v *time.Time) *BillingSequenceCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return bsc
+	return _c
 }
 
 // Mutation returns the BillingSequenceMutation object of the builder.
-func (bsc *BillingSequenceCreate) Mutation() *BillingSequenceMutation {
-	return bsc.mutation
+func (_c *BillingSequenceCreate) Mutation() *BillingSequenceMutation {
+	return _c.mutation
 }
 
 // Save creates the BillingSequence in the database.
-func (bsc *BillingSequenceCreate) Save(ctx context.Context) (*BillingSequence, error) {
-	bsc.defaults()
-	return withHooks(ctx, bsc.sqlSave, bsc.mutation, bsc.hooks)
+func (_c *BillingSequenceCreate) Save(ctx context.Context) (*BillingSequence, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (bsc *BillingSequenceCreate) SaveX(ctx context.Context) *BillingSequence {
-	v, err := bsc.Save(ctx)
+func (_c *BillingSequenceCreate) SaveX(ctx context.Context) *BillingSequence {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -95,70 +95,70 @@ func (bsc *BillingSequenceCreate) SaveX(ctx context.Context) *BillingSequence {
 }
 
 // Exec executes the query.
-func (bsc *BillingSequenceCreate) Exec(ctx context.Context) error {
-	_, err := bsc.Save(ctx)
+func (_c *BillingSequenceCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (bsc *BillingSequenceCreate) ExecX(ctx context.Context) {
-	if err := bsc.Exec(ctx); err != nil {
+func (_c *BillingSequenceCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (bsc *BillingSequenceCreate) defaults() {
-	if _, ok := bsc.mutation.LastSequence(); !ok {
+func (_c *BillingSequenceCreate) defaults() {
+	if _, ok := _c.mutation.LastSequence(); !ok {
 		v := billingsequence.DefaultLastSequence
-		bsc.mutation.SetLastSequence(v)
+		_c.mutation.SetLastSequence(v)
 	}
-	if _, ok := bsc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := billingsequence.DefaultCreatedAt()
-		bsc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := bsc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := billingsequence.DefaultUpdatedAt()
-		bsc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (bsc *BillingSequenceCreate) check() error {
-	if _, ok := bsc.mutation.TenantID(); !ok {
+func (_c *BillingSequenceCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "BillingSequence.tenant_id"`)}
 	}
-	if v, ok := bsc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := billingsequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := bsc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "BillingSequence.subscription_id"`)}
 	}
-	if v, ok := bsc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := billingsequence.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "BillingSequence.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := bsc.mutation.LastSequence(); !ok {
+	if _, ok := _c.mutation.LastSequence(); !ok {
 		return &ValidationError{Name: "last_sequence", err: errors.New(`ent: missing required field "BillingSequence.last_sequence"`)}
 	}
-	if _, ok := bsc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "BillingSequence.created_at"`)}
 	}
-	if _, ok := bsc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "BillingSequence.updated_at"`)}
 	}
 	return nil
 }
 
-func (bsc *BillingSequenceCreate) sqlSave(ctx context.Context) (*BillingSequence, error) {
-	if err := bsc.check(); err != nil {
+func (_c *BillingSequenceCreate) sqlSave(ctx context.Context) (*BillingSequence, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := bsc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, bsc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -166,33 +166,33 @@ func (bsc *BillingSequenceCreate) sqlSave(ctx context.Context) (*BillingSequence
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	bsc.mutation.id = &_node.ID
-	bsc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (bsc *BillingSequenceCreate) createSpec() (*BillingSequence, *sqlgraph.CreateSpec) {
+func (_c *BillingSequenceCreate) createSpec() (*BillingSequence, *sqlgraph.CreateSpec) {
 	var (
-		_node = &BillingSequence{config: bsc.config}
+		_node = &BillingSequence{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(billingsequence.Table, sqlgraph.NewFieldSpec(billingsequence.FieldID, field.TypeInt))
 	)
-	if value, ok := bsc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(billingsequence.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := bsc.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(billingsequence.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = value
 	}
-	if value, ok := bsc.mutation.LastSequence(); ok {
+	if value, ok := _c.mutation.LastSequence(); ok {
 		_spec.SetField(billingsequence.FieldLastSequence, field.TypeInt, value)
 		_node.LastSequence = value
 	}
-	if value, ok := bsc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(billingsequence.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := bsc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(billingsequence.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
@@ -207,16 +207,16 @@ type BillingSequenceCreateBulk struct {
 }
 
 // Save creates the BillingSequence entities in the database.
-func (bscb *BillingSequenceCreateBulk) Save(ctx context.Context) ([]*BillingSequence, error) {
-	if bscb.err != nil {
-		return nil, bscb.err
+func (_c *BillingSequenceCreateBulk) Save(ctx context.Context) ([]*BillingSequence, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(bscb.builders))
-	nodes := make([]*BillingSequence, len(bscb.builders))
-	mutators := make([]Mutator, len(bscb.builders))
-	for i := range bscb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*BillingSequence, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := bscb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*BillingSequenceMutation)
@@ -230,11 +230,11 @@ func (bscb *BillingSequenceCreateBulk) Save(ctx context.Context) ([]*BillingSequ
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, bscb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, bscb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -258,7 +258,7 @@ func (bscb *BillingSequenceCreateBulk) Save(ctx context.Context) ([]*BillingSequ
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, bscb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -266,8 +266,8 @@ func (bscb *BillingSequenceCreateBulk) Save(ctx context.Context) ([]*BillingSequ
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (bscb *BillingSequenceCreateBulk) SaveX(ctx context.Context) []*BillingSequence {
-	v, err := bscb.Save(ctx)
+func (_c *BillingSequenceCreateBulk) SaveX(ctx context.Context) []*BillingSequence {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -275,14 +275,14 @@ func (bscb *BillingSequenceCreateBulk) SaveX(ctx context.Context) []*BillingSequ
 }
 
 // Exec executes the query.
-func (bscb *BillingSequenceCreateBulk) Exec(ctx context.Context) error {
-	_, err := bscb.Save(ctx)
+func (_c *BillingSequenceCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (bscb *BillingSequenceCreateBulk) ExecX(ctx context.Context) {
-	if err := bscb.Exec(ctx); err != nil {
+func (_c *BillingSequenceCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- seed tooling, non-prod
 	"net/http"
 	"sync"
 	"time"
@@ -121,7 +121,7 @@ func generateEvent(index int) dto.IngestEventRequest {
 
 	return dto.IngestEventRequest{
 		EventID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
-		ExternalCustomerID: customerIDs[(index+rand.Intn(10))%len(customerIDs)],
+		ExternalCustomerID: customerIDs[(index+rand.Intn(10))%len(customerIDs)], // #nosec G404 -- seed tooling, non-prod
 		EventName:          meter.Code,
 		Timestamp:          timestamp,
 		Properties:         properties,
@@ -130,7 +130,7 @@ func generateEvent(index int) dto.IngestEventRequest {
 
 // randInt64 generates a random int64 between min and max
 func randInt64(min, max int64) int64 {
-	return min + rand.Int63n(max-min+1)
+	return min + rand.Int63n(max-min+1) // #nosec G404 -- seed tooling, non-prod
 }
 
 func ingestEvent(event dto.IngestEventRequest, limiter *rate.Limiter, wg *sync.WaitGroup, results chan<- time.Duration, errors chan<- error) {
@@ -181,12 +181,12 @@ func ingestEvent(event dto.IngestEventRequest, limiter *rate.Limiter, wg *sync.W
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			resp.Body.Close()
+			resp.Body.Close() // #nosec G104 -- seed tooling, non-prod
 			results <- time.Since(start)
 			return
 		}
 
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- seed tooling, non-prod
 		lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 

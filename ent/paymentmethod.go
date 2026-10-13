@@ -72,7 +72,7 @@ func (*PaymentMethod) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the PaymentMethod fields.
-func (pm *PaymentMethod) assignValues(columns []string, values []any) error {
+func (_m *PaymentMethod) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -82,96 +82,96 @@ func (pm *PaymentMethod) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				pm.ID = value.String
+				_m.ID = value.String
 			}
 		case paymentmethod.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				pm.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case paymentmethod.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				pm.Status = value.String
+				_m.Status = value.String
 			}
 		case paymentmethod.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				pm.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case paymentmethod.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				pm.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case paymentmethod.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				pm.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case paymentmethod.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				pm.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case paymentmethod.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				pm.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case paymentmethod.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				pm.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case paymentmethod.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				pm.Type = types.PaymentMethodType(value.String)
+				_m.Type = types.PaymentMethodType(value.String)
 			}
 		case paymentmethod.FieldGateway:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway", values[i])
 			} else if value.Valid {
-				pm.Gateway = types.PaymentGatewayType(value.String)
+				_m.Gateway = types.PaymentGatewayType(value.String)
 			}
 		case paymentmethod.FieldGatewayMethodID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field gateway_method_id", values[i])
 			} else if value.Valid {
-				pm.GatewayMethodID = value.String
+				_m.GatewayMethodID = value.String
 			}
 		case paymentmethod.FieldPaymentMethodStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_method_status", values[i])
 			} else if value.Valid {
-				pm.PaymentMethodStatus = types.PaymentMethodStatus(value.String)
+				_m.PaymentMethodStatus = types.PaymentMethodStatus(value.String)
 			}
 		case paymentmethod.FieldIsDefault:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_default", values[i])
 			} else if value.Valid {
-				pm.IsDefault = value.Bool
+				_m.IsDefault = value.Bool
 			}
 		case paymentmethod.FieldMethodDetails:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field method_details", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pm.MethodDetails); err != nil {
+				if err := json.Unmarshal(*value, &_m.MethodDetails); err != nil {
 					return fmt.Errorf("unmarshal field method_details: %w", err)
 				}
 			}
 		default:
-			pm.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -179,74 +179,74 @@ func (pm *PaymentMethod) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the PaymentMethod.
 // This includes values selected through modifiers, order, etc.
-func (pm *PaymentMethod) Value(name string) (ent.Value, error) {
-	return pm.selectValues.Get(name)
+func (_m *PaymentMethod) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this PaymentMethod.
 // Note that you need to call PaymentMethod.Unwrap() before calling this method if this PaymentMethod
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (pm *PaymentMethod) Update() *PaymentMethodUpdateOne {
-	return NewPaymentMethodClient(pm.config).UpdateOne(pm)
+func (_m *PaymentMethod) Update() *PaymentMethodUpdateOne {
+	return NewPaymentMethodClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the PaymentMethod entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (pm *PaymentMethod) Unwrap() *PaymentMethod {
-	_tx, ok := pm.config.driver.(*txDriver)
+func (_m *PaymentMethod) Unwrap() *PaymentMethod {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: PaymentMethod is not a transactional entity")
 	}
-	pm.config.driver = _tx.drv
-	return pm
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (pm *PaymentMethod) String() string {
+func (_m *PaymentMethod) String() string {
 	var builder strings.Builder
 	builder.WriteString("PaymentMethod(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", pm.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(pm.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(pm.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(pm.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(pm.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(pm.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(pm.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(pm.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(pm.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(fmt.Sprintf("%v", pm.Type))
+	builder.WriteString(fmt.Sprintf("%v", _m.Type))
 	builder.WriteString(", ")
 	builder.WriteString("gateway=")
-	builder.WriteString(fmt.Sprintf("%v", pm.Gateway))
+	builder.WriteString(fmt.Sprintf("%v", _m.Gateway))
 	builder.WriteString(", ")
 	builder.WriteString("gateway_method_id=")
-	builder.WriteString(pm.GatewayMethodID)
+	builder.WriteString(_m.GatewayMethodID)
 	builder.WriteString(", ")
 	builder.WriteString("payment_method_status=")
-	builder.WriteString(fmt.Sprintf("%v", pm.PaymentMethodStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.PaymentMethodStatus))
 	builder.WriteString(", ")
 	builder.WriteString("is_default=")
-	builder.WriteString(fmt.Sprintf("%v", pm.IsDefault))
+	builder.WriteString(fmt.Sprintf("%v", _m.IsDefault))
 	builder.WriteString(", ")
 	builder.WriteString("method_details=")
-	builder.WriteString(fmt.Sprintf("%v", pm.MethodDetails))
+	builder.WriteString(fmt.Sprintf("%v", _m.MethodDetails))
 	builder.WriteByte(')')
 	return builder.String()
 }

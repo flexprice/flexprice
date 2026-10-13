@@ -33,6 +33,9 @@ func StartRepositorySpan(ctx context.Context, repository, operation string, para
 
 // FinishSpan safely finishes a span, handling nil spans.
 func FinishSpan(span *tracing.Span) {
+	if span == nil {
+		return
+	}
 	span.Finish()
 }
 

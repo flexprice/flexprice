@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -19,7 +20,7 @@ const (
 // Steps:
 // 1. Sleep for 5 seconds to allow invoice to be committed to database
 // 2. Sync invoice to Moyasar (create invoice, get payment URL, save to metadata)
-func MoyasarInvoiceSyncWorkflow(ctx workflow.Context, input models.MoyasarInvoiceSyncWorkflowInput) error {
+func MoyasarInvoiceSyncWorkflow(ctx workflow.Context, input models.MoyasarInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Moyasar invoice sync workflow",
@@ -32,6 +33,10 @@ func MoyasarInvoiceSyncWorkflow(ctx workflow.Context, input models.MoyasarInvoic
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderMoyasar, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -47,7 +52,7 @@ func MoyasarInvoiceSyncWorkflow(ctx workflow.Context, input models.MoyasarInvoic
 		"invoice_id", input.InvoiceID,
 		"wait_seconds", 5)
 
-	err := workflow.Sleep(ctx, 5*time.Second)
+	err = workflow.Sleep(ctx, 5*time.Second)
 	if err != nil {
 		logger.Error("Sleep was interrupted", "error", err)
 		return err

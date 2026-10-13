@@ -11,6 +11,8 @@ type Repository interface {
 	// Core operations
 	Create(ctx context.Context, price *Price) error
 	Get(ctx context.Context, id string) (*Price, error)
+	// GetLinkedCustomerID returns the customer the price is linked to, in any status; "" when it has none.
+	GetLinkedCustomerID(ctx context.Context, id string) (string, error)
 	GetByPlanID(ctx context.Context, planID string) ([]*Price, error)
 	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
@@ -25,6 +27,9 @@ type Repository interface {
 	// Bulk operations
 	CreateBulk(ctx context.Context, prices []*Price) error
 	DeleteBulk(ctx context.Context, ids []string) error
+	// ListByIDs returns the prices whose ids are in ids, regardless of status.
+	// Missing ids are simply absent from the result, not an error.
+	ListByIDs(ctx context.Context, ids []string) ([]*Price, error)
 
 	// Group-related operations (minimal set)
 	GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*Price, error)

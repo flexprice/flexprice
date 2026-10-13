@@ -2,9 +2,18 @@
 #
 # Flow: release published -> version-check (version from release tag only) -> generate -> push to GitHub -> publish to npm/PyPI.
 # Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
+# Docs: generate uploads the spec plus the Go, Python and TypeScript code samples to the Speakeasy registry and promotes
+# them to the main tag, which rebuilds https://spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples.
+# refresh-docs waits for that URL to match the release, copies that file to S3 (served at https://swagger.flexprice.io),
+# then adds the release to version.mdx in the docs repo so Mintlify redeploys.
 #
 # Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
+# Docs redeploy: secret DOCS_REPO_TOKEN (fine-grained PAT: Contents R/W on the docs repo); optional variables DOCS_REPO
+# (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
+# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution"}; skipped while unset.
+# When set, secret AWS_ACCOUNT_ID is required to construct the role ARN. The role needs
+# s3:PutObject on <bucket>/openapi.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
 #
@@ -45,11 +54,16 @@ jobs:
 
       - name: Set version from release tag and set outputs
         id: version-check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          RAW="${{ github.event.release.tag_name }}"
+          RAW="$RELEASE_TAG"
           RESOLVED="${RAW#v}"
           echo "Using release tag: $RAW -> $RESOLVED"
-          [ -z "$RESOLVED" ] && echo "::error::Version is empty (release tag)." && exit 1
+          if ! printf '%s' "$RESOLVED" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Invalid release tag (expected semver like v1.2.3): $RAW"
+            exit 1
+          fi
 
           GEN_VERSION=""
           if [ -f .speakeasy/gen/go.yaml ]; then
@@ -80,6 +94,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      promote_outcome: ${{ steps.promote.outcome }}
     env:
       SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
     steps:
@@ -109,7 +125,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.24.0"
+          go-version: "1.27.2"
 
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.
@@ -144,12 +160,31 @@ jobs:
 
       # Speakeasy install.sh uses VERSION for CLI version; our workflow sets VERSION for SDK. Unset so install fetches latest CLI.
       - name: Install Speakeasy CLI
+        # Vendor's official installer over HTTPS; it verifies the CLI archive
+        # checksum before install. Release-pipeline only.
+        # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell
         run: |
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
-      # SDKs: generate with resolved version only (from version-check job)
+      # SDKs: generate with resolved version only (from version-check job).
+      # Also uploads the spec and each target's code samples (codeSamples in .speakeasy/workflow.yaml) to the
+      # Speakeasy registry tagged main; Speakeasy combines them into the hosted docs spec.
       - name: Generate SDKs and MCP
-        run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
+        env:
+          SDK_VERSION: ${{ needs.version-check.outputs.version }}
+        run: make sdk-all VERSION="$SDK_VERSION" SPEAKEASY_RUN_FLAGS="--skip-testing --skip-versioning --registry-tags main"
+
+      # Tags added during upload don't make Speakeasy rebuild the hosted docs spec; tagging through
+      # `speakeasy tag promote` (what Speakeasy's own GitHub Action runs) does. Non-fatal so the docs
+      # can't block SDK publishing; refresh-docs checks this step's outcome and fails if it didn't succeed.
+      - name: Promote spec and code samples to main
+        id: promote
+        continue-on-error: true
+        run: speakeasy tag promote -s swagger-json -c flexprice-go,flexprice-python,flexprice-typescript -t main
+
+      # Build and test the TypeScript SDK before anything is uploaded, pushed to GitHub or published to npm
+      - name: Check TypeScript SDK
+        run: make ts-sdk-check
 
       # Overwrite Speakeasy version in artifacts with resolved version only
       - name: Apply resolved version to SDK artifacts
@@ -184,6 +219,100 @@ jobs:
         with:
           name: api-mcp
           path: api/mcp/
+
+      - name: Upload openapi-spec artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: openapi-spec
+          path: docs/swagger/swagger-3-0.json
+
+  # ---------------------------------------------------------------------------
+  # Docs: Mintlify re-reads the hosted spec only on deploy, so wait for Speakeasy to
+  # rebuild it (spec and code samples) from this release's upload, copy it to S3, then redeploy the docs.
+  # ---------------------------------------------------------------------------
+  refresh-docs:
+    needs: [version-check, generate]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # With an unchanged spec, the previous hosted spec would still pass the wait below, hiding a failed promote.
+      - name: Check the spec and code samples were promoted
+        env:
+          PROMOTE_OUTCOME: ${{ needs.generate.outputs.promote_outcome }}
+        run: |
+          if [ "$PROMOTE_OUTCOME" != "success" ]; then
+            echo "::error::Promoting the spec and code samples to main did not succeed (outcome: ${PROMOTE_OUTCOME:-unknown}); docs were not redeployed."
+            exit 1
+          fi
+
+      - name: Check AWS account ID for S3 publication
+        if: vars.OPENAPI_SPEC_S3 != ''
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          if ! [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+            echo "::error::AWS_ACCOUNT_ID must be set to a 12-digit AWS account ID when OPENAPI_SPEC_S3 is set. Configure the secret in repository Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download openapi-spec artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: openapi-spec
+          path: release-spec
+
+      - name: Wait for the hosted docs spec to match this release
+        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --save "$RUNNER_TEMP/openapi.json"
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.OPENAPI_SPEC_S3 != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.OPENAPI_SPEC_S3).role }}
+          aws-region: ${{ fromJson(vars.OPENAPI_SPEC_S3).region }}
+
+      # CloudFront serves openapi.json at the root of swagger.flexprice.io (its default root object).
+      - name: Upload the spec to S3 and clear the CloudFront cache
+        if: vars.OPENAPI_SPEC_S3 != ''
+        env:
+          OPENAPI_SPEC_S3: ${{ vars.OPENAPI_SPEC_S3 }}
+        run: |
+          set -euo pipefail
+          BUCKET=$(jq -er .bucket <<<"$OPENAPI_SPEC_S3")
+          DISTRIBUTION=$(jq -er .distribution <<<"$OPENAPI_SPEC_S3")
+          aws s3 cp "$RUNNER_TEMP/openapi.json" "s3://$BUCKET/openapi.json" --only-show-errors \
+            --content-type application/json --cache-control "public, max-age=300"
+          INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" \
+            --paths "/*" --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$INVALIDATION"
+
+      - name: Check swagger.flexprice.io serves this release
+        if: vars.OPENAPI_SPEC_S3 != ''
+        run: python3 scripts/wait-for-docs-spec.py "$RUNNER_TEMP/openapi.json" --url https://swagger.flexprice.io --exact
+
+      # The release is recorded as a new row in the docs repo's version.mdx.
+      - name: Redeploy docs
+        env:
+          DOCS_REPO_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+          DOCS_REPO: ${{ vars.DOCS_REPO || 'flexprice/flexprice-docs' }}
+          DOCS_BRANCH: ${{ vars.DOCS_BRANCH || 'main' }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          if [ -z "$DOCS_REPO_TOKEN" ]; then
+            echo "::error::DOCS_REPO_TOKEN is not set; docs were not redeployed."
+            exit 1
+          fi
+          python3 scripts/redeploy_docs.py --repo "$DOCS_REPO" --branch "$DOCS_BRANCH" \
+            --tag "$RELEASE_TAG" --release-url "$RELEASE_URL"
 
   # ---------------------------------------------------------------------------
   # Publish: one matrix cell per SDK/MCP (parallel push to GitHub repos)
@@ -387,8 +516,8 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
           npm install --ignore-scripts
           [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
-          npm run build
-          npm publish --access public
+          NODE_ENV=production npm run build
+          NODE_ENV=production npm publish --access public
 
       - name: Set up Python
         if: matrix.lang == 'python'
@@ -406,3 +535,44 @@ jobs:
           python -m pip install --upgrade pip build twine
           python -m build
           twine upload dist/*
+
+  # ---------------------------------------------------------------------------
+  # MCP server image, then AWS deploy
+  # ---------------------------------------------------------------------------
+  publish-mcp-image:
+    needs: [version-check, publish-to-registries]
+    if: github.event_name == 'release'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/publish-mcp-image.yml
+    with:
+      version: ${{ needs.version-check.outputs.version }}
+    secrets:
+      GHCR_PUBLISH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+  deploy-mcp-aws:
+    name: Deploy MCP server to AWS (CodePipeline)
+    needs: [version-check, publish-mcp-image]
+    if: github.event_name == 'release' && vars.MCP_AWS_DEPLOY != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy via CodePipeline
+        uses: ./.github/actions/deploy-codepipeline
+        with:
+          role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.MCP_AWS_DEPLOY).role }}
+          region: ${{ fromJson(vars.MCP_AWS_DEPLOY).region }}
+          bucket: ${{ fromJson(vars.MCP_AWS_DEPLOY).pipeline }}-${{ secrets.AWS_ACCOUNT_ID }}
+          pipeline: ${{ fromJson(vars.MCP_AWS_DEPLOY).pipeline }}
+          container: mcp-server
+          image: ghcr.io/flexprice/mcp-server:${{ needs.version-check.outputs.version }}

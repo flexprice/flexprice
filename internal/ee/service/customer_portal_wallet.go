@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -52,20 +53,20 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 			return nil, err
 		}
 
-		// An abandoned session would otherwise lock the wallet until it expires, so
-		// hand back the one already in flight rather than a conflict the customer
-		// cannot act on.
-		if existing, err := s.pendingTopupSession(ctx, w.CustomerID, walletID); err != nil {
-			return nil, err
-		} else if existing != nil {
-			return &dto.PortalTopUpWalletResponse{
-				Wallet:          dto.FromWallet(w),
-				CheckoutSession: existing,
-			}, nil
-		}
-
 		collectionMethod := types.CollectionMethodSendInvoice
 		if req.Checkout.UseSavedMethod {
+			gateway, ok := provider.ToPaymentGateway()
+			if !ok {
+				return nil, ierr.NewError("unsupported payment provider for checkout").
+					WithHint("No gateway mapping exists for this provider").
+					WithReportableDetails(map[string]any{"provider": provider}).
+					Mark(ierr.ErrValidation)
+			}
+
+			if err := s.validateSavedMethodForTopUp(ctx, w.CustomerID, gateway); err != nil {
+				return nil, err
+			}
+
 			collectionMethod = types.CollectionMethodChargeAutomatically
 		}
 
@@ -79,12 +80,12 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 				PaymentProvider: provider,
 				PaymentProviderConfig: &types.CheckoutPaymentProviderConfig{
 					CollectionMethod: collectionMethod,
-					CustomerPresent:  true,
 				},
 			},
-			RedirectionParams: req.Checkout.RedirectionParams,
-			IdempotencyKey:    idempotencyKey,
-			Metadata:          req.Checkout.Metadata,
+			RedirectionParams:     req.Checkout.RedirectionParams,
+			IdempotencyKey:        idempotencyKey,
+			Metadata:              req.Checkout.Metadata,
+			EntityCreationOptions: req.Checkout.EntityCreationOptions,
 		}
 	}
 
@@ -144,13 +145,16 @@ func (s *customerPortalService) UpdateAutoTopup(ctx context.Context, walletID st
 		if err := s.validateTopupAmount(ctx, w, *req.Amount); err != nil {
 			return nil, err
 		}
-		gateway, err := fetchGatewayWithAutoChargeSupport(ctx, s.ServiceParams, s.customerService, w.CustomerID)
+		gateway, err := fetchGatewayWithAutoChargeSupport(ctx, s.ServiceParams, s.customerService, interfaces.HasAutoChargeableMethodRequest{
+			CustomerID: w.CustomerID,
+			Amount:     req.Amount,
+		})
 		if err != nil {
 			return nil, err
 		}
 		if gateway == "" {
 			return nil, ierr.NewError("no payment method can be charged automatically").
-				WithHint("Add a payment method that supports automatic charges before enabling auto top-up").
+				WithHint("Add a payment method that supports automatic charges for this amount before enabling auto top-up").
 				Mark(ierr.ErrInvalidOperation)
 		}
 	}
@@ -184,23 +188,6 @@ func (s *customerPortalService) resolveCheckoutProvider(
 			Mark(ierr.ErrInternal)
 	}
 	return provider, nil
-}
-
-func (s *customerPortalService) pendingTopupSession(
-	ctx context.Context,
-	customerID string,
-	walletID string,
-) (*dto.PortalCheckoutSessionResponse, error) {
-	walletSvc := NewWalletService(s.ServiceParams).(*walletService)
-	existing, err := walletSvc.getAnyPendingCheckoutSession(ctx, customerID, walletID)
-	if err != nil {
-		return nil, err
-	}
-	if len(existing) == 0 {
-		return nil, nil
-	}
-
-	return toPortalCheckoutSession(dto.ToCheckoutSessionResponse(existing[0])), nil
 }
 
 // validateTopupAmount rejects a credit amount that converts to less than the
@@ -243,4 +230,47 @@ func (s *customerPortalService) minTopupAmount(ctx context.Context, currency str
 	}
 
 	return cfg.MinTopupAmount(currency), nil
+}
+
+func (s *customerPortalService) validateSavedMethodForTopUp(
+	ctx context.Context,
+	customerID string,
+	gateway types.PaymentGatewayType,
+) error {
+	methodProvider, err := s.IntegrationFactory.GetPaymentMethodProvider(ctx, gateway, s.customerService)
+	if err != nil {
+		if ierr.IsNotImplemented(err) {
+			return err
+		}
+		return ierr.WithError(err).
+			WithHint("The payment provider could not be reached; try again shortly").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	methods, err := methodProvider.ListSavedMethods(ctx, customerID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			methods = nil
+		} else {
+			return ierr.WithError(err).
+				WithHint("The payment provider could not be reached; try again shortly").
+				Mark(ierr.ErrHTTPClient)
+		}
+	}
+
+	hasChargeableMethod := lo.ContainsBy(methods, func(m interfaces.ProviderPaymentMethod) bool {
+		return m.Active && m.InstantlyChargeable
+	})
+
+	if !hasChargeableMethod {
+		return ierr.NewError("instantaneous charge with saved payment method is not supported for provider").
+			WithHintf("Provider '%s' has no saved payment method that can be charged instantly. Please top up using standard checkout.", gateway).
+			WithReportableDetails(map[string]any{
+				"provider":    gateway,
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

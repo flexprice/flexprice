@@ -2,6 +2,7 @@ package zoho_test
 
 import (
 	"context"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -83,5 +84,5 @@ func TestMarkZohoBooksInvoicePaid_NoZohoConnection(t *testing.T) {
 	var appErr *temporal.ApplicationError
 	require.ErrorAs(t, err, &appErr)
 	assert.True(t, appErr.NonRetryable(), "error must be non-retryable")
-	assert.Equal(t, "ConnectionNotFound", appErr.Type())
+	assert.Equal(t, ierr.ErrConnectionNotFound, appErr.Type())
 }

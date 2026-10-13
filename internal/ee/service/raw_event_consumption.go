@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- dedup salt, not security-sensitive
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -317,7 +317,7 @@ func (s *rawEventConsumptionService) BulkIngestRawEvents(ctx context.Context, ev
 		return fmt.Errorf("failed to marshal raw event batch: %w", err)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", types.GenerateUUID(), time.Now().UnixNano(), rand.Int63())
+	uniqueID := fmt.Sprintf("%s-%d-%d", types.GenerateUUID(), time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", tenantID)
 	msg.Metadata.Set("environment_id", environmentID)
@@ -353,7 +353,7 @@ func (s *rawEventConsumptionService) publishTransformedEvent(ctx context.Context
 	}
 
 	// Make UUID truly unique by adding nanosecond precision timestamp and random bytes
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63())
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 
 	msg := message.NewMessage(uniqueID, payload)
 

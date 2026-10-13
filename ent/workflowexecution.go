@@ -81,7 +81,7 @@ func (*WorkflowExecution) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the WorkflowExecution fields.
-func (we *WorkflowExecution) assignValues(columns []string, values []any) error {
+func (_m *WorkflowExecution) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -91,124 +91,124 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				we.ID = value.String
+				_m.ID = value.String
 			}
 		case workflowexecution.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				we.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case workflowexecution.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				we.Status = value.String
+				_m.Status = value.String
 			}
 		case workflowexecution.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				we.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case workflowexecution.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				we.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case workflowexecution.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				we.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case workflowexecution.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				we.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case workflowexecution.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				we.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case workflowexecution.FieldWorkflowID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field workflow_id", values[i])
 			} else if value.Valid {
-				we.WorkflowID = value.String
+				_m.WorkflowID = value.String
 			}
 		case workflowexecution.FieldRunID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field run_id", values[i])
 			} else if value.Valid {
-				we.RunID = value.String
+				_m.RunID = value.String
 			}
 		case workflowexecution.FieldWorkflowType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field workflow_type", values[i])
 			} else if value.Valid {
-				we.WorkflowType = value.String
+				_m.WorkflowType = value.String
 			}
 		case workflowexecution.FieldTaskQueue:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field task_queue", values[i])
 			} else if value.Valid {
-				we.TaskQueue = value.String
+				_m.TaskQueue = value.String
 			}
 		case workflowexecution.FieldStartTime:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_time", values[i])
 			} else if value.Valid {
-				we.StartTime = value.Time
+				_m.StartTime = value.Time
 			}
 		case workflowexecution.FieldEndTime:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_time", values[i])
 			} else if value.Valid {
-				we.EndTime = new(time.Time)
-				*we.EndTime = value.Time
+				_m.EndTime = new(time.Time)
+				*_m.EndTime = value.Time
 			}
 		case workflowexecution.FieldDurationMs:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field duration_ms", values[i])
 			} else if value.Valid {
-				we.DurationMs = new(int64)
-				*we.DurationMs = value.Int64
+				_m.DurationMs = new(int64)
+				*_m.DurationMs = value.Int64
 			}
 		case workflowexecution.FieldWorkflowStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field workflow_status", values[i])
 			} else if value.Valid {
-				we.WorkflowStatus = types.WorkflowExecutionStatus(value.String)
+				_m.WorkflowStatus = types.WorkflowExecutionStatus(value.String)
 			}
 		case workflowexecution.FieldEntity:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity", values[i])
 			} else if value.Valid {
-				we.Entity = new(string)
-				*we.Entity = value.String
+				_m.Entity = new(string)
+				*_m.Entity = value.String
 			}
 		case workflowexecution.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				we.EntityID = new(string)
-				*we.EntityID = value.String
+				_m.EntityID = new(string)
+				*_m.EntityID = value.String
 			}
 		case workflowexecution.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &we.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			we.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -216,94 +216,94 @@ func (we *WorkflowExecution) assignValues(columns []string, values []any) error 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the WorkflowExecution.
 // This includes values selected through modifiers, order, etc.
-func (we *WorkflowExecution) Value(name string) (ent.Value, error) {
-	return we.selectValues.Get(name)
+func (_m *WorkflowExecution) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this WorkflowExecution.
 // Note that you need to call WorkflowExecution.Unwrap() before calling this method if this WorkflowExecution
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (we *WorkflowExecution) Update() *WorkflowExecutionUpdateOne {
-	return NewWorkflowExecutionClient(we.config).UpdateOne(we)
+func (_m *WorkflowExecution) Update() *WorkflowExecutionUpdateOne {
+	return NewWorkflowExecutionClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the WorkflowExecution entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (we *WorkflowExecution) Unwrap() *WorkflowExecution {
-	_tx, ok := we.config.driver.(*txDriver)
+func (_m *WorkflowExecution) Unwrap() *WorkflowExecution {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: WorkflowExecution is not a transactional entity")
 	}
-	we.config.driver = _tx.drv
-	return we
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (we *WorkflowExecution) String() string {
+func (_m *WorkflowExecution) String() string {
 	var builder strings.Builder
 	builder.WriteString("WorkflowExecution(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", we.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(we.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(we.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(we.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(we.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(we.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(we.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(we.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("workflow_id=")
-	builder.WriteString(we.WorkflowID)
+	builder.WriteString(_m.WorkflowID)
 	builder.WriteString(", ")
 	builder.WriteString("run_id=")
-	builder.WriteString(we.RunID)
+	builder.WriteString(_m.RunID)
 	builder.WriteString(", ")
 	builder.WriteString("workflow_type=")
-	builder.WriteString(we.WorkflowType)
+	builder.WriteString(_m.WorkflowType)
 	builder.WriteString(", ")
 	builder.WriteString("task_queue=")
-	builder.WriteString(we.TaskQueue)
+	builder.WriteString(_m.TaskQueue)
 	builder.WriteString(", ")
 	builder.WriteString("start_time=")
-	builder.WriteString(we.StartTime.Format(time.ANSIC))
+	builder.WriteString(_m.StartTime.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := we.EndTime; v != nil {
+	if v := _m.EndTime; v != nil {
 		builder.WriteString("end_time=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := we.DurationMs; v != nil {
+	if v := _m.DurationMs; v != nil {
 		builder.WriteString("duration_ms=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("workflow_status=")
-	builder.WriteString(fmt.Sprintf("%v", we.WorkflowStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.WorkflowStatus))
 	builder.WriteString(", ")
-	if v := we.Entity; v != nil {
+	if v := _m.Entity; v != nil {
 		builder.WriteString("entity=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := we.EntityID; v != nil {
+	if v := _m.EntityID; v != nil {
 		builder.WriteString("entity_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", we.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -31,6 +32,11 @@ type PriceService interface {
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
+
+	// CalculateUnitCost spreads CalculateCost evenly over quantity, so tiered and package prices
+	// prorate on what they actually bill.
+	// e.g. volume tiers, 12 units billed $96 → $8/unit, not the first tier's $10.
+	CalculateUnitCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 
 	// CalculateBucketedCost calculates cost for bucketed values where each value is priced independently
 	CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal
@@ -125,9 +131,9 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	return response, nil
 }
 
-// preparePriceForCreation prepares a price for creation by setting display name,
-// converting the request to a Price domain object, and applying custom price unit conversion if needed.
-// This encapsulates the common price preparation logic used by both CreatePrice and CreateBulkPrice.
+// preparePriceForCreation prepares a price for creation: display name, converting the
+// request to a Price domain object, price unit conversion, and org currency enforcement.
+// Shared by CreatePrice and CreateBulkPrice.
 func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.CreatePriceRequest) (*price.Price, error) {
 	// Get display name if needed (before price creation)
 	s.setDisplayName(ctx, req)
@@ -166,6 +172,15 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 		if err := s.applyPriceUnitConversionToPrice(ctx, p); err != nil {
 			return nil, err
 		}
+	}
+
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	ccCfg, err := GetSetting[types.CustomCurrencyConfig](settingsSvc, ctx, types.SettingKeyCustomCurrencyConfig)
+	if err != nil {
+		return nil, err
+	}
+	if err := ccCfg.EnforceCurrency(p.Currency); err != nil {
+		return nil, err
 	}
 
 	return p, nil
@@ -866,6 +881,9 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 	// Check if the request has critical fields
 	if req.ShouldCreateNewPrice() {
+		if err := req.ValidateAgainst(existingPrice); err != nil {
+			return nil, err
+		}
 		if existingPrice.EndDate != nil {
 			return nil, ierr.NewError("price is already terminated").
 				WithHint("Cannot update a terminated price").
@@ -904,6 +922,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 				bumpSequence = true
 			}
 
+			ctx = activity.WithAction(ctx, existingPrice.ID, activity.PriceTerminated)
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
 
@@ -1043,6 +1062,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 
 	price.EndDate = &endDate
 
+	ctx = activity.WithAction(ctx, id, activity.PriceTerminated)
 	// bumpSequence=true: DeletePrice is a termination event (end_date being set).
 	if err := s.PriceRepo.Update(ctx, price, true); err != nil {
 		return err
@@ -1115,7 +1135,20 @@ func (s *priceService) calculateSingletonCost(ctx context.Context, price *price.
 // CalculateCost calculates the cost for a given price and quantity
 // returns the cost in main currency units (e.g., 1.00 = $1.00)
 func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+	if price == nil {
+		return decimal.Zero
+	}
 	return s.calculateSingletonCost(ctx, price, quantity)
+}
+
+func (s *priceService) CalculateUnitCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
+	if price == nil {
+		return decimal.Zero
+	}
+	if quantity.IsZero() {
+		return price.Amount
+	}
+	return s.CalculateCost(ctx, price, quantity).Div(quantity)
 }
 
 // CalculateBucketedCost calculates cost for bucketed values (from []decimal.Decimal).

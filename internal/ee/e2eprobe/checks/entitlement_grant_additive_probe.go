@@ -155,11 +155,9 @@ func (p *EntitlementGrantAdditiveProbe) pollRawEvents(ctx context.Context, ext, 
 	// events and asserts len(...) >= 200 — request 200 in a single page so
 	// the assertion can succeed without paginating.
 	pageSize := int64(200)
-	// Staging's ingest consumer drains roughly ten events/second, so this
-	// probe's own 200-event burst needs ~20s to become queryable. The bursts
-	// from concurrent probes (700 for commitment, 100 for tax) share that
-	// same queue, so worst-case depth is closer to a thousand events — about
-	// 100s. 30s and 90s both flaked under that; 180s covers it.
+	// Staging's ingest consumer drains ~1.5 events/s. This probe's 200-event
+	// burst plus concurrent probes (550 for commitment, 100 for tax) share
+	// that queue. 30s and 90s both flaked; 180s covers a few hundred queued.
 	deadline := time.Now().Add(180 * time.Second)
 	for {
 		resp, err := p.client.Events().ListRaw(ctx, types.GetEventsRequest{

@@ -25,442 +25,442 @@ type EntitlementUpdate struct {
 }
 
 // Where appends a list predicates to the EntitlementUpdate builder.
-func (eu *EntitlementUpdate) Where(ps ...predicate.Entitlement) *EntitlementUpdate {
-	eu.mutation.Where(ps...)
-	return eu
+func (_u *EntitlementUpdate) Where(ps ...predicate.Entitlement) *EntitlementUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (eu *EntitlementUpdate) SetStatus(s string) *EntitlementUpdate {
-	eu.mutation.SetStatus(s)
-	return eu
+func (_u *EntitlementUpdate) SetStatus(v string) *EntitlementUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableStatus(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetStatus(*s)
+func (_u *EntitlementUpdate) SetNillableStatus(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return eu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (eu *EntitlementUpdate) SetUpdatedAt(t time.Time) *EntitlementUpdate {
-	eu.mutation.SetUpdatedAt(t)
-	return eu
+func (_u *EntitlementUpdate) SetUpdatedAt(v time.Time) *EntitlementUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (eu *EntitlementUpdate) SetUpdatedBy(s string) *EntitlementUpdate {
-	eu.mutation.SetUpdatedBy(s)
-	return eu
+func (_u *EntitlementUpdate) SetUpdatedBy(v string) *EntitlementUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableUpdatedBy(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetUpdatedBy(*s)
+func (_u *EntitlementUpdate) SetNillableUpdatedBy(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (eu *EntitlementUpdate) ClearUpdatedBy() *EntitlementUpdate {
-	eu.mutation.ClearUpdatedBy()
-	return eu
+func (_u *EntitlementUpdate) ClearUpdatedBy() *EntitlementUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (eu *EntitlementUpdate) SetEntityType(tet types.EntitlementEntityType) *EntitlementUpdate {
-	eu.mutation.SetEntityType(tet)
-	return eu
+func (_u *EntitlementUpdate) SetEntityType(v types.EntitlementEntityType) *EntitlementUpdate {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableEntityType(tet *types.EntitlementEntityType) *EntitlementUpdate {
-	if tet != nil {
-		eu.SetEntityType(*tet)
+func (_u *EntitlementUpdate) SetNillableEntityType(v *types.EntitlementEntityType) *EntitlementUpdate {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearEntityType clears the value of the "entity_type" field.
-func (eu *EntitlementUpdate) ClearEntityType() *EntitlementUpdate {
-	eu.mutation.ClearEntityType()
-	return eu
+func (_u *EntitlementUpdate) ClearEntityType() *EntitlementUpdate {
+	_u.mutation.ClearEntityType()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (eu *EntitlementUpdate) SetEntityID(s string) *EntitlementUpdate {
-	eu.mutation.SetEntityID(s)
-	return eu
+func (_u *EntitlementUpdate) SetEntityID(v string) *EntitlementUpdate {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableEntityID(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetEntityID(*s)
+func (_u *EntitlementUpdate) SetNillableEntityID(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (eu *EntitlementUpdate) ClearEntityID() *EntitlementUpdate {
-	eu.mutation.ClearEntityID()
-	return eu
+func (_u *EntitlementUpdate) ClearEntityID() *EntitlementUpdate {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetFeatureID sets the "feature_id" field.
-func (eu *EntitlementUpdate) SetFeatureID(s string) *EntitlementUpdate {
-	eu.mutation.SetFeatureID(s)
-	return eu
+func (_u *EntitlementUpdate) SetFeatureID(v string) *EntitlementUpdate {
+	_u.mutation.SetFeatureID(v)
+	return _u
 }
 
 // SetNillableFeatureID sets the "feature_id" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableFeatureID(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetFeatureID(*s)
+func (_u *EntitlementUpdate) SetNillableFeatureID(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetFeatureID(*v)
 	}
-	return eu
+	return _u
 }
 
 // SetFeatureType sets the "feature_type" field.
-func (eu *EntitlementUpdate) SetFeatureType(tt types.FeatureType) *EntitlementUpdate {
-	eu.mutation.SetFeatureType(tt)
-	return eu
+func (_u *EntitlementUpdate) SetFeatureType(v types.FeatureType) *EntitlementUpdate {
+	_u.mutation.SetFeatureType(v)
+	return _u
 }
 
 // SetNillableFeatureType sets the "feature_type" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableFeatureType(tt *types.FeatureType) *EntitlementUpdate {
-	if tt != nil {
-		eu.SetFeatureType(*tt)
+func (_u *EntitlementUpdate) SetNillableFeatureType(v *types.FeatureType) *EntitlementUpdate {
+	if v != nil {
+		_u.SetFeatureType(*v)
 	}
-	return eu
+	return _u
 }
 
 // SetIsEnabled sets the "is_enabled" field.
-func (eu *EntitlementUpdate) SetIsEnabled(b bool) *EntitlementUpdate {
-	eu.mutation.SetIsEnabled(b)
-	return eu
+func (_u *EntitlementUpdate) SetIsEnabled(v bool) *EntitlementUpdate {
+	_u.mutation.SetIsEnabled(v)
+	return _u
 }
 
 // SetNillableIsEnabled sets the "is_enabled" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableIsEnabled(b *bool) *EntitlementUpdate {
-	if b != nil {
-		eu.SetIsEnabled(*b)
+func (_u *EntitlementUpdate) SetNillableIsEnabled(v *bool) *EntitlementUpdate {
+	if v != nil {
+		_u.SetIsEnabled(*v)
 	}
-	return eu
+	return _u
 }
 
 // SetUsageLimit sets the "usage_limit" field.
-func (eu *EntitlementUpdate) SetUsageLimit(i int64) *EntitlementUpdate {
-	eu.mutation.ResetUsageLimit()
-	eu.mutation.SetUsageLimit(i)
-	return eu
+func (_u *EntitlementUpdate) SetUsageLimit(v int64) *EntitlementUpdate {
+	_u.mutation.ResetUsageLimit()
+	_u.mutation.SetUsageLimit(v)
+	return _u
 }
 
 // SetNillableUsageLimit sets the "usage_limit" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableUsageLimit(i *int64) *EntitlementUpdate {
-	if i != nil {
-		eu.SetUsageLimit(*i)
+func (_u *EntitlementUpdate) SetNillableUsageLimit(v *int64) *EntitlementUpdate {
+	if v != nil {
+		_u.SetUsageLimit(*v)
 	}
-	return eu
+	return _u
 }
 
-// AddUsageLimit adds i to the "usage_limit" field.
-func (eu *EntitlementUpdate) AddUsageLimit(i int64) *EntitlementUpdate {
-	eu.mutation.AddUsageLimit(i)
-	return eu
+// AddUsageLimit adds value to the "usage_limit" field.
+func (_u *EntitlementUpdate) AddUsageLimit(v int64) *EntitlementUpdate {
+	_u.mutation.AddUsageLimit(v)
+	return _u
 }
 
 // ClearUsageLimit clears the value of the "usage_limit" field.
-func (eu *EntitlementUpdate) ClearUsageLimit() *EntitlementUpdate {
-	eu.mutation.ClearUsageLimit()
-	return eu
+func (_u *EntitlementUpdate) ClearUsageLimit() *EntitlementUpdate {
+	_u.mutation.ClearUsageLimit()
+	return _u
 }
 
 // SetUsageResetPeriod sets the "usage_reset_period" field.
-func (eu *EntitlementUpdate) SetUsageResetPeriod(turp types.EntitlementUsageResetPeriod) *EntitlementUpdate {
-	eu.mutation.SetUsageResetPeriod(turp)
-	return eu
+func (_u *EntitlementUpdate) SetUsageResetPeriod(v types.EntitlementUsageResetPeriod) *EntitlementUpdate {
+	_u.mutation.SetUsageResetPeriod(v)
+	return _u
 }
 
 // SetNillableUsageResetPeriod sets the "usage_reset_period" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableUsageResetPeriod(turp *types.EntitlementUsageResetPeriod) *EntitlementUpdate {
-	if turp != nil {
-		eu.SetUsageResetPeriod(*turp)
+func (_u *EntitlementUpdate) SetNillableUsageResetPeriod(v *types.EntitlementUsageResetPeriod) *EntitlementUpdate {
+	if v != nil {
+		_u.SetUsageResetPeriod(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearUsageResetPeriod clears the value of the "usage_reset_period" field.
-func (eu *EntitlementUpdate) ClearUsageResetPeriod() *EntitlementUpdate {
-	eu.mutation.ClearUsageResetPeriod()
-	return eu
+func (_u *EntitlementUpdate) ClearUsageResetPeriod() *EntitlementUpdate {
+	_u.mutation.ClearUsageResetPeriod()
+	return _u
 }
 
 // SetIsSoftLimit sets the "is_soft_limit" field.
-func (eu *EntitlementUpdate) SetIsSoftLimit(b bool) *EntitlementUpdate {
-	eu.mutation.SetIsSoftLimit(b)
-	return eu
+func (_u *EntitlementUpdate) SetIsSoftLimit(v bool) *EntitlementUpdate {
+	_u.mutation.SetIsSoftLimit(v)
+	return _u
 }
 
 // SetNillableIsSoftLimit sets the "is_soft_limit" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableIsSoftLimit(b *bool) *EntitlementUpdate {
-	if b != nil {
-		eu.SetIsSoftLimit(*b)
+func (_u *EntitlementUpdate) SetNillableIsSoftLimit(v *bool) *EntitlementUpdate {
+	if v != nil {
+		_u.SetIsSoftLimit(*v)
 	}
-	return eu
+	return _u
 }
 
 // SetStaticValue sets the "static_value" field.
-func (eu *EntitlementUpdate) SetStaticValue(s string) *EntitlementUpdate {
-	eu.mutation.SetStaticValue(s)
-	return eu
+func (_u *EntitlementUpdate) SetStaticValue(v string) *EntitlementUpdate {
+	_u.mutation.SetStaticValue(v)
+	return _u
 }
 
 // SetNillableStaticValue sets the "static_value" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableStaticValue(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetStaticValue(*s)
+func (_u *EntitlementUpdate) SetNillableStaticValue(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetStaticValue(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearStaticValue clears the value of the "static_value" field.
-func (eu *EntitlementUpdate) ClearStaticValue() *EntitlementUpdate {
-	eu.mutation.ClearStaticValue()
-	return eu
+func (_u *EntitlementUpdate) ClearStaticValue() *EntitlementUpdate {
+	_u.mutation.ClearStaticValue()
+	return _u
 }
 
 // SetDisplayOrder sets the "display_order" field.
-func (eu *EntitlementUpdate) SetDisplayOrder(i int) *EntitlementUpdate {
-	eu.mutation.ResetDisplayOrder()
-	eu.mutation.SetDisplayOrder(i)
-	return eu
+func (_u *EntitlementUpdate) SetDisplayOrder(v int) *EntitlementUpdate {
+	_u.mutation.ResetDisplayOrder()
+	_u.mutation.SetDisplayOrder(v)
+	return _u
 }
 
 // SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableDisplayOrder(i *int) *EntitlementUpdate {
-	if i != nil {
-		eu.SetDisplayOrder(*i)
+func (_u *EntitlementUpdate) SetNillableDisplayOrder(v *int) *EntitlementUpdate {
+	if v != nil {
+		_u.SetDisplayOrder(*v)
 	}
-	return eu
+	return _u
 }
 
-// AddDisplayOrder adds i to the "display_order" field.
-func (eu *EntitlementUpdate) AddDisplayOrder(i int) *EntitlementUpdate {
-	eu.mutation.AddDisplayOrder(i)
-	return eu
+// AddDisplayOrder adds value to the "display_order" field.
+func (_u *EntitlementUpdate) AddDisplayOrder(v int) *EntitlementUpdate {
+	_u.mutation.AddDisplayOrder(v)
+	return _u
 }
 
 // SetParentEntitlementID sets the "parent_entitlement_id" field.
-func (eu *EntitlementUpdate) SetParentEntitlementID(s string) *EntitlementUpdate {
-	eu.mutation.SetParentEntitlementID(s)
-	return eu
+func (_u *EntitlementUpdate) SetParentEntitlementID(v string) *EntitlementUpdate {
+	_u.mutation.SetParentEntitlementID(v)
+	return _u
 }
 
 // SetNillableParentEntitlementID sets the "parent_entitlement_id" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableParentEntitlementID(s *string) *EntitlementUpdate {
-	if s != nil {
-		eu.SetParentEntitlementID(*s)
+func (_u *EntitlementUpdate) SetNillableParentEntitlementID(v *string) *EntitlementUpdate {
+	if v != nil {
+		_u.SetParentEntitlementID(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearParentEntitlementID clears the value of the "parent_entitlement_id" field.
-func (eu *EntitlementUpdate) ClearParentEntitlementID() *EntitlementUpdate {
-	eu.mutation.ClearParentEntitlementID()
-	return eu
+func (_u *EntitlementUpdate) ClearParentEntitlementID() *EntitlementUpdate {
+	_u.mutation.ClearParentEntitlementID()
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (eu *EntitlementUpdate) SetStartDate(t time.Time) *EntitlementUpdate {
-	eu.mutation.SetStartDate(t)
-	return eu
+func (_u *EntitlementUpdate) SetStartDate(v time.Time) *EntitlementUpdate {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableStartDate(t *time.Time) *EntitlementUpdate {
-	if t != nil {
-		eu.SetStartDate(*t)
+func (_u *EntitlementUpdate) SetNillableStartDate(v *time.Time) *EntitlementUpdate {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (eu *EntitlementUpdate) ClearStartDate() *EntitlementUpdate {
-	eu.mutation.ClearStartDate()
-	return eu
+func (_u *EntitlementUpdate) ClearStartDate() *EntitlementUpdate {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (eu *EntitlementUpdate) SetEndDate(t time.Time) *EntitlementUpdate {
-	eu.mutation.SetEndDate(t)
-	return eu
+func (_u *EntitlementUpdate) SetEndDate(v time.Time) *EntitlementUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableEndDate(t *time.Time) *EntitlementUpdate {
-	if t != nil {
-		eu.SetEndDate(*t)
+func (_u *EntitlementUpdate) SetNillableEndDate(v *time.Time) *EntitlementUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (eu *EntitlementUpdate) ClearEndDate() *EntitlementUpdate {
-	eu.mutation.ClearEndDate()
-	return eu
+func (_u *EntitlementUpdate) ClearEndDate() *EntitlementUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetConfigValue sets the "config_value" field.
-func (eu *EntitlementUpdate) SetConfigValue(m map[string]interface{}) *EntitlementUpdate {
-	eu.mutation.SetConfigValue(m)
-	return eu
+func (_u *EntitlementUpdate) SetConfigValue(v map[string]interface{}) *EntitlementUpdate {
+	_u.mutation.SetConfigValue(v)
+	return _u
 }
 
 // ClearConfigValue clears the value of the "config_value" field.
-func (eu *EntitlementUpdate) ClearConfigValue() *EntitlementUpdate {
-	eu.mutation.ClearConfigValue()
-	return eu
+func (_u *EntitlementUpdate) ClearConfigValue() *EntitlementUpdate {
+	_u.mutation.ClearConfigValue()
+	return _u
 }
 
 // SetGrantMeasure sets the "grant_measure" field.
-func (eu *EntitlementUpdate) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdate {
-	eu.mutation.SetGrantMeasure(tgm)
-	return eu
+func (_u *EntitlementUpdate) SetGrantMeasure(v types.EntitlementGrantMeasure) *EntitlementUpdate {
+	_u.mutation.SetGrantMeasure(v)
+	return _u
 }
 
 // SetNillableGrantMeasure sets the "grant_measure" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantMeasure(tgm *types.EntitlementGrantMeasure) *EntitlementUpdate {
-	if tgm != nil {
-		eu.SetGrantMeasure(*tgm)
+func (_u *EntitlementUpdate) SetNillableGrantMeasure(v *types.EntitlementGrantMeasure) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantMeasure(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearGrantMeasure clears the value of the "grant_measure" field.
-func (eu *EntitlementUpdate) ClearGrantMeasure() *EntitlementUpdate {
-	eu.mutation.ClearGrantMeasure()
-	return eu
+func (_u *EntitlementUpdate) ClearGrantMeasure() *EntitlementUpdate {
+	_u.mutation.ClearGrantMeasure()
+	return _u
 }
 
 // SetGrantDurationValue sets the "grant_duration_value" field.
-func (eu *EntitlementUpdate) SetGrantDurationValue(i int) *EntitlementUpdate {
-	eu.mutation.ResetGrantDurationValue()
-	eu.mutation.SetGrantDurationValue(i)
-	return eu
+func (_u *EntitlementUpdate) SetGrantDurationValue(v int) *EntitlementUpdate {
+	_u.mutation.ResetGrantDurationValue()
+	_u.mutation.SetGrantDurationValue(v)
+	return _u
 }
 
 // SetNillableGrantDurationValue sets the "grant_duration_value" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantDurationValue(i *int) *EntitlementUpdate {
-	if i != nil {
-		eu.SetGrantDurationValue(*i)
+func (_u *EntitlementUpdate) SetNillableGrantDurationValue(v *int) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantDurationValue(*v)
 	}
-	return eu
+	return _u
 }
 
-// AddGrantDurationValue adds i to the "grant_duration_value" field.
-func (eu *EntitlementUpdate) AddGrantDurationValue(i int) *EntitlementUpdate {
-	eu.mutation.AddGrantDurationValue(i)
-	return eu
+// AddGrantDurationValue adds value to the "grant_duration_value" field.
+func (_u *EntitlementUpdate) AddGrantDurationValue(v int) *EntitlementUpdate {
+	_u.mutation.AddGrantDurationValue(v)
+	return _u
 }
 
 // ClearGrantDurationValue clears the value of the "grant_duration_value" field.
-func (eu *EntitlementUpdate) ClearGrantDurationValue() *EntitlementUpdate {
-	eu.mutation.ClearGrantDurationValue()
-	return eu
+func (_u *EntitlementUpdate) ClearGrantDurationValue() *EntitlementUpdate {
+	_u.mutation.ClearGrantDurationValue()
+	return _u
 }
 
 // SetGrantDurationUnit sets the "grant_duration_unit" field.
-func (eu *EntitlementUpdate) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) *EntitlementUpdate {
-	eu.mutation.SetGrantDurationUnit(tgdu)
-	return eu
+func (_u *EntitlementUpdate) SetGrantDurationUnit(v types.EntitlementGrantDurationUnit) *EntitlementUpdate {
+	_u.mutation.SetGrantDurationUnit(v)
+	return _u
 }
 
 // SetNillableGrantDurationUnit sets the "grant_duration_unit" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantDurationUnit(tgdu *types.EntitlementGrantDurationUnit) *EntitlementUpdate {
-	if tgdu != nil {
-		eu.SetGrantDurationUnit(*tgdu)
+func (_u *EntitlementUpdate) SetNillableGrantDurationUnit(v *types.EntitlementGrantDurationUnit) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantDurationUnit(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearGrantDurationUnit clears the value of the "grant_duration_unit" field.
-func (eu *EntitlementUpdate) ClearGrantDurationUnit() *EntitlementUpdate {
-	eu.mutation.ClearGrantDurationUnit()
-	return eu
+func (_u *EntitlementUpdate) ClearGrantDurationUnit() *EntitlementUpdate {
+	_u.mutation.ClearGrantDurationUnit()
+	return _u
 }
 
 // SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
-func (eu *EntitlementUpdate) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
-	eu.mutation.SetGrantAllocationBehavior(tgab)
-	return eu
+func (_u *EntitlementUpdate) SetGrantAllocationBehavior(v types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
+	_u.mutation.SetGrantAllocationBehavior(v)
+	return _u
 }
 
 // SetNillableGrantAllocationBehavior sets the "grant_allocation_behavior" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantAllocationBehavior(tgab *types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
-	if tgab != nil {
-		eu.SetGrantAllocationBehavior(*tgab)
+func (_u *EntitlementUpdate) SetNillableGrantAllocationBehavior(v *types.EntitlementGrantAllocationBehavior) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantAllocationBehavior(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
-func (eu *EntitlementUpdate) ClearGrantAllocationBehavior() *EntitlementUpdate {
-	eu.mutation.ClearGrantAllocationBehavior()
-	return eu
+func (_u *EntitlementUpdate) ClearGrantAllocationBehavior() *EntitlementUpdate {
+	_u.mutation.ClearGrantAllocationBehavior()
+	return _u
 }
 
 // SetGrantQuota sets the "grant_quota" field.
-func (eu *EntitlementUpdate) SetGrantQuota(d decimal.Decimal) *EntitlementUpdate {
-	eu.mutation.SetGrantQuota(d)
-	return eu
+func (_u *EntitlementUpdate) SetGrantQuota(v decimal.Decimal) *EntitlementUpdate {
+	_u.mutation.SetGrantQuota(v)
+	return _u
 }
 
 // SetNillableGrantQuota sets the "grant_quota" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableGrantQuota(d *decimal.Decimal) *EntitlementUpdate {
-	if d != nil {
-		eu.SetGrantQuota(*d)
+func (_u *EntitlementUpdate) SetNillableGrantQuota(v *decimal.Decimal) *EntitlementUpdate {
+	if v != nil {
+		_u.SetGrantQuota(*v)
 	}
-	return eu
+	return _u
 }
 
 // ClearGrantQuota clears the value of the "grant_quota" field.
-func (eu *EntitlementUpdate) ClearGrantQuota() *EntitlementUpdate {
-	eu.mutation.ClearGrantQuota()
-	return eu
+func (_u *EntitlementUpdate) ClearGrantQuota() *EntitlementUpdate {
+	_u.mutation.ClearGrantQuota()
+	return _u
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (eu *EntitlementUpdate) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdate {
-	eu.mutation.SetAggregationMode(tam)
-	return eu
+func (_u *EntitlementUpdate) SetAggregationMode(v types.EntitlementAggregationMode) *EntitlementUpdate {
+	_u.mutation.SetAggregationMode(v)
+	return _u
 }
 
 // SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
-func (eu *EntitlementUpdate) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdate {
-	if tam != nil {
-		eu.SetAggregationMode(*tam)
+func (_u *EntitlementUpdate) SetNillableAggregationMode(v *types.EntitlementAggregationMode) *EntitlementUpdate {
+	if v != nil {
+		_u.SetAggregationMode(*v)
 	}
-	return eu
+	return _u
 }
 
 // Mutation returns the EntitlementMutation object of the builder.
-func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
-	return eu.mutation
+func (_u *EntitlementUpdate) Mutation() *EntitlementMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (eu *EntitlementUpdate) Save(ctx context.Context) (int, error) {
-	eu.defaults()
-	return withHooks(ctx, eu.sqlSave, eu.mutation, eu.hooks)
+func (_u *EntitlementUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (eu *EntitlementUpdate) SaveX(ctx context.Context) int {
-	affected, err := eu.Save(ctx)
+func (_u *EntitlementUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -468,64 +468,64 @@ func (eu *EntitlementUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (eu *EntitlementUpdate) Exec(ctx context.Context) error {
-	_, err := eu.Save(ctx)
+func (_u *EntitlementUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eu *EntitlementUpdate) ExecX(ctx context.Context) {
-	if err := eu.Exec(ctx); err != nil {
+func (_u *EntitlementUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (eu *EntitlementUpdate) defaults() {
-	if _, ok := eu.mutation.UpdatedAt(); !ok {
+func (_u *EntitlementUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entitlement.UpdateDefaultUpdatedAt()
-		eu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (eu *EntitlementUpdate) check() error {
-	if v, ok := eu.mutation.EntityType(); ok {
+func (_u *EntitlementUpdate) check() error {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.FeatureID(); ok {
+	if v, ok := _u.mutation.FeatureID(); ok {
 		if err := entitlement.FeatureIDValidator(v); err != nil {
 			return &ValidationError{Name: "feature_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_id": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.FeatureType(); ok {
+	if v, ok := _u.mutation.FeatureType(); ok {
 		if err := entitlement.FeatureTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "feature_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_type": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.UsageResetPeriod(); ok {
+	if v, ok := _u.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.GrantMeasure(); ok {
+	if v, ok := _u.mutation.GrantMeasure(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_measure", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_measure": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.GrantDurationUnit(); ok {
+	if v, ok := _u.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.GrantAllocationBehavior(); ok {
+	if v, ok := _u.mutation.GrantAllocationBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_allocation_behavior", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_allocation_behavior": %w`, err)}
 		}
 	}
-	if v, ok := eu.mutation.AggregationMode(); ok {
+	if v, ok := _u.mutation.AggregationMode(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
@@ -533,148 +533,148 @@ func (eu *EntitlementUpdate) check() error {
 	return nil
 }
 
-func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := eu.check(); err != nil {
-		return n, err
+func (_u *EntitlementUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(entitlement.Table, entitlement.Columns, sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString))
-	if ps := eu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := eu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entitlement.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := eu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entitlement.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if eu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entitlement.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := eu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entitlement.FieldUpdatedBy, field.TypeString, value)
 	}
-	if eu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entitlement.FieldUpdatedBy, field.TypeString)
 	}
-	if eu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlement.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := eu.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(entitlement.FieldEntityType, field.TypeString, value)
 	}
-	if eu.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(entitlement.FieldEntityType, field.TypeString)
 	}
-	if value, ok := eu.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(entitlement.FieldEntityID, field.TypeString, value)
 	}
-	if eu.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(entitlement.FieldEntityID, field.TypeString)
 	}
-	if value, ok := eu.mutation.FeatureID(); ok {
+	if value, ok := _u.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
-	if value, ok := eu.mutation.FeatureType(); ok {
+	if value, ok := _u.mutation.FeatureType(); ok {
 		_spec.SetField(entitlement.FieldFeatureType, field.TypeString, value)
 	}
-	if value, ok := eu.mutation.IsEnabled(); ok {
+	if value, ok := _u.mutation.IsEnabled(); ok {
 		_spec.SetField(entitlement.FieldIsEnabled, field.TypeBool, value)
 	}
-	if value, ok := eu.mutation.UsageLimit(); ok {
+	if value, ok := _u.mutation.UsageLimit(); ok {
 		_spec.SetField(entitlement.FieldUsageLimit, field.TypeInt64, value)
 	}
-	if value, ok := eu.mutation.AddedUsageLimit(); ok {
+	if value, ok := _u.mutation.AddedUsageLimit(); ok {
 		_spec.AddField(entitlement.FieldUsageLimit, field.TypeInt64, value)
 	}
-	if eu.mutation.UsageLimitCleared() {
+	if _u.mutation.UsageLimitCleared() {
 		_spec.ClearField(entitlement.FieldUsageLimit, field.TypeInt64)
 	}
-	if value, ok := eu.mutation.UsageResetPeriod(); ok {
+	if value, ok := _u.mutation.UsageResetPeriod(); ok {
 		_spec.SetField(entitlement.FieldUsageResetPeriod, field.TypeString, value)
 	}
-	if eu.mutation.UsageResetPeriodCleared() {
+	if _u.mutation.UsageResetPeriodCleared() {
 		_spec.ClearField(entitlement.FieldUsageResetPeriod, field.TypeString)
 	}
-	if value, ok := eu.mutation.IsSoftLimit(); ok {
+	if value, ok := _u.mutation.IsSoftLimit(); ok {
 		_spec.SetField(entitlement.FieldIsSoftLimit, field.TypeBool, value)
 	}
-	if value, ok := eu.mutation.StaticValue(); ok {
+	if value, ok := _u.mutation.StaticValue(); ok {
 		_spec.SetField(entitlement.FieldStaticValue, field.TypeString, value)
 	}
-	if eu.mutation.StaticValueCleared() {
+	if _u.mutation.StaticValueCleared() {
 		_spec.ClearField(entitlement.FieldStaticValue, field.TypeString)
 	}
-	if value, ok := eu.mutation.DisplayOrder(); ok {
+	if value, ok := _u.mutation.DisplayOrder(); ok {
 		_spec.SetField(entitlement.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := eu.mutation.AddedDisplayOrder(); ok {
+	if value, ok := _u.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(entitlement.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := eu.mutation.ParentEntitlementID(); ok {
+	if value, ok := _u.mutation.ParentEntitlementID(); ok {
 		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
 	}
-	if eu.mutation.ParentEntitlementIDCleared() {
+	if _u.mutation.ParentEntitlementIDCleared() {
 		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
 	}
-	if value, ok := eu.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(entitlement.FieldStartDate, field.TypeTime, value)
 	}
-	if eu.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(entitlement.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := eu.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
 	}
-	if eu.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := eu.mutation.ConfigValue(); ok {
+	if value, ok := _u.mutation.ConfigValue(); ok {
 		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
 	}
-	if eu.mutation.ConfigValueCleared() {
+	if _u.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
 	}
-	if value, ok := eu.mutation.GrantMeasure(); ok {
+	if value, ok := _u.mutation.GrantMeasure(); ok {
 		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
 	}
-	if eu.mutation.GrantMeasureCleared() {
+	if _u.mutation.GrantMeasureCleared() {
 		_spec.ClearField(entitlement.FieldGrantMeasure, field.TypeString)
 	}
-	if value, ok := eu.mutation.GrantDurationValue(); ok {
+	if value, ok := _u.mutation.GrantDurationValue(); ok {
 		_spec.SetField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
 	}
-	if value, ok := eu.mutation.AddedGrantDurationValue(); ok {
+	if value, ok := _u.mutation.AddedGrantDurationValue(); ok {
 		_spec.AddField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
 	}
-	if eu.mutation.GrantDurationValueCleared() {
+	if _u.mutation.GrantDurationValueCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationValue, field.TypeInt)
 	}
-	if value, ok := eu.mutation.GrantDurationUnit(); ok {
+	if value, ok := _u.mutation.GrantDurationUnit(); ok {
 		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
 	}
-	if eu.mutation.GrantDurationUnitCleared() {
+	if _u.mutation.GrantDurationUnitCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
 	}
-	if value, ok := eu.mutation.GrantAllocationBehavior(); ok {
+	if value, ok := _u.mutation.GrantAllocationBehavior(); ok {
 		_spec.SetField(entitlement.FieldGrantAllocationBehavior, field.TypeString, value)
 	}
-	if eu.mutation.GrantAllocationBehaviorCleared() {
+	if _u.mutation.GrantAllocationBehaviorCleared() {
 		_spec.ClearField(entitlement.FieldGrantAllocationBehavior, field.TypeString)
 	}
-	if value, ok := eu.mutation.GrantQuota(); ok {
+	if value, ok := _u.mutation.GrantQuota(); ok {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
 	}
-	if eu.mutation.GrantQuotaCleared() {
+	if _u.mutation.GrantQuotaCleared() {
 		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
 	}
-	if value, ok := eu.mutation.AggregationMode(); ok {
+	if value, ok := _u.mutation.AggregationMode(); ok {
 		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entitlement.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -682,8 +682,8 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	eu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // EntitlementUpdateOne is the builder for updating a single Entitlement entity.
@@ -695,449 +695,449 @@ type EntitlementUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (euo *EntitlementUpdateOne) SetStatus(s string) *EntitlementUpdateOne {
-	euo.mutation.SetStatus(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetStatus(v string) *EntitlementUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableStatus(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetStatus(*s)
+func (_u *EntitlementUpdateOne) SetNillableStatus(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return euo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (euo *EntitlementUpdateOne) SetUpdatedAt(t time.Time) *EntitlementUpdateOne {
-	euo.mutation.SetUpdatedAt(t)
-	return euo
+func (_u *EntitlementUpdateOne) SetUpdatedAt(v time.Time) *EntitlementUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (euo *EntitlementUpdateOne) SetUpdatedBy(s string) *EntitlementUpdateOne {
-	euo.mutation.SetUpdatedBy(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetUpdatedBy(v string) *EntitlementUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableUpdatedBy(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetUpdatedBy(*s)
+func (_u *EntitlementUpdateOne) SetNillableUpdatedBy(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (euo *EntitlementUpdateOne) ClearUpdatedBy() *EntitlementUpdateOne {
-	euo.mutation.ClearUpdatedBy()
-	return euo
+func (_u *EntitlementUpdateOne) ClearUpdatedBy() *EntitlementUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetEntityType sets the "entity_type" field.
-func (euo *EntitlementUpdateOne) SetEntityType(tet types.EntitlementEntityType) *EntitlementUpdateOne {
-	euo.mutation.SetEntityType(tet)
-	return euo
+func (_u *EntitlementUpdateOne) SetEntityType(v types.EntitlementEntityType) *EntitlementUpdateOne {
+	_u.mutation.SetEntityType(v)
+	return _u
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableEntityType(tet *types.EntitlementEntityType) *EntitlementUpdateOne {
-	if tet != nil {
-		euo.SetEntityType(*tet)
+func (_u *EntitlementUpdateOne) SetNillableEntityType(v *types.EntitlementEntityType) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetEntityType(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearEntityType clears the value of the "entity_type" field.
-func (euo *EntitlementUpdateOne) ClearEntityType() *EntitlementUpdateOne {
-	euo.mutation.ClearEntityType()
-	return euo
+func (_u *EntitlementUpdateOne) ClearEntityType() *EntitlementUpdateOne {
+	_u.mutation.ClearEntityType()
+	return _u
 }
 
 // SetEntityID sets the "entity_id" field.
-func (euo *EntitlementUpdateOne) SetEntityID(s string) *EntitlementUpdateOne {
-	euo.mutation.SetEntityID(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetEntityID(v string) *EntitlementUpdateOne {
+	_u.mutation.SetEntityID(v)
+	return _u
 }
 
 // SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableEntityID(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetEntityID(*s)
+func (_u *EntitlementUpdateOne) SetNillableEntityID(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetEntityID(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearEntityID clears the value of the "entity_id" field.
-func (euo *EntitlementUpdateOne) ClearEntityID() *EntitlementUpdateOne {
-	euo.mutation.ClearEntityID()
-	return euo
+func (_u *EntitlementUpdateOne) ClearEntityID() *EntitlementUpdateOne {
+	_u.mutation.ClearEntityID()
+	return _u
 }
 
 // SetFeatureID sets the "feature_id" field.
-func (euo *EntitlementUpdateOne) SetFeatureID(s string) *EntitlementUpdateOne {
-	euo.mutation.SetFeatureID(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetFeatureID(v string) *EntitlementUpdateOne {
+	_u.mutation.SetFeatureID(v)
+	return _u
 }
 
 // SetNillableFeatureID sets the "feature_id" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableFeatureID(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetFeatureID(*s)
+func (_u *EntitlementUpdateOne) SetNillableFeatureID(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetFeatureID(*v)
 	}
-	return euo
+	return _u
 }
 
 // SetFeatureType sets the "feature_type" field.
-func (euo *EntitlementUpdateOne) SetFeatureType(tt types.FeatureType) *EntitlementUpdateOne {
-	euo.mutation.SetFeatureType(tt)
-	return euo
+func (_u *EntitlementUpdateOne) SetFeatureType(v types.FeatureType) *EntitlementUpdateOne {
+	_u.mutation.SetFeatureType(v)
+	return _u
 }
 
 // SetNillableFeatureType sets the "feature_type" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableFeatureType(tt *types.FeatureType) *EntitlementUpdateOne {
-	if tt != nil {
-		euo.SetFeatureType(*tt)
+func (_u *EntitlementUpdateOne) SetNillableFeatureType(v *types.FeatureType) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetFeatureType(*v)
 	}
-	return euo
+	return _u
 }
 
 // SetIsEnabled sets the "is_enabled" field.
-func (euo *EntitlementUpdateOne) SetIsEnabled(b bool) *EntitlementUpdateOne {
-	euo.mutation.SetIsEnabled(b)
-	return euo
+func (_u *EntitlementUpdateOne) SetIsEnabled(v bool) *EntitlementUpdateOne {
+	_u.mutation.SetIsEnabled(v)
+	return _u
 }
 
 // SetNillableIsEnabled sets the "is_enabled" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableIsEnabled(b *bool) *EntitlementUpdateOne {
-	if b != nil {
-		euo.SetIsEnabled(*b)
+func (_u *EntitlementUpdateOne) SetNillableIsEnabled(v *bool) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetIsEnabled(*v)
 	}
-	return euo
+	return _u
 }
 
 // SetUsageLimit sets the "usage_limit" field.
-func (euo *EntitlementUpdateOne) SetUsageLimit(i int64) *EntitlementUpdateOne {
-	euo.mutation.ResetUsageLimit()
-	euo.mutation.SetUsageLimit(i)
-	return euo
+func (_u *EntitlementUpdateOne) SetUsageLimit(v int64) *EntitlementUpdateOne {
+	_u.mutation.ResetUsageLimit()
+	_u.mutation.SetUsageLimit(v)
+	return _u
 }
 
 // SetNillableUsageLimit sets the "usage_limit" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableUsageLimit(i *int64) *EntitlementUpdateOne {
-	if i != nil {
-		euo.SetUsageLimit(*i)
+func (_u *EntitlementUpdateOne) SetNillableUsageLimit(v *int64) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetUsageLimit(*v)
 	}
-	return euo
+	return _u
 }
 
-// AddUsageLimit adds i to the "usage_limit" field.
-func (euo *EntitlementUpdateOne) AddUsageLimit(i int64) *EntitlementUpdateOne {
-	euo.mutation.AddUsageLimit(i)
-	return euo
+// AddUsageLimit adds value to the "usage_limit" field.
+func (_u *EntitlementUpdateOne) AddUsageLimit(v int64) *EntitlementUpdateOne {
+	_u.mutation.AddUsageLimit(v)
+	return _u
 }
 
 // ClearUsageLimit clears the value of the "usage_limit" field.
-func (euo *EntitlementUpdateOne) ClearUsageLimit() *EntitlementUpdateOne {
-	euo.mutation.ClearUsageLimit()
-	return euo
+func (_u *EntitlementUpdateOne) ClearUsageLimit() *EntitlementUpdateOne {
+	_u.mutation.ClearUsageLimit()
+	return _u
 }
 
 // SetUsageResetPeriod sets the "usage_reset_period" field.
-func (euo *EntitlementUpdateOne) SetUsageResetPeriod(turp types.EntitlementUsageResetPeriod) *EntitlementUpdateOne {
-	euo.mutation.SetUsageResetPeriod(turp)
-	return euo
+func (_u *EntitlementUpdateOne) SetUsageResetPeriod(v types.EntitlementUsageResetPeriod) *EntitlementUpdateOne {
+	_u.mutation.SetUsageResetPeriod(v)
+	return _u
 }
 
 // SetNillableUsageResetPeriod sets the "usage_reset_period" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableUsageResetPeriod(turp *types.EntitlementUsageResetPeriod) *EntitlementUpdateOne {
-	if turp != nil {
-		euo.SetUsageResetPeriod(*turp)
+func (_u *EntitlementUpdateOne) SetNillableUsageResetPeriod(v *types.EntitlementUsageResetPeriod) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetUsageResetPeriod(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearUsageResetPeriod clears the value of the "usage_reset_period" field.
-func (euo *EntitlementUpdateOne) ClearUsageResetPeriod() *EntitlementUpdateOne {
-	euo.mutation.ClearUsageResetPeriod()
-	return euo
+func (_u *EntitlementUpdateOne) ClearUsageResetPeriod() *EntitlementUpdateOne {
+	_u.mutation.ClearUsageResetPeriod()
+	return _u
 }
 
 // SetIsSoftLimit sets the "is_soft_limit" field.
-func (euo *EntitlementUpdateOne) SetIsSoftLimit(b bool) *EntitlementUpdateOne {
-	euo.mutation.SetIsSoftLimit(b)
-	return euo
+func (_u *EntitlementUpdateOne) SetIsSoftLimit(v bool) *EntitlementUpdateOne {
+	_u.mutation.SetIsSoftLimit(v)
+	return _u
 }
 
 // SetNillableIsSoftLimit sets the "is_soft_limit" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableIsSoftLimit(b *bool) *EntitlementUpdateOne {
-	if b != nil {
-		euo.SetIsSoftLimit(*b)
+func (_u *EntitlementUpdateOne) SetNillableIsSoftLimit(v *bool) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetIsSoftLimit(*v)
 	}
-	return euo
+	return _u
 }
 
 // SetStaticValue sets the "static_value" field.
-func (euo *EntitlementUpdateOne) SetStaticValue(s string) *EntitlementUpdateOne {
-	euo.mutation.SetStaticValue(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetStaticValue(v string) *EntitlementUpdateOne {
+	_u.mutation.SetStaticValue(v)
+	return _u
 }
 
 // SetNillableStaticValue sets the "static_value" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableStaticValue(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetStaticValue(*s)
+func (_u *EntitlementUpdateOne) SetNillableStaticValue(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetStaticValue(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearStaticValue clears the value of the "static_value" field.
-func (euo *EntitlementUpdateOne) ClearStaticValue() *EntitlementUpdateOne {
-	euo.mutation.ClearStaticValue()
-	return euo
+func (_u *EntitlementUpdateOne) ClearStaticValue() *EntitlementUpdateOne {
+	_u.mutation.ClearStaticValue()
+	return _u
 }
 
 // SetDisplayOrder sets the "display_order" field.
-func (euo *EntitlementUpdateOne) SetDisplayOrder(i int) *EntitlementUpdateOne {
-	euo.mutation.ResetDisplayOrder()
-	euo.mutation.SetDisplayOrder(i)
-	return euo
+func (_u *EntitlementUpdateOne) SetDisplayOrder(v int) *EntitlementUpdateOne {
+	_u.mutation.ResetDisplayOrder()
+	_u.mutation.SetDisplayOrder(v)
+	return _u
 }
 
 // SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableDisplayOrder(i *int) *EntitlementUpdateOne {
-	if i != nil {
-		euo.SetDisplayOrder(*i)
+func (_u *EntitlementUpdateOne) SetNillableDisplayOrder(v *int) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetDisplayOrder(*v)
 	}
-	return euo
+	return _u
 }
 
-// AddDisplayOrder adds i to the "display_order" field.
-func (euo *EntitlementUpdateOne) AddDisplayOrder(i int) *EntitlementUpdateOne {
-	euo.mutation.AddDisplayOrder(i)
-	return euo
+// AddDisplayOrder adds value to the "display_order" field.
+func (_u *EntitlementUpdateOne) AddDisplayOrder(v int) *EntitlementUpdateOne {
+	_u.mutation.AddDisplayOrder(v)
+	return _u
 }
 
 // SetParentEntitlementID sets the "parent_entitlement_id" field.
-func (euo *EntitlementUpdateOne) SetParentEntitlementID(s string) *EntitlementUpdateOne {
-	euo.mutation.SetParentEntitlementID(s)
-	return euo
+func (_u *EntitlementUpdateOne) SetParentEntitlementID(v string) *EntitlementUpdateOne {
+	_u.mutation.SetParentEntitlementID(v)
+	return _u
 }
 
 // SetNillableParentEntitlementID sets the "parent_entitlement_id" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableParentEntitlementID(s *string) *EntitlementUpdateOne {
-	if s != nil {
-		euo.SetParentEntitlementID(*s)
+func (_u *EntitlementUpdateOne) SetNillableParentEntitlementID(v *string) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetParentEntitlementID(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearParentEntitlementID clears the value of the "parent_entitlement_id" field.
-func (euo *EntitlementUpdateOne) ClearParentEntitlementID() *EntitlementUpdateOne {
-	euo.mutation.ClearParentEntitlementID()
-	return euo
+func (_u *EntitlementUpdateOne) ClearParentEntitlementID() *EntitlementUpdateOne {
+	_u.mutation.ClearParentEntitlementID()
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (euo *EntitlementUpdateOne) SetStartDate(t time.Time) *EntitlementUpdateOne {
-	euo.mutation.SetStartDate(t)
-	return euo
+func (_u *EntitlementUpdateOne) SetStartDate(v time.Time) *EntitlementUpdateOne {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableStartDate(t *time.Time) *EntitlementUpdateOne {
-	if t != nil {
-		euo.SetStartDate(*t)
+func (_u *EntitlementUpdateOne) SetNillableStartDate(v *time.Time) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (euo *EntitlementUpdateOne) ClearStartDate() *EntitlementUpdateOne {
-	euo.mutation.ClearStartDate()
-	return euo
+func (_u *EntitlementUpdateOne) ClearStartDate() *EntitlementUpdateOne {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (euo *EntitlementUpdateOne) SetEndDate(t time.Time) *EntitlementUpdateOne {
-	euo.mutation.SetEndDate(t)
-	return euo
+func (_u *EntitlementUpdateOne) SetEndDate(v time.Time) *EntitlementUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableEndDate(t *time.Time) *EntitlementUpdateOne {
-	if t != nil {
-		euo.SetEndDate(*t)
+func (_u *EntitlementUpdateOne) SetNillableEndDate(v *time.Time) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (euo *EntitlementUpdateOne) ClearEndDate() *EntitlementUpdateOne {
-	euo.mutation.ClearEndDate()
-	return euo
+func (_u *EntitlementUpdateOne) ClearEndDate() *EntitlementUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetConfigValue sets the "config_value" field.
-func (euo *EntitlementUpdateOne) SetConfigValue(m map[string]interface{}) *EntitlementUpdateOne {
-	euo.mutation.SetConfigValue(m)
-	return euo
+func (_u *EntitlementUpdateOne) SetConfigValue(v map[string]interface{}) *EntitlementUpdateOne {
+	_u.mutation.SetConfigValue(v)
+	return _u
 }
 
 // ClearConfigValue clears the value of the "config_value" field.
-func (euo *EntitlementUpdateOne) ClearConfigValue() *EntitlementUpdateOne {
-	euo.mutation.ClearConfigValue()
-	return euo
+func (_u *EntitlementUpdateOne) ClearConfigValue() *EntitlementUpdateOne {
+	_u.mutation.ClearConfigValue()
+	return _u
 }
 
 // SetGrantMeasure sets the "grant_measure" field.
-func (euo *EntitlementUpdateOne) SetGrantMeasure(tgm types.EntitlementGrantMeasure) *EntitlementUpdateOne {
-	euo.mutation.SetGrantMeasure(tgm)
-	return euo
+func (_u *EntitlementUpdateOne) SetGrantMeasure(v types.EntitlementGrantMeasure) *EntitlementUpdateOne {
+	_u.mutation.SetGrantMeasure(v)
+	return _u
 }
 
 // SetNillableGrantMeasure sets the "grant_measure" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantMeasure(tgm *types.EntitlementGrantMeasure) *EntitlementUpdateOne {
-	if tgm != nil {
-		euo.SetGrantMeasure(*tgm)
+func (_u *EntitlementUpdateOne) SetNillableGrantMeasure(v *types.EntitlementGrantMeasure) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantMeasure(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearGrantMeasure clears the value of the "grant_measure" field.
-func (euo *EntitlementUpdateOne) ClearGrantMeasure() *EntitlementUpdateOne {
-	euo.mutation.ClearGrantMeasure()
-	return euo
+func (_u *EntitlementUpdateOne) ClearGrantMeasure() *EntitlementUpdateOne {
+	_u.mutation.ClearGrantMeasure()
+	return _u
 }
 
 // SetGrantDurationValue sets the "grant_duration_value" field.
-func (euo *EntitlementUpdateOne) SetGrantDurationValue(i int) *EntitlementUpdateOne {
-	euo.mutation.ResetGrantDurationValue()
-	euo.mutation.SetGrantDurationValue(i)
-	return euo
+func (_u *EntitlementUpdateOne) SetGrantDurationValue(v int) *EntitlementUpdateOne {
+	_u.mutation.ResetGrantDurationValue()
+	_u.mutation.SetGrantDurationValue(v)
+	return _u
 }
 
 // SetNillableGrantDurationValue sets the "grant_duration_value" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantDurationValue(i *int) *EntitlementUpdateOne {
-	if i != nil {
-		euo.SetGrantDurationValue(*i)
+func (_u *EntitlementUpdateOne) SetNillableGrantDurationValue(v *int) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantDurationValue(*v)
 	}
-	return euo
+	return _u
 }
 
-// AddGrantDurationValue adds i to the "grant_duration_value" field.
-func (euo *EntitlementUpdateOne) AddGrantDurationValue(i int) *EntitlementUpdateOne {
-	euo.mutation.AddGrantDurationValue(i)
-	return euo
+// AddGrantDurationValue adds value to the "grant_duration_value" field.
+func (_u *EntitlementUpdateOne) AddGrantDurationValue(v int) *EntitlementUpdateOne {
+	_u.mutation.AddGrantDurationValue(v)
+	return _u
 }
 
 // ClearGrantDurationValue clears the value of the "grant_duration_value" field.
-func (euo *EntitlementUpdateOne) ClearGrantDurationValue() *EntitlementUpdateOne {
-	euo.mutation.ClearGrantDurationValue()
-	return euo
+func (_u *EntitlementUpdateOne) ClearGrantDurationValue() *EntitlementUpdateOne {
+	_u.mutation.ClearGrantDurationValue()
+	return _u
 }
 
 // SetGrantDurationUnit sets the "grant_duration_unit" field.
-func (euo *EntitlementUpdateOne) SetGrantDurationUnit(tgdu types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
-	euo.mutation.SetGrantDurationUnit(tgdu)
-	return euo
+func (_u *EntitlementUpdateOne) SetGrantDurationUnit(v types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
+	_u.mutation.SetGrantDurationUnit(v)
+	return _u
 }
 
 // SetNillableGrantDurationUnit sets the "grant_duration_unit" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantDurationUnit(tgdu *types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
-	if tgdu != nil {
-		euo.SetGrantDurationUnit(*tgdu)
+func (_u *EntitlementUpdateOne) SetNillableGrantDurationUnit(v *types.EntitlementGrantDurationUnit) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantDurationUnit(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearGrantDurationUnit clears the value of the "grant_duration_unit" field.
-func (euo *EntitlementUpdateOne) ClearGrantDurationUnit() *EntitlementUpdateOne {
-	euo.mutation.ClearGrantDurationUnit()
-	return euo
+func (_u *EntitlementUpdateOne) ClearGrantDurationUnit() *EntitlementUpdateOne {
+	_u.mutation.ClearGrantDurationUnit()
+	return _u
 }
 
 // SetGrantAllocationBehavior sets the "grant_allocation_behavior" field.
-func (euo *EntitlementUpdateOne) SetGrantAllocationBehavior(tgab types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
-	euo.mutation.SetGrantAllocationBehavior(tgab)
-	return euo
+func (_u *EntitlementUpdateOne) SetGrantAllocationBehavior(v types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
+	_u.mutation.SetGrantAllocationBehavior(v)
+	return _u
 }
 
 // SetNillableGrantAllocationBehavior sets the "grant_allocation_behavior" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantAllocationBehavior(tgab *types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
-	if tgab != nil {
-		euo.SetGrantAllocationBehavior(*tgab)
+func (_u *EntitlementUpdateOne) SetNillableGrantAllocationBehavior(v *types.EntitlementGrantAllocationBehavior) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantAllocationBehavior(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearGrantAllocationBehavior clears the value of the "grant_allocation_behavior" field.
-func (euo *EntitlementUpdateOne) ClearGrantAllocationBehavior() *EntitlementUpdateOne {
-	euo.mutation.ClearGrantAllocationBehavior()
-	return euo
+func (_u *EntitlementUpdateOne) ClearGrantAllocationBehavior() *EntitlementUpdateOne {
+	_u.mutation.ClearGrantAllocationBehavior()
+	return _u
 }
 
 // SetGrantQuota sets the "grant_quota" field.
-func (euo *EntitlementUpdateOne) SetGrantQuota(d decimal.Decimal) *EntitlementUpdateOne {
-	euo.mutation.SetGrantQuota(d)
-	return euo
+func (_u *EntitlementUpdateOne) SetGrantQuota(v decimal.Decimal) *EntitlementUpdateOne {
+	_u.mutation.SetGrantQuota(v)
+	return _u
 }
 
 // SetNillableGrantQuota sets the "grant_quota" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableGrantQuota(d *decimal.Decimal) *EntitlementUpdateOne {
-	if d != nil {
-		euo.SetGrantQuota(*d)
+func (_u *EntitlementUpdateOne) SetNillableGrantQuota(v *decimal.Decimal) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetGrantQuota(*v)
 	}
-	return euo
+	return _u
 }
 
 // ClearGrantQuota clears the value of the "grant_quota" field.
-func (euo *EntitlementUpdateOne) ClearGrantQuota() *EntitlementUpdateOne {
-	euo.mutation.ClearGrantQuota()
-	return euo
+func (_u *EntitlementUpdateOne) ClearGrantQuota() *EntitlementUpdateOne {
+	_u.mutation.ClearGrantQuota()
+	return _u
 }
 
 // SetAggregationMode sets the "aggregation_mode" field.
-func (euo *EntitlementUpdateOne) SetAggregationMode(tam types.EntitlementAggregationMode) *EntitlementUpdateOne {
-	euo.mutation.SetAggregationMode(tam)
-	return euo
+func (_u *EntitlementUpdateOne) SetAggregationMode(v types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	_u.mutation.SetAggregationMode(v)
+	return _u
 }
 
 // SetNillableAggregationMode sets the "aggregation_mode" field if the given value is not nil.
-func (euo *EntitlementUpdateOne) SetNillableAggregationMode(tam *types.EntitlementAggregationMode) *EntitlementUpdateOne {
-	if tam != nil {
-		euo.SetAggregationMode(*tam)
+func (_u *EntitlementUpdateOne) SetNillableAggregationMode(v *types.EntitlementAggregationMode) *EntitlementUpdateOne {
+	if v != nil {
+		_u.SetAggregationMode(*v)
 	}
-	return euo
+	return _u
 }
 
 // Mutation returns the EntitlementMutation object of the builder.
-func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
-	return euo.mutation
+func (_u *EntitlementUpdateOne) Mutation() *EntitlementMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the EntitlementUpdate builder.
-func (euo *EntitlementUpdateOne) Where(ps ...predicate.Entitlement) *EntitlementUpdateOne {
-	euo.mutation.Where(ps...)
-	return euo
+func (_u *EntitlementUpdateOne) Where(ps ...predicate.Entitlement) *EntitlementUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (euo *EntitlementUpdateOne) Select(field string, fields ...string) *EntitlementUpdateOne {
-	euo.fields = append([]string{field}, fields...)
-	return euo
+func (_u *EntitlementUpdateOne) Select(field string, fields ...string) *EntitlementUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Entitlement entity.
-func (euo *EntitlementUpdateOne) Save(ctx context.Context) (*Entitlement, error) {
-	euo.defaults()
-	return withHooks(ctx, euo.sqlSave, euo.mutation, euo.hooks)
+func (_u *EntitlementUpdateOne) Save(ctx context.Context) (*Entitlement, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (euo *EntitlementUpdateOne) SaveX(ctx context.Context) *Entitlement {
-	node, err := euo.Save(ctx)
+func (_u *EntitlementUpdateOne) SaveX(ctx context.Context) *Entitlement {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1145,64 +1145,64 @@ func (euo *EntitlementUpdateOne) SaveX(ctx context.Context) *Entitlement {
 }
 
 // Exec executes the query on the entity.
-func (euo *EntitlementUpdateOne) Exec(ctx context.Context) error {
-	_, err := euo.Save(ctx)
+func (_u *EntitlementUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (euo *EntitlementUpdateOne) ExecX(ctx context.Context) {
-	if err := euo.Exec(ctx); err != nil {
+func (_u *EntitlementUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (euo *EntitlementUpdateOne) defaults() {
-	if _, ok := euo.mutation.UpdatedAt(); !ok {
+func (_u *EntitlementUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := entitlement.UpdateDefaultUpdatedAt()
-		euo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (euo *EntitlementUpdateOne) check() error {
-	if v, ok := euo.mutation.EntityType(); ok {
+func (_u *EntitlementUpdateOne) check() error {
+	if v, ok := _u.mutation.EntityType(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.FeatureID(); ok {
+	if v, ok := _u.mutation.FeatureID(); ok {
 		if err := entitlement.FeatureIDValidator(v); err != nil {
 			return &ValidationError{Name: "feature_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_id": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.FeatureType(); ok {
+	if v, ok := _u.mutation.FeatureType(); ok {
 		if err := entitlement.FeatureTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "feature_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_type": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.UsageResetPeriod(); ok {
+	if v, ok := _u.mutation.UsageResetPeriod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.GrantMeasure(); ok {
+	if v, ok := _u.mutation.GrantMeasure(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_measure", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_measure": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.GrantDurationUnit(); ok {
+	if v, ok := _u.mutation.GrantDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_duration_unit", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_duration_unit": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.GrantAllocationBehavior(); ok {
+	if v, ok := _u.mutation.GrantAllocationBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "grant_allocation_behavior", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_allocation_behavior": %w`, err)}
 		}
 	}
-	if v, ok := euo.mutation.AggregationMode(); ok {
+	if v, ok := _u.mutation.AggregationMode(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
 		}
@@ -1210,17 +1210,17 @@ func (euo *EntitlementUpdateOne) check() error {
 	return nil
 }
 
-func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlement, err error) {
-	if err := euo.check(); err != nil {
+func (_u *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlement, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(entitlement.Table, entitlement.Columns, sqlgraph.NewFieldSpec(entitlement.FieldID, field.TypeString))
-	id, ok := euo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Entitlement.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := euo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, entitlement.FieldID)
 		for _, f := range fields {
@@ -1232,146 +1232,146 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 			}
 		}
 	}
-	if ps := euo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := euo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(entitlement.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := euo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(entitlement.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if euo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(entitlement.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := euo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(entitlement.FieldUpdatedBy, field.TypeString, value)
 	}
-	if euo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(entitlement.FieldUpdatedBy, field.TypeString)
 	}
-	if euo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(entitlement.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := euo.mutation.EntityType(); ok {
+	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(entitlement.FieldEntityType, field.TypeString, value)
 	}
-	if euo.mutation.EntityTypeCleared() {
+	if _u.mutation.EntityTypeCleared() {
 		_spec.ClearField(entitlement.FieldEntityType, field.TypeString)
 	}
-	if value, ok := euo.mutation.EntityID(); ok {
+	if value, ok := _u.mutation.EntityID(); ok {
 		_spec.SetField(entitlement.FieldEntityID, field.TypeString, value)
 	}
-	if euo.mutation.EntityIDCleared() {
+	if _u.mutation.EntityIDCleared() {
 		_spec.ClearField(entitlement.FieldEntityID, field.TypeString)
 	}
-	if value, ok := euo.mutation.FeatureID(); ok {
+	if value, ok := _u.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
 	}
-	if value, ok := euo.mutation.FeatureType(); ok {
+	if value, ok := _u.mutation.FeatureType(); ok {
 		_spec.SetField(entitlement.FieldFeatureType, field.TypeString, value)
 	}
-	if value, ok := euo.mutation.IsEnabled(); ok {
+	if value, ok := _u.mutation.IsEnabled(); ok {
 		_spec.SetField(entitlement.FieldIsEnabled, field.TypeBool, value)
 	}
-	if value, ok := euo.mutation.UsageLimit(); ok {
+	if value, ok := _u.mutation.UsageLimit(); ok {
 		_spec.SetField(entitlement.FieldUsageLimit, field.TypeInt64, value)
 	}
-	if value, ok := euo.mutation.AddedUsageLimit(); ok {
+	if value, ok := _u.mutation.AddedUsageLimit(); ok {
 		_spec.AddField(entitlement.FieldUsageLimit, field.TypeInt64, value)
 	}
-	if euo.mutation.UsageLimitCleared() {
+	if _u.mutation.UsageLimitCleared() {
 		_spec.ClearField(entitlement.FieldUsageLimit, field.TypeInt64)
 	}
-	if value, ok := euo.mutation.UsageResetPeriod(); ok {
+	if value, ok := _u.mutation.UsageResetPeriod(); ok {
 		_spec.SetField(entitlement.FieldUsageResetPeriod, field.TypeString, value)
 	}
-	if euo.mutation.UsageResetPeriodCleared() {
+	if _u.mutation.UsageResetPeriodCleared() {
 		_spec.ClearField(entitlement.FieldUsageResetPeriod, field.TypeString)
 	}
-	if value, ok := euo.mutation.IsSoftLimit(); ok {
+	if value, ok := _u.mutation.IsSoftLimit(); ok {
 		_spec.SetField(entitlement.FieldIsSoftLimit, field.TypeBool, value)
 	}
-	if value, ok := euo.mutation.StaticValue(); ok {
+	if value, ok := _u.mutation.StaticValue(); ok {
 		_spec.SetField(entitlement.FieldStaticValue, field.TypeString, value)
 	}
-	if euo.mutation.StaticValueCleared() {
+	if _u.mutation.StaticValueCleared() {
 		_spec.ClearField(entitlement.FieldStaticValue, field.TypeString)
 	}
-	if value, ok := euo.mutation.DisplayOrder(); ok {
+	if value, ok := _u.mutation.DisplayOrder(); ok {
 		_spec.SetField(entitlement.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := euo.mutation.AddedDisplayOrder(); ok {
+	if value, ok := _u.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(entitlement.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := euo.mutation.ParentEntitlementID(); ok {
+	if value, ok := _u.mutation.ParentEntitlementID(); ok {
 		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
 	}
-	if euo.mutation.ParentEntitlementIDCleared() {
+	if _u.mutation.ParentEntitlementIDCleared() {
 		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
 	}
-	if value, ok := euo.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(entitlement.FieldStartDate, field.TypeTime, value)
 	}
-	if euo.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(entitlement.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := euo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
 	}
-	if euo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := euo.mutation.ConfigValue(); ok {
+	if value, ok := _u.mutation.ConfigValue(); ok {
 		_spec.SetField(entitlement.FieldConfigValue, field.TypeJSON, value)
 	}
-	if euo.mutation.ConfigValueCleared() {
+	if _u.mutation.ConfigValueCleared() {
 		_spec.ClearField(entitlement.FieldConfigValue, field.TypeJSON)
 	}
-	if value, ok := euo.mutation.GrantMeasure(); ok {
+	if value, ok := _u.mutation.GrantMeasure(); ok {
 		_spec.SetField(entitlement.FieldGrantMeasure, field.TypeString, value)
 	}
-	if euo.mutation.GrantMeasureCleared() {
+	if _u.mutation.GrantMeasureCleared() {
 		_spec.ClearField(entitlement.FieldGrantMeasure, field.TypeString)
 	}
-	if value, ok := euo.mutation.GrantDurationValue(); ok {
+	if value, ok := _u.mutation.GrantDurationValue(); ok {
 		_spec.SetField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
 	}
-	if value, ok := euo.mutation.AddedGrantDurationValue(); ok {
+	if value, ok := _u.mutation.AddedGrantDurationValue(); ok {
 		_spec.AddField(entitlement.FieldGrantDurationValue, field.TypeInt, value)
 	}
-	if euo.mutation.GrantDurationValueCleared() {
+	if _u.mutation.GrantDurationValueCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationValue, field.TypeInt)
 	}
-	if value, ok := euo.mutation.GrantDurationUnit(); ok {
+	if value, ok := _u.mutation.GrantDurationUnit(); ok {
 		_spec.SetField(entitlement.FieldGrantDurationUnit, field.TypeString, value)
 	}
-	if euo.mutation.GrantDurationUnitCleared() {
+	if _u.mutation.GrantDurationUnitCleared() {
 		_spec.ClearField(entitlement.FieldGrantDurationUnit, field.TypeString)
 	}
-	if value, ok := euo.mutation.GrantAllocationBehavior(); ok {
+	if value, ok := _u.mutation.GrantAllocationBehavior(); ok {
 		_spec.SetField(entitlement.FieldGrantAllocationBehavior, field.TypeString, value)
 	}
-	if euo.mutation.GrantAllocationBehaviorCleared() {
+	if _u.mutation.GrantAllocationBehaviorCleared() {
 		_spec.ClearField(entitlement.FieldGrantAllocationBehavior, field.TypeString)
 	}
-	if value, ok := euo.mutation.GrantQuota(); ok {
+	if value, ok := _u.mutation.GrantQuota(); ok {
 		_spec.SetField(entitlement.FieldGrantQuota, field.TypeOther, value)
 	}
-	if euo.mutation.GrantQuotaCleared() {
+	if _u.mutation.GrantQuotaCleared() {
 		_spec.ClearField(entitlement.FieldGrantQuota, field.TypeOther)
 	}
-	if value, ok := euo.mutation.AggregationMode(); ok {
+	if value, ok := _u.mutation.AggregationMode(); ok {
 		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 	}
-	_node = &Entitlement{config: euo.config}
+	_node = &Entitlement{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, euo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{entitlement.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1379,6 +1379,6 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 		}
 		return nil, err
 	}
-	euo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

@@ -495,7 +495,15 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
 	// Nil-safe: old schedule records without this field are handled gracefully.
 	if config.OriginalCurrentPeriodEnd != nil {
-		sub.CurrentPeriodEnd = lo.FromPtr(config.OriginalCurrentPeriodEnd)
+		originalEnd := lo.FromPtr(config.OriginalCurrentPeriodEnd)
+		if !originalEnd.Equal(sub.CurrentPeriodEnd) {
+			// The open draft was moved to the scheduled date; move it back with the period.
+			if _, err := NewInvoiceService(s.ServiceParams).MoveCycleDraft(ctx, sub, originalEnd,
+				types.InvoiceBillingReasonSubscriptionCycle); err != nil {
+				return fmt.Errorf("failed to restore the open draft's period end: %w", err)
+			}
+		}
+		sub.CurrentPeriodEnd = originalEnd
 	}
 
 	// Update the subscription

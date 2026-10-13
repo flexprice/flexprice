@@ -12,7 +12,7 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
-	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/activity"
 	domainInvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -24,18 +24,16 @@ import (
 )
 
 type invoiceRepository struct {
-	client     postgres.IClient
-	logger     *logger.Logger
-	queryOpts  InvoiceQueryOptions
-	redisCache cache.RedisCache
+	client    postgres.IClient
+	logger    *logger.Logger
+	queryOpts InvoiceQueryOptions
 }
 
-func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, redisCache cache.RedisCache) domainInvoice.Repository {
+func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger) domainInvoice.Repository {
 	return &invoiceRepository{
-		client:     client,
-		logger:     logger,
-		queryOpts:  InvoiceQueryOptions{},
-		redisCache: redisCache,
+		client:    client,
+		logger:    logger,
+		queryOpts: InvoiceQueryOptions{},
 	}
 }
 
@@ -56,7 +54,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	invoice, err := client.Invoice.Create().
+	builder := client.Invoice.Create().
 		SetID(inv.ID).
 		SetTenantID(inv.TenantID).
 		SetCustomerID(inv.CustomerID).
@@ -69,6 +67,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
+		SetSourceType(inv.SourceType).
 		SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
 		SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
 		SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
@@ -99,7 +98,14 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableIssueDate(inv.IssueDate).
-		Save(ctx)
+		SetCustomCurrency(inv.CustomCurrency)
+
+	// Keep fx_conversion SQL NULL ("never converted"); never write a jsonb null.
+	if inv.FxConversion != nil {
+		builder = builder.SetFxConversion(inv.FxConversion)
+	}
+
+	invoice, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -163,7 +169,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// 1. Create invoice
-		invoice, err := r.client.Writer(ctx).Invoice.Create().
+		invBuilder := r.client.Writer(ctx).Invoice.Create().
 			SetID(inv.ID).
 			SetTenantID(inv.TenantID).
 			SetCustomerID(inv.CustomerID).
@@ -178,6 +184,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetTotalTax(inv.TotalTax).
 			SetNillableTaxExemptionReasonCode(inv.TaxExemptionReasonCode).
 			SetAmountRemaining(inv.AmountRemaining).
+			SetSourceType(inv.SourceType).
 			SetIdempotencyKey(lo.FromPtr(inv.IdempotencyKey)).
 			SetInvoiceNumber(lo.FromPtr(inv.InvoiceNumber)).
 			SetBillingSequence(lo.FromPtr(inv.BillingSequence)).
@@ -206,7 +213,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			SetNillableIssueDate(inv.IssueDate).
-			Save(ctx)
+			SetCustomCurrency(inv.CustomCurrency)
+
+		// fx_conversion stays SQL NULL until conversion.
+		if inv.FxConversion != nil {
+			invBuilder = invBuilder.SetFxConversion(inv.FxConversion)
+		}
+
+		invoice, err := invBuilder.Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
 				var pqErr *pq.Error
@@ -267,12 +281,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetQuantity(item.Quantity).
 					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+					SetNillableParentLineItemID(item.ParentLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
 					SetNillablePeriodEnd(item.PeriodEnd).
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
 					SetCommitmentInfo(item.CommitmentInfo).
+					SetCustomCurrency(item.CustomCurrency).
 					SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 					SetLineItemDiscount(item.LineItemDiscount).
 					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -281,11 +297,21 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetUpdatedBy(item.UpdatedBy).
 					SetCreatedAt(item.CreatedAt).
 					SetUpdatedAt(item.UpdatedAt)
+				if item.FxConversion != nil {
+					builders[i].SetFxConversion(item.FxConversion)
+				}
 			}
 
-			if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-				r.logger.Error(ctx, "failed to create line items", "error", err)
-				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
+			// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
+			for i := 0; i < len(builders); i += invoiceLineItemBatchSize {
+				end := i + invoiceLineItemBatchSize
+				if end > len(builders) {
+					end = len(builders)
+				}
+				if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders[i:end]...).Exec(ctx); err != nil {
+					r.logger.Error(ctx, "failed to create line items", "error", err)
+					return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
+				}
 			}
 		}
 
@@ -351,10 +377,12 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCurrency(item.Currency).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetCustomCurrency(item.CustomCurrency).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -363,11 +391,21 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetUpdatedBy(item.UpdatedBy).
 				SetCreatedAt(item.CreatedAt).
 				SetUpdatedAt(item.UpdatedAt)
+			if item.FxConversion != nil {
+				builders[i].SetFxConversion(item.FxConversion)
+			}
 		}
 
-		if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-			r.logger.Error(ctx, "failed to add line items", "error", err)
-			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
+		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
+		for i := 0; i < len(builders); i += invoiceLineItemBatchSize {
+			end := i + invoiceLineItemBatchSize
+			if end > len(builders) {
+				end = len(builders)
+			}
+			if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders[i:end]...).Exec(ctx); err != nil {
+				r.logger.Error(ctx, "failed to add line items", "error", err)
+				return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
+			}
 		}
 
 		return nil
@@ -427,11 +465,6 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedInvoice := r.GetCache(ctx, id); cachedInvoice != nil {
-		return cachedInvoice, nil
-	}
-
 	r.logger.Debug(ctx, "getting invoice", "id", id)
 
 	invoice, err := r.client.Writer(ctx).Invoice.Query().
@@ -463,7 +496,6 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
 	}
 	invoiceData.LineItems = items
-	r.SetCache(ctx, invoiceData)
 	return invoiceData, nil
 }
 
@@ -488,7 +520,7 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 	// Must check and close rows BEFORE running another query on the same connection
 	hasRow := rows.Next()
 	rowErr := rows.Err()
-	rows.Close() // Close immediately, not deferred
+	rows.Close() // #nosec G104 -- best-effort close, error non-fatal
 	if rowErr != nil {
 		return nil, ierr.WithError(rowErr).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
 	}
@@ -554,6 +586,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	query.
 		SetInvoiceStatus(inv.InvoiceStatus).
 		SetPaymentStatus(inv.PaymentStatus).
+		SetCurrency(inv.Currency).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
@@ -582,6 +615,19 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetTotalDiscount(inv.TotalDiscount).
 		AddVersion(1) // Increment version atomically
 
+	// Never cleared: the denomination is written once at creation and is what every amount on
+	// the row was derived from. An update from a struct that did not load it would
+	// otherwise wipe it and leave the stored amounts unexplainable.
+	if inv.CustomCurrency != nil {
+		query.SetCustomCurrency(inv.CustomCurrency)
+	}
+
+	// Frozen at finalize and never cleared afterwards; an update from a struct that did not
+	// load it must not wipe the conversion record.
+	if inv.FxConversion != nil {
+		query.SetFxConversion(inv.FxConversion)
+	}
+
 	if inv.TaxExemptionReasonCode != nil {
 		query.SetTaxExemptionReasonCode(*inv.TaxExemptionReasonCode)
 	} else {
@@ -595,11 +641,11 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	}
 
 	// Execute update
-	n, err := query.Save(ctx)
+	rows, err := query.SaveReturning(ctx)
 	if err != nil {
 		return ierr.WithError(err).WithHint("invoice update failed").Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
+	if len(rows) == 0 {
 		// No rows were updated - either record doesn't exist or version mismatch
 		exists, err := client.Invoice.Query().
 			Where(
@@ -622,7 +668,41 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 				"expected_version": inv.Version + 1,
 			}).Mark(ierr.ErrVersionConflict)
 	}
-	r.DeleteCache(ctx, inv.ID)
+	return nil
+}
+
+func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+	span := StartRepositorySpan(ctx, "invoice", "update_draft_invoice_period", map[string]interface{}{
+		"invoice_id": id,
+	})
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).Invoice.Update().
+		Where(
+			invoice.ID(id),
+			invoice.TenantID(types.GetTenantID(ctx)),
+			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+			invoice.Status(string(types.StatusPublished)),
+			invoice.InvoiceStatus(types.InvoiceStatusDraft),
+		).
+		SetPeriodEnd(periodEnd).
+		SetBillingReason(billingReason).
+		SetIdempotencyKey(idempotencyKey).
+		SetUpdatedAt(time.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		AddVersion(1).
+		SaveReturning(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("failed to move draft invoice period").Mark(ierr.ErrDatabase)
+	}
+	if len(rows) == 0 {
+		return ierr.NewError("draft invoice not found").
+			WithHint("Only a draft invoice can have its period moved").
+			WithReportableDetails(map[string]any{"invoice_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+	SetSpanSuccess(span)
 	return nil
 }
 
@@ -652,6 +732,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 		}
 
 		// Then delete invoice
+		ctx = activity.WithAction(ctx, id, activity.InvoiceDeleted)
 		_, err = r.client.Writer(ctx).Invoice.Update().
 			Where(
 				invoice.ID(id),
@@ -661,7 +742,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			SetUpdatedAt(time.Now()).
-			Save(ctx)
+			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice deletion failed").Mark(ierr.ErrDatabase)
 		}
@@ -1164,6 +1245,12 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.PeriodEndLTE != nil {
 		query = query.Where(invoice.PeriodEndLTE(*f.PeriodEndLTE))
 	}
+	if f.FinalizedAtGTE != nil {
+		query = query.Where(invoice.FinalizedAtGTE(*f.FinalizedAtGTE))
+	}
+	if f.VoidedAtGTE != nil {
+		query = query.Where(invoice.VoidedAtGTE(*f.VoidedAtGTE))
+	}
 
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[InvoiceQuery, predicate.Invoice](
@@ -1191,44 +1278,6 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 
 	return query, nil
-}
-
-func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Invoice) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "set", map[string]interface{}{
-		"invoice_id": inv.ID,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, inv.ID)
-	r.redisCache.Set(ctx, cacheKey, inv, cache.ExpiryDefaultRedis)
-}
-
-func (r *invoiceRepository) GetCache(ctx context.Context, id string) *domainInvoice.Invoice {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "get", map[string]interface{}{
-		"invoice_id": id,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, id)
-	value, found := r.redisCache.Get(ctx, cacheKey)
-	if !found {
-		return nil
-	}
-	inv, ok := cache.UnmarshalCacheValue[domainInvoice.Invoice](value)
-	if !ok {
-		return nil
-	}
-	return inv
-}
-
-func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "invoice", "delete", map[string]interface{}{
-		"invoice_id": key,
-	})
-	defer cache.FinishSpan(span)
-
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixInvoice, key)
-	r.redisCache.Delete(ctx, cacheKey)
 }
 
 // GetInvoicesForExport retrieves invoices for export purposes with pagination

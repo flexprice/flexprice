@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"math"
 	"strconv"
 	"time"
 
@@ -166,12 +167,10 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			ExternalCustomerID: c.ExternalID,
 			StartTime:          request.StartTime,
 			EndTime:            request.EndTime,
-			GroupBy:            []string{"source", "feature_id"}, // TODO: remove feature_id from group by, we groupBy meter_id by default
-			// Internal flag: keep commitment / true-up cost on bucketed
-			// commitment line items even when they fan out per source.
-			// Without this the per-source rows would carry only raw usage
-			// cost and the export totals would drift from the analytics API.
-			ForceApplyCommitment: true,
+			// No "source": fanning by source applied the line item's
+			// commitment once per row, multi-counting the true-up.
+			GroupBy: []string{"feature_id"}, // TODO: remove feature_id from group by, we groupBy meter_id by default
+			// ForceApplyCommitment: true,
 		})
 		if err != nil {
 			failedCount++
@@ -183,6 +182,15 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 		}
 
 		for _, item := range response.Items {
+			eventCount := item.EventCount
+			if eventCount > math.MaxInt64 {
+				e.logger.Info(ctx, "event count exceeds int64 range, clamping",
+					"customer_id", c.ID,
+					"external_id", c.ExternalID,
+					"feature_id", item.FeatureID,
+					"event_count", eventCount)
+				eventCount = math.MaxInt64
+			}
 			record := &usageAnalyticsRecord{
 				CustomerName:       c.Name,
 				CustomerID:         c.ID,
@@ -192,7 +200,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				FeatureName:        item.FeatureName,
 				FeatureID:          item.FeatureID,
 				EventName:          item.EventName,
-				EventCount:         int64(item.EventCount),
+				EventCount:         int64(eventCount), // #nosec G115 -- bounded above before cast
 				TotalUsage:         item.TotalUsage,
 				TotalCost:          item.TotalCost,
 				Currency:           item.Currency,

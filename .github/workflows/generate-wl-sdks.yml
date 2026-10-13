@@ -168,7 +168,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.24.0"
+          go-version: "1.27.2"
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -197,6 +197,9 @@ jobs:
         run: bash scripts/generate-wl-configs.sh
 
       - name: Install Speakeasy CLI
+        # Vendor's official installer over HTTPS; it verifies the CLI archive
+        # checksum before install. Release-pipeline only.
+        # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell
         run: unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
       - name: Generate SDKs
@@ -205,8 +208,20 @@ jobs:
       - name: Apply white-label branding to custom files
         run: bash scripts/apply-wl-custom-branding.sh
 
+      # Speakeasy sets the generated SDK's minimum Go version, which can be newer
+      # than the Go used above for make swagger.
+      - name: Set up Go for the generated SDK
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: api/go/go.mod
+          cache: false
+
       - name: Verify SDK builds
         run: bash scripts/verify-sdk-builds.sh
+
+      # Test the branded TypeScript SDK before it is pushed to the client repo or published to npm
+      - name: Check TypeScript SDK
+        run: make ts-sdk-check
 
       - name: Apply resolved version to artifacts
         run: ./scripts/force-sdk-version.sh "${{ needs.matrix-setup.outputs.version }}"

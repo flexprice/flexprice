@@ -67,6 +67,7 @@ type customerPortalService struct {
 	ServiceParams
 	customerService         CustomerService
 	revenueAnalyticsService RevenueAnalyticsService
+	paymentService          PaymentService
 }
 
 // NewCustomerPortalService creates a new customer portal service
@@ -79,6 +80,7 @@ func NewCustomerPortalService(
 		ServiceParams:           params,
 		customerService:         customerService,
 		revenueAnalyticsService: revenueAnalyticsService,
+		paymentService:          NewPaymentService(params),
 	}
 }
 
@@ -400,7 +402,7 @@ func (s *customerPortalService) GetInvoicePDFUrl(ctx context.Context, invoiceID 
 	}
 
 	// Get the presigned URL
-	return invoiceService.GetInvoicePDFUrl(ctx, invoiceID, false)
+	return invoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})
 }
 
 // GetPortalConfig returns the customer_portal_config setting for the current tenant/environment.

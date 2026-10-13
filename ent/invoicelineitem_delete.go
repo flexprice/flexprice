@@ -20,56 +20,56 @@ type InvoiceLineItemDelete struct {
 }
 
 // Where appends a list predicates to the InvoiceLineItemDelete builder.
-func (ilid *InvoiceLineItemDelete) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemDelete {
-	ilid.mutation.Where(ps...)
-	return ilid
+func (_d *InvoiceLineItemDelete) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (ilid *InvoiceLineItemDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, ilid.sqlExec, ilid.mutation, ilid.hooks)
+func (_d *InvoiceLineItemDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ilid *InvoiceLineItemDelete) ExecX(ctx context.Context) int {
-	n, err := ilid.Exec(ctx)
+func (_d *InvoiceLineItemDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (ilid *InvoiceLineItemDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *InvoiceLineItemDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(invoicelineitem.Table, sqlgraph.NewFieldSpec(invoicelineitem.FieldID, field.TypeString))
-	if ps := ilid.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, ilid.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	ilid.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // InvoiceLineItemDeleteOne is the builder for deleting a single InvoiceLineItem entity.
 type InvoiceLineItemDeleteOne struct {
-	ilid *InvoiceLineItemDelete
+	_d *InvoiceLineItemDelete
 }
 
 // Where appends a list predicates to the InvoiceLineItemDelete builder.
-func (ilido *InvoiceLineItemDeleteOne) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemDeleteOne {
-	ilido.ilid.mutation.Where(ps...)
-	return ilido
+func (_d *InvoiceLineItemDeleteOne) Where(ps ...predicate.InvoiceLineItem) *InvoiceLineItemDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (ilido *InvoiceLineItemDeleteOne) Exec(ctx context.Context) error {
-	n, err := ilido.ilid.Exec(ctx)
+func (_d *InvoiceLineItemDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (ilido *InvoiceLineItemDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ilido *InvoiceLineItemDeleteOne) ExecX(ctx context.Context) {
-	if err := ilido.Exec(ctx); err != nil {
+func (_d *InvoiceLineItemDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

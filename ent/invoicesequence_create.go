@@ -21,87 +21,87 @@ type InvoiceSequenceCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (isc *InvoiceSequenceCreate) SetTenantID(s string) *InvoiceSequenceCreate {
-	isc.mutation.SetTenantID(s)
-	return isc
+func (_c *InvoiceSequenceCreate) SetTenantID(v string) *InvoiceSequenceCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (isc *InvoiceSequenceCreate) SetEnvironmentID(s string) *InvoiceSequenceCreate {
-	isc.mutation.SetEnvironmentID(s)
-	return isc
+func (_c *InvoiceSequenceCreate) SetEnvironmentID(v string) *InvoiceSequenceCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (isc *InvoiceSequenceCreate) SetNillableEnvironmentID(s *string) *InvoiceSequenceCreate {
-	if s != nil {
-		isc.SetEnvironmentID(*s)
+func (_c *InvoiceSequenceCreate) SetNillableEnvironmentID(v *string) *InvoiceSequenceCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return isc
+	return _c
 }
 
 // SetYearMonth sets the "year_month" field.
-func (isc *InvoiceSequenceCreate) SetYearMonth(s string) *InvoiceSequenceCreate {
-	isc.mutation.SetYearMonth(s)
-	return isc
+func (_c *InvoiceSequenceCreate) SetYearMonth(v string) *InvoiceSequenceCreate {
+	_c.mutation.SetYearMonth(v)
+	return _c
 }
 
 // SetLastValue sets the "last_value" field.
-func (isc *InvoiceSequenceCreate) SetLastValue(i int64) *InvoiceSequenceCreate {
-	isc.mutation.SetLastValue(i)
-	return isc
+func (_c *InvoiceSequenceCreate) SetLastValue(v int64) *InvoiceSequenceCreate {
+	_c.mutation.SetLastValue(v)
+	return _c
 }
 
 // SetNillableLastValue sets the "last_value" field if the given value is not nil.
-func (isc *InvoiceSequenceCreate) SetNillableLastValue(i *int64) *InvoiceSequenceCreate {
-	if i != nil {
-		isc.SetLastValue(*i)
+func (_c *InvoiceSequenceCreate) SetNillableLastValue(v *int64) *InvoiceSequenceCreate {
+	if v != nil {
+		_c.SetLastValue(*v)
 	}
-	return isc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (isc *InvoiceSequenceCreate) SetCreatedAt(t time.Time) *InvoiceSequenceCreate {
-	isc.mutation.SetCreatedAt(t)
-	return isc
+func (_c *InvoiceSequenceCreate) SetCreatedAt(v time.Time) *InvoiceSequenceCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (isc *InvoiceSequenceCreate) SetNillableCreatedAt(t *time.Time) *InvoiceSequenceCreate {
-	if t != nil {
-		isc.SetCreatedAt(*t)
+func (_c *InvoiceSequenceCreate) SetNillableCreatedAt(v *time.Time) *InvoiceSequenceCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return isc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (isc *InvoiceSequenceCreate) SetUpdatedAt(t time.Time) *InvoiceSequenceCreate {
-	isc.mutation.SetUpdatedAt(t)
-	return isc
+func (_c *InvoiceSequenceCreate) SetUpdatedAt(v time.Time) *InvoiceSequenceCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (isc *InvoiceSequenceCreate) SetNillableUpdatedAt(t *time.Time) *InvoiceSequenceCreate {
-	if t != nil {
-		isc.SetUpdatedAt(*t)
+func (_c *InvoiceSequenceCreate) SetNillableUpdatedAt(v *time.Time) *InvoiceSequenceCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return isc
+	return _c
 }
 
 // Mutation returns the InvoiceSequenceMutation object of the builder.
-func (isc *InvoiceSequenceCreate) Mutation() *InvoiceSequenceMutation {
-	return isc.mutation
+func (_c *InvoiceSequenceCreate) Mutation() *InvoiceSequenceMutation {
+	return _c.mutation
 }
 
 // Save creates the InvoiceSequence in the database.
-func (isc *InvoiceSequenceCreate) Save(ctx context.Context) (*InvoiceSequence, error) {
-	isc.defaults()
-	return withHooks(ctx, isc.sqlSave, isc.mutation, isc.hooks)
+func (_c *InvoiceSequenceCreate) Save(ctx context.Context) (*InvoiceSequence, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (isc *InvoiceSequenceCreate) SaveX(ctx context.Context) *InvoiceSequence {
-	v, err := isc.Save(ctx)
+func (_c *InvoiceSequenceCreate) SaveX(ctx context.Context) *InvoiceSequence {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -109,70 +109,70 @@ func (isc *InvoiceSequenceCreate) SaveX(ctx context.Context) *InvoiceSequence {
 }
 
 // Exec executes the query.
-func (isc *InvoiceSequenceCreate) Exec(ctx context.Context) error {
-	_, err := isc.Save(ctx)
+func (_c *InvoiceSequenceCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (isc *InvoiceSequenceCreate) ExecX(ctx context.Context) {
-	if err := isc.Exec(ctx); err != nil {
+func (_c *InvoiceSequenceCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (isc *InvoiceSequenceCreate) defaults() {
-	if _, ok := isc.mutation.LastValue(); !ok {
+func (_c *InvoiceSequenceCreate) defaults() {
+	if _, ok := _c.mutation.LastValue(); !ok {
 		v := invoicesequence.DefaultLastValue
-		isc.mutation.SetLastValue(v)
+		_c.mutation.SetLastValue(v)
 	}
-	if _, ok := isc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := invoicesequence.DefaultCreatedAt()
-		isc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := isc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := invoicesequence.DefaultUpdatedAt()
-		isc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (isc *InvoiceSequenceCreate) check() error {
-	if _, ok := isc.mutation.TenantID(); !ok {
+func (_c *InvoiceSequenceCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "InvoiceSequence.tenant_id"`)}
 	}
-	if v, ok := isc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := invoicesequence.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := isc.mutation.YearMonth(); !ok {
+	if _, ok := _c.mutation.YearMonth(); !ok {
 		return &ValidationError{Name: "year_month", err: errors.New(`ent: missing required field "InvoiceSequence.year_month"`)}
 	}
-	if v, ok := isc.mutation.YearMonth(); ok {
+	if v, ok := _c.mutation.YearMonth(); ok {
 		if err := invoicesequence.YearMonthValidator(v); err != nil {
 			return &ValidationError{Name: "year_month", err: fmt.Errorf(`ent: validator failed for field "InvoiceSequence.year_month": %w`, err)}
 		}
 	}
-	if _, ok := isc.mutation.LastValue(); !ok {
+	if _, ok := _c.mutation.LastValue(); !ok {
 		return &ValidationError{Name: "last_value", err: errors.New(`ent: missing required field "InvoiceSequence.last_value"`)}
 	}
-	if _, ok := isc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "InvoiceSequence.created_at"`)}
 	}
-	if _, ok := isc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "InvoiceSequence.updated_at"`)}
 	}
 	return nil
 }
 
-func (isc *InvoiceSequenceCreate) sqlSave(ctx context.Context) (*InvoiceSequence, error) {
-	if err := isc.check(); err != nil {
+func (_c *InvoiceSequenceCreate) sqlSave(ctx context.Context) (*InvoiceSequence, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := isc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, isc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -180,37 +180,37 @@ func (isc *InvoiceSequenceCreate) sqlSave(ctx context.Context) (*InvoiceSequence
 	}
 	id := _spec.ID.Value.(int64)
 	_node.ID = int(id)
-	isc.mutation.id = &_node.ID
-	isc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (isc *InvoiceSequenceCreate) createSpec() (*InvoiceSequence, *sqlgraph.CreateSpec) {
+func (_c *InvoiceSequenceCreate) createSpec() (*InvoiceSequence, *sqlgraph.CreateSpec) {
 	var (
-		_node = &InvoiceSequence{config: isc.config}
+		_node = &InvoiceSequence{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(invoicesequence.Table, sqlgraph.NewFieldSpec(invoicesequence.FieldID, field.TypeInt))
 	)
-	if value, ok := isc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(invoicesequence.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := isc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(invoicesequence.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := isc.mutation.YearMonth(); ok {
+	if value, ok := _c.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
 		_node.YearMonth = value
 	}
-	if value, ok := isc.mutation.LastValue(); ok {
+	if value, ok := _c.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 		_node.LastValue = value
 	}
-	if value, ok := isc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(invoicesequence.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := isc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoicesequence.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
@@ -225,16 +225,16 @@ type InvoiceSequenceCreateBulk struct {
 }
 
 // Save creates the InvoiceSequence entities in the database.
-func (iscb *InvoiceSequenceCreateBulk) Save(ctx context.Context) ([]*InvoiceSequence, error) {
-	if iscb.err != nil {
-		return nil, iscb.err
+func (_c *InvoiceSequenceCreateBulk) Save(ctx context.Context) ([]*InvoiceSequence, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(iscb.builders))
-	nodes := make([]*InvoiceSequence, len(iscb.builders))
-	mutators := make([]Mutator, len(iscb.builders))
-	for i := range iscb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*InvoiceSequence, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := iscb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*InvoiceSequenceMutation)
@@ -248,11 +248,11 @@ func (iscb *InvoiceSequenceCreateBulk) Save(ctx context.Context) ([]*InvoiceSequ
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, iscb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, iscb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -276,7 +276,7 @@ func (iscb *InvoiceSequenceCreateBulk) Save(ctx context.Context) ([]*InvoiceSequ
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, iscb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -284,8 +284,8 @@ func (iscb *InvoiceSequenceCreateBulk) Save(ctx context.Context) ([]*InvoiceSequ
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (iscb *InvoiceSequenceCreateBulk) SaveX(ctx context.Context) []*InvoiceSequence {
-	v, err := iscb.Save(ctx)
+func (_c *InvoiceSequenceCreateBulk) SaveX(ctx context.Context) []*InvoiceSequence {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -293,14 +293,14 @@ func (iscb *InvoiceSequenceCreateBulk) SaveX(ctx context.Context) []*InvoiceSequ
 }
 
 // Exec executes the query.
-func (iscb *InvoiceSequenceCreateBulk) Exec(ctx context.Context) error {
-	_, err := iscb.Save(ctx)
+func (_c *InvoiceSequenceCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iscb *InvoiceSequenceCreateBulk) ExecX(ctx context.Context) {
-	if err := iscb.Exec(ctx); err != nil {
+func (_c *InvoiceSequenceCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

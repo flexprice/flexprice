@@ -9,7 +9,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 // PaymentParams groups payment-provider settings for checkout flows.
@@ -48,13 +47,17 @@ type RedirectionParams struct {
 type CheckoutParams struct {
 	PaymentParams
 	RedirectionParams
-	IdempotencyKey *string           `json:"idempotency_key,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	IdempotencyKey        *string                `json:"idempotency_key,omitempty"`
+	Metadata              map[string]string      `json:"metadata,omitempty"`
+	EntityCreationOptions *EntityCreationOptions `json:"entity_creation_options,omitempty"`
 }
 
 func (p *CheckoutParams) Validate() error {
 	if p == nil {
 		return nil
+	}
+	if err := p.EntityCreationOptions.Validate(); err != nil {
+		return err
 	}
 	return p.PaymentParams.Validate()
 }
@@ -94,6 +97,13 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 	if r.Action == types.CheckoutActionAddAddon {
 		return ierr.NewError("add_addon is not supported via create checkout session").
 			WithHint("Use POST /subscriptions/addon with a checkout object instead").
+			Mark(ierr.ErrValidation)
+	}
+
+	// pay_invoice sessions are created only via one-off invoice creation (pay-first).
+	if r.Action == types.CheckoutActionPayInvoice {
+		return ierr.NewError("pay_invoice is not supported via create checkout session").
+			WithHint("Use POST /invoices with a checkout object instead").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -253,32 +263,120 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 				Mark(ierr.ErrValidation)
 		}
 		return cfg.AddAddonParams.Validate()
+	case types.CheckoutActionPayInvoice:
+		if cfg.PayInvoiceParams == nil {
+			return ierr.NewError("session has no pay_invoice_params").
+				WithHint("checkout session must have pay_invoice_params before it can be completed").
+				Mark(ierr.ErrValidation)
+		}
+		if err := cfg.PayInvoiceParams.Validate(); err != nil {
+			return err
+		}
+		if cfg.PayInvoiceParams.InvoiceID != *session.CheckoutInvoiceID {
+			return ierr.NewError("pay_invoice_params.invoice_id does not match checkout_invoice_id").
+				WithHint("checkout session invoice does not match the invoice it was created for").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 	default:
 		return nil
 	}
 }
 
+// CheckoutPaymentBlock is the customer-facing view of the payment a checkout
+// session is waiting on. Null until fulfilment has created one.
+type CheckoutPaymentBlock struct {
+	ID      string              `json:"id"`
+	Status  types.PaymentStatus `json:"status"`
+	Gateway string              `json:"gateway,omitempty"`
+}
+
 // CheckoutSessionResponse is the API response for a single checkout session.
+//
+// Fields are listed explicitly rather than embedding the domain model. The domain
+// model carries types.BaseModel, whose `status` is the row-lifecycle value
+// ("published" / "archived") and means nothing to a caller — a response carrying
+// both `status` and `checkout_status` invites reading the wrong one — alongside
+// tenant_id, created_by and updated_by, which are internal audit fields.
 type CheckoutSessionResponse struct {
-	*domainCheckout.CheckoutSession
+	ID              string                        `json:"id"`
+	CustomerID      string                        `json:"customer_id"`
+	Action          types.CheckoutAction          `json:"action"`
+	CheckoutStatus  types.CheckoutStatus          `json:"checkout_status"`
+	PaymentProvider types.CheckoutPaymentProvider `json:"payment_provider"`
+
+	CheckoutInvoiceID *string `json:"checkout_invoice_id,omitempty"`
+	CheckoutPaymentID *string `json:"checkout_payment_id,omitempty"`
+	IdempotencyKey    *string `json:"idempotency_key,omitempty"`
+
+	SuccessURL *string `json:"success_url,omitempty"`
+	FailureURL *string `json:"failure_url,omitempty"`
+	CancelURL  *string `json:"cancel_url,omitempty"`
+
+	ExpiresAt     time.Time      `json:"expires_at"`
+	CompletedAt   *time.Time     `json:"completed_at,omitempty"`
+	CancelledAt   *time.Time     `json:"cancelled_at,omitempty"`
+	FailureReason *string        `json:"failure_reason,omitempty"`
+	Metadata      types.Metadata `json:"metadata,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
+
+	// Terminal reports whether the session has finished. Clients poll until this is
+	// true rather than hardcoding the status set, which would go stale if a status
+	// is ever added.
+	Terminal bool `json:"terminal"`
+
+	// NextPollAfterMs is how long a client should wait before reading again.
+	// Zero means stop — either the session is terminal, or this response did not
+	// come from a polling read.
+	NextPollAfterMs int64 `json:"next_poll_after_ms"`
+
+	// Stale reports that this response is stored state that was not checked against
+	// the payment provider on this request — the read was debounced, or the gateway
+	// did not answer. A UI should say "still checking" rather than presenting a
+	// stale answer as fact.
+	Stale bool `json:"stale"`
+
+	// Payment is the payment this session is waiting on, when one exists.
+	Payment *CheckoutPaymentBlock `json:"payment,omitempty"`
+	// Describes the call that returned this session, not the session itself; never persisted.
+	EntityCreationResult *EntityCreationResult `json:"entity_creation_result,omitempty"`
 }
 
 // ListCheckoutSessionsResponse is the paginated list response.
 type ListCheckoutSessionsResponse = types.ListResponse[*CheckoutSessionResponse]
 
 // ToCheckoutSessionResponse maps a domain session to its API response.
-// PaymentAction is derived from ProviderResult; the raw ProviderResult is omitted
-// from the response because it contains sensitive gateway tokens.
+//
+// PaymentAction is derived from ProviderResult; the raw ProviderResult is never
+// exposed because it holds gateway session identifiers. Configuration, Result and
+// PaymentProviderConfig are likewise internal and have no field here.
 func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessionResponse {
-	session := lo.FromPtr(s)
-	paymentAction := session.ProviderResult.ToProviderResult().PaymentAction()
-	session.ProviderResult = nil
-	session.Result = nil
-	session.Configuration = domainCheckout.JSONBCheckoutConfiguration{}
-	session.PaymentProviderConfig = nil
+	if s == nil {
+		return nil
+	}
 	return &CheckoutSessionResponse{
-		CheckoutSession: lo.ToPtr(session),
-		PaymentAction:   paymentAction,
+		ID:                s.ID,
+		CustomerID:        s.CustomerID,
+		Action:            s.Action,
+		CheckoutStatus:    s.CheckoutStatus,
+		PaymentProvider:   s.PaymentProvider,
+		CheckoutInvoiceID: s.CheckoutInvoiceID,
+		CheckoutPaymentID: s.CheckoutPaymentID,
+		IdempotencyKey:    s.IdempotencyKey,
+		SuccessURL:        s.SuccessURL,
+		FailureURL:        s.FailureURL,
+		CancelURL:         s.CancelURL,
+		ExpiresAt:         s.ExpiresAt,
+		CompletedAt:       s.CompletedAt,
+		CancelledAt:       s.CancelledAt,
+		FailureReason:     s.FailureReason,
+		Metadata:          s.Metadata,
+		CreatedAt:         s.CreatedAt,
+		UpdatedAt:         s.UpdatedAt,
+		PaymentAction:     s.ProviderResult.ToProviderResult().PaymentAction(),
+		Terminal:          s.CheckoutStatus.IsTerminal(),
 	}
 }

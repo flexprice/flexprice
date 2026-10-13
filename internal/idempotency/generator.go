@@ -21,11 +21,14 @@ const (
 	// Payment
 	ScopePayment Scope = "payment"
 
+	// Refund
+	ScopeRefund Scope = "refund"
+
 	// Credit note
 	ScopeCreditNote Scope = "credit_note"
 
-	// Tax Application
-	ScopeTaxApplication Scope = "tax_application"
+	// ScopeTaxProvider scopes a call that files or un-files tax with an external engine.
+	ScopeTaxProvider Scope = "tax_provider"
 
 	// Wallet Top Up
 	ScopeWalletTopUp Scope = "wallet_top_up"

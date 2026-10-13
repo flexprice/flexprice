@@ -24,6 +24,7 @@ type ZohoClient interface {
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	UpdateContact(ctx context.Context, contactID string, req *ContactUpdateRequest) (*ContactResponse, error)
+	GetContact(ctx context.Context, contactID string) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
 	// GetInvoice fetches a Zoho Books invoice by ID (used to read the live balance/customer_id before mark-paid).
 	GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error)
@@ -62,7 +63,7 @@ func NewClient(
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
-		httpClient:        &http.Client{Timeout: 30 * time.Second, Transport: httpclient.OtelTransport(nil)},
+		httpClient:        &http.Client{Timeout: 30 * time.Second, Transport: httpclient.ProviderTransport(nil, logger, string(types.SecretProviderZohoBooks))},
 		logger:            logger,
 	}
 }
@@ -129,6 +130,17 @@ func (c *Client) UpdateContact(ctx context.Context, contactID string, req *Conta
 	}
 	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
 	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Contact, nil
+}
+
+func (c *Client) GetContact(ctx context.Context, contactID string) (*ContactResponse, error) {
+	var resp struct {
+		Contact ContactResponse `json:"contact"`
+	}
+	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Contact, nil

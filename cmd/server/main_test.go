@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -61,5 +62,14 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	}
 	if temporalSvc.stopCalls != 1 {
 		t.Fatalf("expected Temporal service Stop once, got %d calls", temporalSvc.stopCalls)
+	}
+}
+
+func TestProvideAdminHandlersBuildsEveryHandler(t *testing.T) {
+	handlers := reflect.ValueOf(provideAdminHandlers(nil, nil, nil, nil))
+	for i := range handlers.NumField() {
+		if handlers.Field(i).IsNil() {
+			t.Errorf("provideAdminHandlers leaves %s nil", handlers.Type().Field(i).Name)
+		}
 	}
 }

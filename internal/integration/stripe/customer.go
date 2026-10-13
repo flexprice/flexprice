@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	stripeCustomerIDMetadataKey = "stripe_customer_id"
+
 	// customerSyncLockTTL bounds the lock held while creating a Stripe customer.
 	customerSyncLockTTL = 30 * time.Second
 	// While another caller holds the lock we retry taking it rather than creating a second
@@ -74,7 +76,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 
 		if refreshed, refreshErr := customerService.GetCustomer(ctx, customerID); refreshErr == nil &&
 			refreshed != nil && refreshed.Customer != nil {
-			if stripeID := refreshed.Customer.Metadata["stripe_customer_id"]; stripeID != "" {
+			if stripeID := refreshed.Customer.Metadata[stripeCustomerIDMetadataKey]; stripeID != "" {
 				s.logger.Info(ctx, "customer was synced to Stripe by a concurrent caller",
 					"customer_id", customerID,
 					"stripe_customer_id", stripeID)
@@ -93,6 +95,58 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 	return updatedCustomerResp, nil
 }
 
+// GetStripeCustomerID resolves the Stripe customer without creating one; ErrNotFound if
+// the customer was never synced.
+func (s *CustomerService) GetStripeCustomerID(ctx context.Context, customerID string, customerService interfaces.CustomerService) (string, error) {
+	if s == nil || customerService == nil {
+		return "", ierr.NewError("stripe customer service is not configured").
+			Mark(ierr.ErrInternal)
+	}
+
+	ourCustomerResp, err := customerService.GetCustomer(ctx, customerID)
+	if err != nil {
+		return "", err
+	}
+	if ourCustomerResp == nil || ourCustomerResp.Customer == nil {
+		return "", ierr.NewError("customer not found").
+			WithReportableDetails(map[string]interface{}{"customer_id": customerID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if linked := s.existingStripeLink(ctx, ourCustomerResp, customerService); linked != nil && linked.Customer != nil {
+		if stripeID := linked.Customer.Metadata[stripeCustomerIDMetadataKey]; stripeID != "" {
+			return stripeID, nil
+		}
+	}
+
+	return "", ierr.NewError("customer not synced to Stripe").
+		WithHint("Please sync customer to Stripe first").
+		WithReportableDetails(map[string]interface{}{
+			"flexprice_customer_id": customerID,
+		}).
+		Mark(ierr.ErrNotFound)
+}
+
+// RetrieveStripeCustomer fetches the Stripe customer, or ErrNotFound if never synced.
+func (s *CustomerService) RetrieveStripeCustomer(ctx context.Context, customerID string, customerService interfaces.CustomerService) (*stripe.Customer, error) {
+	if s == nil || s.client == nil {
+		return nil, ierr.NewError("stripe client is not configured").
+			Mark(ierr.ErrInternal)
+	}
+
+	stripeCustomerID, err := s.GetStripeCustomerID(ctx, customerID, customerService)
+	if err != nil {
+		return nil, err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return stripeClient.V1Customers.Retrieve(ctx, stripeCustomerID, nil)
+}
+
 // existingStripeLink returns the customer when it is already linked to a Stripe customer,
 // either through metadata or through the integration mapping (which is backfilled into
 // metadata), and nil when the customer still needs to be created in Stripe.
@@ -106,7 +160,7 @@ func (s *CustomerService) existingStripeLink(
 	}
 	ourCustomer := ourCustomerResp.Customer
 
-	if stripeID, exists := ourCustomer.Metadata["stripe_customer_id"]; exists && stripeID != "" {
+	if stripeID, exists := ourCustomer.Metadata[stripeCustomerIDMetadataKey]; exists && stripeID != "" {
 		s.logger.Info(ctx, "customer already synced to Stripe",
 			"customer_id", ourCustomer.ID,
 			"stripe_customer_id", stripeID,
@@ -141,7 +195,7 @@ func (s *CustomerService) existingStripeLink(
 	// Update customer metadata with Stripe ID for faster future lookups
 	updateReq := dto.UpdateCustomerRequest{
 		Metadata: s.mergeCustomerMetadata(ourCustomer.Metadata, map[string]string{
-			"stripe_customer_id": existingMapping.ProviderEntityID,
+			stripeCustomerIDMetadataKey: existingMapping.ProviderEntityID,
 		}),
 	}
 	updatedCustomerResp, err := customerService.UpdateCustomer(ctx, ourCustomer.ID, updateReq)
@@ -149,7 +203,8 @@ func (s *CustomerService) existingStripeLink(
 		s.logger.Info(ctx, "failed to update customer metadata with Stripe ID",
 			"customer_id", ourCustomer.ID,
 			"error", err)
-		// Return original customer info if update fails
+		// The mapping still proves the link; carry the id in memory so callers see it.
+		ourCustomer.Metadata = updateReq.Metadata
 		return ourCustomerResp
 	}
 
@@ -237,7 +292,7 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 
 	// Update our customer with Stripe ID
 	ourCustomer.Metadata = s.mergeCustomerMetadata(ourCustomer.Metadata, map[string]string{
-		"stripe_customer_id": stripeCustomer.ID,
+		stripeCustomerIDMetadataKey: stripeCustomer.ID,
 	})
 
 	updatedCustomerResp, err := customerService.UpdateCustomer(ctx, ourCustomer.ID, dto.UpdateCustomerRequest{
@@ -334,7 +389,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		Name:       stripeCustomer.Name,
 		Email:      stripeCustomer.Email,
 		Metadata: map[string]string{
-			"stripe_customer_id": stripeCustomer.ID,
+			stripeCustomerIDMetadataKey: stripeCustomer.ID,
 		},
 	}
 
@@ -367,69 +422,13 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 
 // GetDefaultPaymentMethod gets the default payment method for a customer
 func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerID string, customerService interfaces.CustomerService) (*dto.PaymentMethodResponse, error) {
-	// Get Stripe client
-	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	customer, err := s.RetrieveStripeCustomer(ctx, customerID, customerService)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get our customer to find Stripe customer ID
-	ourCustomerResp, err := customerService.GetCustomer(ctx, customerID)
-	if err != nil {
-		return nil, err
-	}
-	ourCustomer := ourCustomerResp.Customer
-
-	stripeCustomerID := ""
-	if ourCustomer.Metadata != nil {
-		stripeCustomerID = ourCustomer.Metadata["stripe_customer_id"]
-	}
-	if stripeCustomerID == "" && s.entityIntegrationMappingRepo != nil {
-		filter := &types.EntityIntegrationMappingFilter{
-			QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
-			EntityID:      customerID,
-			EntityType:    types.IntegrationEntityTypeCustomer,
-			ProviderTypes: []string{string(types.SecretProviderStripe)},
-		}
-		mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
-		if err == nil && len(mappings) > 0 {
-			stripeCustomerID = mappings[0].ProviderEntityID
-			updateReq := dto.UpdateCustomerRequest{
-				Metadata: s.mergeCustomerMetadata(
-					ourCustomer.Metadata,
-					map[string]string{"stripe_customer_id": stripeCustomerID},
-				),
-			}
-			if _, err := customerService.UpdateCustomer(ctx, ourCustomer.ID, updateReq); err != nil {
-				s.logger.Info(ctx, "failed to backfill stripe_customer_id metadata",
-					"customer_id", customerID,
-					"error", err)
-			} else {
-				ourCustomer.Metadata = updateReq.Metadata
-			}
-		}
-	}
-	if stripeCustomerID == "" {
-		return nil, ierr.NewError("customer not found in Stripe").
-			WithHint("Customer must have a Stripe account").
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Get customer from Stripe to find default payment method
-	customer, err := stripeClient.V1Customers.Retrieve(ctx, stripeCustomerID, nil)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get customer from Stripe",
-			"error", err,
-			"customer_id", customerID,
-			"stripe_customer_id", stripeCustomerID,
-		)
-		return nil, ierr.NewError("failed to get customer from Stripe").
-			WithHint("Could not retrieve customer information from Stripe").
-			Mark(ierr.ErrSystem)
-	}
-
-	// Check if customer has a default payment method
-	if customer.InvoiceSettings == nil || customer.InvoiceSettings.DefaultPaymentMethod == nil {
+	defaultPMID := defaultPaymentMethodID(customer)
+	if defaultPMID == "" {
 		return nil, ierr.NewError("no default payment method").
 			WithHint("Customer does not have a default payment method set in Stripe").
 			WithReportableDetails(map[string]interface{}{
@@ -438,15 +437,18 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 			Mark(ierr.ErrNotFound)
 	}
 
-	defaultPaymentMethodID := customer.InvoiceSettings.DefaultPaymentMethod.ID
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// Get the payment method details
-	paymentMethod, err := stripeClient.V1PaymentMethods.Retrieve(ctx, defaultPaymentMethodID, nil)
+	paymentMethod, err := stripeClient.V1PaymentMethods.Retrieve(ctx, defaultPMID, nil)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get default payment method from Stripe",
 			"error", err,
 			"customer_id", customerID,
-			"payment_method_id", defaultPaymentMethodID,
+			"payment_method_id", defaultPMID,
 		)
 		return nil, ierr.NewError("failed to get payment method").
 			WithHint("Could not retrieve payment method details from Stripe").
@@ -480,8 +482,8 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 
 	s.logger.Info(ctx, "successfully retrieved default payment method",
 		"customer_id", customerID,
-		"stripe_customer_id", stripeCustomerID,
-		"payment_method_id", defaultPaymentMethodID,
+		"stripe_customer_id", customer.ID,
+		"payment_method_id", defaultPMID,
 	)
 
 	return response, nil
@@ -596,7 +598,7 @@ func (s *CustomerService) SyncCustomerToStripe(ctx context.Context, customer *cu
 		return "", nil, err
 	}
 
-	stripeID := updatedCustomerResp.Customer.Metadata["stripe_customer_id"]
+	stripeID := updatedCustomerResp.Customer.Metadata[stripeCustomerIDMetadataKey]
 	if stripeID == "" {
 		return "", nil, ierr.NewError("failed to get Stripe customer ID").
 			WithHint("Stripe customer ID not found in metadata").
@@ -645,47 +647,11 @@ func (s *CustomerService) UpdateStripeCustomerMetadata(ctx context.Context, stri
 	return nil
 }
 
-// HasCustomerStripeMapping checks if a customer has a Stripe mapping
-func (s *CustomerService) HasCustomerStripeMapping(ctx context.Context, customerID string, customerService interfaces.CustomerService) bool {
-	customerResp, err := customerService.GetCustomer(ctx, customerID)
-	if err != nil {
-		return false
+// defaultPaymentMethodID is a nil-safe read of a Stripe customer's default payment
+// method; every level of the nesting can be nil until something sets it.
+func defaultPaymentMethodID(cust *stripe.Customer) string {
+	if cust == nil || cust.InvoiceSettings == nil || cust.InvoiceSettings.DefaultPaymentMethod == nil {
+		return ""
 	}
-
-	if customerResp.Customer.Metadata != nil {
-		if stripeCustomerID := customerResp.Customer.Metadata["stripe_customer_id"]; stripeCustomerID != "" {
-			return true
-		}
-	}
-	if s.entityIntegrationMappingRepo == nil {
-		return false
-	}
-
-	filter := &types.EntityIntegrationMappingFilter{
-		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
-		EntityID:      customerID,
-		EntityType:    types.IntegrationEntityTypeCustomer,
-		ProviderTypes: []string{string(types.SecretProviderStripe)},
-	}
-	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
-	if err != nil || len(mappings) == 0 {
-		return false
-	}
-
-	stripeCustomerID := mappings[0].ProviderEntityID
-	updateReq := dto.UpdateCustomerRequest{
-		Metadata: s.mergeCustomerMetadata(
-			customerResp.Customer.Metadata,
-			map[string]string{"stripe_customer_id": stripeCustomerID},
-		),
-	}
-	if _, err := customerService.UpdateCustomer(ctx, customerResp.Customer.ID, updateReq); err != nil {
-		s.logger.Info(ctx, "failed to backfill stripe_customer_id metadata",
-			"customer_id", customerID,
-			"error", err)
-	} else {
-		customerResp.Customer.Metadata = updateReq.Metadata
-	}
-
-	return true
+	return cust.InvoiceSettings.DefaultPaymentMethod.ID
 }

@@ -315,3 +315,92 @@ func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_SkipsPeriodWith
 	s.Len(output.InvoiceIDs, 1, "P1 must be skipped (already invoiced), only P2 gets a new draft")
 	s.NotContains(output.InvoiceIDs, existing.ID, "output must contain newly-created draft IDs, not the pre-existing finalized invoice")
 }
+
+func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_AdvancesGroupedInvoicingChildren() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_update_period_grouped")
+
+	oldStart := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	oldEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	newStart := oldEnd
+	newEnd := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+
+	parent := &subscription.Subscription{
+		ID:                 "sub_update_period_parent",
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		SubscriptionType:   types.SubscriptionTypeParent,
+		StartDate:          oldStart,
+		CurrentPeriodStart: oldStart,
+		CurrentPeriodEnd:   oldEnd,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, parent, parent.LineItems))
+
+	child := &subscription.Subscription{
+		ID:                   "sub_update_period_grouped_child",
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeGroupedInvoicing,
+		ParentSubscriptionID: lo.ToPtr(parent.ID),
+		StartDate:            oldStart,
+		CurrentPeriodStart:   oldStart,
+		CurrentPeriodEnd:     oldEnd,
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		Currency:             "usd",
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+		LineItems:            []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, child, child.LineItems))
+
+	inherited := &subscription.Subscription{
+		ID:                   "sub_update_period_inherited_child",
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		ParentSubscriptionID: lo.ToPtr(parent.ID),
+		StartDate:            oldStart,
+		CurrentPeriodStart:   oldStart,
+		CurrentPeriodEnd:     oldEnd,
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		Currency:             "usd",
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+		LineItems:            []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, inherited, inherited.LineItems))
+
+	output, err := s.activities.UpdateCurrentPeriodActivity(ctx, subscriptionModels.UpdateSubscriptionPeriodActivityInput{
+		SubscriptionID: parent.ID,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		UserID:         types.GetUserID(ctx),
+		PeriodStart:    newStart,
+		PeriodEnd:      newEnd,
+	})
+	s.NoError(err)
+	s.Require().NotNil(output)
+	s.True(output.Success)
+
+	updatedParent, err := s.GetStores().SubscriptionRepo.Get(ctx, parent.ID)
+	s.NoError(err)
+	s.True(updatedParent.CurrentPeriodStart.Equal(newStart))
+	s.True(updatedParent.CurrentPeriodEnd.Equal(newEnd))
+
+	updatedChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+	s.NoError(err)
+	s.True(updatedChild.CurrentPeriodStart.Equal(newStart), "grouped_invoicing child period must roll with the parent")
+	s.True(updatedChild.CurrentPeriodEnd.Equal(newEnd), "grouped_invoicing child period must roll with the parent")
+
+	updatedInherited, err := s.GetStores().SubscriptionRepo.Get(ctx, inherited.ID)
+	s.NoError(err)
+	s.True(updatedInherited.CurrentPeriodStart.Equal(oldStart), "inherited children are not cascaded by this activity")
+	s.True(updatedInherited.CurrentPeriodEnd.Equal(oldEnd), "inherited children are not cascaded by this activity")
+}

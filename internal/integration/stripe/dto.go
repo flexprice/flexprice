@@ -3,20 +3,23 @@ package stripe
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
 // CreateStripePaymentLinkRequest represents a request to create a Stripe payment link
 type CreateStripePaymentLinkRequest struct {
-	InvoiceID              string            `json:"invoice_id" validate:"required"`
-	CustomerID             string            `json:"customer_id" validate:"required"`
-	Amount                 decimal.Decimal   `json:"amount" validate:"required,gt=0"`
-	Currency               string            `json:"currency" validate:"required,len=3"`
-	SuccessURL             string            `json:"success_url,omitempty"`
-	CancelURL              string            `json:"cancel_url,omitempty"`
-	Metadata               map[string]string `json:"metadata,omitempty"`
-	SaveCardAndMakeDefault bool              `json:"save_card_and_make_default,omitempty"`
-	PaymentID              string            `json:"payment_id" validate:"required"`
+	InvoiceID              string          `json:"invoice_id" validate:"required"`
+	CustomerID             string          `json:"customer_id" validate:"required"`
+	Amount                 decimal.Decimal `json:"amount" validate:"required,gt=0"`
+	Currency               string          `json:"currency" validate:"required,len=3"`
+	SuccessURL             string          `json:"success_url,omitempty"`
+	CancelURL              string          `json:"cancel_url,omitempty"`
+	Metadata               types.Metadata  `json:"metadata,omitempty"`
+	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default,omitempty"`
+	PaymentID              string          `json:"payment_id" validate:"required"`
+	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled,omitempty"`
+	ExpiresAt              *time.Time      `json:"expires_at,omitempty"`
 }
 
 // StripePaymentLinkResponse represents the response from creating a Stripe payment link
@@ -29,15 +32,17 @@ type StripePaymentLinkResponse struct {
 	Status          string          `json:"status"`
 	CreatedAt       int64           `json:"created_at"`
 	PaymentID       string          `json:"payment_id,omitempty"`
+	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
 }
 
 // ChargeSavedPaymentMethodRequest represents a request to charge a saved payment method
 type ChargeSavedPaymentMethodRequest struct {
 	CustomerID      string          `json:"customer_id" validate:"required"`
-	InvoiceID       string          `json:"invoice_id" validate:"required"`
+	InvoiceID       string          `json:"invoice_id,omitempty"`
 	PaymentMethodID string          `json:"payment_method_id" validate:"required"`
 	Amount          decimal.Decimal `json:"amount" validate:"required,gt=0"`
 	Currency        string          `json:"currency" validate:"required,len=3"`
+	PaymentID       string          `json:"payment_id,omitempty"`
 }
 
 // PaymentIntentResponse represents a Stripe PaymentIntent response

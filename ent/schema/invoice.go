@@ -78,12 +78,13 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Default(string(types.PaymentStatusPending)).
 			GoType(types.PaymentStatus("")),
+		// Not immutable: conversion at finalize switches the invoice from the charge currency to
+		// the customer's billing currency (§3.5).
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
-			NotEmpty().
-			Immutable(),
+			NotEmpty(),
 		field.Other("amount_due", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -116,6 +117,8 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Default(decimal.Zero),
 
+		// Promised, not settled: the sum of finalized refund credit notes.
+		// Settled cash lives on refunds.settled_amount.
 		field.Other("refunded_amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -143,6 +146,16 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Optional().
 			Default(decimal.Zero),
+		field.JSON("custom_currency", &types.CustomCurrency{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
+		field.JSON("fx_conversion", &types.FxConversion{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
 		field.String("description").
 			Optional(),
 		field.Time("due_date").
@@ -172,10 +185,10 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		// Mutable so a period that ends early can move its open draft's end instead of orphaning it.
 		field.Time("period_end").
 			Optional().
-			Nillable().
-			Immutable(),
+			Nillable(),
 		field.String("invoice_pdf_url").
 			Optional().
 			Nillable(),
@@ -225,6 +238,12 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("ID of the replacement invoice created when this invoice was recalculated after voiding"),
+
+		field.String("source_type").
+			GoType(types.InvoiceSourceType("")).
+			Optional().
+			Immutable().
+			Comment("How this invoice was created; 'checkout' marks one owned by a hosted checkout session"),
 
 		field.Bool("is_manually_edited").
 			Default(false).

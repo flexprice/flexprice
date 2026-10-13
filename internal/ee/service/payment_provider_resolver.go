@@ -5,18 +5,10 @@ import (
 	"sort"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
-type PaymentProviderResolver = interfaces.PaymentProviderResolver
-
-// gatewayCapabilities mirrors three switch statements that must agree with it:
-// Factory.GetCheckoutProvider, Factory.GetPaymentMethodProvider, and
-// paymentProcessor.handlePaymentLinkCreation. Stripe's unattended settlement
-// (processPaymentMethodCharge) is absent on purpose — it is not on the
-// CheckoutProvider seam, so nothing resolved here can route to it.
 var gatewayCapabilities = map[types.PaymentGatewayType][]types.IntegrationCapabilityType{
 	types.PaymentGatewayTypeChargebee: {
 		types.IntegrationCapabilityCheckout,
@@ -24,30 +16,49 @@ var gatewayCapabilities = map[types.PaymentGatewayType][]types.IntegrationCapabi
 		types.IntegrationCapabilityAutoCharge,
 		types.IntegrationCapabilityPaymentMethodManagement,
 		types.IntegrationCapabilitySetDefaultMethod,
+		types.IntegrationCapabilityListPaymentMethods,
+		types.IntegrationCapabilityAddPaymentMethod,
+		types.IntegrationCapabilityDeletePaymentMethod,
 	},
 	types.PaymentGatewayTypeRazorpay: {
 		types.IntegrationCapabilityCheckout,
 		types.IntegrationCapabilityAutoCharge,
 		types.IntegrationCapabilityPaymentLink,
+		types.IntegrationCapabilityListPaymentMethods,
 	},
 	types.PaymentGatewayTypeStripe: {
+		types.IntegrationCapabilityCheckout,
 		types.IntegrationCapabilityPaymentLink,
+		types.IntegrationCapabilityAutoCharge,
+		types.IntegrationCapabilityPaymentMethodManagement,
+		types.IntegrationCapabilitySetDefaultMethod,
+		types.IntegrationCapabilityListPaymentMethods,
+		types.IntegrationCapabilityAddPaymentMethod,
+		types.IntegrationCapabilityDeletePaymentMethod,
 	},
 	types.PaymentGatewayTypeNomod: {
 		types.IntegrationCapabilityPaymentLink,
 	},
 }
 
-type paymentProviderResolver struct {
+type PaymentProviderResolver struct {
 	ServiceParams
 }
 
-func NewPaymentProviderResolver(params ServiceParams) interfaces.PaymentProviderResolver {
-	return &paymentProviderResolver{ServiceParams: params}
+func NewPaymentProviderResolver(params ServiceParams) *PaymentProviderResolver {
+	return &PaymentProviderResolver{ServiceParams: params}
 }
 
-func (s *paymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]interfaces.ProviderCapabilities, error) {
-	gateways, err := s.configuredGateways(ctx)
+// ProviderCapabilities holds a payment gateway and its list of supported capabilities.
+type ProviderCapabilities struct {
+	// Gateway is the payment gateway type.
+	Gateway types.PaymentGatewayType
+	// Capabilities is the list of capabilities supported by the gateway.
+	Capabilities []types.IntegrationCapability
+}
+
+func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error) {
+	gateways, err := s.ConfiguredGateways(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,18 +67,18 @@ func (s *paymentProviderResolver) ListProviders(ctx context.Context, customerID 
 		return len(gatewayCapabilities[gw]) > 0
 	})
 
-	out := make([]interfaces.ProviderCapabilities, 0, len(usable))
+	out := make([]ProviderCapabilities, 0, len(usable))
 	for _, gw := range usable {
 		caps := lo.Map(gatewayCapabilities[gw], func(c types.IntegrationCapabilityType, _ int) types.IntegrationCapability {
 			return types.IntegrationCapability{Type: c}
 		})
-		out = append(out, interfaces.ProviderCapabilities{Gateway: gw, Capabilities: caps})
+		out = append(out, ProviderCapabilities{Gateway: gw, Capabilities: caps})
 	}
 
 	return out, nil
 }
 
-func (s *paymentProviderResolver) ResolveProvider(
+func (s *PaymentProviderResolver) ResolveProvider(
 	ctx context.Context,
 	customerID string,
 	capability types.IntegrationCapabilityType,
@@ -84,7 +95,7 @@ func (s *paymentProviderResolver) ResolveProvider(
 		}
 	}
 
-	gateways, err := s.configuredGateways(ctx)
+	gateways, err := s.ConfiguredGateways(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -132,8 +143,7 @@ func (s *paymentProviderResolver) ResolveProvider(
 	}
 }
 
-// configuredGateways deduplicates and sorts so listings and error messages are stable.
-func (s *paymentProviderResolver) configuredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
+func (s *PaymentProviderResolver) ConfiguredGateways(ctx context.Context) ([]types.PaymentGatewayType, error) {
 	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
 	if err != nil {
 		return nil, err

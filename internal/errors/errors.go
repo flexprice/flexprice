@@ -33,6 +33,9 @@ type errorMapping struct {
 	Code   ErrorCode
 }
 
+// ErrConnectionNotFound is the Temporal application error type for a provider with no connection.
+const ErrConnectionNotFound = "ConnectionNotFound"
+
 // Common error types that can be used across the application
 var (
 	ErrNotFound           = new(ErrCodeNotFound, "resource not found")

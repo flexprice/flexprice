@@ -26,398 +26,398 @@ type CouponUpdate struct {
 }
 
 // Where appends a list predicates to the CouponUpdate builder.
-func (cu *CouponUpdate) Where(ps ...predicate.Coupon) *CouponUpdate {
-	cu.mutation.Where(ps...)
-	return cu
+func (_u *CouponUpdate) Where(ps ...predicate.Coupon) *CouponUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (cu *CouponUpdate) SetStatus(s string) *CouponUpdate {
-	cu.mutation.SetStatus(s)
-	return cu
+func (_u *CouponUpdate) SetStatus(v string) *CouponUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableStatus(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetStatus(*s)
+func (_u *CouponUpdate) SetNillableStatus(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cu *CouponUpdate) SetUpdatedAt(t time.Time) *CouponUpdate {
-	cu.mutation.SetUpdatedAt(t)
-	return cu
+func (_u *CouponUpdate) SetUpdatedAt(v time.Time) *CouponUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cu *CouponUpdate) SetUpdatedBy(s string) *CouponUpdate {
-	cu.mutation.SetUpdatedBy(s)
-	return cu
+func (_u *CouponUpdate) SetUpdatedBy(v string) *CouponUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableUpdatedBy(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetUpdatedBy(*s)
+func (_u *CouponUpdate) SetNillableUpdatedBy(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cu *CouponUpdate) ClearUpdatedBy() *CouponUpdate {
-	cu.mutation.ClearUpdatedBy()
-	return cu
+func (_u *CouponUpdate) ClearUpdatedBy() *CouponUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cu *CouponUpdate) SetName(s string) *CouponUpdate {
-	cu.mutation.SetName(s)
-	return cu
+func (_u *CouponUpdate) SetName(v string) *CouponUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableName(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetName(*s)
+func (_u *CouponUpdate) SetNillableName(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetRedeemAfter sets the "redeem_after" field.
-func (cu *CouponUpdate) SetRedeemAfter(t time.Time) *CouponUpdate {
-	cu.mutation.SetRedeemAfter(t)
-	return cu
+func (_u *CouponUpdate) SetRedeemAfter(v time.Time) *CouponUpdate {
+	_u.mutation.SetRedeemAfter(v)
+	return _u
 }
 
 // SetNillableRedeemAfter sets the "redeem_after" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableRedeemAfter(t *time.Time) *CouponUpdate {
-	if t != nil {
-		cu.SetRedeemAfter(*t)
+func (_u *CouponUpdate) SetNillableRedeemAfter(v *time.Time) *CouponUpdate {
+	if v != nil {
+		_u.SetRedeemAfter(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearRedeemAfter clears the value of the "redeem_after" field.
-func (cu *CouponUpdate) ClearRedeemAfter() *CouponUpdate {
-	cu.mutation.ClearRedeemAfter()
-	return cu
+func (_u *CouponUpdate) ClearRedeemAfter() *CouponUpdate {
+	_u.mutation.ClearRedeemAfter()
+	return _u
 }
 
 // SetRedeemBefore sets the "redeem_before" field.
-func (cu *CouponUpdate) SetRedeemBefore(t time.Time) *CouponUpdate {
-	cu.mutation.SetRedeemBefore(t)
-	return cu
+func (_u *CouponUpdate) SetRedeemBefore(v time.Time) *CouponUpdate {
+	_u.mutation.SetRedeemBefore(v)
+	return _u
 }
 
 // SetNillableRedeemBefore sets the "redeem_before" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableRedeemBefore(t *time.Time) *CouponUpdate {
-	if t != nil {
-		cu.SetRedeemBefore(*t)
+func (_u *CouponUpdate) SetNillableRedeemBefore(v *time.Time) *CouponUpdate {
+	if v != nil {
+		_u.SetRedeemBefore(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearRedeemBefore clears the value of the "redeem_before" field.
-func (cu *CouponUpdate) ClearRedeemBefore() *CouponUpdate {
-	cu.mutation.ClearRedeemBefore()
-	return cu
+func (_u *CouponUpdate) ClearRedeemBefore() *CouponUpdate {
+	_u.mutation.ClearRedeemBefore()
+	return _u
 }
 
 // SetMaxRedemptions sets the "max_redemptions" field.
-func (cu *CouponUpdate) SetMaxRedemptions(i int) *CouponUpdate {
-	cu.mutation.ResetMaxRedemptions()
-	cu.mutation.SetMaxRedemptions(i)
-	return cu
+func (_u *CouponUpdate) SetMaxRedemptions(v int) *CouponUpdate {
+	_u.mutation.ResetMaxRedemptions()
+	_u.mutation.SetMaxRedemptions(v)
+	return _u
 }
 
 // SetNillableMaxRedemptions sets the "max_redemptions" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableMaxRedemptions(i *int) *CouponUpdate {
-	if i != nil {
-		cu.SetMaxRedemptions(*i)
+func (_u *CouponUpdate) SetNillableMaxRedemptions(v *int) *CouponUpdate {
+	if v != nil {
+		_u.SetMaxRedemptions(*v)
 	}
-	return cu
+	return _u
 }
 
-// AddMaxRedemptions adds i to the "max_redemptions" field.
-func (cu *CouponUpdate) AddMaxRedemptions(i int) *CouponUpdate {
-	cu.mutation.AddMaxRedemptions(i)
-	return cu
+// AddMaxRedemptions adds value to the "max_redemptions" field.
+func (_u *CouponUpdate) AddMaxRedemptions(v int) *CouponUpdate {
+	_u.mutation.AddMaxRedemptions(v)
+	return _u
 }
 
 // ClearMaxRedemptions clears the value of the "max_redemptions" field.
-func (cu *CouponUpdate) ClearMaxRedemptions() *CouponUpdate {
-	cu.mutation.ClearMaxRedemptions()
-	return cu
+func (_u *CouponUpdate) ClearMaxRedemptions() *CouponUpdate {
+	_u.mutation.ClearMaxRedemptions()
+	return _u
 }
 
 // SetTotalRedemptions sets the "total_redemptions" field.
-func (cu *CouponUpdate) SetTotalRedemptions(i int) *CouponUpdate {
-	cu.mutation.ResetTotalRedemptions()
-	cu.mutation.SetTotalRedemptions(i)
-	return cu
+func (_u *CouponUpdate) SetTotalRedemptions(v int) *CouponUpdate {
+	_u.mutation.ResetTotalRedemptions()
+	_u.mutation.SetTotalRedemptions(v)
+	return _u
 }
 
 // SetNillableTotalRedemptions sets the "total_redemptions" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableTotalRedemptions(i *int) *CouponUpdate {
-	if i != nil {
-		cu.SetTotalRedemptions(*i)
+func (_u *CouponUpdate) SetNillableTotalRedemptions(v *int) *CouponUpdate {
+	if v != nil {
+		_u.SetTotalRedemptions(*v)
 	}
-	return cu
+	return _u
 }
 
-// AddTotalRedemptions adds i to the "total_redemptions" field.
-func (cu *CouponUpdate) AddTotalRedemptions(i int) *CouponUpdate {
-	cu.mutation.AddTotalRedemptions(i)
-	return cu
+// AddTotalRedemptions adds value to the "total_redemptions" field.
+func (_u *CouponUpdate) AddTotalRedemptions(v int) *CouponUpdate {
+	_u.mutation.AddTotalRedemptions(v)
+	return _u
 }
 
 // SetRules sets the "rules" field.
-func (cu *CouponUpdate) SetRules(m map[string]interface{}) *CouponUpdate {
-	cu.mutation.SetRules(m)
-	return cu
+func (_u *CouponUpdate) SetRules(v map[string]interface{}) *CouponUpdate {
+	_u.mutation.SetRules(v)
+	return _u
 }
 
 // ClearRules clears the value of the "rules" field.
-func (cu *CouponUpdate) ClearRules() *CouponUpdate {
-	cu.mutation.ClearRules()
-	return cu
+func (_u *CouponUpdate) ClearRules() *CouponUpdate {
+	_u.mutation.ClearRules()
+	return _u
 }
 
 // SetAmountOff sets the "amount_off" field.
-func (cu *CouponUpdate) SetAmountOff(d decimal.Decimal) *CouponUpdate {
-	cu.mutation.SetAmountOff(d)
-	return cu
+func (_u *CouponUpdate) SetAmountOff(v decimal.Decimal) *CouponUpdate {
+	_u.mutation.SetAmountOff(v)
+	return _u
 }
 
 // SetNillableAmountOff sets the "amount_off" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableAmountOff(d *decimal.Decimal) *CouponUpdate {
-	if d != nil {
-		cu.SetAmountOff(*d)
+func (_u *CouponUpdate) SetNillableAmountOff(v *decimal.Decimal) *CouponUpdate {
+	if v != nil {
+		_u.SetAmountOff(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearAmountOff clears the value of the "amount_off" field.
-func (cu *CouponUpdate) ClearAmountOff() *CouponUpdate {
-	cu.mutation.ClearAmountOff()
-	return cu
+func (_u *CouponUpdate) ClearAmountOff() *CouponUpdate {
+	_u.mutation.ClearAmountOff()
+	return _u
 }
 
 // SetPercentageOff sets the "percentage_off" field.
-func (cu *CouponUpdate) SetPercentageOff(d decimal.Decimal) *CouponUpdate {
-	cu.mutation.SetPercentageOff(d)
-	return cu
+func (_u *CouponUpdate) SetPercentageOff(v decimal.Decimal) *CouponUpdate {
+	_u.mutation.SetPercentageOff(v)
+	return _u
 }
 
 // SetNillablePercentageOff sets the "percentage_off" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillablePercentageOff(d *decimal.Decimal) *CouponUpdate {
-	if d != nil {
-		cu.SetPercentageOff(*d)
+func (_u *CouponUpdate) SetNillablePercentageOff(v *decimal.Decimal) *CouponUpdate {
+	if v != nil {
+		_u.SetPercentageOff(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearPercentageOff clears the value of the "percentage_off" field.
-func (cu *CouponUpdate) ClearPercentageOff() *CouponUpdate {
-	cu.mutation.ClearPercentageOff()
-	return cu
+func (_u *CouponUpdate) ClearPercentageOff() *CouponUpdate {
+	_u.mutation.ClearPercentageOff()
+	return _u
 }
 
 // SetType sets the "type" field.
-func (cu *CouponUpdate) SetType(s string) *CouponUpdate {
-	cu.mutation.SetType(s)
-	return cu
+func (_u *CouponUpdate) SetType(v string) *CouponUpdate {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableType(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetType(*s)
+func (_u *CouponUpdate) SetNillableType(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetCadence sets the "cadence" field.
-func (cu *CouponUpdate) SetCadence(s string) *CouponUpdate {
-	cu.mutation.SetCadence(s)
-	return cu
+func (_u *CouponUpdate) SetCadence(v string) *CouponUpdate {
+	_u.mutation.SetCadence(v)
+	return _u
 }
 
 // SetNillableCadence sets the "cadence" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableCadence(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetCadence(*s)
+func (_u *CouponUpdate) SetNillableCadence(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetCadence(*v)
 	}
-	return cu
+	return _u
 }
 
 // SetDurationInPeriods sets the "duration_in_periods" field.
-func (cu *CouponUpdate) SetDurationInPeriods(i int) *CouponUpdate {
-	cu.mutation.ResetDurationInPeriods()
-	cu.mutation.SetDurationInPeriods(i)
-	return cu
+func (_u *CouponUpdate) SetDurationInPeriods(v int) *CouponUpdate {
+	_u.mutation.ResetDurationInPeriods()
+	_u.mutation.SetDurationInPeriods(v)
+	return _u
 }
 
 // SetNillableDurationInPeriods sets the "duration_in_periods" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableDurationInPeriods(i *int) *CouponUpdate {
-	if i != nil {
-		cu.SetDurationInPeriods(*i)
+func (_u *CouponUpdate) SetNillableDurationInPeriods(v *int) *CouponUpdate {
+	if v != nil {
+		_u.SetDurationInPeriods(*v)
 	}
-	return cu
+	return _u
 }
 
-// AddDurationInPeriods adds i to the "duration_in_periods" field.
-func (cu *CouponUpdate) AddDurationInPeriods(i int) *CouponUpdate {
-	cu.mutation.AddDurationInPeriods(i)
-	return cu
+// AddDurationInPeriods adds value to the "duration_in_periods" field.
+func (_u *CouponUpdate) AddDurationInPeriods(v int) *CouponUpdate {
+	_u.mutation.AddDurationInPeriods(v)
+	return _u
 }
 
 // ClearDurationInPeriods clears the value of the "duration_in_periods" field.
-func (cu *CouponUpdate) ClearDurationInPeriods() *CouponUpdate {
-	cu.mutation.ClearDurationInPeriods()
-	return cu
+func (_u *CouponUpdate) ClearDurationInPeriods() *CouponUpdate {
+	_u.mutation.ClearDurationInPeriods()
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (cu *CouponUpdate) SetCurrency(s string) *CouponUpdate {
-	cu.mutation.SetCurrency(s)
-	return cu
+func (_u *CouponUpdate) SetCurrency(v string) *CouponUpdate {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableCurrency(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetCurrency(*s)
+func (_u *CouponUpdate) SetNillableCurrency(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearCurrency clears the value of the "currency" field.
-func (cu *CouponUpdate) ClearCurrency() *CouponUpdate {
-	cu.mutation.ClearCurrency()
-	return cu
+func (_u *CouponUpdate) ClearCurrency() *CouponUpdate {
+	_u.mutation.ClearCurrency()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cu *CouponUpdate) SetMetadata(m map[string]string) *CouponUpdate {
-	cu.mutation.SetMetadata(m)
-	return cu
+func (_u *CouponUpdate) SetMetadata(v map[string]string) *CouponUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cu *CouponUpdate) ClearMetadata() *CouponUpdate {
-	cu.mutation.ClearMetadata()
-	return cu
+func (_u *CouponUpdate) ClearMetadata() *CouponUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCouponCode sets the "coupon_code" field.
-func (cu *CouponUpdate) SetCouponCode(s string) *CouponUpdate {
-	cu.mutation.SetCouponCode(s)
-	return cu
+func (_u *CouponUpdate) SetCouponCode(v string) *CouponUpdate {
+	_u.mutation.SetCouponCode(v)
+	return _u
 }
 
 // SetNillableCouponCode sets the "coupon_code" field if the given value is not nil.
-func (cu *CouponUpdate) SetNillableCouponCode(s *string) *CouponUpdate {
-	if s != nil {
-		cu.SetCouponCode(*s)
+func (_u *CouponUpdate) SetNillableCouponCode(v *string) *CouponUpdate {
+	if v != nil {
+		_u.SetCouponCode(*v)
 	}
-	return cu
+	return _u
 }
 
 // ClearCouponCode clears the value of the "coupon_code" field.
-func (cu *CouponUpdate) ClearCouponCode() *CouponUpdate {
-	cu.mutation.ClearCouponCode()
-	return cu
+func (_u *CouponUpdate) ClearCouponCode() *CouponUpdate {
+	_u.mutation.ClearCouponCode()
+	return _u
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (cu *CouponUpdate) AddCouponAssociationIDs(ids ...string) *CouponUpdate {
-	cu.mutation.AddCouponAssociationIDs(ids...)
-	return cu
+func (_u *CouponUpdate) AddCouponAssociationIDs(ids ...string) *CouponUpdate {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (cu *CouponUpdate) AddCouponAssociations(c ...*CouponAssociation) *CouponUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdate) AddCouponAssociations(v ...*CouponAssociation) *CouponUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cu.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (cu *CouponUpdate) AddCouponApplicationIDs(ids ...string) *CouponUpdate {
-	cu.mutation.AddCouponApplicationIDs(ids...)
-	return cu
+func (_u *CouponUpdate) AddCouponApplicationIDs(ids ...string) *CouponUpdate {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (cu *CouponUpdate) AddCouponApplications(c ...*CouponApplication) *CouponUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdate) AddCouponApplications(v ...*CouponApplication) *CouponUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cu.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the CouponMutation object of the builder.
-func (cu *CouponUpdate) Mutation() *CouponMutation {
-	return cu.mutation
+func (_u *CouponUpdate) Mutation() *CouponMutation {
+	return _u.mutation
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (cu *CouponUpdate) ClearCouponAssociations() *CouponUpdate {
-	cu.mutation.ClearCouponAssociations()
-	return cu
+func (_u *CouponUpdate) ClearCouponAssociations() *CouponUpdate {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (cu *CouponUpdate) RemoveCouponAssociationIDs(ids ...string) *CouponUpdate {
-	cu.mutation.RemoveCouponAssociationIDs(ids...)
-	return cu
+func (_u *CouponUpdate) RemoveCouponAssociationIDs(ids ...string) *CouponUpdate {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (cu *CouponUpdate) RemoveCouponAssociations(c ...*CouponAssociation) *CouponUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdate) RemoveCouponAssociations(v ...*CouponAssociation) *CouponUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cu.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (cu *CouponUpdate) ClearCouponApplications() *CouponUpdate {
-	cu.mutation.ClearCouponApplications()
-	return cu
+func (_u *CouponUpdate) ClearCouponApplications() *CouponUpdate {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (cu *CouponUpdate) RemoveCouponApplicationIDs(ids ...string) *CouponUpdate {
-	cu.mutation.RemoveCouponApplicationIDs(ids...)
-	return cu
+func (_u *CouponUpdate) RemoveCouponApplicationIDs(ids ...string) *CouponUpdate {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (cu *CouponUpdate) RemoveCouponApplications(c ...*CouponApplication) *CouponUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdate) RemoveCouponApplications(v ...*CouponApplication) *CouponUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cu.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (cu *CouponUpdate) Save(ctx context.Context) (int, error) {
-	cu.defaults()
-	return withHooks(ctx, cu.sqlSave, cu.mutation, cu.hooks)
+func (_u *CouponUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cu *CouponUpdate) SaveX(ctx context.Context) int {
-	affected, err := cu.Save(ctx)
+func (_u *CouponUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -425,39 +425,39 @@ func (cu *CouponUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (cu *CouponUpdate) Exec(ctx context.Context) error {
-	_, err := cu.Save(ctx)
+func (_u *CouponUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cu *CouponUpdate) ExecX(ctx context.Context) {
-	if err := cu.Exec(ctx); err != nil {
+func (_u *CouponUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cu *CouponUpdate) defaults() {
-	if _, ok := cu.mutation.UpdatedAt(); !ok {
+func (_u *CouponUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := coupon.UpdateDefaultUpdatedAt()
-		cu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cu *CouponUpdate) check() error {
-	if v, ok := cu.mutation.Name(); ok {
+func (_u *CouponUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := coupon.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Coupon.name": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.GetType(); ok {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := coupon.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Coupon.type": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.Cadence(); ok {
+	if v, ok := _u.mutation.Cadence(); ok {
 		if err := coupon.CadenceValidator(v); err != nil {
 			return &ValidationError{Name: "cadence", err: fmt.Errorf(`ent: validator failed for field "Coupon.cadence": %w`, err)}
 		}
@@ -465,118 +465,118 @@ func (cu *CouponUpdate) check() error {
 	return nil
 }
 
-func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := cu.check(); err != nil {
-		return n, err
+func (_u *CouponUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(coupon.Table, coupon.Columns, sqlgraph.NewFieldSpec(coupon.FieldID, field.TypeString))
-	if ps := cu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(coupon.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(coupon.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(coupon.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(coupon.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(coupon.FieldUpdatedBy, field.TypeString)
 	}
-	if cu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(coupon.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(coupon.FieldName, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.RedeemAfter(); ok {
+	if value, ok := _u.mutation.RedeemAfter(); ok {
 		_spec.SetField(coupon.FieldRedeemAfter, field.TypeTime, value)
 	}
-	if cu.mutation.RedeemAfterCleared() {
+	if _u.mutation.RedeemAfterCleared() {
 		_spec.ClearField(coupon.FieldRedeemAfter, field.TypeTime)
 	}
-	if value, ok := cu.mutation.RedeemBefore(); ok {
+	if value, ok := _u.mutation.RedeemBefore(); ok {
 		_spec.SetField(coupon.FieldRedeemBefore, field.TypeTime, value)
 	}
-	if cu.mutation.RedeemBeforeCleared() {
+	if _u.mutation.RedeemBeforeCleared() {
 		_spec.ClearField(coupon.FieldRedeemBefore, field.TypeTime)
 	}
-	if value, ok := cu.mutation.MaxRedemptions(); ok {
+	if value, ok := _u.mutation.MaxRedemptions(); ok {
 		_spec.SetField(coupon.FieldMaxRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cu.mutation.AddedMaxRedemptions(); ok {
+	if value, ok := _u.mutation.AddedMaxRedemptions(); ok {
 		_spec.AddField(coupon.FieldMaxRedemptions, field.TypeInt, value)
 	}
-	if cu.mutation.MaxRedemptionsCleared() {
+	if _u.mutation.MaxRedemptionsCleared() {
 		_spec.ClearField(coupon.FieldMaxRedemptions, field.TypeInt)
 	}
-	if value, ok := cu.mutation.TotalRedemptions(); ok {
+	if value, ok := _u.mutation.TotalRedemptions(); ok {
 		_spec.SetField(coupon.FieldTotalRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cu.mutation.AddedTotalRedemptions(); ok {
+	if value, ok := _u.mutation.AddedTotalRedemptions(); ok {
 		_spec.AddField(coupon.FieldTotalRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cu.mutation.Rules(); ok {
+	if value, ok := _u.mutation.Rules(); ok {
 		_spec.SetField(coupon.FieldRules, field.TypeJSON, value)
 	}
-	if cu.mutation.RulesCleared() {
+	if _u.mutation.RulesCleared() {
 		_spec.ClearField(coupon.FieldRules, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.AmountOff(); ok {
+	if value, ok := _u.mutation.AmountOff(); ok {
 		_spec.SetField(coupon.FieldAmountOff, field.TypeOther, value)
 	}
-	if cu.mutation.AmountOffCleared() {
+	if _u.mutation.AmountOffCleared() {
 		_spec.ClearField(coupon.FieldAmountOff, field.TypeOther)
 	}
-	if value, ok := cu.mutation.PercentageOff(); ok {
+	if value, ok := _u.mutation.PercentageOff(); ok {
 		_spec.SetField(coupon.FieldPercentageOff, field.TypeOther, value)
 	}
-	if cu.mutation.PercentageOffCleared() {
+	if _u.mutation.PercentageOffCleared() {
 		_spec.ClearField(coupon.FieldPercentageOff, field.TypeOther)
 	}
-	if value, ok := cu.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(coupon.FieldType, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.Cadence(); ok {
+	if value, ok := _u.mutation.Cadence(); ok {
 		_spec.SetField(coupon.FieldCadence, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.DurationInPeriods(); ok {
+	if value, ok := _u.mutation.DurationInPeriods(); ok {
 		_spec.SetField(coupon.FieldDurationInPeriods, field.TypeInt, value)
 	}
-	if value, ok := cu.mutation.AddedDurationInPeriods(); ok {
+	if value, ok := _u.mutation.AddedDurationInPeriods(); ok {
 		_spec.AddField(coupon.FieldDurationInPeriods, field.TypeInt, value)
 	}
-	if cu.mutation.DurationInPeriodsCleared() {
+	if _u.mutation.DurationInPeriodsCleared() {
 		_spec.ClearField(coupon.FieldDurationInPeriods, field.TypeInt)
 	}
-	if value, ok := cu.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(coupon.FieldCurrency, field.TypeString, value)
 	}
-	if cu.mutation.CurrencyCleared() {
+	if _u.mutation.CurrencyCleared() {
 		_spec.ClearField(coupon.FieldCurrency, field.TypeString)
 	}
-	if value, ok := cu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(coupon.FieldMetadata, field.TypeJSON, value)
 	}
-	if cu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(coupon.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cu.mutation.CouponCode(); ok {
+	if value, ok := _u.mutation.CouponCode(); ok {
 		_spec.SetField(coupon.FieldCouponCode, field.TypeString, value)
 	}
-	if cu.mutation.CouponCodeCleared() {
+	if _u.mutation.CouponCodeCleared() {
 		_spec.ClearField(coupon.FieldCouponCode, field.TypeString)
 	}
-	if cu.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -589,7 +589,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cu.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !cu.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -605,7 +605,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cu.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -621,7 +621,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cu.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -634,7 +634,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cu.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !cu.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -650,7 +650,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cu.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -666,7 +666,7 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{coupon.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -674,8 +674,8 @@ func (cu *CouponUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	cu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CouponUpdateOne is the builder for updating a single Coupon entity.
@@ -687,405 +687,405 @@ type CouponUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (cuo *CouponUpdateOne) SetStatus(s string) *CouponUpdateOne {
-	cuo.mutation.SetStatus(s)
-	return cuo
+func (_u *CouponUpdateOne) SetStatus(v string) *CouponUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableStatus(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetStatus(*s)
+func (_u *CouponUpdateOne) SetNillableStatus(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cuo *CouponUpdateOne) SetUpdatedAt(t time.Time) *CouponUpdateOne {
-	cuo.mutation.SetUpdatedAt(t)
-	return cuo
+func (_u *CouponUpdateOne) SetUpdatedAt(v time.Time) *CouponUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cuo *CouponUpdateOne) SetUpdatedBy(s string) *CouponUpdateOne {
-	cuo.mutation.SetUpdatedBy(s)
-	return cuo
+func (_u *CouponUpdateOne) SetUpdatedBy(v string) *CouponUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableUpdatedBy(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetUpdatedBy(*s)
+func (_u *CouponUpdateOne) SetNillableUpdatedBy(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (cuo *CouponUpdateOne) ClearUpdatedBy() *CouponUpdateOne {
-	cuo.mutation.ClearUpdatedBy()
-	return cuo
+func (_u *CouponUpdateOne) ClearUpdatedBy() *CouponUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (cuo *CouponUpdateOne) SetName(s string) *CouponUpdateOne {
-	cuo.mutation.SetName(s)
-	return cuo
+func (_u *CouponUpdateOne) SetName(v string) *CouponUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableName(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetName(*s)
+func (_u *CouponUpdateOne) SetNillableName(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetRedeemAfter sets the "redeem_after" field.
-func (cuo *CouponUpdateOne) SetRedeemAfter(t time.Time) *CouponUpdateOne {
-	cuo.mutation.SetRedeemAfter(t)
-	return cuo
+func (_u *CouponUpdateOne) SetRedeemAfter(v time.Time) *CouponUpdateOne {
+	_u.mutation.SetRedeemAfter(v)
+	return _u
 }
 
 // SetNillableRedeemAfter sets the "redeem_after" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableRedeemAfter(t *time.Time) *CouponUpdateOne {
-	if t != nil {
-		cuo.SetRedeemAfter(*t)
+func (_u *CouponUpdateOne) SetNillableRedeemAfter(v *time.Time) *CouponUpdateOne {
+	if v != nil {
+		_u.SetRedeemAfter(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearRedeemAfter clears the value of the "redeem_after" field.
-func (cuo *CouponUpdateOne) ClearRedeemAfter() *CouponUpdateOne {
-	cuo.mutation.ClearRedeemAfter()
-	return cuo
+func (_u *CouponUpdateOne) ClearRedeemAfter() *CouponUpdateOne {
+	_u.mutation.ClearRedeemAfter()
+	return _u
 }
 
 // SetRedeemBefore sets the "redeem_before" field.
-func (cuo *CouponUpdateOne) SetRedeemBefore(t time.Time) *CouponUpdateOne {
-	cuo.mutation.SetRedeemBefore(t)
-	return cuo
+func (_u *CouponUpdateOne) SetRedeemBefore(v time.Time) *CouponUpdateOne {
+	_u.mutation.SetRedeemBefore(v)
+	return _u
 }
 
 // SetNillableRedeemBefore sets the "redeem_before" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableRedeemBefore(t *time.Time) *CouponUpdateOne {
-	if t != nil {
-		cuo.SetRedeemBefore(*t)
+func (_u *CouponUpdateOne) SetNillableRedeemBefore(v *time.Time) *CouponUpdateOne {
+	if v != nil {
+		_u.SetRedeemBefore(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearRedeemBefore clears the value of the "redeem_before" field.
-func (cuo *CouponUpdateOne) ClearRedeemBefore() *CouponUpdateOne {
-	cuo.mutation.ClearRedeemBefore()
-	return cuo
+func (_u *CouponUpdateOne) ClearRedeemBefore() *CouponUpdateOne {
+	_u.mutation.ClearRedeemBefore()
+	return _u
 }
 
 // SetMaxRedemptions sets the "max_redemptions" field.
-func (cuo *CouponUpdateOne) SetMaxRedemptions(i int) *CouponUpdateOne {
-	cuo.mutation.ResetMaxRedemptions()
-	cuo.mutation.SetMaxRedemptions(i)
-	return cuo
+func (_u *CouponUpdateOne) SetMaxRedemptions(v int) *CouponUpdateOne {
+	_u.mutation.ResetMaxRedemptions()
+	_u.mutation.SetMaxRedemptions(v)
+	return _u
 }
 
 // SetNillableMaxRedemptions sets the "max_redemptions" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableMaxRedemptions(i *int) *CouponUpdateOne {
-	if i != nil {
-		cuo.SetMaxRedemptions(*i)
+func (_u *CouponUpdateOne) SetNillableMaxRedemptions(v *int) *CouponUpdateOne {
+	if v != nil {
+		_u.SetMaxRedemptions(*v)
 	}
-	return cuo
+	return _u
 }
 
-// AddMaxRedemptions adds i to the "max_redemptions" field.
-func (cuo *CouponUpdateOne) AddMaxRedemptions(i int) *CouponUpdateOne {
-	cuo.mutation.AddMaxRedemptions(i)
-	return cuo
+// AddMaxRedemptions adds value to the "max_redemptions" field.
+func (_u *CouponUpdateOne) AddMaxRedemptions(v int) *CouponUpdateOne {
+	_u.mutation.AddMaxRedemptions(v)
+	return _u
 }
 
 // ClearMaxRedemptions clears the value of the "max_redemptions" field.
-func (cuo *CouponUpdateOne) ClearMaxRedemptions() *CouponUpdateOne {
-	cuo.mutation.ClearMaxRedemptions()
-	return cuo
+func (_u *CouponUpdateOne) ClearMaxRedemptions() *CouponUpdateOne {
+	_u.mutation.ClearMaxRedemptions()
+	return _u
 }
 
 // SetTotalRedemptions sets the "total_redemptions" field.
-func (cuo *CouponUpdateOne) SetTotalRedemptions(i int) *CouponUpdateOne {
-	cuo.mutation.ResetTotalRedemptions()
-	cuo.mutation.SetTotalRedemptions(i)
-	return cuo
+func (_u *CouponUpdateOne) SetTotalRedemptions(v int) *CouponUpdateOne {
+	_u.mutation.ResetTotalRedemptions()
+	_u.mutation.SetTotalRedemptions(v)
+	return _u
 }
 
 // SetNillableTotalRedemptions sets the "total_redemptions" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableTotalRedemptions(i *int) *CouponUpdateOne {
-	if i != nil {
-		cuo.SetTotalRedemptions(*i)
+func (_u *CouponUpdateOne) SetNillableTotalRedemptions(v *int) *CouponUpdateOne {
+	if v != nil {
+		_u.SetTotalRedemptions(*v)
 	}
-	return cuo
+	return _u
 }
 
-// AddTotalRedemptions adds i to the "total_redemptions" field.
-func (cuo *CouponUpdateOne) AddTotalRedemptions(i int) *CouponUpdateOne {
-	cuo.mutation.AddTotalRedemptions(i)
-	return cuo
+// AddTotalRedemptions adds value to the "total_redemptions" field.
+func (_u *CouponUpdateOne) AddTotalRedemptions(v int) *CouponUpdateOne {
+	_u.mutation.AddTotalRedemptions(v)
+	return _u
 }
 
 // SetRules sets the "rules" field.
-func (cuo *CouponUpdateOne) SetRules(m map[string]interface{}) *CouponUpdateOne {
-	cuo.mutation.SetRules(m)
-	return cuo
+func (_u *CouponUpdateOne) SetRules(v map[string]interface{}) *CouponUpdateOne {
+	_u.mutation.SetRules(v)
+	return _u
 }
 
 // ClearRules clears the value of the "rules" field.
-func (cuo *CouponUpdateOne) ClearRules() *CouponUpdateOne {
-	cuo.mutation.ClearRules()
-	return cuo
+func (_u *CouponUpdateOne) ClearRules() *CouponUpdateOne {
+	_u.mutation.ClearRules()
+	return _u
 }
 
 // SetAmountOff sets the "amount_off" field.
-func (cuo *CouponUpdateOne) SetAmountOff(d decimal.Decimal) *CouponUpdateOne {
-	cuo.mutation.SetAmountOff(d)
-	return cuo
+func (_u *CouponUpdateOne) SetAmountOff(v decimal.Decimal) *CouponUpdateOne {
+	_u.mutation.SetAmountOff(v)
+	return _u
 }
 
 // SetNillableAmountOff sets the "amount_off" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableAmountOff(d *decimal.Decimal) *CouponUpdateOne {
-	if d != nil {
-		cuo.SetAmountOff(*d)
+func (_u *CouponUpdateOne) SetNillableAmountOff(v *decimal.Decimal) *CouponUpdateOne {
+	if v != nil {
+		_u.SetAmountOff(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearAmountOff clears the value of the "amount_off" field.
-func (cuo *CouponUpdateOne) ClearAmountOff() *CouponUpdateOne {
-	cuo.mutation.ClearAmountOff()
-	return cuo
+func (_u *CouponUpdateOne) ClearAmountOff() *CouponUpdateOne {
+	_u.mutation.ClearAmountOff()
+	return _u
 }
 
 // SetPercentageOff sets the "percentage_off" field.
-func (cuo *CouponUpdateOne) SetPercentageOff(d decimal.Decimal) *CouponUpdateOne {
-	cuo.mutation.SetPercentageOff(d)
-	return cuo
+func (_u *CouponUpdateOne) SetPercentageOff(v decimal.Decimal) *CouponUpdateOne {
+	_u.mutation.SetPercentageOff(v)
+	return _u
 }
 
 // SetNillablePercentageOff sets the "percentage_off" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillablePercentageOff(d *decimal.Decimal) *CouponUpdateOne {
-	if d != nil {
-		cuo.SetPercentageOff(*d)
+func (_u *CouponUpdateOne) SetNillablePercentageOff(v *decimal.Decimal) *CouponUpdateOne {
+	if v != nil {
+		_u.SetPercentageOff(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearPercentageOff clears the value of the "percentage_off" field.
-func (cuo *CouponUpdateOne) ClearPercentageOff() *CouponUpdateOne {
-	cuo.mutation.ClearPercentageOff()
-	return cuo
+func (_u *CouponUpdateOne) ClearPercentageOff() *CouponUpdateOne {
+	_u.mutation.ClearPercentageOff()
+	return _u
 }
 
 // SetType sets the "type" field.
-func (cuo *CouponUpdateOne) SetType(s string) *CouponUpdateOne {
-	cuo.mutation.SetType(s)
-	return cuo
+func (_u *CouponUpdateOne) SetType(v string) *CouponUpdateOne {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableType(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetType(*s)
+func (_u *CouponUpdateOne) SetNillableType(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetCadence sets the "cadence" field.
-func (cuo *CouponUpdateOne) SetCadence(s string) *CouponUpdateOne {
-	cuo.mutation.SetCadence(s)
-	return cuo
+func (_u *CouponUpdateOne) SetCadence(v string) *CouponUpdateOne {
+	_u.mutation.SetCadence(v)
+	return _u
 }
 
 // SetNillableCadence sets the "cadence" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableCadence(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetCadence(*s)
+func (_u *CouponUpdateOne) SetNillableCadence(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetCadence(*v)
 	}
-	return cuo
+	return _u
 }
 
 // SetDurationInPeriods sets the "duration_in_periods" field.
-func (cuo *CouponUpdateOne) SetDurationInPeriods(i int) *CouponUpdateOne {
-	cuo.mutation.ResetDurationInPeriods()
-	cuo.mutation.SetDurationInPeriods(i)
-	return cuo
+func (_u *CouponUpdateOne) SetDurationInPeriods(v int) *CouponUpdateOne {
+	_u.mutation.ResetDurationInPeriods()
+	_u.mutation.SetDurationInPeriods(v)
+	return _u
 }
 
 // SetNillableDurationInPeriods sets the "duration_in_periods" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableDurationInPeriods(i *int) *CouponUpdateOne {
-	if i != nil {
-		cuo.SetDurationInPeriods(*i)
+func (_u *CouponUpdateOne) SetNillableDurationInPeriods(v *int) *CouponUpdateOne {
+	if v != nil {
+		_u.SetDurationInPeriods(*v)
 	}
-	return cuo
+	return _u
 }
 
-// AddDurationInPeriods adds i to the "duration_in_periods" field.
-func (cuo *CouponUpdateOne) AddDurationInPeriods(i int) *CouponUpdateOne {
-	cuo.mutation.AddDurationInPeriods(i)
-	return cuo
+// AddDurationInPeriods adds value to the "duration_in_periods" field.
+func (_u *CouponUpdateOne) AddDurationInPeriods(v int) *CouponUpdateOne {
+	_u.mutation.AddDurationInPeriods(v)
+	return _u
 }
 
 // ClearDurationInPeriods clears the value of the "duration_in_periods" field.
-func (cuo *CouponUpdateOne) ClearDurationInPeriods() *CouponUpdateOne {
-	cuo.mutation.ClearDurationInPeriods()
-	return cuo
+func (_u *CouponUpdateOne) ClearDurationInPeriods() *CouponUpdateOne {
+	_u.mutation.ClearDurationInPeriods()
+	return _u
 }
 
 // SetCurrency sets the "currency" field.
-func (cuo *CouponUpdateOne) SetCurrency(s string) *CouponUpdateOne {
-	cuo.mutation.SetCurrency(s)
-	return cuo
+func (_u *CouponUpdateOne) SetCurrency(v string) *CouponUpdateOne {
+	_u.mutation.SetCurrency(v)
+	return _u
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableCurrency(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetCurrency(*s)
+func (_u *CouponUpdateOne) SetNillableCurrency(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetCurrency(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearCurrency clears the value of the "currency" field.
-func (cuo *CouponUpdateOne) ClearCurrency() *CouponUpdateOne {
-	cuo.mutation.ClearCurrency()
-	return cuo
+func (_u *CouponUpdateOne) ClearCurrency() *CouponUpdateOne {
+	_u.mutation.ClearCurrency()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (cuo *CouponUpdateOne) SetMetadata(m map[string]string) *CouponUpdateOne {
-	cuo.mutation.SetMetadata(m)
-	return cuo
+func (_u *CouponUpdateOne) SetMetadata(v map[string]string) *CouponUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (cuo *CouponUpdateOne) ClearMetadata() *CouponUpdateOne {
-	cuo.mutation.ClearMetadata()
-	return cuo
+func (_u *CouponUpdateOne) ClearMetadata() *CouponUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetCouponCode sets the "coupon_code" field.
-func (cuo *CouponUpdateOne) SetCouponCode(s string) *CouponUpdateOne {
-	cuo.mutation.SetCouponCode(s)
-	return cuo
+func (_u *CouponUpdateOne) SetCouponCode(v string) *CouponUpdateOne {
+	_u.mutation.SetCouponCode(v)
+	return _u
 }
 
 // SetNillableCouponCode sets the "coupon_code" field if the given value is not nil.
-func (cuo *CouponUpdateOne) SetNillableCouponCode(s *string) *CouponUpdateOne {
-	if s != nil {
-		cuo.SetCouponCode(*s)
+func (_u *CouponUpdateOne) SetNillableCouponCode(v *string) *CouponUpdateOne {
+	if v != nil {
+		_u.SetCouponCode(*v)
 	}
-	return cuo
+	return _u
 }
 
 // ClearCouponCode clears the value of the "coupon_code" field.
-func (cuo *CouponUpdateOne) ClearCouponCode() *CouponUpdateOne {
-	cuo.mutation.ClearCouponCode()
-	return cuo
+func (_u *CouponUpdateOne) ClearCouponCode() *CouponUpdateOne {
+	_u.mutation.ClearCouponCode()
+	return _u
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
-func (cuo *CouponUpdateOne) AddCouponAssociationIDs(ids ...string) *CouponUpdateOne {
-	cuo.mutation.AddCouponAssociationIDs(ids...)
-	return cuo
+func (_u *CouponUpdateOne) AddCouponAssociationIDs(ids ...string) *CouponUpdateOne {
+	_u.mutation.AddCouponAssociationIDs(ids...)
+	return _u
 }
 
 // AddCouponAssociations adds the "coupon_associations" edges to the CouponAssociation entity.
-func (cuo *CouponUpdateOne) AddCouponAssociations(c ...*CouponAssociation) *CouponUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdateOne) AddCouponAssociations(v ...*CouponAssociation) *CouponUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cuo.AddCouponAssociationIDs(ids...)
+	return _u.AddCouponAssociationIDs(ids...)
 }
 
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
-func (cuo *CouponUpdateOne) AddCouponApplicationIDs(ids ...string) *CouponUpdateOne {
-	cuo.mutation.AddCouponApplicationIDs(ids...)
-	return cuo
+func (_u *CouponUpdateOne) AddCouponApplicationIDs(ids ...string) *CouponUpdateOne {
+	_u.mutation.AddCouponApplicationIDs(ids...)
+	return _u
 }
 
 // AddCouponApplications adds the "coupon_applications" edges to the CouponApplication entity.
-func (cuo *CouponUpdateOne) AddCouponApplications(c ...*CouponApplication) *CouponUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdateOne) AddCouponApplications(v ...*CouponApplication) *CouponUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cuo.AddCouponApplicationIDs(ids...)
+	return _u.AddCouponApplicationIDs(ids...)
 }
 
 // Mutation returns the CouponMutation object of the builder.
-func (cuo *CouponUpdateOne) Mutation() *CouponMutation {
-	return cuo.mutation
+func (_u *CouponUpdateOne) Mutation() *CouponMutation {
+	return _u.mutation
 }
 
 // ClearCouponAssociations clears all "coupon_associations" edges to the CouponAssociation entity.
-func (cuo *CouponUpdateOne) ClearCouponAssociations() *CouponUpdateOne {
-	cuo.mutation.ClearCouponAssociations()
-	return cuo
+func (_u *CouponUpdateOne) ClearCouponAssociations() *CouponUpdateOne {
+	_u.mutation.ClearCouponAssociations()
+	return _u
 }
 
 // RemoveCouponAssociationIDs removes the "coupon_associations" edge to CouponAssociation entities by IDs.
-func (cuo *CouponUpdateOne) RemoveCouponAssociationIDs(ids ...string) *CouponUpdateOne {
-	cuo.mutation.RemoveCouponAssociationIDs(ids...)
-	return cuo
+func (_u *CouponUpdateOne) RemoveCouponAssociationIDs(ids ...string) *CouponUpdateOne {
+	_u.mutation.RemoveCouponAssociationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponAssociations removes "coupon_associations" edges to CouponAssociation entities.
-func (cuo *CouponUpdateOne) RemoveCouponAssociations(c ...*CouponAssociation) *CouponUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdateOne) RemoveCouponAssociations(v ...*CouponAssociation) *CouponUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cuo.RemoveCouponAssociationIDs(ids...)
+	return _u.RemoveCouponAssociationIDs(ids...)
 }
 
 // ClearCouponApplications clears all "coupon_applications" edges to the CouponApplication entity.
-func (cuo *CouponUpdateOne) ClearCouponApplications() *CouponUpdateOne {
-	cuo.mutation.ClearCouponApplications()
-	return cuo
+func (_u *CouponUpdateOne) ClearCouponApplications() *CouponUpdateOne {
+	_u.mutation.ClearCouponApplications()
+	return _u
 }
 
 // RemoveCouponApplicationIDs removes the "coupon_applications" edge to CouponApplication entities by IDs.
-func (cuo *CouponUpdateOne) RemoveCouponApplicationIDs(ids ...string) *CouponUpdateOne {
-	cuo.mutation.RemoveCouponApplicationIDs(ids...)
-	return cuo
+func (_u *CouponUpdateOne) RemoveCouponApplicationIDs(ids ...string) *CouponUpdateOne {
+	_u.mutation.RemoveCouponApplicationIDs(ids...)
+	return _u
 }
 
 // RemoveCouponApplications removes "coupon_applications" edges to CouponApplication entities.
-func (cuo *CouponUpdateOne) RemoveCouponApplications(c ...*CouponApplication) *CouponUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *CouponUpdateOne) RemoveCouponApplications(v ...*CouponApplication) *CouponUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cuo.RemoveCouponApplicationIDs(ids...)
+	return _u.RemoveCouponApplicationIDs(ids...)
 }
 
 // Where appends a list predicates to the CouponUpdate builder.
-func (cuo *CouponUpdateOne) Where(ps ...predicate.Coupon) *CouponUpdateOne {
-	cuo.mutation.Where(ps...)
-	return cuo
+func (_u *CouponUpdateOne) Where(ps ...predicate.Coupon) *CouponUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (cuo *CouponUpdateOne) Select(field string, fields ...string) *CouponUpdateOne {
-	cuo.fields = append([]string{field}, fields...)
-	return cuo
+func (_u *CouponUpdateOne) Select(field string, fields ...string) *CouponUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Coupon entity.
-func (cuo *CouponUpdateOne) Save(ctx context.Context) (*Coupon, error) {
-	cuo.defaults()
-	return withHooks(ctx, cuo.sqlSave, cuo.mutation, cuo.hooks)
+func (_u *CouponUpdateOne) Save(ctx context.Context) (*Coupon, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cuo *CouponUpdateOne) SaveX(ctx context.Context) *Coupon {
-	node, err := cuo.Save(ctx)
+func (_u *CouponUpdateOne) SaveX(ctx context.Context) *Coupon {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1093,39 +1093,39 @@ func (cuo *CouponUpdateOne) SaveX(ctx context.Context) *Coupon {
 }
 
 // Exec executes the query on the entity.
-func (cuo *CouponUpdateOne) Exec(ctx context.Context) error {
-	_, err := cuo.Save(ctx)
+func (_u *CouponUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cuo *CouponUpdateOne) ExecX(ctx context.Context) {
-	if err := cuo.Exec(ctx); err != nil {
+func (_u *CouponUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cuo *CouponUpdateOne) defaults() {
-	if _, ok := cuo.mutation.UpdatedAt(); !ok {
+func (_u *CouponUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := coupon.UpdateDefaultUpdatedAt()
-		cuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cuo *CouponUpdateOne) check() error {
-	if v, ok := cuo.mutation.Name(); ok {
+func (_u *CouponUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := coupon.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Coupon.name": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.GetType(); ok {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := coupon.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Coupon.type": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.Cadence(); ok {
+	if v, ok := _u.mutation.Cadence(); ok {
 		if err := coupon.CadenceValidator(v); err != nil {
 			return &ValidationError{Name: "cadence", err: fmt.Errorf(`ent: validator failed for field "Coupon.cadence": %w`, err)}
 		}
@@ -1133,17 +1133,17 @@ func (cuo *CouponUpdateOne) check() error {
 	return nil
 }
 
-func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err error) {
-	if err := cuo.check(); err != nil {
+func (_u *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(coupon.Table, coupon.Columns, sqlgraph.NewFieldSpec(coupon.FieldID, field.TypeString))
-	id, ok := cuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Coupon.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := cuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, coupon.FieldID)
 		for _, f := range fields {
@@ -1155,113 +1155,113 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 			}
 		}
 	}
-	if ps := cuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := cuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(coupon.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(coupon.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if cuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(coupon.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := cuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(coupon.FieldUpdatedBy, field.TypeString, value)
 	}
-	if cuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(coupon.FieldUpdatedBy, field.TypeString)
 	}
-	if cuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(coupon.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := cuo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(coupon.FieldName, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.RedeemAfter(); ok {
+	if value, ok := _u.mutation.RedeemAfter(); ok {
 		_spec.SetField(coupon.FieldRedeemAfter, field.TypeTime, value)
 	}
-	if cuo.mutation.RedeemAfterCleared() {
+	if _u.mutation.RedeemAfterCleared() {
 		_spec.ClearField(coupon.FieldRedeemAfter, field.TypeTime)
 	}
-	if value, ok := cuo.mutation.RedeemBefore(); ok {
+	if value, ok := _u.mutation.RedeemBefore(); ok {
 		_spec.SetField(coupon.FieldRedeemBefore, field.TypeTime, value)
 	}
-	if cuo.mutation.RedeemBeforeCleared() {
+	if _u.mutation.RedeemBeforeCleared() {
 		_spec.ClearField(coupon.FieldRedeemBefore, field.TypeTime)
 	}
-	if value, ok := cuo.mutation.MaxRedemptions(); ok {
+	if value, ok := _u.mutation.MaxRedemptions(); ok {
 		_spec.SetField(coupon.FieldMaxRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cuo.mutation.AddedMaxRedemptions(); ok {
+	if value, ok := _u.mutation.AddedMaxRedemptions(); ok {
 		_spec.AddField(coupon.FieldMaxRedemptions, field.TypeInt, value)
 	}
-	if cuo.mutation.MaxRedemptionsCleared() {
+	if _u.mutation.MaxRedemptionsCleared() {
 		_spec.ClearField(coupon.FieldMaxRedemptions, field.TypeInt)
 	}
-	if value, ok := cuo.mutation.TotalRedemptions(); ok {
+	if value, ok := _u.mutation.TotalRedemptions(); ok {
 		_spec.SetField(coupon.FieldTotalRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cuo.mutation.AddedTotalRedemptions(); ok {
+	if value, ok := _u.mutation.AddedTotalRedemptions(); ok {
 		_spec.AddField(coupon.FieldTotalRedemptions, field.TypeInt, value)
 	}
-	if value, ok := cuo.mutation.Rules(); ok {
+	if value, ok := _u.mutation.Rules(); ok {
 		_spec.SetField(coupon.FieldRules, field.TypeJSON, value)
 	}
-	if cuo.mutation.RulesCleared() {
+	if _u.mutation.RulesCleared() {
 		_spec.ClearField(coupon.FieldRules, field.TypeJSON)
 	}
-	if value, ok := cuo.mutation.AmountOff(); ok {
+	if value, ok := _u.mutation.AmountOff(); ok {
 		_spec.SetField(coupon.FieldAmountOff, field.TypeOther, value)
 	}
-	if cuo.mutation.AmountOffCleared() {
+	if _u.mutation.AmountOffCleared() {
 		_spec.ClearField(coupon.FieldAmountOff, field.TypeOther)
 	}
-	if value, ok := cuo.mutation.PercentageOff(); ok {
+	if value, ok := _u.mutation.PercentageOff(); ok {
 		_spec.SetField(coupon.FieldPercentageOff, field.TypeOther, value)
 	}
-	if cuo.mutation.PercentageOffCleared() {
+	if _u.mutation.PercentageOffCleared() {
 		_spec.ClearField(coupon.FieldPercentageOff, field.TypeOther)
 	}
-	if value, ok := cuo.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(coupon.FieldType, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.Cadence(); ok {
+	if value, ok := _u.mutation.Cadence(); ok {
 		_spec.SetField(coupon.FieldCadence, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.DurationInPeriods(); ok {
+	if value, ok := _u.mutation.DurationInPeriods(); ok {
 		_spec.SetField(coupon.FieldDurationInPeriods, field.TypeInt, value)
 	}
-	if value, ok := cuo.mutation.AddedDurationInPeriods(); ok {
+	if value, ok := _u.mutation.AddedDurationInPeriods(); ok {
 		_spec.AddField(coupon.FieldDurationInPeriods, field.TypeInt, value)
 	}
-	if cuo.mutation.DurationInPeriodsCleared() {
+	if _u.mutation.DurationInPeriodsCleared() {
 		_spec.ClearField(coupon.FieldDurationInPeriods, field.TypeInt)
 	}
-	if value, ok := cuo.mutation.Currency(); ok {
+	if value, ok := _u.mutation.Currency(); ok {
 		_spec.SetField(coupon.FieldCurrency, field.TypeString, value)
 	}
-	if cuo.mutation.CurrencyCleared() {
+	if _u.mutation.CurrencyCleared() {
 		_spec.ClearField(coupon.FieldCurrency, field.TypeString)
 	}
-	if value, ok := cuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(coupon.FieldMetadata, field.TypeJSON, value)
 	}
-	if cuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(coupon.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := cuo.mutation.CouponCode(); ok {
+	if value, ok := _u.mutation.CouponCode(); ok {
 		_spec.SetField(coupon.FieldCouponCode, field.TypeString, value)
 	}
-	if cuo.mutation.CouponCodeCleared() {
+	if _u.mutation.CouponCodeCleared() {
 		_spec.ClearField(coupon.FieldCouponCode, field.TypeString)
 	}
-	if cuo.mutation.CouponAssociationsCleared() {
+	if _u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1274,7 +1274,7 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cuo.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !cuo.mutation.CouponAssociationsCleared() {
+	if nodes := _u.mutation.RemovedCouponAssociationsIDs(); len(nodes) > 0 && !_u.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1290,7 +1290,7 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cuo.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponAssociationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1306,7 +1306,7 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if cuo.mutation.CouponApplicationsCleared() {
+	if _u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1319,7 +1319,7 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cuo.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !cuo.mutation.CouponApplicationsCleared() {
+	if nodes := _u.mutation.RemovedCouponApplicationsIDs(); len(nodes) > 0 && !_u.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1335,7 +1335,7 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := cuo.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CouponApplicationsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -1351,10 +1351,10 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &Coupon{config: cuo.config}
+	_node = &Coupon{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, cuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{coupon.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1362,6 +1362,6 @@ func (cuo *CouponUpdateOne) sqlSave(ctx context.Context) (_node *Coupon, err err
 		}
 		return nil, err
 	}
-	cuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

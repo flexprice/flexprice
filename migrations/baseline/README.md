@@ -7,8 +7,8 @@ replaying the incremental migration history.
 | File | What it builds |
 |---|---|
 | `postgres_baseline_20260819.sql` | 56 tables, 196 indexes, 1 sequence, 3 functions |
-| `clickhouse_baseline_20260819.sql` | 11 tables (8 ReplacingMergeTree, 3 MergeTree) |
-| `clickhouse_baseline_replicated_20260819.sql` | `events` + `meter_usage` only, Replicated\* engines |
+| `clickhouse_baseline_20260819.sql` | 12 tables (9 ReplacingMergeTree, 3 MergeTree) |
+| `clickhouse_baseline_replicated_20260819.sql` | `events`, `meter_usage` + `activity_logs` only, Replicated\* engines |
 | `apply.sh` | Applies either or both, with a guard against non-empty targets |
 
 ## Usage

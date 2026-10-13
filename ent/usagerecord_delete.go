@@ -20,56 +20,56 @@ type UsageRecordDelete struct {
 }
 
 // Where appends a list predicates to the UsageRecordDelete builder.
-func (urd *UsageRecordDelete) Where(ps ...predicate.UsageRecord) *UsageRecordDelete {
-	urd.mutation.Where(ps...)
-	return urd
+func (_d *UsageRecordDelete) Where(ps ...predicate.UsageRecord) *UsageRecordDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (urd *UsageRecordDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, urd.sqlExec, urd.mutation, urd.hooks)
+func (_d *UsageRecordDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (urd *UsageRecordDelete) ExecX(ctx context.Context) int {
-	n, err := urd.Exec(ctx)
+func (_d *UsageRecordDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (urd *UsageRecordDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *UsageRecordDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(usagerecord.Table, sqlgraph.NewFieldSpec(usagerecord.FieldID, field.TypeString))
-	if ps := urd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, urd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	urd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // UsageRecordDeleteOne is the builder for deleting a single UsageRecord entity.
 type UsageRecordDeleteOne struct {
-	urd *UsageRecordDelete
+	_d *UsageRecordDelete
 }
 
 // Where appends a list predicates to the UsageRecordDelete builder.
-func (urdo *UsageRecordDeleteOne) Where(ps ...predicate.UsageRecord) *UsageRecordDeleteOne {
-	urdo.urd.mutation.Where(ps...)
-	return urdo
+func (_d *UsageRecordDeleteOne) Where(ps ...predicate.UsageRecord) *UsageRecordDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (urdo *UsageRecordDeleteOne) Exec(ctx context.Context) error {
-	n, err := urdo.urd.Exec(ctx)
+func (_d *UsageRecordDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (urdo *UsageRecordDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (urdo *UsageRecordDeleteOne) ExecX(ctx context.Context) {
-	if err := urdo.Exec(ctx); err != nil {
+func (_d *UsageRecordDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -3,63 +3,50 @@ package proration
 import (
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
-// calculateProrationCoefficient is a shared helper function that calculates the proration coefficient
-// based on the strategy (second-based or day-based). This eliminates code duplication between
-// price proration and entitlement proration.
-func calculateProrationCoefficient(
-	periodStart time.Time,
-	periodEnd time.Time,
-	prorationDate time.Time,
-	loc *time.Location,
+// CalculateProrationCoefficient is the share of one full billing period that used covers, at most 1, along with
+// that full period. Seconds by default; StrategyDayBased counts local calendar days instead.
+// Every charge, credit and grant proration goes through it.
+// Period and count here can differ for smaller cadence items running inside the sub's cadence.
+// e.g. calendar monthly sub, used [Jan 15, Feb 1): full [Jan 1, Feb 1), coefficient 17/31.
+func CalculateProrationCoefficient(
+	sub *subscription.Subscription,
+	period types.BillingPeriod,
+	count int,
+	used types.Period,
 	strategy types.ProrationStrategy,
-) (decimal.Decimal, error) {
-	switch strategy {
-	case types.StrategySecondBased:
-		totalSeconds := periodEnd.Sub(periodStart).Seconds()
-		if totalSeconds <= 0 {
-			return decimal.Zero, ierr.NewError("invalid billing period").
-				WithHintf("total seconds is zero or negative (%v to %v)", periodStart, periodEnd).
-				Mark(ierr.ErrValidation)
-		}
-
-		remainingSeconds := periodEnd.Sub(prorationDate).Seconds()
-		if remainingSeconds < 0 {
-			remainingSeconds = 0
-		}
-		return decimal.NewFromFloat(remainingSeconds).Div(decimal.NewFromFloat(totalSeconds)), nil
-
-	case types.StrategyDayBased:
-		totalDaysRaw := daysInDurationWithDST(periodStart, periodEnd, loc)
-		totalDays := totalDaysRaw + 1 // Add 1 to make it inclusive of both start and end dates
-		if totalDays <= 0 {
-			return decimal.Zero, ierr.NewError("invalid billing period").
-				WithHintf("total days is zero or negative (%v to %v)", periodStart, periodEnd).
-				Mark(ierr.ErrValidation)
-		}
-
-		remainingDaysRaw := daysInDurationWithDST(prorationDate, periodEnd, loc)
-		remainingDays := remainingDaysRaw + 1 // Add 1 to make it inclusive of both start and end dates
-		if remainingDays < 0 {
-			remainingDays = 0
-		}
-
-		decimalTotalDays := decimal.NewFromInt(int64(totalDays))
-		decimalRemainingDays := decimal.NewFromInt(int64(remainingDays))
-		if decimalTotalDays.GreaterThan(decimal.Zero) {
-			return decimalRemainingDays.Div(decimalTotalDays), nil
-		}
-		return decimal.Zero, nil
-
-	default:
-		return decimal.Zero, ierr.NewError("invalid proration strategy").
-			WithHintf("invalid proration strategy: %s", strategy).
-			Mark(ierr.ErrValidation)
+) (decimal.Decimal, types.Period, error) {
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, period, max(count, 1), sub.Timezone)
+	if err != nil {
+		return decimal.Zero, types.Period{}, err
 	}
+	full := types.FullBillingPeriod(used.Start, grid)
+
+	var usedUnits, fullUnits int64
+	if strategy == types.StrategyDayBased {
+		loc, err := time.LoadLocation(types.ResolveTimezone(sub.Timezone))
+		if err != nil {
+			loc = time.UTC
+		}
+		usedUnits = int64(daysInDurationWithDST(used.Start.In(loc), used.End.In(loc), loc))
+		fullUnits = int64(daysInDurationWithDST(full.Start.In(loc), full.End.In(loc), loc))
+	} else {
+		usedUnits = int64(used.End.Sub(used.Start).Round(time.Second) / time.Second)
+		fullUnits = int64(full.End.Sub(full.Start).Round(time.Second) / time.Second)
+	}
+
+	if usedUnits <= 0 {
+		return decimal.Zero, full, nil
+	}
+	if usedUnits >= fullUnits {
+		return decimal.NewFromInt(1), full, nil
+	}
+
+	return decimal.NewFromInt(usedUnits).Div(decimal.NewFromInt(fullUnits)), full, nil
 }
 
 type AuditParams struct {
@@ -71,13 +58,6 @@ type AuditParams struct {
 	PeriodEnd     time.Time
 	ProrationDate time.Time
 	Strategy      types.ProrationStrategy
-}
-
-func Coefficient(periodStart, periodEnd, prorationDate time.Time, strategy types.ProrationStrategy) (decimal.Decimal, error) {
-	if strategy == "" {
-		strategy = types.StrategySecondBased
-	}
-	return calculateProrationCoefficient(periodStart, periodEnd, prorationDate, time.UTC, strategy)
 }
 
 // AuditMetadata renders the calculation for storage. The coefficient alone says

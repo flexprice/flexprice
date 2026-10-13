@@ -4,7 +4,7 @@ FlexPrice centralizes **consumer-side** retry semantics in the Watermill-based m
 
 ## Primary mechanism
 
-Configured in [`internal/pubsub/router/router.go`](internal/pubsub/router/router.go):
+Configured in [`internal/pubsub/router/router.go`](../../internal/pubsub/router/router.go):
 
 1. **PoisonQueue middleware** (first)
    - Publishes irrecoverably failed handling attempts to **`cfg.Kafka.TopicDLQ`** when configured (real Kafka DLQ publisher).

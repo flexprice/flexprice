@@ -20,56 +20,56 @@ type CreditGrantApplicationDelete struct {
 }
 
 // Where appends a list predicates to the CreditGrantApplicationDelete builder.
-func (cgad *CreditGrantApplicationDelete) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationDelete {
-	cgad.mutation.Where(ps...)
-	return cgad
+func (_d *CreditGrantApplicationDelete) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cgad *CreditGrantApplicationDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cgad.sqlExec, cgad.mutation, cgad.hooks)
+func (_d *CreditGrantApplicationDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgad *CreditGrantApplicationDelete) ExecX(ctx context.Context) int {
-	n, err := cgad.Exec(ctx)
+func (_d *CreditGrantApplicationDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cgad *CreditGrantApplicationDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CreditGrantApplicationDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(creditgrantapplication.Table, sqlgraph.NewFieldSpec(creditgrantapplication.FieldID, field.TypeString))
-	if ps := cgad.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cgad.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cgad.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CreditGrantApplicationDeleteOne is the builder for deleting a single CreditGrantApplication entity.
 type CreditGrantApplicationDeleteOne struct {
-	cgad *CreditGrantApplicationDelete
+	_d *CreditGrantApplicationDelete
 }
 
 // Where appends a list predicates to the CreditGrantApplicationDelete builder.
-func (cgado *CreditGrantApplicationDeleteOne) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationDeleteOne {
-	cgado.cgad.mutation.Where(ps...)
-	return cgado
+func (_d *CreditGrantApplicationDeleteOne) Where(ps ...predicate.CreditGrantApplication) *CreditGrantApplicationDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cgado *CreditGrantApplicationDeleteOne) Exec(ctx context.Context) error {
-	n, err := cgado.cgad.Exec(ctx)
+func (_d *CreditGrantApplicationDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cgado *CreditGrantApplicationDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgado *CreditGrantApplicationDeleteOne) ExecX(ctx context.Context) {
-	if err := cgado.Exec(ctx); err != nil {
+func (_d *CreditGrantApplicationDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

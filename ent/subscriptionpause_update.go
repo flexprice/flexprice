@@ -24,252 +24,252 @@ type SubscriptionPauseUpdate struct {
 }
 
 // Where appends a list predicates to the SubscriptionPauseUpdate builder.
-func (spu *SubscriptionPauseUpdate) Where(ps ...predicate.SubscriptionPause) *SubscriptionPauseUpdate {
-	spu.mutation.Where(ps...)
-	return spu
+func (_u *SubscriptionPauseUpdate) Where(ps ...predicate.SubscriptionPause) *SubscriptionPauseUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (spu *SubscriptionPauseUpdate) SetStatus(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetStatus(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetStatus(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableStatus(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetStatus(*s)
+func (_u *SubscriptionPauseUpdate) SetNillableStatus(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spu *SubscriptionPauseUpdate) SetUpdatedAt(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetUpdatedAt(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetUpdatedAt(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spu *SubscriptionPauseUpdate) SetUpdatedBy(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetUpdatedBy(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetUpdatedBy(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableUpdatedBy(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetUpdatedBy(*s)
+func (_u *SubscriptionPauseUpdate) SetNillableUpdatedBy(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (spu *SubscriptionPauseUpdate) ClearUpdatedBy() *SubscriptionPauseUpdate {
-	spu.mutation.ClearUpdatedBy()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearUpdatedBy() *SubscriptionPauseUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spu *SubscriptionPauseUpdate) SetSubscriptionID(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetSubscriptionID(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetSubscriptionID(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableSubscriptionID(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetSubscriptionID(*s)
+func (_u *SubscriptionPauseUpdate) SetNillableSubscriptionID(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (spu *SubscriptionPauseUpdate) SetPauseStatus(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetPauseStatus(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetPauseStatus(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetPauseStatus(v)
+	return _u
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillablePauseStatus(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetPauseStatus(*s)
+func (_u *SubscriptionPauseUpdate) SetNillablePauseStatus(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetPauseStatus(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetPauseMode sets the "pause_mode" field.
-func (spu *SubscriptionPauseUpdate) SetPauseMode(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetPauseMode(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetPauseMode(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetPauseMode(v)
+	return _u
 }
 
 // SetNillablePauseMode sets the "pause_mode" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillablePauseMode(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetPauseMode(*s)
+func (_u *SubscriptionPauseUpdate) SetNillablePauseMode(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetPauseMode(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetResumeMode sets the "resume_mode" field.
-func (spu *SubscriptionPauseUpdate) SetResumeMode(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetResumeMode(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetResumeMode(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetResumeMode(v)
+	return _u
 }
 
 // SetNillableResumeMode sets the "resume_mode" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableResumeMode(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetResumeMode(*s)
+func (_u *SubscriptionPauseUpdate) SetNillableResumeMode(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetResumeMode(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearResumeMode clears the value of the "resume_mode" field.
-func (spu *SubscriptionPauseUpdate) ClearResumeMode() *SubscriptionPauseUpdate {
-	spu.mutation.ClearResumeMode()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearResumeMode() *SubscriptionPauseUpdate {
+	_u.mutation.ClearResumeMode()
+	return _u
 }
 
 // SetPauseStart sets the "pause_start" field.
-func (spu *SubscriptionPauseUpdate) SetPauseStart(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetPauseStart(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetPauseStart(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetPauseStart(v)
+	return _u
 }
 
 // SetNillablePauseStart sets the "pause_start" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillablePauseStart(t *time.Time) *SubscriptionPauseUpdate {
-	if t != nil {
-		spu.SetPauseStart(*t)
+func (_u *SubscriptionPauseUpdate) SetNillablePauseStart(v *time.Time) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetPauseStart(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetPauseEnd sets the "pause_end" field.
-func (spu *SubscriptionPauseUpdate) SetPauseEnd(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetPauseEnd(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetPauseEnd(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetPauseEnd(v)
+	return _u
 }
 
 // SetNillablePauseEnd sets the "pause_end" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillablePauseEnd(t *time.Time) *SubscriptionPauseUpdate {
-	if t != nil {
-		spu.SetPauseEnd(*t)
+func (_u *SubscriptionPauseUpdate) SetNillablePauseEnd(v *time.Time) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetPauseEnd(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearPauseEnd clears the value of the "pause_end" field.
-func (spu *SubscriptionPauseUpdate) ClearPauseEnd() *SubscriptionPauseUpdate {
-	spu.mutation.ClearPauseEnd()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearPauseEnd() *SubscriptionPauseUpdate {
+	_u.mutation.ClearPauseEnd()
+	return _u
 }
 
 // SetResumedAt sets the "resumed_at" field.
-func (spu *SubscriptionPauseUpdate) SetResumedAt(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetResumedAt(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetResumedAt(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetResumedAt(v)
+	return _u
 }
 
 // SetNillableResumedAt sets the "resumed_at" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableResumedAt(t *time.Time) *SubscriptionPauseUpdate {
-	if t != nil {
-		spu.SetResumedAt(*t)
+func (_u *SubscriptionPauseUpdate) SetNillableResumedAt(v *time.Time) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetResumedAt(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearResumedAt clears the value of the "resumed_at" field.
-func (spu *SubscriptionPauseUpdate) ClearResumedAt() *SubscriptionPauseUpdate {
-	spu.mutation.ClearResumedAt()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearResumedAt() *SubscriptionPauseUpdate {
+	_u.mutation.ClearResumedAt()
+	return _u
 }
 
 // SetOriginalPeriodStart sets the "original_period_start" field.
-func (spu *SubscriptionPauseUpdate) SetOriginalPeriodStart(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetOriginalPeriodStart(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetOriginalPeriodStart(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetOriginalPeriodStart(v)
+	return _u
 }
 
 // SetNillableOriginalPeriodStart sets the "original_period_start" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableOriginalPeriodStart(t *time.Time) *SubscriptionPauseUpdate {
-	if t != nil {
-		spu.SetOriginalPeriodStart(*t)
+func (_u *SubscriptionPauseUpdate) SetNillableOriginalPeriodStart(v *time.Time) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetOriginalPeriodStart(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetOriginalPeriodEnd sets the "original_period_end" field.
-func (spu *SubscriptionPauseUpdate) SetOriginalPeriodEnd(t time.Time) *SubscriptionPauseUpdate {
-	spu.mutation.SetOriginalPeriodEnd(t)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetOriginalPeriodEnd(v time.Time) *SubscriptionPauseUpdate {
+	_u.mutation.SetOriginalPeriodEnd(v)
+	return _u
 }
 
 // SetNillableOriginalPeriodEnd sets the "original_period_end" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableOriginalPeriodEnd(t *time.Time) *SubscriptionPauseUpdate {
-	if t != nil {
-		spu.SetOriginalPeriodEnd(*t)
+func (_u *SubscriptionPauseUpdate) SetNillableOriginalPeriodEnd(v *time.Time) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetOriginalPeriodEnd(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetReason sets the "reason" field.
-func (spu *SubscriptionPauseUpdate) SetReason(s string) *SubscriptionPauseUpdate {
-	spu.mutation.SetReason(s)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetReason(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetReason(v)
+	return _u
 }
 
 // SetNillableReason sets the "reason" field if the given value is not nil.
-func (spu *SubscriptionPauseUpdate) SetNillableReason(s *string) *SubscriptionPauseUpdate {
-	if s != nil {
-		spu.SetReason(*s)
+func (_u *SubscriptionPauseUpdate) SetNillableReason(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetReason(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearReason clears the value of the "reason" field.
-func (spu *SubscriptionPauseUpdate) ClearReason() *SubscriptionPauseUpdate {
-	spu.mutation.ClearReason()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearReason() *SubscriptionPauseUpdate {
+	_u.mutation.ClearReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (spu *SubscriptionPauseUpdate) SetMetadata(m map[string]string) *SubscriptionPauseUpdate {
-	spu.mutation.SetMetadata(m)
-	return spu
+func (_u *SubscriptionPauseUpdate) SetMetadata(v map[string]string) *SubscriptionPauseUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (spu *SubscriptionPauseUpdate) ClearMetadata() *SubscriptionPauseUpdate {
-	spu.mutation.ClearMetadata()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearMetadata() *SubscriptionPauseUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spu *SubscriptionPauseUpdate) SetSubscription(s *Subscription) *SubscriptionPauseUpdate {
-	return spu.SetSubscriptionID(s.ID)
+func (_u *SubscriptionPauseUpdate) SetSubscription(v *Subscription) *SubscriptionPauseUpdate {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPauseMutation object of the builder.
-func (spu *SubscriptionPauseUpdate) Mutation() *SubscriptionPauseMutation {
-	return spu.mutation
+func (_u *SubscriptionPauseUpdate) Mutation() *SubscriptionPauseMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (spu *SubscriptionPauseUpdate) ClearSubscription() *SubscriptionPauseUpdate {
-	spu.mutation.ClearSubscription()
-	return spu
+func (_u *SubscriptionPauseUpdate) ClearSubscription() *SubscriptionPauseUpdate {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (spu *SubscriptionPauseUpdate) Save(ctx context.Context) (int, error) {
-	spu.defaults()
-	return withHooks(ctx, spu.sqlSave, spu.mutation, spu.hooks)
+func (_u *SubscriptionPauseUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spu *SubscriptionPauseUpdate) SaveX(ctx context.Context) int {
-	affected, err := spu.Save(ctx)
+func (_u *SubscriptionPauseUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -277,125 +277,125 @@ func (spu *SubscriptionPauseUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (spu *SubscriptionPauseUpdate) Exec(ctx context.Context) error {
-	_, err := spu.Save(ctx)
+func (_u *SubscriptionPauseUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spu *SubscriptionPauseUpdate) ExecX(ctx context.Context) {
-	if err := spu.Exec(ctx); err != nil {
+func (_u *SubscriptionPauseUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spu *SubscriptionPauseUpdate) defaults() {
-	if _, ok := spu.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionPauseUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionpause.UpdateDefaultUpdatedAt()
-		spu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spu *SubscriptionPauseUpdate) check() error {
-	if v, ok := spu.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionPauseUpdate) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionpause.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := spu.mutation.PauseStatus(); ok {
+	if v, ok := _u.mutation.PauseStatus(); ok {
 		if err := subscriptionpause.PauseStatusValidator(v); err != nil {
 			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_status": %w`, err)}
 		}
 	}
-	if v, ok := spu.mutation.PauseMode(); ok {
+	if v, ok := _u.mutation.PauseMode(); ok {
 		if err := subscriptionpause.PauseModeValidator(v); err != nil {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
 		}
 	}
-	if spu.mutation.SubscriptionCleared() && len(spu.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPause.subscription"`)
 	}
 	return nil
 }
 
-func (spu *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := spu.check(); err != nil {
-		return n, err
+func (_u *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionpause.Table, subscriptionpause.Columns, sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString))
-	if ps := spu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := spu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionpause.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := spu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if spu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionpause.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := spu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedBy, field.TypeString, value)
 	}
-	if spu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionpause.FieldUpdatedBy, field.TypeString)
 	}
-	if spu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionpause.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := spu.mutation.PauseStatus(); ok {
+	if value, ok := _u.mutation.PauseStatus(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStatus, field.TypeString, value)
 	}
-	if value, ok := spu.mutation.PauseMode(); ok {
+	if value, ok := _u.mutation.PauseMode(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseMode, field.TypeString, value)
 	}
-	if value, ok := spu.mutation.ResumeMode(); ok {
+	if value, ok := _u.mutation.ResumeMode(); ok {
 		_spec.SetField(subscriptionpause.FieldResumeMode, field.TypeString, value)
 	}
-	if spu.mutation.ResumeModeCleared() {
+	if _u.mutation.ResumeModeCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumeMode, field.TypeString)
 	}
-	if value, ok := spu.mutation.PauseStart(); ok {
+	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)
 	}
-	if value, ok := spu.mutation.PauseEnd(); ok {
+	if value, ok := _u.mutation.PauseEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseEnd, field.TypeTime, value)
 	}
-	if spu.mutation.PauseEndCleared() {
+	if _u.mutation.PauseEndCleared() {
 		_spec.ClearField(subscriptionpause.FieldPauseEnd, field.TypeTime)
 	}
-	if value, ok := spu.mutation.ResumedAt(); ok {
+	if value, ok := _u.mutation.ResumedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldResumedAt, field.TypeTime, value)
 	}
-	if spu.mutation.ResumedAtCleared() {
+	if _u.mutation.ResumedAtCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumedAt, field.TypeTime)
 	}
-	if value, ok := spu.mutation.OriginalPeriodStart(); ok {
+	if value, ok := _u.mutation.OriginalPeriodStart(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := spu.mutation.OriginalPeriodEnd(); ok {
+	if value, ok := _u.mutation.OriginalPeriodEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := spu.mutation.Reason(); ok {
+	if value, ok := _u.mutation.Reason(); ok {
 		_spec.SetField(subscriptionpause.FieldReason, field.TypeString, value)
 	}
-	if spu.mutation.ReasonCleared() {
+	if _u.mutation.ReasonCleared() {
 		_spec.ClearField(subscriptionpause.FieldReason, field.TypeString)
 	}
-	if value, ok := spu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionpause.FieldMetadata, field.TypeJSON, value)
 	}
-	if spu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionpause.FieldMetadata, field.TypeJSON)
 	}
-	if spu.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -408,7 +408,7 @@ func (spu *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := spu.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -424,7 +424,7 @@ func (spu *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, spu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionpause.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -432,8 +432,8 @@ func (spu *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		return 0, err
 	}
-	spu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SubscriptionPauseUpdateOne is the builder for updating a single SubscriptionPause entity.
@@ -445,259 +445,259 @@ type SubscriptionPauseUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (spuo *SubscriptionPauseUpdateOne) SetStatus(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetStatus(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetStatus(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableStatus(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetStatus(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillableStatus(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spuo *SubscriptionPauseUpdateOne) SetUpdatedAt(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetUpdatedAt(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spuo *SubscriptionPauseUpdateOne) SetUpdatedBy(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetUpdatedBy(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetUpdatedBy(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableUpdatedBy(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetUpdatedBy(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillableUpdatedBy(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearUpdatedBy() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearUpdatedBy()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearUpdatedBy() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spuo *SubscriptionPauseUpdateOne) SetSubscriptionID(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetSubscriptionID(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetSubscriptionID(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableSubscriptionID(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetSubscriptionID(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillableSubscriptionID(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (spuo *SubscriptionPauseUpdateOne) SetPauseStatus(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetPauseStatus(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetPauseStatus(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetPauseStatus(v)
+	return _u
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillablePauseStatus(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetPauseStatus(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillablePauseStatus(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetPauseStatus(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetPauseMode sets the "pause_mode" field.
-func (spuo *SubscriptionPauseUpdateOne) SetPauseMode(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetPauseMode(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetPauseMode(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetPauseMode(v)
+	return _u
 }
 
 // SetNillablePauseMode sets the "pause_mode" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillablePauseMode(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetPauseMode(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillablePauseMode(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetPauseMode(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetResumeMode sets the "resume_mode" field.
-func (spuo *SubscriptionPauseUpdateOne) SetResumeMode(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetResumeMode(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetResumeMode(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetResumeMode(v)
+	return _u
 }
 
 // SetNillableResumeMode sets the "resume_mode" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableResumeMode(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetResumeMode(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillableResumeMode(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetResumeMode(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearResumeMode clears the value of the "resume_mode" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearResumeMode() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearResumeMode()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearResumeMode() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearResumeMode()
+	return _u
 }
 
 // SetPauseStart sets the "pause_start" field.
-func (spuo *SubscriptionPauseUpdateOne) SetPauseStart(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetPauseStart(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetPauseStart(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetPauseStart(v)
+	return _u
 }
 
 // SetNillablePauseStart sets the "pause_start" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillablePauseStart(t *time.Time) *SubscriptionPauseUpdateOne {
-	if t != nil {
-		spuo.SetPauseStart(*t)
+func (_u *SubscriptionPauseUpdateOne) SetNillablePauseStart(v *time.Time) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetPauseStart(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetPauseEnd sets the "pause_end" field.
-func (spuo *SubscriptionPauseUpdateOne) SetPauseEnd(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetPauseEnd(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetPauseEnd(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetPauseEnd(v)
+	return _u
 }
 
 // SetNillablePauseEnd sets the "pause_end" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillablePauseEnd(t *time.Time) *SubscriptionPauseUpdateOne {
-	if t != nil {
-		spuo.SetPauseEnd(*t)
+func (_u *SubscriptionPauseUpdateOne) SetNillablePauseEnd(v *time.Time) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetPauseEnd(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearPauseEnd clears the value of the "pause_end" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearPauseEnd() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearPauseEnd()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearPauseEnd() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearPauseEnd()
+	return _u
 }
 
 // SetResumedAt sets the "resumed_at" field.
-func (spuo *SubscriptionPauseUpdateOne) SetResumedAt(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetResumedAt(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetResumedAt(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetResumedAt(v)
+	return _u
 }
 
 // SetNillableResumedAt sets the "resumed_at" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableResumedAt(t *time.Time) *SubscriptionPauseUpdateOne {
-	if t != nil {
-		spuo.SetResumedAt(*t)
+func (_u *SubscriptionPauseUpdateOne) SetNillableResumedAt(v *time.Time) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetResumedAt(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearResumedAt clears the value of the "resumed_at" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearResumedAt() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearResumedAt()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearResumedAt() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearResumedAt()
+	return _u
 }
 
 // SetOriginalPeriodStart sets the "original_period_start" field.
-func (spuo *SubscriptionPauseUpdateOne) SetOriginalPeriodStart(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetOriginalPeriodStart(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetOriginalPeriodStart(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetOriginalPeriodStart(v)
+	return _u
 }
 
 // SetNillableOriginalPeriodStart sets the "original_period_start" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableOriginalPeriodStart(t *time.Time) *SubscriptionPauseUpdateOne {
-	if t != nil {
-		spuo.SetOriginalPeriodStart(*t)
+func (_u *SubscriptionPauseUpdateOne) SetNillableOriginalPeriodStart(v *time.Time) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetOriginalPeriodStart(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetOriginalPeriodEnd sets the "original_period_end" field.
-func (spuo *SubscriptionPauseUpdateOne) SetOriginalPeriodEnd(t time.Time) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetOriginalPeriodEnd(t)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetOriginalPeriodEnd(v time.Time) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetOriginalPeriodEnd(v)
+	return _u
 }
 
 // SetNillableOriginalPeriodEnd sets the "original_period_end" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableOriginalPeriodEnd(t *time.Time) *SubscriptionPauseUpdateOne {
-	if t != nil {
-		spuo.SetOriginalPeriodEnd(*t)
+func (_u *SubscriptionPauseUpdateOne) SetNillableOriginalPeriodEnd(v *time.Time) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetOriginalPeriodEnd(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetReason sets the "reason" field.
-func (spuo *SubscriptionPauseUpdateOne) SetReason(s string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetReason(s)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetReason(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetReason(v)
+	return _u
 }
 
 // SetNillableReason sets the "reason" field if the given value is not nil.
-func (spuo *SubscriptionPauseUpdateOne) SetNillableReason(s *string) *SubscriptionPauseUpdateOne {
-	if s != nil {
-		spuo.SetReason(*s)
+func (_u *SubscriptionPauseUpdateOne) SetNillableReason(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetReason(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearReason clears the value of the "reason" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearReason() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearReason()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearReason() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (spuo *SubscriptionPauseUpdateOne) SetMetadata(m map[string]string) *SubscriptionPauseUpdateOne {
-	spuo.mutation.SetMetadata(m)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) SetMetadata(v map[string]string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (spuo *SubscriptionPauseUpdateOne) ClearMetadata() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearMetadata()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearMetadata() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spuo *SubscriptionPauseUpdateOne) SetSubscription(s *Subscription) *SubscriptionPauseUpdateOne {
-	return spuo.SetSubscriptionID(s.ID)
+func (_u *SubscriptionPauseUpdateOne) SetSubscription(v *Subscription) *SubscriptionPauseUpdateOne {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPauseMutation object of the builder.
-func (spuo *SubscriptionPauseUpdateOne) Mutation() *SubscriptionPauseMutation {
-	return spuo.mutation
+func (_u *SubscriptionPauseUpdateOne) Mutation() *SubscriptionPauseMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (spuo *SubscriptionPauseUpdateOne) ClearSubscription() *SubscriptionPauseUpdateOne {
-	spuo.mutation.ClearSubscription()
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) ClearSubscription() *SubscriptionPauseUpdateOne {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Where appends a list predicates to the SubscriptionPauseUpdate builder.
-func (spuo *SubscriptionPauseUpdateOne) Where(ps ...predicate.SubscriptionPause) *SubscriptionPauseUpdateOne {
-	spuo.mutation.Where(ps...)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) Where(ps ...predicate.SubscriptionPause) *SubscriptionPauseUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (spuo *SubscriptionPauseUpdateOne) Select(field string, fields ...string) *SubscriptionPauseUpdateOne {
-	spuo.fields = append([]string{field}, fields...)
-	return spuo
+func (_u *SubscriptionPauseUpdateOne) Select(field string, fields ...string) *SubscriptionPauseUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated SubscriptionPause entity.
-func (spuo *SubscriptionPauseUpdateOne) Save(ctx context.Context) (*SubscriptionPause, error) {
-	spuo.defaults()
-	return withHooks(ctx, spuo.sqlSave, spuo.mutation, spuo.hooks)
+func (_u *SubscriptionPauseUpdateOne) Save(ctx context.Context) (*SubscriptionPause, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spuo *SubscriptionPauseUpdateOne) SaveX(ctx context.Context) *SubscriptionPause {
-	node, err := spuo.Save(ctx)
+func (_u *SubscriptionPauseUpdateOne) SaveX(ctx context.Context) *SubscriptionPause {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -705,60 +705,60 @@ func (spuo *SubscriptionPauseUpdateOne) SaveX(ctx context.Context) *Subscription
 }
 
 // Exec executes the query on the entity.
-func (spuo *SubscriptionPauseUpdateOne) Exec(ctx context.Context) error {
-	_, err := spuo.Save(ctx)
+func (_u *SubscriptionPauseUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spuo *SubscriptionPauseUpdateOne) ExecX(ctx context.Context) {
-	if err := spuo.Exec(ctx); err != nil {
+func (_u *SubscriptionPauseUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spuo *SubscriptionPauseUpdateOne) defaults() {
-	if _, ok := spuo.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionPauseUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionpause.UpdateDefaultUpdatedAt()
-		spuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spuo *SubscriptionPauseUpdateOne) check() error {
-	if v, ok := spuo.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionPauseUpdateOne) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionpause.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.subscription_id": %w`, err)}
 		}
 	}
-	if v, ok := spuo.mutation.PauseStatus(); ok {
+	if v, ok := _u.mutation.PauseStatus(); ok {
 		if err := subscriptionpause.PauseStatusValidator(v); err != nil {
 			return &ValidationError{Name: "pause_status", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_status": %w`, err)}
 		}
 	}
-	if v, ok := spuo.mutation.PauseMode(); ok {
+	if v, ok := _u.mutation.PauseMode(); ok {
 		if err := subscriptionpause.PauseModeValidator(v); err != nil {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
 		}
 	}
-	if spuo.mutation.SubscriptionCleared() && len(spuo.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPause.subscription"`)
 	}
 	return nil
 }
 
-func (spuo *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionPause, err error) {
-	if err := spuo.check(); err != nil {
+func (_u *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionPause, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionpause.Table, subscriptionpause.Columns, sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString))
-	id, ok := spuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "SubscriptionPause.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := spuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionpause.FieldID)
 		for _, f := range fields {
@@ -770,77 +770,77 @@ func (spuo *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 			}
 		}
 	}
-	if ps := spuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := spuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionpause.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := spuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if spuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionpause.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := spuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionpause.FieldUpdatedBy, field.TypeString, value)
 	}
-	if spuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionpause.FieldUpdatedBy, field.TypeString)
 	}
-	if spuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionpause.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := spuo.mutation.PauseStatus(); ok {
+	if value, ok := _u.mutation.PauseStatus(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStatus, field.TypeString, value)
 	}
-	if value, ok := spuo.mutation.PauseMode(); ok {
+	if value, ok := _u.mutation.PauseMode(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseMode, field.TypeString, value)
 	}
-	if value, ok := spuo.mutation.ResumeMode(); ok {
+	if value, ok := _u.mutation.ResumeMode(); ok {
 		_spec.SetField(subscriptionpause.FieldResumeMode, field.TypeString, value)
 	}
-	if spuo.mutation.ResumeModeCleared() {
+	if _u.mutation.ResumeModeCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumeMode, field.TypeString)
 	}
-	if value, ok := spuo.mutation.PauseStart(); ok {
+	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)
 	}
-	if value, ok := spuo.mutation.PauseEnd(); ok {
+	if value, ok := _u.mutation.PauseEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseEnd, field.TypeTime, value)
 	}
-	if spuo.mutation.PauseEndCleared() {
+	if _u.mutation.PauseEndCleared() {
 		_spec.ClearField(subscriptionpause.FieldPauseEnd, field.TypeTime)
 	}
-	if value, ok := spuo.mutation.ResumedAt(); ok {
+	if value, ok := _u.mutation.ResumedAt(); ok {
 		_spec.SetField(subscriptionpause.FieldResumedAt, field.TypeTime, value)
 	}
-	if spuo.mutation.ResumedAtCleared() {
+	if _u.mutation.ResumedAtCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumedAt, field.TypeTime)
 	}
-	if value, ok := spuo.mutation.OriginalPeriodStart(); ok {
+	if value, ok := _u.mutation.OriginalPeriodStart(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodStart, field.TypeTime, value)
 	}
-	if value, ok := spuo.mutation.OriginalPeriodEnd(); ok {
+	if value, ok := _u.mutation.OriginalPeriodEnd(); ok {
 		_spec.SetField(subscriptionpause.FieldOriginalPeriodEnd, field.TypeTime, value)
 	}
-	if value, ok := spuo.mutation.Reason(); ok {
+	if value, ok := _u.mutation.Reason(); ok {
 		_spec.SetField(subscriptionpause.FieldReason, field.TypeString, value)
 	}
-	if spuo.mutation.ReasonCleared() {
+	if _u.mutation.ReasonCleared() {
 		_spec.ClearField(subscriptionpause.FieldReason, field.TypeString)
 	}
-	if value, ok := spuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionpause.FieldMetadata, field.TypeJSON, value)
 	}
-	if spuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionpause.FieldMetadata, field.TypeJSON)
 	}
-	if spuo.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -853,7 +853,7 @@ func (spuo *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := spuo.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -869,10 +869,10 @@ func (spuo *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &SubscriptionPause{config: spuo.config}
+	_node = &SubscriptionPause{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, spuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionpause.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -880,6 +880,6 @@ func (spuo *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		return nil, err
 	}
-	spuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

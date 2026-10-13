@@ -24,173 +24,173 @@ type TaxRateUpdate struct {
 }
 
 // Where appends a list predicates to the TaxRateUpdate builder.
-func (tru *TaxRateUpdate) Where(ps ...predicate.TaxRate) *TaxRateUpdate {
-	tru.mutation.Where(ps...)
-	return tru
+func (_u *TaxRateUpdate) Where(ps ...predicate.TaxRate) *TaxRateUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (tru *TaxRateUpdate) SetStatus(s string) *TaxRateUpdate {
-	tru.mutation.SetStatus(s)
-	return tru
+func (_u *TaxRateUpdate) SetStatus(v string) *TaxRateUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableStatus(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetStatus(*s)
+func (_u *TaxRateUpdate) SetNillableStatus(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return tru
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (tru *TaxRateUpdate) SetUpdatedAt(t time.Time) *TaxRateUpdate {
-	tru.mutation.SetUpdatedAt(t)
-	return tru
+func (_u *TaxRateUpdate) SetUpdatedAt(v time.Time) *TaxRateUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (tru *TaxRateUpdate) SetUpdatedBy(s string) *TaxRateUpdate {
-	tru.mutation.SetUpdatedBy(s)
-	return tru
+func (_u *TaxRateUpdate) SetUpdatedBy(v string) *TaxRateUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableUpdatedBy(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetUpdatedBy(*s)
+func (_u *TaxRateUpdate) SetNillableUpdatedBy(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return tru
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (tru *TaxRateUpdate) ClearUpdatedBy() *TaxRateUpdate {
-	tru.mutation.ClearUpdatedBy()
-	return tru
+func (_u *TaxRateUpdate) ClearUpdatedBy() *TaxRateUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (tru *TaxRateUpdate) SetName(s string) *TaxRateUpdate {
-	tru.mutation.SetName(s)
-	return tru
+func (_u *TaxRateUpdate) SetName(v string) *TaxRateUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableName(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetName(*s)
+func (_u *TaxRateUpdate) SetNillableName(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return tru
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (tru *TaxRateUpdate) SetDescription(s string) *TaxRateUpdate {
-	tru.mutation.SetDescription(s)
-	return tru
+func (_u *TaxRateUpdate) SetDescription(v string) *TaxRateUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableDescription(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetDescription(*s)
+func (_u *TaxRateUpdate) SetNillableDescription(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return tru
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (tru *TaxRateUpdate) ClearDescription() *TaxRateUpdate {
-	tru.mutation.ClearDescription()
-	return tru
+func (_u *TaxRateUpdate) ClearDescription() *TaxRateUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetCode sets the "code" field.
-func (tru *TaxRateUpdate) SetCode(s string) *TaxRateUpdate {
-	tru.mutation.SetCode(s)
-	return tru
+func (_u *TaxRateUpdate) SetCode(v string) *TaxRateUpdate {
+	_u.mutation.SetCode(v)
+	return _u
 }
 
 // SetNillableCode sets the "code" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableCode(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetCode(*s)
+func (_u *TaxRateUpdate) SetNillableCode(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetCode(*v)
 	}
-	return tru
+	return _u
 }
 
 // SetTaxRateStatus sets the "tax_rate_status" field.
-func (tru *TaxRateUpdate) SetTaxRateStatus(s string) *TaxRateUpdate {
-	tru.mutation.SetTaxRateStatus(s)
-	return tru
+func (_u *TaxRateUpdate) SetTaxRateStatus(v string) *TaxRateUpdate {
+	_u.mutation.SetTaxRateStatus(v)
+	return _u
 }
 
 // SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableTaxRateStatus(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetTaxRateStatus(*s)
+func (_u *TaxRateUpdate) SetNillableTaxRateStatus(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetTaxRateStatus(*v)
 	}
-	return tru
+	return _u
 }
 
 // SetScope sets the "scope" field.
-func (tru *TaxRateUpdate) SetScope(s string) *TaxRateUpdate {
-	tru.mutation.SetScope(s)
-	return tru
+func (_u *TaxRateUpdate) SetScope(v string) *TaxRateUpdate {
+	_u.mutation.SetScope(v)
+	return _u
 }
 
 // SetNillableScope sets the "scope" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillableScope(s *string) *TaxRateUpdate {
-	if s != nil {
-		tru.SetScope(*s)
+func (_u *TaxRateUpdate) SetNillableScope(v *string) *TaxRateUpdate {
+	if v != nil {
+		_u.SetScope(*v)
 	}
-	return tru
+	return _u
 }
 
 // SetPercentageValue sets the "percentage_value" field.
-func (tru *TaxRateUpdate) SetPercentageValue(d decimal.Decimal) *TaxRateUpdate {
-	tru.mutation.SetPercentageValue(d)
-	return tru
+func (_u *TaxRateUpdate) SetPercentageValue(v decimal.Decimal) *TaxRateUpdate {
+	_u.mutation.SetPercentageValue(v)
+	return _u
 }
 
 // SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
-func (tru *TaxRateUpdate) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateUpdate {
-	if d != nil {
-		tru.SetPercentageValue(*d)
+func (_u *TaxRateUpdate) SetNillablePercentageValue(v *decimal.Decimal) *TaxRateUpdate {
+	if v != nil {
+		_u.SetPercentageValue(*v)
 	}
-	return tru
+	return _u
 }
 
 // ClearPercentageValue clears the value of the "percentage_value" field.
-func (tru *TaxRateUpdate) ClearPercentageValue() *TaxRateUpdate {
-	tru.mutation.ClearPercentageValue()
-	return tru
+func (_u *TaxRateUpdate) ClearPercentageValue() *TaxRateUpdate {
+	_u.mutation.ClearPercentageValue()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (tru *TaxRateUpdate) SetMetadata(m map[string]string) *TaxRateUpdate {
-	tru.mutation.SetMetadata(m)
-	return tru
+func (_u *TaxRateUpdate) SetMetadata(v map[string]string) *TaxRateUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (tru *TaxRateUpdate) ClearMetadata() *TaxRateUpdate {
-	tru.mutation.ClearMetadata()
-	return tru
+func (_u *TaxRateUpdate) ClearMetadata() *TaxRateUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the TaxRateMutation object of the builder.
-func (tru *TaxRateUpdate) Mutation() *TaxRateMutation {
-	return tru.mutation
+func (_u *TaxRateUpdate) Mutation() *TaxRateMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (tru *TaxRateUpdate) Save(ctx context.Context) (int, error) {
-	tru.defaults()
-	return withHooks(ctx, tru.sqlSave, tru.mutation, tru.hooks)
+func (_u *TaxRateUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (tru *TaxRateUpdate) SaveX(ctx context.Context) int {
-	affected, err := tru.Save(ctx)
+func (_u *TaxRateUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -198,44 +198,44 @@ func (tru *TaxRateUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (tru *TaxRateUpdate) Exec(ctx context.Context) error {
-	_, err := tru.Save(ctx)
+func (_u *TaxRateUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tru *TaxRateUpdate) ExecX(ctx context.Context) {
-	if err := tru.Exec(ctx); err != nil {
+func (_u *TaxRateUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (tru *TaxRateUpdate) defaults() {
-	if _, ok := tru.mutation.UpdatedAt(); !ok {
+func (_u *TaxRateUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := taxrate.UpdateDefaultUpdatedAt()
-		tru.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (tru *TaxRateUpdate) check() error {
-	if v, ok := tru.mutation.Name(); ok {
+func (_u *TaxRateUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := taxrate.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "TaxRate.name": %w`, err)}
 		}
 	}
-	if v, ok := tru.mutation.Code(); ok {
+	if v, ok := _u.mutation.Code(); ok {
 		if err := taxrate.CodeValidator(v); err != nil {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if v, ok := tru.mutation.TaxRateStatus(); ok {
+	if v, ok := _u.mutation.TaxRateStatus(); ok {
 		if err := taxrate.TaxRateStatusValidator(v); err != nil {
 			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
 		}
 	}
-	if v, ok := tru.mutation.Scope(); ok {
+	if v, ok := _u.mutation.Scope(); ok {
 		if err := taxrate.ScopeValidator(v); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
 		}
@@ -243,67 +243,67 @@ func (tru *TaxRateUpdate) check() error {
 	return nil
 }
 
-func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := tru.check(); err != nil {
-		return n, err
+func (_u *TaxRateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(taxrate.Table, taxrate.Columns, sqlgraph.NewFieldSpec(taxrate.FieldID, field.TypeString))
-	if ps := tru.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := tru.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(taxrate.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxrate.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if tru.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(taxrate.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := tru.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxrate.FieldUpdatedBy, field.TypeString, value)
 	}
-	if tru.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(taxrate.FieldUpdatedBy, field.TypeString)
 	}
-	if tru.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxrate.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := tru.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(taxrate.FieldName, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(taxrate.FieldDescription, field.TypeString, value)
 	}
-	if tru.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(taxrate.FieldDescription, field.TypeString)
 	}
-	if value, ok := tru.mutation.Code(); ok {
+	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.TaxRateStatus(); ok {
+	if value, ok := _u.mutation.TaxRateStatus(); ok {
 		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.Scope(); ok {
+	if value, ok := _u.mutation.Scope(); ok {
 		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
 	}
-	if value, ok := tru.mutation.PercentageValue(); ok {
+	if value, ok := _u.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
 	}
-	if tru.mutation.PercentageValueCleared() {
+	if _u.mutation.PercentageValueCleared() {
 		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
 	}
-	if value, ok := tru.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
 	}
-	if tru.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(taxrate.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, tru.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{taxrate.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -311,8 +311,8 @@ func (tru *TaxRateUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	tru.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // TaxRateUpdateOne is the builder for updating a single TaxRate entity.
@@ -324,180 +324,180 @@ type TaxRateUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (truo *TaxRateUpdateOne) SetStatus(s string) *TaxRateUpdateOne {
-	truo.mutation.SetStatus(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetStatus(v string) *TaxRateUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableStatus(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetStatus(*s)
+func (_u *TaxRateUpdateOne) SetNillableStatus(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return truo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (truo *TaxRateUpdateOne) SetUpdatedAt(t time.Time) *TaxRateUpdateOne {
-	truo.mutation.SetUpdatedAt(t)
-	return truo
+func (_u *TaxRateUpdateOne) SetUpdatedAt(v time.Time) *TaxRateUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (truo *TaxRateUpdateOne) SetUpdatedBy(s string) *TaxRateUpdateOne {
-	truo.mutation.SetUpdatedBy(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetUpdatedBy(v string) *TaxRateUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableUpdatedBy(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetUpdatedBy(*s)
+func (_u *TaxRateUpdateOne) SetNillableUpdatedBy(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return truo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (truo *TaxRateUpdateOne) ClearUpdatedBy() *TaxRateUpdateOne {
-	truo.mutation.ClearUpdatedBy()
-	return truo
+func (_u *TaxRateUpdateOne) ClearUpdatedBy() *TaxRateUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (truo *TaxRateUpdateOne) SetName(s string) *TaxRateUpdateOne {
-	truo.mutation.SetName(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetName(v string) *TaxRateUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableName(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetName(*s)
+func (_u *TaxRateUpdateOne) SetNillableName(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return truo
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (truo *TaxRateUpdateOne) SetDescription(s string) *TaxRateUpdateOne {
-	truo.mutation.SetDescription(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetDescription(v string) *TaxRateUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableDescription(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetDescription(*s)
+func (_u *TaxRateUpdateOne) SetNillableDescription(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return truo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (truo *TaxRateUpdateOne) ClearDescription() *TaxRateUpdateOne {
-	truo.mutation.ClearDescription()
-	return truo
+func (_u *TaxRateUpdateOne) ClearDescription() *TaxRateUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetCode sets the "code" field.
-func (truo *TaxRateUpdateOne) SetCode(s string) *TaxRateUpdateOne {
-	truo.mutation.SetCode(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetCode(v string) *TaxRateUpdateOne {
+	_u.mutation.SetCode(v)
+	return _u
 }
 
 // SetNillableCode sets the "code" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableCode(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetCode(*s)
+func (_u *TaxRateUpdateOne) SetNillableCode(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetCode(*v)
 	}
-	return truo
+	return _u
 }
 
 // SetTaxRateStatus sets the "tax_rate_status" field.
-func (truo *TaxRateUpdateOne) SetTaxRateStatus(s string) *TaxRateUpdateOne {
-	truo.mutation.SetTaxRateStatus(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetTaxRateStatus(v string) *TaxRateUpdateOne {
+	_u.mutation.SetTaxRateStatus(v)
+	return _u
 }
 
 // SetNillableTaxRateStatus sets the "tax_rate_status" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableTaxRateStatus(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetTaxRateStatus(*s)
+func (_u *TaxRateUpdateOne) SetNillableTaxRateStatus(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetTaxRateStatus(*v)
 	}
-	return truo
+	return _u
 }
 
 // SetScope sets the "scope" field.
-func (truo *TaxRateUpdateOne) SetScope(s string) *TaxRateUpdateOne {
-	truo.mutation.SetScope(s)
-	return truo
+func (_u *TaxRateUpdateOne) SetScope(v string) *TaxRateUpdateOne {
+	_u.mutation.SetScope(v)
+	return _u
 }
 
 // SetNillableScope sets the "scope" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillableScope(s *string) *TaxRateUpdateOne {
-	if s != nil {
-		truo.SetScope(*s)
+func (_u *TaxRateUpdateOne) SetNillableScope(v *string) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetScope(*v)
 	}
-	return truo
+	return _u
 }
 
 // SetPercentageValue sets the "percentage_value" field.
-func (truo *TaxRateUpdateOne) SetPercentageValue(d decimal.Decimal) *TaxRateUpdateOne {
-	truo.mutation.SetPercentageValue(d)
-	return truo
+func (_u *TaxRateUpdateOne) SetPercentageValue(v decimal.Decimal) *TaxRateUpdateOne {
+	_u.mutation.SetPercentageValue(v)
+	return _u
 }
 
 // SetNillablePercentageValue sets the "percentage_value" field if the given value is not nil.
-func (truo *TaxRateUpdateOne) SetNillablePercentageValue(d *decimal.Decimal) *TaxRateUpdateOne {
-	if d != nil {
-		truo.SetPercentageValue(*d)
+func (_u *TaxRateUpdateOne) SetNillablePercentageValue(v *decimal.Decimal) *TaxRateUpdateOne {
+	if v != nil {
+		_u.SetPercentageValue(*v)
 	}
-	return truo
+	return _u
 }
 
 // ClearPercentageValue clears the value of the "percentage_value" field.
-func (truo *TaxRateUpdateOne) ClearPercentageValue() *TaxRateUpdateOne {
-	truo.mutation.ClearPercentageValue()
-	return truo
+func (_u *TaxRateUpdateOne) ClearPercentageValue() *TaxRateUpdateOne {
+	_u.mutation.ClearPercentageValue()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (truo *TaxRateUpdateOne) SetMetadata(m map[string]string) *TaxRateUpdateOne {
-	truo.mutation.SetMetadata(m)
-	return truo
+func (_u *TaxRateUpdateOne) SetMetadata(v map[string]string) *TaxRateUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (truo *TaxRateUpdateOne) ClearMetadata() *TaxRateUpdateOne {
-	truo.mutation.ClearMetadata()
-	return truo
+func (_u *TaxRateUpdateOne) ClearMetadata() *TaxRateUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the TaxRateMutation object of the builder.
-func (truo *TaxRateUpdateOne) Mutation() *TaxRateMutation {
-	return truo.mutation
+func (_u *TaxRateUpdateOne) Mutation() *TaxRateMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the TaxRateUpdate builder.
-func (truo *TaxRateUpdateOne) Where(ps ...predicate.TaxRate) *TaxRateUpdateOne {
-	truo.mutation.Where(ps...)
-	return truo
+func (_u *TaxRateUpdateOne) Where(ps ...predicate.TaxRate) *TaxRateUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (truo *TaxRateUpdateOne) Select(field string, fields ...string) *TaxRateUpdateOne {
-	truo.fields = append([]string{field}, fields...)
-	return truo
+func (_u *TaxRateUpdateOne) Select(field string, fields ...string) *TaxRateUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated TaxRate entity.
-func (truo *TaxRateUpdateOne) Save(ctx context.Context) (*TaxRate, error) {
-	truo.defaults()
-	return withHooks(ctx, truo.sqlSave, truo.mutation, truo.hooks)
+func (_u *TaxRateUpdateOne) Save(ctx context.Context) (*TaxRate, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (truo *TaxRateUpdateOne) SaveX(ctx context.Context) *TaxRate {
-	node, err := truo.Save(ctx)
+func (_u *TaxRateUpdateOne) SaveX(ctx context.Context) *TaxRate {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -505,44 +505,44 @@ func (truo *TaxRateUpdateOne) SaveX(ctx context.Context) *TaxRate {
 }
 
 // Exec executes the query on the entity.
-func (truo *TaxRateUpdateOne) Exec(ctx context.Context) error {
-	_, err := truo.Save(ctx)
+func (_u *TaxRateUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (truo *TaxRateUpdateOne) ExecX(ctx context.Context) {
-	if err := truo.Exec(ctx); err != nil {
+func (_u *TaxRateUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (truo *TaxRateUpdateOne) defaults() {
-	if _, ok := truo.mutation.UpdatedAt(); !ok {
+func (_u *TaxRateUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := taxrate.UpdateDefaultUpdatedAt()
-		truo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (truo *TaxRateUpdateOne) check() error {
-	if v, ok := truo.mutation.Name(); ok {
+func (_u *TaxRateUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := taxrate.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "TaxRate.name": %w`, err)}
 		}
 	}
-	if v, ok := truo.mutation.Code(); ok {
+	if v, ok := _u.mutation.Code(); ok {
 		if err := taxrate.CodeValidator(v); err != nil {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "TaxRate.code": %w`, err)}
 		}
 	}
-	if v, ok := truo.mutation.TaxRateStatus(); ok {
+	if v, ok := _u.mutation.TaxRateStatus(); ok {
 		if err := taxrate.TaxRateStatusValidator(v); err != nil {
 			return &ValidationError{Name: "tax_rate_status", err: fmt.Errorf(`ent: validator failed for field "TaxRate.tax_rate_status": %w`, err)}
 		}
 	}
-	if v, ok := truo.mutation.Scope(); ok {
+	if v, ok := _u.mutation.Scope(); ok {
 		if err := taxrate.ScopeValidator(v); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "TaxRate.scope": %w`, err)}
 		}
@@ -550,17 +550,17 @@ func (truo *TaxRateUpdateOne) check() error {
 	return nil
 }
 
-func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err error) {
-	if err := truo.check(); err != nil {
+func (_u *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(taxrate.Table, taxrate.Columns, sqlgraph.NewFieldSpec(taxrate.FieldID, field.TypeString))
-	id, ok := truo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "TaxRate.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := truo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, taxrate.FieldID)
 		for _, f := range fields {
@@ -572,65 +572,65 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 			}
 		}
 	}
-	if ps := truo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := truo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(taxrate.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxrate.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if truo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(taxrate.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := truo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxrate.FieldUpdatedBy, field.TypeString, value)
 	}
-	if truo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(taxrate.FieldUpdatedBy, field.TypeString)
 	}
-	if truo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(taxrate.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := truo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(taxrate.FieldName, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(taxrate.FieldDescription, field.TypeString, value)
 	}
-	if truo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(taxrate.FieldDescription, field.TypeString)
 	}
-	if value, ok := truo.mutation.Code(); ok {
+	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(taxrate.FieldCode, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.TaxRateStatus(); ok {
+	if value, ok := _u.mutation.TaxRateStatus(); ok {
 		_spec.SetField(taxrate.FieldTaxRateStatus, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.Scope(); ok {
+	if value, ok := _u.mutation.Scope(); ok {
 		_spec.SetField(taxrate.FieldScope, field.TypeString, value)
 	}
-	if value, ok := truo.mutation.PercentageValue(); ok {
+	if value, ok := _u.mutation.PercentageValue(); ok {
 		_spec.SetField(taxrate.FieldPercentageValue, field.TypeOther, value)
 	}
-	if truo.mutation.PercentageValueCleared() {
+	if _u.mutation.PercentageValueCleared() {
 		_spec.ClearField(taxrate.FieldPercentageValue, field.TypeOther)
 	}
-	if value, ok := truo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(taxrate.FieldMetadata, field.TypeJSON, value)
 	}
-	if truo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(taxrate.FieldMetadata, field.TypeJSON)
 	}
-	_node = &TaxRate{config: truo.config}
+	_node = &TaxRate{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, truo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{taxrate.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -638,6 +638,6 @@ func (truo *TaxRateUpdateOne) sqlSave(ctx context.Context) (_node *TaxRate, err 
 		}
 		return nil, err
 	}
-	truo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

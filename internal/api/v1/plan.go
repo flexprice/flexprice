@@ -293,7 +293,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	// Acquire plan-level lock (Redis SetNX, 6h TTL)
 	if h.locker == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
@@ -312,7 +312,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	if !lock.AcquiredSuccessfully() {
 		h.log.Info(c.Request.Context(), "price_sync_lock_rejected", "plan_id", id, "lock_key", lockKey, "reason", "already_held")
 		c.Error(ierr.NewError("price sync already in progress for this plan").
-			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			WithHint("Try again later or wait up to 6 hours for the current sync to complete.").
 			Mark(ierr.ErrAlreadyExists))
 		return
 	}
@@ -422,7 +422,7 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		return
 	}
 
-	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	// Acquire plan-level lock (Redis SetNX, 6h TTL)
 	if h.locker == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
@@ -441,7 +441,7 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 	if !lock.AcquiredSuccessfully() {
 		h.log.Info(c.Request.Context(), "price_sync_lock_rejected", "plan_id", id, "lock_key", lockKey, "reason", "already_held")
 		c.Error(ierr.NewError("price sync already in progress for this plan").
-			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			WithHint("Try again later or wait up to 6 hours for the current sync to complete.").
 			Mark(ierr.ErrAlreadyExists))
 		return
 	}

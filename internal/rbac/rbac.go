@@ -37,7 +37,7 @@ func NewRBACService(cfg *config.Configuration) (*RBACService, error) {
 	}
 
 	// Load JSON
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) // #nosec G304 -- config path, not user input
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}

@@ -41,6 +41,7 @@ type Logger struct {
 	// exception span events (SigNoz Exceptions tab). Mirrors
 	// otel.traces.capture_exceptions; see logErrorToSpan.
 	captureExceptions bool
+	providerCalls     bool
 	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
 	// Guards against repeated WithContext calls accumulating nested wrappers,
 	// which would append multiple _span_ctx fields on every Write.
@@ -186,6 +187,7 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 		SugaredLogger:     sugar,
 		otelLogProvider:   otelLogProvider,
 		captureExceptions: cfg.Otel.Enabled && cfg.Otel.Traces.Enabled && cfg.Otel.Traces.CaptureExceptions,
+		providerCalls:     cfg.Logging.ProviderCallsEnabled,
 	}, nil
 }
 
@@ -196,7 +198,12 @@ func NewNoopLogger() *Logger {
 
 // NewFromSugared creates a Logger from an existing SugaredLogger. For use in tests only.
 func NewFromSugared(s *zap.SugaredLogger) *Logger {
-	return &Logger{SugaredLogger: s}
+	return &Logger{SugaredLogger: s, providerCalls: true}
+}
+
+// ProviderCallsEnabled reports whether provider calls are logged.
+func (l *Logger) ProviderCallsEnabled() bool {
+	return l != nil && l.providerCalls
 }
 
 // resolveOtelLogsConfig picks the active log-export settings. Precedence:
@@ -385,6 +392,7 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 		SugaredLogger:     newSugared,
 		otelLogProvider:   l.otelLogProvider,
 		captureExceptions: l.captureExceptions,
+		providerCalls:     l.providerCalls,
 		ctxBound:          ctxBound,
 	}
 }

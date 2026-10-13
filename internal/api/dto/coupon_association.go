@@ -10,6 +10,7 @@ import (
 
 // CreateCouponAssociationRequest represents the request to create a new coupon association
 type CreateCouponAssociationRequest struct {
+	ID                     string            `json:"-"`
 	CouponID               string            `json:"coupon_id" validate:"required"`
 	SubscriptionID         string            `json:"subscription_id" validate:"required"`
 	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty"`
@@ -22,8 +23,8 @@ type CreateCouponAssociationRequest struct {
 // CouponAssociationResponse represents the response for coupon association data
 type CouponAssociationResponse struct {
 	*couponAssociation.CouponAssociation `json:",inline"`
-	Coupon               *CouponResponse               `json:"coupon,omitempty"`
-	SubscriptionLineItem *SubscriptionLineItemResponse `json:"subscription_line_item,omitempty"`
+	Coupon                               *CouponResponse               `json:"coupon,omitempty"`
+	SubscriptionLineItem                 *SubscriptionLineItemResponse `json:"subscription_line_item,omitempty"`
 }
 
 // ListCouponAssociationsResponse represents the response for listing coupon associations

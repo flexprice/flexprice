@@ -161,7 +161,7 @@ func MigrateInvoiceSequences() error {
 		timestamp := time.Now().Format("20060102_150405")
 		filename := filepath.Join("scripts", "internal", fmt.Sprintf("invoice_sequence_dry_run_%s.json", timestamp))
 
-		file, err := os.Create(filename)
+		file, err := os.Create(filename) // #nosec G304 -- CLI/script file path, dev tooling
 		if err != nil {
 			return fmt.Errorf("failed to create output file: %w", err)
 		}

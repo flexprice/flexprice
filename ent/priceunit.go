@@ -91,7 +91,7 @@ func (*PriceUnit) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the PriceUnit fields.
-func (pu *PriceUnit) assignValues(columns []string, values []any) error {
+func (_m *PriceUnit) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -101,55 +101,55 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				pu.ID = value.String
+				_m.ID = value.String
 			}
 		case priceunit.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				pu.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case priceunit.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				pu.Status = value.String
+				_m.Status = value.String
 			}
 		case priceunit.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				pu.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case priceunit.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				pu.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case priceunit.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				pu.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case priceunit.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				pu.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case priceunit.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				pu.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case priceunit.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &pu.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -157,34 +157,34 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				pu.Name = value.String
+				_m.Name = value.String
 			}
 		case priceunit.FieldCode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field code", values[i])
 			} else if value.Valid {
-				pu.Code = value.String
+				_m.Code = value.String
 			}
 		case priceunit.FieldSymbol:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field symbol", values[i])
 			} else if value.Valid {
-				pu.Symbol = value.String
+				_m.Symbol = value.String
 			}
 		case priceunit.FieldBaseCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field base_currency", values[i])
 			} else if value.Valid {
-				pu.BaseCurrency = value.String
+				_m.BaseCurrency = value.String
 			}
 		case priceunit.FieldConversionRate:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
 			} else if value != nil {
-				pu.ConversionRate = *value
+				_m.ConversionRate = *value
 			}
 		default:
-			pu.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -192,76 +192,76 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the PriceUnit.
 // This includes values selected through modifiers, order, etc.
-func (pu *PriceUnit) Value(name string) (ent.Value, error) {
-	return pu.selectValues.Get(name)
+func (_m *PriceUnit) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryPrices queries the "prices" edge of the PriceUnit entity.
-func (pu *PriceUnit) QueryPrices() *PriceQuery {
-	return NewPriceUnitClient(pu.config).QueryPrices(pu)
+func (_m *PriceUnit) QueryPrices() *PriceQuery {
+	return NewPriceUnitClient(_m.config).QueryPrices(_m)
 }
 
 // Update returns a builder for updating this PriceUnit.
 // Note that you need to call PriceUnit.Unwrap() before calling this method if this PriceUnit
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (pu *PriceUnit) Update() *PriceUnitUpdateOne {
-	return NewPriceUnitClient(pu.config).UpdateOne(pu)
+func (_m *PriceUnit) Update() *PriceUnitUpdateOne {
+	return NewPriceUnitClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the PriceUnit entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (pu *PriceUnit) Unwrap() *PriceUnit {
-	_tx, ok := pu.config.driver.(*txDriver)
+func (_m *PriceUnit) Unwrap() *PriceUnit {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: PriceUnit is not a transactional entity")
 	}
-	pu.config.driver = _tx.drv
-	return pu
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (pu *PriceUnit) String() string {
+func (_m *PriceUnit) String() string {
 	var builder strings.Builder
 	builder.WriteString("PriceUnit(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", pu.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(pu.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(pu.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(pu.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(pu.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(pu.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(pu.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(pu.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", pu.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(pu.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("code=")
-	builder.WriteString(pu.Code)
+	builder.WriteString(_m.Code)
 	builder.WriteString(", ")
 	builder.WriteString("symbol=")
-	builder.WriteString(pu.Symbol)
+	builder.WriteString(_m.Symbol)
 	builder.WriteString(", ")
 	builder.WriteString("base_currency=")
-	builder.WriteString(pu.BaseCurrency)
+	builder.WriteString(_m.BaseCurrency)
 	builder.WriteString(", ")
 	builder.WriteString("conversion_rate=")
-	builder.WriteString(fmt.Sprintf("%v", pu.ConversionRate))
+	builder.WriteString(fmt.Sprintf("%v", _m.ConversionRate))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -38,11 +38,13 @@ func (s *SubscriptionTimezoneTestSuite) SetupTest() {
 	s.ClearStores()
 
 	params := ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,

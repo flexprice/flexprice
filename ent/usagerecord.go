@@ -83,7 +83,7 @@ func (*UsageRecord) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the UsageRecord fields.
-func (ur *UsageRecord) assignValues(columns []string, values []any) error {
+func (_m *UsageRecord) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -93,120 +93,120 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				ur.ID = value.String
+				_m.ID = value.String
 			}
 		case usagerecord.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				ur.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case usagerecord.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ur.Status = value.String
+				_m.Status = value.String
 			}
 		case usagerecord.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ur.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case usagerecord.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				ur.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case usagerecord.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				ur.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case usagerecord.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				ur.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case usagerecord.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				ur.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case usagerecord.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				ur.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case usagerecord.FieldCustomerExternalID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_external_id", values[i])
 			} else if value.Valid {
-				ur.CustomerExternalID = value.String
+				_m.CustomerExternalID = value.String
 			}
 		case usagerecord.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				ur.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case usagerecord.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
 			} else if value.Valid {
-				ur.PlanID = value.String
+				_m.PlanID = value.String
 			}
 		case usagerecord.FieldQuantity:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field quantity", values[i])
 			} else if value != nil {
-				ur.Quantity = *value
+				_m.Quantity = *value
 			}
 		case usagerecord.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				ur.Amount = *value
+				_m.Amount = *value
 			}
 		case usagerecord.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				ur.Currency = value.String
+				_m.Currency = value.String
 			}
 		case usagerecord.FieldPeriodStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_start", values[i])
 			} else if value.Valid {
-				ur.PeriodStart = value.Time
+				_m.PeriodStart = value.Time
 			}
 		case usagerecord.FieldPeriodEnd:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field period_end", values[i])
 			} else if value.Valid {
-				ur.PeriodEnd = value.Time
+				_m.PeriodEnd = value.Time
 			}
 		case usagerecord.FieldSynced:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field synced", values[i])
 			} else if value.Valid {
-				ur.Synced = value.Bool
+				_m.Synced = value.Bool
 			}
 		case usagerecord.FieldSyncs:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field syncs", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ur.Syncs); err != nil {
+				if err := json.Unmarshal(*value, &_m.Syncs); err != nil {
 					return fmt.Errorf("unmarshal field syncs: %w", err)
 				}
 			}
 		default:
-			ur.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -214,86 +214,86 @@ func (ur *UsageRecord) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the UsageRecord.
 // This includes values selected through modifiers, order, etc.
-func (ur *UsageRecord) Value(name string) (ent.Value, error) {
-	return ur.selectValues.Get(name)
+func (_m *UsageRecord) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this UsageRecord.
 // Note that you need to call UsageRecord.Unwrap() before calling this method if this UsageRecord
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (ur *UsageRecord) Update() *UsageRecordUpdateOne {
-	return NewUsageRecordClient(ur.config).UpdateOne(ur)
+func (_m *UsageRecord) Update() *UsageRecordUpdateOne {
+	return NewUsageRecordClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the UsageRecord entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (ur *UsageRecord) Unwrap() *UsageRecord {
-	_tx, ok := ur.config.driver.(*txDriver)
+func (_m *UsageRecord) Unwrap() *UsageRecord {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: UsageRecord is not a transactional entity")
 	}
-	ur.config.driver = _tx.drv
-	return ur
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (ur *UsageRecord) String() string {
+func (_m *UsageRecord) String() string {
 	var builder strings.Builder
 	builder.WriteString("UsageRecord(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", ur.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(ur.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(ur.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(ur.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(ur.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(ur.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(ur.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(ur.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(ur.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_external_id=")
-	builder.WriteString(ur.CustomerExternalID)
+	builder.WriteString(_m.CustomerExternalID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(ur.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("plan_id=")
-	builder.WriteString(ur.PlanID)
+	builder.WriteString(_m.PlanID)
 	builder.WriteString(", ")
 	builder.WriteString("quantity=")
-	builder.WriteString(fmt.Sprintf("%v", ur.Quantity))
+	builder.WriteString(fmt.Sprintf("%v", _m.Quantity))
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", ur.Amount))
+	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(ur.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("period_start=")
-	builder.WriteString(ur.PeriodStart.Format(time.ANSIC))
+	builder.WriteString(_m.PeriodStart.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("period_end=")
-	builder.WriteString(ur.PeriodEnd.Format(time.ANSIC))
+	builder.WriteString(_m.PeriodEnd.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("synced=")
-	builder.WriteString(fmt.Sprintf("%v", ur.Synced))
+	builder.WriteString(fmt.Sprintf("%v", _m.Synced))
 	builder.WriteString(", ")
 	builder.WriteString("syncs=")
-	builder.WriteString(fmt.Sprintf("%v", ur.Syncs))
+	builder.WriteString(fmt.Sprintf("%v", _m.Syncs))
 	builder.WriteByte(')')
 	return builder.String()
 }

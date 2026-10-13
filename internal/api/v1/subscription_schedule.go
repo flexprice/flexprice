@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -28,9 +29,9 @@ func NewSubscriptionScheduleHandler(scheduleService service.SubscriptionSchedule
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
-// @Param id path string true "Schedule ID"
+// @Param schedule_id path string true "Schedule ID"
 // @Success 200 {object} dto.SubscriptionScheduleResponse
-// @Router /v1/subscription-schedules/{id} [get]
+// @Router /subscriptions/schedules/{schedule_id} [get]
 func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")
 
@@ -51,9 +52,9 @@ func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
-// @Param subscription_id path string true "Subscription ID"
+// @Param id path string true "Subscription ID"
 // @Success 200 {object} dto.GetPendingSchedulesResponse
-// @Router /v1/subscriptions/{subscription_id}/schedules [get]
+// @Router /subscriptions/{id}/schedules [get]
 func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
 
@@ -81,24 +82,37 @@ func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Contex
 // @Param schedule_id path string false "Schedule ID (optional if using request body)"
 // @Param request body dto.CancelScheduleRequest false "Cancel request (optional if using path parameter)"
 // @Success 200 {object} dto.CancelScheduleResponse
-// @Router /v1/subscriptions/schedules/{schedule_id}/cancel [post]
+// @Router /subscriptions/schedules/{schedule_id}/cancel [post]
 func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")
 
 	// Try to parse request body
 	var req dto.CancelScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		// If no body provided, use schedule_id from path
 		if scheduleID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Either schedule_id in path or request body with subscription_id and schedule_type must be provided"})
+			c.Error(ierr.NewError("missing schedule identifier").
+				WithHint("Provide schedule_id in the path, or a body with subscription_id and schedule_type").
+				Mark(ierr.ErrValidation))
 			return
 		}
 		req.ScheduleID = &scheduleID
 	}
 
-	// Validate the request
+	// Path schedule_id is authoritative when present.
+	if scheduleID != "" {
+		if req.ScheduleID != nil && *req.ScheduleID != scheduleID {
+			c.Error(ierr.NewError("schedule_id mismatch").
+				WithHint("schedule_id in the path does not match the request body").
+				Mark(ierr.ErrValidation))
+			return
+		}
+		req.ScheduleID = &scheduleID
+	}
+
 	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid cancel-schedule request").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -117,14 +131,16 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	}
 
 	if err != nil {
-		// Check if it's a not found error
-		if err.Error() == "subscription schedule not found" ||
-			err.Error() == "failed to get schedule" ||
-			err.Error() == "failed to get pending schedule" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Schedule not found"})
-			return
+		switch err.Error() {
+		case "subscription schedule not found",
+			"failed to get schedule",
+			"failed to get pending schedule":
+			c.Error(ierr.NewError("schedule not found").
+				WithHint("Schedule not found").
+				Mark(ierr.ErrNotFound))
+		default:
+			c.Error(err)
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -145,10 +161,13 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 // @Produce json
 // @Param pending_only query boolean false "Filter to pending schedules only"
 // @Param subscription_id query string false "Filter by subscription ID"
+// @Param subscription_ids query []string false "Filter by subscription IDs" collectionFormat(multi)
+// @Param schedule_type query []string false "Filter by schedule type" Enums(plan_change, cancellation) collectionFormat(multi)
+// @Param schedule_status query []string false "Filter by schedule status" Enums(pending, executing, executed, cancelled, failed) collectionFormat(multi)
 // @Param limit query int false "Limit results"
 // @Param offset query int false "Offset for pagination"
 // @Success 200 {object} dto.GetPendingSchedulesResponse
-// @Router /v1/subscription-schedules [get]
+// @Router /subscriptions/schedules [get]
 func (h *SubscriptionScheduleHandler) ListSchedules(c *gin.Context) {
 	// Parse filter from query params
 	filter := &types.SubscriptionScheduleFilter{
@@ -158,6 +177,11 @@ func (h *SubscriptionScheduleHandler) ListSchedules(c *gin.Context) {
 	if err := c.ShouldBindQuery(filter); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Accept singular subscription_id (documented param) in addition to subscription_ids.
+	if subID := c.Query("subscription_id"); subID != "" {
+		filter.SubscriptionIDs = append(filter.SubscriptionIDs, subID)
 	}
 
 	schedules, err := h.scheduleService.List(c.Request.Context(), filter)

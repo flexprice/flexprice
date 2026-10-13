@@ -3,14 +3,14 @@
 ## Trigger
 
 - Any request to **`/v1/**` routes** gated by **`AuthenticateMiddleware`** (private group) vs public auth endpoints under `GuestAuthenticateMiddleware`.
-- Middleware chain established in [`internal/api/router.go`](internal/api/router.go).
+- Middleware chain established in [`internal/api/router.go`](../../internal/api/router.go).
 
 ## Execution path
 
 1. **Guest public auth** (`/v1/auth/signup`, `/v1/auth/login`) — bypass full auth stack (see router grouping).
 2. **Protected routes:**
    - Read configured API key header (default **`x-api-key`** family per `cfg.Auth.APIKey.Header`).
-   - **`validateAPIKey`** in [`internal/rest/middleware/auth.go`](internal/rest/middleware/auth.go):
+   - **`validateAPIKey`** in [`internal/rest/middleware/auth.go`](../../internal/rest/middleware/auth.go):
      - First: static/config keys (`internal/auth.ValidateAPIKey`).
      - Else: **`SecretService.VerifyAPIKey`** (DB-backed secrets with RBAC roles + environment affinity).
    - Else: parse **`Authorization: Bearer <jwt>`**.

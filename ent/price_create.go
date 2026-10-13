@@ -26,551 +26,551 @@ type PriceCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (pc *PriceCreate) SetTenantID(s string) *PriceCreate {
-	pc.mutation.SetTenantID(s)
-	return pc
+func (_c *PriceCreate) SetTenantID(v string) *PriceCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (pc *PriceCreate) SetStatus(s string) *PriceCreate {
-	pc.mutation.SetStatus(s)
-	return pc
+func (_c *PriceCreate) SetStatus(v string) *PriceCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableStatus(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetStatus(*s)
+func (_c *PriceCreate) SetNillableStatus(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (pc *PriceCreate) SetCreatedAt(t time.Time) *PriceCreate {
-	pc.mutation.SetCreatedAt(t)
-	return pc
+func (_c *PriceCreate) SetCreatedAt(v time.Time) *PriceCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableCreatedAt(t *time.Time) *PriceCreate {
-	if t != nil {
-		pc.SetCreatedAt(*t)
+func (_c *PriceCreate) SetNillableCreatedAt(v *time.Time) *PriceCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (pc *PriceCreate) SetUpdatedAt(t time.Time) *PriceCreate {
-	pc.mutation.SetUpdatedAt(t)
-	return pc
+func (_c *PriceCreate) SetUpdatedAt(v time.Time) *PriceCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableUpdatedAt(t *time.Time) *PriceCreate {
-	if t != nil {
-		pc.SetUpdatedAt(*t)
+func (_c *PriceCreate) SetNillableUpdatedAt(v *time.Time) *PriceCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (pc *PriceCreate) SetCreatedBy(s string) *PriceCreate {
-	pc.mutation.SetCreatedBy(s)
-	return pc
+func (_c *PriceCreate) SetCreatedBy(v string) *PriceCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableCreatedBy(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetCreatedBy(*s)
+func (_c *PriceCreate) SetNillableCreatedBy(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (pc *PriceCreate) SetUpdatedBy(s string) *PriceCreate {
-	pc.mutation.SetUpdatedBy(s)
-	return pc
+func (_c *PriceCreate) SetUpdatedBy(v string) *PriceCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableUpdatedBy(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetUpdatedBy(*s)
+func (_c *PriceCreate) SetNillableUpdatedBy(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (pc *PriceCreate) SetEnvironmentID(s string) *PriceCreate {
-	pc.mutation.SetEnvironmentID(s)
-	return pc
+func (_c *PriceCreate) SetEnvironmentID(v string) *PriceCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableEnvironmentID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetEnvironmentID(*s)
+func (_c *PriceCreate) SetNillableEnvironmentID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetDisplayName sets the "display_name" field.
-func (pc *PriceCreate) SetDisplayName(s string) *PriceCreate {
-	pc.mutation.SetDisplayName(s)
-	return pc
+func (_c *PriceCreate) SetDisplayName(v string) *PriceCreate {
+	_c.mutation.SetDisplayName(v)
+	return _c
 }
 
 // SetNillableDisplayName sets the "display_name" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableDisplayName(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetDisplayName(*s)
+func (_c *PriceCreate) SetNillableDisplayName(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetDisplayName(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetAmount sets the "amount" field.
-func (pc *PriceCreate) SetAmount(d decimal.Decimal) *PriceCreate {
-	pc.mutation.SetAmount(d)
-	return pc
+func (_c *PriceCreate) SetAmount(v decimal.Decimal) *PriceCreate {
+	_c.mutation.SetAmount(v)
+	return _c
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableAmount(d *decimal.Decimal) *PriceCreate {
-	if d != nil {
-		pc.SetAmount(*d)
+func (_c *PriceCreate) SetNillableAmount(v *decimal.Decimal) *PriceCreate {
+	if v != nil {
+		_c.SetAmount(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (pc *PriceCreate) SetCurrency(s string) *PriceCreate {
-	pc.mutation.SetCurrency(s)
-	return pc
+func (_c *PriceCreate) SetCurrency(v string) *PriceCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetDisplayAmount sets the "display_amount" field.
-func (pc *PriceCreate) SetDisplayAmount(s string) *PriceCreate {
-	pc.mutation.SetDisplayAmount(s)
-	return pc
+func (_c *PriceCreate) SetDisplayAmount(v string) *PriceCreate {
+	_c.mutation.SetDisplayAmount(v)
+	return _c
 }
 
 // SetNillableDisplayAmount sets the "display_amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableDisplayAmount(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetDisplayAmount(*s)
+func (_c *PriceCreate) SetNillableDisplayAmount(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetDisplayAmount(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (pc *PriceCreate) SetPriceUnitType(tut types.PriceUnitType) *PriceCreate {
-	pc.mutation.SetPriceUnitType(tut)
-	return pc
+func (_c *PriceCreate) SetPriceUnitType(v types.PriceUnitType) *PriceCreate {
+	_c.mutation.SetPriceUnitType(v)
+	return _c
 }
 
 // SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceCreate {
-	if tut != nil {
-		pc.SetPriceUnitType(*tut)
+func (_c *PriceCreate) SetNillablePriceUnitType(v *types.PriceUnitType) *PriceCreate {
+	if v != nil {
+		_c.SetPriceUnitType(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetPriceUnitID sets the "price_unit_id" field.
-func (pc *PriceCreate) SetPriceUnitID(s string) *PriceCreate {
-	pc.mutation.SetPriceUnitID(s)
-	return pc
+func (_c *PriceCreate) SetPriceUnitID(v string) *PriceCreate {
+	_c.mutation.SetPriceUnitID(v)
+	return _c
 }
 
 // SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetPriceUnitID(*s)
+func (_c *PriceCreate) SetNillablePriceUnitID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetPriceUnitID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetPriceUnit sets the "price_unit" field.
-func (pc *PriceCreate) SetPriceUnit(s string) *PriceCreate {
-	pc.mutation.SetPriceUnit(s)
-	return pc
+func (_c *PriceCreate) SetPriceUnit(v string) *PriceCreate {
+	_c.mutation.SetPriceUnit(v)
+	return _c
 }
 
 // SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnit(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetPriceUnit(*s)
+func (_c *PriceCreate) SetNillablePriceUnit(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetPriceUnit(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (pc *PriceCreate) SetPriceUnitAmount(d decimal.Decimal) *PriceCreate {
-	pc.mutation.SetPriceUnitAmount(d)
-	return pc
+func (_c *PriceCreate) SetPriceUnitAmount(v decimal.Decimal) *PriceCreate {
+	_c.mutation.SetPriceUnitAmount(v)
+	return _c
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceCreate {
-	if d != nil {
-		pc.SetPriceUnitAmount(*d)
+func (_c *PriceCreate) SetNillablePriceUnitAmount(v *decimal.Decimal) *PriceCreate {
+	if v != nil {
+		_c.SetPriceUnitAmount(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
-func (pc *PriceCreate) SetDisplayPriceUnitAmount(s string) *PriceCreate {
-	pc.mutation.SetDisplayPriceUnitAmount(s)
-	return pc
+func (_c *PriceCreate) SetDisplayPriceUnitAmount(v string) *PriceCreate {
+	_c.mutation.SetDisplayPriceUnitAmount(v)
+	return _c
 }
 
 // SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetDisplayPriceUnitAmount(*s)
+func (_c *PriceCreate) SetNillableDisplayPriceUnitAmount(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetDisplayPriceUnitAmount(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (pc *PriceCreate) SetConversionRate(d decimal.Decimal) *PriceCreate {
-	pc.mutation.SetConversionRate(d)
-	return pc
+func (_c *PriceCreate) SetConversionRate(v decimal.Decimal) *PriceCreate {
+	_c.mutation.SetConversionRate(v)
+	return _c
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableConversionRate(d *decimal.Decimal) *PriceCreate {
-	if d != nil {
-		pc.SetConversionRate(*d)
+func (_c *PriceCreate) SetNillableConversionRate(v *decimal.Decimal) *PriceCreate {
+	if v != nil {
+		_c.SetConversionRate(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetMinQuantity sets the "min_quantity" field.
-func (pc *PriceCreate) SetMinQuantity(d decimal.Decimal) *PriceCreate {
-	pc.mutation.SetMinQuantity(d)
-	return pc
+func (_c *PriceCreate) SetMinQuantity(v decimal.Decimal) *PriceCreate {
+	_c.mutation.SetMinQuantity(v)
+	return _c
 }
 
 // SetNillableMinQuantity sets the "min_quantity" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableMinQuantity(d *decimal.Decimal) *PriceCreate {
-	if d != nil {
-		pc.SetMinQuantity(*d)
+func (_c *PriceCreate) SetNillableMinQuantity(v *decimal.Decimal) *PriceCreate {
+	if v != nil {
+		_c.SetMinQuantity(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetType sets the "type" field.
-func (pc *PriceCreate) SetType(tt types.PriceType) *PriceCreate {
-	pc.mutation.SetType(tt)
-	return pc
+func (_c *PriceCreate) SetType(v types.PriceType) *PriceCreate {
+	_c.mutation.SetType(v)
+	return _c
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (pc *PriceCreate) SetBillingPeriod(tp types.BillingPeriod) *PriceCreate {
-	pc.mutation.SetBillingPeriod(tp)
-	return pc
+func (_c *PriceCreate) SetBillingPeriod(v types.BillingPeriod) *PriceCreate {
+	_c.mutation.SetBillingPeriod(v)
+	return _c
 }
 
 // SetBillingPeriodCount sets the "billing_period_count" field.
-func (pc *PriceCreate) SetBillingPeriodCount(i int) *PriceCreate {
-	pc.mutation.SetBillingPeriodCount(i)
-	return pc
+func (_c *PriceCreate) SetBillingPeriodCount(v int) *PriceCreate {
+	_c.mutation.SetBillingPeriodCount(v)
+	return _c
 }
 
 // SetBillingModel sets the "billing_model" field.
-func (pc *PriceCreate) SetBillingModel(tm types.BillingModel) *PriceCreate {
-	pc.mutation.SetBillingModel(tm)
-	return pc
+func (_c *PriceCreate) SetBillingModel(v types.BillingModel) *PriceCreate {
+	_c.mutation.SetBillingModel(v)
+	return _c
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (pc *PriceCreate) SetBillingCadence(tc types.BillingCadence) *PriceCreate {
-	pc.mutation.SetBillingCadence(tc)
-	return pc
+func (_c *PriceCreate) SetBillingCadence(v types.BillingCadence) *PriceCreate {
+	_c.mutation.SetBillingCadence(v)
+	return _c
 }
 
 // SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableBillingCadence(tc *types.BillingCadence) *PriceCreate {
-	if tc != nil {
-		pc.SetBillingCadence(*tc)
+func (_c *PriceCreate) SetNillableBillingCadence(v *types.BillingCadence) *PriceCreate {
+	if v != nil {
+		_c.SetBillingCadence(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetInvoiceCadence sets the "invoice_cadence" field.
-func (pc *PriceCreate) SetInvoiceCadence(tc types.InvoiceCadence) *PriceCreate {
-	pc.mutation.SetInvoiceCadence(tc)
-	return pc
+func (_c *PriceCreate) SetInvoiceCadence(v types.InvoiceCadence) *PriceCreate {
+	_c.mutation.SetInvoiceCadence(v)
+	return _c
 }
 
 // SetNillableInvoiceCadence sets the "invoice_cadence" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableInvoiceCadence(tc *types.InvoiceCadence) *PriceCreate {
-	if tc != nil {
-		pc.SetInvoiceCadence(*tc)
+func (_c *PriceCreate) SetNillableInvoiceCadence(v *types.InvoiceCadence) *PriceCreate {
+	if v != nil {
+		_c.SetInvoiceCadence(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetTrialPeriodDays sets the "trial_period_days" field.
-func (pc *PriceCreate) SetTrialPeriodDays(i int) *PriceCreate {
-	pc.mutation.SetTrialPeriodDays(i)
-	return pc
+func (_c *PriceCreate) SetTrialPeriodDays(v int) *PriceCreate {
+	_c.mutation.SetTrialPeriodDays(v)
+	return _c
 }
 
 // SetNillableTrialPeriodDays sets the "trial_period_days" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableTrialPeriodDays(i *int) *PriceCreate {
-	if i != nil {
-		pc.SetTrialPeriodDays(*i)
+func (_c *PriceCreate) SetNillableTrialPeriodDays(v *int) *PriceCreate {
+	if v != nil {
+		_c.SetTrialPeriodDays(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetMeterID sets the "meter_id" field.
-func (pc *PriceCreate) SetMeterID(s string) *PriceCreate {
-	pc.mutation.SetMeterID(s)
-	return pc
+func (_c *PriceCreate) SetMeterID(v string) *PriceCreate {
+	_c.mutation.SetMeterID(v)
+	return _c
 }
 
 // SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableMeterID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetMeterID(*s)
+func (_c *PriceCreate) SetNillableMeterID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetMeterID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetFilterValues sets the "filter_values" field.
-func (pc *PriceCreate) SetFilterValues(m map[string][]string) *PriceCreate {
-	pc.mutation.SetFilterValues(m)
-	return pc
+func (_c *PriceCreate) SetFilterValues(v map[string][]string) *PriceCreate {
+	_c.mutation.SetFilterValues(v)
+	return _c
 }
 
 // SetTierMode sets the "tier_mode" field.
-func (pc *PriceCreate) SetTierMode(tt types.BillingTier) *PriceCreate {
-	pc.mutation.SetTierMode(tt)
-	return pc
+func (_c *PriceCreate) SetTierMode(v types.BillingTier) *PriceCreate {
+	_c.mutation.SetTierMode(v)
+	return _c
 }
 
 // SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableTierMode(tt *types.BillingTier) *PriceCreate {
-	if tt != nil {
-		pc.SetTierMode(*tt)
+func (_c *PriceCreate) SetNillableTierMode(v *types.BillingTier) *PriceCreate {
+	if v != nil {
+		_c.SetTierMode(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetBucketSize sets the "bucket_size" field.
-func (pc *PriceCreate) SetBucketSize(ts types.WindowSize) *PriceCreate {
-	pc.mutation.SetBucketSize(ts)
-	return pc
+func (_c *PriceCreate) SetBucketSize(v types.WindowSize) *PriceCreate {
+	_c.mutation.SetBucketSize(v)
+	return _c
 }
 
 // SetNillableBucketSize sets the "bucket_size" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableBucketSize(ts *types.WindowSize) *PriceCreate {
-	if ts != nil {
-		pc.SetBucketSize(*ts)
+func (_c *PriceCreate) SetNillableBucketSize(v *types.WindowSize) *PriceCreate {
+	if v != nil {
+		_c.SetBucketSize(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetTiers sets the "tiers" field.
-func (pc *PriceCreate) SetTiers(tt []*types.PriceTier) *PriceCreate {
-	pc.mutation.SetTiers(tt)
-	return pc
+func (_c *PriceCreate) SetTiers(v []*types.PriceTier) *PriceCreate {
+	_c.mutation.SetTiers(v)
+	return _c
 }
 
 // SetPriceUnitTiers sets the "price_unit_tiers" field.
-func (pc *PriceCreate) SetPriceUnitTiers(tt []*types.PriceTier) *PriceCreate {
-	pc.mutation.SetPriceUnitTiers(tt)
-	return pc
+func (_c *PriceCreate) SetPriceUnitTiers(v []*types.PriceTier) *PriceCreate {
+	_c.mutation.SetPriceUnitTiers(v)
+	return _c
 }
 
 // SetTransformQuantity sets the "transform_quantity" field.
-func (pc *PriceCreate) SetTransformQuantity(tq types.TransformQuantity) *PriceCreate {
-	pc.mutation.SetTransformQuantity(tq)
-	return pc
+func (_c *PriceCreate) SetTransformQuantity(v types.TransformQuantity) *PriceCreate {
+	_c.mutation.SetTransformQuantity(v)
+	return _c
 }
 
 // SetNillableTransformQuantity sets the "transform_quantity" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableTransformQuantity(tq *types.TransformQuantity) *PriceCreate {
-	if tq != nil {
-		pc.SetTransformQuantity(*tq)
+func (_c *PriceCreate) SetNillableTransformQuantity(v *types.TransformQuantity) *PriceCreate {
+	if v != nil {
+		_c.SetTransformQuantity(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (pc *PriceCreate) SetLookupKey(s string) *PriceCreate {
-	pc.mutation.SetLookupKey(s)
-	return pc
+func (_c *PriceCreate) SetLookupKey(v string) *PriceCreate {
+	_c.mutation.SetLookupKey(v)
+	return _c
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableLookupKey(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetLookupKey(*s)
+func (_c *PriceCreate) SetNillableLookupKey(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetLookupKey(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetDescription sets the "description" field.
-func (pc *PriceCreate) SetDescription(s string) *PriceCreate {
-	pc.mutation.SetDescription(s)
-	return pc
+func (_c *PriceCreate) SetDescription(v string) *PriceCreate {
+	_c.mutation.SetDescription(v)
+	return _c
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableDescription(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetDescription(*s)
+func (_c *PriceCreate) SetNillableDescription(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetDescription(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (pc *PriceCreate) SetMetadata(m map[string]string) *PriceCreate {
-	pc.mutation.SetMetadata(m)
-	return pc
+func (_c *PriceCreate) SetMetadata(v map[string]string) *PriceCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (pc *PriceCreate) SetEntityType(tet types.PriceEntityType) *PriceCreate {
-	pc.mutation.SetEntityType(tet)
-	return pc
+func (_c *PriceCreate) SetEntityType(v types.PriceEntityType) *PriceCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableEntityType(tet *types.PriceEntityType) *PriceCreate {
-	if tet != nil {
-		pc.SetEntityType(*tet)
+func (_c *PriceCreate) SetNillableEntityType(v *types.PriceEntityType) *PriceCreate {
+	if v != nil {
+		_c.SetEntityType(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (pc *PriceCreate) SetEntityID(s string) *PriceCreate {
-	pc.mutation.SetEntityID(s)
-	return pc
+func (_c *PriceCreate) SetEntityID(v string) *PriceCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetParentPriceID sets the "parent_price_id" field.
-func (pc *PriceCreate) SetParentPriceID(s string) *PriceCreate {
-	pc.mutation.SetParentPriceID(s)
-	return pc
+func (_c *PriceCreate) SetParentPriceID(v string) *PriceCreate {
+	_c.mutation.SetParentPriceID(v)
+	return _c
 }
 
 // SetNillableParentPriceID sets the "parent_price_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableParentPriceID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetParentPriceID(*s)
+func (_c *PriceCreate) SetNillableParentPriceID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetParentPriceID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (pc *PriceCreate) SetStartDate(t time.Time) *PriceCreate {
-	pc.mutation.SetStartDate(t)
-	return pc
+func (_c *PriceCreate) SetStartDate(v time.Time) *PriceCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableStartDate(t *time.Time) *PriceCreate {
-	if t != nil {
-		pc.SetStartDate(*t)
+func (_c *PriceCreate) SetNillableStartDate(v *time.Time) *PriceCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (pc *PriceCreate) SetEndDate(t time.Time) *PriceCreate {
-	pc.mutation.SetEndDate(t)
-	return pc
+func (_c *PriceCreate) SetEndDate(v time.Time) *PriceCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableEndDate(t *time.Time) *PriceCreate {
-	if t != nil {
-		pc.SetEndDate(*t)
+func (_c *PriceCreate) SetNillableEndDate(v *time.Time) *PriceCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetGroupID sets the "group_id" field.
-func (pc *PriceCreate) SetGroupID(s string) *PriceCreate {
-	pc.mutation.SetGroupID(s)
-	return pc
+func (_c *PriceCreate) SetGroupID(v string) *PriceCreate {
+	_c.mutation.SetGroupID(v)
+	return _c
 }
 
 // SetNillableGroupID sets the "group_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableGroupID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetGroupID(*s)
+func (_c *PriceCreate) SetNillableGroupID(v *string) *PriceCreate {
+	if v != nil {
+		_c.SetGroupID(*v)
 	}
-	return pc
+	return _c
 }
 
 // SetSequence sets the "sequence" field.
-func (pc *PriceCreate) SetSequence(i int64) *PriceCreate {
-	pc.mutation.SetSequence(i)
-	return pc
+func (_c *PriceCreate) SetSequence(v int64) *PriceCreate {
+	_c.mutation.SetSequence(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (pc *PriceCreate) SetID(s string) *PriceCreate {
-	pc.mutation.SetID(s)
-	return pc
+func (_c *PriceCreate) SetID(v string) *PriceCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
-func (pc *PriceCreate) AddCostsheetIDs(ids ...string) *PriceCreate {
-	pc.mutation.AddCostsheetIDs(ids...)
-	return pc
+func (_c *PriceCreate) AddCostsheetIDs(ids ...string) *PriceCreate {
+	_c.mutation.AddCostsheetIDs(ids...)
+	return _c
 }
 
 // AddCostsheet adds the "costsheet" edges to the Costsheet entity.
-func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *PriceCreate) AddCostsheet(v ...*Costsheet) *PriceCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return pc.AddCostsheetIDs(ids...)
+	return _c.AddCostsheetIDs(ids...)
 }
 
 // SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
-func (pc *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
-	pc.mutation.SetPriceUnitEdgeID(id)
-	return pc
+func (_c *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
+	_c.mutation.SetPriceUnitEdgeID(id)
+	return _c
 }
 
 // SetNillablePriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitEdgeID(id *string) *PriceCreate {
+func (_c *PriceCreate) SetNillablePriceUnitEdgeID(id *string) *PriceCreate {
 	if id != nil {
-		pc = pc.SetPriceUnitEdgeID(*id)
+		_c = _c.SetPriceUnitEdgeID(*id)
 	}
-	return pc
+	return _c
 }
 
 // SetPriceUnitEdge sets the "price_unit_edge" edge to the PriceUnit entity.
-func (pc *PriceCreate) SetPriceUnitEdge(p *PriceUnit) *PriceCreate {
-	return pc.SetPriceUnitEdgeID(p.ID)
+func (_c *PriceCreate) SetPriceUnitEdge(v *PriceUnit) *PriceCreate {
+	return _c.SetPriceUnitEdgeID(v.ID)
 }
 
 // Mutation returns the PriceMutation object of the builder.
-func (pc *PriceCreate) Mutation() *PriceMutation {
-	return pc.mutation
+func (_c *PriceCreate) Mutation() *PriceMutation {
+	return _c.mutation
 }
 
 // Save creates the Price in the database.
-func (pc *PriceCreate) Save(ctx context.Context) (*Price, error) {
-	pc.defaults()
-	return withHooks(ctx, pc.sqlSave, pc.mutation, pc.hooks)
+func (_c *PriceCreate) Save(ctx context.Context) (*Price, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (pc *PriceCreate) SaveX(ctx context.Context) *Price {
-	v, err := pc.Save(ctx)
+func (_c *PriceCreate) SaveX(ctx context.Context) *Price {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -578,212 +578,212 @@ func (pc *PriceCreate) SaveX(ctx context.Context) *Price {
 }
 
 // Exec executes the query.
-func (pc *PriceCreate) Exec(ctx context.Context) error {
-	_, err := pc.Save(ctx)
+func (_c *PriceCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pc *PriceCreate) ExecX(ctx context.Context) {
-	if err := pc.Exec(ctx); err != nil {
+func (_c *PriceCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (pc *PriceCreate) defaults() {
-	if _, ok := pc.mutation.Status(); !ok {
+func (_c *PriceCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := price.DefaultStatus
-		pc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := pc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := price.DefaultCreatedAt()
-		pc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := pc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := price.DefaultUpdatedAt()
-		pc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := pc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := price.DefaultEnvironmentID
-		pc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := pc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		v := price.DefaultAmount
-		pc.mutation.SetAmount(v)
+		_c.mutation.SetAmount(v)
 	}
-	if _, ok := pc.mutation.PriceUnitType(); !ok {
+	if _, ok := _c.mutation.PriceUnitType(); !ok {
 		v := price.DefaultPriceUnitType
-		pc.mutation.SetPriceUnitType(v)
+		_c.mutation.SetPriceUnitType(v)
 	}
-	if _, ok := pc.mutation.PriceUnitAmount(); !ok {
+	if _, ok := _c.mutation.PriceUnitAmount(); !ok {
 		v := price.DefaultPriceUnitAmount
-		pc.mutation.SetPriceUnitAmount(v)
+		_c.mutation.SetPriceUnitAmount(v)
 	}
-	if _, ok := pc.mutation.ConversionRate(); !ok {
+	if _, ok := _c.mutation.ConversionRate(); !ok {
 		v := price.DefaultConversionRate
-		pc.mutation.SetConversionRate(v)
+		_c.mutation.SetConversionRate(v)
 	}
-	if _, ok := pc.mutation.BillingCadence(); !ok {
+	if _, ok := _c.mutation.BillingCadence(); !ok {
 		v := price.DefaultBillingCadence
-		pc.mutation.SetBillingCadence(v)
+		_c.mutation.SetBillingCadence(v)
 	}
-	if _, ok := pc.mutation.TrialPeriodDays(); !ok {
+	if _, ok := _c.mutation.TrialPeriodDays(); !ok {
 		v := price.DefaultTrialPeriodDays
-		pc.mutation.SetTrialPeriodDays(v)
+		_c.mutation.SetTrialPeriodDays(v)
 	}
-	if _, ok := pc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		v := price.DefaultEntityType
-		pc.mutation.SetEntityType(v)
+		_c.mutation.SetEntityType(v)
 	}
-	if _, ok := pc.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		v := price.DefaultStartDate()
-		pc.mutation.SetStartDate(v)
+		_c.mutation.SetStartDate(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (pc *PriceCreate) check() error {
-	if _, ok := pc.mutation.TenantID(); !ok {
+func (_c *PriceCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Price.tenant_id"`)}
 	}
-	if v, ok := pc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := price.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Price.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Price.status"`)}
 	}
-	if _, ok := pc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Price.created_at"`)}
 	}
-	if _, ok := pc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Price.updated_at"`)}
 	}
-	if _, ok := pc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "Price.amount"`)}
 	}
-	if _, ok := pc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Price.currency"`)}
 	}
-	if v, ok := pc.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := price.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Price.currency": %w`, err)}
 		}
 	}
-	if v, ok := pc.mutation.DisplayAmount(); ok {
+	if v, ok := _c.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.PriceUnitType(); !ok {
+	if _, ok := _c.mutation.PriceUnitType(); !ok {
 		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
 	}
-	if v, ok := pc.mutation.PriceUnitType(); ok {
+	if v, ok := _c.mutation.PriceUnitType(); ok {
 		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.GetType(); !ok {
+	if _, ok := _c.mutation.GetType(); !ok {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Price.type"`)}
 	}
-	if v, ok := pc.mutation.GetType(); ok {
+	if v, ok := _c.mutation.GetType(); ok {
 		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.BillingPeriod(); !ok {
+	if _, ok := _c.mutation.BillingPeriod(); !ok {
 		return &ValidationError{Name: "billing_period", err: errors.New(`ent: missing required field "Price.billing_period"`)}
 	}
-	if v, ok := pc.mutation.BillingPeriod(); ok {
+	if v, ok := _c.mutation.BillingPeriod(); ok {
 		if err := price.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Price.billing_period": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.BillingPeriodCount(); !ok {
+	if _, ok := _c.mutation.BillingPeriodCount(); !ok {
 		return &ValidationError{Name: "billing_period_count", err: errors.New(`ent: missing required field "Price.billing_period_count"`)}
 	}
-	if v, ok := pc.mutation.BillingPeriodCount(); ok {
+	if v, ok := _c.mutation.BillingPeriodCount(); ok {
 		if err := price.BillingPeriodCountValidator(v); err != nil {
 			return &ValidationError{Name: "billing_period_count", err: fmt.Errorf(`ent: validator failed for field "Price.billing_period_count": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.BillingModel(); !ok {
+	if _, ok := _c.mutation.BillingModel(); !ok {
 		return &ValidationError{Name: "billing_model", err: errors.New(`ent: missing required field "Price.billing_model"`)}
 	}
-	if v, ok := pc.mutation.BillingModel(); ok {
+	if v, ok := _c.mutation.BillingModel(); ok {
 		if err := price.BillingModelValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_model", err: fmt.Errorf(`ent: validator failed for field "Price.billing_model": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.BillingCadence(); !ok {
+	if _, ok := _c.mutation.BillingCadence(); !ok {
 		return &ValidationError{Name: "billing_cadence", err: errors.New(`ent: missing required field "Price.billing_cadence"`)}
 	}
-	if v, ok := pc.mutation.BillingCadence(); ok {
+	if v, ok := _c.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
 		}
 	}
-	if v, ok := pc.mutation.InvoiceCadence(); ok {
+	if v, ok := _c.mutation.InvoiceCadence(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "invoice_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.invoice_cadence": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.TrialPeriodDays(); !ok {
+	if _, ok := _c.mutation.TrialPeriodDays(); !ok {
 		return &ValidationError{Name: "trial_period_days", err: errors.New(`ent: missing required field "Price.trial_period_days"`)}
 	}
-	if v, ok := pc.mutation.TrialPeriodDays(); ok {
+	if v, ok := _c.mutation.TrialPeriodDays(); ok {
 		if err := price.TrialPeriodDaysValidator(v); err != nil {
 			return &ValidationError{Name: "trial_period_days", err: fmt.Errorf(`ent: validator failed for field "Price.trial_period_days": %w`, err)}
 		}
 	}
-	if v, ok := pc.mutation.TierMode(); ok {
+	if v, ok := _c.mutation.TierMode(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
-	if v, ok := pc.mutation.BucketSize(); ok {
+	if v, ok := _c.mutation.BucketSize(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "bucket_size", err: fmt.Errorf(`ent: validator failed for field "Price.bucket_size": %w`, err)}
 		}
 	}
-	if v, ok := pc.mutation.TransformQuantity(); ok {
+	if v, ok := _c.mutation.TransformQuantity(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "transform_quantity", err: fmt.Errorf(`ent: validator failed for field "Price.transform_quantity": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "Price.entity_type"`)}
 	}
-	if v, ok := pc.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := price.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Price.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "Price.entity_id"`)}
 	}
-	if v, ok := pc.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := price.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "Price.entity_id": %w`, err)}
 		}
 	}
-	switch pc.driver.Dialect() {
+	switch _c.driver.Dialect() {
 	case dialect.MySQL, dialect.SQLite:
-		if _, ok := pc.mutation.Sequence(); !ok {
+		if _, ok := _c.mutation.Sequence(); !ok {
 			return &ValidationError{Name: "sequence", err: errors.New(`ent: missing required field "Price.sequence"`)}
 		}
 	}
 	return nil
 }
 
-func (pc *PriceCreate) sqlSave(ctx context.Context) (*Price, error) {
-	if err := pc.check(); err != nil {
+func (_c *PriceCreate) sqlSave(ctx context.Context) (*Price, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := pc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, pc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -796,185 +796,185 @@ func (pc *PriceCreate) sqlSave(ctx context.Context) (*Price, error) {
 			return nil, fmt.Errorf("unexpected Price.ID type: %T", _spec.ID.Value)
 		}
 	}
-	pc.mutation.id = &_node.ID
-	pc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
+func (_c *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Price{config: pc.config}
+		_node = &Price{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(price.Table, sqlgraph.NewFieldSpec(price.FieldID, field.TypeString))
 	)
-	if id, ok := pc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := pc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(price.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := pc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(price.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := pc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(price.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := pc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(price.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := pc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(price.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := pc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(price.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := pc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(price.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := pc.mutation.DisplayName(); ok {
+	if value, ok := _c.mutation.DisplayName(); ok {
 		_spec.SetField(price.FieldDisplayName, field.TypeString, value)
 		_node.DisplayName = value
 	}
-	if value, ok := pc.mutation.Amount(); ok {
+	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := pc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(price.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := pc.mutation.DisplayAmount(); ok {
+	if value, ok := _c.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 		_node.DisplayAmount = value
 	}
-	if value, ok := pc.mutation.PriceUnitType(); ok {
+	if value, ok := _c.mutation.PriceUnitType(); ok {
 		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
 		_node.PriceUnitType = value
 	}
-	if value, ok := pc.mutation.PriceUnit(); ok {
+	if value, ok := _c.mutation.PriceUnit(); ok {
 		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
 		_node.PriceUnit = &value
 	}
-	if value, ok := pc.mutation.PriceUnitAmount(); ok {
+	if value, ok := _c.mutation.PriceUnitAmount(); ok {
 		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
 		_node.PriceUnitAmount = &value
 	}
-	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
+	if value, ok := _c.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
 		_node.DisplayPriceUnitAmount = value
 	}
-	if value, ok := pc.mutation.ConversionRate(); ok {
+	if value, ok := _c.mutation.ConversionRate(); ok {
 		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
 		_node.ConversionRate = &value
 	}
-	if value, ok := pc.mutation.MinQuantity(); ok {
+	if value, ok := _c.mutation.MinQuantity(); ok {
 		_spec.SetField(price.FieldMinQuantity, field.TypeOther, value)
 		_node.MinQuantity = &value
 	}
-	if value, ok := pc.mutation.GetType(); ok {
+	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
 		_node.Type = value
 	}
-	if value, ok := pc.mutation.BillingPeriod(); ok {
+	if value, ok := _c.mutation.BillingPeriod(); ok {
 		_spec.SetField(price.FieldBillingPeriod, field.TypeString, value)
 		_node.BillingPeriod = value
 	}
-	if value, ok := pc.mutation.BillingPeriodCount(); ok {
+	if value, ok := _c.mutation.BillingPeriodCount(); ok {
 		_spec.SetField(price.FieldBillingPeriodCount, field.TypeInt, value)
 		_node.BillingPeriodCount = value
 	}
-	if value, ok := pc.mutation.BillingModel(); ok {
+	if value, ok := _c.mutation.BillingModel(); ok {
 		_spec.SetField(price.FieldBillingModel, field.TypeString, value)
 		_node.BillingModel = value
 	}
-	if value, ok := pc.mutation.BillingCadence(); ok {
+	if value, ok := _c.mutation.BillingCadence(); ok {
 		_spec.SetField(price.FieldBillingCadence, field.TypeString, value)
 		_node.BillingCadence = value
 	}
-	if value, ok := pc.mutation.InvoiceCadence(); ok {
+	if value, ok := _c.mutation.InvoiceCadence(); ok {
 		_spec.SetField(price.FieldInvoiceCadence, field.TypeString, value)
 		_node.InvoiceCadence = value
 	}
-	if value, ok := pc.mutation.TrialPeriodDays(); ok {
+	if value, ok := _c.mutation.TrialPeriodDays(); ok {
 		_spec.SetField(price.FieldTrialPeriodDays, field.TypeInt, value)
 		_node.TrialPeriodDays = value
 	}
-	if value, ok := pc.mutation.MeterID(); ok {
+	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(price.FieldMeterID, field.TypeString, value)
 		_node.MeterID = &value
 	}
-	if value, ok := pc.mutation.FilterValues(); ok {
+	if value, ok := _c.mutation.FilterValues(); ok {
 		_spec.SetField(price.FieldFilterValues, field.TypeJSON, value)
 		_node.FilterValues = value
 	}
-	if value, ok := pc.mutation.TierMode(); ok {
+	if value, ok := _c.mutation.TierMode(); ok {
 		_spec.SetField(price.FieldTierMode, field.TypeString, value)
 		_node.TierMode = &value
 	}
-	if value, ok := pc.mutation.BucketSize(); ok {
+	if value, ok := _c.mutation.BucketSize(); ok {
 		_spec.SetField(price.FieldBucketSize, field.TypeString, value)
 		_node.BucketSize = value
 	}
-	if value, ok := pc.mutation.Tiers(); ok {
+	if value, ok := _c.mutation.Tiers(); ok {
 		_spec.SetField(price.FieldTiers, field.TypeJSON, value)
 		_node.Tiers = value
 	}
-	if value, ok := pc.mutation.PriceUnitTiers(); ok {
+	if value, ok := _c.mutation.PriceUnitTiers(); ok {
 		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
 		_node.PriceUnitTiers = value
 	}
-	if value, ok := pc.mutation.TransformQuantity(); ok {
+	if value, ok := _c.mutation.TransformQuantity(); ok {
 		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)
 		_node.TransformQuantity = value
 	}
-	if value, ok := pc.mutation.LookupKey(); ok {
+	if value, ok := _c.mutation.LookupKey(); ok {
 		_spec.SetField(price.FieldLookupKey, field.TypeString, value)
 		_node.LookupKey = value
 	}
-	if value, ok := pc.mutation.Description(); ok {
+	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(price.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
-	if value, ok := pc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(price.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := pc.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(price.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := pc.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(price.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := pc.mutation.ParentPriceID(); ok {
+	if value, ok := _c.mutation.ParentPriceID(); ok {
 		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
 		_node.ParentPriceID = &value
 	}
-	if value, ok := pc.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(price.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = &value
 	}
-	if value, ok := pc.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := pc.mutation.GroupID(); ok {
+	if value, ok := _c.mutation.GroupID(); ok {
 		_spec.SetField(price.FieldGroupID, field.TypeString, value)
 		_node.GroupID = &value
 	}
-	if value, ok := pc.mutation.Sequence(); ok {
+	if value, ok := _c.mutation.Sequence(); ok {
 		_spec.SetField(price.FieldSequence, field.TypeInt64, value)
 		_node.Sequence = value
 	}
-	if nodes := pc.mutation.CostsheetIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CostsheetIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -990,7 +990,7 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: false,
@@ -1018,16 +1018,16 @@ type PriceCreateBulk struct {
 }
 
 // Save creates the Price entities in the database.
-func (pcb *PriceCreateBulk) Save(ctx context.Context) ([]*Price, error) {
-	if pcb.err != nil {
-		return nil, pcb.err
+func (_c *PriceCreateBulk) Save(ctx context.Context) ([]*Price, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(pcb.builders))
-	nodes := make([]*Price, len(pcb.builders))
-	mutators := make([]Mutator, len(pcb.builders))
-	for i := range pcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Price, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := pcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*PriceMutation)
@@ -1041,11 +1041,11 @@ func (pcb *PriceCreateBulk) Save(ctx context.Context) ([]*Price, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, pcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, pcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -1065,7 +1065,7 @@ func (pcb *PriceCreateBulk) Save(ctx context.Context) ([]*Price, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, pcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -1073,8 +1073,8 @@ func (pcb *PriceCreateBulk) Save(ctx context.Context) ([]*Price, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (pcb *PriceCreateBulk) SaveX(ctx context.Context) []*Price {
-	v, err := pcb.Save(ctx)
+func (_c *PriceCreateBulk) SaveX(ctx context.Context) []*Price {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -1082,14 +1082,14 @@ func (pcb *PriceCreateBulk) SaveX(ctx context.Context) []*Price {
 }
 
 // Exec executes the query.
-func (pcb *PriceCreateBulk) Exec(ctx context.Context) error {
-	_, err := pcb.Save(ctx)
+func (_c *PriceCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pcb *PriceCreateBulk) ExecX(ctx context.Context) {
-	if err := pcb.Exec(ctx); err != nil {
+func (_c *PriceCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

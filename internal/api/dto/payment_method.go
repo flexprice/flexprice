@@ -22,6 +22,9 @@ type CreateStripePaymentLinkRequest struct {
 	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default" default:"false"`
 	PaymentID              string          `json:"payment_id" binding:"required"`
 	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled" default:"false"`
+	// ExpiresAt closes the Stripe Checkout Session at a fixed time. Nil leaves Stripe's
+	// own 24h default in place.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // StripePaymentLinkResponse represents a response from creating a Stripe payment link
@@ -34,6 +37,7 @@ type StripePaymentLinkResponse struct {
 	Status          string          `json:"status"`
 	CreatedAt       int64           `json:"created_at"`
 	PaymentID       string          `json:"payment_id,omitempty"`
+	ExpiresAt       *time.Time      `json:"expires_at,omitempty"`
 }
 
 // Validate validates the create Stripe payment link request
@@ -370,7 +374,20 @@ type SavedPaymentMethod struct {
 	// Capability, not permission: could this be charged with nobody present.
 	// True for any active Chargebee or Stripe card (both vault off-session by
 	// construction); false for a Razorpay token without a mandate.
-	CanAutoCharge bool `json:"can_auto_charge"`
+	CanAutoCharge       bool                          `json:"can_auto_charge"`
+	InstantlyChargeable bool                          `json:"instantly_chargeable"`
+	UPI                 *SavedUPIDetails              `json:"upi,omitempty"`
+	Recurring           *SavedRecurringPaymentDetails `json:"recurring,omitempty"`
+}
+
+type SavedUPIDetails struct {
+	VPA string `json:"vpa,omitempty"`
+}
+
+type SavedRecurringPaymentDetails struct {
+	Status             types.RecurringPaymentStatus `json:"status,omitempty"`
+	AutoChargeableTill *time.Time                   `json:"auto_chargeable_till,omitempty"`
+	MaxAmount          *decimal.Decimal             `json:"max_amount,omitempty" swaggertype:"string"`
 }
 
 type SavedCardDetails struct {
@@ -383,7 +400,7 @@ type SavedCardDetails struct {
 type ProviderSavedPaymentMethods struct {
 	Provider types.PaymentGatewayType `json:"provider"`
 	Items    []*SavedPaymentMethod    `json:"items"`
-	Error *ProviderError `json:"error,omitempty"`
+	Error    *ProviderError           `json:"error,omitempty"`
 }
 
 type ProviderError struct {

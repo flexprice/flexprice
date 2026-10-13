@@ -219,6 +219,7 @@ type Event struct {
 	CustomerID         string                 `json:"customer_id"`
 	EventName          string                 `json:"event_name"`
 	Timestamp          time.Time              `json:"timestamp"`
+	IngestedAt         time.Time              `json:"ingested_at,omitempty"`
 	Properties         map[string]interface{} `json:"properties"`
 	Source             string                 `json:"source"`
 	EnvironmentID      string                 `json:"environment_id"`
@@ -314,6 +315,13 @@ func (r *GetEventsRequest) Validate() error {
 		return err
 	}
 
+	// An id-only lookup can't use the sort key and scans the tenant's whole time range.
+	if r.EventID != "" && r.ExternalCustomerID == "" {
+		return ierr.NewError("external_customer_id is required when filtering by event_id").
+			WithHint("Please provide the external customer ID the event was ingested with").
+			Mark(ierr.ErrValidation)
+	}
+
 	allowedSortFields := []string{"timestamp", "event_name"}
 	if r.Sort != nil && !slices.Contains(allowedSortFields, *r.Sort) {
 		return ierr.NewErrorf("invalid sort field: %s", *r.Sort).
@@ -398,7 +406,8 @@ type UsageAnalyticItem struct {
 	FeatureName          string                             `json:"name,omitempty"`
 	EventName            string                             `json:"event_name,omitempty"`
 	Source               string                             `json:"source,omitempty"`
-	Sources              []string                           `json:"sources,omitempty"` // List of sources when not grouping by source
+	Sources              []string                           `json:"sources,omitempty"`              // List of sources when not grouping by source
+	ExternalCustomerID   string                             `json:"external_customer_id,omitempty"` // Populated only when "external_customer_id" is a group_by dimension
 	Unit                 string                             `json:"unit,omitempty"`
 	UnitPlural           string                             `json:"unit_plural,omitempty"`
 	AggregationType      types.AggregationType              `json:"aggregation_type,omitempty"`
@@ -519,21 +528,9 @@ type GetMonitoringDataResponse struct {
 	Points            []EventCountPoint `json:"points,omitempty"`
 }
 
-type GetHuggingFaceBillingDataRequest struct {
-	EventIDs []string `json:"requestIds" binding:"required,min=1"`
-}
-
-type EventCostInfo struct {
-	EventID       string          `json:"requestId"`
-	CostInNanoUSD decimal.Decimal `json:"costNanoUsd" swaggertype:"string"`
-}
-
-type GetHuggingFaceBillingDataResponse struct {
-	Data []EventCostInfo `json:"requests"`
-}
-
 type GetEventByIDResponse struct {
 	Event           *Event                          `json:"event"`
+	Events          []*Event                        `json:"events,omitempty"`
 	Status          types.EventProcessingStatusType `json:"status"`
 	ProcessedEvents []*FeatureUsageInfo             `json:"processed_events,omitempty"`
 	DebugTracker    *DebugTracker                   `json:"debug_tracker,omitempty"`

@@ -105,6 +105,16 @@ func PaymentID(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldPaymentID, v))
 }
 
+// InvoiceID applies equality check predicate on the "invoice_id" field. It's identical to InvoiceIDEQ.
+func InvoiceID(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldInvoiceID, v))
+}
+
+// CreditNoteID applies equality check predicate on the "credit_note_id" field. It's identical to CreditNoteIDEQ.
+func CreditNoteID(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldCreditNoteID, v))
+}
+
 // PaymentGateway applies equality check predicate on the "payment_gateway" field. It's identical to PaymentGatewayEQ.
 func PaymentGateway(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldPaymentGateway, v))
@@ -125,6 +135,11 @@ func Amount(v decimal.Decimal) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldAmount, v))
 }
 
+// SettledAmount applies equality check predicate on the "settled_amount" field. It's identical to SettledAmountEQ.
+func SettledAmount(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldSettledAmount, v))
+}
+
 // Currency applies equality check predicate on the "currency" field. It's identical to CurrencyEQ.
 func Currency(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldCurrency, v))
@@ -138,6 +153,21 @@ func RefundStatus(v string) predicate.Refund {
 // RefundReason applies equality check predicate on the "refund_reason" field. It's identical to RefundReasonEQ.
 func RefundReason(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldRefundReason, v))
+}
+
+// RefundDestination applies equality check predicate on the "refund_destination" field. It's identical to RefundDestinationEQ.
+func RefundDestination(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldRefundDestination, v))
+}
+
+// RefundDestinationID applies equality check predicate on the "refund_destination_id" field. It's identical to RefundDestinationIDEQ.
+func RefundDestinationID(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldRefundDestinationID, v))
+}
+
+// Attempt applies equality check predicate on the "attempt" field. It's identical to AttemptEQ.
+func Attempt(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldAttempt, v))
 }
 
 // IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
@@ -665,6 +695,16 @@ func PaymentIDHasSuffix(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldHasSuffix(FieldPaymentID, v))
 }
 
+// PaymentIDIsNil applies the IsNil predicate on the "payment_id" field.
+func PaymentIDIsNil() predicate.Refund {
+	return predicate.Refund(sql.FieldIsNull(FieldPaymentID))
+}
+
+// PaymentIDNotNil applies the NotNil predicate on the "payment_id" field.
+func PaymentIDNotNil() predicate.Refund {
+	return predicate.Refund(sql.FieldNotNull(FieldPaymentID))
+}
+
 // PaymentIDEqualFold applies the EqualFold predicate on the "payment_id" field.
 func PaymentIDEqualFold(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEqualFold(FieldPaymentID, v))
@@ -673,6 +713,146 @@ func PaymentIDEqualFold(v string) predicate.Refund {
 // PaymentIDContainsFold applies the ContainsFold predicate on the "payment_id" field.
 func PaymentIDContainsFold(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldContainsFold(FieldPaymentID, v))
+}
+
+// InvoiceIDEQ applies the EQ predicate on the "invoice_id" field.
+func InvoiceIDEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldInvoiceID, v))
+}
+
+// InvoiceIDNEQ applies the NEQ predicate on the "invoice_id" field.
+func InvoiceIDNEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldInvoiceID, v))
+}
+
+// InvoiceIDIn applies the In predicate on the "invoice_id" field.
+func InvoiceIDIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldInvoiceID, vs...))
+}
+
+// InvoiceIDNotIn applies the NotIn predicate on the "invoice_id" field.
+func InvoiceIDNotIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldInvoiceID, vs...))
+}
+
+// InvoiceIDGT applies the GT predicate on the "invoice_id" field.
+func InvoiceIDGT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldInvoiceID, v))
+}
+
+// InvoiceIDGTE applies the GTE predicate on the "invoice_id" field.
+func InvoiceIDGTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldInvoiceID, v))
+}
+
+// InvoiceIDLT applies the LT predicate on the "invoice_id" field.
+func InvoiceIDLT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldInvoiceID, v))
+}
+
+// InvoiceIDLTE applies the LTE predicate on the "invoice_id" field.
+func InvoiceIDLTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldInvoiceID, v))
+}
+
+// InvoiceIDContains applies the Contains predicate on the "invoice_id" field.
+func InvoiceIDContains(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContains(FieldInvoiceID, v))
+}
+
+// InvoiceIDHasPrefix applies the HasPrefix predicate on the "invoice_id" field.
+func InvoiceIDHasPrefix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasPrefix(FieldInvoiceID, v))
+}
+
+// InvoiceIDHasSuffix applies the HasSuffix predicate on the "invoice_id" field.
+func InvoiceIDHasSuffix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasSuffix(FieldInvoiceID, v))
+}
+
+// InvoiceIDEqualFold applies the EqualFold predicate on the "invoice_id" field.
+func InvoiceIDEqualFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEqualFold(FieldInvoiceID, v))
+}
+
+// InvoiceIDContainsFold applies the ContainsFold predicate on the "invoice_id" field.
+func InvoiceIDContainsFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContainsFold(FieldInvoiceID, v))
+}
+
+// CreditNoteIDEQ applies the EQ predicate on the "credit_note_id" field.
+func CreditNoteIDEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDNEQ applies the NEQ predicate on the "credit_note_id" field.
+func CreditNoteIDNEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDIn applies the In predicate on the "credit_note_id" field.
+func CreditNoteIDIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldCreditNoteID, vs...))
+}
+
+// CreditNoteIDNotIn applies the NotIn predicate on the "credit_note_id" field.
+func CreditNoteIDNotIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldCreditNoteID, vs...))
+}
+
+// CreditNoteIDGT applies the GT predicate on the "credit_note_id" field.
+func CreditNoteIDGT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDGTE applies the GTE predicate on the "credit_note_id" field.
+func CreditNoteIDGTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDLT applies the LT predicate on the "credit_note_id" field.
+func CreditNoteIDLT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDLTE applies the LTE predicate on the "credit_note_id" field.
+func CreditNoteIDLTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDContains applies the Contains predicate on the "credit_note_id" field.
+func CreditNoteIDContains(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContains(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDHasPrefix applies the HasPrefix predicate on the "credit_note_id" field.
+func CreditNoteIDHasPrefix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasPrefix(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDHasSuffix applies the HasSuffix predicate on the "credit_note_id" field.
+func CreditNoteIDHasSuffix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasSuffix(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDIsNil applies the IsNil predicate on the "credit_note_id" field.
+func CreditNoteIDIsNil() predicate.Refund {
+	return predicate.Refund(sql.FieldIsNull(FieldCreditNoteID))
+}
+
+// CreditNoteIDNotNil applies the NotNil predicate on the "credit_note_id" field.
+func CreditNoteIDNotNil() predicate.Refund {
+	return predicate.Refund(sql.FieldNotNull(FieldCreditNoteID))
+}
+
+// CreditNoteIDEqualFold applies the EqualFold predicate on the "credit_note_id" field.
+func CreditNoteIDEqualFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEqualFold(FieldCreditNoteID, v))
+}
+
+// CreditNoteIDContainsFold applies the ContainsFold predicate on the "credit_note_id" field.
+func CreditNoteIDContainsFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContainsFold(FieldCreditNoteID, v))
 }
 
 // PaymentGatewayEQ applies the EQ predicate on the "payment_gateway" field.
@@ -728,6 +908,16 @@ func PaymentGatewayHasPrefix(v string) predicate.Refund {
 // PaymentGatewayHasSuffix applies the HasSuffix predicate on the "payment_gateway" field.
 func PaymentGatewayHasSuffix(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldHasSuffix(FieldPaymentGateway, v))
+}
+
+// PaymentGatewayIsNil applies the IsNil predicate on the "payment_gateway" field.
+func PaymentGatewayIsNil() predicate.Refund {
+	return predicate.Refund(sql.FieldIsNull(FieldPaymentGateway))
+}
+
+// PaymentGatewayNotNil applies the NotNil predicate on the "payment_gateway" field.
+func PaymentGatewayNotNil() predicate.Refund {
+	return predicate.Refund(sql.FieldNotNull(FieldPaymentGateway))
 }
 
 // PaymentGatewayEqualFold applies the EqualFold predicate on the "payment_gateway" field.
@@ -930,6 +1120,46 @@ func AmountLTE(v decimal.Decimal) predicate.Refund {
 	return predicate.Refund(sql.FieldLTE(FieldAmount, v))
 }
 
+// SettledAmountEQ applies the EQ predicate on the "settled_amount" field.
+func SettledAmountEQ(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldSettledAmount, v))
+}
+
+// SettledAmountNEQ applies the NEQ predicate on the "settled_amount" field.
+func SettledAmountNEQ(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldSettledAmount, v))
+}
+
+// SettledAmountIn applies the In predicate on the "settled_amount" field.
+func SettledAmountIn(vs ...decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldSettledAmount, vs...))
+}
+
+// SettledAmountNotIn applies the NotIn predicate on the "settled_amount" field.
+func SettledAmountNotIn(vs ...decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldSettledAmount, vs...))
+}
+
+// SettledAmountGT applies the GT predicate on the "settled_amount" field.
+func SettledAmountGT(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldSettledAmount, v))
+}
+
+// SettledAmountGTE applies the GTE predicate on the "settled_amount" field.
+func SettledAmountGTE(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldSettledAmount, v))
+}
+
+// SettledAmountLT applies the LT predicate on the "settled_amount" field.
+func SettledAmountLT(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldSettledAmount, v))
+}
+
+// SettledAmountLTE applies the LTE predicate on the "settled_amount" field.
+func SettledAmountLTE(v decimal.Decimal) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldSettledAmount, v))
+}
+
 // CurrencyEQ applies the EQ predicate on the "currency" field.
 func CurrencyEQ(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldCurrency, v))
@@ -1125,6 +1355,186 @@ func RefundReasonContainsFold(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldContainsFold(FieldRefundReason, v))
 }
 
+// RefundDestinationEQ applies the EQ predicate on the "refund_destination" field.
+func RefundDestinationEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldRefundDestination, v))
+}
+
+// RefundDestinationNEQ applies the NEQ predicate on the "refund_destination" field.
+func RefundDestinationNEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldRefundDestination, v))
+}
+
+// RefundDestinationIn applies the In predicate on the "refund_destination" field.
+func RefundDestinationIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldRefundDestination, vs...))
+}
+
+// RefundDestinationNotIn applies the NotIn predicate on the "refund_destination" field.
+func RefundDestinationNotIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldRefundDestination, vs...))
+}
+
+// RefundDestinationGT applies the GT predicate on the "refund_destination" field.
+func RefundDestinationGT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldRefundDestination, v))
+}
+
+// RefundDestinationGTE applies the GTE predicate on the "refund_destination" field.
+func RefundDestinationGTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldRefundDestination, v))
+}
+
+// RefundDestinationLT applies the LT predicate on the "refund_destination" field.
+func RefundDestinationLT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldRefundDestination, v))
+}
+
+// RefundDestinationLTE applies the LTE predicate on the "refund_destination" field.
+func RefundDestinationLTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldRefundDestination, v))
+}
+
+// RefundDestinationContains applies the Contains predicate on the "refund_destination" field.
+func RefundDestinationContains(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContains(FieldRefundDestination, v))
+}
+
+// RefundDestinationHasPrefix applies the HasPrefix predicate on the "refund_destination" field.
+func RefundDestinationHasPrefix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasPrefix(FieldRefundDestination, v))
+}
+
+// RefundDestinationHasSuffix applies the HasSuffix predicate on the "refund_destination" field.
+func RefundDestinationHasSuffix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasSuffix(FieldRefundDestination, v))
+}
+
+// RefundDestinationEqualFold applies the EqualFold predicate on the "refund_destination" field.
+func RefundDestinationEqualFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEqualFold(FieldRefundDestination, v))
+}
+
+// RefundDestinationContainsFold applies the ContainsFold predicate on the "refund_destination" field.
+func RefundDestinationContainsFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContainsFold(FieldRefundDestination, v))
+}
+
+// RefundDestinationIDEQ applies the EQ predicate on the "refund_destination_id" field.
+func RefundDestinationIDEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDNEQ applies the NEQ predicate on the "refund_destination_id" field.
+func RefundDestinationIDNEQ(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDIn applies the In predicate on the "refund_destination_id" field.
+func RefundDestinationIDIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldRefundDestinationID, vs...))
+}
+
+// RefundDestinationIDNotIn applies the NotIn predicate on the "refund_destination_id" field.
+func RefundDestinationIDNotIn(vs ...string) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldRefundDestinationID, vs...))
+}
+
+// RefundDestinationIDGT applies the GT predicate on the "refund_destination_id" field.
+func RefundDestinationIDGT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDGTE applies the GTE predicate on the "refund_destination_id" field.
+func RefundDestinationIDGTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDLT applies the LT predicate on the "refund_destination_id" field.
+func RefundDestinationIDLT(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDLTE applies the LTE predicate on the "refund_destination_id" field.
+func RefundDestinationIDLTE(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDContains applies the Contains predicate on the "refund_destination_id" field.
+func RefundDestinationIDContains(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContains(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDHasPrefix applies the HasPrefix predicate on the "refund_destination_id" field.
+func RefundDestinationIDHasPrefix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasPrefix(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDHasSuffix applies the HasSuffix predicate on the "refund_destination_id" field.
+func RefundDestinationIDHasSuffix(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldHasSuffix(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDIsNil applies the IsNil predicate on the "refund_destination_id" field.
+func RefundDestinationIDIsNil() predicate.Refund {
+	return predicate.Refund(sql.FieldIsNull(FieldRefundDestinationID))
+}
+
+// RefundDestinationIDNotNil applies the NotNil predicate on the "refund_destination_id" field.
+func RefundDestinationIDNotNil() predicate.Refund {
+	return predicate.Refund(sql.FieldNotNull(FieldRefundDestinationID))
+}
+
+// RefundDestinationIDEqualFold applies the EqualFold predicate on the "refund_destination_id" field.
+func RefundDestinationIDEqualFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldEqualFold(FieldRefundDestinationID, v))
+}
+
+// RefundDestinationIDContainsFold applies the ContainsFold predicate on the "refund_destination_id" field.
+func RefundDestinationIDContainsFold(v string) predicate.Refund {
+	return predicate.Refund(sql.FieldContainsFold(FieldRefundDestinationID, v))
+}
+
+// AttemptEQ applies the EQ predicate on the "attempt" field.
+func AttemptEQ(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldEQ(FieldAttempt, v))
+}
+
+// AttemptNEQ applies the NEQ predicate on the "attempt" field.
+func AttemptNEQ(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldNEQ(FieldAttempt, v))
+}
+
+// AttemptIn applies the In predicate on the "attempt" field.
+func AttemptIn(vs ...int) predicate.Refund {
+	return predicate.Refund(sql.FieldIn(FieldAttempt, vs...))
+}
+
+// AttemptNotIn applies the NotIn predicate on the "attempt" field.
+func AttemptNotIn(vs ...int) predicate.Refund {
+	return predicate.Refund(sql.FieldNotIn(FieldAttempt, vs...))
+}
+
+// AttemptGT applies the GT predicate on the "attempt" field.
+func AttemptGT(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldGT(FieldAttempt, v))
+}
+
+// AttemptGTE applies the GTE predicate on the "attempt" field.
+func AttemptGTE(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldGTE(FieldAttempt, v))
+}
+
+// AttemptLT applies the LT predicate on the "attempt" field.
+func AttemptLT(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldLT(FieldAttempt, v))
+}
+
+// AttemptLTE applies the LTE predicate on the "attempt" field.
+func AttemptLTE(v int) predicate.Refund {
+	return predicate.Refund(sql.FieldLTE(FieldAttempt, v))
+}
+
 // IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.
 func IdempotencyKeyEQ(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldEQ(FieldIdempotencyKey, v))
@@ -1243,6 +1653,16 @@ func GatewayIdempotencyTokenHasPrefix(v string) predicate.Refund {
 // GatewayIdempotencyTokenHasSuffix applies the HasSuffix predicate on the "gateway_idempotency_token" field.
 func GatewayIdempotencyTokenHasSuffix(v string) predicate.Refund {
 	return predicate.Refund(sql.FieldHasSuffix(FieldGatewayIdempotencyToken, v))
+}
+
+// GatewayIdempotencyTokenIsNil applies the IsNil predicate on the "gateway_idempotency_token" field.
+func GatewayIdempotencyTokenIsNil() predicate.Refund {
+	return predicate.Refund(sql.FieldIsNull(FieldGatewayIdempotencyToken))
+}
+
+// GatewayIdempotencyTokenNotNil applies the NotNil predicate on the "gateway_idempotency_token" field.
+func GatewayIdempotencyTokenNotNil() predicate.Refund {
+	return predicate.Refund(sql.FieldNotNull(FieldGatewayIdempotencyToken))
 }
 
 // GatewayIdempotencyTokenEqualFold applies the EqualFold predicate on the "gateway_idempotency_token" field.

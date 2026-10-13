@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -19,7 +20,7 @@ const (
 // Steps:
 // 1. Sleep for 5 seconds to allow the invoice DB transaction to commit before fetching.
 // 2. Sync invoice to Razorpay.
-func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvoiceSyncWorkflowInput) error {
+func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Razorpay invoice sync workflow",
@@ -31,6 +32,10 @@ func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvo
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderRazorpay, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -45,7 +50,7 @@ func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvo
 		return err
 	}
 
-	err := workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToRazorpay, input).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToRazorpay, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to sync invoice to Razorpay",
 			"error", err,

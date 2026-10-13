@@ -18,9 +18,9 @@ import (
 )
 
 // validateAPIKey validates the API key against the config first, then the database.
-func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, valid bool) {
+func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID, userType string, roles []string, actor types.Actor, valid bool) {
 	if apiKey == "" {
-		return "", "", "", "", nil, false
+		return "", "", "", "", nil, types.Actor{}, false
 	}
 
 	// First check in config
@@ -28,7 +28,7 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	if valid {
 		// Config keys are operator-provisioned and carry no database record to
 		// hold roles, so they are granted full access explicitly.
-		return tenantID, userID, "", "", []string{types.RoleSuperAdmin.String()}, true
+		return tenantID, userID, "", "", []string{types.RoleSuperAdmin.String()}, types.Actor{Type: types.ActorTypeAPIKey, ID: types.ActorIDOperatorKey}, true
 	}
 
 	// If not found in config, check in database
@@ -36,11 +36,11 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 		secret, err := secretService.VerifyAPIKey(ctx, apiKey)
 		if err == nil && secret != nil {
 			// Return roles from the secret for RBAC permission checks
-			return secret.TenantID, secret.UserID, secret.EnvironmentID, secret.UserType, secret.Roles, true
+			return secret.TenantID, secret.UserID, secret.EnvironmentID, secret.UserType, secret.Roles, types.Actor{Type: types.ActorTypeAPIKey, ID: secret.ID}, true
 		}
 	}
 
-	return "", "", "", "", nil, false
+	return "", "", "", "", nil, types.Actor{}, false
 }
 
 // errEnvironmentUnresolved signals that no environment could be established for
@@ -172,8 +172,9 @@ func isEnvironmentDiscoveryRoute(c *gin.Context) bool {
 // environment could be established for the caller, and the underlying error
 // when the lookup itself failed; callers pass the error to
 // abortEnvironmentResolution, which distinguishes the two.
-func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Repository, tenantID, userID, environmentID, userType string, roles []string) error {
+func setContextValues(c *gin.Context, environmentRepo domainEnvironment.Repository, tenantID, userID, environmentID, userType string, roles []string, actor types.Actor, source types.Source) error {
 	ctx := c.Request.Context()
+	ctx = types.SetActor(ctx, actor, source)
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, userID)
 
@@ -250,7 +251,7 @@ func GuestAuthenticateMiddleware(c *gin.Context) {
 func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, userType, roles, actor, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if !valid {
 			logger.Debug(c.Request.Context(), "invalid api key")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
@@ -258,7 +259,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 			return
 		}
 
-		if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
+		if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles, actor, types.SourceAPI); err != nil {
 			abortEnvironmentResolution(c, logger, err, tenantID, userID)
 			return
 		}
@@ -286,9 +287,9 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 	return func(c *gin.Context) {
 		// First check for API key
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, userType, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, userType, roles, actor, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
-			if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles); err != nil {
+			if err := setContextValues(c, environmentRepo, tenantID, userID, environmentID, userType, roles, actor, types.SourceAPI); err != nil {
 				abortEnvironmentResolution(c, logger, err, tenantID, userID)
 				return
 			}
@@ -374,7 +375,8 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 			return
 		}
 
-		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", user.Roles); err != nil {
+		jwtActor := types.Actor{Type: types.ActorTypeUser, ID: claims.UserID}
+		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", user.Roles, jwtActor, types.SourceDashboard); err != nil {
 			abortEnvironmentResolution(c, logger, err, claims.TenantID, claims.UserID)
 			return
 		}
@@ -408,6 +410,7 @@ func SessionTokenAuthMiddleware(cfg *config.Configuration, logger *logger.Logger
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, claims.EnvironmentID)
 		ctx = context.WithValue(ctx, types.CtxCustomerID, claims.CustomerID)
 		ctx = context.WithValue(ctx, types.CtxExternalCustomerID, claims.ExternalCustomerID)
+		ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeCustomer, ID: claims.CustomerID}, types.SourceCustomerPortal)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()

@@ -23,65 +23,65 @@ type AlertLogsUpdate struct {
 }
 
 // Where appends a list predicates to the AlertLogsUpdate builder.
-func (alu *AlertLogsUpdate) Where(ps ...predicate.AlertLogs) *AlertLogsUpdate {
-	alu.mutation.Where(ps...)
-	return alu
+func (_u *AlertLogsUpdate) Where(ps ...predicate.AlertLogs) *AlertLogsUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (alu *AlertLogsUpdate) SetStatus(s string) *AlertLogsUpdate {
-	alu.mutation.SetStatus(s)
-	return alu
+func (_u *AlertLogsUpdate) SetStatus(v string) *AlertLogsUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (alu *AlertLogsUpdate) SetNillableStatus(s *string) *AlertLogsUpdate {
-	if s != nil {
-		alu.SetStatus(*s)
+func (_u *AlertLogsUpdate) SetNillableStatus(v *string) *AlertLogsUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return alu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (alu *AlertLogsUpdate) SetUpdatedAt(t time.Time) *AlertLogsUpdate {
-	alu.mutation.SetUpdatedAt(t)
-	return alu
+func (_u *AlertLogsUpdate) SetUpdatedAt(v time.Time) *AlertLogsUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (alu *AlertLogsUpdate) SetUpdatedBy(s string) *AlertLogsUpdate {
-	alu.mutation.SetUpdatedBy(s)
-	return alu
+func (_u *AlertLogsUpdate) SetUpdatedBy(v string) *AlertLogsUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (alu *AlertLogsUpdate) SetNillableUpdatedBy(s *string) *AlertLogsUpdate {
-	if s != nil {
-		alu.SetUpdatedBy(*s)
+func (_u *AlertLogsUpdate) SetNillableUpdatedBy(v *string) *AlertLogsUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return alu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (alu *AlertLogsUpdate) ClearUpdatedBy() *AlertLogsUpdate {
-	alu.mutation.ClearUpdatedBy()
-	return alu
+func (_u *AlertLogsUpdate) ClearUpdatedBy() *AlertLogsUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // Mutation returns the AlertLogsMutation object of the builder.
-func (alu *AlertLogsUpdate) Mutation() *AlertLogsMutation {
-	return alu.mutation
+func (_u *AlertLogsUpdate) Mutation() *AlertLogsMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (alu *AlertLogsUpdate) Save(ctx context.Context) (int, error) {
-	alu.defaults()
-	return withHooks(ctx, alu.sqlSave, alu.mutation, alu.hooks)
+func (_u *AlertLogsUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (alu *AlertLogsUpdate) SaveX(ctx context.Context) int {
-	affected, err := alu.Save(ctx)
+func (_u *AlertLogsUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -89,66 +89,66 @@ func (alu *AlertLogsUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (alu *AlertLogsUpdate) Exec(ctx context.Context) error {
-	_, err := alu.Save(ctx)
+func (_u *AlertLogsUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (alu *AlertLogsUpdate) ExecX(ctx context.Context) {
-	if err := alu.Exec(ctx); err != nil {
+func (_u *AlertLogsUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (alu *AlertLogsUpdate) defaults() {
-	if _, ok := alu.mutation.UpdatedAt(); !ok {
+func (_u *AlertLogsUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := alertlogs.UpdateDefaultUpdatedAt()
-		alu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (alu *AlertLogsUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *AlertLogsUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(alertlogs.Table, alertlogs.Columns, sqlgraph.NewFieldSpec(alertlogs.FieldID, field.TypeString))
-	if ps := alu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := alu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(alertlogs.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := alu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if alu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(alertlogs.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := alu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedBy, field.TypeString, value)
 	}
-	if alu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(alertlogs.FieldUpdatedBy, field.TypeString)
 	}
-	if alu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alertlogs.FieldEnvironmentID, field.TypeString)
 	}
-	if alu.mutation.ParentEntityTypeCleared() {
+	if _u.mutation.ParentEntityTypeCleared() {
 		_spec.ClearField(alertlogs.FieldParentEntityType, field.TypeString)
 	}
-	if alu.mutation.ParentEntityIDCleared() {
+	if _u.mutation.ParentEntityIDCleared() {
 		_spec.ClearField(alertlogs.FieldParentEntityID, field.TypeString)
 	}
-	if alu.mutation.CustomerIDCleared() {
+	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(alertlogs.FieldCustomerID, field.TypeString)
 	}
-	if alu.mutation.AlertSettingIDCleared() {
+	if _u.mutation.AlertSettingIDCleared() {
 		_spec.ClearField(alertlogs.FieldAlertSettingID, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, alu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{alertlogs.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -156,8 +156,8 @@ func (alu *AlertLogsUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	alu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // AlertLogsUpdateOne is the builder for updating a single AlertLogs entity.
@@ -169,72 +169,72 @@ type AlertLogsUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (aluo *AlertLogsUpdateOne) SetStatus(s string) *AlertLogsUpdateOne {
-	aluo.mutation.SetStatus(s)
-	return aluo
+func (_u *AlertLogsUpdateOne) SetStatus(v string) *AlertLogsUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (aluo *AlertLogsUpdateOne) SetNillableStatus(s *string) *AlertLogsUpdateOne {
-	if s != nil {
-		aluo.SetStatus(*s)
+func (_u *AlertLogsUpdateOne) SetNillableStatus(v *string) *AlertLogsUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return aluo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (aluo *AlertLogsUpdateOne) SetUpdatedAt(t time.Time) *AlertLogsUpdateOne {
-	aluo.mutation.SetUpdatedAt(t)
-	return aluo
+func (_u *AlertLogsUpdateOne) SetUpdatedAt(v time.Time) *AlertLogsUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (aluo *AlertLogsUpdateOne) SetUpdatedBy(s string) *AlertLogsUpdateOne {
-	aluo.mutation.SetUpdatedBy(s)
-	return aluo
+func (_u *AlertLogsUpdateOne) SetUpdatedBy(v string) *AlertLogsUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (aluo *AlertLogsUpdateOne) SetNillableUpdatedBy(s *string) *AlertLogsUpdateOne {
-	if s != nil {
-		aluo.SetUpdatedBy(*s)
+func (_u *AlertLogsUpdateOne) SetNillableUpdatedBy(v *string) *AlertLogsUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return aluo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (aluo *AlertLogsUpdateOne) ClearUpdatedBy() *AlertLogsUpdateOne {
-	aluo.mutation.ClearUpdatedBy()
-	return aluo
+func (_u *AlertLogsUpdateOne) ClearUpdatedBy() *AlertLogsUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // Mutation returns the AlertLogsMutation object of the builder.
-func (aluo *AlertLogsUpdateOne) Mutation() *AlertLogsMutation {
-	return aluo.mutation
+func (_u *AlertLogsUpdateOne) Mutation() *AlertLogsMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the AlertLogsUpdate builder.
-func (aluo *AlertLogsUpdateOne) Where(ps ...predicate.AlertLogs) *AlertLogsUpdateOne {
-	aluo.mutation.Where(ps...)
-	return aluo
+func (_u *AlertLogsUpdateOne) Where(ps ...predicate.AlertLogs) *AlertLogsUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (aluo *AlertLogsUpdateOne) Select(field string, fields ...string) *AlertLogsUpdateOne {
-	aluo.fields = append([]string{field}, fields...)
-	return aluo
+func (_u *AlertLogsUpdateOne) Select(field string, fields ...string) *AlertLogsUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated AlertLogs entity.
-func (aluo *AlertLogsUpdateOne) Save(ctx context.Context) (*AlertLogs, error) {
-	aluo.defaults()
-	return withHooks(ctx, aluo.sqlSave, aluo.mutation, aluo.hooks)
+func (_u *AlertLogsUpdateOne) Save(ctx context.Context) (*AlertLogs, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (aluo *AlertLogsUpdateOne) SaveX(ctx context.Context) *AlertLogs {
-	node, err := aluo.Save(ctx)
+func (_u *AlertLogsUpdateOne) SaveX(ctx context.Context) *AlertLogs {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -242,34 +242,34 @@ func (aluo *AlertLogsUpdateOne) SaveX(ctx context.Context) *AlertLogs {
 }
 
 // Exec executes the query on the entity.
-func (aluo *AlertLogsUpdateOne) Exec(ctx context.Context) error {
-	_, err := aluo.Save(ctx)
+func (_u *AlertLogsUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aluo *AlertLogsUpdateOne) ExecX(ctx context.Context) {
-	if err := aluo.Exec(ctx); err != nil {
+func (_u *AlertLogsUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (aluo *AlertLogsUpdateOne) defaults() {
-	if _, ok := aluo.mutation.UpdatedAt(); !ok {
+func (_u *AlertLogsUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := alertlogs.UpdateDefaultUpdatedAt()
-		aluo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (aluo *AlertLogsUpdateOne) sqlSave(ctx context.Context) (_node *AlertLogs, err error) {
+func (_u *AlertLogsUpdateOne) sqlSave(ctx context.Context) (_node *AlertLogs, err error) {
 	_spec := sqlgraph.NewUpdateSpec(alertlogs.Table, alertlogs.Columns, sqlgraph.NewFieldSpec(alertlogs.FieldID, field.TypeString))
-	id, ok := aluo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "AlertLogs.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := aluo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, alertlogs.FieldID)
 		for _, f := range fields {
@@ -281,47 +281,47 @@ func (aluo *AlertLogsUpdateOne) sqlSave(ctx context.Context) (_node *AlertLogs, 
 			}
 		}
 	}
-	if ps := aluo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := aluo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(alertlogs.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := aluo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if aluo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(alertlogs.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := aluo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(alertlogs.FieldUpdatedBy, field.TypeString, value)
 	}
-	if aluo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(alertlogs.FieldUpdatedBy, field.TypeString)
 	}
-	if aluo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(alertlogs.FieldEnvironmentID, field.TypeString)
 	}
-	if aluo.mutation.ParentEntityTypeCleared() {
+	if _u.mutation.ParentEntityTypeCleared() {
 		_spec.ClearField(alertlogs.FieldParentEntityType, field.TypeString)
 	}
-	if aluo.mutation.ParentEntityIDCleared() {
+	if _u.mutation.ParentEntityIDCleared() {
 		_spec.ClearField(alertlogs.FieldParentEntityID, field.TypeString)
 	}
-	if aluo.mutation.CustomerIDCleared() {
+	if _u.mutation.CustomerIDCleared() {
 		_spec.ClearField(alertlogs.FieldCustomerID, field.TypeString)
 	}
-	if aluo.mutation.AlertSettingIDCleared() {
+	if _u.mutation.AlertSettingIDCleared() {
 		_spec.ClearField(alertlogs.FieldAlertSettingID, field.TypeString)
 	}
-	_node = &AlertLogs{config: aluo.config}
+	_node = &AlertLogs{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, aluo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{alertlogs.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -329,6 +329,6 @@ func (aluo *AlertLogsUpdateOne) sqlSave(ctx context.Context) (_node *AlertLogs, 
 		}
 		return nil, err
 	}
-	aluo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

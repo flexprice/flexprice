@@ -95,7 +95,7 @@ func (*Addon) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Addon fields.
-func (a *Addon) assignValues(columns []string, values []any) error {
+func (_m *Addon) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -105,78 +105,78 @@ func (a *Addon) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				a.ID = value.String
+				_m.ID = value.String
 			}
 		case addon.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				a.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case addon.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				a.Status = value.String
+				_m.Status = value.String
 			}
 		case addon.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				a.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case addon.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				a.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case addon.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				a.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case addon.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				a.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case addon.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				a.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case addon.FieldLookupKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field lookup_key", values[i])
 			} else if value.Valid {
-				a.LookupKey = value.String
+				_m.LookupKey = value.String
 			}
 		case addon.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				a.Name = value.String
+				_m.Name = value.String
 			}
 		case addon.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				a.Description = value.String
+				_m.Description = value.String
 			}
 		case addon.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &a.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			a.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -184,75 +184,75 @@ func (a *Addon) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Addon.
 // This includes values selected through modifiers, order, etc.
-func (a *Addon) Value(name string) (ent.Value, error) {
-	return a.selectValues.Get(name)
+func (_m *Addon) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryEntitlements queries the "entitlements" edge of the Addon entity.
-func (a *Addon) QueryEntitlements() *EntitlementQuery {
-	return NewAddonClient(a.config).QueryEntitlements(a)
+func (_m *Addon) QueryEntitlements() *EntitlementQuery {
+	return NewAddonClient(_m.config).QueryEntitlements(_m)
 }
 
 // QueryCreditGrants queries the "credit_grants" edge of the Addon entity.
-func (a *Addon) QueryCreditGrants() *CreditGrantQuery {
-	return NewAddonClient(a.config).QueryCreditGrants(a)
+func (_m *Addon) QueryCreditGrants() *CreditGrantQuery {
+	return NewAddonClient(_m.config).QueryCreditGrants(_m)
 }
 
 // Update returns a builder for updating this Addon.
 // Note that you need to call Addon.Unwrap() before calling this method if this Addon
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (a *Addon) Update() *AddonUpdateOne {
-	return NewAddonClient(a.config).UpdateOne(a)
+func (_m *Addon) Update() *AddonUpdateOne {
+	return NewAddonClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Addon entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (a *Addon) Unwrap() *Addon {
-	_tx, ok := a.config.driver.(*txDriver)
+func (_m *Addon) Unwrap() *Addon {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Addon is not a transactional entity")
 	}
-	a.config.driver = _tx.drv
-	return a
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (a *Addon) String() string {
+func (_m *Addon) String() string {
 	var builder strings.Builder
 	builder.WriteString("Addon(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", a.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(a.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(a.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(a.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(a.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(a.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(a.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(a.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("lookup_key=")
-	builder.WriteString(a.LookupKey)
+	builder.WriteString(_m.LookupKey)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(a.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("description=")
-	builder.WriteString(a.Description)
+	builder.WriteString(_m.Description)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", a.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

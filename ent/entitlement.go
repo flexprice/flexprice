@@ -106,7 +106,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Entitlement fields.
-func (e *Entitlement) assignValues(columns []string, values []any) error {
+func (_m *Entitlement) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -116,137 +116,137 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				e.ID = value.String
+				_m.ID = value.String
 			}
 		case entitlement.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				e.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case entitlement.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				e.Status = value.String
+				_m.Status = value.String
 			}
 		case entitlement.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				e.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case entitlement.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				e.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case entitlement.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				e.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case entitlement.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				e.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case entitlement.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				e.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case entitlement.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				e.EntityType = types.EntitlementEntityType(value.String)
+				_m.EntityType = types.EntitlementEntityType(value.String)
 			}
 		case entitlement.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				e.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case entitlement.FieldFeatureID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field feature_id", values[i])
 			} else if value.Valid {
-				e.FeatureID = value.String
+				_m.FeatureID = value.String
 			}
 		case entitlement.FieldFeatureType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field feature_type", values[i])
 			} else if value.Valid {
-				e.FeatureType = types.FeatureType(value.String)
+				_m.FeatureType = types.FeatureType(value.String)
 			}
 		case entitlement.FieldIsEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_enabled", values[i])
 			} else if value.Valid {
-				e.IsEnabled = value.Bool
+				_m.IsEnabled = value.Bool
 			}
 		case entitlement.FieldUsageLimit:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field usage_limit", values[i])
 			} else if value.Valid {
-				e.UsageLimit = new(int64)
-				*e.UsageLimit = value.Int64
+				_m.UsageLimit = new(int64)
+				*_m.UsageLimit = value.Int64
 			}
 		case entitlement.FieldUsageResetPeriod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field usage_reset_period", values[i])
 			} else if value.Valid {
-				e.UsageResetPeriod = types.EntitlementUsageResetPeriod(value.String)
+				_m.UsageResetPeriod = types.EntitlementUsageResetPeriod(value.String)
 			}
 		case entitlement.FieldIsSoftLimit:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_soft_limit", values[i])
 			} else if value.Valid {
-				e.IsSoftLimit = value.Bool
+				_m.IsSoftLimit = value.Bool
 			}
 		case entitlement.FieldStaticValue:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field static_value", values[i])
 			} else if value.Valid {
-				e.StaticValue = value.String
+				_m.StaticValue = value.String
 			}
 		case entitlement.FieldDisplayOrder:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field display_order", values[i])
 			} else if value.Valid {
-				e.DisplayOrder = int(value.Int64)
+				_m.DisplayOrder = int(value.Int64)
 			}
 		case entitlement.FieldParentEntitlementID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field parent_entitlement_id", values[i])
 			} else if value.Valid {
-				e.ParentEntitlementID = new(string)
-				*e.ParentEntitlementID = value.String
+				_m.ParentEntitlementID = new(string)
+				*_m.ParentEntitlementID = value.String
 			}
 		case entitlement.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				e.StartDate = new(time.Time)
-				*e.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case entitlement.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				e.EndDate = new(time.Time)
-				*e.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case entitlement.FieldConfigValue:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field config_value", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &e.ConfigValue); err != nil {
+				if err := json.Unmarshal(*value, &_m.ConfigValue); err != nil {
 					return fmt.Errorf("unmarshal field config_value: %w", err)
 				}
 			}
@@ -254,49 +254,49 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_measure", values[i])
 			} else if value.Valid {
-				e.GrantMeasure = types.EntitlementGrantMeasure(value.String)
+				_m.GrantMeasure = types.EntitlementGrantMeasure(value.String)
 			}
 		case entitlement.FieldGrantDurationValue:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_duration_value", values[i])
 			} else if value.Valid {
-				e.GrantDurationValue = new(int)
-				*e.GrantDurationValue = int(value.Int64)
+				_m.GrantDurationValue = new(int)
+				*_m.GrantDurationValue = int(value.Int64)
 			}
 		case entitlement.FieldGrantDurationUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_duration_unit", values[i])
 			} else if value.Valid {
-				e.GrantDurationUnit = types.EntitlementGrantDurationUnit(value.String)
+				_m.GrantDurationUnit = types.EntitlementGrantDurationUnit(value.String)
 			}
 		case entitlement.FieldGrantAllocationBehavior:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_allocation_behavior", values[i])
 			} else if value.Valid {
-				e.GrantAllocationBehavior = types.EntitlementGrantAllocationBehavior(value.String)
+				_m.GrantAllocationBehavior = types.EntitlementGrantAllocationBehavior(value.String)
 			}
 		case entitlement.FieldGrantQuota:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field grant_quota", values[i])
 			} else if value.Valid {
-				e.GrantQuota = new(decimal.Decimal)
-				*e.GrantQuota = *value.S.(*decimal.Decimal)
+				_m.GrantQuota = new(decimal.Decimal)
+				*_m.GrantQuota = *value.S.(*decimal.Decimal)
 			}
 		case entitlement.FieldAggregationMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field aggregation_mode", values[i])
 			} else if value.Valid {
-				e.AggregationMode = types.EntitlementAggregationMode(value.String)
+				_m.AggregationMode = types.EntitlementAggregationMode(value.String)
 			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
 			} else if value.Valid {
-				e.addon_entitlements = new(string)
-				*e.addon_entitlements = value.String
+				_m.addon_entitlements = new(string)
+				*_m.addon_entitlements = value.String
 			}
 		default:
-			e.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -304,125 +304,125 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Entitlement.
 // This includes values selected through modifiers, order, etc.
-func (e *Entitlement) Value(name string) (ent.Value, error) {
-	return e.selectValues.Get(name)
+func (_m *Entitlement) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Entitlement.
 // Note that you need to call Entitlement.Unwrap() before calling this method if this Entitlement
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (e *Entitlement) Update() *EntitlementUpdateOne {
-	return NewEntitlementClient(e.config).UpdateOne(e)
+func (_m *Entitlement) Update() *EntitlementUpdateOne {
+	return NewEntitlementClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Entitlement entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (e *Entitlement) Unwrap() *Entitlement {
-	_tx, ok := e.config.driver.(*txDriver)
+func (_m *Entitlement) Unwrap() *Entitlement {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Entitlement is not a transactional entity")
 	}
-	e.config.driver = _tx.drv
-	return e
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (e *Entitlement) String() string {
+func (_m *Entitlement) String() string {
 	var builder strings.Builder
 	builder.WriteString("Entitlement(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", e.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(e.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(e.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(e.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(e.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(e.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(e.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(e.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(fmt.Sprintf("%v", e.EntityType))
+	builder.WriteString(fmt.Sprintf("%v", _m.EntityType))
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(e.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("feature_id=")
-	builder.WriteString(e.FeatureID)
+	builder.WriteString(_m.FeatureID)
 	builder.WriteString(", ")
 	builder.WriteString("feature_type=")
-	builder.WriteString(fmt.Sprintf("%v", e.FeatureType))
+	builder.WriteString(fmt.Sprintf("%v", _m.FeatureType))
 	builder.WriteString(", ")
 	builder.WriteString("is_enabled=")
-	builder.WriteString(fmt.Sprintf("%v", e.IsEnabled))
+	builder.WriteString(fmt.Sprintf("%v", _m.IsEnabled))
 	builder.WriteString(", ")
-	if v := e.UsageLimit; v != nil {
+	if v := _m.UsageLimit; v != nil {
 		builder.WriteString("usage_limit=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("usage_reset_period=")
-	builder.WriteString(fmt.Sprintf("%v", e.UsageResetPeriod))
+	builder.WriteString(fmt.Sprintf("%v", _m.UsageResetPeriod))
 	builder.WriteString(", ")
 	builder.WriteString("is_soft_limit=")
-	builder.WriteString(fmt.Sprintf("%v", e.IsSoftLimit))
+	builder.WriteString(fmt.Sprintf("%v", _m.IsSoftLimit))
 	builder.WriteString(", ")
 	builder.WriteString("static_value=")
-	builder.WriteString(e.StaticValue)
+	builder.WriteString(_m.StaticValue)
 	builder.WriteString(", ")
 	builder.WriteString("display_order=")
-	builder.WriteString(fmt.Sprintf("%v", e.DisplayOrder))
+	builder.WriteString(fmt.Sprintf("%v", _m.DisplayOrder))
 	builder.WriteString(", ")
-	if v := e.ParentEntitlementID; v != nil {
+	if v := _m.ParentEntitlementID; v != nil {
 		builder.WriteString("parent_entitlement_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := e.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := e.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("config_value=")
-	builder.WriteString(fmt.Sprintf("%v", e.ConfigValue))
+	builder.WriteString(fmt.Sprintf("%v", _m.ConfigValue))
 	builder.WriteString(", ")
 	builder.WriteString("grant_measure=")
-	builder.WriteString(fmt.Sprintf("%v", e.GrantMeasure))
+	builder.WriteString(fmt.Sprintf("%v", _m.GrantMeasure))
 	builder.WriteString(", ")
-	if v := e.GrantDurationValue; v != nil {
+	if v := _m.GrantDurationValue; v != nil {
 		builder.WriteString("grant_duration_value=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("grant_duration_unit=")
-	builder.WriteString(fmt.Sprintf("%v", e.GrantDurationUnit))
+	builder.WriteString(fmt.Sprintf("%v", _m.GrantDurationUnit))
 	builder.WriteString(", ")
 	builder.WriteString("grant_allocation_behavior=")
-	builder.WriteString(fmt.Sprintf("%v", e.GrantAllocationBehavior))
+	builder.WriteString(fmt.Sprintf("%v", _m.GrantAllocationBehavior))
 	builder.WriteString(", ")
-	if v := e.GrantQuota; v != nil {
+	if v := _m.GrantQuota; v != nil {
 		builder.WriteString("grant_quota=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("aggregation_mode=")
-	builder.WriteString(fmt.Sprintf("%v", e.AggregationMode))
+	builder.WriteString(fmt.Sprintf("%v", _m.AggregationMode))
 	builder.WriteByte(')')
 	return builder.String()
 }

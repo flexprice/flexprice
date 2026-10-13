@@ -20,56 +20,56 @@ type AddonDelete struct {
 }
 
 // Where appends a list predicates to the AddonDelete builder.
-func (ad *AddonDelete) Where(ps ...predicate.Addon) *AddonDelete {
-	ad.mutation.Where(ps...)
-	return ad
+func (_d *AddonDelete) Where(ps ...predicate.Addon) *AddonDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (ad *AddonDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, ad.sqlExec, ad.mutation, ad.hooks)
+func (_d *AddonDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ad *AddonDelete) ExecX(ctx context.Context) int {
-	n, err := ad.Exec(ctx)
+func (_d *AddonDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (ad *AddonDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *AddonDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(addon.Table, sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString))
-	if ps := ad.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, ad.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	ad.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // AddonDeleteOne is the builder for deleting a single Addon entity.
 type AddonDeleteOne struct {
-	ad *AddonDelete
+	_d *AddonDelete
 }
 
 // Where appends a list predicates to the AddonDelete builder.
-func (ado *AddonDeleteOne) Where(ps ...predicate.Addon) *AddonDeleteOne {
-	ado.ad.mutation.Where(ps...)
-	return ado
+func (_d *AddonDeleteOne) Where(ps ...predicate.Addon) *AddonDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (ado *AddonDeleteOne) Exec(ctx context.Context) error {
-	n, err := ado.ad.Exec(ctx)
+func (_d *AddonDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (ado *AddonDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ado *AddonDeleteOne) ExecX(ctx context.Context) {
-	if err := ado.Exec(ctx); err != nil {
+func (_d *AddonDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

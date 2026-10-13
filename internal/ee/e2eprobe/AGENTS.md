@@ -83,6 +83,8 @@ distinguishable in logs:
 | `entitlement-enforcement-probe` | `e2eprobe-cust-eph-ent-<unixnano>` | Soft-limit enforcement |
 | `tax-application-probe` | `e2eprobe-cust-eph-tax-<unixnano>` | Sub + fresh tax association + preview |
 | `coupon-application-probe` | `e2eprobe-cust-eph-coupon-<unixnano>` | Sub w/ SubscriptionCoupons + preview |
+| `billing-matrix-<family>` | `e2eprobe-cust-eph-bm-<scenario>-<unixnano>` | One customer, plan and subscription per billing-matrix scenario (role `ephemeral-billing-matrix`) |
+| `payment-*-probe-<gateway>` | `e2eprobe-cust-eph-payment-<link\|method\|autocharge>-<gateway>-<unixnano>` | Checkout + saved-method flows against one gateway (roles `ephemeral-payment-link` / `-method` / `-autocharge`) |
 
 **When to use ephemeral:**
 - End-to-end billing verification against a preview (throwaway state — no cleanup pollution)
@@ -123,7 +125,7 @@ tenant that already has these entities is a no-op (with one caveat below).
 ### Idempotency gotchas
 
 - **Tax rate** (`ensureTaxRates`): SDK v2.0.24's `TaxRates.GetTaxRates` is broken (server returns `{items, pagination}` but the SDK decoder expects a bare array — malformed swagger annotation on `internal/api/v1/tax.go:86`). The workaround: **skip List, try Create, swallow "already exists"**. Downstream code that needs `Seeds.SharedTaxRateID` falls back to matching by `TaxRate.Code == SharedTaxRateCode`. When you add another list-based idempotency check, verify the SDK's decoder shape matches the server's response shape first — grep `~/go/pkg/mod/github.com/flexprice/go-sdk/v2@v<VERSION>/<name>.go` for `var out .*types\.` at the 200-status branch and confirm it names a struct wrapper (`types.List<X>Response`), NOT a bare `[]types.X`.
-- **Commitments / coupon on cust #1**: attached at sub-create only. Existing tenants whose sub already exists WON'T get these retro-fitted — the seed doesn't mutate existing subs (that would break `cycle-invoice-probe`'s baseline). Fresh tenants get full coverage from day one; older tenants continue running until their sub is naturally recreated.
+- **Commitments / coupon on cust #1**: attached at sub-create only. Existing tenants whose sub already exists WON'T get these retro-fitted — the seed doesn't mutate existing subs (that would break `cycle-invoice-probe`'s baseline). Fresh tenants get full coverage from day one; older tenants continue running until their sub is naturally recreated. The shared coupon is ONCE cadence, so `persistent-billing-invariants-probe` asserts the oldest subscription invoice (`order=asc`, `limit=1`) and soft-skips when the sub has no coupon association.
 - **Tax association on cust #0**: separate API call, so idempotent for both new and existing subs.
 
 ---

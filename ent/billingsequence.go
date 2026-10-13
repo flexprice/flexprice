@@ -50,7 +50,7 @@ func (*BillingSequence) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the BillingSequence fields.
-func (bs *BillingSequence) assignValues(columns []string, values []any) error {
+func (_m *BillingSequence) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -61,39 +61,39 @@ func (bs *BillingSequence) assignValues(columns []string, values []any) error {
 			if !ok {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-			bs.ID = int(value.Int64)
+			_m.ID = int(value.Int64)
 		case billingsequence.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				bs.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case billingsequence.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				bs.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case billingsequence.FieldLastSequence:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field last_sequence", values[i])
 			} else if value.Valid {
-				bs.LastSequence = int(value.Int64)
+				_m.LastSequence = int(value.Int64)
 			}
 		case billingsequence.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				bs.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case billingsequence.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				bs.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		default:
-			bs.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -101,47 +101,47 @@ func (bs *BillingSequence) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the BillingSequence.
 // This includes values selected through modifiers, order, etc.
-func (bs *BillingSequence) Value(name string) (ent.Value, error) {
-	return bs.selectValues.Get(name)
+func (_m *BillingSequence) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this BillingSequence.
 // Note that you need to call BillingSequence.Unwrap() before calling this method if this BillingSequence
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (bs *BillingSequence) Update() *BillingSequenceUpdateOne {
-	return NewBillingSequenceClient(bs.config).UpdateOne(bs)
+func (_m *BillingSequence) Update() *BillingSequenceUpdateOne {
+	return NewBillingSequenceClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the BillingSequence entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (bs *BillingSequence) Unwrap() *BillingSequence {
-	_tx, ok := bs.config.driver.(*txDriver)
+func (_m *BillingSequence) Unwrap() *BillingSequence {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: BillingSequence is not a transactional entity")
 	}
-	bs.config.driver = _tx.drv
-	return bs
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (bs *BillingSequence) String() string {
+func (_m *BillingSequence) String() string {
 	var builder strings.Builder
 	builder.WriteString("BillingSequence(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", bs.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(bs.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(bs.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("last_sequence=")
-	builder.WriteString(fmt.Sprintf("%v", bs.LastSequence))
+	builder.WriteString(fmt.Sprintf("%v", _m.LastSequence))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(bs.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(bs.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

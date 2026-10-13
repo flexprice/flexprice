@@ -205,6 +205,17 @@ func ParentTransactionID(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldParentTransactionID, v))
 }
 
+// SourceType applies equality check predicate on the "source_type" field. It's identical to SourceTypeEQ.
+func SourceType(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldEQ(FieldSourceType, vc))
+}
+
+// SourceID applies equality check predicate on the "source_id" field. It's identical to SourceIDEQ.
+func SourceID(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldSourceID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldEQ(FieldTenantID, v))
@@ -1899,6 +1910,185 @@ func ParentTransactionIDEqualFold(v string) predicate.WalletTransaction {
 // ParentTransactionIDContainsFold applies the ContainsFold predicate on the "parent_transaction_id" field.
 func ParentTransactionIDContainsFold(v string) predicate.WalletTransaction {
 	return predicate.WalletTransaction(sql.FieldContainsFold(FieldParentTransactionID, v))
+}
+
+// SourceTypeEQ applies the EQ predicate on the "source_type" field.
+func SourceTypeEQ(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldEQ(FieldSourceType, vc))
+}
+
+// SourceTypeNEQ applies the NEQ predicate on the "source_type" field.
+func SourceTypeNEQ(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldNEQ(FieldSourceType, vc))
+}
+
+// SourceTypeIn applies the In predicate on the "source_type" field.
+func SourceTypeIn(vs ...types.WalletTxSourceType) predicate.WalletTransaction {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.WalletTransaction(sql.FieldIn(FieldSourceType, v...))
+}
+
+// SourceTypeNotIn applies the NotIn predicate on the "source_type" field.
+func SourceTypeNotIn(vs ...types.WalletTxSourceType) predicate.WalletTransaction {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.WalletTransaction(sql.FieldNotIn(FieldSourceType, v...))
+}
+
+// SourceTypeGT applies the GT predicate on the "source_type" field.
+func SourceTypeGT(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldGT(FieldSourceType, vc))
+}
+
+// SourceTypeGTE applies the GTE predicate on the "source_type" field.
+func SourceTypeGTE(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldGTE(FieldSourceType, vc))
+}
+
+// SourceTypeLT applies the LT predicate on the "source_type" field.
+func SourceTypeLT(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldLT(FieldSourceType, vc))
+}
+
+// SourceTypeLTE applies the LTE predicate on the "source_type" field.
+func SourceTypeLTE(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldLTE(FieldSourceType, vc))
+}
+
+// SourceTypeContains applies the Contains predicate on the "source_type" field.
+func SourceTypeContains(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldContains(FieldSourceType, vc))
+}
+
+// SourceTypeHasPrefix applies the HasPrefix predicate on the "source_type" field.
+func SourceTypeHasPrefix(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldHasPrefix(FieldSourceType, vc))
+}
+
+// SourceTypeHasSuffix applies the HasSuffix predicate on the "source_type" field.
+func SourceTypeHasSuffix(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldHasSuffix(FieldSourceType, vc))
+}
+
+// SourceTypeIsNil applies the IsNil predicate on the "source_type" field.
+func SourceTypeIsNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIsNull(FieldSourceType))
+}
+
+// SourceTypeNotNil applies the NotNil predicate on the "source_type" field.
+func SourceTypeNotNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotNull(FieldSourceType))
+}
+
+// SourceTypeEqualFold applies the EqualFold predicate on the "source_type" field.
+func SourceTypeEqualFold(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldEqualFold(FieldSourceType, vc))
+}
+
+// SourceTypeContainsFold applies the ContainsFold predicate on the "source_type" field.
+func SourceTypeContainsFold(v types.WalletTxSourceType) predicate.WalletTransaction {
+	vc := string(v)
+	return predicate.WalletTransaction(sql.FieldContainsFold(FieldSourceType, vc))
+}
+
+// SourceIDEQ applies the EQ predicate on the "source_id" field.
+func SourceIDEQ(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEQ(FieldSourceID, v))
+}
+
+// SourceIDNEQ applies the NEQ predicate on the "source_id" field.
+func SourceIDNEQ(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNEQ(FieldSourceID, v))
+}
+
+// SourceIDIn applies the In predicate on the "source_id" field.
+func SourceIDIn(vs ...string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIn(FieldSourceID, vs...))
+}
+
+// SourceIDNotIn applies the NotIn predicate on the "source_id" field.
+func SourceIDNotIn(vs ...string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotIn(FieldSourceID, vs...))
+}
+
+// SourceIDGT applies the GT predicate on the "source_id" field.
+func SourceIDGT(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGT(FieldSourceID, v))
+}
+
+// SourceIDGTE applies the GTE predicate on the "source_id" field.
+func SourceIDGTE(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldGTE(FieldSourceID, v))
+}
+
+// SourceIDLT applies the LT predicate on the "source_id" field.
+func SourceIDLT(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLT(FieldSourceID, v))
+}
+
+// SourceIDLTE applies the LTE predicate on the "source_id" field.
+func SourceIDLTE(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldLTE(FieldSourceID, v))
+}
+
+// SourceIDContains applies the Contains predicate on the "source_id" field.
+func SourceIDContains(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldContains(FieldSourceID, v))
+}
+
+// SourceIDHasPrefix applies the HasPrefix predicate on the "source_id" field.
+func SourceIDHasPrefix(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldHasPrefix(FieldSourceID, v))
+}
+
+// SourceIDHasSuffix applies the HasSuffix predicate on the "source_id" field.
+func SourceIDHasSuffix(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldHasSuffix(FieldSourceID, v))
+}
+
+// SourceIDIsNil applies the IsNil predicate on the "source_id" field.
+func SourceIDIsNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIsNull(FieldSourceID))
+}
+
+// SourceIDNotNil applies the NotNil predicate on the "source_id" field.
+func SourceIDNotNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotNull(FieldSourceID))
+}
+
+// SourceIDEqualFold applies the EqualFold predicate on the "source_id" field.
+func SourceIDEqualFold(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldEqualFold(FieldSourceID, v))
+}
+
+// SourceIDContainsFold applies the ContainsFold predicate on the "source_id" field.
+func SourceIDContainsFold(v string) predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldContainsFold(FieldSourceID, v))
+}
+
+// ConsumptionBreakdownIsNil applies the IsNil predicate on the "consumption_breakdown" field.
+func ConsumptionBreakdownIsNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldIsNull(FieldConsumptionBreakdown))
+}
+
+// ConsumptionBreakdownNotNil applies the NotNil predicate on the "consumption_breakdown" field.
+func ConsumptionBreakdownNotNil() predicate.WalletTransaction {
+	return predicate.WalletTransaction(sql.FieldNotNull(FieldConsumptionBreakdown))
 }
 
 // And groups predicates with the AND operator between them.

@@ -596,7 +596,7 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromStripe(ctx context.Contex
 		if flexInvoice.Metadata == nil {
 			flexInvoice.Metadata = make(types.Metadata)
 		}
-		flexInvoice.Metadata["stripe_hosted_invoice_url"] = stripeInvoice.HostedInvoiceURL
+		flexInvoice.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] = stripeInvoice.HostedInvoiceURL
 		updated = true
 	}
 
@@ -659,6 +659,67 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 		"total_credits_paid_cents", newTotalCredits.String())
 
 	return nil
+}
+
+// IsStripeInvoiceSettled reports whether the Stripe invoice synced for a FlexPrice invoice is already paid or voided.
+func (s *InvoiceSyncService) IsStripeInvoiceSettled(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
+	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
+	if ierr.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, mapping.ProviderEntityID, nil)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Unable to get invoice from Stripe").
+			Mark(ierr.ErrSystem)
+	}
+
+	return stripeInvoice.Status == stripe.InvoiceStatusPaid || stripeInvoice.Status == stripe.InvoiceStatusVoid, nil
+}
+
+// VoidInvoiceInStripe voids the synced Stripe invoice; false means Stripe already has it paid.
+func (s *InvoiceSyncService) VoidInvoiceInStripe(ctx context.Context, flexpriceInvoiceID string) (bool, error) {
+	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
+	if ierr.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, mapping.ProviderEntityID, nil)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Unable to get invoice from Stripe").
+			Mark(ierr.ErrSystem)
+	}
+	if stripeInvoice.Status == stripe.InvoiceStatusVoid {
+		return true, nil
+	}
+	if stripeInvoice.Status == stripe.InvoiceStatusPaid {
+		return false, nil
+	}
+
+	if _, err := stripeClient.V1Invoices.VoidInvoice(ctx, mapping.ProviderEntityID, nil); err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Unable to void invoice in Stripe").
+			Mark(ierr.ErrSystem)
+	}
+	return true, nil
 }
 
 // IsInvoiceSyncedToStripe checks if an invoice is already synced to Stripe

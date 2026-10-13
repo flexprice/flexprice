@@ -172,3 +172,17 @@ func (r *InMemoryRedis) ForceCacheDelete(ctx context.Context, key string) {
 	defer r.mu.Unlock()
 	delete(r.values, key)
 }
+
+// GetBulk mirrors the Redis MGET contract over the in-memory map.
+func (r *InMemoryRedis) GetBulk(ctx context.Context, keys []string) (map[string]interface{}, []string) {
+	found := make(map[string]interface{}, len(keys))
+	missing := make([]string, 0)
+	for _, k := range keys {
+		if v, ok := r.Get(ctx, k); ok {
+			found[k] = v
+			continue
+		}
+		missing = append(missing, k)
+	}
+	return found, missing
+}

@@ -85,7 +85,7 @@ func (*Feature) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Feature fields.
-func (f *Feature) assignValues(columns []string, values []any) error {
+func (_m *Feature) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -95,87 +95,87 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				f.ID = value.String
+				_m.ID = value.String
 			}
 		case feature.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				f.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case feature.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				f.Status = value.String
+				_m.Status = value.String
 			}
 		case feature.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				f.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case feature.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				f.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case feature.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				f.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case feature.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				f.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case feature.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				f.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case feature.FieldLookupKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field lookup_key", values[i])
 			} else if value.Valid {
-				f.LookupKey = value.String
+				_m.LookupKey = value.String
 			}
 		case feature.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				f.Name = value.String
+				_m.Name = value.String
 			}
 		case feature.FieldDescription:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
-				f.Description = new(string)
-				*f.Description = value.String
+				_m.Description = new(string)
+				*_m.Description = value.String
 			}
 		case feature.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				f.Type = value.String
+				_m.Type = value.String
 			}
 		case feature.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
-				f.MeterID = new(string)
-				*f.MeterID = value.String
+				_m.MeterID = new(string)
+				*_m.MeterID = value.String
 			}
 		case feature.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &f.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -183,42 +183,42 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field unit_singular", values[i])
 			} else if value.Valid {
-				f.UnitSingular = new(string)
-				*f.UnitSingular = value.String
+				_m.UnitSingular = new(string)
+				*_m.UnitSingular = value.String
 			}
 		case feature.FieldUnitPlural:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field unit_plural", values[i])
 			} else if value.Valid {
-				f.UnitPlural = new(string)
-				*f.UnitPlural = value.String
+				_m.UnitPlural = new(string)
+				*_m.UnitPlural = value.String
 			}
 		case feature.FieldReportingUnitSingular:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reporting_unit_singular", values[i])
 			} else if value.Valid {
-				f.ReportingUnitSingular = new(string)
-				*f.ReportingUnitSingular = value.String
+				_m.ReportingUnitSingular = new(string)
+				*_m.ReportingUnitSingular = value.String
 			}
 		case feature.FieldReportingUnitPlural:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reporting_unit_plural", values[i])
 			} else if value.Valid {
-				f.ReportingUnitPlural = new(string)
-				*f.ReportingUnitPlural = value.String
+				_m.ReportingUnitPlural = new(string)
+				*_m.ReportingUnitPlural = value.String
 			}
 		case feature.FieldReportingUnitConversionRate:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field reporting_unit_conversion_rate", values[i])
 			} else if value.Valid {
-				f.ReportingUnitConversionRate = new(decimal.Decimal)
-				*f.ReportingUnitConversionRate = *value.S.(*decimal.Decimal)
+				_m.ReportingUnitConversionRate = new(decimal.Decimal)
+				*_m.ReportingUnitConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case feature.FieldAlertSettings:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field alert_settings", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &f.AlertSettings); err != nil {
+				if err := json.Unmarshal(*value, &_m.AlertSettings); err != nil {
 					return fmt.Errorf("unmarshal field alert_settings: %w", err)
 				}
 			}
@@ -226,11 +226,11 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
-				f.GroupID = new(string)
-				*f.GroupID = value.String
+				_m.GroupID = new(string)
+				*_m.GroupID = value.String
 			}
 		default:
-			f.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -238,105 +238,105 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Feature.
 // This includes values selected through modifiers, order, etc.
-func (f *Feature) Value(name string) (ent.Value, error) {
-	return f.selectValues.Get(name)
+func (_m *Feature) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Feature.
 // Note that you need to call Feature.Unwrap() before calling this method if this Feature
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (f *Feature) Update() *FeatureUpdateOne {
-	return NewFeatureClient(f.config).UpdateOne(f)
+func (_m *Feature) Update() *FeatureUpdateOne {
+	return NewFeatureClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Feature entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (f *Feature) Unwrap() *Feature {
-	_tx, ok := f.config.driver.(*txDriver)
+func (_m *Feature) Unwrap() *Feature {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Feature is not a transactional entity")
 	}
-	f.config.driver = _tx.drv
-	return f
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (f *Feature) String() string {
+func (_m *Feature) String() string {
 	var builder strings.Builder
 	builder.WriteString("Feature(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", f.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(f.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(f.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(f.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(f.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(f.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(f.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(f.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("lookup_key=")
-	builder.WriteString(f.LookupKey)
+	builder.WriteString(_m.LookupKey)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(f.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	if v := f.Description; v != nil {
+	if v := _m.Description; v != nil {
 		builder.WriteString("description=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(f.Type)
+	builder.WriteString(_m.Type)
 	builder.WriteString(", ")
-	if v := f.MeterID; v != nil {
+	if v := _m.MeterID; v != nil {
 		builder.WriteString("meter_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", f.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := f.UnitSingular; v != nil {
+	if v := _m.UnitSingular; v != nil {
 		builder.WriteString("unit_singular=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := f.UnitPlural; v != nil {
+	if v := _m.UnitPlural; v != nil {
 		builder.WriteString("unit_plural=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := f.ReportingUnitSingular; v != nil {
+	if v := _m.ReportingUnitSingular; v != nil {
 		builder.WriteString("reporting_unit_singular=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := f.ReportingUnitPlural; v != nil {
+	if v := _m.ReportingUnitPlural; v != nil {
 		builder.WriteString("reporting_unit_plural=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := f.ReportingUnitConversionRate; v != nil {
+	if v := _m.ReportingUnitConversionRate; v != nil {
 		builder.WriteString("reporting_unit_conversion_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("alert_settings=")
-	builder.WriteString(fmt.Sprintf("%v", f.AlertSettings))
+	builder.WriteString(fmt.Sprintf("%v", _m.AlertSettings))
 	builder.WriteString(", ")
-	if v := f.GroupID; v != nil {
+	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
 		builder.WriteString(*v)
 	}

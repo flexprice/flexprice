@@ -26,356 +26,356 @@ type CreditGrantCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cgc *CreditGrantCreate) SetTenantID(s string) *CreditGrantCreate {
-	cgc.mutation.SetTenantID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetTenantID(v string) *CreditGrantCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cgc *CreditGrantCreate) SetStatus(s string) *CreditGrantCreate {
-	cgc.mutation.SetStatus(s)
-	return cgc
+func (_c *CreditGrantCreate) SetStatus(v string) *CreditGrantCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableStatus(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetStatus(*s)
+func (_c *CreditGrantCreate) SetNillableStatus(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cgc *CreditGrantCreate) SetCreatedAt(t time.Time) *CreditGrantCreate {
-	cgc.mutation.SetCreatedAt(t)
-	return cgc
+func (_c *CreditGrantCreate) SetCreatedAt(v time.Time) *CreditGrantCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableCreatedAt(t *time.Time) *CreditGrantCreate {
-	if t != nil {
-		cgc.SetCreatedAt(*t)
+func (_c *CreditGrantCreate) SetNillableCreatedAt(v *time.Time) *CreditGrantCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cgc *CreditGrantCreate) SetUpdatedAt(t time.Time) *CreditGrantCreate {
-	cgc.mutation.SetUpdatedAt(t)
-	return cgc
+func (_c *CreditGrantCreate) SetUpdatedAt(v time.Time) *CreditGrantCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableUpdatedAt(t *time.Time) *CreditGrantCreate {
-	if t != nil {
-		cgc.SetUpdatedAt(*t)
+func (_c *CreditGrantCreate) SetNillableUpdatedAt(v *time.Time) *CreditGrantCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cgc *CreditGrantCreate) SetCreatedBy(s string) *CreditGrantCreate {
-	cgc.mutation.SetCreatedBy(s)
-	return cgc
+func (_c *CreditGrantCreate) SetCreatedBy(v string) *CreditGrantCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableCreatedBy(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetCreatedBy(*s)
+func (_c *CreditGrantCreate) SetNillableCreatedBy(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cgc *CreditGrantCreate) SetUpdatedBy(s string) *CreditGrantCreate {
-	cgc.mutation.SetUpdatedBy(s)
-	return cgc
+func (_c *CreditGrantCreate) SetUpdatedBy(v string) *CreditGrantCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableUpdatedBy(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetUpdatedBy(*s)
+func (_c *CreditGrantCreate) SetNillableUpdatedBy(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cgc *CreditGrantCreate) SetEnvironmentID(s string) *CreditGrantCreate {
-	cgc.mutation.SetEnvironmentID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetEnvironmentID(v string) *CreditGrantCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableEnvironmentID(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetEnvironmentID(*s)
+func (_c *CreditGrantCreate) SetNillableEnvironmentID(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetName sets the "name" field.
-func (cgc *CreditGrantCreate) SetName(s string) *CreditGrantCreate {
-	cgc.mutation.SetName(s)
-	return cgc
+func (_c *CreditGrantCreate) SetName(v string) *CreditGrantCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetScope sets the "scope" field.
-func (cgc *CreditGrantCreate) SetScope(tgs types.CreditGrantScope) *CreditGrantCreate {
-	cgc.mutation.SetScope(tgs)
-	return cgc
+func (_c *CreditGrantCreate) SetScope(v types.CreditGrantScope) *CreditGrantCreate {
+	_c.mutation.SetScope(v)
+	return _c
 }
 
 // SetPlanID sets the "plan_id" field.
-func (cgc *CreditGrantCreate) SetPlanID(s string) *CreditGrantCreate {
-	cgc.mutation.SetPlanID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetPlanID(v string) *CreditGrantCreate {
+	_c.mutation.SetPlanID(v)
+	return _c
 }
 
 // SetNillablePlanID sets the "plan_id" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillablePlanID(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetPlanID(*s)
+func (_c *CreditGrantCreate) SetNillablePlanID(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetPlanID(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cgc *CreditGrantCreate) SetSubscriptionID(s string) *CreditGrantCreate {
-	cgc.mutation.SetSubscriptionID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetSubscriptionID(v string) *CreditGrantCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableSubscriptionID(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetSubscriptionID(*s)
+func (_c *CreditGrantCreate) SetNillableSubscriptionID(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetAddonID sets the "addon_id" field.
-func (cgc *CreditGrantCreate) SetAddonID(s string) *CreditGrantCreate {
-	cgc.mutation.SetAddonID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetAddonID(v string) *CreditGrantCreate {
+	_c.mutation.SetAddonID(v)
+	return _c
 }
 
 // SetNillableAddonID sets the "addon_id" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableAddonID(s *string) *CreditGrantCreate {
-	if s != nil {
-		cgc.SetAddonID(*s)
+func (_c *CreditGrantCreate) SetNillableAddonID(v *string) *CreditGrantCreate {
+	if v != nil {
+		_c.SetAddonID(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetCredits sets the "credits" field.
-func (cgc *CreditGrantCreate) SetCredits(d decimal.Decimal) *CreditGrantCreate {
-	cgc.mutation.SetCredits(d)
-	return cgc
+func (_c *CreditGrantCreate) SetCredits(v decimal.Decimal) *CreditGrantCreate {
+	_c.mutation.SetCredits(v)
+	return _c
 }
 
 // SetNillableCredits sets the "credits" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableCredits(d *decimal.Decimal) *CreditGrantCreate {
-	if d != nil {
-		cgc.SetCredits(*d)
+func (_c *CreditGrantCreate) SetNillableCredits(v *decimal.Decimal) *CreditGrantCreate {
+	if v != nil {
+		_c.SetCredits(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (cgc *CreditGrantCreate) SetConversionRate(d decimal.Decimal) *CreditGrantCreate {
-	cgc.mutation.SetConversionRate(d)
-	return cgc
+func (_c *CreditGrantCreate) SetConversionRate(v decimal.Decimal) *CreditGrantCreate {
+	_c.mutation.SetConversionRate(v)
+	return _c
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableConversionRate(d *decimal.Decimal) *CreditGrantCreate {
-	if d != nil {
-		cgc.SetConversionRate(*d)
+func (_c *CreditGrantCreate) SetNillableConversionRate(v *decimal.Decimal) *CreditGrantCreate {
+	if v != nil {
+		_c.SetConversionRate(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetTopupConversionRate sets the "topup_conversion_rate" field.
-func (cgc *CreditGrantCreate) SetTopupConversionRate(d decimal.Decimal) *CreditGrantCreate {
-	cgc.mutation.SetTopupConversionRate(d)
-	return cgc
+func (_c *CreditGrantCreate) SetTopupConversionRate(v decimal.Decimal) *CreditGrantCreate {
+	_c.mutation.SetTopupConversionRate(v)
+	return _c
 }
 
 // SetNillableTopupConversionRate sets the "topup_conversion_rate" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableTopupConversionRate(d *decimal.Decimal) *CreditGrantCreate {
-	if d != nil {
-		cgc.SetTopupConversionRate(*d)
+func (_c *CreditGrantCreate) SetNillableTopupConversionRate(v *decimal.Decimal) *CreditGrantCreate {
+	if v != nil {
+		_c.SetTopupConversionRate(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetCadence sets the "cadence" field.
-func (cgc *CreditGrantCreate) SetCadence(tgc types.CreditGrantCadence) *CreditGrantCreate {
-	cgc.mutation.SetCadence(tgc)
-	return cgc
+func (_c *CreditGrantCreate) SetCadence(v types.CreditGrantCadence) *CreditGrantCreate {
+	_c.mutation.SetCadence(v)
+	return _c
 }
 
 // SetPeriod sets the "period" field.
-func (cgc *CreditGrantCreate) SetPeriod(tgp types.CreditGrantPeriod) *CreditGrantCreate {
-	cgc.mutation.SetPeriod(tgp)
-	return cgc
+func (_c *CreditGrantCreate) SetPeriod(v types.CreditGrantPeriod) *CreditGrantCreate {
+	_c.mutation.SetPeriod(v)
+	return _c
 }
 
 // SetNillablePeriod sets the "period" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillablePeriod(tgp *types.CreditGrantPeriod) *CreditGrantCreate {
-	if tgp != nil {
-		cgc.SetPeriod(*tgp)
+func (_c *CreditGrantCreate) SetNillablePeriod(v *types.CreditGrantPeriod) *CreditGrantCreate {
+	if v != nil {
+		_c.SetPeriod(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetPeriodCount sets the "period_count" field.
-func (cgc *CreditGrantCreate) SetPeriodCount(i int) *CreditGrantCreate {
-	cgc.mutation.SetPeriodCount(i)
-	return cgc
+func (_c *CreditGrantCreate) SetPeriodCount(v int) *CreditGrantCreate {
+	_c.mutation.SetPeriodCount(v)
+	return _c
 }
 
 // SetNillablePeriodCount sets the "period_count" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillablePeriodCount(i *int) *CreditGrantCreate {
-	if i != nil {
-		cgc.SetPeriodCount(*i)
+func (_c *CreditGrantCreate) SetNillablePeriodCount(v *int) *CreditGrantCreate {
+	if v != nil {
+		_c.SetPeriodCount(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetExpirationType sets the "expiration_type" field.
-func (cgc *CreditGrantCreate) SetExpirationType(tget types.CreditGrantExpiryType) *CreditGrantCreate {
-	cgc.mutation.SetExpirationType(tget)
-	return cgc
+func (_c *CreditGrantCreate) SetExpirationType(v types.CreditGrantExpiryType) *CreditGrantCreate {
+	_c.mutation.SetExpirationType(v)
+	return _c
 }
 
 // SetExpirationDuration sets the "expiration_duration" field.
-func (cgc *CreditGrantCreate) SetExpirationDuration(i int) *CreditGrantCreate {
-	cgc.mutation.SetExpirationDuration(i)
-	return cgc
+func (_c *CreditGrantCreate) SetExpirationDuration(v int) *CreditGrantCreate {
+	_c.mutation.SetExpirationDuration(v)
+	return _c
 }
 
 // SetNillableExpirationDuration sets the "expiration_duration" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableExpirationDuration(i *int) *CreditGrantCreate {
-	if i != nil {
-		cgc.SetExpirationDuration(*i)
+func (_c *CreditGrantCreate) SetNillableExpirationDuration(v *int) *CreditGrantCreate {
+	if v != nil {
+		_c.SetExpirationDuration(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetExpirationDurationUnit sets the "expiration_duration_unit" field.
-func (cgc *CreditGrantCreate) SetExpirationDurationUnit(tgedu types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
-	cgc.mutation.SetExpirationDurationUnit(tgedu)
-	return cgc
+func (_c *CreditGrantCreate) SetExpirationDurationUnit(v types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+	_c.mutation.SetExpirationDurationUnit(v)
+	return _c
 }
 
 // SetNillableExpirationDurationUnit sets the "expiration_duration_unit" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableExpirationDurationUnit(tgedu *types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
-	if tgedu != nil {
-		cgc.SetExpirationDurationUnit(*tgedu)
+func (_c *CreditGrantCreate) SetNillableExpirationDurationUnit(v *types.CreditGrantExpiryDurationUnit) *CreditGrantCreate {
+	if v != nil {
+		_c.SetExpirationDurationUnit(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetPriority sets the "priority" field.
-func (cgc *CreditGrantCreate) SetPriority(i int) *CreditGrantCreate {
-	cgc.mutation.SetPriority(i)
-	return cgc
+func (_c *CreditGrantCreate) SetPriority(v int) *CreditGrantCreate {
+	_c.mutation.SetPriority(v)
+	return _c
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillablePriority(i *int) *CreditGrantCreate {
-	if i != nil {
-		cgc.SetPriority(*i)
+func (_c *CreditGrantCreate) SetNillablePriority(v *int) *CreditGrantCreate {
+	if v != nil {
+		_c.SetPriority(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cgc *CreditGrantCreate) SetMetadata(m map[string]string) *CreditGrantCreate {
-	cgc.mutation.SetMetadata(m)
-	return cgc
+func (_c *CreditGrantCreate) SetMetadata(v map[string]string) *CreditGrantCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (cgc *CreditGrantCreate) SetStartDate(t time.Time) *CreditGrantCreate {
-	cgc.mutation.SetStartDate(t)
-	return cgc
+func (_c *CreditGrantCreate) SetStartDate(v time.Time) *CreditGrantCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableStartDate(t *time.Time) *CreditGrantCreate {
-	if t != nil {
-		cgc.SetStartDate(*t)
+func (_c *CreditGrantCreate) SetNillableStartDate(v *time.Time) *CreditGrantCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (cgc *CreditGrantCreate) SetEndDate(t time.Time) *CreditGrantCreate {
-	cgc.mutation.SetEndDate(t)
-	return cgc
+func (_c *CreditGrantCreate) SetEndDate(v time.Time) *CreditGrantCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableEndDate(t *time.Time) *CreditGrantCreate {
-	if t != nil {
-		cgc.SetEndDate(*t)
+func (_c *CreditGrantCreate) SetNillableEndDate(v *time.Time) *CreditGrantCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetCreditGrantAnchor sets the "credit_grant_anchor" field.
-func (cgc *CreditGrantCreate) SetCreditGrantAnchor(t time.Time) *CreditGrantCreate {
-	cgc.mutation.SetCreditGrantAnchor(t)
-	return cgc
+func (_c *CreditGrantCreate) SetCreditGrantAnchor(v time.Time) *CreditGrantCreate {
+	_c.mutation.SetCreditGrantAnchor(v)
+	return _c
 }
 
 // SetNillableCreditGrantAnchor sets the "credit_grant_anchor" field if the given value is not nil.
-func (cgc *CreditGrantCreate) SetNillableCreditGrantAnchor(t *time.Time) *CreditGrantCreate {
-	if t != nil {
-		cgc.SetCreditGrantAnchor(*t)
+func (_c *CreditGrantCreate) SetNillableCreditGrantAnchor(v *time.Time) *CreditGrantCreate {
+	if v != nil {
+		_c.SetCreditGrantAnchor(*v)
 	}
-	return cgc
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cgc *CreditGrantCreate) SetID(s string) *CreditGrantCreate {
-	cgc.mutation.SetID(s)
-	return cgc
+func (_c *CreditGrantCreate) SetID(v string) *CreditGrantCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetPlan sets the "plan" edge to the Plan entity.
-func (cgc *CreditGrantCreate) SetPlan(p *Plan) *CreditGrantCreate {
-	return cgc.SetPlanID(p.ID)
+func (_c *CreditGrantCreate) SetPlan(v *Plan) *CreditGrantCreate {
+	return _c.SetPlanID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (cgc *CreditGrantCreate) SetSubscription(s *Subscription) *CreditGrantCreate {
-	return cgc.SetSubscriptionID(s.ID)
+func (_c *CreditGrantCreate) SetSubscription(v *Subscription) *CreditGrantCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // SetAddon sets the "addon" edge to the Addon entity.
-func (cgc *CreditGrantCreate) SetAddon(a *Addon) *CreditGrantCreate {
-	return cgc.SetAddonID(a.ID)
+func (_c *CreditGrantCreate) SetAddon(v *Addon) *CreditGrantCreate {
+	return _c.SetAddonID(v.ID)
 }
 
 // Mutation returns the CreditGrantMutation object of the builder.
-func (cgc *CreditGrantCreate) Mutation() *CreditGrantMutation {
-	return cgc.mutation
+func (_c *CreditGrantCreate) Mutation() *CreditGrantMutation {
+	return _c.mutation
 }
 
 // Save creates the CreditGrant in the database.
-func (cgc *CreditGrantCreate) Save(ctx context.Context) (*CreditGrant, error) {
-	cgc.defaults()
-	return withHooks(ctx, cgc.sqlSave, cgc.mutation, cgc.hooks)
+func (_c *CreditGrantCreate) Save(ctx context.Context) (*CreditGrant, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cgc *CreditGrantCreate) SaveX(ctx context.Context) *CreditGrant {
-	v, err := cgc.Save(ctx)
+func (_c *CreditGrantCreate) SaveX(ctx context.Context) *CreditGrant {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -383,106 +383,106 @@ func (cgc *CreditGrantCreate) SaveX(ctx context.Context) *CreditGrant {
 }
 
 // Exec executes the query.
-func (cgc *CreditGrantCreate) Exec(ctx context.Context) error {
-	_, err := cgc.Save(ctx)
+func (_c *CreditGrantCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgc *CreditGrantCreate) ExecX(ctx context.Context) {
-	if err := cgc.Exec(ctx); err != nil {
+func (_c *CreditGrantCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cgc *CreditGrantCreate) defaults() {
-	if _, ok := cgc.mutation.Status(); !ok {
+func (_c *CreditGrantCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := creditgrant.DefaultStatus
-		cgc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cgc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := creditgrant.DefaultCreatedAt()
-		cgc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cgc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := creditgrant.DefaultUpdatedAt()
-		cgc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cgc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := creditgrant.DefaultEnvironmentID
-		cgc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cgc.mutation.Credits(); !ok {
+	if _, ok := _c.mutation.Credits(); !ok {
 		v := creditgrant.DefaultCredits
-		cgc.mutation.SetCredits(v)
+		_c.mutation.SetCredits(v)
 	}
-	if _, ok := cgc.mutation.Metadata(); !ok {
+	if _, ok := _c.mutation.Metadata(); !ok {
 		v := creditgrant.DefaultMetadata
-		cgc.mutation.SetMetadata(v)
+		_c.mutation.SetMetadata(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cgc *CreditGrantCreate) check() error {
-	if _, ok := cgc.mutation.TenantID(); !ok {
+func (_c *CreditGrantCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "CreditGrant.tenant_id"`)}
 	}
-	if v, ok := cgc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := creditgrant.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "CreditGrant.status"`)}
 	}
-	if _, ok := cgc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CreditGrant.created_at"`)}
 	}
-	if _, ok := cgc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "CreditGrant.updated_at"`)}
 	}
-	if _, ok := cgc.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "CreditGrant.name"`)}
 	}
-	if v, ok := cgc.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := creditgrant.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.name": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.Scope(); !ok {
+	if _, ok := _c.mutation.Scope(); !ok {
 		return &ValidationError{Name: "scope", err: errors.New(`ent: missing required field "CreditGrant.scope"`)}
 	}
-	if v, ok := cgc.mutation.Scope(); ok {
+	if v, ok := _c.mutation.Scope(); ok {
 		if err := creditgrant.ScopeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "scope", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.scope": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.Credits(); !ok {
+	if _, ok := _c.mutation.Credits(); !ok {
 		return &ValidationError{Name: "credits", err: errors.New(`ent: missing required field "CreditGrant.credits"`)}
 	}
-	if _, ok := cgc.mutation.Cadence(); !ok {
+	if _, ok := _c.mutation.Cadence(); !ok {
 		return &ValidationError{Name: "cadence", err: errors.New(`ent: missing required field "CreditGrant.cadence"`)}
 	}
-	if v, ok := cgc.mutation.Cadence(); ok {
+	if v, ok := _c.mutation.Cadence(); ok {
 		if err := creditgrant.CadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "cadence", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.cadence": %w`, err)}
 		}
 	}
-	if v, ok := cgc.mutation.Period(); ok {
+	if v, ok := _c.mutation.Period(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "period", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.period": %w`, err)}
 		}
 	}
-	if _, ok := cgc.mutation.ExpirationType(); !ok {
+	if _, ok := _c.mutation.ExpirationType(); !ok {
 		return &ValidationError{Name: "expiration_type", err: errors.New(`ent: missing required field "CreditGrant.expiration_type"`)}
 	}
-	if v, ok := cgc.mutation.ExpirationType(); ok {
+	if v, ok := _c.mutation.ExpirationType(); ok {
 		if err := creditgrant.ExpirationTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "expiration_type", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.expiration_type": %w`, err)}
 		}
 	}
-	if v, ok := cgc.mutation.ExpirationDurationUnit(); ok {
+	if v, ok := _c.mutation.ExpirationDurationUnit(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "expiration_duration_unit", err: fmt.Errorf(`ent: validator failed for field "CreditGrant.expiration_duration_unit": %w`, err)}
 		}
@@ -490,12 +490,12 @@ func (cgc *CreditGrantCreate) check() error {
 	return nil
 }
 
-func (cgc *CreditGrantCreate) sqlSave(ctx context.Context) (*CreditGrant, error) {
-	if err := cgc.check(); err != nil {
+func (_c *CreditGrantCreate) sqlSave(ctx context.Context) (*CreditGrant, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cgc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cgc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -508,113 +508,113 @@ func (cgc *CreditGrantCreate) sqlSave(ctx context.Context) (*CreditGrant, error)
 			return nil, fmt.Errorf("unexpected CreditGrant.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cgc.mutation.id = &_node.ID
-	cgc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) {
+func (_c *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) {
 	var (
-		_node = &CreditGrant{config: cgc.config}
+		_node = &CreditGrant{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(creditgrant.Table, sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString))
 	)
-	if id, ok := cgc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cgc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(creditgrant.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cgc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(creditgrant.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cgc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(creditgrant.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cgc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cgc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(creditgrant.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cgc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(creditgrant.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cgc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(creditgrant.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cgc.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(creditgrant.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := cgc.mutation.Scope(); ok {
+	if value, ok := _c.mutation.Scope(); ok {
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
 		_node.Scope = value
 	}
-	if value, ok := cgc.mutation.Credits(); ok {
+	if value, ok := _c.mutation.Credits(); ok {
 		_spec.SetField(creditgrant.FieldCredits, field.TypeOther, value)
 		_node.Credits = value
 	}
-	if value, ok := cgc.mutation.ConversionRate(); ok {
+	if value, ok := _c.mutation.ConversionRate(); ok {
 		_spec.SetField(creditgrant.FieldConversionRate, field.TypeOther, value)
 		_node.ConversionRate = &value
 	}
-	if value, ok := cgc.mutation.TopupConversionRate(); ok {
+	if value, ok := _c.mutation.TopupConversionRate(); ok {
 		_spec.SetField(creditgrant.FieldTopupConversionRate, field.TypeOther, value)
 		_node.TopupConversionRate = &value
 	}
-	if value, ok := cgc.mutation.Cadence(); ok {
+	if value, ok := _c.mutation.Cadence(); ok {
 		_spec.SetField(creditgrant.FieldCadence, field.TypeString, value)
 		_node.Cadence = value
 	}
-	if value, ok := cgc.mutation.Period(); ok {
+	if value, ok := _c.mutation.Period(); ok {
 		_spec.SetField(creditgrant.FieldPeriod, field.TypeString, value)
 		_node.Period = &value
 	}
-	if value, ok := cgc.mutation.PeriodCount(); ok {
+	if value, ok := _c.mutation.PeriodCount(); ok {
 		_spec.SetField(creditgrant.FieldPeriodCount, field.TypeInt, value)
 		_node.PeriodCount = &value
 	}
-	if value, ok := cgc.mutation.ExpirationType(); ok {
+	if value, ok := _c.mutation.ExpirationType(); ok {
 		_spec.SetField(creditgrant.FieldExpirationType, field.TypeString, value)
 		_node.ExpirationType = value
 	}
-	if value, ok := cgc.mutation.ExpirationDuration(); ok {
+	if value, ok := _c.mutation.ExpirationDuration(); ok {
 		_spec.SetField(creditgrant.FieldExpirationDuration, field.TypeInt, value)
 		_node.ExpirationDuration = &value
 	}
-	if value, ok := cgc.mutation.ExpirationDurationUnit(); ok {
+	if value, ok := _c.mutation.ExpirationDurationUnit(); ok {
 		_spec.SetField(creditgrant.FieldExpirationDurationUnit, field.TypeString, value)
 		_node.ExpirationDurationUnit = &value
 	}
-	if value, ok := cgc.mutation.Priority(); ok {
+	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(creditgrant.FieldPriority, field.TypeInt, value)
 		_node.Priority = &value
 	}
-	if value, ok := cgc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(creditgrant.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := cgc.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(creditgrant.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = &value
 	}
-	if value, ok := cgc.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(creditgrant.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := cgc.mutation.CreditGrantAnchor(); ok {
+	if value, ok := _c.mutation.CreditGrantAnchor(); ok {
 		_spec.SetField(creditgrant.FieldCreditGrantAnchor, field.TypeTime, value)
 		_node.CreditGrantAnchor = &value
 	}
-	if nodes := cgc.mutation.PlanIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.PlanIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -631,7 +631,7 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 		_node.PlanID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cgc.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -648,7 +648,7 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 		_node.SubscriptionID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cgc.mutation.AddonIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.AddonIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -676,16 +676,16 @@ type CreditGrantCreateBulk struct {
 }
 
 // Save creates the CreditGrant entities in the database.
-func (cgcb *CreditGrantCreateBulk) Save(ctx context.Context) ([]*CreditGrant, error) {
-	if cgcb.err != nil {
-		return nil, cgcb.err
+func (_c *CreditGrantCreateBulk) Save(ctx context.Context) ([]*CreditGrant, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(cgcb.builders))
-	nodes := make([]*CreditGrant, len(cgcb.builders))
-	mutators := make([]Mutator, len(cgcb.builders))
-	for i := range cgcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*CreditGrant, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := cgcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CreditGrantMutation)
@@ -699,11 +699,11 @@ func (cgcb *CreditGrantCreateBulk) Save(ctx context.Context) ([]*CreditGrant, er
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, cgcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, cgcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -723,7 +723,7 @@ func (cgcb *CreditGrantCreateBulk) Save(ctx context.Context) ([]*CreditGrant, er
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, cgcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -731,8 +731,8 @@ func (cgcb *CreditGrantCreateBulk) Save(ctx context.Context) ([]*CreditGrant, er
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cgcb *CreditGrantCreateBulk) SaveX(ctx context.Context) []*CreditGrant {
-	v, err := cgcb.Save(ctx)
+func (_c *CreditGrantCreateBulk) SaveX(ctx context.Context) []*CreditGrant {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -740,14 +740,14 @@ func (cgcb *CreditGrantCreateBulk) SaveX(ctx context.Context) []*CreditGrant {
 }
 
 // Exec executes the query.
-func (cgcb *CreditGrantCreateBulk) Exec(ctx context.Context) error {
-	_, err := cgcb.Save(ctx)
+func (_c *CreditGrantCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgcb *CreditGrantCreateBulk) ExecX(ctx context.Context) {
-	if err := cgcb.Exec(ctx); err != nil {
+func (_c *CreditGrantCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

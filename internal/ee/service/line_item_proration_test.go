@@ -4,20 +4,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
 
 type LineItemProrationServiceSuite struct {
 	testutil.BaseServiceTestSuite
-	svc LineItemProrationService
-	td  lineItemProrationTestData
+	svc    LineItemProrationService
+	params ServiceParams
+	td     lineItemProrationTestData
 }
 
 type lineItemProrationTestData struct {
@@ -44,7 +47,8 @@ func (s *LineItemProrationServiceSuite) TearDownTest() {
 }
 
 func (s *LineItemProrationServiceSuite) setupService() {
-	s.svc = NewLineItemProrationService(ServiceParams{
+	s.params = ServiceParams{
+		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
@@ -79,12 +83,14 @@ func (s *LineItemProrationServiceSuite) setupService() {
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		IntegrationFactory:         s.GetIntegrationFactory(),
-	})
+	}
+	s.svc = NewLineItemProrationService(s.params)
 }
 
 func (s *LineItemProrationServiceSuite) setupTestData() {
@@ -198,7 +204,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_FullPeriod() {
 		IdempotencyKey: "test_add_full",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -208,12 +214,60 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_FullPeriod() {
 	s.NoError(err)
 	s.NotNil(summary)
 
-	// Coefficient = (May1-1s - Apr1) / (May1-1s - Apr1) = 1.0 → $20.00
+	// Coefficient = [Apr1, May1) / [Apr1, May1) = 1.0 → $20.00
 	s.True(summary.TotalChargeAmount.Equal(decimal.NewFromInt(20)),
 		"full-period add should charge the full price; got %s", summary.TotalChargeAmount)
 	s.True(summary.TotalCreditAmount.IsZero(), "no credit expected for AddItem")
 	s.Len(summary.ChargeLineItems, 1)
 	s.False(summary.IsPreview)
+}
+
+// A volume-tiered price is prorated on what it bills (12 × $8 = $96), not on Amount × quantity.
+func (s *LineItemProrationServiceSuite) TestCompute_TieredPrice_ProratesCalculatedCost() {
+	ctx := s.GetContext()
+	tiered := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Currency:           "usd",
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(10)},
+			{UnitAmount: decimal.NewFromInt(8)},
+		},
+		InvoiceCadence: types.InvoiceCadenceAdvance,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, tiered))
+	item := *s.td.lineItem
+	item.PriceID = tiered.ID
+	item.Quantity = decimal.NewFromInt(12)
+	sub := s.subCopyWithPeriod(s.td.periodStart, s.td.periodEnd)
+	effectiveDate := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC) // 20 of 30 days left
+
+	added, err := s.svc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  sub,
+		EffectiveDate: effectiveDate,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Entries: []LineItemProrationEntry{{
+			LineItem: &item, NewPrice: tiered, NewQuantity: item.Quantity, Action: types.ProrationActionAddItem,
+		}},
+	})
+	s.NoError(err)
+	s.True(added.TotalChargeAmount.Equal(decimal.NewFromInt(64)), "attach: got %s", added.TotalChargeAmount)
+
+	removed, err := s.svc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  sub,
+		EffectiveDate: effectiveDate,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Entries: []LineItemProrationEntry{{
+			LineItem: &item, CurrentPrice: tiered, CurrentQuantity: item.Quantity, Action: types.ProrationActionRemoveItem,
+		}},
+	})
+	s.NoError(err)
+	s.True(removed.TotalCreditAmount.Equal(decimal.NewFromInt(64)), "remove: got %s", removed.TotalCreditAmount)
 }
 
 func (s *LineItemProrationServiceSuite) TestCompute_AddItem_MidPeriod() {
@@ -227,7 +281,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_MidPeriod() {
 		IdempotencyKey: "test_add_mid",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -256,7 +310,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_LastSecond() {
 		IdempotencyKey: "test_add_last",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -282,9 +336,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_MidPeriod() {
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_mid",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -310,9 +364,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_CreditCappedAtBil
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_capped",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -338,9 +392,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_CreditNetsPreviou
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_netted",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -367,9 +421,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_NoBilledRow_Falls
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_unbilled",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -410,9 +464,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_IgnoresOtherPerio
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_other_period",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -453,9 +507,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_LongerCadenceChar
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_quarterly",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -469,6 +523,190 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_LongerCadenceChar
 		summary.TotalCreditAmount)
 }
 
+// A monthly item on a quarterly sub is credited on each remaining month, capped by that month's billing.
+func (s *LineItemProrationServiceSuite) TestCompute_ShorterCadence_CreditsEveryWindow() {
+	ctx := s.GetContext()
+	sub := s.subCopyWithPeriod(s.td.periodStart, time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
+	sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+	effectiveDate := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+
+	lineItemID := s.td.lineItem.ID
+	for m := 4; m <= 6; m++ {
+		start := time.Date(2026, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+			CustomerID:             sub.CustomerID,
+			SubscriptionID:         &sub.ID,
+			SubscriptionLineItemID: &lineItemID,
+			Amount:                 decimal.NewFromInt(20),
+			Quantity:               decimal.NewFromInt(1),
+			Currency:               "usd",
+			PeriodStart:            &start,
+			PeriodEnd:              &end,
+			BaseModel:              types.GetDefaultBaseModel(ctx),
+		}))
+	}
+	expected, _ := decimal.NewFromString("53.33")
+
+	removed, err := s.svc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  sub,
+		EffectiveDate: effectiveDate,
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Entries: []LineItemProrationEntry{{
+			LineItem: s.td.lineItem, CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
+		}},
+	})
+	s.NoError(err)
+	s.True(removed.TotalCreditAmount.Equal(expected), "remove: got %s", removed.TotalCreditAmount)
+	s.Len(removed.CreditLineItems, 3)
+
+	cancelled, err := NewProrationService(s.params).CalculateSubscriptionCancellationProration(
+		ctx, sub, []*subscription.SubscriptionLineItem{s.td.lineItem},
+		types.CancellationTypeImmediate, effectiveDate, "test", types.ProrationBehaviorCreateProrations,
+	)
+	s.NoError(err)
+	s.True(cancelled.TotalProrationAmount.Equal(expected.Neg()), "cancel: got %s", cancelled.TotalProrationAmount)
+	s.Len(cancelled.LineItemResults[lineItemID].CreditItems, 1)
+}
+
+// A longer-cadence item is charged and credited against its own period on its own grid.
+func (s *LineItemProrationServiceSuite) TestCompute_LongerCadence_ProratesOwnPeriod() {
+	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	effectiveDate := date(2026, 4, 11)
+
+	tests := []struct {
+		name                   string
+		cycle                  types.BillingCycle
+		action                 types.ProrationAction
+		billedThrough          time.Time // end of the billed item period; zero means nothing billed
+		effective              time.Time // default Apr 11
+		periodStart, periodEnd time.Time // sub period; default [Apr 1, May 1)
+		want                   int64
+	}{
+		{name: "anniversary add", cycle: types.BillingCycleAnniversary, action: types.ProrationActionAddItem, want: 355},
+		{name: "anniversary remove", cycle: types.BillingCycleAnniversary, action: types.ProrationActionRemoveItem, billedThrough: date(2027, 4, 1), want: 355},
+		{name: "anniversary cancel", cycle: types.BillingCycleAnniversary, action: types.ProrationActionCancellation, billedThrough: date(2027, 4, 1), want: 355},
+		{name: "calendar remove ends on Jan 1", cycle: types.BillingCycleCalendar, action: types.ProrationActionRemoveItem, billedThrough: date(2027, 1, 1), want: 265},
+		// Period-end removal (no change_at) credits the item year after the sub period: [May 1, Jan 1) = 245 days.
+		{name: "calendar remove at period end", cycle: types.BillingCycleCalendar, action: types.ProrationActionRemoveItem, billedThrough: date(2027, 1, 1), effective: date(2026, 5, 1), want: 245},
+		{name: "anniversary remove at period end", cycle: types.BillingCycleAnniversary, action: types.ProrationActionRemoveItem, billedThrough: date(2027, 4, 1), effective: date(2026, 5, 1), want: 335},
+		// The sub period ends with the item year, so nothing of the billed year is left to credit.
+		{name: "calendar remove at period end on the item boundary", cycle: types.BillingCycleCalendar, action: types.ProrationActionRemoveItem,
+			billedThrough: date(2027, 1, 1), periodStart: date(2026, 12, 1), periodEnd: date(2027, 1, 1), effective: date(2027, 1, 1), want: 0},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			effectiveDate := effectiveDate
+			if !tt.effective.IsZero() {
+				effectiveDate = tt.effective
+			}
+			periodStart, periodEnd := s.td.periodStart, s.td.periodEnd
+			if !tt.periodStart.IsZero() {
+				periodStart, periodEnd = tt.periodStart, tt.periodEnd
+			}
+			annual := *s.td.fixedPrice
+			annual.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+			annual.Amount = decimal.NewFromInt(365)
+			annual.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+			s.NoError(s.GetStores().PriceRepo.Create(ctx, &annual))
+
+			item := *s.td.lineItem
+			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+			item.PriceID = annual.ID
+			item.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+			if tt.action == types.ProrationActionAddItem {
+				item.StartDate = effectiveDate
+			}
+
+			sub := s.subCopyWithPeriod(periodStart, periodEnd)
+			sub.BillingCycle = tt.cycle
+
+			if !tt.billedThrough.IsZero() {
+				periodStart := s.td.periodStart
+				s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+					ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+					InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+					CustomerID:             sub.CustomerID,
+					SubscriptionID:         &sub.ID,
+					SubscriptionLineItemID: &item.ID,
+					Amount:                 decimal.NewFromInt(365),
+					Quantity:               decimal.NewFromInt(1),
+					Currency:               "usd",
+					PeriodStart:            &periodStart,
+					PeriodEnd:              &tt.billedThrough,
+					BaseModel:              types.GetDefaultBaseModel(ctx),
+				}))
+			}
+
+			if tt.action == types.ProrationActionCancellation {
+				result, err := NewProrationService(s.params).CalculateSubscriptionCancellationProration(
+					ctx, sub, []*subscription.SubscriptionLineItem{&item},
+					types.CancellationTypeImmediate, effectiveDate, "test", types.ProrationBehaviorCreateProrations,
+				)
+				s.NoError(err)
+				s.True(result.TotalProrationAmount.Equal(decimal.NewFromInt(-tt.want)), "got %s", result.TotalProrationAmount)
+				return
+			}
+
+			entry := LineItemProrationEntry{LineItem: &item, Action: tt.action}
+			if tt.action == types.ProrationActionAddItem {
+				entry.NewPrice, entry.NewQuantity = &annual, item.Quantity
+			} else {
+				entry.CurrentPrice, entry.CurrentQuantity = &annual, item.Quantity
+			}
+
+			summary, err := s.svc.Compute(ctx, LineItemProrationRequest{
+				Subscription:  sub,
+				EffectiveDate: effectiveDate,
+				Behavior:      types.ProrationBehaviorCreateProrations,
+				Entries:       []LineItemProrationEntry{entry},
+			})
+			s.NoError(err)
+			s.True(summary.NetAmount().Abs().Equal(decimal.NewFromInt(tt.want)), "got %s", summary.NetAmount())
+		})
+	}
+}
+
+// With merged invoice lines one row spans every window, so all windows share its cap.
+func (s *LineItemProrationServiceSuite) TestCompute_ShorterCadence_MergedRowCapsAllWindows() {
+	ctx := s.GetContext()
+	sub := s.subCopyWithPeriod(s.td.periodStart, time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
+	sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+	sub.LineItemGrouping = types.LineItemGroupingPerBillingPeriod
+
+	lineItemID := s.td.lineItem.ID
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:             sub.CustomerID,
+		SubscriptionID:         &sub.ID,
+		SubscriptionLineItemID: &lineItemID,
+		Amount:                 decimal.NewFromInt(30),
+		Quantity:               decimal.NewFromInt(3),
+		Currency:               "usd",
+		PeriodStart:            &sub.CurrentPeriodStart,
+		PeriodEnd:              &sub.CurrentPeriodEnd,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}))
+
+	removed, err := s.svc.Compute(ctx, LineItemProrationRequest{
+		Subscription:  sub,
+		EffectiveDate: time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC),
+		Behavior:      types.ProrationBehaviorCreateProrations,
+		Entries: []LineItemProrationEntry{{
+			LineItem: s.td.lineItem, CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
+		}},
+	})
+	s.NoError(err)
+	s.True(removed.TotalCreditAmount.Equal(decimal.NewFromInt(30)), "got %s", removed.TotalCreditAmount)
+}
+
 func (s *LineItemProrationServiceSuite) TestCompute_ProrationChargeLinksToLineItem() {
 	ctx := s.GetContext()
 
@@ -479,7 +717,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_ProrationChargeLinksToLineIt
 		IdempotencyKey: "test_add_fk",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -506,9 +744,9 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_OnetimeAddon() {
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_rem_onetime",
 		Entries: []LineItemProrationEntry{{
-			LineItem: &onetimeItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     &onetimeItem,
+			CurrentPrice: s.td.fixedPrice,
+			Action:       types.ProrationActionRemoveItem,
 		}},
 	}
 
@@ -518,7 +756,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_RemoveItem_OnetimeAddon() {
 
 	s.True(summary.TotalCreditAmount.IsZero(), "onetime addon remove must not produce a credit")
 	s.True(summary.TotalChargeAmount.IsZero())
-	s.Empty(summary.Results, "no proration result expected for onetime remove")
+	s.Empty(summary.CreditLineItems, "no proration line expected for onetime remove")
 }
 
 func (s *LineItemProrationServiceSuite) TestCompute_SkipsUsagePrice() {
@@ -535,7 +773,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_SkipsUsagePrice() {
 		Behavior:      types.ProrationBehaviorCreateProrations,
 		Entries: []LineItemProrationEntry{{
 			LineItem:    &usageItem,
-			Price:       s.td.usagePrice,
+			NewPrice:    s.td.usagePrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: decimal.NewFromInt(1),
 		}},
@@ -545,7 +783,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_SkipsUsagePrice() {
 	s.NoError(err)
 	s.NotNil(summary)
 	s.True(summary.TotalChargeAmount.IsZero(), "usage price must be skipped")
-	s.Empty(summary.Results)
+	s.Empty(summary.ChargeLineItems)
 }
 
 func (s *LineItemProrationServiceSuite) TestCompute_NoneProrationBehavior() {
@@ -558,7 +796,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_NoneProrationBehavior() {
 		Behavior:      types.ProrationBehaviorNone,
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
@@ -587,13 +825,14 @@ func (s *LineItemProrationServiceSuite) TestCompute_MultipleEntries_AddAndRemove
 		Behavior:      types.ProrationBehaviorCreateProrations,
 		Entries: []LineItemProrationEntry{
 			{
-				LineItem: s.td.lineItem,
-				Price:    s.td.fixedPrice,
-				Action:   types.ProrationActionRemoveItem,
+				LineItem:        s.td.lineItem,
+				Action:          types.ProrationActionRemoveItem,
+				CurrentPrice:    s.td.fixedPrice,
+				CurrentQuantity: s.td.lineItem.Quantity,
 			},
 			{
 				LineItem:    &addItem,
-				Price:       s.td.fixedPrice,
+				NewPrice:    s.td.fixedPrice,
 				Action:      types.ProrationActionAddItem,
 				NewQuantity: addItem.Quantity,
 			},
@@ -602,7 +841,8 @@ func (s *LineItemProrationServiceSuite) TestCompute_MultipleEntries_AddAndRemove
 
 	summary, err := s.svc.Compute(ctx, req)
 	s.NoError(err)
-	s.Len(summary.Results, 2)
+	s.Len(summary.ChargeLineItems, 1)
+	s.Len(summary.CreditLineItems, 1)
 
 	expected, _ := decimal.NewFromString("13.33")
 	s.True(summary.TotalCreditAmount.Equal(expected), "remove credit mismatch: %s", summary.TotalCreditAmount)
@@ -620,13 +860,13 @@ func (s *LineItemProrationServiceSuite) TestApply_AddItem_CreatesOneOffInvoice()
 		IdempotencyKey: "test_apply_add",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
 	}
 
-	_, err := s.svc.Apply(ctx, req)
+	_, err := s.applyViaSettle(req)
 	s.NoError(err)
 
 	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
@@ -674,14 +914,14 @@ func (s *LineItemProrationServiceSuite) TestApply_TwoChangesSameEffectiveDate_Bi
 	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, secondLineItem))
 
 	applyAdd := func(lineItem *subscription.SubscriptionLineItem, p *price.Price, key string) error {
-		_, applyErr := s.svc.Apply(ctx, LineItemProrationRequest{
+		_, applyErr := s.applyViaSettle(LineItemProrationRequest{
 			Subscription:   s.subCopyWithPeriod(s.td.periodStart, s.td.periodEnd),
 			EffectiveDate:  effectiveDate,
 			Behavior:       types.ProrationBehaviorCreateProrations,
 			IdempotencyKey: key,
 			Entries: []LineItemProrationEntry{{
 				LineItem:    lineItem,
-				Price:       p,
+				NewPrice:    p,
 				Action:      types.ProrationActionAddItem,
 				NewQuantity: lineItem.Quantity,
 			}},
@@ -725,15 +965,15 @@ func (s *LineItemProrationServiceSuite) TestApply_SameChangeTwice_IsIdempotent()
 		IdempotencyKey: "addon_add_assoc_replayed",
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
 	}
 
-	_, applyErr := s.svc.Apply(ctx, req)
+	_, applyErr := s.applyViaSettle(req)
 	s.NoError(applyErr)
-	_, _ = s.svc.Apply(ctx, req)
+	_, _ = s.applyViaSettle(req)
 
 	invoices, err := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
 		QueryFilter: types.NewDefaultQueryFilter(),
@@ -754,13 +994,13 @@ func (s *LineItemProrationServiceSuite) TestApply_RemoveItem_CreatesWalletCredit
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_apply_remove",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
-	_, err := s.svc.Apply(ctx, req)
+	_, err := s.applyViaSettle(req)
 	s.NoError(err)
 
 	wallets, listErr := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
@@ -785,13 +1025,13 @@ func (s *LineItemProrationServiceSuite) TestApply_NoneProrationBehavior_IsNoOp()
 		Behavior:      types.ProrationBehaviorNone,
 		Entries: []LineItemProrationEntry{{
 			LineItem:    s.td.lineItem,
-			Price:       s.td.fixedPrice,
+			NewPrice:    s.td.fixedPrice,
 			Action:      types.ProrationActionAddItem,
 			NewQuantity: s.td.lineItem.Quantity,
 		}},
 	}
 
-	_, err := s.svc.Apply(ctx, req)
+	_, err := s.applyViaSettle(req)
 	s.NoError(err)
 
 	invoices, _ := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
@@ -818,13 +1058,13 @@ func (s *LineItemProrationServiceSuite) TestApply_OnetimeRemove_IsNoOp() {
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "test_apply_onetime",
 		Entries: []LineItemProrationEntry{{
-			LineItem: &onetimeItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     &onetimeItem,
+			CurrentPrice: s.td.fixedPrice,
+			Action:       types.ProrationActionRemoveItem,
 		}},
 	}
 
-	_, err := s.svc.Apply(ctx, req)
+	_, err := s.applyViaSettle(req)
 	s.NoError(err)
 
 	wallets, _ := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
@@ -834,7 +1074,6 @@ func (s *LineItemProrationServiceSuite) TestApply_OnetimeRemove_IsNoOp() {
 }
 
 func (s *LineItemProrationServiceSuite) TestApply_RemoveItem_IdempotencyKeyUsed() {
-	ctx := s.GetContext()
 	effectiveDate := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
 
 	s.recordBilled(s.td.lineItem.ID, decimal.NewFromInt(20))
@@ -845,16 +1084,16 @@ func (s *LineItemProrationServiceSuite) TestApply_RemoveItem_IdempotencyKeyUsed(
 		Behavior:       types.ProrationBehaviorCreateProrations,
 		IdempotencyKey: "idempotency_test_key",
 		Entries: []LineItemProrationEntry{{
-			LineItem: s.td.lineItem,
-			Price:    s.td.fixedPrice,
-			Action:   types.ProrationActionRemoveItem,
+			LineItem:     s.td.lineItem,
+			CurrentPrice: s.td.fixedPrice, CurrentQuantity: s.td.lineItem.Quantity,
+			Action: types.ProrationActionRemoveItem,
 		}},
 	}
 
-	_, err := s.svc.Apply(ctx, req)
+	_, err := s.applyViaSettle(req)
 	s.NoError(err)
 
-	_, err = s.svc.Apply(ctx, req)
+	_, err = s.applyViaSettle(req)
 	s.NoError(err, "duplicate Apply call with same idempotency key must not error")
 }
 
@@ -902,7 +1141,7 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_TableDriven() {
 				Behavior:      types.ProrationBehaviorCreateProrations,
 				Entries: []LineItemProrationEntry{{
 					LineItem:    s.td.lineItem,
-					Price:       s.td.fixedPrice,
+					NewPrice:    s.td.fixedPrice,
 					Action:      types.ProrationActionAddItem,
 					NewQuantity: s.td.lineItem.Quantity,
 				}},
@@ -916,5 +1155,209 @@ func (s *LineItemProrationServiceSuite) TestCompute_AddItem_TableDriven() {
 			s.True(summary.TotalChargeAmount.Equal(want),
 				"[%s] charge: want %s, got %s", tt.name, want, summary.TotalChargeAmount)
 		})
+	}
+}
+
+func (s *LineItemProrationServiceSuite) recordBilledPeriod(lineItemID string, amount decimal.Decimal, start, end time.Time) {
+	ctx := s.GetContext()
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, &invoice.InvoiceLineItem{
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:             s.td.sub.CustomerID,
+		SubscriptionID:         &s.td.sub.ID,
+		SubscriptionLineItemID: &lineItemID,
+		Amount:                 amount,
+		Quantity:               decimal.NewFromInt(1),
+		Currency:               "usd",
+		PeriodStart:            &start,
+		PeriodEnd:              &end,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}))
+}
+
+// $20 monthly item on a quarterly sub [Apr 1, Jul 1): only windows ending after the change are credited.
+func (s *LineItemProrationServiceSuite) TestCompute_ShorterCadence_RemovalTiming() {
+	date := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
+
+	tests := []struct {
+		name      string
+		action    types.ProrationAction
+		effective time.Time
+		grouping  types.LineItemGrouping
+		want      string
+		wantRows  int
+	}{
+		{name: "remove at period end credits nothing", action: types.ProrationActionRemoveItem, effective: date(7, 1), want: "0", wantRows: 0},
+		{name: "remove on a window boundary credits May and June", action: types.ProrationActionRemoveItem, effective: date(5, 1), want: "40", wantRows: 2},
+		// Windows owe 13.33 + 20 + 20, but one merged $30 row caps them all together.
+		{name: "cancel with a merged row is capped by it", action: types.ProrationActionCancellation, effective: date(4, 11),
+			grouping: types.LineItemGroupingPerBillingPeriod, want: "30", wantRows: 1},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			item := *s.td.lineItem
+			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+			sub := s.subCopyWithPeriod(date(4, 1), date(7, 1))
+			sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+			sub.LineItemGrouping = tt.grouping
+			if tt.grouping == types.LineItemGroupingPerBillingPeriod {
+				s.recordBilledPeriod(item.ID, decimal.NewFromInt(30), date(4, 1), date(7, 1))
+			} else {
+				for m := time.April; m <= time.June; m++ {
+					s.recordBilledPeriod(item.ID, decimal.NewFromInt(20), date(m, 1), date(m+1, 1))
+				}
+			}
+			want := decimal.RequireFromString(tt.want)
+
+			if tt.action == types.ProrationActionCancellation {
+				res, err := NewProrationService(s.params).CalculateSubscriptionCancellationProration(ctx, sub,
+					[]*subscription.SubscriptionLineItem{&item}, types.CancellationTypeImmediate, tt.effective, "test",
+					types.ProrationBehaviorCreateProrations)
+				s.Require().NoError(err)
+				s.True(res.TotalProrationAmount.Equal(want.Neg()), "cancel credit: got %s", res.TotalProrationAmount)
+				s.Len(res.LineItemResults, tt.wantRows, "one proration row per line item")
+				return
+			}
+
+			summary, err := s.svc.Compute(ctx, LineItemProrationRequest{
+				Subscription:  sub,
+				EffectiveDate: tt.effective,
+				Behavior:      types.ProrationBehaviorCreateProrations,
+				Entries: []LineItemProrationEntry{{
+					LineItem: &item, CurrentPrice: s.td.fixedPrice, CurrentQuantity: item.Quantity,
+					Action: tt.action,
+				}},
+			})
+			s.Require().NoError(err)
+			s.True(summary.TotalCreditAmount.Equal(want), "remove credit: got %s", summary.TotalCreditAmount)
+			s.Len(summary.CreditLineItems, tt.wantRows)
+		})
+	}
+}
+
+// Only an immediate cancel with create_prorations credits: $20 item in a full period [Apr 1, May 1)
+// cancelled Apr 21 → 10/30 x 20; scheduled and end-of-period cancels bill to their date instead.
+func (s *LineItemProrationServiceSuite) TestCancel_OnlyImmediateCredits() {
+	tests := []struct {
+		name     string
+		cancel   types.CancellationType
+		behavior types.ProrationBehavior
+		want     string
+	}{
+		{name: "immediate", cancel: types.CancellationTypeImmediate, behavior: types.ProrationBehaviorCreateProrations, want: "6.67"},
+		{name: "immediate with none", cancel: types.CancellationTypeImmediate, behavior: types.ProrationBehaviorNone, want: "0"},
+		{name: "end of period", cancel: types.CancellationTypeEndOfPeriod, behavior: types.ProrationBehaviorCreateProrations, want: "0"},
+		{name: "scheduled date", cancel: types.CancellationTypeScheduledDate, behavior: types.ProrationBehaviorCreateProrations, want: "0"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			item := *s.td.lineItem
+			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+			s.recordBilledPeriod(item.ID, decimal.NewFromInt(20), s.td.periodStart, s.td.periodEnd)
+
+			res, err := NewProrationService(s.params).CalculateSubscriptionCancellationProration(s.GetContext(),
+				s.subCopyWithPeriod(s.td.periodStart, s.td.periodEnd), []*subscription.SubscriptionLineItem{&item},
+				tt.cancel, time.Date(2026, 4, 21, 0, 0, 0, 0, time.UTC), "test", tt.behavior)
+			s.Require().NoError(err)
+			s.True(res.TotalProrationAmount.Equal(decimal.RequireFromString(tt.want).Neg()), "got %s", res.TotalProrationAmount)
+		})
+	}
+}
+
+// Cancel credits an item only for the time it would still have run. CancelSubscription passes every
+// item with end_date >= current_period_start, so items already ended or scheduled to end reach it.
+func (s *LineItemProrationServiceSuite) TestCancel_CreditStopsAtLineItemEndDate() {
+	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	cancelAt := date(2026, 4, 21)
+
+	tests := []struct {
+		name          string
+		annual        bool
+		itemEnd       time.Time
+		billedThrough time.Time
+		want          string
+	}{
+		{name: "monthly item ending at period end is credited to it", itemEnd: date(2026, 5, 1), billedThrough: date(2026, 5, 1), want: "6.67"},
+		// Removed Apr 11 with 13.33 paid to the wallet then; cancelling Apr 21 owes nothing more.
+		{name: "monthly item removed earlier in the period", itemEnd: date(2026, 4, 11), billedThrough: date(2026, 5, 1), want: "0"},
+		// Removed at period end: [May 1, Jan 1) was credited then, so cancel owes only [Apr 21, May 1) = 10/365.
+		{name: "annual item removed at period end", annual: true, itemEnd: date(2026, 5, 1), billedThrough: date(2027, 1, 1), want: "10"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			item := *s.td.lineItem
+			item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+			item.EndDate = tt.itemEnd
+			sub := s.subCopyWithPeriod(s.td.periodStart, s.td.periodEnd)
+			billed := decimal.NewFromInt(20)
+			if tt.annual {
+				annual := *s.td.fixedPrice
+				annual.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+				annual.Amount = decimal.NewFromInt(365)
+				annual.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+				s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &annual))
+				billed = annual.Amount
+				item.PriceID, item.BillingPeriod = annual.ID, types.BILLING_PERIOD_ANNUAL
+				sub.BillingCycle = types.BillingCycleCalendar
+			}
+			s.recordBilledPeriod(item.ID, billed, s.td.periodStart, tt.billedThrough)
+
+			res, err := NewProrationService(s.params).CalculateSubscriptionCancellationProration(ctx, sub,
+				[]*subscription.SubscriptionLineItem{&item}, types.CancellationTypeImmediate, cancelAt, "test",
+				types.ProrationBehaviorCreateProrations)
+			s.Require().NoError(err)
+			s.True(res.TotalProrationAmount.Equal(decimal.RequireFromString(tt.want).Neg()), "cancel credit: got %s", res.TotalProrationAmount)
+		})
+	}
+}
+
+func TestLineItemProrationSummary_NetAmountSubtractsDiscountBeforeCredit(t *testing.T) {
+	d := decimal.NewFromInt
+	cases := []struct {
+		name                     string
+		charge, discount, credit decimal.Decimal
+		want                     decimal.Decimal
+	}{
+		{name: "no_discount", charge: d(100), discount: d(0), credit: d(80), want: d(20)},
+		{name: "discount_flips_to_credit", charge: d(100), discount: d(50), credit: d(80), want: d(-30)},
+		{name: "discount_only", charge: d(100), discount: d(50), credit: d(0), want: d(50)},
+		{name: "credit_only", charge: d(0), discount: d(0), credit: d(40), want: d(-40)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			summary := &LineItemProrationSummary{
+				TotalChargeAmount:   tc.charge,
+				TotalDiscountAmount: tc.discount,
+				TotalCreditAmount:   tc.credit,
+			}
+			if !summary.NetAmount().Equal(tc.want) {
+				t.Fatalf("net = %s, want %s", summary.NetAmount(), tc.want)
+			}
+		})
+	}
+
+	var nilSummary *LineItemProrationSummary
+	if !nilSummary.NetAmount().IsZero() {
+		t.Fatalf("nil summary nets to zero")
+	}
+}
+
+func TestLineItemProrationSummary_MergeCarriesDiscounts(t *testing.T) {
+	d := decimal.NewFromInt
+	a := &LineItemProrationSummary{TotalChargeAmount: d(100), TotalDiscountAmount: d(50), TotalCreditAmount: d(0),
+		LineItemCoupons: []dto.InvoiceLineItemCoupon{{CouponID: "c1"}}}
+	b := &LineItemProrationSummary{TotalChargeAmount: d(0), TotalDiscountAmount: d(0), TotalCreditAmount: d(80)}
+
+	merged := a.Merge(b)
+	if !merged.TotalDiscountAmount.Equal(d(50)) || len(merged.LineItemCoupons) != 1 {
+		t.Fatalf("merge dropped the discount: %s, %d coupons", merged.TotalDiscountAmount, len(merged.LineItemCoupons))
+	}
+	if !merged.NetAmount().Equal(d(-30)) {
+		t.Fatalf("merged net = %s, want -30", merged.NetAmount())
 	}
 }

@@ -67,7 +67,7 @@ func runPostgresSQLFile(file string, dryRun bool, timeout int) error {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
-	raw, err := os.ReadFile(file)
+	raw, err := os.ReadFile(file) // #nosec G304 -- operator-supplied --file flag, CLI tool not a request handler
 	if err != nil {
 		return fmt.Errorf("read %s: %w", file, err)
 	}
@@ -411,11 +411,8 @@ func runVersionedMigrations(dir string, statusOnly bool) error {
 	//
 	// `bin` is resolved by resolveDbmate from the fixed dbmateSearchPath list,
 	// never from input. `dir` is an operator-supplied flag passed as its own argv
-	// element, not through a shell, so neither can inject a command. The
-	// suppression must sit on the line DIRECTLY above the call to take effect.
-	//
-	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	c := exec.CommandContext(context.Background(), bin, "--migrations-dir", dir, "--no-dump-schema", action)
+	// element, not through a shell, so neither can inject a command.
+	c := exec.CommandContext(context.Background(), bin, "--migrations-dir", dir, "--no-dump-schema", action) // #nosec G204 -- bin from fixed candidate list, argv not shell // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	c.Env = append(os.Environ(), "DATABASE_URL="+dsn)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

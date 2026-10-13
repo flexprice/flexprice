@@ -26,10 +26,10 @@ type CreateTaxAssociationRequest struct {
 	// EndDate sets when this association expires. Must be after StartDate when both are provided.
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// TaxBehavior is inclusive or exclusive. Settable at any level. If left empty on a
-	// subscription-level association, it resolves from the currency default at creation
-	// time (internal/types.DefaultTaxBehaviorForCurrency) — tenant/customer-level templates
-	// only need this set explicitly if the tenant wants one; otherwise it stays null and is
-	// resolved when the template is copied down to a subscription.
+	// subscription-level association, it defaults to exclusive at creation time —
+	// tenant/customer-level templates only need this set explicitly if the tenant wants
+	// one; otherwise it stays null and is resolved when the template is copied down to
+	// a subscription.
 	TaxBehavior *types.TaxBehavior `json:"tax_behavior,omitempty"`
 }
 

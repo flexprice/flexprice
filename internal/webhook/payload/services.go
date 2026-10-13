@@ -12,21 +12,23 @@ import (
 // previously read .Sentry should use .Tracing. The field name is kept short
 // because builders only use it for CaptureException today.
 type Services struct {
-	InvoiceService           service.InvoiceService
-	PlanService              service.PlanService
-	PriceService             service.PriceService
-	EntitlementService       service.EntitlementService
-	FeatureService           service.FeatureService
-	SubscriptionService      service.SubscriptionService
-	SubscriptionPhaseService service.SubscriptionPhaseService
-	WalletService            service.WalletService
-	CustomerService          service.CustomerService
-	PaymentService           service.PaymentService
-	Tracing                  *tracing.Service
-	CreditNoteService        service.CreditNoteService
-	CheckoutSessionService   interfaces.CheckoutSessionService
-	GroupService             service.GroupService
-	EntitlementGrantSvc      service.EntitlementGrantService
+	InvoiceService                  service.InvoiceService
+	PlanService                     service.PlanService
+	PriceService                    service.PriceService
+	EntitlementService              service.EntitlementService
+	FeatureService                  service.FeatureService
+	SubscriptionService             service.SubscriptionService
+	SubscriptionPhaseService        service.SubscriptionPhaseService
+	WalletService                   service.WalletService
+	CustomerService                 service.CustomerService
+	PaymentService                  service.PaymentService
+	Tracing                         *tracing.Service
+	CreditNoteService               service.CreditNoteService
+	RefundService                   service.RefundService
+	CheckoutSessionService          interfaces.CheckoutSessionService
+	GroupService                    service.GroupService
+	EntitlementGrantSvc             service.EntitlementGrantService
+	EntityIntegrationMappingService service.EntityIntegrationMappingService
 }
 
 // NewServices creates a new Services container
@@ -43,25 +45,29 @@ func NewServices(
 	paymentService service.PaymentService,
 	tracingSvc *tracing.Service,
 	creditNoteService service.CreditNoteService,
+	refundService service.RefundService,
 	checkoutSessionService interfaces.CheckoutSessionService,
 	groupService service.GroupService,
 	entitlementGrantSvc service.EntitlementGrantService,
+	entityIntegrationMappingService service.EntityIntegrationMappingService,
 ) *Services {
 	return &Services{
-		InvoiceService:           invoiceService,
-		PlanService:              planService,
-		PriceService:             priceService,
-		EntitlementService:       entitlementService,
-		FeatureService:           featureService,
-		SubscriptionService:      subscriptionService,
-		SubscriptionPhaseService: subscriptionPhaseService,
-		WalletService:            walletService,
-		CustomerService:          customerService,
-		PaymentService:           paymentService,
-		Tracing:                  tracingSvc,
-		CreditNoteService:        creditNoteService,
-		CheckoutSessionService:   checkoutSessionService,
-		GroupService:             groupService,
-		EntitlementGrantSvc:      entitlementGrantSvc,
+		InvoiceService:                  invoiceService,
+		PlanService:                     planService,
+		PriceService:                    priceService,
+		EntitlementService:              entitlementService,
+		FeatureService:                  featureService,
+		SubscriptionService:             subscriptionService,
+		SubscriptionPhaseService:        subscriptionPhaseService,
+		WalletService:                   walletService,
+		CustomerService:                 customerService,
+		PaymentService:                  paymentService,
+		Tracing:                         tracingSvc,
+		CreditNoteService:               creditNoteService,
+		RefundService:                   refundService,
+		CheckoutSessionService:          checkoutSessionService,
+		GroupService:                    groupService,
+		EntitlementGrantSvc:             entitlementGrantSvc,
+		EntityIntegrationMappingService: entityIntegrationMappingService,
 	}
 }

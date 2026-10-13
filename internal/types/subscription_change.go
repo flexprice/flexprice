@@ -22,7 +22,7 @@ type SubscriptionChangeEntityType string
 
 const (
 	SubscriptionChangeEntityTypePlan             SubscriptionChangeEntityType = "plan"
-	SubscriptionChangeEntityTypeAddon            SubscriptionChangeEntityType = "addon"
+	SubscriptionChangeEntityTypeAddonAssociation SubscriptionChangeEntityType = "addon_association"
 	SubscriptionChangeEntityTypeCreditGrant      SubscriptionChangeEntityType = "credit_grant"
 	SubscriptionChangeEntityTypeEntitlement      SubscriptionChangeEntityType = "entitlement"
 	SubscriptionChangeEntityTypeEntitlementGrant SubscriptionChangeEntityType = "entitlement_grant"

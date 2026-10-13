@@ -678,7 +678,7 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
-// @Success 200 {array} dto.AddonAssociationResponse
+// @Success 200 {object} dto.ListAddonAssociationsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"

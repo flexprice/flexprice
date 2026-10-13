@@ -79,6 +79,7 @@ const (
 	UUID_PREFIX_SUBSCRIPTION_CHANGE        = "subsc"
 	UUID_PREFIX_SUBSCRIPTION_SCHEDULE      = "sched"
 	UUID_PREFIX_CUSTOMER                   = "cust"
+	UUID_PREFIX_CONTACT_PERSON             = "cp"
 	UUID_PREFIX_CONNECTION                 = "conn"
 	UUID_PREFIX_WALLET                     = "wallet"
 	UUID_PREFIX_WALLET_TRANSACTION         = "wtxn"
@@ -89,6 +90,7 @@ const (
 	UUID_PREFIX_ENTITLEMENT                = "ent"
 	UUID_PREFIX_ENTITLEMENT_GRANT          = "eg"
 	UUID_PREFIX_PAYMENT                    = "pay"
+	UUID_PREFIX_REFUND                     = "refund"
 	UUID_PREFIX_PAYMENT_METHOD             = "pm"
 	UUID_PREFIX_PAYMENT_ATTEMPT            = "attempt"
 	UUID_PREFIX_TASK                       = "task"
@@ -117,6 +119,10 @@ const (
 	UUID_PREFIX_SYSTEM_EVENT               = "sys_event"
 	UUID_PREFIX_COMMITMENT_BUCKET          = "bucket"
 	UUID_PREFIX_INCOMING_WEBHOOK_EVENT     = "fp_webhook"
+	UUID_PREFIX_ANALYTICS_VIEW             = "aview"
+	UUID_PREFIX_REVENUE_FACT               = "revfact"
+	UUID_PREFIX_FX_RATE                    = "fxr"
+	UUID_PREFIX_ACTIVITY                   = "act"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

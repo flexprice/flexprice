@@ -16,9 +16,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -270,8 +272,8 @@ func (s *BillingServiceSuite) setupTestData() {
 	s.testData.now = time.Now().UTC()
 	// Use CurrentPeriodEnd as BillingAnchor so the next period is a full month (same day-of-month),
 	// ensuring next-period advance charges (e.g. fixed price) are included when billing at period end.
-	currentPeriodStart := s.testData.now.Add(-48 * time.Hour)
 	currentPeriodEnd := s.testData.now.Add(6 * 24 * time.Hour)
+	currentPeriodStart := currentPeriodEnd.AddDate(0, -1, 0)
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
 		PlanID:             s.testData.plan.ID,
@@ -689,6 +691,19 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 	}
 	s.False(foundAPI, "GetWithLineItems should omit line item whose EndDate is before new CurrentPeriodStart")
 
+	// The API usage line has no events in this window, so keep zero usage lines to assert it is still picked up.
+	raw, err := utils.ToMap(types.InvoiceConfig{IncludeZeroValueLineItems: true})
+	s.NoError(err)
+	invoiceConfigSetting := &settings.Setting{
+		ID:            "setting_invoice_config",
+		Key:           types.SettingKeyInvoiceConfig,
+		Value:         raw,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	invoiceConfigSetting.Status = types.StatusPublished
+	s.NoError(s.GetStores().SettingsRepo.Create(ctx, invoiceConfigSetting))
+
 	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 		Subscription:   sub,
 		PeriodStart:    oldStart,
@@ -706,6 +721,85 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 		}
 	}
 	s.True(hasAPI, "PrepareSubscriptionInvoiceRequest for historical period should still bill API usage")
+}
+
+func (s *BillingServiceSuite) TestCreateInvoiceRequestForCharges_ZeroUsageLineItems() {
+	tests := []struct {
+		name                      string
+		includeZeroUsageLineItems *bool
+		referencePoint            types.InvoiceReferencePoint
+		expectedPriceIDs          []string
+	}{
+		{
+			name:             "setting absent skips zero usage line items",
+			expectedPriceIDs: []string{"price_fixed_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:                      "setting disabled skips zero usage line items",
+			includeZeroUsageLineItems: lo.ToPtr(false),
+			expectedPriceIDs:          []string{"price_fixed_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:                      "setting enabled keeps zero usage line items",
+			includeZeroUsageLineItems: lo.ToPtr(true),
+			expectedPriceIDs:          []string{"price_fixed_zero", "price_usage_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+		{
+			name:             "revenue facts keep zero value line items regardless of setting",
+			referencePoint:   types.ReferencePointRevenueFacts,
+			expectedPriceIDs: []string{"price_fixed_zero", "price_usage_zero", "price_usage_qty_only", "price_usage_billed"},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.GetStores().SettingsRepo.(*testutil.InMemorySettingsStore).Clear()
+			ctx := s.GetContext()
+
+			if tt.includeZeroUsageLineItems != nil {
+				raw, err := utils.ToMap(types.InvoiceConfig{IncludeZeroValueLineItems: *tt.includeZeroUsageLineItems})
+				s.Require().NoError(err)
+				invoiceConfigSetting := &settings.Setting{
+					ID:            "setting_invoice_config",
+					Key:           types.SettingKeyInvoiceConfig,
+					Value:         raw,
+					EnvironmentID: types.GetEnvironmentID(ctx),
+					BaseModel:     types.GetDefaultBaseModel(ctx),
+				}
+				invoiceConfigSetting.Status = types.StatusPublished
+				s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, invoiceConfigSetting))
+			}
+
+			sub := s.testData.subscription
+			result := &dto.BillingCalculationResult{
+				Currency:    sub.Currency,
+				TotalAmount: decimal.NewFromInt(10),
+				FixedCharges: []dto.CreateInvoiceLineItemRequest{
+					{PriceID: lo.ToPtr("price_fixed_zero"), Quantity: decimal.Zero, Amount: decimal.Zero},
+				},
+				UsageCharges: []dto.CreateInvoiceLineItemRequest{
+					{PriceID: lo.ToPtr("price_usage_zero"), Quantity: decimal.Zero, Amount: decimal.Zero},
+					{PriceID: lo.ToPtr("price_usage_qty_only"), Quantity: decimal.NewFromInt(5), Amount: decimal.Zero},
+					{PriceID: lo.ToPtr("price_usage_billed"), Quantity: decimal.NewFromInt(10), Amount: decimal.NewFromInt(10)},
+				},
+			}
+
+			req, err := s.service.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
+				Subscription:   sub,
+				Result:         result,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+				ReferencePoint: tt.referencePoint,
+			})
+			s.Require().NoError(err)
+
+			priceIDs := lo.Map(req.LineItems, func(li dto.CreateInvoiceLineItemRequest, _ int) string {
+				return lo.FromPtr(li.PriceID)
+			})
+			s.ElementsMatch(tt.expectedPriceIDs, priceIDs)
+			s.Len(result.UsageCharges, 3, "caller's calculation result must not be mutated")
+		})
+	}
 }
 
 // Helper methods for specific validations
@@ -923,6 +1017,210 @@ func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
 	s.True(quarterlyLine.Amount.Equal(decimal.NewFromInt(300)), "quarterly line should be full amount 300")
 	s.True(marAprTotal.GreaterThanOrEqual(decimal.NewFromInt(300)), "total should be at least 300 (quarterly)")
 	s.True(marAprTotal.LessThanOrEqual(decimal.NewFromInt(310)), "total should be at most 310 (full monthly + quarterly)")
+}
+
+// A longer-cadence item renews on its own grid (calendar boundary, or the sub's anchor) and its first period is prorated.
+func (s *BillingServiceSuite) TestCalculateFixedCharges_LongerCadenceAnchoredToSubGrid() {
+	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	at := func(y int, m time.Month, d, h int) time.Time { return time.Date(y, m, d, h, 0, 0, 0, time.UTC) }
+
+	tests := []struct {
+		name                     string
+		cycle                    types.BillingCycle
+		subPeriod                types.BillingPeriod // default MONTHLY
+		itemPeriod               types.BillingPeriod // default ANNUAL
+		itemCount                int                 // default 1
+		anchor, itemStart        time.Time
+		behavior                 types.ProrationBehavior
+		invoiceStart, invoiceEnd time.Time
+		wantStart, wantEnd       time.Time
+		wantAmount               int64 // 0 means no line
+		wantAmountText           string
+	}{
+		{
+			name: "calendar first period ends on Jan 1", cycle: types.BillingCycleCalendar,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 1, 15), invoiceEnd: date(2026, 2, 1),
+			wantStart: date(2026, 1, 15), wantEnd: date(2027, 1, 1), wantAmount: 351,
+		},
+		{
+			name: "none bills an item starting with the sub in full", cycle: types.BillingCycleCalendar,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorNone,
+			invoiceStart: date(2026, 1, 15), invoiceEnd: date(2026, 2, 1),
+			wantStart: date(2026, 1, 15), wantEnd: date(2027, 1, 1), wantAmount: 365,
+		},
+		{
+			name: "calendar renews in full on Jan 1", cycle: types.BillingCycleCalendar,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2027, 1, 1), invoiceEnd: date(2027, 2, 1),
+			wantStart: date(2027, 1, 1), wantEnd: date(2028, 1, 1), wantAmount: 365,
+		},
+		{
+			name: "anniversary attach mid-life ends on the sub anchor", cycle: types.BillingCycleAnniversary,
+			anchor: date(2026, 1, 15), itemStart: date(2026, 3, 20), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 3, 15), invoiceEnd: date(2026, 4, 15),
+			wantStart: date(2026, 3, 20), wantEnd: date(2027, 1, 15), wantAmount: 301,
+		},
+		{
+			name: "none leaves an item attached mid-period free", cycle: types.BillingCycleAnniversary,
+			anchor: date(2026, 1, 15), itemStart: date(2026, 3, 20), behavior: types.ProrationBehaviorNone,
+			invoiceStart: date(2026, 3, 15), invoiceEnd: date(2026, 4, 15),
+		},
+		{
+			name: "6-month item on a calendar quarterly sub stubs to the sub grid", cycle: types.BillingCycleCalendar,
+			subPeriod: types.BILLING_PERIOD_QUARTER, itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 6,
+			anchor: date(2026, 7, 1), itemStart: date(2026, 4, 30), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 4, 30), invoiceEnd: date(2026, 7, 1),
+			wantStart: date(2026, 4, 30), wantEnd: date(2026, 7, 1), wantAmountText: "125.03",
+		},
+		{
+			name: "6-month item on a calendar quarterly sub renews on the sub grid", cycle: types.BillingCycleCalendar,
+			subPeriod: types.BILLING_PERIOD_QUARTER, itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 6,
+			anchor: date(2026, 7, 1), itemStart: date(2026, 4, 30), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 7, 1), invoiceEnd: date(2026, 10, 1),
+			wantStart: date(2026, 7, 1), wantEnd: date(2027, 1, 1), wantAmount: 365,
+		},
+		{
+			name: "attach earlier in the day than the anchor renews on that day's grid time", cycle: types.BillingCycleAnniversary,
+			anchor: at(2026, 1, 15, 17), itemStart: at(2027, 1, 15, 9), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: at(2027, 1, 15, 17), invoiceEnd: at(2027, 2, 15, 17),
+			wantStart: at(2027, 1, 15, 17), wantEnd: at(2028, 1, 15, 17), wantAmount: 365,
+		},
+		{
+			name: "anniversary item starting with the sub bills a full year from the anchor", cycle: types.BillingCycleAnniversary,
+			anchor: date(2026, 1, 15), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 1, 15), invoiceEnd: date(2026, 2, 15),
+			wantStart: date(2026, 1, 15), wantEnd: date(2027, 1, 15), wantAmount: 365,
+		},
+		{
+			name: "anniversary annual item bills nothing mid-year", cycle: types.BillingCycleAnniversary,
+			anchor: date(2026, 1, 15), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 6, 15), invoiceEnd: date(2026, 7, 15),
+		},
+		{
+			// [Jan 15, Feb 1) of the 3-month period [Nov 1, Feb 1) = 17/92 x 365.
+			name: "3-month item on a calendar monthly sub stubs to the next month start", cycle: types.BillingCycleCalendar,
+			itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 3,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 1, 15), invoiceEnd: date(2026, 2, 1),
+			wantStart: date(2026, 1, 15), wantEnd: date(2026, 2, 1), wantAmountText: "67.45",
+		},
+		{
+			name: "3-month item on a calendar monthly sub renews every third month", cycle: types.BillingCycleCalendar,
+			itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 3,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 2, 1), invoiceEnd: date(2026, 3, 1),
+			wantStart: date(2026, 2, 1), wantEnd: date(2026, 5, 1), wantAmount: 365,
+		},
+		{
+			name: "3-month item bills nothing between renewals", cycle: types.BillingCycleCalendar,
+			itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 3,
+			anchor: date(2026, 2, 1), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 3, 1), invoiceEnd: date(2026, 4, 1),
+		},
+		{
+			// [Mar 20, Apr 15) of [Jan 15, Apr 15) = 26/90 x 365.
+			name: "3-month item attached mid-life on an anniversary monthly sub", cycle: types.BillingCycleAnniversary,
+			itemPeriod: types.BILLING_PERIOD_MONTHLY, itemCount: 3,
+			anchor: date(2026, 1, 15), itemStart: date(2026, 3, 20), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 3, 15), invoiceEnd: date(2026, 4, 15),
+			wantStart: date(2026, 3, 20), wantEnd: date(2026, 4, 15), wantAmountText: "105.44",
+		},
+		{
+			name: "2-year item on an anniversary monthly sub bills two years from the anchor", cycle: types.BillingCycleAnniversary,
+			itemCount: 2, anchor: date(2026, 1, 15), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2026, 1, 15), invoiceEnd: date(2026, 2, 15),
+			wantStart: date(2026, 1, 15), wantEnd: date(2028, 1, 15), wantAmount: 365,
+		},
+		{
+			name: "2-year item skips the middle anniversary", cycle: types.BillingCycleAnniversary,
+			itemCount: 2, anchor: date(2026, 1, 15), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2027, 1, 15), invoiceEnd: date(2027, 2, 15),
+		},
+		{
+			name: "2-year item renews after two years", cycle: types.BillingCycleAnniversary,
+			itemCount: 2, anchor: date(2026, 1, 15), itemStart: date(2026, 1, 15), behavior: types.ProrationBehaviorCreateProrations,
+			invoiceStart: date(2028, 1, 15), invoiceEnd: date(2028, 2, 15),
+			wantStart: date(2028, 1, 15), wantEnd: date(2030, 1, 15), wantAmount: 365,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			ctx := s.GetContext()
+			subPeriod := lo.CoalesceOrEmpty(tt.subPeriod, types.BILLING_PERIOD_MONTHLY)
+			itemPeriod := lo.CoalesceOrEmpty(tt.itemPeriod, types.BILLING_PERIOD_ANNUAL)
+			itemCount := max(tt.itemCount, 1)
+
+			annual := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(365),
+				Currency:           "usd",
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      itemPeriod,
+				BillingPeriodCount: itemCount,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PriceRepo.Create(ctx, annual))
+
+			sub := &subscription.Subscription{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+				CustomerID:         "cust_longer_grid",
+				StartDate:          types.EarliestOf(tt.anchor, tt.itemStart),
+				BillingAnchor:      tt.anchor,
+				BillingCycle:       tt.cycle,
+				CurrentPeriodStart: tt.invoiceStart,
+				CurrentPeriodEnd:   tt.invoiceEnd,
+				Currency:           "usd",
+				BillingPeriod:      subPeriod,
+				BillingPeriodCount: 1,
+				ProrationBehavior:  tt.behavior,
+				SubscriptionStatus: types.SubscriptionStatusActive,
+				Timezone:           "UTC",
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			item := &subscription.SubscriptionLineItem{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID:     sub.ID,
+				CustomerID:         sub.CustomerID,
+				PriceID:            annual.ID,
+				PriceType:          types.PRICE_TYPE_FIXED,
+				DisplayName:        "Annual Fee",
+				Quantity:           decimal.NewFromInt(1),
+				Currency:           "usd",
+				BillingPeriod:      itemPeriod,
+				BillingPeriodCount: itemCount,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				StartDate:          tt.itemStart,
+				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{item}))
+			sub.LineItems = []*subscription.SubscriptionLineItem{item}
+
+			result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+				Subscription: sub, PeriodStart: tt.invoiceStart, PeriodEnd: tt.invoiceEnd,
+			})
+			s.NoError(err)
+
+			want := decimal.NewFromInt(tt.wantAmount)
+			if tt.wantAmountText != "" {
+				want = decimal.RequireFromString(tt.wantAmountText)
+			}
+			if want.IsZero() {
+				s.Empty(result.LineItems)
+				return
+			}
+			s.Require().Len(result.LineItems, 1)
+			line := result.LineItems[0]
+			s.True(line.Amount.Equal(want), "amount: got %s", line.Amount)
+			s.True(line.PeriodStart.Equal(tt.wantStart), "start: got %s", line.PeriodStart)
+			s.True(line.PeriodEnd.Equal(tt.wantEnd), "end: got %s", line.PeriodEnd)
+		})
+	}
 }
 
 // scenario1DailyExpectedTotals is the expected fixed charge total for each of 12 daily invoices
@@ -2011,6 +2309,7 @@ func (s *BillingServiceSuite) TestFindMatchingLineItemPeriodForInvoice() {
 		s.Run(tt.name, func() {
 			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           tt.item,
+				Anchor:         tt.item.StartDate,
 				PeriodStart:    tt.periodStart,
 				PeriodEnd:      tt.periodEnd,
 				InvoiceCadence: tt.invoiceCadence,
@@ -2858,6 +3157,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_SkipsInactiveLineIt
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -2919,6 +3219,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_ItemLevelCommitment
 
 	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
 		subCopy.CurrentPeriodStart, subCopy.CurrentPeriodEnd, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -2967,6 +3268,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_KeepsBothNormalAndO
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -3000,6 +3302,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MatchesActiveLineIt
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
 		types.UsageSourceInvoiceCreation,
+		nil,
 	)
 
 	s.NoError(err)
@@ -3078,6 +3381,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_WindowedTrueUp_Uses
 
 	lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
 		periodStart, periodEnd, types.UsageSourceInvoiceCreation,
+		nil,
 	)
 	s.NoError(err)
 	s.Len(lineItems, 1)
@@ -3104,6 +3408,129 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_WindowedTrueUp_Uses
 	s.True(totalAmount.Equal(expectedTotal), "expected elapsed-window true-up %s, got %s", expectedTotal, totalAmount)
 	s.True(lineItems[0].Amount.Equal(expectedTotal), "line item amount should match elapsed-window commitment total")
 	s.True(totalAmount.LessThan(fullPeriodTotal), "amount should not project full-period commitment")
+}
+
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_DeferredCommitment_DoesNotChargeUntilStart() {
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	now := time.Now().UTC()
+	periodStart := now.Add(-48 * time.Hour)
+	periodEnd := now.Add(20 * 24 * time.Hour)
+	futureStart := now.Add(13 * 24 * time.Hour)
+
+	flatPrice := &price.Price{
+		ID:                 "price_deferred_commitment_flat",
+		Amount:             decimal.RequireFromString("12.50"),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, flatPrice))
+
+	commitmentQty := decimal.NewFromInt(30)
+	overageFactor := decimal.NewFromInt(1)
+
+	newDeferredItem := func(id string, start, end time.Time, windowed bool) *subscription.SubscriptionLineItem {
+		return &subscription.SubscriptionLineItem{
+			ID:                      id,
+			SubscriptionID:          s.testData.subscription.ID,
+			CustomerID:              s.testData.subscription.CustomerID,
+			EntityID:                s.testData.plan.ID,
+			EntityType:              types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:         s.testData.plan.Name,
+			PriceID:                 flatPrice.ID,
+			PriceType:               types.PRICE_TYPE_USAGE,
+			MeterID:                 s.testData.meters.apiCalls.ID,
+			MeterDisplayName:        s.testData.meters.apiCalls.Name,
+			DisplayName:             "Deferred commitment",
+			Quantity:                decimal.Zero,
+			Currency:                s.testData.subscription.Currency,
+			BillingPeriod:           s.testData.subscription.BillingPeriod,
+			InvoiceCadence:          types.InvoiceCadenceArrear,
+			StartDate:               start,
+			EndDate:                 end,
+			CommitmentType:          types.COMMITMENT_TYPE_QUANTITY,
+			CommitmentQuantity:      &commitmentQty,
+			CommitmentOverageFactor: &overageFactor,
+			CommitmentTrueUpEnabled: true,
+			CommitmentWindowed:      windowed,
+			BaseModel:               types.GetDefaultBaseModel(ctx),
+		}
+	}
+
+	tests := []struct {
+		name     string
+		item     *subscription.SubscriptionLineItem
+		wantZero bool
+	}{
+		{
+			name:     "future_start_non_windowed",
+			item:     newDeferredItem("sub_li_deferred_flat", futureStart, time.Time{}, false),
+			wantZero: true,
+		},
+		{
+			name:     "future_start_windowed",
+			item:     newDeferredItem("sub_li_deferred_windowed", futureStart, time.Time{}, true),
+			wantZero: true,
+		},
+		{
+			name:     "zero_length_at_future_start",
+			item:     newDeferredItem("sub_li_deferred_zero_length", futureStart, futureStart, false),
+			wantZero: true,
+		},
+		{
+			name:     "already_started_non_windowed_still_charges",
+			item:     newDeferredItem("sub_li_active_commitment", s.testData.subscription.StartDate, time.Time{}, false),
+			wantZero: false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			subCopy := *s.testData.subscription
+			subCopy.CurrentPeriodStart = periodStart
+			subCopy.CurrentPeriodEnd = periodEnd
+			subCopy.LineItems = []*subscription.SubscriptionLineItem{tt.item}
+
+			usage := &dto.GetUsageBySubscriptionResponse{
+				StartTime: periodStart,
+				EndTime:   periodEnd,
+				Currency:  subCopy.Currency,
+				Charges: []*dto.SubscriptionUsageByMetersResponse{
+					{
+						SubscriptionLineItemID: tt.item.ID,
+						Price:                  flatPrice,
+						Quantity:               0,
+						Amount:                 0,
+						IsOverage:              false,
+					},
+				},
+			}
+
+			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, &subCopy, usage,
+				periodStart, periodEnd, types.UsageSourceWallet,
+				nil,
+			)
+			s.NoError(err)
+			if tt.wantZero {
+				s.True(totalAmount.IsZero(), "deferred/zero-length commitment must not affect balance, got %s", totalAmount)
+				s.Empty(lineItems)
+				return
+			}
+			expected := flatPrice.Amount.Mul(commitmentQty)
+			s.True(totalAmount.Equal(expected), "active commitment should true-up to %s, got %s", expected, totalAmount)
+			s.Len(lineItems, 1)
+		})
+	}
 }
 
 func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitment() {
@@ -3490,6 +3917,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_CumulativeCommitmen
 			lineItems, totalAmount, err := s.service.CalculateMeterUsageCharges(ctx, subToUse, usage,
 				sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
 				types.UsageSourceInvoiceCreation,
+				nil,
 			)
 
 			s.NoError(err)
@@ -3797,7 +4225,7 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 
 // TestApplyProrationToLineItem_RuntimeSafetyNet_MixedBillingPeriods implements PRD E.3.4.
 // When subscription has mixed billing periods and ProrationBehavior=create_prorations,
-// applyProrationToLineItem (invoked via CalculateFixedCharges) must return original amount (safety net).
+// CalculateFixedCharges must bill each full window at its original amount.
 func (s *BillingServiceSuite) TestApplyProrationToLineItem_RuntimeSafetyNet_MixedBillingPeriods() {
 	ctx := s.GetContext()
 	jan1 := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -3978,6 +4406,7 @@ func (s *BillingServiceSuite) TestFindMatchingLineItemPeriodForInvoice_MultiCade
 		s.Run(tt.name, func() {
 			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           tt.item,
+				Anchor:         tt.item.StartDate,
 				PeriodStart:    tt.periodStart,
 				PeriodEnd:      tt.periodEnd,
 				InvoiceCadence: tt.invoiceCadence,
@@ -5484,7 +5913,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// March: ts in Mar window, QtyTotal=300
 	seedMeterUsage(time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC), decimal.NewFromInt(300))
 
-	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true)
+	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil)
 	s.Require().NoError(err)
 	s.Require().Len(result.UsageCharges, 3, "one usage line item per month")
 
@@ -5528,4 +5957,340 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// Total usage cost: $1 + $2 + $3 = $6.00
 	s.True(decimal.NewFromFloat(6.00).Equal(result.TotalAmount),
 		"total: $1+$2+$3 = $6.00, got %s", result.TotalAmount)
+}
+
+// A usage price longer than the sub (annual, 3-month on monthly) is metered over each sub invoice
+// period: the Feb invoice bills only February's 200 units at $0.01.
+func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_LongerCadenceUsage_MetersEachSubInvoice() {
+	jan1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	feb1 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	mar1 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name   string
+		period types.BillingPeriod
+		count  int
+	}{
+		{name: "annual usage on monthly sub", period: types.BILLING_PERIOD_ANNUAL, count: 1},
+		{name: "3-month usage on monthly sub", period: types.BILLING_PERIOD_MONTHLY, count: 3},
+		{name: "2-year usage on monthly sub", period: types.BILLING_PERIOD_ANNUAL, count: 2},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			ctx := s.GetContext()
+			cust := &customer.Customer{ID: "cust_longer_usage", ExternalID: "ext_longer_usage", Name: "Longer Usage", BaseModel: types.GetDefaultBaseModel(ctx)}
+			s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+			m := &meter.Meter{ID: "meter_longer_usage", Name: "Calls", EventName: "longer_usage_call",
+				Aggregation: meter.Aggregation{Type: types.AggregationSum}, BaseModel: types.GetDefaultBaseModel(ctx)}
+			s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+			pr := &price.Price{
+				ID: "price_longer_usage", Amount: decimal.NewFromFloat(0.01), Currency: "usd",
+				Type: types.PRICE_TYPE_USAGE, BillingPeriod: tt.period, BillingPeriodCount: tt.count,
+				BillingModel: types.BILLING_MODEL_FLAT_FEE, BillingCadence: types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence: types.InvoiceCadenceArrear, MeterID: m.ID, BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, pr))
+			sub := &subscription.Subscription{
+				ID: "sub_longer_usage", CustomerID: cust.ID, StartDate: jan1, BillingAnchor: jan1,
+				CurrentPeriodStart: feb1, CurrentPeriodEnd: mar1, Currency: "usd",
+				BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingCycle: types.BillingCycleAnniversary,
+				SubscriptionStatus: types.SubscriptionStatusActive, Timezone: "UTC", BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			li := &subscription.SubscriptionLineItem{
+				ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM), SubscriptionID: sub.ID,
+				CustomerID: cust.ID, PriceID: pr.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: m.ID,
+				DisplayName: "Calls", Quantity: decimal.Zero, Currency: "usd",
+				BillingPeriod: tt.period, BillingPeriodCount: tt.count, InvoiceCadence: types.InvoiceCadenceArrear,
+				StartDate: jan1, BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{li}))
+			sub.LineItems = []*subscription.SubscriptionLineItem{li}
+
+			for i, qty := range []int64{100, 200, 300} {
+				id := s.GetUUID()
+				ts := time.Date(2026, time.Month(i+1), 15, 12, 0, 0, 0, time.UTC)
+				s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+					Event: events.Event{ID: id, TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID, EventName: m.EventName,
+						ExternalCustomerID: cust.ExternalID, CustomerID: cust.ID, Timestamp: ts, IngestedAt: ts},
+					MeterID: m.ID, QtyTotal: decimal.NewFromInt(qty), UniqueHash: id,
+				}}))
+			}
+
+			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, feb1, mar1, true, nil)
+			s.Require().NoError(err, "a longer usage item must not fail the invoice")
+			s.Require().Len(result.UsageCharges, 1)
+			s.Equal(feb1, *result.UsageCharges[0].PeriodStart)
+			s.Equal(mar1, *result.UsageCharges[0].PeriodEnd)
+			s.True(decimal.NewFromFloat(2).Equal(result.TotalAmount), "February usage only: got %s", result.TotalAmount)
+		})
+	}
+}
+
+var (
+	groupingQ1Start = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	groupingFebStar = time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	groupingMarStar = time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	groupingQ1End   = time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+)
+
+func groupingLine(sliID, priceID, displayName string, priceType types.PriceType, amount, qty string, start, end time.Time) dto.CreateInvoiceLineItemRequest {
+	return dto.CreateInvoiceLineItemRequest{
+		SubscriptionLineItemID: lo.ToPtr(sliID),
+		PriceID:                lo.ToPtr(priceID),
+		PriceType:              lo.ToPtr(string(priceType)),
+		DisplayName:            lo.ToPtr(displayName),
+		Amount:                 decimal.RequireFromString(amount),
+		Quantity:               decimal.RequireFromString(qty),
+		PeriodStart:            lo.ToPtr(start),
+		PeriodEnd:              lo.ToPtr(end),
+	}
+}
+
+func groupingSumAmounts(items []dto.CreateInvoiceLineItemRequest) decimal.Decimal {
+	total := decimal.Zero
+	for _, i := range items {
+		total = total.Add(i.Amount)
+	}
+	return total
+}
+
+func groupingQuarterlySub(g types.LineItemGrouping) *subscription.Subscription {
+	return &subscription.Subscription{
+		ID:                 "sub_q",
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		LineItemGrouping:   g,
+	}
+}
+
+func groupingMonthlyChargesAcrossQuarter() *dto.BillingCalculationResult {
+	return &dto.BillingCalculationResult{
+		FixedCharges: []dto.CreateInvoiceLineItemRequest{
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingFebStar),
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingFebStar, groupingMarStar),
+			groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingMarStar, groupingQ1End),
+		},
+		UsageCharges: []dto.CreateInvoiceLineItemRequest{
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30", "300", groupingFebStar, groupingMarStar),
+			groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "5", "50", groupingMarStar, groupingQ1End),
+		},
+		TotalAmount: decimal.RequireFromString("345"),
+		Currency:    "usd",
+	}
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_UsageSumsQuantity() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30", "300", groupingFebStar, groupingMarStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "5", "50", groupingMarStar, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("45")), "amount = %s, want 45", got[0].Amount)
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("450")), "quantity = %s, want 450 (usage quantities sum)", got[0].Quantity)
+	s.Equal(groupingQ1Start, *got[0].PeriodStart)
+	s.Equal(groupingQ1End, *got[0].PeriodEnd)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_PreservesTotal() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10.01", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "30.02", "300", groupingFebStar, groupingMarStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "99.99", "5", groupingQ1Start, groupingFebStar),
+	}
+	want := groupingSumAmounts(in)
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.True(groupingSumAmounts(got).Equal(want), "total after merge = %s, want %s (merge must be presentational)", groupingSumAmounts(got), want)
+}
+
+// Quantity sums for fixed charges too, so amount / quantity stays the unit price:
+// 5 seats billed for 3 months at $20 is 15 seat-months, not 5 seats at $60.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_FixedSumsQuantity() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingFebStar, groupingMarStar),
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingMarStar, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("300")), "amount = %s, want 300", got[0].Amount)
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("15")), "quantity = %s, want 15 (3 windows x 5 seats)", got[0].Quantity)
+
+	unitPrice := got[0].Amount.Div(got[0].Quantity)
+	s.True(unitPrice.Equal(decimal.RequireFromString("20")), "amount/quantity = %s, want the $20 unit price", unitPrice)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_KeepsOverageSeparate() {
+	commitment := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+	overage := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "4", "40", groupingQ1Start, groupingFebStar)
+	overage.Metadata = types.Metadata{"is_overage": "true"}
+
+	got := mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{commitment, overage})
+
+	s.Len(got, 2, "commitment and overage must stay separate")
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_DistinctLineItemsStaySeparate() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar),
+		groupingLine("sli_storage", "price_storage", "Storage", types.PRICE_TYPE_USAGE, "20", "200", groupingQ1Start, groupingFebStar),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Len(got, 2)
+}
+
+// Plan-level cumulative overage carries no line item id and a fresh price id per window.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_LeavesUnkeyedRowsUntouched() {
+	a := groupingLine("", "price_gen_1", "Plan Overage", types.PRICE_TYPE_FIXED, "10", "1", groupingQ1Start, groupingFebStar)
+	a.SubscriptionLineItemID = nil
+	b := groupingLine("", "price_gen_2", "Plan Overage", types.PRICE_TYPE_FIXED, "20", "2", groupingFebStar, groupingMarStar)
+	b.SubscriptionLineItemID = nil
+
+	got := mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{a, b})
+
+	s.Len(got, 2)
+}
+
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_SingleWindowUnchanged() {
+	in := []dto.CreateInvoiceLineItemRequest{
+		groupingLine("sli_seat", "price_seat", "Seats", types.PRICE_TYPE_FIXED, "100", "5", groupingQ1Start, groupingQ1End),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(decimal.RequireFromString("100")))
+	s.True(got[0].Quantity.Equal(decimal.RequireFromString("5")))
+}
+
+// A monthly fixed + monthly usage charge on a quarterly sub: 3 line items each under
+// per_charge_period, 1 each under per_billing_period, same total either way.
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_LineItemCountByGrouping() {
+	tests := []struct {
+		name      string
+		grouping  types.LineItemGrouping
+		wantFixed int
+		wantUsage int
+	}{
+		{"per charge period fans out", types.LineItemGroupingPerChargePeriod, 3, 3},
+		{"per billing period collapses", types.LineItemGroupingPerBillingPeriod, 1, 1},
+		{"unset defaults to fan out", types.LineItemGrouping(""), 3, 3},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			got := applyLineItemGrouping(groupingQuarterlySub(tt.grouping), groupingMonthlyChargesAcrossQuarter())
+
+			s.Len(got.FixedCharges, tt.wantFixed)
+			s.Len(got.UsageCharges, tt.wantUsage)
+
+			wantTotal := decimal.RequireFromString("345")
+			s.True(got.TotalAmount.Equal(wantTotal), "total = %s, want %s unchanged", got.TotalAmount, wantTotal)
+			lineSum := groupingSumAmounts(append(got.FixedCharges, got.UsageCharges...))
+			s.True(lineSum.Equal(wantTotal), "line item sum %s no longer reconciles with total %s", lineSum, wantTotal)
+		})
+	}
+}
+
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_NilResultIsSafe() {
+	s.Nil(applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), nil))
+}
+
+func (s *BillingServiceSuite) TestApplyLineItemGrouping_DoesNotMutateInput() {
+	result := groupingMonthlyChargesAcrossQuarter()
+
+	_ = applyLineItemGrouping(groupingQuarterlySub(types.LineItemGroupingPerBillingPeriod), result)
+
+	s.Len(result.FixedCharges, 3, "caller's result was mutated")
+	s.Len(result.UsageCharges, 3, "caller's result was mutated")
+}
+
+// Every monetary field on a line item is per-window and must survive the merge.
+// Taking only the first window's values silently drops the rest.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_SumsAllMonetaryFields() {
+	window := func(utilized, overage, trueUp, prepaid, lineDisc, invDisc string) dto.CreateInvoiceLineItemRequest {
+		li := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+		li.CommitmentInfo = &types.CommitmentInfo{
+			Type:                             types.COMMITMENT_TYPE_AMOUNT,
+			Amount:                           decimal.RequireFromString("500"),
+			OverageFactor:                    lo.ToPtr(decimal.RequireFromString("2")),
+			TrueUpEnabled:                    true,
+			ComputedCommitmentUtilizedAmount: decimal.RequireFromString(utilized),
+			ComputedOverageAmount:            decimal.RequireFromString(overage),
+			ComputedTrueUpAmount:             decimal.RequireFromString(trueUp),
+		}
+		li.PrepaidCreditsApplied = lo.ToPtr(decimal.RequireFromString(prepaid))
+		li.LineItemDiscount = lo.ToPtr(decimal.RequireFromString(lineDisc))
+		li.InvoiceLevelDiscount = lo.ToPtr(decimal.RequireFromString(invDisc))
+		return li
+	}
+
+	in := []dto.CreateInvoiceLineItemRequest{
+		window("100", "10", "1", "3", "0.50", "0.25"),
+		window("200", "20", "2", "4", "1.50", "0.75"),
+	}
+
+	got := mergeLineItemsByBillingPeriod(in)
+	s.Require().Len(got, 1)
+	m := got[0]
+
+	s.Require().NotNil(m.CommitmentInfo)
+	s.True(m.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(decimal.RequireFromString("300")),
+		"utilized = %s, want 300", m.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+	s.True(m.CommitmentInfo.ComputedOverageAmount.Equal(decimal.RequireFromString("30")),
+		"overage = %s, want 30", m.CommitmentInfo.ComputedOverageAmount)
+	s.True(m.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.RequireFromString("3")),
+		"true-up = %s, want 3", m.CommitmentInfo.ComputedTrueUpAmount)
+
+	// Configuration echoed from the subscription line item is identical on every
+	// window, so it carries over rather than accumulating.
+	s.Equal(types.COMMITMENT_TYPE_AMOUNT, m.CommitmentInfo.Type)
+	s.True(m.CommitmentInfo.Amount.Equal(decimal.RequireFromString("500")),
+		"commitment amount = %s, want 500 (config, not summed)", m.CommitmentInfo.Amount)
+	s.True(m.CommitmentInfo.TrueUpEnabled)
+
+	s.True(lo.FromPtr(m.PrepaidCreditsApplied).Equal(decimal.RequireFromString("7")),
+		"prepaid credits = %s, want 7", lo.FromPtr(m.PrepaidCreditsApplied))
+	s.True(lo.FromPtr(m.LineItemDiscount).Equal(decimal.RequireFromString("2")),
+		"line item discount = %s, want 2", lo.FromPtr(m.LineItemDiscount))
+	s.True(lo.FromPtr(m.InvoiceLevelDiscount).Equal(decimal.RequireFromString("1")),
+		"invoice level discount = %s, want 1", lo.FromPtr(m.InvoiceLevelDiscount))
+}
+
+// The merge must not write through the pointer the caller still holds.
+func (s *BillingServiceSuite) TestMergeLineItemsByBillingPeriod_DoesNotMutateSourceCommitmentInfo() {
+	first := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingQ1Start, groupingFebStar)
+	first.CommitmentInfo = &types.CommitmentInfo{ComputedOverageAmount: decimal.RequireFromString("10")}
+	second := groupingLine("sli_api", "price_api", "API calls", types.PRICE_TYPE_USAGE, "10", "100", groupingFebStar, groupingMarStar)
+	second.CommitmentInfo = &types.CommitmentInfo{ComputedOverageAmount: decimal.RequireFromString("20")}
+
+	_ = mergeLineItemsByBillingPeriod([]dto.CreateInvoiceLineItemRequest{first, second})
+
+	s.True(first.CommitmentInfo.ComputedOverageAmount.Equal(decimal.RequireFromString("10")),
+		"source commitment info was mutated: %s", first.CommitmentInfo.ComputedOverageAmount)
+}
+
+func TestResolveAsOf(t *testing.T) {
+	d := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+	if got := resolveAsOf(&dto.PrepareSubscriptionInvoiceRequestParams{AsOf: d}); !got.Equal(d) {
+		t.Fatalf("resolveAsOf(AsOf=%s) = %s, want the override back", d, got)
+	}
+
+	got := resolveAsOf(&dto.PrepareSubscriptionInvoiceRequestParams{}) // zero AsOf -> now
+	if diff := time.Since(got); diff < 0 || diff > time.Minute {
+		t.Fatalf("resolveAsOf(zero) = %s, want ~now", got)
+	}
 }

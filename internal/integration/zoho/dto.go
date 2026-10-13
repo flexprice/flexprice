@@ -29,24 +29,33 @@ func IsZohoErrorCode(err error, code int) bool {
 }
 
 type ContactPerson struct {
-	FirstName        string `json:"first_name,omitempty"`
-	LastName         string `json:"last_name,omitempty"`
-	Email            string `json:"email,omitempty"`
-	Phone            string `json:"phone,omitempty"`
+	ContactPersonID  string `json:"contact_person_id,omitempty"`
+	Salutation       string `json:"salutation"`
+	FirstName        string `json:"first_name"`
+	LastName         string `json:"last_name"`
+	Email            string `json:"email"`
+	Mobile           string `json:"mobile"`
+	Designation      string `json:"designation"`
+	Department       string `json:"department"`
 	IsPrimaryContact bool   `json:"is_primary_contact,omitempty"`
 }
 
 type ContactAddress struct {
-	Address string `json:"address,omitempty"`
-	City    string `json:"city,omitempty"`
-	State   string `json:"state,omitempty"`
-	Zip     string `json:"zip,omitempty"`
-	Country string `json:"country,omitempty"`
+	Attention   string `json:"attention,omitempty"`
+	Address     string `json:"address,omitempty"`
+	Street2     string `json:"street2,omitempty"`
+	City        string `json:"city,omitempty"`
+	State       string `json:"state,omitempty"`
+	Zip         string `json:"zip,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
 }
 
 type ContactCreateRequest struct {
 	ContactName     string          `json:"contact_name"`
 	CompanyName     string          `json:"company_name,omitempty"`
+	LegalName       string          `json:"legal_name,omitempty"`
+	TraderName      string          `json:"trader_name,omitempty"`
 	ContactType     string          `json:"contact_type,omitempty"`
 	CustomerSubType string          `json:"customer_sub_type,omitempty"`
 	BillingAddress  *ContactAddress `json:"billing_address,omitempty"`
@@ -64,10 +73,11 @@ type ContactCreateRequest struct {
 type ContactUpdateRequest = ContactCreateRequest
 
 type ContactResponse struct {
-	ContactID      string `json:"contact_id"`
-	ContactName    string `json:"contact_name,omitempty"`
-	Email          string `json:"email,omitempty"`
-	PrimaryContact string `json:"primary_contact_id,omitempty"`
+	ContactID      string          `json:"contact_id"`
+	ContactName    string          `json:"contact_name,omitempty"`
+	Email          string          `json:"email,omitempty"`
+	PrimaryContact string          `json:"primary_contact_id,omitempty"`
+	ContactPersons []ContactPerson `json:"contact_persons,omitempty"`
 }
 
 type ItemCreateRequest struct {
@@ -128,6 +138,9 @@ type CustomField struct {
 // customfield_id. Zoho generates these as "cf_<label_slug>".
 const apiNamePrefix = "cf_"
 
+// Zoho caps reference_number at 100 characters.
+const maxZohoReferenceNumberLen = 100
+
 func NewCustomField(ref, value string) CustomField {
 	ref = strings.TrimSpace(ref)
 	if strings.HasPrefix(ref, apiNamePrefix) {
@@ -150,6 +163,7 @@ type InvoiceCreateRequest struct {
 	Adjustment          decimal.Decimal   `json:"adjustment,omitzero"`
 	DiscountType        string            `json:"discount_type,omitempty"`
 	IsDiscountBeforeTax bool              `json:"is_discount_before_tax,omitempty"`
+	AccountID           string            `json:"account_id,omitempty"`
 
 	// PlaceOfSupply is the GST state code the supply is made to. It drives Zoho's
 	// IGST vs CGST/SGST split. Zoho falls back to the contact's place_of_contact
@@ -219,29 +233,46 @@ type customerPaymentInvoiceApplyWire struct {
 	AmountApplied decimal.Decimal `json:"amount_applied"`
 }
 
+// CustomerPaymentCreateParams are the inputs for NewCustomerPaymentCreateRequest.
+type CustomerPaymentCreateParams struct {
+	CustomerID  string
+	PaymentMode string
+	Amount      decimal.Decimal
+	Date        string
+	Invoices    []CustomerPaymentInvoiceApply
+	// AccountID is Zoho's "Deposit To" chart-of-accounts id. Empty omits the field, leaving
+	// Zoho's Undeposited Funds default.
+	AccountID string
+	// ReferenceNumber is the gateway payment id that settled the invoice. Empty omits the field.
+	ReferenceNumber string
+}
+
 // CustomerPaymentCreateRequest is the body for POST /books/v3/customerpayments.
 type CustomerPaymentCreateRequest struct {
-	customerID  string
-	paymentMode string
-	amount      decimal.Decimal
-	date        string
-	invoices    []CustomerPaymentInvoiceApply
+	customerID      string
+	paymentMode     string
+	amount          decimal.Decimal
+	date            string
+	invoices        []CustomerPaymentInvoiceApply
+	accountID       string
+	referenceNumber string
 }
 
 // NewCustomerPaymentCreateRequest builds the request body for recording a Zoho customer payment.
-func NewCustomerPaymentCreateRequest(
-	customerID string,
-	paymentMode string,
-	amount decimal.Decimal,
-	date string,
-	invoices []CustomerPaymentInvoiceApply,
-) *CustomerPaymentCreateRequest {
+func NewCustomerPaymentCreateRequest(params CustomerPaymentCreateParams) *CustomerPaymentCreateRequest {
+	reference := strings.TrimSpace(params.ReferenceNumber)
+	if len(reference) > maxZohoReferenceNumberLen {
+		reference = reference[:maxZohoReferenceNumberLen]
+	}
+
 	return &CustomerPaymentCreateRequest{
-		customerID:  customerID,
-		paymentMode: paymentMode,
-		amount:      amount,
-		date:        date,
-		invoices:    invoices,
+		customerID:      params.CustomerID,
+		paymentMode:     params.PaymentMode,
+		amount:          params.Amount,
+		date:            params.Date,
+		invoices:        params.Invoices,
+		accountID:       strings.TrimSpace(params.AccountID),
+		referenceNumber: reference,
 	}
 }
 
@@ -280,16 +311,32 @@ func (r *CustomerPaymentCreateRequest) Invoices() []CustomerPaymentInvoiceApply 
 	return r.invoices
 }
 
+func (r *CustomerPaymentCreateRequest) AccountID() string {
+	if r == nil {
+		return ""
+	}
+	return r.accountID
+}
+
+func (r *CustomerPaymentCreateRequest) ReferenceNumber() string {
+	if r == nil {
+		return ""
+	}
+	return r.referenceNumber
+}
+
 func (r *CustomerPaymentCreateRequest) MarshalJSON() ([]byte, error) {
 	if r == nil {
 		return []byte("null"), nil
 	}
 	return json.Marshal(customerPaymentCreateRequestWire{
-		CustomerID:  r.customerID,
-		PaymentMode: r.paymentMode,
-		Amount:      r.amount,
-		Date:        r.date,
-		Invoices:    r.invoices,
+		CustomerID:      r.customerID,
+		PaymentMode:     r.paymentMode,
+		Amount:          r.amount,
+		Date:            r.date,
+		Invoices:        r.invoices,
+		AccountID:       r.accountID,
+		ReferenceNumber: r.referenceNumber,
 	})
 }
 
@@ -303,15 +350,19 @@ func (r *CustomerPaymentCreateRequest) UnmarshalJSON(data []byte) error {
 	r.amount = wire.Amount
 	r.date = wire.Date
 	r.invoices = wire.Invoices
+	r.accountID = wire.AccountID
+	r.referenceNumber = wire.ReferenceNumber
 	return nil
 }
 
 type customerPaymentCreateRequestWire struct {
-	CustomerID  string                        `json:"customer_id"`
-	PaymentMode string                        `json:"payment_mode"`
-	Amount      decimal.Decimal               `json:"amount"`
-	Date        string                        `json:"date"`
-	Invoices    []CustomerPaymentInvoiceApply `json:"invoices"`
+	CustomerID      string                        `json:"customer_id"`
+	PaymentMode     string                        `json:"payment_mode"`
+	Amount          decimal.Decimal               `json:"amount"`
+	Date            string                        `json:"date"`
+	Invoices        []CustomerPaymentInvoiceApply `json:"invoices"`
+	AccountID       string                        `json:"account_id,omitempty"`
+	ReferenceNumber string                        `json:"reference_number,omitempty"`
 }
 
 // CustomerPaymentResponse is the response from POST /books/v3/customerpayments.

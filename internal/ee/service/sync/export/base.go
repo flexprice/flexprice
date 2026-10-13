@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -45,6 +46,7 @@ type ExportService struct {
 	logger                   *logger.Logger
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
+	revenueFactRepo          revenuefact.Repository
 }
 
 // NewExportService creates a new export service
@@ -89,6 +91,7 @@ func NewExportServiceWithWallet(
 	usageAnalyticsGetter UsageAnalyticsGetter,
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
+	revenueFactRepo revenuefact.Repository,
 ) *ExportService {
 	return &ExportService{
 		meterUsageRepo:           meterUsageRepo,
@@ -105,6 +108,7 @@ func NewExportServiceWithWallet(
 		usageAnalyticsGetter:     usageAnalyticsGetter,
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
+		revenueFactRepo:          revenueFactRepo,
 	}
 }
 
@@ -144,15 +148,10 @@ func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) 
 	return s.executeExport(ctx, request, exporter)
 }
 
-// executeExport performs the common export workflow: validate -> prepare data -> upload to provider
 func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRequest, exporter Exporter) (*dto.ExportResponse, error) {
-	// Step 1: Prepare data (fetch + convert to CSV) - entity-specific logic
-	csvBytes, recordCount, err := exporter.PrepareData(ctx, request)
-	if err != nil {
-		return nil, err
-	}
+	ctx = types.SetTenantID(ctx, request.TenantID)
+	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
-	// Step 2: Get connection to determine provider type
 	conn, err := s.connectionRepo.Get(ctx, request.ConnectionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -160,35 +159,43 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Add tenant and environment to context for connection lookup
-	ctx = types.SetTenantID(ctx, request.TenantID)
-	ctx = types.SetEnvironmentID(ctx, request.EnvID)
-
-	// Step 3: Route to appropriate provider based on connection type
 	switch conn.ProviderType {
 	case types.SecretProviderS3, types.SecretProviderGCS:
-		return s.uploadToStorage(ctx, request, exporter, csvBytes, recordCount)
 	default:
 		return nil, ierr.NewError("unsupported provider type").
 			WithHintf("Provider type '%s' is not supported for exports", conn.ProviderType).
 			Mark(ierr.ErrValidation)
 	}
+
+	store, err := s.resolveExportStore(ctx, request)
+	if err != nil {
+		if ierr.IsValidation(err) {
+			return nil, err
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get storage provider from factory").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	csvBytes, recordCount, err := exporter.PrepareData(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.uploadToStorage(ctx, request, exporter, store, csvBytes, recordCount)
 }
 
-func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
+func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
 	if request.JobConfig == nil {
 		return nil, ierr.NewError("job configuration is required").
 			WithHint("job configuration must be provided for storage uploads").
 			Mark(ierr.ErrValidation)
 	}
 
-	store, err := s.storageResolver.ForConnection(ctx, request.ConnectionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get storage provider from factory").
-			Mark(ierr.ErrHTTPClient)
-	}
+	return s.storageResolver.ForConnectionExport(ctx, request.ConnectionID, request.JobConfig)
+}
 
+func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
 	startTimeStr := request.StartTime.Format("060102150405")
 	endTimeStr := request.EndTime.Format("060102150405")
 	filenamePrefix := exporter.GetFilenamePrefix()
@@ -239,6 +246,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewCreditTopupExporter(s.walletRepo, s.integrationFactory, s.logger)
+	case types.ScheduledTaskEntityTypeWalletDebits:
+		if s.walletRepo == nil {
+			s.logger.Info(context.Background(), "wallet repository not configured for wallet debit export")
+			return nil
+		}
+		return NewWalletDebitExporter(s.walletRepo, s.logger)
 	case types.ScheduledTaskEntityTypeCreditUsage:
 		if s.walletRepo == nil || s.walletBalanceGetter == nil || s.customerRepo == nil {
 			s.logger.Info(context.Background(), "wallet or customer repository not configured for credit usage export",
@@ -248,6 +261,12 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			return nil
 		}
 		return NewCreditUsageExporter(s.walletRepo, s.customerRepo, s.walletBalanceGetter, s.integrationFactory, s.logger)
+	case types.ScheduledTaskEntityTypeRevenueFacts:
+		if s.revenueFactRepo == nil {
+			s.logger.Info(context.Background(), "revenue fact repository not configured for revenue facts export")
+			return nil
+		}
+		return NewRevenueFactsExporter(s.revenueFactRepo, s.logger)
 	case types.ScheduledTaskEntityTypeUsageAnalytics:
 		if s.customerRepo == nil || s.subscriptionLineItemRepo == nil {
 			s.logger.Info(context.Background(), "customer or subscription line item repository not configured for usage analytics export",

@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -67,6 +68,9 @@ func (s *CreditNoteServiceSuite) setupService() {
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
 		CreditNoteRepo:             s.GetStores().CreditNoteRepo,
+		RefundRepo:                 s.GetStores().RefundRepo,
+		PaymentRepo:                s.GetStores().PaymentRepo,
+		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		CreditNoteLineItemRepo:     s.GetStores().CreditNoteLineItemRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
@@ -1032,7 +1036,7 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RecalculationFailureIsPr
 	// shared publisher, so assert no *new* webhook was published rather than empty.
 	webhookCountBefore := len(s.GetPublishedWebhooks())
 
-	err := failingService.FinalizeCreditNote(s.GetContext(), cn.ID)
+	err := failingService.FinalizeCreditNote(s.GetContext(), cn.ID, nil)
 
 	s.Error(err)
 	s.Contains(err.Error(), "forced invoice update failure for test")
@@ -1172,7 +1176,7 @@ func (s *CreditNoteServiceSuite) TestProcessDraftCreditNote() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := s.service.FinalizeCreditNote(s.GetContext(), tt.id)
+			err := s.service.FinalizeCreditNote(s.GetContext(), tt.id, nil)
 
 			if tt.wantErr {
 				s.Error(err)
@@ -1223,9 +1227,9 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_RefundCapacityRecheck() 
 	// In-memory wallet store returns a live pointer, so snapshot the balance now.
 	balanceBefore := walletBefore.Balance
 
-	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID))
+	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID, nil))
 
-	err = s.service.FinalizeCreditNote(s.GetContext(), second.ID)
+	err = s.service.FinalizeCreditNote(s.GetContext(), second.ID, nil)
 	s.Error(err)
 	s.Contains(err.Error(), "credit amount exceeds available limit")
 
@@ -1265,9 +1269,9 @@ func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_AdjustmentCapacityRechec
 	s.NoError(err)
 	s.NotEqual(first.ID, second.ID)
 
-	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID))
+	s.NoError(s.service.FinalizeCreditNote(s.GetContext(), first.ID, nil))
 
-	err = s.service.FinalizeCreditNote(s.GetContext(), second.ID)
+	err = s.service.FinalizeCreditNote(s.GetContext(), second.ID, nil)
 	s.Error(err)
 	s.Contains(err.Error(), "credit amount exceeds available limit")
 
@@ -1919,7 +1923,7 @@ func (s *CreditNoteServiceSuite) TestVoidCreditNoteRefetchesUnderLock() {
 			return
 		}
 		once = true
-		s.Require().NoError(s.service.FinalizeCreditNote(s.GetContext(), resp.ID))
+		s.Require().NoError(s.service.FinalizeCreditNote(s.GetContext(), resp.ID, nil))
 	}
 	defer func() { invStore.BeforeGetForUpdate = nil }()
 
@@ -1930,4 +1934,138 @@ func (s *CreditNoteServiceSuite) TestVoidCreditNoteRefetchesUnderLock() {
 	s.Require().NoError(err)
 	s.Equal(types.CreditNoteStatusFinalized, after.CreditNoteStatus,
 		"a concurrently-finalized credit note must not be overwritten as voided")
+}
+
+func (s *CreditNoteServiceSuite) refundRows(invoiceID string) []*refund.Refund {
+	rows, err := s.GetStores().RefundRepo.List(s.GetContext(), &types.RefundFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		InvoiceIDs:  []string{invoiceID},
+	})
+	s.NoError(err)
+	return rows
+}
+
+func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_EmitsSettledRefundRows() {
+	inv := s.testData.invoices.finalized
+	walletBefore, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallets.usd.ID)
+	s.NoError(err)
+	// Value copy: the in-memory store hands back the stored pointer, which the top-up mutates.
+	balanceBefore := walletBefore.Balance
+
+	amount := decimal.NewFromFloat(25.00)
+	resp, err := s.service.CreateCreditNote(s.GetContext(), &dto.CreateCreditNoteRequest{
+		InvoiceID:         inv.ID,
+		Reason:            types.CreditNoteReasonUnsatisfactory,
+		ProcessCreditNote: true,
+		LineItems: []dto.CreateCreditNoteLineItemRequest{
+			{InvoiceLineItemID: "line_1", Amount: amount},
+		},
+	})
+	s.NoError(err)
+	s.Equal(types.CreditNoteTypeRefund, resp.CreditNoteType)
+
+	rows := s.refundRows(inv.ID)
+	s.Len(rows, 1)
+	s.Equal(resp.ID, lo.FromPtr(rows[0].CreditNoteID))
+	s.Equal(types.RefundStatusSucceeded, rows[0].RefundStatus)
+	s.Equal(types.RefundDestinationWallet, rows[0].RefundDestination)
+	s.True(amount.Equal(rows[0].SettledAmount))
+
+	updatedInv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
+	s.NoError(err)
+	s.True(amount.Equal(updatedInv.RefundedAmount))
+
+	walletAfter, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallets.usd.ID)
+	s.NoError(err)
+	s.True(balanceBefore.Add(amount).Equal(walletAfter.Balance))
+}
+
+// A refund now always lands in an active PRE_PAID wallet. Before the settlement ledger,
+// FinalizeCreditNote matched on currency alone and would have topped up this POST_PAID one.
+func (s *CreditNoteServiceSuite) TestFinalizeCreditNote_SkipsNonPrepaidWallet() {
+	cust := &customer.Customer{
+		ID:        "cust_postpaid_only",
+		Name:      "Postpaid Only",
+		Email:     "postpaid@example.com",
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), cust))
+
+	walletService := NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               s.GetStores().WalletRepo,
+		SubRepo:                  s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
+		InvoiceRepo:              s.GetStores().InvoiceRepo,
+		CustomerRepo:             s.GetStores().CustomerRepo,
+		FeatureRepo:              s.GetStores().FeatureRepo,
+		MeterRepo:                s.GetStores().MeterRepo,
+		PriceRepo:                s.GetStores().PriceRepo,
+		SettingsRepo:             s.GetStores().SettingsRepo,
+		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+	})
+	postPaid, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
+		CustomerID:     cust.ID,
+		Name:           "Postpaid Wallet",
+		Currency:       "USD",
+		ConversionRate: decimal.NewFromInt(1),
+		WalletType:     types.WalletTypePostPaid,
+	})
+	s.NoError(err)
+
+	inv := &invoice.Invoice{
+		ID:               "inv_postpaid_only",
+		CustomerID:       cust.ID,
+		InvoiceNumber:    lo.ToPtr("INV-POSTPAID"),
+		InvoiceType:      types.InvoiceTypeOneOff,
+		InvoiceStatus:    types.InvoiceStatusFinalized,
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		Currency:         "USD",
+		Subtotal:         decimal.NewFromFloat(40.00),
+		Total:            decimal.NewFromFloat(40.00),
+		AmountPaid:       decimal.NewFromFloat(40.00),
+		AmountDue:        decimal.NewFromFloat(40.00),
+		AmountRemaining:  decimal.Zero,
+		AdjustmentAmount: decimal.Zero,
+		RefundedAmount:   decimal.Zero,
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:          "line_postpaid_1",
+				DisplayName: lo.ToPtr("Product P"),
+				Amount:      decimal.NewFromFloat(40.00),
+				Currency:    "USD",
+				BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.GetContext(), inv))
+
+	amount := decimal.NewFromFloat(40.00)
+	_, err = s.service.CreateCreditNote(s.GetContext(), &dto.CreateCreditNoteRequest{
+		InvoiceID:         inv.ID,
+		Reason:            types.CreditNoteReasonUnsatisfactory,
+		ProcessCreditNote: true,
+		LineItems: []dto.CreateCreditNoteLineItemRequest{
+			{InvoiceLineItemID: "line_postpaid_1", Amount: amount},
+		},
+	})
+	s.NoError(err)
+
+	unchanged, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), postPaid.ID)
+	s.NoError(err)
+	s.True(unchanged.Balance.IsZero())
+
+	wallets, err := walletService.GetWalletsByCustomerID(s.GetContext(), cust.ID)
+	s.NoError(err)
+	prepaid := lo.Filter(wallets, func(w *dto.WalletResponse, _ int) bool {
+		return w.WalletType == types.WalletTypePrePaid
+	})
+	s.Len(prepaid, 1)
+	s.True(amount.Equal(prepaid[0].Balance))
 }

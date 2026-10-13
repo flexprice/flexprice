@@ -29,15 +29,73 @@ type meterUsageBaseChargeInfo struct {
 	adjustedEntitlementQuantity *decimal.Decimal
 }
 
+// elapsedLineItemWindow clips a line item's overlap with [periodStart, periodEnd)
+// against asOf. ok is false when nothing has elapsed yet — the line starts in
+// the future, has already ended, or is zero-length (EndDate == StartDate).
+func elapsedLineItemWindow(item *subscription.SubscriptionLineItem, periodStart, periodEnd, asOf time.Time) (start, end time.Time, ok bool) {
+	start = item.GetPeriodStart(periodStart)
+	end = item.GetPeriodEnd(periodEnd)
+	if start.After(asOf) {
+		return start, end, false
+	}
+	if !item.EndDate.IsZero() && !item.EndDate.After(item.StartDate) {
+		return start, end, false
+	}
+	if end.After(asOf) {
+		end = asOf
+	}
+	return start, end, end.After(start) || start.Equal(asOf)
+}
+
+// resolveAsOf returns params.AsOf when set, else now (UTC) — the reference instant used to
+// clip open-period line items and windowed commitments during invoice preview/rebuild.
+func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time {
+	if !params.AsOf.IsZero() {
+		return params.AsOf
+	}
+	return time.Now().UTC()
+}
+
+// UsageNetForWindow returns sub's usage charges for [periodStart, until) after coupon discounts,
+// priced as an invoice for that window would be. Nothing is persisted.
+func (s *billingService) UsageNetForWindow(ctx context.Context, sub *subscription.Subscription, periodStart, until time.Time) (decimal.Decimal, error) {
+	window := *sub // building the request replaces the subscription's line items
+	req, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   &window,
+		PeriodStart:    periodStart,
+		PeriodEnd:      until,
+		ReferencePoint: types.ReferencePointPreview,
+		AsOf:           until,
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	if err := s.applyCouponPreview(ctx, req); err != nil {
+		return decimal.Zero, err
+	}
+	net := decimal.Zero
+	for _, line := range req.LineItems {
+		if lo.FromPtr(line.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			continue
+		}
+		discounts := lo.FromPtr(line.LineItemDiscount).Add(lo.FromPtr(line.InvoiceLevelDiscount))
+		net = net.Add(decimal.Max(decimal.Zero, line.Amount.Sub(discounts)))
+	}
+	return net, nil
+}
+
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
 // All queries (bucketed meters, windowed entitlements, windowed commitments) read from
-// MeterUsageRepo — never from raw events.
+// MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
+// the reference instant used to clip line items and windowed commitments (see resolveAsOf);
+// otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart, periodEnd time.Time,
 	source types.UsageSource,
+	asOfOverride *time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
 	if usage == nil {
 		return nil, decimal.Zero, nil
@@ -46,6 +104,9 @@ func (s *billingService) CalculateMeterUsageCharges(
 	querySource := source
 
 	asOf := time.Now().UTC()
+	if asOfOverride != nil && !asOfOverride.IsZero() {
+		asOf = *asOfOverride
+	}
 
 	// --- Setup: resolve meters, entitlements, customer IDs ---
 
@@ -134,6 +195,22 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+
+		// Clip the line's period to elapsed time so a version that has not started yet (or a zero-length EndDate==StartDate leftover)
+		// cannot contribute commitment to wallet/invoice totals.
+		if _, _, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf); !active {
+			s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during elapsed window",
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID,
+				"invoice_period_start", periodStart,
+				"invoice_period_end", periodEnd,
+				"item_start_date", item.StartDate,
+				"item_end_date", item.EndDate,
+				"as_of", asOf,
+			)
 			continue
 		}
 
@@ -305,21 +382,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 				}
 			}
 
-			// Clip the invoice period against the line item's own active range.
 			psStart := item.GetPeriodStart(periodStart)
 			psEnd := item.GetPeriodEnd(periodEnd)
-			if !psEnd.After(psStart) {
-				s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during invoice window",
-					"subscription_id", sub.ID,
-					"line_item_id", item.ID,
-					"price_id", item.PriceID,
-					"invoice_period_start", periodStart,
-					"invoice_period_end", periodEnd,
-					"item_start_date", item.StartDate,
-					"item_end_date", item.EndDate,
-				)
-				continue
-			}
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				EntityID:                    lo.ToPtr(item.EntityID),
 				EntityType:                  lo.ToPtr(string(item.EntityType)),
@@ -380,10 +444,10 @@ func (s *billingService) CalculateMeterUsageCharges(
 				PeriodEnd:       &periodEnd,
 				PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
 				Metadata: types.Metadata{
-					"is_commitment_trueup": "true",
-					"description":          "Remaining commitment amount for billing period",
-					"commitment_amount":    commitmentAmount.String(),
-					"commitment_utilized":  utilized.String(),
+					types.MetadataKeyIsCommitmentTrueup: types.MetadataValueTrue,
+					types.MetadataKeyDescription:        "Remaining commitment amount for billing period",
+					types.MetadataKeyCommitmentAmount:   commitmentAmount.String(),
+					types.MetadataKeyCommitmentUtilized: utilized.String(),
 				},
 			})
 			totalUsageCost = totalUsageCost.Add(rounded)
@@ -564,10 +628,10 @@ func (s *billingService) applyMeterUsageCommitment(
 	// Windowed commitment — needs bucketed values from meter_usage
 	linePeriodStart := item.GetPeriodStart(periodStart)
 	linePeriodEnd := item.GetPeriodEnd(periodEnd)
-	effectiveEnd := asOf
-	if effectiveEnd.Before(linePeriodStart) {
-		effectiveEnd = linePeriodStart
+	if asOf.Before(linePeriodStart) {
+		return decimal.Zero, nil, nil
 	}
+	effectiveEnd := asOf
 	if effectiveEnd.After(linePeriodEnd) {
 		effectiveEnd = linePeriodEnd
 	}
@@ -641,21 +705,21 @@ func (s *billingService) buildChargeMetadata(
 	entitlement *dto.AggregatedEntitlement,
 ) types.Metadata {
 	metadata := types.Metadata{
-		"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
+		types.MetadataKeyDescription: fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
 	}
 	if charge.IsOverage {
-		metadata["is_overage"] = "true"
-		metadata["overage_factor"] = fmt.Sprintf("%v", charge.OverageFactor)
-		metadata["description"] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
+		metadata[types.MetadataKeyIsOverage] = types.MetadataValueTrue
+		metadata[types.MetadataKeyOverageFactor] = fmt.Sprintf("%v", charge.OverageFactor)
+		metadata[types.MetadataKeyDescription] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
 	}
 	if !charge.IsOverage && entitlement != nil && entitlement.IsEnabled {
 		switch entitlement.UsageResetPeriod {
 		case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
-			metadata["usage_reset_period"] = "daily"
+			metadata[types.MetadataKeyUsageResetPeriod] = "daily"
 		case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
-			metadata["usage_reset_period"] = "monthly"
+			metadata[types.MetadataKeyUsageResetPeriod] = "monthly"
 		case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
-			metadata["usage_reset_period"] = "never"
+			metadata[types.MetadataKeyUsageResetPeriod] = "never"
 		}
 	}
 	return metadata
@@ -761,9 +825,9 @@ func (s *billingService) buildCumulativeCommitmentCharges(
 			PeriodEnd:       &periodEnd,
 			PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
 			Metadata: types.Metadata{
-				"is_overage":     "true",
-				"overage_factor": overageFactor.String(),
-				"description":    "Overage charge (cumulative commitment)",
+				types.MetadataKeyIsOverage:     types.MetadataValueTrue,
+				types.MetadataKeyOverageFactor: overageFactor.String(),
+				types.MetadataKeyDescription:   "Overage charge (cumulative commitment)",
 			},
 		})
 		totalCost = totalCost.Add(rounded)
@@ -783,10 +847,10 @@ func (s *billingService) buildCumulativeCommitmentCharges(
 			PeriodEnd:       &periodEnd,
 			PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
 			Metadata: types.Metadata{
-				"is_commitment_trueup": "true",
-				"description":          "Remaining commitment amount for commitment period",
-				"commitment_amount":    commitmentAmount.String(),
-				"commitment_utilized":  result.CommitmentUtilized.String(),
+				types.MetadataKeyIsCommitmentTrueup: types.MetadataValueTrue,
+				types.MetadataKeyDescription:        "Remaining commitment amount for commitment period",
+				types.MetadataKeyCommitmentAmount:   commitmentAmount.String(),
+				types.MetadataKeyCommitmentUtilized: result.CommitmentUtilized.String(),
 			},
 		})
 		totalCost = totalCost.Add(rounded)
@@ -813,7 +877,7 @@ func (s *billingService) calculateAllMeterUsageCharges(
 	}
 
 	usageCharges, usageTotal, err := s.CalculateMeterUsageCharges(ctx, sub, usage, periodStart, periodEnd,
-		types.UsageSourceInvoiceCreation)
+		types.UsageSourceInvoiceCreation, nil)
 	if err != nil {
 		return nil, err
 	}

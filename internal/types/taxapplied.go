@@ -12,6 +12,7 @@ type TaxAppliedFilter struct {
 	TaxRateIDs       []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
 	EntityType       TaxRateEntityType  `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
 	EntityID         string             `json:"entity_id,omitempty" form:"entity_id" validate:"omitempty"`
+	EntityIDs        []string           `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
 	TaxAssociationID string             `json:"tax_association_id,omitempty" form:"tax_association_id" validate:"omitempty"`
 }
 

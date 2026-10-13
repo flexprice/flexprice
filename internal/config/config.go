@@ -65,6 +65,7 @@ type Configuration struct {
 	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
 	OAuth                  OAuthConfig                  `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert     WalletBalanceAlertConfig     `mapstructure:"wallet_balance_alert" validate:"required"`
+	Activity               ActivityConfig               `mapstructure:"activity" validate:"omitempty"`
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
@@ -78,12 +79,32 @@ type Configuration struct {
 	Onboarding             OnboardingConfig             `mapstructure:"onboarding" validate:"omitempty"`
 	ChatSupport            ChatSupportConfig            `mapstructure:"chat_support" validate:"omitempty"`
 	Analytics              AnalyticsConfig              `mapstructure:"analytics" validate:"omitempty"`
+	Admin                  AdminConfig                  `mapstructure:"admin" validate:"omitempty"`
+}
+
+// AdminConfig is the operator portal. Secret is required when deployment.mode is admin.
+// Set it from the secret manager via FLEXPRICE_ADMIN_SECRET. Callers send it as X-Admin-Secret.
+type AdminConfig struct {
+	Secret string `mapstructure:"secret"`
 }
 
 // AnalyticsConfig gates the fire-and-forget analytics meter_usage feed.
 type AnalyticsConfig struct {
-	Enabled             bool   `mapstructure:"enabled" default:"false"`
-	MeterUsageSinkTopic string `mapstructure:"meter_usage_sink_topic"`
+	Enabled             bool                `mapstructure:"enabled" default:"false"`
+	MeterUsageSinkTopic string              `mapstructure:"meter_usage_sink_topic"`
+	RevenueRollup       RevenueRollupConfig `mapstructure:"revenue_rollup" validate:"omitempty"`
+}
+
+// RevenueRollupConfig gates the daily Temporal revenue_facts rollup + drift
+// sweep (RevenueRollupWorkflow). Off by default; AutoCorrect keeps the sweeper
+// flag-only (detect, never repair) unless explicitly enabled.
+type RevenueRollupConfig struct {
+	Enabled     bool `mapstructure:"enabled" default:"false"`
+	AutoCorrect bool `mapstructure:"auto_correct" default:"false"`
+	// FullRebuildWeekday forces a full pass on that weekday (0=Sunday), so
+	// anything the scan's triggers miss is repaired within a week rather than
+	// persisting. This is the net under the scan, not a switch for it.
+	FullRebuildWeekday int `mapstructure:"full_rebuild_weekday" default:"0"`
 }
 
 type ChatSupportConfig struct {
@@ -323,8 +344,30 @@ type DeploymentConfig struct {
 	Mode types.RunMode `mapstructure:"mode" validate:"required"`
 }
 
+const (
+	DefaultServerShutdownTimeout = 25 * time.Second
+	// Ceiling for the drain, leaving the rest of StopTimeout to other stop hooks.
+	MaxServerShutdownTimeout = 45 * time.Second
+	// Budget fx allows for all stop hooks combined.
+	ServerStopTimeout = 1 * time.Minute
+)
+
 type ServerConfig struct {
 	Address string `mapstructure:"address" validate:"required"`
+	// Grace period for in-flight requests to finish after SIGTERM.
+	// Must stay below the ECS task stopTimeout.
+	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
+}
+
+// GetShutdownTimeout clamps the configured drain so it cannot outlive the fx stop budget.
+func (c ServerConfig) GetShutdownTimeout() time.Duration {
+	if c.ShutdownTimeout <= 0 {
+		return DefaultServerShutdownTimeout
+	}
+	if c.ShutdownTimeout > MaxServerShutdownTimeout {
+		return MaxServerShutdownTimeout
+	}
+	return c.ShutdownTimeout
 }
 
 type AuthConfig struct {
@@ -540,8 +583,14 @@ type ClickHouseConfig struct {
 	// the ConnOpenInOrder note in GetClientOptions. Prefer raising MaxOpenConns instead.
 	DialTimeout time.Duration `mapstructure:"dial_timeout"`
 	ReadTimeout time.Duration `mapstructure:"read_timeout"`
-	Address     string        `mapstructure:"address" validate:"required"`
-	TLS         bool          `mapstructure:"tls"`
+	// ConnMaxLifetime retires pooled connections on a timer so they reopen and
+	// re-pick a replica. A ClusterIP balances per TCP connection, so without this
+	// a pod's pool stays pinned to whichever replica it first drew: measured 1795
+	// queries to replica 0 vs 14 to replica 1 on a healthy 2-replica nane2.
+	// Zero = unbounded (driver default); 5-10m is the useful range.
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	Address         string        `mapstructure:"address" validate:"required"`
+	TLS             bool          `mapstructure:"tls"`
 	// TLSSkipVerify disables server certificate and hostname verification on the
 	// TLS connection. It only takes effect when TLS is true. Intended for dev
 	// environments whose ClickHouse serves a self-signed certificate (equivalent to
@@ -580,6 +629,9 @@ type LoggingConfig struct {
 	OtelAuthHeader string `mapstructure:"otel_auth_header" validate:"omitempty"` // header name
 	OtelAuthValue  string `mapstructure:"otel_auth_value" validate:"omitempty"`  // header value / token
 	OtelDebug      bool   `mapstructure:"otel_debug" default:"false"`            // use synchronous SimpleProcessor and verbose stderr output
+
+	// ProviderCallsEnabled is the kill switch for provider call log lines.
+	ProviderCallsEnabled bool `mapstructure:"provider_calls_enabled" default:"true"`
 }
 
 type PostgresConfig struct {
@@ -702,6 +754,10 @@ type OtelMetricsConfig struct {
 	// and SigNoz already derives it); turn it on where the backend cannot store
 	// traces and this is the only source of API latency.
 	HTTPServerEnabled bool `mapstructure:"http_server_enabled" default:"false"`
+	// AppEnabled, DisabledMetrics and TenantAllowlist control internal/metrics only.
+	AppEnabled      bool     `mapstructure:"app_enabled" default:"false"`
+	DisabledMetrics []string `mapstructure:"disabled_metrics"`
+	TenantAllowlist []string `mapstructure:"tenant_allowlist"`
 }
 
 // MergedHeaders — see OtelTracesConfig.MergedHeaders.
@@ -797,6 +853,18 @@ type TemporalWorkerConfig struct {
 	// TaskQueueActivitiesPerSecond is the rate limit for activities per second across all workers for the task queue. 0 means unlimited.
 	// Default: 0 (unlimited)
 	TaskQueueActivitiesPerSecond float64 `mapstructure:"task_queue_activities_per_second"`
+	// Queues holds per-task-queue overrides, keyed by task queue name. Unset
+	// fields fall back to the values above.
+	Queues map[string]TemporalQueueWorkerConfig `mapstructure:"queues"`
+}
+
+// TemporalQueueWorkerConfig overrides worker limits for a single task queue.
+// Zero fields inherit the global TemporalWorkerConfig value.
+type TemporalQueueWorkerConfig struct {
+	MaxConcurrentActivityExecutionSize     int     `mapstructure:"max_concurrent_activity_execution_size"`
+	MaxConcurrentWorkflowTaskExecutionSize int     `mapstructure:"max_concurrent_workflow_task_execution_size"`
+	WorkerActivitiesPerSecond              float64 `mapstructure:"worker_activities_per_second"`
+	TaskQueueActivitiesPerSecond           float64 `mapstructure:"task_queue_activities_per_second"`
 }
 
 type SecretsConfig struct {
@@ -862,6 +930,7 @@ type UsageAlertsConfig struct {
 	Enabled bool `mapstructure:"enabled" default:"false"`
 	// ScheduleDelay is the debounce window: the workflow's StartDelay AND the
 	// TTL of the Redis lock that throttles schedule attempts to one per customer per window.
+	// ScheduleDelay and StaleAfter are deployment defaults; the usage_alert_config setting overrides them per environment.
 	ScheduleDelay time.Duration `mapstructure:"schedule_delay" default:"5m30s"`
 	// StaleAfter bounds staleness on both queues: a workflow run firing more
 	// than this past its intended time yields once (ContinueAsNew) to the back
@@ -892,6 +961,25 @@ type WalletBalanceAlertConfig struct {
 	Topic         string `mapstructure:"topic" default:"wallet_alert"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_wallet_alert_service"`
+}
+
+// ActivityConfig configures the activity log pipeline; Enabled is the kill switch.
+type ActivityConfig struct {
+	Enabled       bool                    `mapstructure:"enabled" default:"false"`
+	Topic         string                  `mapstructure:"topic" default:"activity_logs"`
+	TopicDLQ      string                  `mapstructure:"topic_dlq" default:"activity_logs_dlq"`
+	ConsumerGroup string                  `mapstructure:"consumer_group" default:"activity_log"`
+	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
+	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
+}
+
+type ActivityPublisherConfig struct {
+	BufferSize           int           `mapstructure:"buffer_size" default:"10000"`
+	Workers              int           `mapstructure:"workers" default:"4"`
+	MaxEntriesPerMessage int           `mapstructure:"max_entries_per_message" default:"100"`
+	MaxMessageBytes      int           `mapstructure:"max_message_bytes" default:"524288"`
+	MaxSnapshotBytes     int           `mapstructure:"max_snapshot_bytes" default:"262144"`
+	ShutdownTimeout      time.Duration `mapstructure:"shutdown_timeout" default:"10s"`
 }
 
 type RawEventsReprocessingConfig struct {
@@ -1006,13 +1094,17 @@ type RedisConfig struct {
 	Host string `mapstructure:"host" default:"localhost"`
 	Port int    `mapstructure:"port" default:"6379"`
 	// Username is the data-node ACL user; leave empty for requirepass-style auth.
-	Username  string        `mapstructure:"username" default:""`
-	Password  string        `mapstructure:"password" default:""`
-	DB        int           `mapstructure:"db" default:"0"`
-	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
-	PoolSize  int           `mapstructure:"pool_size" default:"10"`
-	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
-	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
+	Username string `mapstructure:"username" default:""`
+	Password string `mapstructure:"password" default:""`
+	DB       int    `mapstructure:"db" default:"0"`
+	UseTLS   bool   `mapstructure:"use_tls" default:"false"`
+	// Set to the cert SAN to verify ElastiCache wildcard certs.
+	TLSServerName string `mapstructure:"tls_server_name" default:""`
+	// Defaults true for ElastiCache compatibility; set false to verify.
+	TLSSkipVerify bool          `mapstructure:"tls_skip_verify" default:"true"`
+	PoolSize      int           `mapstructure:"pool_size" default:"10"`
+	Timeout       time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix     string        `mapstructure:"key_prefix" default:"flexprice"`
 	// ClusterMode: true → *redis.ClusterClient (Redis Cluster, ElastiCache
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
@@ -1075,6 +1167,7 @@ func NewConfig() (*Configuration, error) {
 	// here (defaults live in config.yaml), so guarantee default-on for deploys whose
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
+	v.SetDefault("logging.provider_calls_enabled", true)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -1334,6 +1427,9 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		MaxOpenConns: c.MaxOpenConns,
 		MaxIdleConns: c.MaxIdleConns,
 	}
+	if c.ConnMaxLifetime > 0 {
+		options.ConnMaxLifetime = c.ConnMaxLifetime
+	}
 	if c.DialTimeout > 0 {
 		options.DialTimeout = c.DialTimeout
 	}
@@ -1341,7 +1437,7 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 		options.ReadTimeout = c.ReadTimeout
 	}
 	if c.TLS {
-		options.TLS = &tls.Config{InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
+		options.TLS = &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.TLSSkipVerify} // #nosec G402 -- opt-in, dev-only self-signed certs
 	}
 	options.Protocol = c.protocol()
 

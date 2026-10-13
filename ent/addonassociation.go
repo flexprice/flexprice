@@ -73,7 +73,7 @@ func (*AddonAssociation) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the AddonAssociation fields.
-func (aa *AddonAssociation) assignValues(columns []string, values []any) error {
+func (_m *AddonAssociation) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -83,111 +83,111 @@ func (aa *AddonAssociation) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				aa.ID = value.String
+				_m.ID = value.String
 			}
 		case addonassociation.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				aa.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case addonassociation.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				aa.Status = value.String
+				_m.Status = value.String
 			}
 		case addonassociation.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				aa.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case addonassociation.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				aa.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case addonassociation.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				aa.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case addonassociation.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				aa.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case addonassociation.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				aa.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case addonassociation.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				aa.EntityID = value.String
+				_m.EntityID = value.String
 			}
 		case addonassociation.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				aa.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case addonassociation.FieldAddonID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_id", values[i])
 			} else if value.Valid {
-				aa.AddonID = value.String
+				_m.AddonID = value.String
 			}
 		case addonassociation.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				aa.StartDate = new(time.Time)
-				*aa.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case addonassociation.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				aa.EndDate = new(time.Time)
-				*aa.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case addonassociation.FieldAddonStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_status", values[i])
 			} else if value.Valid {
-				aa.AddonStatus = value.String
+				_m.AddonStatus = value.String
 			}
 		case addonassociation.FieldCancellationReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field cancellation_reason", values[i])
 			} else if value.Valid {
-				aa.CancellationReason = value.String
+				_m.CancellationReason = value.String
 			}
 		case addonassociation.FieldCancelledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cancelled_at", values[i])
 			} else if value.Valid {
-				aa.CancelledAt = new(time.Time)
-				*aa.CancelledAt = value.Time
+				_m.CancelledAt = new(time.Time)
+				*_m.CancelledAt = value.Time
 			}
 		case addonassociation.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &aa.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			aa.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -195,86 +195,86 @@ func (aa *AddonAssociation) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the AddonAssociation.
 // This includes values selected through modifiers, order, etc.
-func (aa *AddonAssociation) Value(name string) (ent.Value, error) {
-	return aa.selectValues.Get(name)
+func (_m *AddonAssociation) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this AddonAssociation.
 // Note that you need to call AddonAssociation.Unwrap() before calling this method if this AddonAssociation
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (aa *AddonAssociation) Update() *AddonAssociationUpdateOne {
-	return NewAddonAssociationClient(aa.config).UpdateOne(aa)
+func (_m *AddonAssociation) Update() *AddonAssociationUpdateOne {
+	return NewAddonAssociationClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the AddonAssociation entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (aa *AddonAssociation) Unwrap() *AddonAssociation {
-	_tx, ok := aa.config.driver.(*txDriver)
+func (_m *AddonAssociation) Unwrap() *AddonAssociation {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: AddonAssociation is not a transactional entity")
 	}
-	aa.config.driver = _tx.drv
-	return aa
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (aa *AddonAssociation) String() string {
+func (_m *AddonAssociation) String() string {
 	var builder strings.Builder
 	builder.WriteString("AddonAssociation(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", aa.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(aa.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(aa.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(aa.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(aa.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(aa.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(aa.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(aa.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_id=")
-	builder.WriteString(aa.EntityID)
+	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(aa.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("addon_id=")
-	builder.WriteString(aa.AddonID)
+	builder.WriteString(_m.AddonID)
 	builder.WriteString(", ")
-	if v := aa.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := aa.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("addon_status=")
-	builder.WriteString(aa.AddonStatus)
+	builder.WriteString(_m.AddonStatus)
 	builder.WriteString(", ")
 	builder.WriteString("cancellation_reason=")
-	builder.WriteString(aa.CancellationReason)
+	builder.WriteString(_m.CancellationReason)
 	builder.WriteString(", ")
-	if v := aa.CancelledAt; v != nil {
+	if v := _m.CancelledAt; v != nil {
 		builder.WriteString("cancelled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", aa.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

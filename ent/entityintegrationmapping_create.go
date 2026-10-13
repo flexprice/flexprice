@@ -21,145 +21,145 @@ type EntityIntegrationMappingCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (eimc *EntityIntegrationMappingCreate) SetTenantID(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetTenantID(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetTenantID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (eimc *EntityIntegrationMappingCreate) SetStatus(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetStatus(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetStatus(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableStatus(s *string) *EntityIntegrationMappingCreate {
-	if s != nil {
-		eimc.SetStatus(*s)
+func (_c *EntityIntegrationMappingCreate) SetNillableStatus(v *string) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (eimc *EntityIntegrationMappingCreate) SetCreatedAt(t time.Time) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetCreatedAt(t)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetCreatedAt(v time.Time) *EntityIntegrationMappingCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableCreatedAt(t *time.Time) *EntityIntegrationMappingCreate {
-	if t != nil {
-		eimc.SetCreatedAt(*t)
+func (_c *EntityIntegrationMappingCreate) SetNillableCreatedAt(v *time.Time) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (eimc *EntityIntegrationMappingCreate) SetUpdatedAt(t time.Time) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetUpdatedAt(t)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetUpdatedAt(v time.Time) *EntityIntegrationMappingCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableUpdatedAt(t *time.Time) *EntityIntegrationMappingCreate {
-	if t != nil {
-		eimc.SetUpdatedAt(*t)
+func (_c *EntityIntegrationMappingCreate) SetNillableUpdatedAt(v *time.Time) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (eimc *EntityIntegrationMappingCreate) SetCreatedBy(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetCreatedBy(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetCreatedBy(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableCreatedBy(s *string) *EntityIntegrationMappingCreate {
-	if s != nil {
-		eimc.SetCreatedBy(*s)
+func (_c *EntityIntegrationMappingCreate) SetNillableCreatedBy(v *string) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (eimc *EntityIntegrationMappingCreate) SetUpdatedBy(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetUpdatedBy(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetUpdatedBy(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableUpdatedBy(s *string) *EntityIntegrationMappingCreate {
-	if s != nil {
-		eimc.SetUpdatedBy(*s)
+func (_c *EntityIntegrationMappingCreate) SetNillableUpdatedBy(v *string) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (eimc *EntityIntegrationMappingCreate) SetEnvironmentID(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetEnvironmentID(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetEnvironmentID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (eimc *EntityIntegrationMappingCreate) SetNillableEnvironmentID(s *string) *EntityIntegrationMappingCreate {
-	if s != nil {
-		eimc.SetEnvironmentID(*s)
+func (_c *EntityIntegrationMappingCreate) SetNillableEnvironmentID(v *string) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return eimc
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (eimc *EntityIntegrationMappingCreate) SetEntityID(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetEntityID(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetEntityID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (eimc *EntityIntegrationMappingCreate) SetEntityType(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetEntityType(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetEntityType(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetProviderType sets the "provider_type" field.
-func (eimc *EntityIntegrationMappingCreate) SetProviderType(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetProviderType(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetProviderType(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetProviderType(v)
+	return _c
 }
 
 // SetProviderEntityID sets the "provider_entity_id" field.
-func (eimc *EntityIntegrationMappingCreate) SetProviderEntityID(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetProviderEntityID(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetProviderEntityID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetProviderEntityID(v)
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (eimc *EntityIntegrationMappingCreate) SetMetadata(m map[string]interface{}) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetMetadata(m)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetMetadata(v map[string]interface{}) *EntityIntegrationMappingCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (eimc *EntityIntegrationMappingCreate) SetID(s string) *EntityIntegrationMappingCreate {
-	eimc.mutation.SetID(s)
-	return eimc
+func (_c *EntityIntegrationMappingCreate) SetID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the EntityIntegrationMappingMutation object of the builder.
-func (eimc *EntityIntegrationMappingCreate) Mutation() *EntityIntegrationMappingMutation {
-	return eimc.mutation
+func (_c *EntityIntegrationMappingCreate) Mutation() *EntityIntegrationMappingMutation {
+	return _c.mutation
 }
 
 // Save creates the EntityIntegrationMapping in the database.
-func (eimc *EntityIntegrationMappingCreate) Save(ctx context.Context) (*EntityIntegrationMapping, error) {
-	eimc.defaults()
-	return withHooks(ctx, eimc.sqlSave, eimc.mutation, eimc.hooks)
+func (_c *EntityIntegrationMappingCreate) Save(ctx context.Context) (*EntityIntegrationMapping, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (eimc *EntityIntegrationMappingCreate) SaveX(ctx context.Context) *EntityIntegrationMapping {
-	v, err := eimc.Save(ctx)
+func (_c *EntityIntegrationMappingCreate) SaveX(ctx context.Context) *EntityIntegrationMapping {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -167,85 +167,85 @@ func (eimc *EntityIntegrationMappingCreate) SaveX(ctx context.Context) *EntityIn
 }
 
 // Exec executes the query.
-func (eimc *EntityIntegrationMappingCreate) Exec(ctx context.Context) error {
-	_, err := eimc.Save(ctx)
+func (_c *EntityIntegrationMappingCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimc *EntityIntegrationMappingCreate) ExecX(ctx context.Context) {
-	if err := eimc.Exec(ctx); err != nil {
+func (_c *EntityIntegrationMappingCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (eimc *EntityIntegrationMappingCreate) defaults() {
-	if _, ok := eimc.mutation.Status(); !ok {
+func (_c *EntityIntegrationMappingCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := entityintegrationmapping.DefaultStatus
-		eimc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := eimc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := entityintegrationmapping.DefaultCreatedAt()
-		eimc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := eimc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := entityintegrationmapping.DefaultUpdatedAt()
-		eimc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := eimc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := entityintegrationmapping.DefaultEnvironmentID
-		eimc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (eimc *EntityIntegrationMappingCreate) check() error {
-	if _, ok := eimc.mutation.TenantID(); !ok {
+func (_c *EntityIntegrationMappingCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "EntityIntegrationMapping.tenant_id"`)}
 	}
-	if v, ok := eimc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := entityintegrationmapping.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := eimc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "EntityIntegrationMapping.status"`)}
 	}
-	if _, ok := eimc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "EntityIntegrationMapping.created_at"`)}
 	}
-	if _, ok := eimc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "EntityIntegrationMapping.updated_at"`)}
 	}
-	if _, ok := eimc.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "EntityIntegrationMapping.entity_id"`)}
 	}
-	if v, ok := eimc.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := entityintegrationmapping.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_id": %w`, err)}
 		}
 	}
-	if _, ok := eimc.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "EntityIntegrationMapping.entity_type"`)}
 	}
-	if v, ok := eimc.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := entityintegrationmapping.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := eimc.mutation.ProviderType(); !ok {
+	if _, ok := _c.mutation.ProviderType(); !ok {
 		return &ValidationError{Name: "provider_type", err: errors.New(`ent: missing required field "EntityIntegrationMapping.provider_type"`)}
 	}
-	if v, ok := eimc.mutation.ProviderType(); ok {
+	if v, ok := _c.mutation.ProviderType(); ok {
 		if err := entityintegrationmapping.ProviderTypeValidator(v); err != nil {
 			return &ValidationError{Name: "provider_type", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_type": %w`, err)}
 		}
 	}
-	if _, ok := eimc.mutation.ProviderEntityID(); !ok {
+	if _, ok := _c.mutation.ProviderEntityID(); !ok {
 		return &ValidationError{Name: "provider_entity_id", err: errors.New(`ent: missing required field "EntityIntegrationMapping.provider_entity_id"`)}
 	}
-	if v, ok := eimc.mutation.ProviderEntityID(); ok {
+	if v, ok := _c.mutation.ProviderEntityID(); ok {
 		if err := entityintegrationmapping.ProviderEntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "provider_entity_id", err: fmt.Errorf(`ent: validator failed for field "EntityIntegrationMapping.provider_entity_id": %w`, err)}
 		}
@@ -253,12 +253,12 @@ func (eimc *EntityIntegrationMappingCreate) check() error {
 	return nil
 }
 
-func (eimc *EntityIntegrationMappingCreate) sqlSave(ctx context.Context) (*EntityIntegrationMapping, error) {
-	if err := eimc.check(); err != nil {
+func (_c *EntityIntegrationMappingCreate) sqlSave(ctx context.Context) (*EntityIntegrationMapping, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := eimc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, eimc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -271,65 +271,65 @@ func (eimc *EntityIntegrationMappingCreate) sqlSave(ctx context.Context) (*Entit
 			return nil, fmt.Errorf("unexpected EntityIntegrationMapping.ID type: %T", _spec.ID.Value)
 		}
 	}
-	eimc.mutation.id = &_node.ID
-	eimc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (eimc *EntityIntegrationMappingCreate) createSpec() (*EntityIntegrationMapping, *sqlgraph.CreateSpec) {
+func (_c *EntityIntegrationMappingCreate) createSpec() (*EntityIntegrationMapping, *sqlgraph.CreateSpec) {
 	var (
-		_node = &EntityIntegrationMapping{config: eimc.config}
+		_node = &EntityIntegrationMapping{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(entityintegrationmapping.Table, sqlgraph.NewFieldSpec(entityintegrationmapping.FieldID, field.TypeString))
 	)
-	if id, ok := eimc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := eimc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := eimc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(entityintegrationmapping.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := eimc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(entityintegrationmapping.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := eimc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := eimc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(entityintegrationmapping.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := eimc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(entityintegrationmapping.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := eimc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := eimc.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := eimc.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := eimc.mutation.ProviderType(); ok {
+	if value, ok := _c.mutation.ProviderType(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderType, field.TypeString, value)
 		_node.ProviderType = value
 	}
-	if value, ok := eimc.mutation.ProviderEntityID(); ok {
+	if value, ok := _c.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
 		_node.ProviderEntityID = value
 	}
-	if value, ok := eimc.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
@@ -344,16 +344,16 @@ type EntityIntegrationMappingCreateBulk struct {
 }
 
 // Save creates the EntityIntegrationMapping entities in the database.
-func (eimcb *EntityIntegrationMappingCreateBulk) Save(ctx context.Context) ([]*EntityIntegrationMapping, error) {
-	if eimcb.err != nil {
-		return nil, eimcb.err
+func (_c *EntityIntegrationMappingCreateBulk) Save(ctx context.Context) ([]*EntityIntegrationMapping, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(eimcb.builders))
-	nodes := make([]*EntityIntegrationMapping, len(eimcb.builders))
-	mutators := make([]Mutator, len(eimcb.builders))
-	for i := range eimcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*EntityIntegrationMapping, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := eimcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*EntityIntegrationMappingMutation)
@@ -367,11 +367,11 @@ func (eimcb *EntityIntegrationMappingCreateBulk) Save(ctx context.Context) ([]*E
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, eimcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, eimcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -391,7 +391,7 @@ func (eimcb *EntityIntegrationMappingCreateBulk) Save(ctx context.Context) ([]*E
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, eimcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -399,8 +399,8 @@ func (eimcb *EntityIntegrationMappingCreateBulk) Save(ctx context.Context) ([]*E
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (eimcb *EntityIntegrationMappingCreateBulk) SaveX(ctx context.Context) []*EntityIntegrationMapping {
-	v, err := eimcb.Save(ctx)
+func (_c *EntityIntegrationMappingCreateBulk) SaveX(ctx context.Context) []*EntityIntegrationMapping {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -408,14 +408,14 @@ func (eimcb *EntityIntegrationMappingCreateBulk) SaveX(ctx context.Context) []*E
 }
 
 // Exec executes the query.
-func (eimcb *EntityIntegrationMappingCreateBulk) Exec(ctx context.Context) error {
-	_, err := eimcb.Save(ctx)
+func (_c *EntityIntegrationMappingCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (eimcb *EntityIntegrationMappingCreateBulk) ExecX(ctx context.Context) {
-	if err := eimcb.Exec(ctx); err != nil {
+func (_c *EntityIntegrationMappingCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

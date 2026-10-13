@@ -16,6 +16,7 @@ type InMemorySubscriptionStore struct {
 	*InMemoryStore[*subscription.Subscription]
 	lineItems     map[string][]*subscription.SubscriptionLineItem // map[subscriptionID][]lineItems (initial batch from CreateWithLineItems)
 	lineItemStore *InMemorySubscriptionLineItemStore              // optional: when set, GetWithLineItems merges in line items created via SubscriptionLineItemRepo.Create
+	invoiceStore  *InMemoryInvoiceStore                           // optional: when set, MarkOverdueGatedSubscriptionsIncomplete checks invoices
 	pauses        map[string][]*subscription.SubscriptionPause    // map[subscriptionID][]pauses
 	pauseByID     map[string]*subscription.SubscriptionPause      // map[pauseID]pause
 }
@@ -188,11 +189,30 @@ func (s *InMemorySubscriptionStore) Get(ctx context.Context, id string) (*subscr
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	// Attach line items if they exist
+	// Hand back a copy. The real repository returns a fresh row per read, and callers
+	// mutate what they read — activateDraftSubscription writes straight to it — so
+	// returning the stored pointer races every concurrent reader. Attaching line items
+	// below is itself such a write.
+	subCopy := copySubscription(sub)
 	if items, ok := s.lineItems[id]; ok {
-		sub.LineItems = items
+		subCopy.LineItems = append([]*subscription.SubscriptionLineItem(nil), items...)
 	}
-	return sub, nil
+	return subCopy, nil
+}
+
+// copySubscription returns a read-safe copy: value fields plus the metadata map callers write through.
+func copySubscription(sub *subscription.Subscription) *subscription.Subscription {
+	if sub == nil {
+		return nil
+	}
+	out := *sub
+	if sub.Metadata != nil {
+		out.Metadata = make(map[string]string, len(sub.Metadata))
+		for k, v := range sub.Metadata {
+			out.Metadata[k] = v
+		}
+	}
+	return &out
 }
 
 // GetForUpdate matches Get; in-memory store has no row locks.
@@ -212,7 +232,11 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 	// SetLineItemStore), source from it so line items added via the
 	// SubscriptionLineItemRepo are visible here too. Falls back to the
 	// initial-batch map populated by CreateWithLineItems.
-	for _, sub := range subs {
+	for i, sub := range subs {
+		// Same copy-on-read contract as Get; attaching line items below is a write.
+		sub = copySubscription(sub)
+		subs[i] = sub
+
 		if s.lineItemStore != nil {
 			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 			liFilter.SubscriptionIDs = []string{sub.ID}
@@ -412,10 +436,12 @@ func (s *InMemorySubscriptionStore) SetLineItemStore(store *InMemorySubscription
 // When lineItemStore is set, line items come from SubscriptionLineItemRepo only (mirrors DB + supports Update).
 // Otherwise returns the batch from CreateWithLineItems.
 func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
+	// Get already returns a copy, so assigning LineItems below is safe.
 	sub, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	if s.lineItemStore != nil {
 		filter := types.NewNoLimitSubscriptionLineItemFilter()
 		filter.SubscriptionIDs = []string{id}
@@ -623,6 +649,79 @@ func (s *InMemorySubscriptionStore) GetSubscriptionsWithAutoInvoiceThreshold(ctx
 		results = results[:limit]
 	}
 	return results, nil
+}
+
+// SetInvoiceStore lets MarkOverdueGatedSubscriptionsIncomplete see invoices, mirroring the ent repository's join.
+func (s *InMemorySubscriptionStore) SetInvoiceStore(store *InMemoryInvoiceStore) {
+	s.invoiceStore = store
+}
+
+func (s *InMemorySubscriptionStore) ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error) {
+	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	envs := lo.FilterMap(subs, func(sub *subscription.Subscription, _ int) (types.TenantEnvironment, bool) {
+		return types.TenantEnvironment{TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID}, isGatedActive(sub)
+	})
+	return lo.Uniq(envs), nil
+}
+
+func (s *InMemorySubscriptionStore) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
+	if s.invoiceStore == nil {
+		return nil, nil
+	}
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	windowStart := asOf.AddDate(0, 0, -graceDays)
+
+	invoices, err := s.invoiceStore.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	overdue := make(map[string]bool)
+	for _, inv := range invoices {
+		if inv.TenantID != tenantID || inv.EnvironmentID != environmentID || inv.SubscriptionID == nil || inv.DueDate == nil {
+			continue
+		}
+		if inv.Status != types.StatusPublished ||
+			inv.InvoiceType != types.InvoiceTypeSubscription ||
+			inv.InvoiceStatus != types.InvoiceStatusFinalized ||
+			inv.BillingReason != string(types.InvoiceBillingReasonSubscriptionCycle) ||
+			!lo.Contains([]types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusFailed}, inv.PaymentStatus) ||
+			!inv.AmountRemaining.IsPositive() {
+			continue
+		}
+		if inv.DueDate.After(asOf) || !inv.DueDate.After(windowStart) {
+			continue
+		}
+		overdue[*inv.SubscriptionID] = true
+	}
+
+	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, sub := range subs {
+		if sub.TenantID != tenantID || sub.EnvironmentID != environmentID || !overdue[sub.ID] || !isGatedActive(sub) {
+			continue
+		}
+		updated := *sub
+		updated.SubscriptionStatus = types.SubscriptionStatusIncomplete
+		updated.UpdatedAt = asOf
+		if err := s.InMemoryStore.Update(ctx, sub.ID, &updated); err != nil {
+			return nil, err
+		}
+		ids = append(ids, sub.ID)
+	}
+	return ids, nil
+}
+
+func isGatedActive(sub *subscription.Subscription) bool {
+	return sub.Status == types.StatusPublished &&
+		sub.SubscriptionStatus == types.SubscriptionStatusActive &&
+		types.PaymentBehavior(sub.PaymentBehavior).IsIncompleteType()
 }
 
 // Clear removes all data from the store

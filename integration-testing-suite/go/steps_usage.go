@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- test event data
 	"time"
 
 	"github.com/flexprice/go-sdk/v2/models/types"

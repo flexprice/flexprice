@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +14,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -176,6 +179,18 @@ func TestSetCreateSubscriptionTrialWindow_ZeroClears(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, sub.TrialStart)
 	assert.Nil(t, sub.TrialEnd)
+}
+
+func TestSetCreateSubscriptionTrialWindow_LocalDaysAcrossDST(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	sub := &subscription.Subscription{StartDate: time.Date(2027, 3, 1, 0, 0, 0, 0, loc).UTC(), Timezone: "America/New_York"}
+	fourteen := 14
+	req := &dto.CreateSubscriptionRequest{SubscriptionCreationConfig: dto.SubscriptionCreationConfig{TrialPeriodDays: &fourteen}, Timezone: "America/New_York"}
+
+	require.NoError(t, setCreateSubscriptionTrialWindow(req, sub, nil))
+	require.NotNil(t, sub.TrialEnd)
+	assert.True(t, sub.TrialEnd.Equal(time.Date(2027, 3, 15, 0, 0, 0, 0, loc)), "trial end %s", sub.TrialEnd.In(loc))
 }
 
 type SubscriptionTrialInvoicePaidSuite struct {
@@ -374,4 +389,123 @@ func (s *SubscriptionTrialInvoicePaidSuite) TestTrialEndPaidInvoice_IdempotentWh
 	s.Equal(first.CurrentPeriodStart, second.CurrentPeriodStart)
 	s.Equal(first.CurrentPeriodEnd, second.CurrentPeriodEnd)
 	s.Equal(types.SubscriptionStatusActive, second.SubscriptionStatus)
+}
+
+// SubscriptionTrialProrationSuite covers the first paid period after a trial (D10) through create
+// and processSubscriptionTrialEnd.
+type SubscriptionTrialProrationSuite struct {
+	testutil.BaseServiceTestSuite
+	params ServiceParams
+	subSvc SubscriptionService
+}
+
+func TestSubscriptionTrialProration(t *testing.T) {
+	suite.Run(t, new(SubscriptionTrialProrationSuite))
+}
+
+func (s *SubscriptionTrialProrationSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	st := s.GetStores()
+	s.params = ServiceParams{
+		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
+		TaxAssociationRepo: st.TaxAssociationRepo, TaxRateRepo: st.TaxRateRepo, TaxAppliedRepo: st.TaxAppliedRepo,
+		SubRepo: st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo: st.SubscriptionPhaseRepo, SubScheduleRepo: st.SubscriptionScheduleRepo,
+		PlanRepo: st.PlanRepo, PriceRepo: st.PriceRepo, PriceUnitRepo: st.PriceUnitRepo, EventRepo: st.EventRepo,
+		MeterRepo: st.MeterRepo, CustomerRepo: st.CustomerRepo, InvoiceRepo: st.InvoiceRepo,
+		InvoiceLineItemRepo: st.InvoiceLineItemRepo, EntitlementRepo: st.EntitlementRepo,
+		EntitlementGrantRepo: st.EntitlementGrantRepo, EnvironmentRepo: st.EnvironmentRepo, FeatureRepo: st.FeatureRepo,
+		TenantRepo: st.TenantRepo, UserRepo: st.UserRepo, AuthRepo: st.AuthRepo, WalletRepo: st.WalletRepo,
+		PaymentRepo: st.PaymentRepo, CreditGrantRepo: st.CreditGrantRepo, CreditGrantApplicationRepo: st.CreditGrantApplicationRepo,
+		CouponRepo: st.CouponRepo, CouponAssociationRepo: st.CouponAssociationRepo, CouponApplicationRepo: st.CouponApplicationRepo,
+		AlertLogsRepo: st.AlertLogsRepo, WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+		AddonRepo: st.AddonRepo, AddonAssociationRepo: st.AddonAssociationRepo, CheckoutSessionRepo: st.CheckoutSessionRepo,
+		ConnectionRepo: st.ConnectionRepo, SettingsRepo: st.SettingsRepo, EventPublisher: s.GetPublisher(),
+		WebhookPublisher: s.GetWebhookPublisher(), ProrationCalculator: s.GetCalculator(), MeterUsageRepo: st.MeterUsageRepo,
+		IntegrationFactory: s.GetIntegrationFactory(), PlanPriceSyncRepo: st.PlanPriceSyncRepo,
+		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
+	}
+	s.subSvc = NewSubscriptionService(s.params)
+}
+
+// D10/I1–I4: calendar subs keep the calendar anchor after a trial and bill a prorated stub;
+// anniversary subs re-anchor at trial end. Trial end is in local days; an early end can fall at any time.
+// want is $31 x used/full in real seconds.
+func (s *SubscriptionTrialProrationSuite) TestFirstPaidPeriodAfterTrial() {
+	ny, err := time.LoadLocation("America/New_York")
+	s.Require().NoError(err)
+	utc := func(m time.Month, d, h, mi int) time.Time { return time.Date(2027, m, d, h, mi, 0, 0, time.UTC) }
+	nyAt := func(m time.Month, d int) time.Time { return time.Date(2027, m, d, 0, 0, 0, 0, ny).UTC() }
+	cases := []struct {
+		name               string
+		cycle              types.BillingCycle
+		tz                 string
+		start              time.Time
+		trialEnd           time.Time
+		endEarlyAt         *time.Time
+		wantStart, wantEnd time.Time
+		wantAmount         string
+	}{
+		{name: "I1 calendar stub Jan29-Feb1 (3/31)", cycle: types.BillingCycleCalendar, tz: "UTC", start: utc(1, 15, 0, 0),
+			trialEnd: utc(1, 29, 0, 0), wantStart: utc(1, 29, 0, 0), wantEnd: utc(2, 1, 0, 0), wantAmount: "3.00"},
+		{name: "I3 anniversary re-anchors Jan29-Feb28", cycle: types.BillingCycleAnniversary, tz: "UTC", start: utc(1, 15, 0, 0),
+			trialEnd: utc(1, 29, 0, 0), wantStart: utc(1, 29, 0, 0), wantEnd: utc(2, 28, 0, 0), wantAmount: "31.00"},
+		// DST starts Mar 14 2027: 14 local days end at Mar 15 00:00 EDT; 408h used of a 743h March.
+		{name: "I4 calendar New York across DST", cycle: types.BillingCycleCalendar, tz: "America/New_York", start: nyAt(3, 1),
+			trialEnd: nyAt(3, 15), wantStart: nyAt(3, 15), wantEnd: nyAt(4, 1), wantAmount: "17.02"},
+		{name: "I4 anniversary New York across DST", cycle: types.BillingCycleAnniversary, tz: "America/New_York", start: nyAt(3, 1),
+			trialEnd: nyAt(3, 15), wantStart: nyAt(3, 15), wantEnd: nyAt(4, 15), wantAmount: "31.00"},
+		// Early end Jan 20 13:45: 274.25h used of a 744h January.
+		{name: "early trial end calendar", cycle: types.BillingCycleCalendar, tz: "UTC", start: utc(1, 15, 0, 0),
+			trialEnd: utc(1, 29, 0, 0), endEarlyAt: lo.ToPtr(utc(1, 20, 13, 45)), wantStart: utc(1, 20, 13, 45), wantEnd: utc(2, 1, 0, 0), wantAmount: "11.43"},
+		{name: "early trial end anniversary", cycle: types.BillingCycleAnniversary, tz: "UTC", start: utc(1, 15, 0, 0),
+			trialEnd: utc(1, 29, 0, 0), endEarlyAt: lo.ToPtr(utc(1, 20, 13, 45)), wantStart: utc(1, 20, 13, 45), wantEnd: utc(2, 20, 13, 45), wantAmount: "31.00"},
+	}
+	for i, tc := range cases {
+		s.Run(tc.name, func() {
+			ctx := s.GetContext()
+			st := s.GetStores()
+			id := fmt.Sprintf("trial_%d", i)
+			s.Require().NoError(st.CustomerRepo.Create(ctx, &customer.Customer{
+				ID: "cust_" + id, ExternalID: "ext_" + id, Name: id, Timezone: tc.tz, BaseModel: types.GetDefaultBaseModel(ctx),
+			}))
+			s.Require().NoError(st.PlanRepo.Create(ctx, &plan.Plan{ID: "plan_" + id, Name: id, BaseModel: types.GetDefaultBaseModel(ctx)}))
+			s.Require().NoError(st.PriceRepo.Create(ctx, &price.Price{
+				ID: "price_" + id, Amount: decimal.NewFromInt(31), Currency: "usd",
+				EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_" + id, Type: types.PRICE_TYPE_FIXED,
+				BillingCadence: types.BILLING_CADENCE_RECURRING, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1, BillingModel: types.BILLING_MODEL_FLAT_FEE, InvoiceCadence: types.InvoiceCadenceAdvance,
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}))
+
+			start := tc.start
+			resp, err := s.subSvc.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+				CustomerID: "cust_" + id, PlanID: "plan_" + id, Currency: "usd", StartDate: &start,
+				BillingCadence: types.BILLING_CADENCE_RECURRING, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1, BillingCycle: tc.cycle, ProrationBehavior: types.ProrationBehaviorCreateProrations,
+				SubscriptionCreationConfig: dto.SubscriptionCreationConfig{TrialPeriodDays: lo.ToPtr(14)},
+			})
+			s.Require().NoError(err)
+			sub, err := st.SubscriptionRepo.Get(ctx, resp.ID)
+			s.Require().NoError(err)
+			s.Require().NotNil(sub.TrialEnd)
+			s.True(sub.TrialEnd.Equal(tc.trialEnd), "trial end %s, want %s", sub.TrialEnd, tc.trialEnd)
+
+			now := tc.trialEnd
+			if tc.endEarlyAt != nil {
+				now = *tc.endEarlyAt
+				sub.TrialEnd = lo.ToPtr(now)
+			}
+			inv, err := s.subSvc.(*subscriptionService).processSubscriptionTrialEnd(ctx, sub, NewInvoiceService(s.params), now)
+			s.Require().NoError(err)
+
+			after, err := st.SubscriptionRepo.Get(ctx, resp.ID)
+			s.Require().NoError(err)
+			s.True(after.CurrentPeriodStart.Equal(tc.wantStart), "period start %s, want %s", after.CurrentPeriodStart, tc.wantStart)
+			s.True(after.CurrentPeriodEnd.Equal(tc.wantEnd), "period end %s, want %s", after.CurrentPeriodEnd, tc.wantEnd)
+			s.Require().NotNil(inv, "a non-zero first paid period raises a trial-end invoice")
+			want := decimal.RequireFromString(tc.wantAmount)
+			s.True(inv.Subtotal.Sub(want).Abs().LessThanOrEqual(decimal.NewFromFloat(0.01)), "first paid period subtotal %s, want %s", inv.Subtotal, want)
+		})
+	}
 }

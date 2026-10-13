@@ -17,9 +17,14 @@ package searchattr
 
 import (
 	"fmt"
+	"regexp"
 
 	"go.temporal.io/sdk/workflow"
 )
+
+// tsvectorUnsafe matches chars that break the ::tsvector cast of Text search attributes
+// on PostgreSQL visibility (notably ':')
+var tsvectorUnsafe = regexp.MustCompile(`[:'\\\r\n\t\x00]+`)
 
 const (
 	// Custom Search Attribute Keys
@@ -75,7 +80,7 @@ func UpsertFailureSearchAttributes(
 
 	// Safely add activity name
 	if activityName != "" {
-		searchAttrs[SearchAttributeFailingActivity] = activityName
+		searchAttrs[SearchAttributeFailingActivity] = sanitizeSearchAttributeValue(activityName)
 	}
 
 	// Safely add failure reason
@@ -83,8 +88,8 @@ func UpsertFailureSearchAttributes(
 	if err != nil {
 		errMsg = err.Error()
 	}
-	// Temporal has a 2048 byte limit - truncate to 2000 bytes to be safe
-	searchAttrs[SearchAttributeFailureReason] = truncateStringByBytes(errMsg, 2000)
+
+	searchAttrs[SearchAttributeFailureReason] = truncateStringByBytes(sanitizeSearchAttributeValue(errMsg), 2000)
 
 	// Safely add subscription ID if provided
 	if subscriptionID != "" {
@@ -181,6 +186,14 @@ func ClearFailureSearchAttributes(ctx workflow.Context) {
 			"error", err.Error(),
 			"note", "This does not affect workflow execution")
 	}
+}
+
+// sanitizeSearchAttributeValue replaces tsvector-breaking chars with a space (see tsvectorUnsafe).
+func sanitizeSearchAttributeValue(s string) string {
+	if s == "" {
+		return s
+	}
+	return tsvectorUnsafe.ReplaceAllString(s, " ")
 }
 
 // truncateString truncates a string to the specified length (character count)

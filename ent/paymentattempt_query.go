@@ -30,44 +30,44 @@ type PaymentAttemptQuery struct {
 }
 
 // Where adds a new predicate for the PaymentAttemptQuery builder.
-func (paq *PaymentAttemptQuery) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptQuery {
-	paq.predicates = append(paq.predicates, ps...)
-	return paq
+func (_q *PaymentAttemptQuery) Where(ps ...predicate.PaymentAttempt) *PaymentAttemptQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (paq *PaymentAttemptQuery) Limit(limit int) *PaymentAttemptQuery {
-	paq.ctx.Limit = &limit
-	return paq
+func (_q *PaymentAttemptQuery) Limit(limit int) *PaymentAttemptQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (paq *PaymentAttemptQuery) Offset(offset int) *PaymentAttemptQuery {
-	paq.ctx.Offset = &offset
-	return paq
+func (_q *PaymentAttemptQuery) Offset(offset int) *PaymentAttemptQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (paq *PaymentAttemptQuery) Unique(unique bool) *PaymentAttemptQuery {
-	paq.ctx.Unique = &unique
-	return paq
+func (_q *PaymentAttemptQuery) Unique(unique bool) *PaymentAttemptQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (paq *PaymentAttemptQuery) Order(o ...paymentattempt.OrderOption) *PaymentAttemptQuery {
-	paq.order = append(paq.order, o...)
-	return paq
+func (_q *PaymentAttemptQuery) Order(o ...paymentattempt.OrderOption) *PaymentAttemptQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QueryPayment chains the current query on the "payment" edge.
-func (paq *PaymentAttemptQuery) QueryPayment() *PaymentQuery {
-	query := (&PaymentClient{config: paq.config}).Query()
+func (_q *PaymentAttemptQuery) QueryPayment() *PaymentQuery {
+	query := (&PaymentClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := paq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := paq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func (paq *PaymentAttemptQuery) QueryPayment() *PaymentQuery {
 			sqlgraph.To(payment.Table, payment.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, paymentattempt.PaymentTable, paymentattempt.PaymentColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(paq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -84,8 +84,8 @@ func (paq *PaymentAttemptQuery) QueryPayment() *PaymentQuery {
 
 // First returns the first PaymentAttempt entity from the query.
 // Returns a *NotFoundError when no PaymentAttempt was found.
-func (paq *PaymentAttemptQuery) First(ctx context.Context) (*PaymentAttempt, error) {
-	nodes, err := paq.Limit(1).All(setContextOp(ctx, paq.ctx, ent.OpQueryFirst))
+func (_q *PaymentAttemptQuery) First(ctx context.Context) (*PaymentAttempt, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +96,8 @@ func (paq *PaymentAttemptQuery) First(ctx context.Context) (*PaymentAttempt, err
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) FirstX(ctx context.Context) *PaymentAttempt {
-	node, err := paq.First(ctx)
+func (_q *PaymentAttemptQuery) FirstX(ctx context.Context) *PaymentAttempt {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,9 +106,9 @@ func (paq *PaymentAttemptQuery) FirstX(ctx context.Context) *PaymentAttempt {
 
 // FirstID returns the first PaymentAttempt ID from the query.
 // Returns a *NotFoundError when no PaymentAttempt ID was found.
-func (paq *PaymentAttemptQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *PaymentAttemptQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = paq.Limit(1).IDs(setContextOp(ctx, paq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -119,8 +119,8 @@ func (paq *PaymentAttemptQuery) FirstID(ctx context.Context) (id string, err err
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) FirstIDX(ctx context.Context) string {
-	id, err := paq.FirstID(ctx)
+func (_q *PaymentAttemptQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -130,8 +130,8 @@ func (paq *PaymentAttemptQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single PaymentAttempt entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one PaymentAttempt entity is found.
 // Returns a *NotFoundError when no PaymentAttempt entities are found.
-func (paq *PaymentAttemptQuery) Only(ctx context.Context) (*PaymentAttempt, error) {
-	nodes, err := paq.Limit(2).All(setContextOp(ctx, paq.ctx, ent.OpQueryOnly))
+func (_q *PaymentAttemptQuery) Only(ctx context.Context) (*PaymentAttempt, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +146,8 @@ func (paq *PaymentAttemptQuery) Only(ctx context.Context) (*PaymentAttempt, erro
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) OnlyX(ctx context.Context) *PaymentAttempt {
-	node, err := paq.Only(ctx)
+func (_q *PaymentAttemptQuery) OnlyX(ctx context.Context) *PaymentAttempt {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -157,9 +157,9 @@ func (paq *PaymentAttemptQuery) OnlyX(ctx context.Context) *PaymentAttempt {
 // OnlyID is like Only, but returns the only PaymentAttempt ID in the query.
 // Returns a *NotSingularError when more than one PaymentAttempt ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (paq *PaymentAttemptQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *PaymentAttemptQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = paq.Limit(2).IDs(setContextOp(ctx, paq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -174,8 +174,8 @@ func (paq *PaymentAttemptQuery) OnlyID(ctx context.Context) (id string, err erro
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) OnlyIDX(ctx context.Context) string {
-	id, err := paq.OnlyID(ctx)
+func (_q *PaymentAttemptQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -183,18 +183,18 @@ func (paq *PaymentAttemptQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of PaymentAttempts.
-func (paq *PaymentAttemptQuery) All(ctx context.Context) ([]*PaymentAttempt, error) {
-	ctx = setContextOp(ctx, paq.ctx, ent.OpQueryAll)
-	if err := paq.prepareQuery(ctx); err != nil {
+func (_q *PaymentAttemptQuery) All(ctx context.Context) ([]*PaymentAttempt, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*PaymentAttempt, *PaymentAttemptQuery]()
-	return withInterceptors[[]*PaymentAttempt](ctx, paq, qr, paq.inters)
+	return withInterceptors[[]*PaymentAttempt](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) AllX(ctx context.Context) []*PaymentAttempt {
-	nodes, err := paq.All(ctx)
+func (_q *PaymentAttemptQuery) AllX(ctx context.Context) []*PaymentAttempt {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -202,20 +202,20 @@ func (paq *PaymentAttemptQuery) AllX(ctx context.Context) []*PaymentAttempt {
 }
 
 // IDs executes the query and returns a list of PaymentAttempt IDs.
-func (paq *PaymentAttemptQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if paq.ctx.Unique == nil && paq.path != nil {
-		paq.Unique(true)
+func (_q *PaymentAttemptQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, paq.ctx, ent.OpQueryIDs)
-	if err = paq.Select(paymentattempt.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(paymentattempt.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) IDsX(ctx context.Context) []string {
-	ids, err := paq.IDs(ctx)
+func (_q *PaymentAttemptQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -223,17 +223,17 @@ func (paq *PaymentAttemptQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (paq *PaymentAttemptQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, paq.ctx, ent.OpQueryCount)
-	if err := paq.prepareQuery(ctx); err != nil {
+func (_q *PaymentAttemptQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, paq, querierCount[*PaymentAttemptQuery](), paq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*PaymentAttemptQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) CountX(ctx context.Context) int {
-	count, err := paq.Count(ctx)
+func (_q *PaymentAttemptQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -241,9 +241,9 @@ func (paq *PaymentAttemptQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (paq *PaymentAttemptQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, paq.ctx, ent.OpQueryExist)
-	switch _, err := paq.FirstID(ctx); {
+func (_q *PaymentAttemptQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -254,8 +254,8 @@ func (paq *PaymentAttemptQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (paq *PaymentAttemptQuery) ExistX(ctx context.Context) bool {
-	exist, err := paq.Exist(ctx)
+func (_q *PaymentAttemptQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -264,32 +264,32 @@ func (paq *PaymentAttemptQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the PaymentAttemptQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (paq *PaymentAttemptQuery) Clone() *PaymentAttemptQuery {
-	if paq == nil {
+func (_q *PaymentAttemptQuery) Clone() *PaymentAttemptQuery {
+	if _q == nil {
 		return nil
 	}
 	return &PaymentAttemptQuery{
-		config:      paq.config,
-		ctx:         paq.ctx.Clone(),
-		order:       append([]paymentattempt.OrderOption{}, paq.order...),
-		inters:      append([]Interceptor{}, paq.inters...),
-		predicates:  append([]predicate.PaymentAttempt{}, paq.predicates...),
-		withPayment: paq.withPayment.Clone(),
+		config:      _q.config,
+		ctx:         _q.ctx.Clone(),
+		order:       append([]paymentattempt.OrderOption{}, _q.order...),
+		inters:      append([]Interceptor{}, _q.inters...),
+		predicates:  append([]predicate.PaymentAttempt{}, _q.predicates...),
+		withPayment: _q.withPayment.Clone(),
 		// clone intermediate query.
-		sql:  paq.sql.Clone(),
-		path: paq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithPayment tells the query-builder to eager-load the nodes that are connected to
 // the "payment" edge. The optional arguments are used to configure the query builder of the edge.
-func (paq *PaymentAttemptQuery) WithPayment(opts ...func(*PaymentQuery)) *PaymentAttemptQuery {
-	query := (&PaymentClient{config: paq.config}).Query()
+func (_q *PaymentAttemptQuery) WithPayment(opts ...func(*PaymentQuery)) *PaymentAttemptQuery {
+	query := (&PaymentClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	paq.withPayment = query
-	return paq
+	_q.withPayment = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -306,10 +306,10 @@ func (paq *PaymentAttemptQuery) WithPayment(opts ...func(*PaymentQuery)) *Paymen
 //		GroupBy(paymentattempt.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (paq *PaymentAttemptQuery) GroupBy(field string, fields ...string) *PaymentAttemptGroupBy {
-	paq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &PaymentAttemptGroupBy{build: paq}
-	grbuild.flds = &paq.ctx.Fields
+func (_q *PaymentAttemptQuery) GroupBy(field string, fields ...string) *PaymentAttemptGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &PaymentAttemptGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = paymentattempt.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -327,58 +327,58 @@ func (paq *PaymentAttemptQuery) GroupBy(field string, fields ...string) *Payment
 //	client.PaymentAttempt.Query().
 //		Select(paymentattempt.FieldTenantID).
 //		Scan(ctx, &v)
-func (paq *PaymentAttemptQuery) Select(fields ...string) *PaymentAttemptSelect {
-	paq.ctx.Fields = append(paq.ctx.Fields, fields...)
-	sbuild := &PaymentAttemptSelect{PaymentAttemptQuery: paq}
+func (_q *PaymentAttemptQuery) Select(fields ...string) *PaymentAttemptSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &PaymentAttemptSelect{PaymentAttemptQuery: _q}
 	sbuild.label = paymentattempt.Label
-	sbuild.flds, sbuild.scan = &paq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a PaymentAttemptSelect configured with the given aggregations.
-func (paq *PaymentAttemptQuery) Aggregate(fns ...AggregateFunc) *PaymentAttemptSelect {
-	return paq.Select().Aggregate(fns...)
+func (_q *PaymentAttemptQuery) Aggregate(fns ...AggregateFunc) *PaymentAttemptSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (paq *PaymentAttemptQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range paq.inters {
+func (_q *PaymentAttemptQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, paq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range paq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !paymentattempt.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if paq.path != nil {
-		prev, err := paq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		paq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (paq *PaymentAttemptQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*PaymentAttempt, error) {
+func (_q *PaymentAttemptQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*PaymentAttempt, error) {
 	var (
 		nodes       = []*PaymentAttempt{}
-		_spec       = paq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
-			paq.withPayment != nil,
+			_q.withPayment != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*PaymentAttempt).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &PaymentAttempt{config: paq.config}
+		node := &PaymentAttempt{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -386,14 +386,14 @@ func (paq *PaymentAttemptQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, paq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := paq.withPayment; query != nil {
-		if err := paq.loadPayment(ctx, query, nodes, nil,
+	if query := _q.withPayment; query != nil {
+		if err := _q.loadPayment(ctx, query, nodes, nil,
 			func(n *PaymentAttempt, e *Payment) { n.Edges.Payment = e }); err != nil {
 			return nil, err
 		}
@@ -401,7 +401,7 @@ func (paq *PaymentAttemptQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	return nodes, nil
 }
 
-func (paq *PaymentAttemptQuery) loadPayment(ctx context.Context, query *PaymentQuery, nodes []*PaymentAttempt, init func(*PaymentAttempt), assign func(*PaymentAttempt, *Payment)) error {
+func (_q *PaymentAttemptQuery) loadPayment(ctx context.Context, query *PaymentQuery, nodes []*PaymentAttempt, init func(*PaymentAttempt), assign func(*PaymentAttempt, *Payment)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*PaymentAttempt)
 	for i := range nodes {
@@ -431,24 +431,24 @@ func (paq *PaymentAttemptQuery) loadPayment(ctx context.Context, query *PaymentQ
 	return nil
 }
 
-func (paq *PaymentAttemptQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := paq.querySpec()
-	_spec.Node.Columns = paq.ctx.Fields
-	if len(paq.ctx.Fields) > 0 {
-		_spec.Unique = paq.ctx.Unique != nil && *paq.ctx.Unique
+func (_q *PaymentAttemptQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, paq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (paq *PaymentAttemptQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *PaymentAttemptQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(paymentattempt.Table, paymentattempt.Columns, sqlgraph.NewFieldSpec(paymentattempt.FieldID, field.TypeString))
-	_spec.From = paq.sql
-	if unique := paq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if paq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := paq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, paymentattempt.FieldID)
 		for i := range fields {
@@ -456,24 +456,24 @@ func (paq *PaymentAttemptQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if paq.withPayment != nil {
+		if _q.withPayment != nil {
 			_spec.Node.AddColumnOnce(paymentattempt.FieldPaymentID)
 		}
 	}
-	if ps := paq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := paq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := paq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := paq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -483,33 +483,33 @@ func (paq *PaymentAttemptQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (paq *PaymentAttemptQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(paq.driver.Dialect())
+func (_q *PaymentAttemptQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(paymentattempt.Table)
-	columns := paq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = paymentattempt.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if paq.sql != nil {
-		selector = paq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if paq.ctx.Unique != nil && *paq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range paq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range paq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := paq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := paq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -522,41 +522,41 @@ type PaymentAttemptGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (pagb *PaymentAttemptGroupBy) Aggregate(fns ...AggregateFunc) *PaymentAttemptGroupBy {
-	pagb.fns = append(pagb.fns, fns...)
-	return pagb
+func (_g *PaymentAttemptGroupBy) Aggregate(fns ...AggregateFunc) *PaymentAttemptGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (pagb *PaymentAttemptGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, pagb.build.ctx, ent.OpQueryGroupBy)
-	if err := pagb.build.prepareQuery(ctx); err != nil {
+func (_g *PaymentAttemptGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*PaymentAttemptQuery, *PaymentAttemptGroupBy](ctx, pagb.build, pagb, pagb.build.inters, v)
+	return scanWithInterceptors[*PaymentAttemptQuery, *PaymentAttemptGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (pagb *PaymentAttemptGroupBy) sqlScan(ctx context.Context, root *PaymentAttemptQuery, v any) error {
+func (_g *PaymentAttemptGroupBy) sqlScan(ctx context.Context, root *PaymentAttemptQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(pagb.fns))
-	for _, fn := range pagb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*pagb.flds)+len(pagb.fns))
-		for _, f := range *pagb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*pagb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := pagb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -570,27 +570,27 @@ type PaymentAttemptSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (pas *PaymentAttemptSelect) Aggregate(fns ...AggregateFunc) *PaymentAttemptSelect {
-	pas.fns = append(pas.fns, fns...)
-	return pas
+func (_s *PaymentAttemptSelect) Aggregate(fns ...AggregateFunc) *PaymentAttemptSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (pas *PaymentAttemptSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, pas.ctx, ent.OpQuerySelect)
-	if err := pas.prepareQuery(ctx); err != nil {
+func (_s *PaymentAttemptSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*PaymentAttemptQuery, *PaymentAttemptSelect](ctx, pas.PaymentAttemptQuery, pas, pas.inters, v)
+	return scanWithInterceptors[*PaymentAttemptQuery, *PaymentAttemptSelect](ctx, _s.PaymentAttemptQuery, _s, _s.inters, v)
 }
 
-func (pas *PaymentAttemptSelect) sqlScan(ctx context.Context, root *PaymentAttemptQuery, v any) error {
+func (_s *PaymentAttemptSelect) sqlScan(ctx context.Context, root *PaymentAttemptQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(pas.fns))
-	for _, fn := range pas.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*pas.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -598,7 +598,7 @@ func (pas *PaymentAttemptSelect) sqlScan(ctx context.Context, root *PaymentAttem
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := pas.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

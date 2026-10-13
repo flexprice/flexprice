@@ -51,6 +51,12 @@ type RedisCache interface {
 	IsRedisCache() bool
 
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
+
+	// GetBulk retrieves many keys in one round trip, returning the values
+	// found (keyed by the original key) and the keys not found — callers
+	// fetch those from the DB and Set them back. A disabled cache reports
+	// every key missing.
+	GetBulk(ctx context.Context, keys []string) (found map[string]interface{}, missing []string)
 }
 
 // Predefined cache key prefixes for different entity types
@@ -90,22 +96,30 @@ const (
 	PrefixInvoiceLineItem          = "invoice_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
 	PrefixUsageAlertSchedule       = "usage_alert_schedule:v1:"
+	PrefixSettingsByKey            = "settings_by_key:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
+	PrefixBillerTaxIDs             = "biller_tax_ids:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"
 	PrefixWalletRealTimeBalance    = "wallet_realtime_balance:v1:"
 	PrefixWorkflowExecution        = "workflow_execution:v1:"
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
-	PrefixPriceSyncLock             = "price_sync:plan:"
-	PrefixRazorpayWebhookRefundLock = "razorpay:webhook-refund:"
+	PrefixPriceSyncLock              = "price_sync:plan:"
+	PrefixRazorpayWebhookRefundLock  = "razorpay:webhook-refund:"
 	PrefixChargebeeWebhookRefundLock = "chargebee:webhook-refund:"
+	PrefixStripeWebhookRefundLock    = "stripe:webhook-refund:"
 	PrefixTabsInvoiceSyncLock        = "tabs:invoice_sync:"
 	// PrefixStripeCustomerSyncLock guards first-time Stripe customer creation for a
 	// FlexPrice customer (used with customerID) so concurrent callers cannot each
 	// create their own Stripe customer.
 	PrefixStripeCustomerSyncLock = "stripe:customer_sync:"
-	PrefixPublishedConnections   = "published_connections:"
-	PrefixMeterFeature           = "meter:feature:v1:"
+	// PrefixCreditGrantApplyLock serializes credit grant application per customer.
+	PrefixCreditGrantApplyLock = "credit_grant:apply:"
+	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
+	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
+	PrefixCheckoutPollLock     = "checkout:poll:"
+	PrefixPublishedConnections = "published_connections:"
+	PrefixMeterFeature         = "meter:feature:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

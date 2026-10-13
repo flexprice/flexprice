@@ -20,56 +20,56 @@ type CreditNoteLineItemDelete struct {
 }
 
 // Where appends a list predicates to the CreditNoteLineItemDelete builder.
-func (cnlid *CreditNoteLineItemDelete) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemDelete {
-	cnlid.mutation.Where(ps...)
-	return cnlid
+func (_d *CreditNoteLineItemDelete) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cnlid *CreditNoteLineItemDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cnlid.sqlExec, cnlid.mutation, cnlid.hooks)
+func (_d *CreditNoteLineItemDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnlid *CreditNoteLineItemDelete) ExecX(ctx context.Context) int {
-	n, err := cnlid.Exec(ctx)
+func (_d *CreditNoteLineItemDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cnlid *CreditNoteLineItemDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CreditNoteLineItemDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(creditnotelineitem.Table, sqlgraph.NewFieldSpec(creditnotelineitem.FieldID, field.TypeString))
-	if ps := cnlid.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cnlid.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cnlid.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CreditNoteLineItemDeleteOne is the builder for deleting a single CreditNoteLineItem entity.
 type CreditNoteLineItemDeleteOne struct {
-	cnlid *CreditNoteLineItemDelete
+	_d *CreditNoteLineItemDelete
 }
 
 // Where appends a list predicates to the CreditNoteLineItemDelete builder.
-func (cnlido *CreditNoteLineItemDeleteOne) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemDeleteOne {
-	cnlido.cnlid.mutation.Where(ps...)
-	return cnlido
+func (_d *CreditNoteLineItemDeleteOne) Where(ps ...predicate.CreditNoteLineItem) *CreditNoteLineItemDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cnlido *CreditNoteLineItemDeleteOne) Exec(ctx context.Context) error {
-	n, err := cnlido.cnlid.Exec(ctx)
+func (_d *CreditNoteLineItemDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cnlido *CreditNoteLineItemDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cnlido *CreditNoteLineItemDeleteOne) ExecX(ctx context.Context) {
-	if err := cnlido.Exec(ctx); err != nil {
+func (_d *CreditNoteLineItemDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

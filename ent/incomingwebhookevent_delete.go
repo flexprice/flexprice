@@ -20,56 +20,56 @@ type IncomingWebhookEventDelete struct {
 }
 
 // Where appends a list predicates to the IncomingWebhookEventDelete builder.
-func (iwed *IncomingWebhookEventDelete) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventDelete {
-	iwed.mutation.Where(ps...)
-	return iwed
+func (_d *IncomingWebhookEventDelete) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (iwed *IncomingWebhookEventDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, iwed.sqlExec, iwed.mutation, iwed.hooks)
+func (_d *IncomingWebhookEventDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iwed *IncomingWebhookEventDelete) ExecX(ctx context.Context) int {
-	n, err := iwed.Exec(ctx)
+func (_d *IncomingWebhookEventDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (iwed *IncomingWebhookEventDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *IncomingWebhookEventDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(incomingwebhookevent.Table, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
-	if ps := iwed.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, iwed.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	iwed.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // IncomingWebhookEventDeleteOne is the builder for deleting a single IncomingWebhookEvent entity.
 type IncomingWebhookEventDeleteOne struct {
-	iwed *IncomingWebhookEventDelete
+	_d *IncomingWebhookEventDelete
 }
 
 // Where appends a list predicates to the IncomingWebhookEventDelete builder.
-func (iwedo *IncomingWebhookEventDeleteOne) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventDeleteOne {
-	iwedo.iwed.mutation.Where(ps...)
-	return iwedo
+func (_d *IncomingWebhookEventDeleteOne) Where(ps ...predicate.IncomingWebhookEvent) *IncomingWebhookEventDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (iwedo *IncomingWebhookEventDeleteOne) Exec(ctx context.Context) error {
-	n, err := iwedo.iwed.Exec(ctx)
+func (_d *IncomingWebhookEventDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (iwedo *IncomingWebhookEventDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (iwedo *IncomingWebhookEventDeleteOne) ExecX(ctx context.Context) {
-	if err := iwedo.Exec(ctx); err != nil {
+func (_d *IncomingWebhookEventDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

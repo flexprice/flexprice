@@ -7,8 +7,10 @@ import (
 	coupon_domain "github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -57,6 +59,7 @@ func (s *CouponApplicationServiceSuite) newServiceParams() ServiceParams {
 		CouponRepo:               stores.CouponRepo,
 		CouponAssociationRepo:    stores.CouponAssociationRepo,
 		CouponApplicationRepo:    stores.CouponApplicationRepo,
+		SettingsRepo:             stores.SettingsRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	}
@@ -483,4 +486,76 @@ func (s *CouponApplicationServiceSuite) TestApplyCouponsToInvoice_SubscriptionAs
 	secondRows, err := s.GetStores().CouponApplicationRepo.List(ctx, appFilter)
 	s.Require().NoError(err)
 	s.Len(secondRows, 1, "recompute of a subscription-attached coupon must not persist duplicate CouponApplication rows")
+}
+
+// A fixed-amount coupon carries a currency and is matched against the subscription's,
+// so an unsupported one would silently never apply. Percentage coupons carry none and
+// are unrestricted.
+func (s *CouponApplicationServiceSuite) TestCreateCoupon_CustomCurrencyEnforcement() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:                  "MoEngage AI Credits",
+				Symbol:                "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{"usd": decimal.NewFromFloat(0.1)},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.GetContext(), &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyCustomCurrencyConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	couponSvc := NewCouponService(s.newServiceParams())
+	amountOff := decimal.NewFromInt(5)
+
+	tests := []struct {
+		name     string
+		currency *string
+		wantErr  bool
+	}{
+		{name: "custom currency is allowed", currency: lo.ToPtr("mac")},
+		{name: "default fiat currency is allowed", currency: lo.ToPtr("usd")},
+		{name: "unconfigured currency is rejected", currency: lo.ToPtr("eur"), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := couponSvc.CreateCoupon(s.GetContext(), dto.CreateCouponRequest{
+				Name:      "Coupon " + tt.name,
+				Type:      types.CouponTypeFixed,
+				AmountOff: &amountOff,
+				Currency:  tt.currency,
+				Cadence:   types.CouponCadenceOnce,
+			})
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+			s.Equal(*tt.currency, resp.Currency)
+		})
+	}
+}
+
+// A percentage coupon has no currency, so enforcement does not apply to it.
+func (s *CouponApplicationServiceSuite) TestCreateCoupon_PercentageCouponUnrestricted() {
+	percentageOff := decimal.NewFromInt(10)
+	couponSvc := NewCouponService(s.newServiceParams())
+
+	resp, err := couponSvc.CreateCoupon(s.GetContext(), dto.CreateCouponRequest{
+		Name:          "Ten percent",
+		Type:          types.CouponTypePercentage,
+		PercentageOff: &percentageOff,
+		Cadence:       types.CouponCadenceOnce,
+	})
+	s.NoError(err)
+	s.Empty(resp.Currency)
 }

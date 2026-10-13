@@ -21,21 +21,26 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 | Repository | `internal/repository/` | Implements domain interfaces; DB access only |
 | Service | `internal/service/` | All business logic; orchestrates repos + services |
 | API | `internal/api/v1/` | Parse → validate → delegate to service → respond |
+| Admin API | `internal/api/admin/` | Operator HTTP for the admin portal; same parse → delegate rule. Not mounted on the public router |
+| Admin service | `internal/ee/service/admin/` | Operator business logic; takes `service.ServiceParams` |
+| Admin DTO | `internal/api/dto/admin/` | Admin request and response types |
 | Temporal | `internal/temporal/` | Long-running workflows + activities |
 | Integration | `internal/integration/` | Third-party providers; factory pattern |
 
 ## Hard invariants
 
 ### Layering (never violate)
-- No business logic in `internal/api/v1/` — handlers call services, nothing more.
+- No business logic in `internal/api/v1/` or `internal/api/admin/` — handlers call services, nothing more.
 - No DB calls from handlers — all data access through service → repository chain.
 - Domain interfaces in `internal/domain/`; implementations in `internal/repository/`.
 - All new deps registered in `cmd/server/main.go` via `fx.Provide()`.
+- Admin portal routes stay on the admin router (`deployment.mode=admin`). Do not mount them on the public API.
 
 ### Multi-tenancy (every entity, every query)
 - Every DB entity carries `tenant_id` + `environment_id`.
 - Every query filters on both. Missing filter = data leak = critical bug.
 - No cross-tenant reads. No shared mutable state between tenants.
+- The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup is the only cross-tenant read, and it stays in `internal/ee/service/admin`.
 
 ### Event processing (billing correctness)
 - All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
@@ -99,6 +104,7 @@ The application supports multiple deployment modes via `FLEXPRICE_DEPLOYMENT_MOD
 - `api` - Runs only the API server
 - `consumer` - Runs only the Kafka consumer for event processing
 - `temporal_worker` - Runs only Temporal workflow workers
+- `admin` - Admin portal API only. Flexprice staff manage tenant accounts and settings here. Does not serve the public API, Kafka consumers, or Temporal workers (`make run-local-admin`)
 
 ```bash
 # Run in local mode (default)
@@ -552,11 +558,12 @@ The application can run in split mode for scalability:
 - **API Mode**: Handles HTTP requests only
 - **Consumer Mode**: Processes Kafka events only
 - **Worker Mode**: Runs Temporal workflows only
+- **Admin Mode**: Admin portal API. `/v1` requires `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). Cross-tenant tenant targeting is intentional. Per-operator RBAC and an action audit log are not built yet
 
 Set via environment variable:
 
 ```bash
-export FLEXPRICE_DEPLOYMENT_MODE=api  # or consumer, temporal_worker
+export FLEXPRICE_DEPLOYMENT_MODE=api  # or consumer, temporal_worker, admin
 ```
 
 Docker Compose demonstrates this pattern with separate services: `flexprice-api`, `flexprice-consumer`, `flexprice-worker`.
@@ -666,7 +673,16 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
 
 ## Coding style guide
 
-1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings.
+1. Whenever creating new structs, keep them private, and expose their getters and constructors with proper nil handling and use those in code. Keep the structs and it's fields private and only expose them via getters with nil handlings. Two scoped exceptions, matching long-standing convention: domain models (`internal/domain/*`) use exported fields with builders (rule 2) and `FromEnt` converters; serialization/wire types (Temporal workflow inputs, DTOs, config) keep exported fields for JSON round-tripping.
 2. When updating "domain" entities, use their builders. If builder doesn't exist, create it and then use and set only the required fields. Builders should have always initiate by taking in input an existing entity and provide a builder instance of it.
 3. Only add comments when some logic or definition is complex to understand or there is an edge case. Don't write comments on generic logic and easy to understand structs and methods.
+   - **Keep them short — one or two lines.** A comment says what a thing is for and what it does. It is not the place for rationale, alternatives considered, or background. A dev can read the code; a paragraph above every method makes the code harder to reach, not easier.
+   - No restating the code in prose, no "why not X" essays, no history of the change. If a decision genuinely needs explaining, it belongs in the design doc, not the file.
+   - Same rule for struct field comments and doc comments on exported methods.
 4. Logging: log only meaningful state changes, failures, and operational decisions, with the relevant IDs and error attached. `Warn` is reserved for bootstrap/setup code; use `Info` for a recovered/skipped condition and `Error` for a failure.
+5. Write maintainable Go per [Practical Go](https://dave.cheney.net/practical-go/presentations/qcon-china.html). The rules we enforce in review:
+   - **Naming**: choose clarity over brevity; identifier length grows with distance from its declaration (short names near use, longer names for wider scope). Never name a variable after its type (`usersMap`, `configStruct`). Prefer single-word method and package names; keep receiver names one or two letters and consistent across a type's methods.
+   - **Packages**: name a package for what it *provides*, not what it contains — no `utils`, `helpers`, `common`. Prefer fewer, larger packages; split files by responsibility, not by kind.
+   - **Comments**: a comment explains one of *what*, *how*, or *why* — in one or two lines, self-sufficient with no references to design docs, tickets, or section numbers. Document every exported symbol; skip comments on interface-implementing methods (the interface doc stands). Don't comment bad code — rewrite it; extract a commented block into a well-named function instead.
+   - **Shape**: guard clauses and early returns; keep the happy path unindented and flowing down the screen. Make zero values useful. No package-level mutable state.
+   - **APIs**: easy to use, hard to misuse — avoid several same-typed parameters in a row, avoid nil-tolerant parameters that fork behavior, design for the default case.

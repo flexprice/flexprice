@@ -43,9 +43,9 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 	for _, id := range walletIDs {
 		if _, err := p.client.Wallets().GetBalance(ctx, id); err != nil {
 			return e2eprobe.Errorf(map[string]string{
-				"external_customer_id":  extCustID,
-				"internal_customer_id":  internalCustID,
-				"wallet_id":             id,
+				"external_customer_id": extCustID,
+				"internal_customer_id": internalCustID,
+				"wallet_id":            id,
 			}, "wallet balance %s: %w", id, err)
 		}
 	}

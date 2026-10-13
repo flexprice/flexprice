@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -172,16 +173,16 @@ type CheckoutSession struct {
 	// PaymentProviderConfig holds provider-specific payment configuration
 	// (e.g. Razorpay UPI Autopay preferences) supplied at session creation.
 	// Nil if not set on the request.
-	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty"`
+	PaymentProviderConfig *JSONBCheckoutPaymentProviderConfig `db:"payment_provider_config,jsonb" json:"payment_provider_config,omitempty" activity:"redact"`
 
 	// Result holds the Flexprice entity IDs created during the apply step.
 	// Nil until the session reaches completed status.
-	Result *JSONBCheckoutResult `db:"result,jsonb" json:"result,omitempty"`
+	Result *JSONBCheckoutResult `db:"result,jsonb" json:"result,omitempty" activity:"redact"`
 
 	// ProviderResult holds the external provider response (session URL,
 	// payment intent ID, etc.). Set after the provider call in the create
 	// step. Source of truth for deriving PaymentActions in API responses.
-	ProviderResult *JSONBCheckoutProviderResult `db:"provider_result,jsonb" json:"provider_result,omitempty"`
+	ProviderResult *JSONBCheckoutProviderResult `db:"provider_result,jsonb" json:"provider_result,omitempty" activity:"redact"`
 
 	// IdempotencyKey is caller-supplied. It is unique only while the session
 	// is active (initiated|pending). The same key may be reused once the
@@ -203,9 +204,54 @@ type CheckoutSession struct {
 
 	// FailureReason is a human-readable string set on failed sessions.
 	FailureReason *string        `db:"failure_reason" json:"failure_reason,omitempty"`
-	Metadata      types.Metadata `db:"metadata,jsonb" json:"metadata,omitempty"`
+	Metadata      types.Metadata `db:"metadata,jsonb" json:"metadata,omitempty" activity:"drop"`
 
 	types.BaseModel
+}
+
+// FromEnt converts a stored checkout session.
+func FromEnt(e *ent.CheckoutSession) *CheckoutSession {
+	s := &CheckoutSession{
+		ID:                    e.ID,
+		EnvironmentID:         e.EnvironmentID,
+		CustomerID:            e.CustomerID,
+		Action:                e.Action,
+		CheckoutStatus:        types.CheckoutStatus(e.CheckoutStatus),
+		PaymentProvider:       e.PaymentProvider,
+		CheckoutInvoiceID:     e.CheckoutInvoiceID,
+		CheckoutPaymentID:     e.CheckoutPaymentID,
+		Configuration:         JSONBCheckoutConfiguration(e.Configuration),
+		PaymentProviderConfig: (*JSONBCheckoutPaymentProviderConfig)(e.PaymentProviderConfig),
+		Result:                (*JSONBCheckoutResult)(e.Result),
+		ProviderResult:        (*JSONBCheckoutProviderResult)(e.ProviderResult),
+		IdempotencyKey:        e.IdempotencyKey,
+		SuccessURL:            e.SuccessURL,
+		FailureURL:            e.FailureURL,
+		CancelURL:             e.CancelURL,
+		CompletedAt:           e.CompletedAt,
+		CancelledAt:           e.CancelledAt,
+		FailureReason:         e.FailureReason,
+		Metadata:              types.Metadata(e.Metadata),
+		BaseModel: types.BaseModel{
+			TenantID:  e.TenantID,
+			Status:    types.Status(e.Status),
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
+		},
+	}
+	if e.ExpiresAt != nil {
+		s.ExpiresAt = *e.ExpiresAt
+	}
+	return s
+}
+
+func (s *CheckoutSession) GetID() string {
+	if s == nil {
+		return ""
+	}
+	return s.ID
 }
 
 // Validate checks that the session has all required fields and that enum values are valid.

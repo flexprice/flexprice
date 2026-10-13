@@ -52,6 +52,9 @@ type WalletOperation struct {
 	// BonusExpiryDate is the expiry timestamp applied to the bonus tx (independent of the
 	// purchase tx's ExpiryDate/ExpiryDateTime). nil means the bonus never expires.
 	BonusExpiryDate *time.Time `json:"-"`
+	// SourceType/SourceID set the transaction's source (see Transaction).
+	SourceType types.WalletTxSourceType `json:"-"`
+	SourceID   string                   `json:"-"`
 }
 
 func (w *WalletOperation) Validate() error {

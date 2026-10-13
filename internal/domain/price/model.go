@@ -113,7 +113,7 @@ type Price struct {
 
 	TransformQuantity JSONBTransformQuantity `db:"transform_quantity,jsonb" json:"transform_quantity"`
 
-	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata"`
+	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the price
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
@@ -140,7 +140,7 @@ type Price struct {
 	// subscription line items need to react to. Read by the plan-price sync;
 	// set by the database (DEFAULT nextval) on create and by the price
 	// repository on termination / compatibility-affecting edits.
-	Sequence int64 `db:"sequence" json:"sequence,omitempty"`
+	Sequence int64 `db:"sequence" json:"sequence,omitempty" activity:"drop"`
 
 	types.BaseModel
 }

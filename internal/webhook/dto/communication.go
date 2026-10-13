@@ -16,5 +16,5 @@ type CommunicationWebhookPayload struct {
 }
 
 func NewCommunicationWebhookPayload(invoice *dto.InvoiceResponse, eventType types.WebhookEventName) *CommunicationWebhookPayload {
-	return &CommunicationWebhookPayload{EventType: eventType, Invoice: NewInvoice(invoice, eventType)}
+	return &CommunicationWebhookPayload{EventType: eventType, Invoice: NewInvoice(invoice)}
 }

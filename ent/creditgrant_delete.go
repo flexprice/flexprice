@@ -20,56 +20,56 @@ type CreditGrantDelete struct {
 }
 
 // Where appends a list predicates to the CreditGrantDelete builder.
-func (cgd *CreditGrantDelete) Where(ps ...predicate.CreditGrant) *CreditGrantDelete {
-	cgd.mutation.Where(ps...)
-	return cgd
+func (_d *CreditGrantDelete) Where(ps ...predicate.CreditGrant) *CreditGrantDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (cgd *CreditGrantDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, cgd.sqlExec, cgd.mutation, cgd.hooks)
+func (_d *CreditGrantDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgd *CreditGrantDelete) ExecX(ctx context.Context) int {
-	n, err := cgd.Exec(ctx)
+func (_d *CreditGrantDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (cgd *CreditGrantDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *CreditGrantDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(creditgrant.Table, sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString))
-	if ps := cgd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, cgd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	cgd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // CreditGrantDeleteOne is the builder for deleting a single CreditGrant entity.
 type CreditGrantDeleteOne struct {
-	cgd *CreditGrantDelete
+	_d *CreditGrantDelete
 }
 
 // Where appends a list predicates to the CreditGrantDelete builder.
-func (cgdo *CreditGrantDeleteOne) Where(ps ...predicate.CreditGrant) *CreditGrantDeleteOne {
-	cgdo.cgd.mutation.Where(ps...)
-	return cgdo
+func (_d *CreditGrantDeleteOne) Where(ps ...predicate.CreditGrant) *CreditGrantDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (cgdo *CreditGrantDeleteOne) Exec(ctx context.Context) error {
-	n, err := cgdo.cgd.Exec(ctx)
+func (_d *CreditGrantDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (cgdo *CreditGrantDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cgdo *CreditGrantDeleteOne) ExecX(ctx context.Context) {
-	if err := cgdo.Exec(ctx); err != nil {
+func (_d *CreditGrantDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

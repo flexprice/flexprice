@@ -33,7 +33,6 @@ data:
       max_open_conns: {{ .Values.postgres.maxOpenConns }}
       max_idle_conns: {{ .Values.postgres.maxIdleConns }}
       conn_max_lifetime_minutes: {{ .Values.postgres.connMaxLifetimeMinutes }}
-      auto_migrate: {{ .Values.postgres.autoMigrate }}
     {{- if .Values.postgres.readerHost }}
       reader_host: {{ .Values.postgres.readerHost | quote }}
       reader_port: {{ .Values.postgres.readerPort }}

@@ -87,7 +87,7 @@ func (*SubscriptionPhase) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the SubscriptionPhase fields.
-func (sp *SubscriptionPhase) assignValues(columns []string, values []any) error {
+func (_m *SubscriptionPhase) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -97,55 +97,55 @@ func (sp *SubscriptionPhase) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				sp.ID = value.String
+				_m.ID = value.String
 			}
 		case subscriptionphase.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				sp.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case subscriptionphase.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				sp.Status = value.String
+				_m.Status = value.String
 			}
 		case subscriptionphase.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				sp.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case subscriptionphase.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				sp.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case subscriptionphase.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				sp.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case subscriptionphase.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				sp.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case subscriptionphase.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				sp.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case subscriptionphase.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &sp.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -153,23 +153,23 @@ func (sp *SubscriptionPhase) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				sp.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case subscriptionphase.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				sp.StartDate = value.Time
+				_m.StartDate = value.Time
 			}
 		case subscriptionphase.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				sp.EndDate = new(time.Time)
-				*sp.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		default:
-			sp.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -177,69 +177,69 @@ func (sp *SubscriptionPhase) assignValues(columns []string, values []any) error 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the SubscriptionPhase.
 // This includes values selected through modifiers, order, etc.
-func (sp *SubscriptionPhase) Value(name string) (ent.Value, error) {
-	return sp.selectValues.Get(name)
+func (_m *SubscriptionPhase) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QuerySubscription queries the "subscription" edge of the SubscriptionPhase entity.
-func (sp *SubscriptionPhase) QuerySubscription() *SubscriptionQuery {
-	return NewSubscriptionPhaseClient(sp.config).QuerySubscription(sp)
+func (_m *SubscriptionPhase) QuerySubscription() *SubscriptionQuery {
+	return NewSubscriptionPhaseClient(_m.config).QuerySubscription(_m)
 }
 
 // Update returns a builder for updating this SubscriptionPhase.
 // Note that you need to call SubscriptionPhase.Unwrap() before calling this method if this SubscriptionPhase
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (sp *SubscriptionPhase) Update() *SubscriptionPhaseUpdateOne {
-	return NewSubscriptionPhaseClient(sp.config).UpdateOne(sp)
+func (_m *SubscriptionPhase) Update() *SubscriptionPhaseUpdateOne {
+	return NewSubscriptionPhaseClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the SubscriptionPhase entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (sp *SubscriptionPhase) Unwrap() *SubscriptionPhase {
-	_tx, ok := sp.config.driver.(*txDriver)
+func (_m *SubscriptionPhase) Unwrap() *SubscriptionPhase {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: SubscriptionPhase is not a transactional entity")
 	}
-	sp.config.driver = _tx.drv
-	return sp
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (sp *SubscriptionPhase) String() string {
+func (_m *SubscriptionPhase) String() string {
 	var builder strings.Builder
 	builder.WriteString("SubscriptionPhase(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", sp.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(sp.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(sp.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(sp.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(sp.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(sp.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(sp.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(sp.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", sp.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(sp.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
 	builder.WriteString("start_date=")
-	builder.WriteString(sp.StartDate.Format(time.ANSIC))
+	builder.WriteString(_m.StartDate.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := sp.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}

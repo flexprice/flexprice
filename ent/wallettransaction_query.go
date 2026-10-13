@@ -28,40 +28,40 @@ type WalletTransactionQuery struct {
 }
 
 // Where adds a new predicate for the WalletTransactionQuery builder.
-func (wtq *WalletTransactionQuery) Where(ps ...predicate.WalletTransaction) *WalletTransactionQuery {
-	wtq.predicates = append(wtq.predicates, ps...)
-	return wtq
+func (_q *WalletTransactionQuery) Where(ps ...predicate.WalletTransaction) *WalletTransactionQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (wtq *WalletTransactionQuery) Limit(limit int) *WalletTransactionQuery {
-	wtq.ctx.Limit = &limit
-	return wtq
+func (_q *WalletTransactionQuery) Limit(limit int) *WalletTransactionQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (wtq *WalletTransactionQuery) Offset(offset int) *WalletTransactionQuery {
-	wtq.ctx.Offset = &offset
-	return wtq
+func (_q *WalletTransactionQuery) Offset(offset int) *WalletTransactionQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (wtq *WalletTransactionQuery) Unique(unique bool) *WalletTransactionQuery {
-	wtq.ctx.Unique = &unique
-	return wtq
+func (_q *WalletTransactionQuery) Unique(unique bool) *WalletTransactionQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (wtq *WalletTransactionQuery) Order(o ...wallettransaction.OrderOption) *WalletTransactionQuery {
-	wtq.order = append(wtq.order, o...)
-	return wtq
+func (_q *WalletTransactionQuery) Order(o ...wallettransaction.OrderOption) *WalletTransactionQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first WalletTransaction entity from the query.
 // Returns a *NotFoundError when no WalletTransaction was found.
-func (wtq *WalletTransactionQuery) First(ctx context.Context) (*WalletTransaction, error) {
-	nodes, err := wtq.Limit(1).All(setContextOp(ctx, wtq.ctx, ent.OpQueryFirst))
+func (_q *WalletTransactionQuery) First(ctx context.Context) (*WalletTransaction, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (wtq *WalletTransactionQuery) First(ctx context.Context) (*WalletTransactio
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) FirstX(ctx context.Context) *WalletTransaction {
-	node, err := wtq.First(ctx)
+func (_q *WalletTransactionQuery) FirstX(ctx context.Context) *WalletTransaction {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (wtq *WalletTransactionQuery) FirstX(ctx context.Context) *WalletTransactio
 
 // FirstID returns the first WalletTransaction ID from the query.
 // Returns a *NotFoundError when no WalletTransaction ID was found.
-func (wtq *WalletTransactionQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *WalletTransactionQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = wtq.Limit(1).IDs(setContextOp(ctx, wtq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (wtq *WalletTransactionQuery) FirstID(ctx context.Context) (id string, err 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) FirstIDX(ctx context.Context) string {
-	id, err := wtq.FirstID(ctx)
+func (_q *WalletTransactionQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (wtq *WalletTransactionQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single WalletTransaction entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one WalletTransaction entity is found.
 // Returns a *NotFoundError when no WalletTransaction entities are found.
-func (wtq *WalletTransactionQuery) Only(ctx context.Context) (*WalletTransaction, error) {
-	nodes, err := wtq.Limit(2).All(setContextOp(ctx, wtq.ctx, ent.OpQueryOnly))
+func (_q *WalletTransactionQuery) Only(ctx context.Context) (*WalletTransaction, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (wtq *WalletTransactionQuery) Only(ctx context.Context) (*WalletTransaction
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) OnlyX(ctx context.Context) *WalletTransaction {
-	node, err := wtq.Only(ctx)
+func (_q *WalletTransactionQuery) OnlyX(ctx context.Context) *WalletTransaction {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (wtq *WalletTransactionQuery) OnlyX(ctx context.Context) *WalletTransaction
 // OnlyID is like Only, but returns the only WalletTransaction ID in the query.
 // Returns a *NotSingularError when more than one WalletTransaction ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (wtq *WalletTransactionQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *WalletTransactionQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = wtq.Limit(2).IDs(setContextOp(ctx, wtq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (wtq *WalletTransactionQuery) OnlyID(ctx context.Context) (id string, err e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) OnlyIDX(ctx context.Context) string {
-	id, err := wtq.OnlyID(ctx)
+func (_q *WalletTransactionQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (wtq *WalletTransactionQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of WalletTransactions.
-func (wtq *WalletTransactionQuery) All(ctx context.Context) ([]*WalletTransaction, error) {
-	ctx = setContextOp(ctx, wtq.ctx, ent.OpQueryAll)
-	if err := wtq.prepareQuery(ctx); err != nil {
+func (_q *WalletTransactionQuery) All(ctx context.Context) ([]*WalletTransaction, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*WalletTransaction, *WalletTransactionQuery]()
-	return withInterceptors[[]*WalletTransaction](ctx, wtq, qr, wtq.inters)
+	return withInterceptors[[]*WalletTransaction](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) AllX(ctx context.Context) []*WalletTransaction {
-	nodes, err := wtq.All(ctx)
+func (_q *WalletTransactionQuery) AllX(ctx context.Context) []*WalletTransaction {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (wtq *WalletTransactionQuery) AllX(ctx context.Context) []*WalletTransactio
 }
 
 // IDs executes the query and returns a list of WalletTransaction IDs.
-func (wtq *WalletTransactionQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if wtq.ctx.Unique == nil && wtq.path != nil {
-		wtq.Unique(true)
+func (_q *WalletTransactionQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, wtq.ctx, ent.OpQueryIDs)
-	if err = wtq.Select(wallettransaction.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(wallettransaction.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) IDsX(ctx context.Context) []string {
-	ids, err := wtq.IDs(ctx)
+func (_q *WalletTransactionQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (wtq *WalletTransactionQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (wtq *WalletTransactionQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, wtq.ctx, ent.OpQueryCount)
-	if err := wtq.prepareQuery(ctx); err != nil {
+func (_q *WalletTransactionQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, wtq, querierCount[*WalletTransactionQuery](), wtq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*WalletTransactionQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) CountX(ctx context.Context) int {
-	count, err := wtq.Count(ctx)
+func (_q *WalletTransactionQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (wtq *WalletTransactionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (wtq *WalletTransactionQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, wtq.ctx, ent.OpQueryExist)
-	switch _, err := wtq.FirstID(ctx); {
+func (_q *WalletTransactionQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (wtq *WalletTransactionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (wtq *WalletTransactionQuery) ExistX(ctx context.Context) bool {
-	exist, err := wtq.Exist(ctx)
+func (_q *WalletTransactionQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (wtq *WalletTransactionQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the WalletTransactionQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (wtq *WalletTransactionQuery) Clone() *WalletTransactionQuery {
-	if wtq == nil {
+func (_q *WalletTransactionQuery) Clone() *WalletTransactionQuery {
+	if _q == nil {
 		return nil
 	}
 	return &WalletTransactionQuery{
-		config:     wtq.config,
-		ctx:        wtq.ctx.Clone(),
-		order:      append([]wallettransaction.OrderOption{}, wtq.order...),
-		inters:     append([]Interceptor{}, wtq.inters...),
-		predicates: append([]predicate.WalletTransaction{}, wtq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]wallettransaction.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.WalletTransaction{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  wtq.sql.Clone(),
-		path: wtq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (wtq *WalletTransactionQuery) Clone() *WalletTransactionQuery {
 //		GroupBy(wallettransaction.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (wtq *WalletTransactionQuery) GroupBy(field string, fields ...string) *WalletTransactionGroupBy {
-	wtq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &WalletTransactionGroupBy{build: wtq}
-	grbuild.flds = &wtq.ctx.Fields
+func (_q *WalletTransactionQuery) GroupBy(field string, fields ...string) *WalletTransactionGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &WalletTransactionGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = wallettransaction.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (wtq *WalletTransactionQuery) GroupBy(field string, fields ...string) *Wall
 //	client.WalletTransaction.Query().
 //		Select(wallettransaction.FieldTenantID).
 //		Scan(ctx, &v)
-func (wtq *WalletTransactionQuery) Select(fields ...string) *WalletTransactionSelect {
-	wtq.ctx.Fields = append(wtq.ctx.Fields, fields...)
-	sbuild := &WalletTransactionSelect{WalletTransactionQuery: wtq}
+func (_q *WalletTransactionQuery) Select(fields ...string) *WalletTransactionSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &WalletTransactionSelect{WalletTransactionQuery: _q}
 	sbuild.label = wallettransaction.Label
-	sbuild.flds, sbuild.scan = &wtq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a WalletTransactionSelect configured with the given aggregations.
-func (wtq *WalletTransactionQuery) Aggregate(fns ...AggregateFunc) *WalletTransactionSelect {
-	return wtq.Select().Aggregate(fns...)
+func (_q *WalletTransactionQuery) Aggregate(fns ...AggregateFunc) *WalletTransactionSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (wtq *WalletTransactionQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range wtq.inters {
+func (_q *WalletTransactionQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, wtq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range wtq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !wallettransaction.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if wtq.path != nil {
-		prev, err := wtq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		wtq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (wtq *WalletTransactionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*WalletTransaction, error) {
+func (_q *WalletTransactionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*WalletTransaction, error) {
 	var (
 		nodes = []*WalletTransaction{}
-		_spec = wtq.querySpec()
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*WalletTransaction).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &WalletTransaction{config: wtq.config}
+		node := &WalletTransaction{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, wtq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (wtq *WalletTransactionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	return nodes, nil
 }
 
-func (wtq *WalletTransactionQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := wtq.querySpec()
-	_spec.Node.Columns = wtq.ctx.Fields
-	if len(wtq.ctx.Fields) > 0 {
-		_spec.Unique = wtq.ctx.Unique != nil && *wtq.ctx.Unique
+func (_q *WalletTransactionQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, wtq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (wtq *WalletTransactionQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *WalletTransactionQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(wallettransaction.Table, wallettransaction.Columns, sqlgraph.NewFieldSpec(wallettransaction.FieldID, field.TypeString))
-	_spec.From = wtq.sql
-	if unique := wtq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if wtq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := wtq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, wallettransaction.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (wtq *WalletTransactionQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := wtq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := wtq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := wtq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := wtq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (wtq *WalletTransactionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (wtq *WalletTransactionQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(wtq.driver.Dialect())
+func (_q *WalletTransactionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(wallettransaction.Table)
-	columns := wtq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = wallettransaction.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if wtq.sql != nil {
-		selector = wtq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if wtq.ctx.Unique != nil && *wtq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range wtq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range wtq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := wtq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := wtq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type WalletTransactionGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (wtgb *WalletTransactionGroupBy) Aggregate(fns ...AggregateFunc) *WalletTransactionGroupBy {
-	wtgb.fns = append(wtgb.fns, fns...)
-	return wtgb
+func (_g *WalletTransactionGroupBy) Aggregate(fns ...AggregateFunc) *WalletTransactionGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (wtgb *WalletTransactionGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, wtgb.build.ctx, ent.OpQueryGroupBy)
-	if err := wtgb.build.prepareQuery(ctx); err != nil {
+func (_g *WalletTransactionGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WalletTransactionQuery, *WalletTransactionGroupBy](ctx, wtgb.build, wtgb, wtgb.build.inters, v)
+	return scanWithInterceptors[*WalletTransactionQuery, *WalletTransactionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (wtgb *WalletTransactionGroupBy) sqlScan(ctx context.Context, root *WalletTransactionQuery, v any) error {
+func (_g *WalletTransactionGroupBy) sqlScan(ctx context.Context, root *WalletTransactionQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(wtgb.fns))
-	for _, fn := range wtgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*wtgb.flds)+len(wtgb.fns))
-		for _, f := range *wtgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*wtgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := wtgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type WalletTransactionSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (wts *WalletTransactionSelect) Aggregate(fns ...AggregateFunc) *WalletTransactionSelect {
-	wts.fns = append(wts.fns, fns...)
-	return wts
+func (_s *WalletTransactionSelect) Aggregate(fns ...AggregateFunc) *WalletTransactionSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (wts *WalletTransactionSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, wts.ctx, ent.OpQuerySelect)
-	if err := wts.prepareQuery(ctx); err != nil {
+func (_s *WalletTransactionSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WalletTransactionQuery, *WalletTransactionSelect](ctx, wts.WalletTransactionQuery, wts, wts.inters, v)
+	return scanWithInterceptors[*WalletTransactionQuery, *WalletTransactionSelect](ctx, _s.WalletTransactionQuery, _s, _s.inters, v)
 }
 
-func (wts *WalletTransactionSelect) sqlScan(ctx context.Context, root *WalletTransactionQuery, v any) error {
+func (_s *WalletTransactionSelect) sqlScan(ctx context.Context, root *WalletTransactionQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(wts.fns))
-	for _, fn := range wts.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*wts.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (wts *WalletTransactionSelect) sqlScan(ctx context.Context, root *WalletTra
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := wts.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

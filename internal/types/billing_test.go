@@ -214,11 +214,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 4, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "start on anchor day advances one month",
+			name:               "start earlier on anchor day ends at that day's anchor time",
 			currentPeriodStart: time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC),
 			unit:               1,
-			want:               time.Date(2024, 5, 14, 12, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 4, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "start after anchor day in month advances to next month anchor",
@@ -228,11 +228,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 5, 14, 12, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "anchor equals start day-of-month advances one month",
+			name:               "anchor later on the start day is the first billing date",
 			currentPeriodStart: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
 			unit:               1,
-			want:               time.Date(2024, 2, 15, 12, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "anchor day 31 in 30-day month clamps",
@@ -242,11 +242,11 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 			want:               time.Date(2024, 4, 30, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			name:               "unit 2 before anchor snaps then next call uses two-month step",
+			name:               "unit 2 off-schedule start lands on the anchor's two-month schedule",
 			currentPeriodStart: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 			billingAnchor:      time.Date(2024, 1, 14, 0, 0, 0, 0, time.UTC),
 			unit:               2,
-			want:               time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC),
+			want:               time.Date(2024, 5, 14, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:                "subscription end before first anchor cliffs",
@@ -287,7 +287,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !first.Equal(time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC)) {
+		if !first.Equal(time.Date(2024, 5, 14, 0, 0, 0, 0, time.UTC)) {
 			t.Fatalf("first = %v", first)
 		}
 		second, err := NextBillingDate(&NextBillingDateParams{
@@ -299,7 +299,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := time.Date(2024, 6, 14, 0, 0, 0, 0, time.UTC)
+		want := time.Date(2024, 7, 14, 0, 0, 0, 0, time.UTC)
 		if !second.Equal(want) {
 			t.Errorf("second = %v, want %v", second, want)
 		}
@@ -371,5 +371,50 @@ func TestCalculateBillingPeriods_Monthly_FirstPeriodCliffedToSubscriptionEnd(t *
 	wantEnd := time.Date(2024, 4, 12, 0, 0, 0, 0, time.UTC)
 	if !periods[0].Start.Equal(start) || !periods[0].End.Equal(wantEnd) {
 		t.Errorf("first period = [%v, %v], want [%v, %v]", periods[0].Start, periods[0].End, start, wantEnd)
+	}
+}
+
+func TestLineItemGroupingValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   LineItemGrouping
+		wantErr bool
+	}{
+		{"per_charge_period", LineItemGroupingPerChargePeriod, false},
+		{"per_billing_period", LineItemGroupingPerBillingPeriod, false},
+		{"empty_is_allowed_and_defaults", LineItemGrouping(""), false},
+		{"unknown", LineItemGrouping("WEEKLY_ISH"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.value.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("Validate(%q) = nil, want error", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Validate(%q) = %v, want nil", tt.value, err)
+			}
+		})
+	}
+}
+
+func TestLineItemGroupingDefaultPreservesExistingBehavior(t *testing.T) {
+	if got := LineItemGrouping("").Default(); got != LineItemGroupingPerChargePeriod {
+		t.Errorf("Default() = %q, want %q (unset must keep per-charge-period fan-out)", got, LineItemGroupingPerChargePeriod)
+	}
+	if got := LineItemGroupingPerBillingPeriod.Default(); got != LineItemGroupingPerBillingPeriod {
+		t.Errorf("Default() = %q, want it to preserve an explicit value", got)
+	}
+}
+
+func TestLineItemGroupingMergesPerBillingPeriod(t *testing.T) {
+	if LineItemGroupingPerChargePeriod.MergesIntoBillingPeriod() {
+		t.Error("per-charge-period must not merge")
+	}
+	if !LineItemGroupingPerBillingPeriod.MergesIntoBillingPeriod() {
+		t.Error("per-billing-period must merge")
+	}
+	if LineItemGrouping("").MergesIntoBillingPeriod() {
+		t.Error("unset must not merge (defaults to today's behavior)")
 	}
 }

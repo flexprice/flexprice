@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -12,6 +13,11 @@ import (
 // InMemoryCheckoutSessionStore implements domainCheckout.Repository for tests.
 type InMemoryCheckoutSessionStore struct {
 	*InMemoryStore[*domainCheckout.CheckoutSession]
+
+	// claimMu makes MarkCompleted / MarkTerminal atomic. The real repository claims a
+	// session with a conditional UPDATE, so a double that read, checked and wrote without
+	// a lock would let two callers both win the claim — the opposite of what it stands in for.
+	claimMu sync.Mutex
 }
 
 func NewInMemoryCheckoutSessionStore() *InMemoryCheckoutSessionStore {
@@ -37,7 +43,65 @@ func (s *InMemoryCheckoutSessionStore) Create(ctx context.Context, session *doma
 }
 
 func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*domainCheckout.CheckoutSession, error) {
-	return s.InMemoryStore.Get(ctx, id)
+	stored, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Hand back a copy. The real repository returns a fresh row per read, and callers
+	// mutate what they read; sharing the stored record races every concurrent reader.
+	//
+	// The struct copy is not enough on its own — the JSONB fields are pointers, so two
+	// readers would still share whatever they point at.
+	session := *stored
+	if stored.ProviderResult != nil {
+		pr := *stored.ProviderResult
+		session.ProviderResult = &pr
+	}
+	if stored.Result != nil {
+		r := *stored.Result
+		session.Result = &r
+	}
+	if stored.PaymentProviderConfig != nil {
+		c := *stored.PaymentProviderConfig
+		session.PaymentProviderConfig = &c
+	}
+	if stored.Metadata != nil {
+		m := make(map[string]string, len(stored.Metadata))
+		for k, v := range stored.Metadata {
+			m[k] = v
+		}
+		session.Metadata = m
+	}
+	return &session, nil
+}
+
+func (s *InMemoryCheckoutSessionStore) GetByCheckoutInvoiceID(ctx context.Context, invoiceID string) (*domainCheckout.CheckoutSession, error) {
+	sessions, err := s.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CheckoutInvoiceIDs: []string{invoiceID},
+		CheckoutStatuses:   types.ActiveCheckoutStatuses(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+	return sessions[0], nil
+}
+
+func (s *InMemoryCheckoutSessionStore) GetSessionByPaymentID(ctx context.Context, paymentID string) (*domainCheckout.CheckoutSession, error) {
+	sessions, err := s.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CheckoutPaymentIDs: []string{paymentID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return nil, nil
+	}
+	return sessions[0], nil
 }
 
 func (s *InMemoryCheckoutSessionStore) Update(ctx context.Context, session *domainCheckout.CheckoutSession) error {
@@ -71,6 +135,36 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 		found := false
 		for _, st := range filter.CheckoutStatuses {
 			if session.CheckoutStatus == st {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.CheckoutInvoiceIDs) > 0 {
+		if session.CheckoutInvoiceID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutInvoiceIDs {
+			if *session.CheckoutInvoiceID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	if len(filter.CheckoutPaymentIDs) > 0 {
+		if session.CheckoutPaymentID == nil {
+			return false
+		}
+		found := false
+		for _, id := range filter.CheckoutPaymentIDs {
+			if *session.CheckoutPaymentID == id {
 				found = true
 				break
 			}
@@ -145,7 +239,10 @@ func (s *InMemoryCheckoutSessionStore) Delete(ctx context.Context, id string) er
 }
 
 func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessionID string, completedAt time.Time, providerResult *types.CheckoutProviderResult) (bool, error) {
-	session, err := s.InMemoryStore.Get(ctx, sessionID)
+	s.claimMu.Lock()
+	defer s.claimMu.Unlock()
+
+	session, err := s.Get(ctx, sessionID)
 	if err != nil {
 		return false, err
 	}
@@ -158,6 +255,31 @@ func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessio
 	if providerResult != nil {
 		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
 	}
+	if err := s.InMemoryStore.Update(ctx, sessionID, session); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *InMemoryCheckoutSessionStore) MarkTerminal(ctx context.Context, sessionID string, status types.CheckoutStatus, failureReason *string) (bool, error) {
+	if status != types.CheckoutStatusExpired && status != types.CheckoutStatusFailed {
+		return false, ierr.NewError("invalid terminal checkout status").
+			WithHint("MarkTerminal accepts expired or failed").
+			Mark(ierr.ErrValidation)
+	}
+
+	s.claimMu.Lock()
+	defer s.claimMu.Unlock()
+
+	session, err := s.Get(ctx, sessionID)
+	if err != nil {
+		return false, err
+	}
+	if session.CheckoutStatus != types.CheckoutStatusPending && session.CheckoutStatus != types.CheckoutStatusInitiated {
+		return false, nil
+	}
+	session.CheckoutStatus = status
+	session.FailureReason = failureReason
 	if err := s.InMemoryStore.Update(ctx, sessionID, session); err != nil {
 		return false, err
 	}

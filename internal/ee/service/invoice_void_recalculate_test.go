@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -60,6 +61,7 @@ func (s *InvoiceVoidRecalculateSuite) setupService() {
 
 	stores := s.GetStores()
 	s.service = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -85,6 +87,7 @@ func (s *InvoiceVoidRecalculateSuite) setupService() {
 		AuthRepo:                     stores.AuthRepo,
 		WalletRepo:                   s.walletRepo,
 		PaymentRepo:                  stores.PaymentRepo,
+		RefundRepo:                   stores.RefundRepo,
 		CreditNoteRepo:               stores.CreditNoteRepo,
 		CouponRepo:                   stores.CouponRepo,
 		CouponAssociationRepo:        stores.CouponAssociationRepo,
@@ -329,8 +332,19 @@ func (s *InvoiceVoidRecalculateSuite) refundTxns(walletID string) []*wallet.Tran
 }
 
 // walletsByCustomer returns all prepaid wallets for the test customer.
+// refundRows returns the settlement ledger rows written for an invoice.
+func (s *InvoiceVoidRecalculateSuite) refundRows(invoiceID string) []*refund.Refund {
+	rows, err := s.GetStores().RefundRepo.List(s.GetContext(), &types.RefundFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		InvoiceIDs:  []string{invoiceID},
+	})
+	s.NoError(err)
+	return rows
+}
+
 func (s *InvoiceVoidRecalculateSuite) walletsByCustomer() []*dto.WalletResponse {
 	svc := NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      s.GetStores().CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -395,7 +409,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_Validation() {
 			s.setupTestData()
 
 			id := tt.setup()
-			err := s.service.VoidInvoice(s.GetContext(), id, dto.InvoiceVoidRequest{})
+			_, err := s.service.VoidInvoice(s.GetContext(), id, dto.InvoiceVoidRequest{})
 			s.Error(err)
 			s.Contains(err.Error(), tt.expectedError)
 		})
@@ -450,7 +464,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_ZeroRefund() {
 			}
 			s.NoError(s.invoiceRepo.CreateWithLineItems(s.GetContext(), inv))
 
-			err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+			_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 			s.NoError(err)
 
 			updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -476,7 +490,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_RefundWithExistingWallet()
 	prepaidCredits := decimal.NewFromFloat(20.00)
 	inv := s.buildFinalizedInvoice("inv_refund_existing", amountPaid, prepaidCredits, types.PaymentStatusSucceeded)
 
-	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -502,8 +516,13 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_RefundWithExistingWallet()
 	s.Equal(types.TransactionReasonInvoiceVoidRefund, txns[0].TransactionReason)
 	s.True(expectedRefund.Equal(txns[0].CreditAmount),
 		"expected txn credit amount=%s, got=%s", expectedRefund, txns[0].CreditAmount)
-	// Idempotency key must equal the invoice ID
-	s.Equal(inv.ID, txns[0].IdempotencyKey)
+	// The top-up is now keyed on the refund row that settled it, not the invoice.
+	refunds := s.refundRows(inv.ID)
+	s.Len(refunds, 1)
+	s.Equal(refunds[0].ID, txns[0].IdempotencyKey)
+	s.Equal(types.RefundStatusSucceeded, refunds[0].RefundStatus)
+	s.Equal(types.RefundDestinationWallet, refunds[0].RefundDestination)
+	s.True(expectedRefund.Equal(refunds[0].SettledAmount))
 }
 
 func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_RefundCreatesNewWallet() {
@@ -513,7 +532,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_RefundCreatesNewWallet() {
 	amountPaid := decimal.NewFromFloat(100.00)
 	inv := s.buildFinalizedInvoice("inv_new_wallet", amountPaid, decimal.Zero, types.PaymentStatusSucceeded)
 
-	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -542,7 +561,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PrepaidCreditsOnlyRefund()
 	prepaidCredits := decimal.NewFromFloat(75.00)
 	inv := s.buildFinalizedInvoice("inv_prepaid_only", decimal.Zero, prepaidCredits, types.PaymentStatusPending)
 
-	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -573,7 +592,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PartiallyRefundedStatus() 
 	stored.RefundedAmount = prevRefunded
 	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
 
-	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -605,7 +624,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_PartiallyRefundedDoesNotOv
 	stored.RefundedAmount = prevRefunded
 	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
 
-	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -642,7 +661,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_FullyRefundedValueYieldsNo
 	stored.RefundedAmount = amountPaid
 	s.NoError(s.invoiceRepo.Update(s.GetContext(), stored))
 
-	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -685,7 +704,7 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_ConcurrentRefundDoesNotOve
 	}
 	defer func() { s.invoiceRepo.BeforeGetForUpdate = nil }()
 
-	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	updated, err := s.invoiceRepo.Get(s.GetContext(), inv.ID)
@@ -712,7 +731,8 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_TakesRowLockBeforeRefund()
 	s.buildPrepaidWallet("wallet_lock_order", decimal.Zero)
 	s.invoiceRepo.ResetInvoiceAccessLog(inv.ID)
 
-	s.NoError(s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{}))
+	_, voidErr := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	s.NoError(voidErr)
 
 	s.Contains(s.invoiceRepo.InvoiceAccessLog(inv.ID), "get_for_update",
 		"void must re-read the invoice under a row lock inside the transaction")
@@ -722,11 +742,11 @@ func (s *InvoiceVoidRecalculateSuite) TestVoidInvoice_Idempotency() {
 	inv := s.buildFinalizedInvoice("inv_idem", decimal.Zero, decimal.Zero, types.PaymentStatusPending)
 
 	// First void succeeds
-	err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err := s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.NoError(err)
 
 	// Second void on already-voided invoice must fail
-	err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
+	_, err = s.service.VoidInvoice(s.GetContext(), inv.ID, dto.InvoiceVoidRequest{})
 	s.Error(err)
 	s.Contains(err.Error(), "not allowed")
 }

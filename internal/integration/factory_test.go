@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -651,4 +652,267 @@ func TestFactory_GetStorageProvider_RepositoryFailure_PreservesOriginalErrorKind
 	// retry/error-handling logic.
 	require.False(t, ierr.IsNotFound(err), "database failure was incorrectly reclassified as NotFound: %v", err)
 	require.ErrorIs(t, err, dbErr)
+}
+
+// GetStorageProviderExport must resolve a BYOB connection's DESTINATION from the
+// per-run job_config passed in, not the connection's sync_config row. The seeded
+// connection records bucket "test-bucket"/us-east-1; the export run targets a
+// different bucket/region, which must win.
+func TestFactory_GetStorageProviderExport_BYOB_UsesJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+
+	conn := seedS3Connection(ctx, t, connRepo, encSvc) // sync_config bucket=test-bucket region=us-east-1
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:     "run-bucket",
+		Region:     "ap-south-1",
+		Encryption: types.S3EncryptionTypeAES256,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderS3, got.Provider())
+	require.Contains(t, got.FileURL("k.csv"), "run-bucket",
+		"BYOB export must write to the job_config bucket, not the connection sync_config bucket")
+	require.NotContains(t, got.FileURL("k.csv"), "test-bucket")
+}
+
+func seedS3ConnectionKeysOnly(ctx context.Context, t *testing.T, store *testutil.InMemoryConnectionStore, encSvc security.EncryptionService) *connection.Connection {
+	t.Helper()
+	accessKey, err := encSvc.Encrypt("AKIAFAKEACCESSKEY")
+	require.NoError(t, err)
+	secretKey, err := encSvc.Encrypt("fake-secret-access-key")
+	require.NoError(t, err)
+	conn := &connection.Connection{
+		ID:           "conn_s3_keys_only",
+		Name:         "Keys only",
+		ProviderType: types.SecretProviderS3,
+		EncryptedSecretData: types.ConnectionMetadata{
+			S3: &types.S3ConnectionMetadata{
+				AWSAccessKeyID:     accessKey,
+				AWSSecretAccessKey: secretKey,
+			},
+		},
+		SyncConfig:    nil,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID: types.GetTenantID(ctx),
+			Status:   types.StatusPublished,
+		},
+	}
+	require.NoError(t, store.Create(ctx, conn))
+	return conn
+}
+
+func TestFactory_GetStorageProviderExport_KeysOnly_UsesJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+	conn := seedS3ConnectionKeysOnly(ctx, t, connRepo, encSvc)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:     "run-bucket",
+		Region:     "ap-south-1",
+		Encryption: types.S3EncryptionTypeAES256,
+	})
+	require.NoError(t, err)
+	require.Contains(t, got.FileURL("k.csv"), "run-bucket")
+}
+
+func TestFactory_GetStorageProviderForConnection_KeysOnly_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+	conn := seedS3ConnectionKeysOnly(ctx, t, connRepo, encSvc)
+
+	_, err := factory.GetStorageProviderForConnection(ctx, conn)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+}
+
+func TestFactory_GetStorageProviderExport_NoStorageNoKeys_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, _ := buildStorageTestFactory(connRepo)
+	conn := &connection.Connection{
+		ID:            "conn_s3_empty",
+		ProviderType:  types.SecretProviderS3,
+		SyncConfig:    nil,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.BaseModel{TenantID: types.GetTenantID(ctx), Status: types.StatusPublished},
+	}
+	require.NoError(t, connRepo.Create(ctx, conn))
+
+	_, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:     "run-bucket",
+		Region:     "ap-south-1",
+		Encryption: types.S3EncryptionTypeAES256,
+	})
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+}
+
+// A BYOB export whose job_config carries an empty bucket or region must fail loud
+// at construction rather than reaching the S3 SDK as "A region must be set".
+func TestFactory_GetStorageProviderExport_ManagedGCS_EmptyRegion_Succeeds(t *testing.T) {
+	stubAmbientGCPCredentials(t)
+
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceGCSExports.Bucket = "flexprice-managed-bucket"
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedGCSConnection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket: "flexprice-managed-bucket",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, storage.ProviderGCS, got.Provider())
+}
+
+func TestFactory_GetStorageProviderExport_BYOB_EmptyDestination_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+
+	conn := seedS3Connection(ctx, t, connRepo, encSvc)
+
+	_, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:     "run-bucket",
+		Encryption: types.S3EncryptionTypeAES256,
+	})
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+// Managed exports must ignore the per-run job_config destination and force the
+// platform/connection bucket — the run cannot redirect a managed export elsewhere.
+func TestFactory_GetStorageProviderExport_Managed_IgnoresJobConfigDestination(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "platform-config-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo) // no recorded bucket
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:     "attacker-bucket",
+		Region:     "eu-west-1",
+		Encryption: types.S3EncryptionTypeAES256,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Contains(t, got.FileURL("k.csv"), "platform-config-bucket",
+		"managed export must ignore job_config destination and use platform config")
+	require.NotContains(t, got.FileURL("k.csv"), "attacker-bucket")
+}
+
+func TestFactory_GetStorageProviderExport_MissingConnectionID_ReturnsValidationError(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	factory, _ := buildStorageTestFactory(testutil.NewInMemoryConnectionStore())
+
+	_, err := factory.GetStorageProviderExport(ctx, "", &types.S3JobConfig{Bucket: "b", Region: "r", Encryption: types.S3EncryptionTypeAES256})
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+func TestFactory_GetStorageProviderExport_BYOB_UsesJobConfigEndpoint(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+	factory, encSvc := buildStorageTestFactory(connRepo)
+	conn := seedS3ConnectionKeysOnly(ctx, t, connRepo, encSvc)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:       "krutrim-metering-billing",
+		Region:       "us-east-1",
+		Encryption:   types.S3EncryptionTypeAES256,
+		EndpointURL:  "https://blr1.kos.olakrutrimsvc.com",
+		UsePathStyle: true,
+	})
+	require.NoError(t, err)
+
+	url, err := got.PresignGet(ctx, "k.csv", time.Minute)
+	require.NoError(t, err)
+	require.Contains(t, url, "blr1.kos.olakrutrimsvc.com",
+		"BYOB export must send to job_config.endpoint_url, not AWS")
+	require.Contains(t, url, "krutrim-metering-billing",
+		"path-style addressing must keep the bucket in the URL path")
+	require.NotContains(t, url, "amazonaws.com")
+}
+
+func TestFactory_GetStorageProviderExport_Managed_IgnoresJobConfigEndpoint(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	connRepo := testutil.NewInMemoryConnectionStore()
+
+	cfg := &config.Configuration{
+		Secrets: config.SecretsConfig{EncryptionKey: "test-encryption-key-for-unit-tests-only"},
+	}
+	cfg.FlexpriceS3Exports.Bucket = "platform-config-bucket"
+	cfg.FlexpriceS3Exports.Region = "ap-south-1"
+	cfg.FlexpriceS3Exports.CredentialSource = config.CredentialSourceAmbient
+
+	log := logger.NewNoopLogger()
+	encSvc, err := security.NewEncryptionService(cfg, log)
+	require.NoError(t, err)
+	factory := buildStorageTestFactoryWithRepo(connRepo, cfg, log, encSvc)
+	conn := seedFlexpriceManagedS3Connection(ctx, t, connRepo)
+
+	got, err := factory.GetStorageProviderExport(ctx, conn.ID, &types.S3JobConfig{
+		Bucket:       "attacker-bucket",
+		Region:       "us-east-1",
+		EndpointURL:  "https://blr1.kos.olakrutrimsvc.com",
+		UsePathStyle: true,
+	})
+	require.NoError(t, err)
+	require.Contains(t, got.FileURL("k.csv"), "platform-config-bucket")
+	require.NotContains(t, got.FileURL("k.csv"), "attacker-bucket")
+}
+
+func TestFactory_GetRefundProvider(t *testing.T) {
+	ctx := buildFactoryTestContext()
+	factory, _ := buildStorageTestFactory(testutil.NewInMemoryConnectionStore())
+
+	supported := []types.PaymentGatewayType{
+		types.PaymentGatewayTypeRazorpay,
+		types.PaymentGatewayTypeChargebee,
+	}
+	for _, gateway := range supported {
+		provider, err := factory.GetRefundProvider(ctx, gateway)
+		require.NoError(t, err, "gateway %s", gateway)
+		require.NotNil(t, provider, "gateway %s", gateway)
+	}
+
+	// Moyasar refunds only in full, so it has no v1 adapter.
+	unsupported := []types.PaymentGatewayType{
+		types.PaymentGatewayTypeMoyasar,
+		types.PaymentGatewayTypeStripe,
+		types.PaymentGatewayTypeNomod,
+		types.PaymentGatewayTypePaddle,
+		types.PaymentGatewayTypeWhop,
+	}
+	for _, gateway := range unsupported {
+		_, err := factory.GetRefundProvider(ctx, gateway)
+		require.Error(t, err, "gateway %s", gateway)
+		require.True(t, ierr.IsNotImplemented(err), "gateway %s: want ErrNotImplemented, got %v", gateway, err)
+	}
 }

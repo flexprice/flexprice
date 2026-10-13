@@ -30,44 +30,44 @@ type SubscriptionScheduleQuery struct {
 }
 
 // Where adds a new predicate for the SubscriptionScheduleQuery builder.
-func (ssq *SubscriptionScheduleQuery) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleQuery {
-	ssq.predicates = append(ssq.predicates, ps...)
-	return ssq
+func (_q *SubscriptionScheduleQuery) Where(ps ...predicate.SubscriptionSchedule) *SubscriptionScheduleQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (ssq *SubscriptionScheduleQuery) Limit(limit int) *SubscriptionScheduleQuery {
-	ssq.ctx.Limit = &limit
-	return ssq
+func (_q *SubscriptionScheduleQuery) Limit(limit int) *SubscriptionScheduleQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (ssq *SubscriptionScheduleQuery) Offset(offset int) *SubscriptionScheduleQuery {
-	ssq.ctx.Offset = &offset
-	return ssq
+func (_q *SubscriptionScheduleQuery) Offset(offset int) *SubscriptionScheduleQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (ssq *SubscriptionScheduleQuery) Unique(unique bool) *SubscriptionScheduleQuery {
-	ssq.ctx.Unique = &unique
-	return ssq
+func (_q *SubscriptionScheduleQuery) Unique(unique bool) *SubscriptionScheduleQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (ssq *SubscriptionScheduleQuery) Order(o ...subscriptionschedule.OrderOption) *SubscriptionScheduleQuery {
-	ssq.order = append(ssq.order, o...)
-	return ssq
+func (_q *SubscriptionScheduleQuery) Order(o ...subscriptionschedule.OrderOption) *SubscriptionScheduleQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // QuerySubscription chains the current query on the "subscription" edge.
-func (ssq *SubscriptionScheduleQuery) QuerySubscription() *SubscriptionQuery {
-	query := (&SubscriptionClient{config: ssq.config}).Query()
+func (_q *SubscriptionScheduleQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := ssq.prepareQuery(ctx); err != nil {
+		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
 		}
-		selector := ssq.sqlQuery(ctx)
+		selector := _q.sqlQuery(ctx)
 		if err := selector.Err(); err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func (ssq *SubscriptionScheduleQuery) QuerySubscription() *SubscriptionQuery {
 			sqlgraph.To(subscription.Table, subscription.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionschedule.SubscriptionTable, subscriptionschedule.SubscriptionColumn),
 		)
-		fromU = sqlgraph.SetNeighbors(ssq.driver.Dialect(), step)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
 	}
 	return query
@@ -84,8 +84,8 @@ func (ssq *SubscriptionScheduleQuery) QuerySubscription() *SubscriptionQuery {
 
 // First returns the first SubscriptionSchedule entity from the query.
 // Returns a *NotFoundError when no SubscriptionSchedule was found.
-func (ssq *SubscriptionScheduleQuery) First(ctx context.Context) (*SubscriptionSchedule, error) {
-	nodes, err := ssq.Limit(1).All(setContextOp(ctx, ssq.ctx, ent.OpQueryFirst))
+func (_q *SubscriptionScheduleQuery) First(ctx context.Context) (*SubscriptionSchedule, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +96,8 @@ func (ssq *SubscriptionScheduleQuery) First(ctx context.Context) (*SubscriptionS
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) FirstX(ctx context.Context) *SubscriptionSchedule {
-	node, err := ssq.First(ctx)
+func (_q *SubscriptionScheduleQuery) FirstX(ctx context.Context) *SubscriptionSchedule {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,9 +106,9 @@ func (ssq *SubscriptionScheduleQuery) FirstX(ctx context.Context) *SubscriptionS
 
 // FirstID returns the first SubscriptionSchedule ID from the query.
 // Returns a *NotFoundError when no SubscriptionSchedule ID was found.
-func (ssq *SubscriptionScheduleQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionScheduleQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = ssq.Limit(1).IDs(setContextOp(ctx, ssq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -119,8 +119,8 @@ func (ssq *SubscriptionScheduleQuery) FirstID(ctx context.Context) (id string, e
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) FirstIDX(ctx context.Context) string {
-	id, err := ssq.FirstID(ctx)
+func (_q *SubscriptionScheduleQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -130,8 +130,8 @@ func (ssq *SubscriptionScheduleQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single SubscriptionSchedule entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one SubscriptionSchedule entity is found.
 // Returns a *NotFoundError when no SubscriptionSchedule entities are found.
-func (ssq *SubscriptionScheduleQuery) Only(ctx context.Context) (*SubscriptionSchedule, error) {
-	nodes, err := ssq.Limit(2).All(setContextOp(ctx, ssq.ctx, ent.OpQueryOnly))
+func (_q *SubscriptionScheduleQuery) Only(ctx context.Context) (*SubscriptionSchedule, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -146,8 +146,8 @@ func (ssq *SubscriptionScheduleQuery) Only(ctx context.Context) (*SubscriptionSc
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) OnlyX(ctx context.Context) *SubscriptionSchedule {
-	node, err := ssq.Only(ctx)
+func (_q *SubscriptionScheduleQuery) OnlyX(ctx context.Context) *SubscriptionSchedule {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -157,9 +157,9 @@ func (ssq *SubscriptionScheduleQuery) OnlyX(ctx context.Context) *SubscriptionSc
 // OnlyID is like Only, but returns the only SubscriptionSchedule ID in the query.
 // Returns a *NotSingularError when more than one SubscriptionSchedule ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (ssq *SubscriptionScheduleQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *SubscriptionScheduleQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = ssq.Limit(2).IDs(setContextOp(ctx, ssq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -174,8 +174,8 @@ func (ssq *SubscriptionScheduleQuery) OnlyID(ctx context.Context) (id string, er
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) OnlyIDX(ctx context.Context) string {
-	id, err := ssq.OnlyID(ctx)
+func (_q *SubscriptionScheduleQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -183,18 +183,18 @@ func (ssq *SubscriptionScheduleQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of SubscriptionSchedules.
-func (ssq *SubscriptionScheduleQuery) All(ctx context.Context) ([]*SubscriptionSchedule, error) {
-	ctx = setContextOp(ctx, ssq.ctx, ent.OpQueryAll)
-	if err := ssq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionScheduleQuery) All(ctx context.Context) ([]*SubscriptionSchedule, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*SubscriptionSchedule, *SubscriptionScheduleQuery]()
-	return withInterceptors[[]*SubscriptionSchedule](ctx, ssq, qr, ssq.inters)
+	return withInterceptors[[]*SubscriptionSchedule](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) AllX(ctx context.Context) []*SubscriptionSchedule {
-	nodes, err := ssq.All(ctx)
+func (_q *SubscriptionScheduleQuery) AllX(ctx context.Context) []*SubscriptionSchedule {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -202,20 +202,20 @@ func (ssq *SubscriptionScheduleQuery) AllX(ctx context.Context) []*SubscriptionS
 }
 
 // IDs executes the query and returns a list of SubscriptionSchedule IDs.
-func (ssq *SubscriptionScheduleQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if ssq.ctx.Unique == nil && ssq.path != nil {
-		ssq.Unique(true)
+func (_q *SubscriptionScheduleQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, ssq.ctx, ent.OpQueryIDs)
-	if err = ssq.Select(subscriptionschedule.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(subscriptionschedule.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) IDsX(ctx context.Context) []string {
-	ids, err := ssq.IDs(ctx)
+func (_q *SubscriptionScheduleQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -223,17 +223,17 @@ func (ssq *SubscriptionScheduleQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (ssq *SubscriptionScheduleQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, ssq.ctx, ent.OpQueryCount)
-	if err := ssq.prepareQuery(ctx); err != nil {
+func (_q *SubscriptionScheduleQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, ssq, querierCount[*SubscriptionScheduleQuery](), ssq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*SubscriptionScheduleQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) CountX(ctx context.Context) int {
-	count, err := ssq.Count(ctx)
+func (_q *SubscriptionScheduleQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -241,9 +241,9 @@ func (ssq *SubscriptionScheduleQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (ssq *SubscriptionScheduleQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, ssq.ctx, ent.OpQueryExist)
-	switch _, err := ssq.FirstID(ctx); {
+func (_q *SubscriptionScheduleQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -254,8 +254,8 @@ func (ssq *SubscriptionScheduleQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (ssq *SubscriptionScheduleQuery) ExistX(ctx context.Context) bool {
-	exist, err := ssq.Exist(ctx)
+func (_q *SubscriptionScheduleQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -264,32 +264,32 @@ func (ssq *SubscriptionScheduleQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the SubscriptionScheduleQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (ssq *SubscriptionScheduleQuery) Clone() *SubscriptionScheduleQuery {
-	if ssq == nil {
+func (_q *SubscriptionScheduleQuery) Clone() *SubscriptionScheduleQuery {
+	if _q == nil {
 		return nil
 	}
 	return &SubscriptionScheduleQuery{
-		config:           ssq.config,
-		ctx:              ssq.ctx.Clone(),
-		order:            append([]subscriptionschedule.OrderOption{}, ssq.order...),
-		inters:           append([]Interceptor{}, ssq.inters...),
-		predicates:       append([]predicate.SubscriptionSchedule{}, ssq.predicates...),
-		withSubscription: ssq.withSubscription.Clone(),
+		config:           _q.config,
+		ctx:              _q.ctx.Clone(),
+		order:            append([]subscriptionschedule.OrderOption{}, _q.order...),
+		inters:           append([]Interceptor{}, _q.inters...),
+		predicates:       append([]predicate.SubscriptionSchedule{}, _q.predicates...),
+		withSubscription: _q.withSubscription.Clone(),
 		// clone intermediate query.
-		sql:  ssq.sql.Clone(),
-		path: ssq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
 // WithSubscription tells the query-builder to eager-load the nodes that are connected to
 // the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
-func (ssq *SubscriptionScheduleQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionScheduleQuery {
-	query := (&SubscriptionClient{config: ssq.config}).Query()
+func (_q *SubscriptionScheduleQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionScheduleQuery {
+	query := (&SubscriptionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	ssq.withSubscription = query
-	return ssq
+	_q.withSubscription = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -306,10 +306,10 @@ func (ssq *SubscriptionScheduleQuery) WithSubscription(opts ...func(*Subscriptio
 //		GroupBy(subscriptionschedule.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (ssq *SubscriptionScheduleQuery) GroupBy(field string, fields ...string) *SubscriptionScheduleGroupBy {
-	ssq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SubscriptionScheduleGroupBy{build: ssq}
-	grbuild.flds = &ssq.ctx.Fields
+func (_q *SubscriptionScheduleQuery) GroupBy(field string, fields ...string) *SubscriptionScheduleGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &SubscriptionScheduleGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = subscriptionschedule.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -327,58 +327,58 @@ func (ssq *SubscriptionScheduleQuery) GroupBy(field string, fields ...string) *S
 //	client.SubscriptionSchedule.Query().
 //		Select(subscriptionschedule.FieldTenantID).
 //		Scan(ctx, &v)
-func (ssq *SubscriptionScheduleQuery) Select(fields ...string) *SubscriptionScheduleSelect {
-	ssq.ctx.Fields = append(ssq.ctx.Fields, fields...)
-	sbuild := &SubscriptionScheduleSelect{SubscriptionScheduleQuery: ssq}
+func (_q *SubscriptionScheduleQuery) Select(fields ...string) *SubscriptionScheduleSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &SubscriptionScheduleSelect{SubscriptionScheduleQuery: _q}
 	sbuild.label = subscriptionschedule.Label
-	sbuild.flds, sbuild.scan = &ssq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a SubscriptionScheduleSelect configured with the given aggregations.
-func (ssq *SubscriptionScheduleQuery) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleSelect {
-	return ssq.Select().Aggregate(fns...)
+func (_q *SubscriptionScheduleQuery) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (ssq *SubscriptionScheduleQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range ssq.inters {
+func (_q *SubscriptionScheduleQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, ssq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range ssq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !subscriptionschedule.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if ssq.path != nil {
-		prev, err := ssq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		ssq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (ssq *SubscriptionScheduleQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionSchedule, error) {
+func (_q *SubscriptionScheduleQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionSchedule, error) {
 	var (
 		nodes       = []*SubscriptionSchedule{}
-		_spec       = ssq.querySpec()
+		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
-			ssq.withSubscription != nil,
+			_q.withSubscription != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SubscriptionSchedule).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &SubscriptionSchedule{config: ssq.config}
+		node := &SubscriptionSchedule{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -386,14 +386,14 @@ func (ssq *SubscriptionScheduleQuery) sqlAll(ctx context.Context, hooks ...query
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, ssq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := ssq.withSubscription; query != nil {
-		if err := ssq.loadSubscription(ctx, query, nodes, nil,
+	if query := _q.withSubscription; query != nil {
+		if err := _q.loadSubscription(ctx, query, nodes, nil,
 			func(n *SubscriptionSchedule, e *Subscription) { n.Edges.Subscription = e }); err != nil {
 			return nil, err
 		}
@@ -401,7 +401,7 @@ func (ssq *SubscriptionScheduleQuery) sqlAll(ctx context.Context, hooks ...query
 	return nodes, nil
 }
 
-func (ssq *SubscriptionScheduleQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionSchedule, init func(*SubscriptionSchedule), assign func(*SubscriptionSchedule, *Subscription)) error {
+func (_q *SubscriptionScheduleQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionSchedule, init func(*SubscriptionSchedule), assign func(*SubscriptionSchedule, *Subscription)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*SubscriptionSchedule)
 	for i := range nodes {
@@ -431,24 +431,24 @@ func (ssq *SubscriptionScheduleQuery) loadSubscription(ctx context.Context, quer
 	return nil
 }
 
-func (ssq *SubscriptionScheduleQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := ssq.querySpec()
-	_spec.Node.Columns = ssq.ctx.Fields
-	if len(ssq.ctx.Fields) > 0 {
-		_spec.Unique = ssq.ctx.Unique != nil && *ssq.ctx.Unique
+func (_q *SubscriptionScheduleQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, ssq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (ssq *SubscriptionScheduleQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *SubscriptionScheduleQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(subscriptionschedule.Table, subscriptionschedule.Columns, sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString))
-	_spec.From = ssq.sql
-	if unique := ssq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if ssq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := ssq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionschedule.FieldID)
 		for i := range fields {
@@ -456,24 +456,24 @@ func (ssq *SubscriptionScheduleQuery) querySpec() *sqlgraph.QuerySpec {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
-		if ssq.withSubscription != nil {
+		if _q.withSubscription != nil {
 			_spec.Node.AddColumnOnce(subscriptionschedule.FieldSubscriptionID)
 		}
 	}
-	if ps := ssq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := ssq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := ssq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := ssq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -483,33 +483,33 @@ func (ssq *SubscriptionScheduleQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (ssq *SubscriptionScheduleQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(ssq.driver.Dialect())
+func (_q *SubscriptionScheduleQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(subscriptionschedule.Table)
-	columns := ssq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = subscriptionschedule.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if ssq.sql != nil {
-		selector = ssq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if ssq.ctx.Unique != nil && *ssq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range ssq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range ssq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := ssq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := ssq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -522,41 +522,41 @@ type SubscriptionScheduleGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (ssgb *SubscriptionScheduleGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleGroupBy {
-	ssgb.fns = append(ssgb.fns, fns...)
-	return ssgb
+func (_g *SubscriptionScheduleGroupBy) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (ssgb *SubscriptionScheduleGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, ssgb.build.ctx, ent.OpQueryGroupBy)
-	if err := ssgb.build.prepareQuery(ctx); err != nil {
+func (_g *SubscriptionScheduleGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionScheduleQuery, *SubscriptionScheduleGroupBy](ctx, ssgb.build, ssgb, ssgb.build.inters, v)
+	return scanWithInterceptors[*SubscriptionScheduleQuery, *SubscriptionScheduleGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (ssgb *SubscriptionScheduleGroupBy) sqlScan(ctx context.Context, root *SubscriptionScheduleQuery, v any) error {
+func (_g *SubscriptionScheduleGroupBy) sqlScan(ctx context.Context, root *SubscriptionScheduleQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(ssgb.fns))
-	for _, fn := range ssgb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*ssgb.flds)+len(ssgb.fns))
-		for _, f := range *ssgb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*ssgb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := ssgb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -570,27 +570,27 @@ type SubscriptionScheduleSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (sss *SubscriptionScheduleSelect) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleSelect {
-	sss.fns = append(sss.fns, fns...)
-	return sss
+func (_s *SubscriptionScheduleSelect) Aggregate(fns ...AggregateFunc) *SubscriptionScheduleSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (sss *SubscriptionScheduleSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, sss.ctx, ent.OpQuerySelect)
-	if err := sss.prepareQuery(ctx); err != nil {
+func (_s *SubscriptionScheduleSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SubscriptionScheduleQuery, *SubscriptionScheduleSelect](ctx, sss.SubscriptionScheduleQuery, sss, sss.inters, v)
+	return scanWithInterceptors[*SubscriptionScheduleQuery, *SubscriptionScheduleSelect](ctx, _s.SubscriptionScheduleQuery, _s, _s.inters, v)
 }
 
-func (sss *SubscriptionScheduleSelect) sqlScan(ctx context.Context, root *SubscriptionScheduleQuery, v any) error {
+func (_s *SubscriptionScheduleSelect) sqlScan(ctx context.Context, root *SubscriptionScheduleQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(sss.fns))
-	for _, fn := range sss.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*sss.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -598,7 +598,7 @@ func (sss *SubscriptionScheduleSelect) sqlScan(ctx context.Context, root *Subscr
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := sss.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

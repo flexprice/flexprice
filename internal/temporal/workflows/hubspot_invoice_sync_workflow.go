@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -19,7 +20,7 @@ const (
 // Steps:
 // 1. Sleep for 5 seconds to allow invoice to be committed to database
 // 2. Sync invoice to HubSpot (create invoice, line items, associate to contact, update properties, set status)
-func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoiceSyncWorkflowInput) error {
+func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting HubSpot invoice sync workflow",
@@ -32,6 +33,14 @@ func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoic
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	var syncErr error
+	defer func() {
+		if syncErr == nil {
+			syncErr = err
+		}
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderHubSpot, input.InvoiceID, input.TenantID, input.EnvironmentID, syncErr)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -47,7 +56,7 @@ func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoic
 		"invoice_id", input.InvoiceID,
 		"wait_seconds", 5)
 
-	err := workflow.Sleep(ctx, 5*time.Second)
+	err = workflow.Sleep(ctx, 5*time.Second)
 	if err != nil {
 		logger.Error("Sleep was interrupted", "error", err)
 		return err
@@ -65,6 +74,7 @@ func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoic
 			"invoice_id", input.InvoiceID)
 		// Log error but don't fail the workflow - invoice sync is not critical
 		logger.Warn("Continuing despite invoice sync failure")
+		syncErr = err
 		return nil // Return nil to not fail the workflow
 	}
 

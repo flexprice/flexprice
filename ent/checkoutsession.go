@@ -94,7 +94,7 @@ func (*CheckoutSession) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CheckoutSession fields.
-func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
+func (_m *CheckoutSession) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -104,93 +104,93 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				cs.ID = value.String
+				_m.ID = value.String
 			}
 		case checkoutsession.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				cs.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case checkoutsession.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				cs.Status = value.String
+				_m.Status = value.String
 			}
 		case checkoutsession.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				cs.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case checkoutsession.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				cs.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case checkoutsession.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				cs.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case checkoutsession.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				cs.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case checkoutsession.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				cs.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case checkoutsession.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
-				cs.CustomerID = value.String
+				_m.CustomerID = value.String
 			}
 		case checkoutsession.FieldAction:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field action", values[i])
 			} else if value.Valid {
-				cs.Action = types.CheckoutAction(value.String)
+				_m.Action = types.CheckoutAction(value.String)
 			}
 		case checkoutsession.FieldCheckoutStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field checkout_status", values[i])
 			} else if value.Valid {
-				cs.CheckoutStatus = types.CheckoutStatus(value.String)
+				_m.CheckoutStatus = types.CheckoutStatus(value.String)
 			}
 		case checkoutsession.FieldPaymentProvider:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_provider", values[i])
 			} else if value.Valid {
-				cs.PaymentProvider = types.CheckoutPaymentProvider(value.String)
+				_m.PaymentProvider = types.CheckoutPaymentProvider(value.String)
 			}
 		case checkoutsession.FieldCheckoutInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field checkout_invoice_id", values[i])
 			} else if value.Valid {
-				cs.CheckoutInvoiceID = new(string)
-				*cs.CheckoutInvoiceID = value.String
+				_m.CheckoutInvoiceID = new(string)
+				*_m.CheckoutInvoiceID = value.String
 			}
 		case checkoutsession.FieldCheckoutPaymentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field checkout_payment_id", values[i])
 			} else if value.Valid {
-				cs.CheckoutPaymentID = new(string)
-				*cs.CheckoutPaymentID = value.String
+				_m.CheckoutPaymentID = new(string)
+				*_m.CheckoutPaymentID = value.String
 			}
 		case checkoutsession.FieldConfiguration:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field configuration", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cs.Configuration); err != nil {
+				if err := json.Unmarshal(*value, &_m.Configuration); err != nil {
 					return fmt.Errorf("unmarshal field configuration: %w", err)
 				}
 			}
@@ -198,7 +198,7 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_provider_config", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cs.PaymentProviderConfig); err != nil {
+				if err := json.Unmarshal(*value, &_m.PaymentProviderConfig); err != nil {
 					return fmt.Errorf("unmarshal field payment_provider_config: %w", err)
 				}
 			}
@@ -206,7 +206,7 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field result", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cs.Result); err != nil {
+				if err := json.Unmarshal(*value, &_m.Result); err != nil {
 					return fmt.Errorf("unmarshal field result: %w", err)
 				}
 			}
@@ -214,7 +214,7 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field provider_result", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cs.ProviderResult); err != nil {
+				if err := json.Unmarshal(*value, &_m.ProviderResult); err != nil {
 					return fmt.Errorf("unmarshal field provider_result: %w", err)
 				}
 			}
@@ -222,68 +222,68 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
-				cs.IdempotencyKey = new(string)
-				*cs.IdempotencyKey = value.String
+				_m.IdempotencyKey = new(string)
+				*_m.IdempotencyKey = value.String
 			}
 		case checkoutsession.FieldSuccessURL:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field success_url", values[i])
 			} else if value.Valid {
-				cs.SuccessURL = new(string)
-				*cs.SuccessURL = value.String
+				_m.SuccessURL = new(string)
+				*_m.SuccessURL = value.String
 			}
 		case checkoutsession.FieldFailureURL:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_url", values[i])
 			} else if value.Valid {
-				cs.FailureURL = new(string)
-				*cs.FailureURL = value.String
+				_m.FailureURL = new(string)
+				*_m.FailureURL = value.String
 			}
 		case checkoutsession.FieldCancelURL:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field cancel_url", values[i])
 			} else if value.Valid {
-				cs.CancelURL = new(string)
-				*cs.CancelURL = value.String
+				_m.CancelURL = new(string)
+				*_m.CancelURL = value.String
 			}
 		case checkoutsession.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
 			} else if value.Valid {
-				cs.ExpiresAt = new(time.Time)
-				*cs.ExpiresAt = value.Time
+				_m.ExpiresAt = new(time.Time)
+				*_m.ExpiresAt = value.Time
 			}
 		case checkoutsession.FieldCompletedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field completed_at", values[i])
 			} else if value.Valid {
-				cs.CompletedAt = new(time.Time)
-				*cs.CompletedAt = value.Time
+				_m.CompletedAt = new(time.Time)
+				*_m.CompletedAt = value.Time
 			}
 		case checkoutsession.FieldCancelledAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field cancelled_at", values[i])
 			} else if value.Valid {
-				cs.CancelledAt = new(time.Time)
-				*cs.CancelledAt = value.Time
+				_m.CancelledAt = new(time.Time)
+				*_m.CancelledAt = value.Time
 			}
 		case checkoutsession.FieldFailureReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
 			} else if value.Valid {
-				cs.FailureReason = new(string)
-				*cs.FailureReason = value.String
+				_m.FailureReason = new(string)
+				*_m.FailureReason = value.String
 			}
 		case checkoutsession.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cs.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			cs.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -291,130 +291,130 @@ func (cs *CheckoutSession) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CheckoutSession.
 // This includes values selected through modifiers, order, etc.
-func (cs *CheckoutSession) Value(name string) (ent.Value, error) {
-	return cs.selectValues.Get(name)
+func (_m *CheckoutSession) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this CheckoutSession.
 // Note that you need to call CheckoutSession.Unwrap() before calling this method if this CheckoutSession
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (cs *CheckoutSession) Update() *CheckoutSessionUpdateOne {
-	return NewCheckoutSessionClient(cs.config).UpdateOne(cs)
+func (_m *CheckoutSession) Update() *CheckoutSessionUpdateOne {
+	return NewCheckoutSessionClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CheckoutSession entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (cs *CheckoutSession) Unwrap() *CheckoutSession {
-	_tx, ok := cs.config.driver.(*txDriver)
+func (_m *CheckoutSession) Unwrap() *CheckoutSession {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CheckoutSession is not a transactional entity")
 	}
-	cs.config.driver = _tx.drv
-	return cs
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (cs *CheckoutSession) String() string {
+func (_m *CheckoutSession) String() string {
 	var builder strings.Builder
 	builder.WriteString("CheckoutSession(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", cs.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(cs.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(cs.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(cs.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(cs.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(cs.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(cs.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(cs.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
-	builder.WriteString(cs.CustomerID)
+	builder.WriteString(_m.CustomerID)
 	builder.WriteString(", ")
 	builder.WriteString("action=")
-	builder.WriteString(fmt.Sprintf("%v", cs.Action))
+	builder.WriteString(fmt.Sprintf("%v", _m.Action))
 	builder.WriteString(", ")
 	builder.WriteString("checkout_status=")
-	builder.WriteString(fmt.Sprintf("%v", cs.CheckoutStatus))
+	builder.WriteString(fmt.Sprintf("%v", _m.CheckoutStatus))
 	builder.WriteString(", ")
 	builder.WriteString("payment_provider=")
-	builder.WriteString(fmt.Sprintf("%v", cs.PaymentProvider))
+	builder.WriteString(fmt.Sprintf("%v", _m.PaymentProvider))
 	builder.WriteString(", ")
-	if v := cs.CheckoutInvoiceID; v != nil {
+	if v := _m.CheckoutInvoiceID; v != nil {
 		builder.WriteString("checkout_invoice_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cs.CheckoutPaymentID; v != nil {
+	if v := _m.CheckoutPaymentID; v != nil {
 		builder.WriteString("checkout_payment_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("configuration=")
-	builder.WriteString(fmt.Sprintf("%v", cs.Configuration))
+	builder.WriteString(fmt.Sprintf("%v", _m.Configuration))
 	builder.WriteString(", ")
 	builder.WriteString("payment_provider_config=")
-	builder.WriteString(fmt.Sprintf("%v", cs.PaymentProviderConfig))
+	builder.WriteString(fmt.Sprintf("%v", _m.PaymentProviderConfig))
 	builder.WriteString(", ")
 	builder.WriteString("result=")
-	builder.WriteString(fmt.Sprintf("%v", cs.Result))
+	builder.WriteString(fmt.Sprintf("%v", _m.Result))
 	builder.WriteString(", ")
 	builder.WriteString("provider_result=")
-	builder.WriteString(fmt.Sprintf("%v", cs.ProviderResult))
+	builder.WriteString(fmt.Sprintf("%v", _m.ProviderResult))
 	builder.WriteString(", ")
-	if v := cs.IdempotencyKey; v != nil {
+	if v := _m.IdempotencyKey; v != nil {
 		builder.WriteString("idempotency_key=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cs.SuccessURL; v != nil {
+	if v := _m.SuccessURL; v != nil {
 		builder.WriteString("success_url=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cs.FailureURL; v != nil {
+	if v := _m.FailureURL; v != nil {
 		builder.WriteString("failure_url=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cs.CancelURL; v != nil {
+	if v := _m.CancelURL; v != nil {
 		builder.WriteString("cancel_url=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cs.ExpiresAt; v != nil {
+	if v := _m.ExpiresAt; v != nil {
 		builder.WriteString("expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cs.CompletedAt; v != nil {
+	if v := _m.CompletedAt; v != nil {
 		builder.WriteString("completed_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cs.CancelledAt; v != nil {
+	if v := _m.CancelledAt; v != nil {
 		builder.WriteString("cancelled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cs.FailureReason; v != nil {
+	if v := _m.FailureReason; v != nil {
 		builder.WriteString("failure_reason=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", cs.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -57,6 +57,18 @@ func (f AlertSettingsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AlertSettingsMutation", m)
 }
 
+// The AnalyticsViewFunc type is an adapter to allow the use of ordinary
+// function as AnalyticsView mutator.
+type AnalyticsViewFunc func(context.Context, *ent.AnalyticsViewMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AnalyticsViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AnalyticsViewMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AnalyticsViewMutation", m)
+}
+
 // The AuthFunc type is an adapter to allow the use of ordinary
 // function as Auth mutator.
 type AuthFunc func(context.Context, *ent.AuthMutation) (ent.Value, error)
@@ -261,6 +273,18 @@ func (f EnvironmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EnvironmentMutation", m)
 }
 
+// The FXRateFunc type is an adapter to allow the use of ordinary
+// function as FXRate mutator.
+type FXRateFunc func(context.Context, *ent.FXRateMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f FXRateFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.FXRateMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.FXRateMutation", m)
+}
+
 // The FeatureFunc type is an adapter to allow the use of ordinary
 // function as Feature mutator.
 type FeatureFunc func(context.Context, *ent.FeatureMutation) (ent.Value, error)
@@ -427,6 +451,18 @@ func (f RefundFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RefundMutation", m)
+}
+
+// The RevenueFactFunc type is an adapter to allow the use of ordinary
+// function as RevenueFact mutator.
+type RevenueFactFunc func(context.Context, *ent.RevenueFactMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RevenueFactFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RevenueFactMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RevenueFactMutation", m)
 }
 
 // The ScheduledTaskFunc type is an adapter to allow the use of ordinary

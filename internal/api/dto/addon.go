@@ -78,8 +78,12 @@ type AddAddonToSubscriptionRequest struct {
 	AddonID           string                  `json:"addon_id" validate:"required"`
 	Cadence           types.AddonCadence      `json:"cadence"`
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	ProrationSettings ProrationSettings       `json:"-"`
 	StartDate         *time.Time              `json:"start_date,omitempty"`
-	Metadata          map[string]interface{}  `json:"metadata"`
+	// ChangeAt names when the attach applies without computing a date. Mutually exclusive
+	// with StartDate; omit both to attach now.
+	ChangeAt *types.ScheduleType    `json:"change_at,omitempty"`
+	Metadata map[string]interface{} `json:"metadata"`
 
 	// LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
@@ -87,11 +91,11 @@ type AddAddonToSubscriptionRequest struct {
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
-	// SkipEntityValidation is used to skip the entitlement check for the addon
-	// This is used to add an addon to a subscription without checking the entitlement compatibility
-	// This is used when we are adding an addon to a subscription that already has an active instance of the addon
-	// In that case we don't need to check the entitlement compatibility
-	SkipEntityValidation bool `json:"-"`
+	// Coupons apply to this addon's line items; price_id targets one price, omitted targets all.
+	Coupons []SubscriptionCouponInput `json:"coupons,omitempty"`
+
+	// CouponRefs are the coupons resolved at quote time. Server-set on replay.
+	CouponRefs []types.CouponRef `json:"-"`
 
 	// PreviewOnly quotes the attach without writing anything. Server-set: callers reach it
 	// through the preview endpoint, never by sending it.
@@ -118,9 +122,28 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 	}
 }
 
+func (r *AddAddonToSubscriptionRequest) ApplyDefaults() {
+	if r == nil {
+		return
+	}
+	applyLineItemCommitmentDefaults(r.LineItemCommitments)
+}
+
 func (r *AddAddonToSubscriptionRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ChangeAt != nil {
+		if err := r.ChangeAt.Validate(); err != nil {
+			return err
+		}
+		if r.StartDate != nil {
+			return ierr.NewError("change_at and start_date are mutually exclusive").
+				WithHint("Provide change_at for immediate or end_of_period, or start_date for any other date").
+				WithReportableDetails(map[string]any{"addon_id": r.AddonID}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Default to recurring when not provided for backward compatibility.
@@ -157,7 +180,7 @@ type AddonAssociationResponse struct {
 }
 
 // ListAddonAssociationsResponse represents the response for listing addon associations
-type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse]
+type ListAddonAssociationsResponse = types.ListResponse[*AddonAssociationResponse] // @name ListAddonAssociationsResponse
 
 type AddAddonToSubscriptionResponse struct {
 	*addonassociation.AddonAssociation

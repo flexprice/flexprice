@@ -41,6 +41,18 @@ func makeGrant(quota, usage int64, measure types.EntitlementGrantMeasure) *entit
 	}
 }
 
+// sequentialWindows tiles the grants into back-to-back one-hour windows. makeGrant
+// hands every row the same span, which would read as overlapping slots — the shape
+// the merged-window measurement exists for, not the sequential one these tests mean.
+func sequentialWindows(grants ...*entitlementgrant.EntitlementGrant) []*entitlementgrant.EntitlementGrant {
+	start := time.Now().Add(-time.Duration(len(grants)) * time.Hour)
+	for i, g := range grants {
+		g.ValidFrom = start.Add(time.Duration(i) * time.Hour)
+		g.ValidTo = g.ValidFrom.Add(time.Hour)
+	}
+	return grants
+}
+
 func newTestPriceService() PriceService {
 	return &priceService{ServiceParams: ServiceParams{Logger: newTestLogger()}}
 }
@@ -133,11 +145,11 @@ func TestAdjustMeterUsageGrants_QuantityLane_SumOfOverages(t *testing.T) {
 	bs := newTestBillingService()
 	li := linItem(false, false)
 	c := charge(flatPrice(0.5))
-	grants := []*entitlementgrant.EntitlementGrant{
-		makeGrant(100, 40, types.EntitlementGrantMeasureQuantity),   // no overage
-		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity),  // overage 150
-		makeGrant(50, 60, types.EntitlementGrantMeasureQuantity),    // overage 10
-	}
+	grants := sequentialWindows(
+		makeGrant(100, 40, types.EntitlementGrantMeasureQuantity),  // no overage
+		makeGrant(100, 250, types.EntitlementGrantMeasureQuantity), // overage 150
+		makeGrant(50, 60, types.EntitlementGrantMeasureQuantity),   // overage 10
+	)
 
 	res, applied, _ := bs.adjustMeterUsageGrants(context.Background(), li, c, grants, newTestPriceService(), nil, nil, nil)
 	if !applied {

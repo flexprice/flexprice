@@ -72,21 +72,7 @@ func (s *entityIntegrationMappingService) GetEntityIntegrationMapping(ctx contex
 		return nil, err
 	}
 
-	return &dto.EntityIntegrationMappingResponse{
-		ID:               mapping.ID,
-		EntityID:         mapping.EntityID,
-		EntityType:       mapping.EntityType,
-		ProviderType:     mapping.ProviderType,
-		ProviderEntityID: mapping.ProviderEntityID,
-		EnvironmentID:    mapping.EnvironmentID,
-		TenantID:         mapping.TenantID,
-		Status:           mapping.Status,
-		Metadata:         mapping.Metadata,
-		CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		CreatedBy:        mapping.CreatedBy,
-		UpdatedBy:        mapping.UpdatedBy,
-	}, nil
+	return dto.NewEntityIntegrationMappingResponse(mapping), nil
 }
 
 func (s *entityIntegrationMappingService) GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*dto.ListEntityIntegrationMappingsResponse, error) {
@@ -116,21 +102,7 @@ func (s *entityIntegrationMappingService) GetEntityIntegrationMappings(ctx conte
 
 	response := make([]*dto.EntityIntegrationMappingResponse, 0, len(mappings))
 	for _, m := range mappings {
-		response = append(response, &dto.EntityIntegrationMappingResponse{
-			ID:               m.ID,
-			EntityID:         m.EntityID,
-			EntityType:       m.EntityType,
-			ProviderType:     m.ProviderType,
-			ProviderEntityID: m.ProviderEntityID,
-			EnvironmentID:    m.EnvironmentID,
-			TenantID:         m.TenantID,
-			Status:           m.Status,
-			Metadata:         m.Metadata,
-			CreatedAt:        m.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:        m.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			CreatedBy:        m.CreatedBy,
-			UpdatedBy:        m.UpdatedBy,
-		})
+		response = append(response, dto.NewEntityIntegrationMappingResponse(m))
 	}
 
 	return &dto.ListEntityIntegrationMappingsResponse{

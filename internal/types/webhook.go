@@ -146,6 +146,13 @@ const (
 	WebhookEventPaymentPending WebhookEventName = "payment.pending"
 )
 
+// refund event names
+const (
+	WebhookEventRefundCreated   WebhookEventName = "refund.created"
+	WebhookEventRefundSucceeded WebhookEventName = "refund.succeeded"
+	WebhookEventRefundFailed    WebhookEventName = "refund.failed"
+)
+
 // customer event names
 const (
 	WebhookEventCustomerCreated WebhookEventName = "customer.created"
@@ -160,6 +167,12 @@ const (
 	WebhookEventInvoiceUpdateVoided    WebhookEventName = "invoice.update.voided"
 	WebhookEventInvoiceUpdate          WebhookEventName = "invoice.update"
 	WebhookEventInvoicePaymentOverdue  WebhookEventName = "invoice.payment.overdue"
+)
+
+// invoice sync event names
+const (
+	WebhookEventInvoiceSyncSuccess WebhookEventName = "invoice.sync.success"
+	WebhookEventInvoiceSyncFailed  WebhookEventName = "invoice.sync.failed"
 )
 
 // alert event names

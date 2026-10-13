@@ -28,7 +28,8 @@ func ScheduleDraftFinalizationWorkflow(
 	logger := workflow.GetLogger(ctx)
 
 	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: 24 * time.Hour,
+		StartToCloseTimeout: time.Hour,
+		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    10 * time.Second,
 			BackoffCoefficient: 2.0,

@@ -23,213 +23,213 @@ type UsageRecordCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (urc *UsageRecordCreate) SetTenantID(s string) *UsageRecordCreate {
-	urc.mutation.SetTenantID(s)
-	return urc
+func (_c *UsageRecordCreate) SetTenantID(v string) *UsageRecordCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (urc *UsageRecordCreate) SetStatus(s string) *UsageRecordCreate {
-	urc.mutation.SetStatus(s)
-	return urc
+func (_c *UsageRecordCreate) SetStatus(v string) *UsageRecordCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableStatus(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetStatus(*s)
+func (_c *UsageRecordCreate) SetNillableStatus(v *string) *UsageRecordCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (urc *UsageRecordCreate) SetCreatedAt(t time.Time) *UsageRecordCreate {
-	urc.mutation.SetCreatedAt(t)
-	return urc
+func (_c *UsageRecordCreate) SetCreatedAt(v time.Time) *UsageRecordCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableCreatedAt(t *time.Time) *UsageRecordCreate {
-	if t != nil {
-		urc.SetCreatedAt(*t)
+func (_c *UsageRecordCreate) SetNillableCreatedAt(v *time.Time) *UsageRecordCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (urc *UsageRecordCreate) SetUpdatedAt(t time.Time) *UsageRecordCreate {
-	urc.mutation.SetUpdatedAt(t)
-	return urc
+func (_c *UsageRecordCreate) SetUpdatedAt(v time.Time) *UsageRecordCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableUpdatedAt(t *time.Time) *UsageRecordCreate {
-	if t != nil {
-		urc.SetUpdatedAt(*t)
+func (_c *UsageRecordCreate) SetNillableUpdatedAt(v *time.Time) *UsageRecordCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (urc *UsageRecordCreate) SetCreatedBy(s string) *UsageRecordCreate {
-	urc.mutation.SetCreatedBy(s)
-	return urc
+func (_c *UsageRecordCreate) SetCreatedBy(v string) *UsageRecordCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableCreatedBy(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetCreatedBy(*s)
+func (_c *UsageRecordCreate) SetNillableCreatedBy(v *string) *UsageRecordCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (urc *UsageRecordCreate) SetUpdatedBy(s string) *UsageRecordCreate {
-	urc.mutation.SetUpdatedBy(s)
-	return urc
+func (_c *UsageRecordCreate) SetUpdatedBy(v string) *UsageRecordCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableUpdatedBy(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetUpdatedBy(*s)
+func (_c *UsageRecordCreate) SetNillableUpdatedBy(v *string) *UsageRecordCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (urc *UsageRecordCreate) SetEnvironmentID(s string) *UsageRecordCreate {
-	urc.mutation.SetEnvironmentID(s)
-	return urc
+func (_c *UsageRecordCreate) SetEnvironmentID(v string) *UsageRecordCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableEnvironmentID(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetEnvironmentID(*s)
+func (_c *UsageRecordCreate) SetNillableEnvironmentID(v *string) *UsageRecordCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetCustomerID sets the "customer_id" field.
-func (urc *UsageRecordCreate) SetCustomerID(s string) *UsageRecordCreate {
-	urc.mutation.SetCustomerID(s)
-	return urc
+func (_c *UsageRecordCreate) SetCustomerID(v string) *UsageRecordCreate {
+	_c.mutation.SetCustomerID(v)
+	return _c
 }
 
 // SetCustomerExternalID sets the "customer_external_id" field.
-func (urc *UsageRecordCreate) SetCustomerExternalID(s string) *UsageRecordCreate {
-	urc.mutation.SetCustomerExternalID(s)
-	return urc
+func (_c *UsageRecordCreate) SetCustomerExternalID(v string) *UsageRecordCreate {
+	_c.mutation.SetCustomerExternalID(v)
+	return _c
 }
 
 // SetNillableCustomerExternalID sets the "customer_external_id" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableCustomerExternalID(s *string) *UsageRecordCreate {
-	if s != nil {
-		urc.SetCustomerExternalID(*s)
+func (_c *UsageRecordCreate) SetNillableCustomerExternalID(v *string) *UsageRecordCreate {
+	if v != nil {
+		_c.SetCustomerExternalID(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (urc *UsageRecordCreate) SetSubscriptionID(s string) *UsageRecordCreate {
-	urc.mutation.SetSubscriptionID(s)
-	return urc
+func (_c *UsageRecordCreate) SetSubscriptionID(v string) *UsageRecordCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetPlanID sets the "plan_id" field.
-func (urc *UsageRecordCreate) SetPlanID(s string) *UsageRecordCreate {
-	urc.mutation.SetPlanID(s)
-	return urc
+func (_c *UsageRecordCreate) SetPlanID(v string) *UsageRecordCreate {
+	_c.mutation.SetPlanID(v)
+	return _c
 }
 
 // SetQuantity sets the "quantity" field.
-func (urc *UsageRecordCreate) SetQuantity(d decimal.Decimal) *UsageRecordCreate {
-	urc.mutation.SetQuantity(d)
-	return urc
+func (_c *UsageRecordCreate) SetQuantity(v decimal.Decimal) *UsageRecordCreate {
+	_c.mutation.SetQuantity(v)
+	return _c
 }
 
 // SetNillableQuantity sets the "quantity" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableQuantity(d *decimal.Decimal) *UsageRecordCreate {
-	if d != nil {
-		urc.SetQuantity(*d)
+func (_c *UsageRecordCreate) SetNillableQuantity(v *decimal.Decimal) *UsageRecordCreate {
+	if v != nil {
+		_c.SetQuantity(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetAmount sets the "amount" field.
-func (urc *UsageRecordCreate) SetAmount(d decimal.Decimal) *UsageRecordCreate {
-	urc.mutation.SetAmount(d)
-	return urc
+func (_c *UsageRecordCreate) SetAmount(v decimal.Decimal) *UsageRecordCreate {
+	_c.mutation.SetAmount(v)
+	return _c
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableAmount(d *decimal.Decimal) *UsageRecordCreate {
-	if d != nil {
-		urc.SetAmount(*d)
+func (_c *UsageRecordCreate) SetNillableAmount(v *decimal.Decimal) *UsageRecordCreate {
+	if v != nil {
+		_c.SetAmount(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (urc *UsageRecordCreate) SetCurrency(s string) *UsageRecordCreate {
-	urc.mutation.SetCurrency(s)
-	return urc
+func (_c *UsageRecordCreate) SetCurrency(v string) *UsageRecordCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetPeriodStart sets the "period_start" field.
-func (urc *UsageRecordCreate) SetPeriodStart(t time.Time) *UsageRecordCreate {
-	urc.mutation.SetPeriodStart(t)
-	return urc
+func (_c *UsageRecordCreate) SetPeriodStart(v time.Time) *UsageRecordCreate {
+	_c.mutation.SetPeriodStart(v)
+	return _c
 }
 
 // SetPeriodEnd sets the "period_end" field.
-func (urc *UsageRecordCreate) SetPeriodEnd(t time.Time) *UsageRecordCreate {
-	urc.mutation.SetPeriodEnd(t)
-	return urc
+func (_c *UsageRecordCreate) SetPeriodEnd(v time.Time) *UsageRecordCreate {
+	_c.mutation.SetPeriodEnd(v)
+	return _c
 }
 
 // SetSynced sets the "synced" field.
-func (urc *UsageRecordCreate) SetSynced(b bool) *UsageRecordCreate {
-	urc.mutation.SetSynced(b)
-	return urc
+func (_c *UsageRecordCreate) SetSynced(v bool) *UsageRecordCreate {
+	_c.mutation.SetSynced(v)
+	return _c
 }
 
 // SetNillableSynced sets the "synced" field if the given value is not nil.
-func (urc *UsageRecordCreate) SetNillableSynced(b *bool) *UsageRecordCreate {
-	if b != nil {
-		urc.SetSynced(*b)
+func (_c *UsageRecordCreate) SetNillableSynced(v *bool) *UsageRecordCreate {
+	if v != nil {
+		_c.SetSynced(*v)
 	}
-	return urc
+	return _c
 }
 
 // SetSyncs sets the "syncs" field.
-func (urc *UsageRecordCreate) SetSyncs(mrse map[string]types.UsageRecordSyncEntry) *UsageRecordCreate {
-	urc.mutation.SetSyncs(mrse)
-	return urc
+func (_c *UsageRecordCreate) SetSyncs(v map[string]types.UsageRecordSyncEntry) *UsageRecordCreate {
+	_c.mutation.SetSyncs(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (urc *UsageRecordCreate) SetID(s string) *UsageRecordCreate {
-	urc.mutation.SetID(s)
-	return urc
+func (_c *UsageRecordCreate) SetID(v string) *UsageRecordCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the UsageRecordMutation object of the builder.
-func (urc *UsageRecordCreate) Mutation() *UsageRecordMutation {
-	return urc.mutation
+func (_c *UsageRecordCreate) Mutation() *UsageRecordMutation {
+	return _c.mutation
 }
 
 // Save creates the UsageRecord in the database.
-func (urc *UsageRecordCreate) Save(ctx context.Context) (*UsageRecord, error) {
-	urc.defaults()
-	return withHooks(ctx, urc.sqlSave, urc.mutation, urc.hooks)
+func (_c *UsageRecordCreate) Save(ctx context.Context) (*UsageRecord, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (urc *UsageRecordCreate) SaveX(ctx context.Context) *UsageRecord {
-	v, err := urc.Save(ctx)
+func (_c *UsageRecordCreate) SaveX(ctx context.Context) *UsageRecord {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -237,129 +237,129 @@ func (urc *UsageRecordCreate) SaveX(ctx context.Context) *UsageRecord {
 }
 
 // Exec executes the query.
-func (urc *UsageRecordCreate) Exec(ctx context.Context) error {
-	_, err := urc.Save(ctx)
+func (_c *UsageRecordCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (urc *UsageRecordCreate) ExecX(ctx context.Context) {
-	if err := urc.Exec(ctx); err != nil {
+func (_c *UsageRecordCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (urc *UsageRecordCreate) defaults() {
-	if _, ok := urc.mutation.Status(); !ok {
+func (_c *UsageRecordCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := usagerecord.DefaultStatus
-		urc.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := urc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := usagerecord.DefaultCreatedAt()
-		urc.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := urc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := usagerecord.DefaultUpdatedAt()
-		urc.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := urc.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := usagerecord.DefaultEnvironmentID
-		urc.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := urc.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		v := usagerecord.DefaultQuantity
-		urc.mutation.SetQuantity(v)
+		_c.mutation.SetQuantity(v)
 	}
-	if _, ok := urc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		v := usagerecord.DefaultAmount
-		urc.mutation.SetAmount(v)
+		_c.mutation.SetAmount(v)
 	}
-	if _, ok := urc.mutation.Synced(); !ok {
+	if _, ok := _c.mutation.Synced(); !ok {
 		v := usagerecord.DefaultSynced
-		urc.mutation.SetSynced(v)
+		_c.mutation.SetSynced(v)
 	}
-	if _, ok := urc.mutation.Syncs(); !ok {
+	if _, ok := _c.mutation.Syncs(); !ok {
 		v := usagerecord.DefaultSyncs
-		urc.mutation.SetSyncs(v)
+		_c.mutation.SetSyncs(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (urc *UsageRecordCreate) check() error {
-	if _, ok := urc.mutation.TenantID(); !ok {
+func (_c *UsageRecordCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "UsageRecord.tenant_id"`)}
 	}
-	if v, ok := urc.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := usagerecord.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := urc.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "UsageRecord.status"`)}
 	}
-	if _, ok := urc.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "UsageRecord.created_at"`)}
 	}
-	if _, ok := urc.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "UsageRecord.updated_at"`)}
 	}
-	if _, ok := urc.mutation.CustomerID(); !ok {
+	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "UsageRecord.customer_id"`)}
 	}
-	if v, ok := urc.mutation.CustomerID(); ok {
+	if v, ok := _c.mutation.CustomerID(); ok {
 		if err := usagerecord.CustomerIDValidator(v); err != nil {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := urc.mutation.SubscriptionID(); !ok {
+	if _, ok := _c.mutation.SubscriptionID(); !ok {
 		return &ValidationError{Name: "subscription_id", err: errors.New(`ent: missing required field "UsageRecord.subscription_id"`)}
 	}
-	if v, ok := urc.mutation.SubscriptionID(); ok {
+	if v, ok := _c.mutation.SubscriptionID(); ok {
 		if err := usagerecord.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.subscription_id": %w`, err)}
 		}
 	}
-	if _, ok := urc.mutation.PlanID(); !ok {
+	if _, ok := _c.mutation.PlanID(); !ok {
 		return &ValidationError{Name: "plan_id", err: errors.New(`ent: missing required field "UsageRecord.plan_id"`)}
 	}
-	if v, ok := urc.mutation.PlanID(); ok {
+	if v, ok := _c.mutation.PlanID(); ok {
 		if err := usagerecord.PlanIDValidator(v); err != nil {
 			return &ValidationError{Name: "plan_id", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.plan_id": %w`, err)}
 		}
 	}
-	if _, ok := urc.mutation.Quantity(); !ok {
+	if _, ok := _c.mutation.Quantity(); !ok {
 		return &ValidationError{Name: "quantity", err: errors.New(`ent: missing required field "UsageRecord.quantity"`)}
 	}
-	if _, ok := urc.mutation.Amount(); !ok {
+	if _, ok := _c.mutation.Amount(); !ok {
 		return &ValidationError{Name: "amount", err: errors.New(`ent: missing required field "UsageRecord.amount"`)}
 	}
-	if _, ok := urc.mutation.Currency(); !ok {
+	if _, ok := _c.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "UsageRecord.currency"`)}
 	}
-	if v, ok := urc.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := usagerecord.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "UsageRecord.currency": %w`, err)}
 		}
 	}
-	if _, ok := urc.mutation.PeriodStart(); !ok {
+	if _, ok := _c.mutation.PeriodStart(); !ok {
 		return &ValidationError{Name: "period_start", err: errors.New(`ent: missing required field "UsageRecord.period_start"`)}
 	}
-	if _, ok := urc.mutation.PeriodEnd(); !ok {
+	if _, ok := _c.mutation.PeriodEnd(); !ok {
 		return &ValidationError{Name: "period_end", err: errors.New(`ent: missing required field "UsageRecord.period_end"`)}
 	}
-	if _, ok := urc.mutation.Synced(); !ok {
+	if _, ok := _c.mutation.Synced(); !ok {
 		return &ValidationError{Name: "synced", err: errors.New(`ent: missing required field "UsageRecord.synced"`)}
 	}
 	return nil
 }
 
-func (urc *UsageRecordCreate) sqlSave(ctx context.Context) (*UsageRecord, error) {
-	if err := urc.check(); err != nil {
+func (_c *UsageRecordCreate) sqlSave(ctx context.Context) (*UsageRecord, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := urc.createSpec()
-	if err := sqlgraph.CreateNode(ctx, urc.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -372,89 +372,89 @@ func (urc *UsageRecordCreate) sqlSave(ctx context.Context) (*UsageRecord, error)
 			return nil, fmt.Errorf("unexpected UsageRecord.ID type: %T", _spec.ID.Value)
 		}
 	}
-	urc.mutation.id = &_node.ID
-	urc.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (urc *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) {
+func (_c *UsageRecordCreate) createSpec() (*UsageRecord, *sqlgraph.CreateSpec) {
 	var (
-		_node = &UsageRecord{config: urc.config}
+		_node = &UsageRecord{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(usagerecord.Table, sqlgraph.NewFieldSpec(usagerecord.FieldID, field.TypeString))
 	)
-	if id, ok := urc.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := urc.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(usagerecord.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := urc.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(usagerecord.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := urc.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(usagerecord.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := urc.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := urc.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(usagerecord.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := urc.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(usagerecord.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := urc.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(usagerecord.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := urc.mutation.CustomerID(); ok {
+	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerID, field.TypeString, value)
 		_node.CustomerID = value
 	}
-	if value, ok := urc.mutation.CustomerExternalID(); ok {
+	if value, ok := _c.mutation.CustomerExternalID(); ok {
 		_spec.SetField(usagerecord.FieldCustomerExternalID, field.TypeString, value)
 		_node.CustomerExternalID = value
 	}
-	if value, ok := urc.mutation.SubscriptionID(); ok {
+	if value, ok := _c.mutation.SubscriptionID(); ok {
 		_spec.SetField(usagerecord.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = value
 	}
-	if value, ok := urc.mutation.PlanID(); ok {
+	if value, ok := _c.mutation.PlanID(); ok {
 		_spec.SetField(usagerecord.FieldPlanID, field.TypeString, value)
 		_node.PlanID = value
 	}
-	if value, ok := urc.mutation.Quantity(); ok {
+	if value, ok := _c.mutation.Quantity(); ok {
 		_spec.SetField(usagerecord.FieldQuantity, field.TypeOther, value)
 		_node.Quantity = value
 	}
-	if value, ok := urc.mutation.Amount(); ok {
+	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(usagerecord.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
-	if value, ok := urc.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(usagerecord.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := urc.mutation.PeriodStart(); ok {
+	if value, ok := _c.mutation.PeriodStart(); ok {
 		_spec.SetField(usagerecord.FieldPeriodStart, field.TypeTime, value)
 		_node.PeriodStart = value
 	}
-	if value, ok := urc.mutation.PeriodEnd(); ok {
+	if value, ok := _c.mutation.PeriodEnd(); ok {
 		_spec.SetField(usagerecord.FieldPeriodEnd, field.TypeTime, value)
 		_node.PeriodEnd = value
 	}
-	if value, ok := urc.mutation.Synced(); ok {
+	if value, ok := _c.mutation.Synced(); ok {
 		_spec.SetField(usagerecord.FieldSynced, field.TypeBool, value)
 		_node.Synced = value
 	}
-	if value, ok := urc.mutation.Syncs(); ok {
+	if value, ok := _c.mutation.Syncs(); ok {
 		_spec.SetField(usagerecord.FieldSyncs, field.TypeJSON, value)
 		_node.Syncs = value
 	}
@@ -469,16 +469,16 @@ type UsageRecordCreateBulk struct {
 }
 
 // Save creates the UsageRecord entities in the database.
-func (urcb *UsageRecordCreateBulk) Save(ctx context.Context) ([]*UsageRecord, error) {
-	if urcb.err != nil {
-		return nil, urcb.err
+func (_c *UsageRecordCreateBulk) Save(ctx context.Context) ([]*UsageRecord, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(urcb.builders))
-	nodes := make([]*UsageRecord, len(urcb.builders))
-	mutators := make([]Mutator, len(urcb.builders))
-	for i := range urcb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*UsageRecord, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := urcb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*UsageRecordMutation)
@@ -492,11 +492,11 @@ func (urcb *UsageRecordCreateBulk) Save(ctx context.Context) ([]*UsageRecord, er
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, urcb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, urcb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -516,7 +516,7 @@ func (urcb *UsageRecordCreateBulk) Save(ctx context.Context) ([]*UsageRecord, er
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, urcb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -524,8 +524,8 @@ func (urcb *UsageRecordCreateBulk) Save(ctx context.Context) ([]*UsageRecord, er
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (urcb *UsageRecordCreateBulk) SaveX(ctx context.Context) []*UsageRecord {
-	v, err := urcb.Save(ctx)
+func (_c *UsageRecordCreateBulk) SaveX(ctx context.Context) []*UsageRecord {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -533,14 +533,14 @@ func (urcb *UsageRecordCreateBulk) SaveX(ctx context.Context) []*UsageRecord {
 }
 
 // Exec executes the query.
-func (urcb *UsageRecordCreateBulk) Exec(ctx context.Context) error {
-	_, err := urcb.Save(ctx)
+func (_c *UsageRecordCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (urcb *UsageRecordCreateBulk) ExecX(ctx context.Context) {
-	if err := urcb.Exec(ctx); err != nil {
+func (_c *UsageRecordCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

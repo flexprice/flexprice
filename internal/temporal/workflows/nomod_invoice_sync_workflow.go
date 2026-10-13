@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -19,7 +20,7 @@ const (
 // Steps:
 // 1. Sleep for 5 seconds to allow invoice to be committed to database
 // 2. Sync invoice to Nomod (create invoice, line items, associate to customer)
-func NomodInvoiceSyncWorkflow(ctx workflow.Context, input models.NomodInvoiceSyncWorkflowInput) error {
+func NomodInvoiceSyncWorkflow(ctx workflow.Context, input models.NomodInvoiceSyncWorkflowInput) (err error) {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Nomod invoice sync workflow",
@@ -32,6 +33,10 @@ func NomodInvoiceSyncWorkflow(ctx workflow.Context, input models.NomodInvoiceSyn
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
+
+	defer func() {
+		publishInvoiceSyncOutcome(ctx, types.SecretProviderNomod, input.InvoiceID, input.TenantID, input.EnvironmentID, err)
+	}()
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -47,7 +52,7 @@ func NomodInvoiceSyncWorkflow(ctx workflow.Context, input models.NomodInvoiceSyn
 		"invoice_id", input.InvoiceID,
 		"wait_seconds", 5)
 
-	err := workflow.Sleep(ctx, 5*time.Second)
+	err = workflow.Sleep(ctx, 5*time.Second)
 	if err != nil {
 		logger.Error("Sleep was interrupted", "error", err)
 		return err

@@ -303,3 +303,69 @@ func TestParseYYYYMMDDToDate_SpecificBehaviors(t *testing.T) {
 		}
 	})
 }
+
+func TestEarliestOfAndLatestOf(t *testing.T) {
+	early := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		a, b         time.Time
+		wantEarliest time.Time
+		wantLatest   time.Time
+	}{
+		{"a before b", early, late, early, late},
+		{"b before a", late, early, early, late},
+		{"equal", early, early, early, early},
+		{"zero value participates", time.Time{}, early, time.Time{}, early},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EarliestOf(tt.a, tt.b); !got.Equal(tt.wantEarliest) {
+				t.Errorf("EarliestOf(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.wantEarliest)
+			}
+			if got := LatestOf(tt.a, tt.b); !got.Equal(tt.wantLatest) {
+				t.Errorf("LatestOf(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.wantLatest)
+			}
+		})
+	}
+}
+
+func TestEarliestOfPtrAndLatestOfPtr(t *testing.T) {
+	early := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		a, b         *time.Time
+		wantEarliest *time.Time
+		wantLatest   *time.Time
+	}{
+		{"both set", &early, &late, &early, &late},
+		{"both set reversed", &late, &early, &early, &late},
+		{"a nil falls back to b", nil, &late, &late, &late},
+		{"b nil falls back to a", &early, nil, &early, &early},
+		{"both nil", nil, nil, nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotEarliest := EarliestOfPtr(tt.a, tt.b)
+			if (gotEarliest == nil) != (tt.wantEarliest == nil) {
+				t.Fatalf("EarliestOfPtr nil-ness = %v, want %v", gotEarliest, tt.wantEarliest)
+			}
+			if gotEarliest != nil && !gotEarliest.Equal(*tt.wantEarliest) {
+				t.Errorf("EarliestOfPtr = %v, want %v", gotEarliest, tt.wantEarliest)
+			}
+
+			gotLatest := LatestOfPtr(tt.a, tt.b)
+			if (gotLatest == nil) != (tt.wantLatest == nil) {
+				t.Fatalf("LatestOfPtr nil-ness = %v, want %v", gotLatest, tt.wantLatest)
+			}
+			if gotLatest != nil && !gotLatest.Equal(*tt.wantLatest) {
+				t.Errorf("LatestOfPtr = %v, want %v", gotLatest, tt.wantLatest)
+			}
+		})
+	}
+}

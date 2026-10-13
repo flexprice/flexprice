@@ -20,56 +20,56 @@ type SubscriptionLineItemDelete struct {
 }
 
 // Where appends a list predicates to the SubscriptionLineItemDelete builder.
-func (slid *SubscriptionLineItemDelete) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemDelete {
-	slid.mutation.Where(ps...)
-	return slid
+func (_d *SubscriptionLineItemDelete) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (slid *SubscriptionLineItemDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, slid.sqlExec, slid.mutation, slid.hooks)
+func (_d *SubscriptionLineItemDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (slid *SubscriptionLineItemDelete) ExecX(ctx context.Context) int {
-	n, err := slid.Exec(ctx)
+func (_d *SubscriptionLineItemDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (slid *SubscriptionLineItemDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *SubscriptionLineItemDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(subscriptionlineitem.Table, sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString))
-	if ps := slid.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, slid.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	slid.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // SubscriptionLineItemDeleteOne is the builder for deleting a single SubscriptionLineItem entity.
 type SubscriptionLineItemDeleteOne struct {
-	slid *SubscriptionLineItemDelete
+	_d *SubscriptionLineItemDelete
 }
 
 // Where appends a list predicates to the SubscriptionLineItemDelete builder.
-func (slido *SubscriptionLineItemDeleteOne) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemDeleteOne {
-	slido.slid.mutation.Where(ps...)
-	return slido
+func (_d *SubscriptionLineItemDeleteOne) Where(ps ...predicate.SubscriptionLineItem) *SubscriptionLineItemDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (slido *SubscriptionLineItemDeleteOne) Exec(ctx context.Context) error {
-	n, err := slido.slid.Exec(ctx)
+func (_d *SubscriptionLineItemDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (slido *SubscriptionLineItemDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (slido *SubscriptionLineItemDeleteOne) ExecX(ctx context.Context) {
-	if err := slido.Exec(ctx); err != nil {
+func (_d *SubscriptionLineItemDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

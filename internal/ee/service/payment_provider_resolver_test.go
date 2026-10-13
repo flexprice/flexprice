@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -14,7 +13,7 @@ import (
 
 type PaymentProviderResolverSuite struct {
 	testutil.BaseServiceTestSuite
-	svc interfaces.PaymentProviderResolver
+	svc *PaymentProviderResolver
 }
 
 func TestPaymentProviderResolverSuite(t *testing.T) {
@@ -59,16 +58,15 @@ func (s *PaymentProviderResolverSuite) TestResolvesSoleCandidate() {
 	s.Equal(types.PaymentGatewayTypeChargebee, gw)
 }
 
-// The capability intersection is the point of the resolver: a Chargebee+Stripe
-// tenant has exactly one checkout provider and exactly one payment-link provider,
-// and they are different gateways.
+// The capability intersection is the point of the resolver: a Stripe+Nomod
+// tenant has exactly one checkout provider and both do payment links.
 func (s *PaymentProviderResolverSuite) TestIntersectionNarrowsPerCapability() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderStripe, types.SecretProviderNomod)
 	ctx := s.GetContext()
 
 	gw, err := s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityCheckout, "")
 	s.NoError(err)
-	s.Equal(types.PaymentGatewayTypeChargebee, gw)
+	s.Equal(types.PaymentGatewayTypeStripe, gw)
 
 	// Both do payment links, so that capability is contested and must be chosen.
 	_, err = s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityPaymentLink, "")
@@ -76,7 +74,7 @@ func (s *PaymentProviderResolverSuite) TestIntersectionNarrowsPerCapability() {
 
 	gw, err = s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityPaymentMethodManagement, "")
 	s.NoError(err)
-	s.Equal(types.PaymentGatewayTypeChargebee, gw)
+	s.Equal(types.PaymentGatewayTypeStripe, gw)
 }
 
 func (s *PaymentProviderResolverSuite) TestAmbiguousWithoutRequest() {
@@ -106,10 +104,10 @@ func (s *PaymentProviderResolverSuite) TestRequestedProviderNotConnected() {
 }
 
 func (s *PaymentProviderResolverSuite) TestRequestedProviderLacksCapability() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderStripe)
+	s.connect(types.SecretProviderChargebee, types.SecretProviderNomod)
 
 	_, err := s.svc.ResolveProvider(s.GetContext(), "cust_1",
-		types.IntegrationCapabilityCheckout, types.PaymentGatewayTypeStripe)
+		types.IntegrationCapabilityCheckout, types.PaymentGatewayTypeNomod)
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
 }
@@ -135,6 +133,9 @@ func (s *PaymentProviderResolverSuite) TestListProvidersSkipsUnusableAndNonPayme
 		{Type: types.IntegrationCapabilityAutoCharge},
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
+		{Type: types.IntegrationCapabilityListPaymentMethods},
+		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, got[0].Capabilities)
 }
 
@@ -166,10 +167,10 @@ func (s *PaymentProviderResolverSuite) TestGatewayCapabilitiesMatchFactory() {
 	factory := s.GetIntegrationFactory()
 
 	for gw := range gatewayCapabilities {
-		wantSaved := lo.Contains(gatewayCapabilities[gw], types.IntegrationCapabilityPaymentMethodManagement)
+		wantSaved := lo.Contains(gatewayCapabilities[gw], types.IntegrationCapabilityListPaymentMethods)
 		_, err := factory.GetPaymentMethodProvider(ctx, gw, nil)
 		s.Equal(wantSaved, !ierr.IsNotImplemented(err),
-			"payment_method_management for %s disagrees with Factory.GetPaymentMethodProvider", gw)
+			"list_payment_methods for %s disagrees with Factory.GetPaymentMethodProvider", gw)
 
 		wantCheckout := lo.Contains(gatewayCapabilities[gw], types.IntegrationCapabilityCheckout)
 		provider, ok := checkoutProviderFor(gw)

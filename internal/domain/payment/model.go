@@ -31,7 +31,7 @@ type Payment struct {
 	// The gateway_tracking_id is the tracking identifier from the external payment gateway (optional)
 	GatewayTrackingID *string `json:"gateway_tracking_id,omitempty"`
 	// The gateway_metadata field contains gateway-specific metadata (optional)
-	GatewayMetadata types.Metadata `json:"gateway_metadata,omitempty"`
+	GatewayMetadata types.Metadata `json:"gateway_metadata,omitempty" activity:"redact"`
 	// The amount field specifies the payment value in the given currency
 	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 	// The currency field uses a three-letter ISO code (USD, EUR, GBP, etc.)
@@ -41,7 +41,7 @@ type Payment struct {
 	// The track_attempts flag indicates whether payment processing attempts are being monitored
 	TrackAttempts bool `json:"track_attempts"`
 	// The metadata field contains additional custom key-value pairs for this payment (optional)
-	Metadata types.Metadata `json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 	// The succeeded_at timestamp shows when this payment was successfully completed (optional)
 	SucceededAt *time.Time `json:"succeeded_at,omitempty"`
 	// The failed_at timestamp indicates when this payment failed (optional)

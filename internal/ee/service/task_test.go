@@ -527,6 +527,9 @@ func (r *fakeImportResolver) ForPlatform(_ context.Context, purpose storage.Purp
 func (r *fakeImportResolver) ForConnection(context.Context, string) (storagetypes.Storage, error) {
 	return nil, nil
 }
+func (r *fakeImportResolver) ForConnectionExport(context.Context, string, *types.S3JobConfig) (storagetypes.Storage, error) {
+	return nil, nil
+}
 func (r *fakeImportResolver) Provider() storage.Provider { return storage.ProviderS3 }
 func (r *fakeImportResolver) BucketConfigFor(purpose storage.Purpose) (config.BucketConfig, error) {
 	if purpose != storage.PurposeImport {
@@ -539,4 +542,3 @@ type notFoundError struct{ what string }
 
 func (e *notFoundError) Error() string { return "not found: " + e.what }
 func notFoundErr(what string) error    { return &notFoundError{what: what} }
-

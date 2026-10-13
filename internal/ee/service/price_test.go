@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	cockroachErrors "github.com/cockroachdb/errors"
 	"sort"
 	"strings"
 	"testing"
@@ -14,11 +15,15 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -57,6 +62,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
 		FeatureRepo:   s.featureRepo,
+		SettingsRepo:  testutil.NewInMemorySettingsStore(),
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
@@ -2471,6 +2477,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2524,6 +2531,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2610,6 +2618,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2677,6 +2686,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2744,6 +2754,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
+			SettingsRepo:  testutil.NewInMemorySettingsStore(),
 			Logger:        s.logger,
 			DB:            testutil.NewMockPostgresClient(s.logger),
 		}
@@ -2818,6 +2829,7 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityExistenceValidation() {
 		AddonRepo:     s.addonRepo,
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
+		SettingsRepo:  testutil.NewInMemorySettingsStore(),
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	})
@@ -2901,4 +2913,312 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityExistenceValidation() {
 		s.Require().NotNil(resp)
 		s.Len(resp.Items, 1)
 	})
+}
+
+// A tenant with custom currencies restricts prices to those currencies or its
+// default fiat currency.
+func (s *PriceServiceSuite) TestCreatePrice_CustomCurrencyEnforcement() {
+	settingsStore := testutil.NewInMemorySettingsStore()
+
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(settingsStore.Create(s.ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyCustomCurrencyConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	}))
+
+	priceSvc := NewPriceService(ServiceParams{
+		PriceRepo:     s.priceRepo,
+		MeterRepo:     s.meterRepo,
+		PlanRepo:      s.planRepo,
+		AddonRepo:     s.addonRepo,
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+		PriceUnitRepo: s.priceUnitRepo,
+		FeatureRepo:   s.featureRepo,
+		SettingsRepo:  settingsStore,
+		Logger:        s.logger,
+		DB:            testutil.NewMockPostgresClient(s.logger),
+	})
+
+	testPlan := &plan.Plan{ID: "plan-cc", Name: "Custom Currency Plan", BaseModel: types.GetDefaultBaseModel(s.ctx)}
+	s.NoError(s.planRepo.Create(s.ctx, testPlan))
+
+	tests := []struct {
+		name     string
+		currency string
+		wantErr  bool
+	}{
+		{name: "configured custom currency is allowed", currency: "mac"},
+		{name: "default fiat currency is allowed", currency: "usd"},
+		{name: "a mapped fiat currency is allowed even though it is not the default", currency: "inr"},
+		{name: "unconfigured currency is rejected", currency: "eur", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			amount := decimal.NewFromInt(100)
+			_, err := priceSvc.CreatePrice(s.ctx, dto.CreatePriceRequest{
+				Amount:             &amount,
+				Currency:           tt.currency,
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           testPlan.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:     types.InvoiceCadenceArrear,
+			})
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+		})
+	}
+}
+
+// Accepting any mapped fiat is only safe if every custom currency reaches all of them,
+// so a factor present in one and missing from another is rejected outright.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_FiatFactorsMustMatchAcrossCurrencies() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+			"fxp": {
+				Name:                  "Flexprice Credits",
+				Symbol:                "FXP",
+				FiatConversionFactors: map[string]decimal.Decimal{"usd": decimal.NewFromFloat(0.2)},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	err := cfg.Validate()
+	s.Error(err)
+	s.Contains(err.Error(), "inr")
+}
+
+// Equal-sized but different factor sets are still a mismatch.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_DisjointFiatSetsRejected() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+			"fxp": {
+				Name:   "Flexprice Credits",
+				Symbol: "FXP",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.2),
+					"eur": decimal.NewFromFloat(0.9),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	s.Error(cfg.Validate())
+}
+
+// Matching sets across currencies are accepted.
+func (s *PriceServiceSuite) TestCustomCurrencyConfig_MatchingFiatSetsAccepted() {
+	factors := func() map[string]decimal.Decimal {
+		return map[string]decimal.Decimal{
+			"usd": decimal.NewFromFloat(0.1),
+			"inr": decimal.NewFromFloat(8.5),
+		}
+	}
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {Name: "MoEngage AI Credits", Symbol: "MAC", FiatConversionFactors: factors()},
+			"fxp": {Name: "Flexprice Credits", Symbol: "FXP", FiatConversionFactors: factors()},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+
+	s.NoError(cfg.Validate())
+}
+
+// The rejection names the supported currencies in two groups, not one merged list.
+func (s *PriceServiceSuite) TestEnforceCurrency_ErrorReportsBothGroups() {
+	cfg := types.CustomCurrencyConfig{
+		CustomCurrencies: map[string]types.CustomCurrencyDefinition{
+			"mac": {
+				Name:   "MoEngage AI Credits",
+				Symbol: "MAC",
+				FiatConversionFactors: map[string]decimal.Decimal{
+					"usd": decimal.NewFromFloat(0.1),
+					"inr": decimal.NewFromFloat(8.5),
+				},
+			},
+		},
+		DefaultFiatCurrency: "usd",
+	}
+	s.NoError(cfg.Validate())
+
+	err := cfg.EnforceCurrency("eur")
+	s.Require().Error(err)
+	s.Contains(err.Error(), "eur", "the rejected currency is named")
+
+	hint := strings.Join(cockroachErrors.GetAllHints(err), " ")
+	s.Contains(hint, "Supported custom currencies: mac")
+	s.Contains(hint, "Supported fiat currencies: inr, usd")
+}
+
+// An environment with no custom currencies still rejects codes that are not real
+// currencies. Length is the only thing every other validator checks, so without this
+// a custom code configured in one environment is accepted in a fresh one.
+func (s *PriceServiceSuite) TestEnforceCurrency_UnconfiguredEnvironmentAllowsOnlyKnownFiat() {
+	var cfg types.CustomCurrencyConfig
+
+	s.NoError(cfg.EnforceCurrency("eur"))
+	s.NoError(cfg.EnforceCurrency("USD"), "matching is case-insensitive")
+
+	for _, currency := range []string{"mac", "zzz", "anything"} {
+		err := cfg.EnforceCurrency(currency)
+		s.Require().Error(err, "%s is not a known fiat currency", currency)
+		s.Contains(err.Error(), strings.ToLower(currency))
+	}
+}
+
+type pricingShape struct {
+	model types.BillingModel
+	mode  types.BillingTier
+}
+
+var pricingShapes = map[string]pricingShape{
+	"flat":    {types.BILLING_MODEL_FLAT_FEE, ""},
+	"package": {types.BILLING_MODEL_PACKAGE, ""},
+	"volume":  {types.BILLING_MODEL_TIERED, types.BILLING_TIER_VOLUME},
+	"slab":    {types.BILLING_MODEL_TIERED, types.BILLING_TIER_SLAB},
+}
+
+var testTiers = []dto.CreatePriceTier{
+	{UpTo: lo.ToPtr(uint64(720)), UnitAmount: decimal.RequireFromString("3.6")},
+	{UpTo: nil, UnitAmount: decimal.RequireFromString("4.5")},
+}
+
+func shapedPrice(s pricingShape, unit types.PriceUnitType) *price.Price {
+	p := &price.Price{
+		ID: "price_1", Currency: "usd", Type: types.PRICE_TYPE_USAGE, MeterID: "meter_1",
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, InvoiceCadence: types.InvoiceCadenceArrear,
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1", PriceUnitType: unit,
+		BillingModel: s.model, TierMode: s.mode, Amount: decimal.NewFromInt(3),
+		Tiers:             price.JSONBTiers{{UpTo: nil, UnitAmount: decimal.NewFromInt(1)}},
+		TransformQuantity: price.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
+	}
+	if unit == types.PRICE_UNIT_TYPE_CUSTOM {
+		p.PriceUnit = lo.ToPtr("crd")
+		p.PriceUnitAmount = lo.ToPtr(decimal.NewFromInt(3))
+		p.PriceUnitTiers = p.Tiers
+		p.Tiers = nil
+	}
+	return p
+}
+
+// shapedOverride is the payload the dashboard sends to move a price to shape s.
+func shapedOverride(s pricingShape, unit types.PriceUnitType) dto.OverrideLineItemRequest {
+	o := dto.OverrideLineItemRequest{PriceID: "price_1", BillingModel: s.model, TierMode: s.mode}
+	custom := unit == types.PRICE_UNIT_TYPE_CUSTOM
+	switch {
+	case s.model == types.BILLING_MODEL_TIERED && custom:
+		o.PriceUnitTiers = testTiers
+	case s.model == types.BILLING_MODEL_TIERED:
+		o.Tiers = testTiers
+	case custom:
+		o.PriceUnitAmount = lo.ToPtr(decimal.RequireFromString("3.6"))
+	default:
+		o.Amount = lo.ToPtr(decimal.RequireFromString("3.6"))
+	}
+	if s.model == types.BILLING_MODEL_PACKAGE {
+		o.TransformQuantity = &price.TransformQuantity{DivideBy: 60, Round: types.ROUND_UP}
+	}
+	return o
+}
+
+func TestBillingModelChange_AnyToAny(t *testing.T) {
+	for _, unit := range []types.PriceUnitType{types.PRICE_UNIT_TYPE_FIAT, types.PRICE_UNIT_TYPE_CUSTOM} {
+		for fromName, from := range pricingShapes {
+			for toName, to := range pricingShapes {
+				t.Run(string(unit)+"/"+fromName+"_to_"+toName, func(t *testing.T) {
+					existing := shapedPrice(from, unit)
+					o := shapedOverride(to, unit)
+
+					priceMap := map[string]*dto.PriceResponse{existing.ID: {Price: existing}}
+					lineItems := map[string]*subscription.SubscriptionLineItem{existing.ID: {PriceID: existing.ID}}
+					require.NoError(t, o.Validate(priceMap, lineItems, "plan_1"))
+					req, err := buildOverridePriceRequest(priceMap[existing.ID], o, "subs_1")
+					require.NoError(t, err)
+					require.NoError(t, req.Validate())
+					require.Equal(t, to.model, req.BillingModel)
+					require.Equal(t, to.mode, req.TierMode)
+
+					update := dto.UpdatePriceRequest{
+						BillingModel: o.BillingModel, TierMode: o.TierMode, Amount: o.Amount, Tiers: o.Tiers,
+						PriceUnitAmount: o.PriceUnitAmount, PriceUnitTiers: o.PriceUnitTiers, TransformQuantity: o.TransformQuantity,
+					}
+					require.NoError(t, update.ValidateAgainst(existing))
+					created := update.ToCreatePriceRequest(existing)
+					require.NoError(t, created.Validate())
+					require.Equal(t, to.model, created.BillingModel)
+					require.Equal(t, to.mode, created.TierMode)
+				})
+			}
+		}
+	}
+}
+
+func TestBillingModelChange_Rejects(t *testing.T) {
+	flat := shapedPrice(pricingShapes["flat"], types.PRICE_UNIT_TYPE_FIAT)
+
+	tests := []struct {
+		name     string
+		existing *price.Price
+		override dto.OverrideLineItemRequest
+		wantErr  string
+	}{
+		// The payload the line item edit dialog sent for "Slab Tiered" on a flat price.
+		{"tiers on a flat price", flat, dto.OverrideLineItemRequest{Tiers: testTiers}, "tiers can only be set on a TIERED price"},
+		{"tiered without tier mode", flat, dto.OverrideLineItemRequest{BillingModel: types.BILLING_MODEL_TIERED, Tiers: testTiers}, "tier_mode is required"},
+		{"amount only on a tiered price", shapedPrice(pricingShapes["slab"], types.PRICE_UNIT_TYPE_FIAT), dto.OverrideLineItemRequest{Amount: lo.ToPtr(decimal.NewFromInt(4))}, "amount cannot be set on a TIERED price"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.override.PriceID = tt.existing.ID
+			priceMap := map[string]*dto.PriceResponse{tt.existing.ID: {Price: tt.existing}}
+			lineItems := map[string]*subscription.SubscriptionLineItem{tt.existing.ID: {PriceID: tt.existing.ID}}
+			require.ErrorContains(t, tt.override.Validate(priceMap, lineItems, "plan_1"), tt.wantErr)
+		})
+	}
+
+	update := dto.UpdatePriceRequest{BillingModel: types.BILLING_MODEL_FLAT_FEE}
+	require.ErrorContains(t, update.ValidateAgainst(shapedPrice(pricingShapes["slab"], types.PRICE_UNIT_TYPE_FIAT)), "amount is required")
 }

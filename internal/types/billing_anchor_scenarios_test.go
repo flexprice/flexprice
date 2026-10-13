@@ -105,7 +105,7 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 			want:    time.Date(2024, 7, 1, 0, 0, 0, 0, loc),
 		},
 
-		// ANNUAL: adds unit years with anchor month/day; same month/day → next year.
+		// ANNUAL: anchor + k years; an anchor ahead of the start ends the first period at the anchor.
 		{
 			name:    "annual_same_anchor_as_start_advances_one_year",
 			period:  BILLING_PERIOD_ANNUAL,
@@ -114,11 +114,11 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 			want:    time.Date(2025, 5, 15, 10, 0, 0, 0, loc),
 		},
 		{
-			name:    "annual_anchor_month_day_after_start_in_year_moves_to_anchor_month_next_year",
+			name:    "annual_anchor_after_start_ends_first_period_at_anchor",
 			period:  BILLING_PERIOD_ANNUAL,
 			current: time.Date(2024, 1, 15, 0, 0, 0, 0, loc),
 			anchor:  time.Date(2024, 6, 15, 12, 0, 0, 0, loc),
-			want:    time.Date(2025, 6, 15, 12, 0, 0, 0, loc),
+			want:    time.Date(2024, 6, 15, 12, 0, 0, 0, loc),
 		},
 	}
 

@@ -47,13 +47,11 @@ type WalletDebitOpts struct {
 	AnalyticsPollInterval time.Duration
 	AnalyticsPollTimeout  time.Duration
 
-	// LandedPollInterval / LandedPollTimeout bound the wait for synchronously-
-	// ingested events to show up in the raw events table before the probe
-	// starts polling the aggregation pipeline. The budget has to cover queue
-	// depth, not just this batch: the scenario probes burst on the same
-	// minute and staging's consumer drains ~10 events/second, so ten events
-	// can sit behind a thousand queued ones. 30s flagged that as dropped
-	// data.
+	// LandedPollInterval / LandedPollTimeout bound the wait for asynchronously
+	// ingested events (API returns 202 after Kafka publish) to show up in the
+	// raw events table. Staging's consumer drains ~1.5 events/s, not 10: a
+	// 220-event burst ahead of this batch needs ~2.5 min. 30s and 2m both
+	// reported landed_count=0 while ingest had succeeded.
 	LandedPollInterval time.Duration
 	LandedPollTimeout  time.Duration
 }
@@ -66,7 +64,7 @@ func defaultWalletDebitOpts() WalletDebitOpts {
 		AnalyticsPollInterval: 10 * time.Second,
 		AnalyticsPollTimeout:  5 * time.Minute,
 		LandedPollInterval:    2 * time.Second,
-		LandedPollTimeout:     120 * time.Second,
+		LandedPollTimeout:     5 * time.Minute,
 	}
 }
 
@@ -86,7 +84,7 @@ func NewWalletDebitVerification(c e2eprobe.Client, r e2eprobe.Registry, runID st
 		opts.LandedPollInterval = 2 * time.Second
 	}
 	if opts.LandedPollTimeout == 0 {
-		opts.LandedPollTimeout = 120 * time.Second
+		opts.LandedPollTimeout = 5 * time.Minute
 	}
 	return &WalletDebitVerification{client: c, reg: r, runID: runID, opts: opts}
 }
@@ -241,10 +239,8 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 			"landed_timeout":       v.opts.LandedPollTimeout.String(),
 		}
 		// "not visible yet" is not the same as "dropped": staging's ingest
-		// consumer drains ~10 events/second and the scenario probes burst
-		// together on the same minute, so a batch can sit behind a thousand
-		// queued events. Say what was observed and surface the last query
-		// error — a failing read used to render identically to data loss.
+		// consumer drains ~1.5 events/s and the scenario probes burst
+		// together, so a batch can sit behind hundreds of queued events.
 		if lastQueryErr != nil {
 			attrs["last_query_error"] = lastQueryErr.Error()
 			return e2eprobe.Errorf(attrs, "only %d of %d events visible within %s; last query failed: %w",

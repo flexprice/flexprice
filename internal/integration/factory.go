@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/cache"
@@ -77,6 +78,14 @@ type Factory struct {
 	paymentService interfaces.PaymentService
 	invoiceService interfaces.InvoiceService
 	lifecycle      *payments.PaymentLifecycle
+
+	// checkoutProvider, when set, is returned by GetCheckoutProvider instead of
+	// constructing a live adapter. Tests use this; production never sets it.
+	checkoutProvider interfaces.CheckoutProvider
+
+	// paymentMethodProvider, when set, is returned by GetPaymentMethodProvider instead of
+	// constructing a live adapter. Tests use this; production never sets it.
+	paymentMethodProvider interfaces.PaymentMethodProvider
 }
 
 // NewFactory creates a new integration factory
@@ -146,7 +155,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.logger,
 	)
 
-	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.logger)
+	priceSyncSvc := stripe.NewStripePriceSyncService(stripeClient, f.entityIntegrationMappingRepo, f.priceRepo, f.logger)
 
 	// Create invoice sync service first
 	invoiceSyncSvc := stripe.NewInvoiceSyncService(
@@ -166,6 +175,7 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		priceSyncSvc,
 		f.invoiceRepo,
 		f.paymentRepo,
+		f.locker,
 		f.logger,
 	)
 
@@ -687,6 +697,7 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.invoiceRepo,
 		f.priceRepo,
 		f.entityIntegrationMappingRepo,
+		f.paymentRepo,
 		f.logger,
 	)
 
@@ -1362,6 +1373,53 @@ func (f *Factory) GetStorageProvider(ctx context.Context, connectionID string) (
 	return f.GetStorageProviderForConnection(ctx, conn)
 }
 
+// exportDestination carries the per-run destination from a scheduled task's
+// job_config. When set, it overrides the connection row's sync_config for
+// bucket/region/encryption/endpoint — the connection then contributes only
+// credentials and the is_flexprice_managed flag. nil means resolve everything
+// from the connection (the ValidateConnection path).
+type exportDestination struct {
+	bucket       string
+	region       string
+	encryption   string
+	gzip         bool
+	endpointURL  string
+	usePathStyle bool
+}
+
+// GetStorageProviderExport builds storage for a scheduled export: credentials
+// and the managed flag from the connection, destination from the run's job_config.
+func (f *Factory) GetStorageProviderExport(ctx context.Context, connectionID string, dest *types.S3JobConfig) (storage.Storage, error) {
+	if connectionID == "" {
+		return nil, ierr.NewError("connection ID is required for storage").Mark(ierr.ErrValidation)
+	}
+	if dest == nil {
+		return nil, ierr.NewError("export job_config is required").Mark(ierr.ErrValidation)
+	}
+	conn, err := f.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, err
+	}
+	dst := &exportDestination{
+		bucket:       dest.Bucket,
+		region:       dest.Region,
+		encryption:   string(dest.Encryption),
+		gzip:         dest.Compression == types.S3CompressionTypeGzip,
+		endpointURL:  strings.TrimSpace(dest.EndpointURL),
+		usePathStyle: dest.UsePathStyle,
+	}
+	switch conn.ProviderType {
+	case types.SecretProviderS3:
+		return f.buildS3Storage(ctx, conn, dst)
+	case types.SecretProviderGCS:
+		return f.buildGCSStorage(ctx, conn, dst)
+	default:
+		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
+			WithHint("Supported storage provider types: s3, gcs").
+			Mark(ierr.ErrValidation)
+	}
+}
+
 // Validates config before persisting.
 func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
 	if conn == nil {
@@ -1371,9 +1429,9 @@ func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *con
 
 	switch conn.ProviderType {
 	case types.SecretProviderS3:
-		return f.buildS3Storage(ctx, conn)
+		return f.buildS3Storage(ctx, conn, nil)
 	case types.SecretProviderGCS:
-		return f.buildGCSStorage(ctx, conn)
+		return f.buildGCSStorage(ctx, conn, nil)
 	default:
 		return nil, ierr.NewErrorf("unsupported storage provider type: %s", conn.ProviderType).
 			WithHint("Supported storage provider types: s3, gcs").
@@ -1381,10 +1439,13 @@ func (f *Factory) GetStorageProviderForConnection(ctx context.Context, conn *con
 	}
 }
 
-func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connection, dst *exportDestination) (storage.Storage, error) {
 	jobConfig := conn.GetSyncConfig().Storage
 	if jobConfig == nil {
-		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+		if dst == nil || conn.EncryptedSecretData.S3 == nil {
+			return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
+		}
+		jobConfig = &types.StorageExportConfig{}
 	}
 
 	// Credentials from platform config; bucket from row.
@@ -1451,18 +1512,41 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		}
 	}
 
-	return s3backend.New(ctx, &s3backend.Config{
-		Bucket:             jobConfig.Bucket,
-		Region:             jobConfig.Region,
-		CompressionGzip:    jobConfig.Compression == types.S3CompressionTypeGzip,
-		ServerSideEncrypt:  string(jobConfig.Encryption),
+	// Destination comes from the run's job_config (dst) when this is an export;
+	// the ValidateConnection path passes nil and falls back to the connection row.
+	// A BYOB connection runs many scheduled tasks with different region/prefix, so
+	// the per-run job_config is authoritative — the connection carries only keys.
+	bucket, region := jobConfig.Bucket, jobConfig.Region
+	encryption := string(jobConfig.Encryption)
+	gzip := jobConfig.Compression == types.S3CompressionTypeGzip
+	if dst != nil {
+		bucket, region, encryption, gzip = dst.bucket, dst.region, dst.encryption, dst.gzip
+	}
+
+	if bucket == "" || region == "" {
+		return nil, ierr.NewError("S3 export is missing bucket or region").
+			WithHintf("connection %s: job_config (or sync_config.s3) must set bucket and region", conn.ID).
+			Mark(ierr.ErrValidation)
+	}
+
+	s3Cfg := &s3backend.Config{
+		Bucket:             bucket,
+		Region:             region,
+		CompressionGzip:    gzip,
+		ServerSideEncrypt:  encryption,
 		AWSAccessKeyID:     accessKey,
 		AWSSecretAccessKey: secretKey,
 		AWSSessionToken:    sessionToken,
-	}, f.logger)
+	}
+	if dst != nil {
+		s3Cfg.EndpointURL = dst.endpointURL
+		s3Cfg.UsePathStyle = dst.usePathStyle
+	}
+
+	return s3backend.New(ctx, s3Cfg, f.logger)
 }
 
-func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection) (storage.Storage, error) {
+func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection, _ *exportDestination) (storage.Storage, error) {
 	jobConfig := conn.GetSyncConfig().Storage
 	if jobConfig == nil {
 		return nil, ierr.NewError("no storage job configuration on connection").Mark(ierr.ErrValidation)
@@ -1491,9 +1575,11 @@ func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connecti
 
 // GetPaymentMethodProvider returns the PaymentMethodProvider adapter for the given
 // gateway. ErrNotImplemented means the provider cannot manage saved methods at all
-// — the permanent answer for Razorpay, whose tokens need a mandate — and callers
-// must treat it as a capability answer rather than a failure.
+// and callers must treat it as a capability answer rather than a failure.
 func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.PaymentGatewayType, customerSvc interfaces.CustomerService) (interfaces.PaymentMethodProvider, error) {
+	if f.paymentMethodProvider != nil {
+		return f.paymentMethodProvider, nil
+	}
 	switch gateway {
 	case types.PaymentGatewayTypeChargebee:
 		i, err := f.GetChargebeeIntegration(ctx)
@@ -1505,6 +1591,23 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
 			Logger:      f.logger,
 		}, nil
+	case types.PaymentGatewayTypeStripe:
+		i, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &stripe.PaymentMethodAdapter{
+			Client:            i.Client,
+			StripeCustomerSvc: i.CustomerSvc,
+			CustomerSvc:       customerSvc,
+			Logger:            f.logger,
+		}, nil
+	case types.PaymentGatewayTypeRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.PaymentMethodAdapter{CustomerSvc: i.CustomerSvc}, nil
 	default:
 		return nil, ierr.NewError("saved payment methods are not supported for this provider").
 			WithHintf("%s cannot manage saved payment methods", gateway).
@@ -1512,9 +1615,48 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 	}
 }
 
+// GetRefundProvider returns ErrNotImplemented for gateways without a v1 refund
+// adapter — Moyasar's API refunds only in full, so it cannot back this ledger.
+func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGatewayType) (interfaces.RefundProvider, error) {
+	switch gateway {
+	case types.PaymentGatewayTypeRazorpay:
+		i, err := f.GetRazorpayIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+	case types.PaymentGatewayTypeChargebee:
+		i, err := f.GetChargebeeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+	default:
+		return nil, ierr.NewError("gateway refunds are not supported for this provider").
+			WithHintf("%s cannot issue gateway refunds", gateway).
+			WithReportableDetails(map[string]interface{}{"gateway": gateway}).
+			Mark(ierr.ErrNotImplemented)
+	}
+}
+
+// SetPaymentMethodProvider overrides GetPaymentMethodProvider with a fixed adapter.
+// Tests use this when no live gateway connection exists. Production never calls it.
+func (f *Factory) SetPaymentMethodProvider(provider interfaces.PaymentMethodProvider) {
+	f.paymentMethodProvider = provider
+}
+
+// SetCheckoutProvider overrides GetCheckoutProvider with a fixed adapter.
+// Tests use this when no live gateway connection exists. Production never calls it.
+func (f *Factory) SetCheckoutProvider(provider interfaces.CheckoutProvider) {
+	f.checkoutProvider = provider
+}
+
 // GetCheckoutProvider returns the CheckoutProvider adapter for the given payment provider.
 // Returns ErrValidation for providers that do not support hosted checkout.
 func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.CheckoutPaymentProvider, customerSvc interfaces.CustomerService, invoiceSvc interfaces.InvoiceService) (interfaces.CheckoutProvider, error) {
+	if f.checkoutProvider != nil {
+		return f.checkoutProvider, nil
+	}
 	switch provider {
 	case types.CheckoutPaymentProviderRazorpay:
 		i, err := f.GetRazorpayIntegration(ctx)
@@ -1529,8 +1671,20 @@ func (f *Factory) GetCheckoutProvider(ctx context.Context, provider types.Checko
 		}
 		return &chargebee.CheckoutAdapter{
 			Client:      i.Client,
-			CustomerSvc: i.CustomerSvc.(*chargebee.CustomerService),
-			InvoiceSvc:  i.InvoiceSvc.(*chargebee.InvoiceService),
+			CustomerSvc: i.CustomerSvc,
+			InvoiceSvc:  i.InvoiceSvc,
+			Logger:      f.logger,
+		}, nil
+	case types.CheckoutPaymentProviderStripe:
+		i, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &stripe.CheckoutAdapter{
+			Client:      i.Client,
+			PaymentSvc:  i.PaymentSvc,
+			CustomerSvc: customerSvc,
+			InvoiceSvc:  invoiceSvc,
 			Logger:      f.logger,
 		}, nil
 	default:

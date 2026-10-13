@@ -85,6 +85,18 @@ jobs:
             --set secrets.existingSecret=flexprice-secrets \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
+      - name: helm lint (values-gce.example)
+        run: helm lint internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-gce.example.yaml
+
+      - name: helm template + kubeconform (values-gce.example)
+        run: |
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            -f internal/ee/infrastructure/helm/values-gce.example.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+
+      - name: GCE render and defaults guard
+        run: ./internal/ee/infrastructure/helm/scripts/validate-gce-render.sh
+
   install-dry-run-kind:
     name: helm install --dry-run on kind
     runs-on: ubuntu-latest
@@ -100,7 +112,7 @@ jobs:
           version: '3.14.0'
 
       - name: Create kind cluster
-        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
           version: v0.24.0
           node_image: kindest/node:v1.30.0

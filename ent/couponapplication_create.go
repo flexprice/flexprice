@@ -27,282 +27,282 @@ type CouponApplicationCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (cac *CouponApplicationCreate) SetTenantID(s string) *CouponApplicationCreate {
-	cac.mutation.SetTenantID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetTenantID(v string) *CouponApplicationCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (cac *CouponApplicationCreate) SetStatus(s string) *CouponApplicationCreate {
-	cac.mutation.SetStatus(s)
-	return cac
+func (_c *CouponApplicationCreate) SetStatus(v string) *CouponApplicationCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableStatus(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetStatus(*s)
+func (_c *CouponApplicationCreate) SetNillableStatus(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (cac *CouponApplicationCreate) SetCreatedAt(t time.Time) *CouponApplicationCreate {
-	cac.mutation.SetCreatedAt(t)
-	return cac
+func (_c *CouponApplicationCreate) SetCreatedAt(v time.Time) *CouponApplicationCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableCreatedAt(t *time.Time) *CouponApplicationCreate {
-	if t != nil {
-		cac.SetCreatedAt(*t)
+func (_c *CouponApplicationCreate) SetNillableCreatedAt(v *time.Time) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (cac *CouponApplicationCreate) SetUpdatedAt(t time.Time) *CouponApplicationCreate {
-	cac.mutation.SetUpdatedAt(t)
-	return cac
+func (_c *CouponApplicationCreate) SetUpdatedAt(v time.Time) *CouponApplicationCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableUpdatedAt(t *time.Time) *CouponApplicationCreate {
-	if t != nil {
-		cac.SetUpdatedAt(*t)
+func (_c *CouponApplicationCreate) SetNillableUpdatedAt(v *time.Time) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (cac *CouponApplicationCreate) SetCreatedBy(s string) *CouponApplicationCreate {
-	cac.mutation.SetCreatedBy(s)
-	return cac
+func (_c *CouponApplicationCreate) SetCreatedBy(v string) *CouponApplicationCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableCreatedBy(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetCreatedBy(*s)
+func (_c *CouponApplicationCreate) SetNillableCreatedBy(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (cac *CouponApplicationCreate) SetUpdatedBy(s string) *CouponApplicationCreate {
-	cac.mutation.SetUpdatedBy(s)
-	return cac
+func (_c *CouponApplicationCreate) SetUpdatedBy(v string) *CouponApplicationCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableUpdatedBy(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetUpdatedBy(*s)
+func (_c *CouponApplicationCreate) SetNillableUpdatedBy(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (cac *CouponApplicationCreate) SetEnvironmentID(s string) *CouponApplicationCreate {
-	cac.mutation.SetEnvironmentID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetEnvironmentID(v string) *CouponApplicationCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableEnvironmentID(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetEnvironmentID(*s)
+func (_c *CouponApplicationCreate) SetNillableEnvironmentID(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCouponID sets the "coupon_id" field.
-func (cac *CouponApplicationCreate) SetCouponID(s string) *CouponApplicationCreate {
-	cac.mutation.SetCouponID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetCouponID(v string) *CouponApplicationCreate {
+	_c.mutation.SetCouponID(v)
+	return _c
 }
 
 // SetCouponAssociationID sets the "coupon_association_id" field.
-func (cac *CouponApplicationCreate) SetCouponAssociationID(s string) *CouponApplicationCreate {
-	cac.mutation.SetCouponAssociationID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetCouponAssociationID(v string) *CouponApplicationCreate {
+	_c.mutation.SetCouponAssociationID(v)
+	return _c
 }
 
 // SetNillableCouponAssociationID sets the "coupon_association_id" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableCouponAssociationID(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetCouponAssociationID(*s)
+func (_c *CouponApplicationCreate) SetNillableCouponAssociationID(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetCouponAssociationID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetInvoiceID sets the "invoice_id" field.
-func (cac *CouponApplicationCreate) SetInvoiceID(s string) *CouponApplicationCreate {
-	cac.mutation.SetInvoiceID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetInvoiceID(v string) *CouponApplicationCreate {
+	_c.mutation.SetInvoiceID(v)
+	return _c
 }
 
 // SetInvoiceLineItemID sets the "invoice_line_item_id" field.
-func (cac *CouponApplicationCreate) SetInvoiceLineItemID(s string) *CouponApplicationCreate {
-	cac.mutation.SetInvoiceLineItemID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetInvoiceLineItemID(v string) *CouponApplicationCreate {
+	_c.mutation.SetInvoiceLineItemID(v)
+	return _c
 }
 
 // SetNillableInvoiceLineItemID sets the "invoice_line_item_id" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableInvoiceLineItemID(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetInvoiceLineItemID(*s)
+func (_c *CouponApplicationCreate) SetNillableInvoiceLineItemID(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetInvoiceLineItemID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetAppliedAt sets the "applied_at" field.
-func (cac *CouponApplicationCreate) SetAppliedAt(t time.Time) *CouponApplicationCreate {
-	cac.mutation.SetAppliedAt(t)
-	return cac
+func (_c *CouponApplicationCreate) SetAppliedAt(v time.Time) *CouponApplicationCreate {
+	_c.mutation.SetAppliedAt(v)
+	return _c
 }
 
 // SetNillableAppliedAt sets the "applied_at" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableAppliedAt(t *time.Time) *CouponApplicationCreate {
-	if t != nil {
-		cac.SetAppliedAt(*t)
+func (_c *CouponApplicationCreate) SetNillableAppliedAt(v *time.Time) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetAppliedAt(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetOriginalPrice sets the "original_price" field.
-func (cac *CouponApplicationCreate) SetOriginalPrice(d decimal.Decimal) *CouponApplicationCreate {
-	cac.mutation.SetOriginalPrice(d)
-	return cac
+func (_c *CouponApplicationCreate) SetOriginalPrice(v decimal.Decimal) *CouponApplicationCreate {
+	_c.mutation.SetOriginalPrice(v)
+	return _c
 }
 
 // SetFinalPrice sets the "final_price" field.
-func (cac *CouponApplicationCreate) SetFinalPrice(d decimal.Decimal) *CouponApplicationCreate {
-	cac.mutation.SetFinalPrice(d)
-	return cac
+func (_c *CouponApplicationCreate) SetFinalPrice(v decimal.Decimal) *CouponApplicationCreate {
+	_c.mutation.SetFinalPrice(v)
+	return _c
 }
 
 // SetDiscountedAmount sets the "discounted_amount" field.
-func (cac *CouponApplicationCreate) SetDiscountedAmount(d decimal.Decimal) *CouponApplicationCreate {
-	cac.mutation.SetDiscountedAmount(d)
-	return cac
+func (_c *CouponApplicationCreate) SetDiscountedAmount(v decimal.Decimal) *CouponApplicationCreate {
+	_c.mutation.SetDiscountedAmount(v)
+	return _c
 }
 
 // SetDiscountType sets the "discount_type" field.
-func (cac *CouponApplicationCreate) SetDiscountType(s string) *CouponApplicationCreate {
-	cac.mutation.SetDiscountType(s)
-	return cac
+func (_c *CouponApplicationCreate) SetDiscountType(v string) *CouponApplicationCreate {
+	_c.mutation.SetDiscountType(v)
+	return _c
 }
 
 // SetDiscountPercentage sets the "discount_percentage" field.
-func (cac *CouponApplicationCreate) SetDiscountPercentage(d decimal.Decimal) *CouponApplicationCreate {
-	cac.mutation.SetDiscountPercentage(d)
-	return cac
+func (_c *CouponApplicationCreate) SetDiscountPercentage(v decimal.Decimal) *CouponApplicationCreate {
+	_c.mutation.SetDiscountPercentage(v)
+	return _c
 }
 
 // SetNillableDiscountPercentage sets the "discount_percentage" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableDiscountPercentage(d *decimal.Decimal) *CouponApplicationCreate {
-	if d != nil {
-		cac.SetDiscountPercentage(*d)
+func (_c *CouponApplicationCreate) SetNillableDiscountPercentage(v *decimal.Decimal) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetDiscountPercentage(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (cac *CouponApplicationCreate) SetCurrency(s string) *CouponApplicationCreate {
-	cac.mutation.SetCurrency(s)
-	return cac
+func (_c *CouponApplicationCreate) SetCurrency(v string) *CouponApplicationCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableCurrency(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetCurrency(*s)
+func (_c *CouponApplicationCreate) SetNillableCurrency(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetCurrency(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetCouponSnapshot sets the "coupon_snapshot" field.
-func (cac *CouponApplicationCreate) SetCouponSnapshot(m map[string]interface{}) *CouponApplicationCreate {
-	cac.mutation.SetCouponSnapshot(m)
-	return cac
+func (_c *CouponApplicationCreate) SetCouponSnapshot(v map[string]interface{}) *CouponApplicationCreate {
+	_c.mutation.SetCouponSnapshot(v)
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (cac *CouponApplicationCreate) SetMetadata(m map[string]string) *CouponApplicationCreate {
-	cac.mutation.SetMetadata(m)
-	return cac
+func (_c *CouponApplicationCreate) SetMetadata(v map[string]string) *CouponApplicationCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (cac *CouponApplicationCreate) SetSubscriptionID(s string) *CouponApplicationCreate {
-	cac.mutation.SetSubscriptionID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetSubscriptionID(v string) *CouponApplicationCreate {
+	_c.mutation.SetSubscriptionID(v)
+	return _c
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (cac *CouponApplicationCreate) SetNillableSubscriptionID(s *string) *CouponApplicationCreate {
-	if s != nil {
-		cac.SetSubscriptionID(*s)
+func (_c *CouponApplicationCreate) SetNillableSubscriptionID(v *string) *CouponApplicationCreate {
+	if v != nil {
+		_c.SetSubscriptionID(*v)
 	}
-	return cac
+	return _c
 }
 
 // SetID sets the "id" field.
-func (cac *CouponApplicationCreate) SetID(s string) *CouponApplicationCreate {
-	cac.mutation.SetID(s)
-	return cac
+func (_c *CouponApplicationCreate) SetID(v string) *CouponApplicationCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // SetCoupon sets the "coupon" edge to the Coupon entity.
-func (cac *CouponApplicationCreate) SetCoupon(c *Coupon) *CouponApplicationCreate {
-	return cac.SetCouponID(c.ID)
+func (_c *CouponApplicationCreate) SetCoupon(v *Coupon) *CouponApplicationCreate {
+	return _c.SetCouponID(v.ID)
 }
 
 // AddCouponAssociationIDs adds the "coupon_association" edge to the CouponAssociation entity by IDs.
-func (cac *CouponApplicationCreate) AddCouponAssociationIDs(ids ...string) *CouponApplicationCreate {
-	cac.mutation.AddCouponAssociationIDs(ids...)
-	return cac
+func (_c *CouponApplicationCreate) AddCouponAssociationIDs(ids ...string) *CouponApplicationCreate {
+	_c.mutation.AddCouponAssociationIDs(ids...)
+	return _c
 }
 
 // AddCouponAssociation adds the "coupon_association" edges to the CouponAssociation entity.
-func (cac *CouponApplicationCreate) AddCouponAssociation(c ...*CouponAssociation) *CouponApplicationCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *CouponApplicationCreate) AddCouponAssociation(v ...*CouponAssociation) *CouponApplicationCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return cac.AddCouponAssociationIDs(ids...)
+	return _c.AddCouponAssociationIDs(ids...)
 }
 
 // SetInvoice sets the "invoice" edge to the Invoice entity.
-func (cac *CouponApplicationCreate) SetInvoice(i *Invoice) *CouponApplicationCreate {
-	return cac.SetInvoiceID(i.ID)
+func (_c *CouponApplicationCreate) SetInvoice(v *Invoice) *CouponApplicationCreate {
+	return _c.SetInvoiceID(v.ID)
 }
 
 // SetInvoiceLineItem sets the "invoice_line_item" edge to the InvoiceLineItem entity.
-func (cac *CouponApplicationCreate) SetInvoiceLineItem(i *InvoiceLineItem) *CouponApplicationCreate {
-	return cac.SetInvoiceLineItemID(i.ID)
+func (_c *CouponApplicationCreate) SetInvoiceLineItem(v *InvoiceLineItem) *CouponApplicationCreate {
+	return _c.SetInvoiceLineItemID(v.ID)
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (cac *CouponApplicationCreate) SetSubscription(s *Subscription) *CouponApplicationCreate {
-	return cac.SetSubscriptionID(s.ID)
+func (_c *CouponApplicationCreate) SetSubscription(v *Subscription) *CouponApplicationCreate {
+	return _c.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the CouponApplicationMutation object of the builder.
-func (cac *CouponApplicationCreate) Mutation() *CouponApplicationMutation {
-	return cac.mutation
+func (_c *CouponApplicationCreate) Mutation() *CouponApplicationMutation {
+	return _c.mutation
 }
 
 // Save creates the CouponApplication in the database.
-func (cac *CouponApplicationCreate) Save(ctx context.Context) (*CouponApplication, error) {
-	cac.defaults()
-	return withHooks(ctx, cac.sqlSave, cac.mutation, cac.hooks)
+func (_c *CouponApplicationCreate) Save(ctx context.Context) (*CouponApplication, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (cac *CouponApplicationCreate) SaveX(ctx context.Context) *CouponApplication {
-	v, err := cac.Save(ctx)
+func (_c *CouponApplicationCreate) SaveX(ctx context.Context) *CouponApplication {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -310,112 +310,112 @@ func (cac *CouponApplicationCreate) SaveX(ctx context.Context) *CouponApplicatio
 }
 
 // Exec executes the query.
-func (cac *CouponApplicationCreate) Exec(ctx context.Context) error {
-	_, err := cac.Save(ctx)
+func (_c *CouponApplicationCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cac *CouponApplicationCreate) ExecX(ctx context.Context) {
-	if err := cac.Exec(ctx); err != nil {
+func (_c *CouponApplicationCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (cac *CouponApplicationCreate) defaults() {
-	if _, ok := cac.mutation.Status(); !ok {
+func (_c *CouponApplicationCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := couponapplication.DefaultStatus
-		cac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := cac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := couponapplication.DefaultCreatedAt()
-		cac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := cac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := couponapplication.DefaultUpdatedAt()
-		cac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := cac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := couponapplication.DefaultEnvironmentID
-		cac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := cac.mutation.AppliedAt(); !ok {
+	if _, ok := _c.mutation.AppliedAt(); !ok {
 		v := couponapplication.DefaultAppliedAt()
-		cac.mutation.SetAppliedAt(v)
+		_c.mutation.SetAppliedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (cac *CouponApplicationCreate) check() error {
-	if _, ok := cac.mutation.TenantID(); !ok {
+func (_c *CouponApplicationCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "CouponApplication.tenant_id"`)}
 	}
-	if v, ok := cac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := couponapplication.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "CouponApplication.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "CouponApplication.status"`)}
 	}
-	if _, ok := cac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CouponApplication.created_at"`)}
 	}
-	if _, ok := cac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "CouponApplication.updated_at"`)}
 	}
-	if _, ok := cac.mutation.CouponID(); !ok {
+	if _, ok := _c.mutation.CouponID(); !ok {
 		return &ValidationError{Name: "coupon_id", err: errors.New(`ent: missing required field "CouponApplication.coupon_id"`)}
 	}
-	if v, ok := cac.mutation.CouponID(); ok {
+	if v, ok := _c.mutation.CouponID(); ok {
 		if err := couponapplication.CouponIDValidator(v); err != nil {
 			return &ValidationError{Name: "coupon_id", err: fmt.Errorf(`ent: validator failed for field "CouponApplication.coupon_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.InvoiceID(); !ok {
+	if _, ok := _c.mutation.InvoiceID(); !ok {
 		return &ValidationError{Name: "invoice_id", err: errors.New(`ent: missing required field "CouponApplication.invoice_id"`)}
 	}
-	if v, ok := cac.mutation.InvoiceID(); ok {
+	if v, ok := _c.mutation.InvoiceID(); ok {
 		if err := couponapplication.InvoiceIDValidator(v); err != nil {
 			return &ValidationError{Name: "invoice_id", err: fmt.Errorf(`ent: validator failed for field "CouponApplication.invoice_id": %w`, err)}
 		}
 	}
-	if _, ok := cac.mutation.AppliedAt(); !ok {
+	if _, ok := _c.mutation.AppliedAt(); !ok {
 		return &ValidationError{Name: "applied_at", err: errors.New(`ent: missing required field "CouponApplication.applied_at"`)}
 	}
-	if _, ok := cac.mutation.OriginalPrice(); !ok {
+	if _, ok := _c.mutation.OriginalPrice(); !ok {
 		return &ValidationError{Name: "original_price", err: errors.New(`ent: missing required field "CouponApplication.original_price"`)}
 	}
-	if _, ok := cac.mutation.FinalPrice(); !ok {
+	if _, ok := _c.mutation.FinalPrice(); !ok {
 		return &ValidationError{Name: "final_price", err: errors.New(`ent: missing required field "CouponApplication.final_price"`)}
 	}
-	if _, ok := cac.mutation.DiscountedAmount(); !ok {
+	if _, ok := _c.mutation.DiscountedAmount(); !ok {
 		return &ValidationError{Name: "discounted_amount", err: errors.New(`ent: missing required field "CouponApplication.discounted_amount"`)}
 	}
-	if _, ok := cac.mutation.DiscountType(); !ok {
+	if _, ok := _c.mutation.DiscountType(); !ok {
 		return &ValidationError{Name: "discount_type", err: errors.New(`ent: missing required field "CouponApplication.discount_type"`)}
 	}
-	if v, ok := cac.mutation.DiscountType(); ok {
+	if v, ok := _c.mutation.DiscountType(); ok {
 		if err := couponapplication.DiscountTypeValidator(v); err != nil {
 			return &ValidationError{Name: "discount_type", err: fmt.Errorf(`ent: validator failed for field "CouponApplication.discount_type": %w`, err)}
 		}
 	}
-	if len(cac.mutation.CouponIDs()) == 0 {
+	if len(_c.mutation.CouponIDs()) == 0 {
 		return &ValidationError{Name: "coupon", err: errors.New(`ent: missing required edge "CouponApplication.coupon"`)}
 	}
-	if len(cac.mutation.InvoiceIDs()) == 0 {
+	if len(_c.mutation.InvoiceIDs()) == 0 {
 		return &ValidationError{Name: "invoice", err: errors.New(`ent: missing required edge "CouponApplication.invoice"`)}
 	}
 	return nil
 }
 
-func (cac *CouponApplicationCreate) sqlSave(ctx context.Context) (*CouponApplication, error) {
-	if err := cac.check(); err != nil {
+func (_c *CouponApplicationCreate) sqlSave(ctx context.Context) (*CouponApplication, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := cac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, cac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -428,89 +428,89 @@ func (cac *CouponApplicationCreate) sqlSave(ctx context.Context) (*CouponApplica
 			return nil, fmt.Errorf("unexpected CouponApplication.ID type: %T", _spec.ID.Value)
 		}
 	}
-	cac.mutation.id = &_node.ID
-	cac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (cac *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.CreateSpec) {
+func (_c *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.CreateSpec) {
 	var (
-		_node = &CouponApplication{config: cac.config}
+		_node = &CouponApplication{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(couponapplication.Table, sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString))
 	)
-	if id, ok := cac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := cac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(couponapplication.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := cac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(couponapplication.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := cac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(couponapplication.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := cac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(couponapplication.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := cac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(couponapplication.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := cac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(couponapplication.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := cac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(couponapplication.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := cac.mutation.CouponAssociationID(); ok {
+	if value, ok := _c.mutation.CouponAssociationID(); ok {
 		_spec.SetField(couponapplication.FieldCouponAssociationID, field.TypeString, value)
 		_node.CouponAssociationID = &value
 	}
-	if value, ok := cac.mutation.AppliedAt(); ok {
+	if value, ok := _c.mutation.AppliedAt(); ok {
 		_spec.SetField(couponapplication.FieldAppliedAt, field.TypeTime, value)
 		_node.AppliedAt = value
 	}
-	if value, ok := cac.mutation.OriginalPrice(); ok {
+	if value, ok := _c.mutation.OriginalPrice(); ok {
 		_spec.SetField(couponapplication.FieldOriginalPrice, field.TypeOther, value)
 		_node.OriginalPrice = value
 	}
-	if value, ok := cac.mutation.FinalPrice(); ok {
+	if value, ok := _c.mutation.FinalPrice(); ok {
 		_spec.SetField(couponapplication.FieldFinalPrice, field.TypeOther, value)
 		_node.FinalPrice = value
 	}
-	if value, ok := cac.mutation.DiscountedAmount(); ok {
+	if value, ok := _c.mutation.DiscountedAmount(); ok {
 		_spec.SetField(couponapplication.FieldDiscountedAmount, field.TypeOther, value)
 		_node.DiscountedAmount = value
 	}
-	if value, ok := cac.mutation.DiscountType(); ok {
+	if value, ok := _c.mutation.DiscountType(); ok {
 		_spec.SetField(couponapplication.FieldDiscountType, field.TypeString, value)
 		_node.DiscountType = value
 	}
-	if value, ok := cac.mutation.DiscountPercentage(); ok {
+	if value, ok := _c.mutation.DiscountPercentage(); ok {
 		_spec.SetField(couponapplication.FieldDiscountPercentage, field.TypeOther, value)
 		_node.DiscountPercentage = &value
 	}
-	if value, ok := cac.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(couponapplication.FieldCurrency, field.TypeString, value)
 		_node.Currency = &value
 	}
-	if value, ok := cac.mutation.CouponSnapshot(); ok {
+	if value, ok := _c.mutation.CouponSnapshot(); ok {
 		_spec.SetField(couponapplication.FieldCouponSnapshot, field.TypeJSON, value)
 		_node.CouponSnapshot = value
 	}
-	if value, ok := cac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(couponapplication.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if nodes := cac.mutation.CouponIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -527,7 +527,7 @@ func (cac *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.
 		_node.CouponID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.CouponAssociationIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CouponAssociationIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2M,
 			Inverse: true,
@@ -543,7 +543,7 @@ func (cac *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.InvoiceIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -560,7 +560,7 @@ func (cac *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.
 		_node.InvoiceID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.InvoiceLineItemIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.InvoiceLineItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -577,7 +577,7 @@ func (cac *CouponApplicationCreate) createSpec() (*CouponApplication, *sqlgraph.
 		_node.InvoiceLineItemID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := cac.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -605,16 +605,16 @@ type CouponApplicationCreateBulk struct {
 }
 
 // Save creates the CouponApplication entities in the database.
-func (cacb *CouponApplicationCreateBulk) Save(ctx context.Context) ([]*CouponApplication, error) {
-	if cacb.err != nil {
-		return nil, cacb.err
+func (_c *CouponApplicationCreateBulk) Save(ctx context.Context) ([]*CouponApplication, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(cacb.builders))
-	nodes := make([]*CouponApplication, len(cacb.builders))
-	mutators := make([]Mutator, len(cacb.builders))
-	for i := range cacb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*CouponApplication, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := cacb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*CouponApplicationMutation)
@@ -628,11 +628,11 @@ func (cacb *CouponApplicationCreateBulk) Save(ctx context.Context) ([]*CouponApp
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, cacb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, cacb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -652,7 +652,7 @@ func (cacb *CouponApplicationCreateBulk) Save(ctx context.Context) ([]*CouponApp
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, cacb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -660,8 +660,8 @@ func (cacb *CouponApplicationCreateBulk) Save(ctx context.Context) ([]*CouponApp
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (cacb *CouponApplicationCreateBulk) SaveX(ctx context.Context) []*CouponApplication {
-	v, err := cacb.Save(ctx)
+func (_c *CouponApplicationCreateBulk) SaveX(ctx context.Context) []*CouponApplication {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -669,14 +669,14 @@ func (cacb *CouponApplicationCreateBulk) SaveX(ctx context.Context) []*CouponApp
 }
 
 // Exec executes the query.
-func (cacb *CouponApplicationCreateBulk) Exec(ctx context.Context) error {
-	_, err := cacb.Save(ctx)
+func (_c *CouponApplicationCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (cacb *CouponApplicationCreateBulk) ExecX(ctx context.Context) {
-	if err := cacb.Exec(ctx); err != nil {
+func (_c *CouponApplicationCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

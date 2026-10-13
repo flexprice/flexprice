@@ -12,8 +12,8 @@ const (
 	// accepts a PUT here (to obtain a session token) — a PUT to
 	// /latest/meta-data/ returns 403 Forbidden, not 200/405, so probing that
 	// path never actually detects a real AWS instance.
-	defaultAWSMetadataURL     = "http://169.254.169.254/latest/api/token"
-	awsMetadataTokenTTLHeader = "X-aws-ec2-metadata-token-ttl-seconds"
+	defaultAWSMetadataURL     = "http://169.254.169.254/latest/api/token" // #nosec G101 -- IMDS endpoint URL, not a secret
+	awsMetadataTokenTTLHeader = "X-aws-ec2-metadata-token-ttl-seconds"    // #nosec G101 -- HTTP header name, not a secret
 	awsMetadataTokenTTL       = "21600"
 	defaultProbeTimeout       = 500 * time.Millisecond
 )

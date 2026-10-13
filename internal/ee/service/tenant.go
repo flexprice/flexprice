@@ -225,23 +225,7 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 		return nil, err
 	}
 
-	var billingDetails tenant.TenantBillingDetails
-	if req.BillingDetails != nil {
-		billingDetails = tenant.TenantBillingDetails{
-			Email:     req.BillingDetails.Email,
-			HelpEmail: req.BillingDetails.HelpEmail,
-			Phone:     req.BillingDetails.Phone,
-			Address: tenant.TenantAddress{
-				Line1:      req.BillingDetails.Address.Line1,
-				Line2:      req.BillingDetails.Address.Line2,
-				City:       req.BillingDetails.Address.City,
-				State:      req.BillingDetails.Address.State,
-				PostalCode: req.BillingDetails.Address.PostalCode,
-				Country:    req.BillingDetails.Address.Country,
-			},
-		}
-	}
-	existingTenant.BillingDetails = billingDetails
+	existingTenant.BillingDetails = req.BillingDetails.MergeInto(existingTenant.BillingDetails)
 
 	// Update the name only if it is explicitly provided (not nil), not empty, and different from existing
 	if req.Name != nil && *req.Name != "" && *req.Name != existingTenant.Name {

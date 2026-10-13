@@ -23,177 +23,177 @@ type AddonCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (ac *AddonCreate) SetTenantID(s string) *AddonCreate {
-	ac.mutation.SetTenantID(s)
-	return ac
+func (_c *AddonCreate) SetTenantID(v string) *AddonCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (ac *AddonCreate) SetStatus(s string) *AddonCreate {
-	ac.mutation.SetStatus(s)
-	return ac
+func (_c *AddonCreate) SetStatus(v string) *AddonCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableStatus(s *string) *AddonCreate {
-	if s != nil {
-		ac.SetStatus(*s)
+func (_c *AddonCreate) SetNillableStatus(v *string) *AddonCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (ac *AddonCreate) SetCreatedAt(t time.Time) *AddonCreate {
-	ac.mutation.SetCreatedAt(t)
-	return ac
+func (_c *AddonCreate) SetCreatedAt(v time.Time) *AddonCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableCreatedAt(t *time.Time) *AddonCreate {
-	if t != nil {
-		ac.SetCreatedAt(*t)
+func (_c *AddonCreate) SetNillableCreatedAt(v *time.Time) *AddonCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (ac *AddonCreate) SetUpdatedAt(t time.Time) *AddonCreate {
-	ac.mutation.SetUpdatedAt(t)
-	return ac
+func (_c *AddonCreate) SetUpdatedAt(v time.Time) *AddonCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableUpdatedAt(t *time.Time) *AddonCreate {
-	if t != nil {
-		ac.SetUpdatedAt(*t)
+func (_c *AddonCreate) SetNillableUpdatedAt(v *time.Time) *AddonCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (ac *AddonCreate) SetCreatedBy(s string) *AddonCreate {
-	ac.mutation.SetCreatedBy(s)
-	return ac
+func (_c *AddonCreate) SetCreatedBy(v string) *AddonCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableCreatedBy(s *string) *AddonCreate {
-	if s != nil {
-		ac.SetCreatedBy(*s)
+func (_c *AddonCreate) SetNillableCreatedBy(v *string) *AddonCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (ac *AddonCreate) SetUpdatedBy(s string) *AddonCreate {
-	ac.mutation.SetUpdatedBy(s)
-	return ac
+func (_c *AddonCreate) SetUpdatedBy(v string) *AddonCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableUpdatedBy(s *string) *AddonCreate {
-	if s != nil {
-		ac.SetUpdatedBy(*s)
+func (_c *AddonCreate) SetNillableUpdatedBy(v *string) *AddonCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (ac *AddonCreate) SetEnvironmentID(s string) *AddonCreate {
-	ac.mutation.SetEnvironmentID(s)
-	return ac
+func (_c *AddonCreate) SetEnvironmentID(v string) *AddonCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableEnvironmentID(s *string) *AddonCreate {
-	if s != nil {
-		ac.SetEnvironmentID(*s)
+func (_c *AddonCreate) SetNillableEnvironmentID(v *string) *AddonCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (ac *AddonCreate) SetLookupKey(s string) *AddonCreate {
-	ac.mutation.SetLookupKey(s)
-	return ac
+func (_c *AddonCreate) SetLookupKey(v string) *AddonCreate {
+	_c.mutation.SetLookupKey(v)
+	return _c
 }
 
 // SetName sets the "name" field.
-func (ac *AddonCreate) SetName(s string) *AddonCreate {
-	ac.mutation.SetName(s)
-	return ac
+func (_c *AddonCreate) SetName(v string) *AddonCreate {
+	_c.mutation.SetName(v)
+	return _c
 }
 
 // SetDescription sets the "description" field.
-func (ac *AddonCreate) SetDescription(s string) *AddonCreate {
-	ac.mutation.SetDescription(s)
-	return ac
+func (_c *AddonCreate) SetDescription(v string) *AddonCreate {
+	_c.mutation.SetDescription(v)
+	return _c
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (ac *AddonCreate) SetNillableDescription(s *string) *AddonCreate {
-	if s != nil {
-		ac.SetDescription(*s)
+func (_c *AddonCreate) SetNillableDescription(v *string) *AddonCreate {
+	if v != nil {
+		_c.SetDescription(*v)
 	}
-	return ac
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (ac *AddonCreate) SetMetadata(m map[string]interface{}) *AddonCreate {
-	ac.mutation.SetMetadata(m)
-	return ac
+func (_c *AddonCreate) SetMetadata(v map[string]interface{}) *AddonCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (ac *AddonCreate) SetID(s string) *AddonCreate {
-	ac.mutation.SetID(s)
-	return ac
+func (_c *AddonCreate) SetID(v string) *AddonCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
-func (ac *AddonCreate) AddEntitlementIDs(ids ...string) *AddonCreate {
-	ac.mutation.AddEntitlementIDs(ids...)
-	return ac
+func (_c *AddonCreate) AddEntitlementIDs(ids ...string) *AddonCreate {
+	_c.mutation.AddEntitlementIDs(ids...)
+	return _c
 }
 
 // AddEntitlements adds the "entitlements" edges to the Entitlement entity.
-func (ac *AddonCreate) AddEntitlements(e ...*Entitlement) *AddonCreate {
-	ids := make([]string, len(e))
-	for i := range e {
-		ids[i] = e[i].ID
+func (_c *AddonCreate) AddEntitlements(v ...*Entitlement) *AddonCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return ac.AddEntitlementIDs(ids...)
+	return _c.AddEntitlementIDs(ids...)
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
-func (ac *AddonCreate) AddCreditGrantIDs(ids ...string) *AddonCreate {
-	ac.mutation.AddCreditGrantIDs(ids...)
-	return ac
+func (_c *AddonCreate) AddCreditGrantIDs(ids ...string) *AddonCreate {
+	_c.mutation.AddCreditGrantIDs(ids...)
+	return _c
 }
 
 // AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
-func (ac *AddonCreate) AddCreditGrants(c ...*CreditGrant) *AddonCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_c *AddonCreate) AddCreditGrants(v ...*CreditGrant) *AddonCreate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return ac.AddCreditGrantIDs(ids...)
+	return _c.AddCreditGrantIDs(ids...)
 }
 
 // Mutation returns the AddonMutation object of the builder.
-func (ac *AddonCreate) Mutation() *AddonMutation {
-	return ac.mutation
+func (_c *AddonCreate) Mutation() *AddonMutation {
+	return _c.mutation
 }
 
 // Save creates the Addon in the database.
-func (ac *AddonCreate) Save(ctx context.Context) (*Addon, error) {
-	ac.defaults()
-	return withHooks(ctx, ac.sqlSave, ac.mutation, ac.hooks)
+func (_c *AddonCreate) Save(ctx context.Context) (*Addon, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (ac *AddonCreate) SaveX(ctx context.Context) *Addon {
-	v, err := ac.Save(ctx)
+func (_c *AddonCreate) SaveX(ctx context.Context) *Addon {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -201,69 +201,69 @@ func (ac *AddonCreate) SaveX(ctx context.Context) *Addon {
 }
 
 // Exec executes the query.
-func (ac *AddonCreate) Exec(ctx context.Context) error {
-	_, err := ac.Save(ctx)
+func (_c *AddonCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (ac *AddonCreate) ExecX(ctx context.Context) {
-	if err := ac.Exec(ctx); err != nil {
+func (_c *AddonCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (ac *AddonCreate) defaults() {
-	if _, ok := ac.mutation.Status(); !ok {
+func (_c *AddonCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := addon.DefaultStatus
-		ac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := ac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := addon.DefaultCreatedAt()
-		ac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := ac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := addon.DefaultUpdatedAt()
-		ac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := ac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := addon.DefaultEnvironmentID
-		ac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (ac *AddonCreate) check() error {
-	if _, ok := ac.mutation.TenantID(); !ok {
+func (_c *AddonCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Addon.tenant_id"`)}
 	}
-	if v, ok := ac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := addon.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "Addon.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := ac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Addon.status"`)}
 	}
-	if _, ok := ac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Addon.created_at"`)}
 	}
-	if _, ok := ac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Addon.updated_at"`)}
 	}
-	if _, ok := ac.mutation.LookupKey(); !ok {
+	if _, ok := _c.mutation.LookupKey(); !ok {
 		return &ValidationError{Name: "lookup_key", err: errors.New(`ent: missing required field "Addon.lookup_key"`)}
 	}
-	if v, ok := ac.mutation.LookupKey(); ok {
+	if v, ok := _c.mutation.LookupKey(); ok {
 		if err := addon.LookupKeyValidator(v); err != nil {
 			return &ValidationError{Name: "lookup_key", err: fmt.Errorf(`ent: validator failed for field "Addon.lookup_key": %w`, err)}
 		}
 	}
-	if _, ok := ac.mutation.Name(); !ok {
+	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Addon.name"`)}
 	}
-	if v, ok := ac.mutation.Name(); ok {
+	if v, ok := _c.mutation.Name(); ok {
 		if err := addon.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Addon.name": %w`, err)}
 		}
@@ -271,12 +271,12 @@ func (ac *AddonCreate) check() error {
 	return nil
 }
 
-func (ac *AddonCreate) sqlSave(ctx context.Context) (*Addon, error) {
-	if err := ac.check(); err != nil {
+func (_c *AddonCreate) sqlSave(ctx context.Context) (*Addon, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := ac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, ac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -289,65 +289,65 @@ func (ac *AddonCreate) sqlSave(ctx context.Context) (*Addon, error) {
 			return nil, fmt.Errorf("unexpected Addon.ID type: %T", _spec.ID.Value)
 		}
 	}
-	ac.mutation.id = &_node.ID
-	ac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (ac *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
+func (_c *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Addon{config: ac.config}
+		_node = &Addon{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(addon.Table, sqlgraph.NewFieldSpec(addon.FieldID, field.TypeString))
 	)
-	if id, ok := ac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := ac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(addon.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := ac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(addon.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := ac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(addon.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := ac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(addon.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := ac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(addon.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := ac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(addon.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := ac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(addon.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := ac.mutation.LookupKey(); ok {
+	if value, ok := _c.mutation.LookupKey(); ok {
 		_spec.SetField(addon.FieldLookupKey, field.TypeString, value)
 		_node.LookupKey = value
 	}
-	if value, ok := ac.mutation.Name(); ok {
+	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(addon.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := ac.mutation.Description(); ok {
+	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(addon.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
-	if value, ok := ac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(addon.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if nodes := ac.mutation.EntitlementsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.EntitlementsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -363,7 +363,7 @@ func (ac *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := ac.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -390,16 +390,16 @@ type AddonCreateBulk struct {
 }
 
 // Save creates the Addon entities in the database.
-func (acb *AddonCreateBulk) Save(ctx context.Context) ([]*Addon, error) {
-	if acb.err != nil {
-		return nil, acb.err
+func (_c *AddonCreateBulk) Save(ctx context.Context) ([]*Addon, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(acb.builders))
-	nodes := make([]*Addon, len(acb.builders))
-	mutators := make([]Mutator, len(acb.builders))
-	for i := range acb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*Addon, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := acb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AddonMutation)
@@ -413,11 +413,11 @@ func (acb *AddonCreateBulk) Save(ctx context.Context) ([]*Addon, error) {
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, acb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, acb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -437,7 +437,7 @@ func (acb *AddonCreateBulk) Save(ctx context.Context) ([]*Addon, error) {
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, acb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -445,8 +445,8 @@ func (acb *AddonCreateBulk) Save(ctx context.Context) ([]*Addon, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (acb *AddonCreateBulk) SaveX(ctx context.Context) []*Addon {
-	v, err := acb.Save(ctx)
+func (_c *AddonCreateBulk) SaveX(ctx context.Context) []*Addon {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -454,14 +454,14 @@ func (acb *AddonCreateBulk) SaveX(ctx context.Context) []*Addon {
 }
 
 // Exec executes the query.
-func (acb *AddonCreateBulk) Exec(ctx context.Context) error {
-	_, err := acb.Save(ctx)
+func (_c *AddonCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (acb *AddonCreateBulk) ExecX(ctx context.Context) {
-	if err := acb.Exec(ctx); err != nil {
+func (_c *AddonCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

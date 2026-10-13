@@ -132,7 +132,7 @@ func (*CouponAssociation) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CouponAssociation fields.
-func (ca *CouponAssociation) assignValues(columns []string, values []any) error {
+func (_m *CouponAssociation) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -142,99 +142,99 @@ func (ca *CouponAssociation) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				ca.ID = value.String
+				_m.ID = value.String
 			}
 		case couponassociation.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				ca.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case couponassociation.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				ca.Status = value.String
+				_m.Status = value.String
 			}
 		case couponassociation.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				ca.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case couponassociation.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				ca.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case couponassociation.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				ca.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case couponassociation.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				ca.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case couponassociation.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				ca.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case couponassociation.FieldCouponID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field coupon_id", values[i])
 			} else if value.Valid {
-				ca.CouponID = value.String
+				_m.CouponID = value.String
 			}
 		case couponassociation.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				ca.SubscriptionID = value.String
+				_m.SubscriptionID = value.String
 			}
 		case couponassociation.FieldSubscriptionLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_line_item_id", values[i])
 			} else if value.Valid {
-				ca.SubscriptionLineItemID = new(string)
-				*ca.SubscriptionLineItemID = value.String
+				_m.SubscriptionLineItemID = new(string)
+				*_m.SubscriptionLineItemID = value.String
 			}
 		case couponassociation.FieldSubscriptionPhaseID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_phase_id", values[i])
 			} else if value.Valid {
-				ca.SubscriptionPhaseID = new(string)
-				*ca.SubscriptionPhaseID = value.String
+				_m.SubscriptionPhaseID = new(string)
+				*_m.SubscriptionPhaseID = value.String
 			}
 		case couponassociation.FieldStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				ca.StartDate = value.Time
+				_m.StartDate = value.Time
 			}
 		case couponassociation.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				ca.EndDate = new(time.Time)
-				*ca.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case couponassociation.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &ca.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			ca.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -242,100 +242,100 @@ func (ca *CouponAssociation) assignValues(columns []string, values []any) error 
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CouponAssociation.
 // This includes values selected through modifiers, order, etc.
-func (ca *CouponAssociation) Value(name string) (ent.Value, error) {
-	return ca.selectValues.Get(name)
+func (_m *CouponAssociation) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryCoupon queries the "coupon" edge of the CouponAssociation entity.
-func (ca *CouponAssociation) QueryCoupon() *CouponQuery {
-	return NewCouponAssociationClient(ca.config).QueryCoupon(ca)
+func (_m *CouponAssociation) QueryCoupon() *CouponQuery {
+	return NewCouponAssociationClient(_m.config).QueryCoupon(_m)
 }
 
 // QuerySubscription queries the "subscription" edge of the CouponAssociation entity.
-func (ca *CouponAssociation) QuerySubscription() *SubscriptionQuery {
-	return NewCouponAssociationClient(ca.config).QuerySubscription(ca)
+func (_m *CouponAssociation) QuerySubscription() *SubscriptionQuery {
+	return NewCouponAssociationClient(_m.config).QuerySubscription(_m)
 }
 
 // QuerySubscriptionLineItem queries the "subscription_line_item" edge of the CouponAssociation entity.
-func (ca *CouponAssociation) QuerySubscriptionLineItem() *SubscriptionLineItemQuery {
-	return NewCouponAssociationClient(ca.config).QuerySubscriptionLineItem(ca)
+func (_m *CouponAssociation) QuerySubscriptionLineItem() *SubscriptionLineItemQuery {
+	return NewCouponAssociationClient(_m.config).QuerySubscriptionLineItem(_m)
 }
 
 // QueryCouponApplications queries the "coupon_applications" edge of the CouponAssociation entity.
-func (ca *CouponAssociation) QueryCouponApplications() *CouponApplicationQuery {
-	return NewCouponAssociationClient(ca.config).QueryCouponApplications(ca)
+func (_m *CouponAssociation) QueryCouponApplications() *CouponApplicationQuery {
+	return NewCouponAssociationClient(_m.config).QueryCouponApplications(_m)
 }
 
 // Update returns a builder for updating this CouponAssociation.
 // Note that you need to call CouponAssociation.Unwrap() before calling this method if this CouponAssociation
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (ca *CouponAssociation) Update() *CouponAssociationUpdateOne {
-	return NewCouponAssociationClient(ca.config).UpdateOne(ca)
+func (_m *CouponAssociation) Update() *CouponAssociationUpdateOne {
+	return NewCouponAssociationClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CouponAssociation entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (ca *CouponAssociation) Unwrap() *CouponAssociation {
-	_tx, ok := ca.config.driver.(*txDriver)
+func (_m *CouponAssociation) Unwrap() *CouponAssociation {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CouponAssociation is not a transactional entity")
 	}
-	ca.config.driver = _tx.drv
-	return ca
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (ca *CouponAssociation) String() string {
+func (_m *CouponAssociation) String() string {
 	var builder strings.Builder
 	builder.WriteString("CouponAssociation(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", ca.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(ca.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(ca.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(ca.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(ca.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(ca.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(ca.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(ca.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("coupon_id=")
-	builder.WriteString(ca.CouponID)
+	builder.WriteString(_m.CouponID)
 	builder.WriteString(", ")
 	builder.WriteString("subscription_id=")
-	builder.WriteString(ca.SubscriptionID)
+	builder.WriteString(_m.SubscriptionID)
 	builder.WriteString(", ")
-	if v := ca.SubscriptionLineItemID; v != nil {
+	if v := _m.SubscriptionLineItemID; v != nil {
 		builder.WriteString("subscription_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := ca.SubscriptionPhaseID; v != nil {
+	if v := _m.SubscriptionPhaseID; v != nil {
 		builder.WriteString("subscription_phase_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("start_date=")
-	builder.WriteString(ca.StartDate.Format(time.ANSIC))
+	builder.WriteString(_m.StartDate.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := ca.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", ca.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

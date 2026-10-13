@@ -95,6 +95,12 @@ runs:
           --region "$REGION" \
           --query 'taskDefinition')
 
+        # Fixed destination for migration logs. Not derived from the service's
+        # task definition: that is json-file on India prod, so there is nothing
+        # to derive.
+        LOG_GROUP="/ecs/flexprice-migrate"
+        LOG_PREFIX="migrate"
+
         if [ "$DRY_RUN" = "true" ]; then
           echo "  [DRY RUN] Would register a -migrate task definition and run ./migrate postgres up"
           exit 0
@@ -106,7 +112,8 @@ runs:
         # a log shipper or proxy has nothing to do here and would keep the task
         # RUNNING after the migration container exits, so the task never stops.
         NEW_TASK_DEF=$(echo "$TASK_DEF" \
-          | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" \
+          | LOG_GROUP="$LOG_GROUP" LOG_PREFIX="$LOG_PREFIX" REGION="$REGION" \
+            ECR_REPO_PREFIX="$ECR_REPO_PREFIX" \
             GHCR_REPO_PREFIX="$GHCR_REPO_PREFIX" \
             GHCR_CREDENTIALS_ARN="$GHCR_CREDENTIALS_ARN" \
             IMAGE="$IMAGE" python3 -c "
@@ -138,6 +145,22 @@ runs:
         # A migration task must not be restarted or health-checked as a service.
         c.pop('healthCheck', None)
         c['portMappings'] = []
+
+        # Log to CloudWatch, whatever the service uses. India prod's task
+        # definition is json-file, which keeps stdout on the EC2 instance where
+        # neither this workflow nor the ECS API can read it -- a failed migration
+        # would report an exit code and nothing else. Overriding here changes
+        # logging for THIS task only: the family is renamed below, the service's
+        # own task definition is never modified, and the app keeps json-file.
+        c['logConfiguration'] = {
+            'logDriver': 'awslogs',
+            'options': {
+                'awslogs-group': os.environ['LOG_GROUP'],
+                'awslogs-region': os.environ['REGION'],
+                'awslogs-stream-prefix': os.environ['LOG_PREFIX'],
+            },
+        }
+        c.pop('secretOptions', None)
         td['containerDefinitions'] = [c]
 
         # Separate family so migration revisions never appear in the service's
@@ -194,6 +217,35 @@ runs:
           fi
         fi
 
+        # The group MUST exist before the task starts. With the awslogs driver a
+        # missing group is a CONTAINER START failure, and the error looks nothing
+        # like a logging problem. It has to be created here rather than by the
+        # task: on EC2 launch type the awslogs driver uses the container
+        # INSTANCE's role (AmazonEC2ContainerServiceforEC2Role), which grants
+        # CreateLogStream and PutLogEvents but NOT CreateLogGroup.
+        # Existence is confirmed from create-log-group's own outcome rather than a
+        # describe call: logs:DescribeLogGroups does not support resource-level
+        # permissions -- it is denied unless granted on "*" -- and a wildcard read
+        # grant is not worth adding for a check this can do directly.
+        CG_ERR="$(mktemp)"
+        if aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$REGION" 2>"$CG_ERR"; then
+          echo "  created log group $LOG_GROUP"
+        elif grep -q "ResourceAlreadyExistsException" "$CG_ERR"; then
+          :
+        else
+          echo "  ERROR: log group $LOG_GROUP does not exist and could not be created." >&2
+          echo "         The migration task would fail to START with the awslogs driver," >&2
+          echo "         with an error that does not mention logging." >&2
+          sed 's/^/         /' "$CG_ERR" >&2
+          rm -f "$CG_ERR"; exit 1
+        fi
+        rm -f "$CG_ERR"
+
+        # Best-effort: retention keeps this from accumulating, but a missing
+        # PutRetentionPolicy grant must not block a migration.
+        aws logs put-retention-policy --log-group-name "$LOG_GROUP" \
+          --retention-in-days 30 --region "$REGION" 2>/dev/null || true
+
         TASK=$(aws "${RUN_ARGS[@]}" --query 'tasks[0].taskArn' --output text)
         if [ -z "$TASK" ] || [ "$TASK" = "None" ]; then
           echo "  ERROR: run-task returned no task; check cluster capacity and failures above" >&2
@@ -221,20 +273,6 @@ runs:
         # Print the migration's own output. Without this a failure shows only an
         # exit code, and the message that says which migration broke -- or that the
         # database was never adopted -- stays in CloudWatch where nobody looks.
-        LOG_CFG=$(echo "$TASK_DEF" | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" GHCR_REPO_PREFIX="$GHCR_REPO_PREFIX" python3 -c "
-        import json, sys, os
-        ecr_prefix  = os.environ['ECR_REPO_PREFIX']
-        ghcr_prefix = os.environ['GHCR_REPO_PREFIX']
-        td = json.load(sys.stdin)
-        for c in td['containerDefinitions']:
-            if c.get('image','').startswith(ecr_prefix) or c.get('image','').startswith(ghcr_prefix):
-                o = (c.get('logConfiguration') or {}).get('options', {})
-                print(o.get('awslogs-group',''))
-                print(o.get('awslogs-stream-prefix',''))
-                break
-        ")
-        LOG_GROUP=$(echo "$LOG_CFG" | sed -n '1p')
-        LOG_PREFIX=$(echo "$LOG_CFG" | sed -n '2p')
 
         if [ -n "$LOG_GROUP" ] && [ -n "$LOG_PREFIX" ]; then
           echo "  ---- migration output ----"

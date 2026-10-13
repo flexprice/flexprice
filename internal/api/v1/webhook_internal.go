@@ -14,6 +14,7 @@ var _ = []any{
 	(*apidto.RetryOutboundWebhookResponse)(nil),
 	(*webhookDto.InvoiceWebhookPayload)(nil),
 	(*webhookDto.CommunicationWebhookPayload)(nil),
+	(*webhookDto.InvoiceSyncWebhookPayload)(nil),
 	(*webhookDto.SubscriptionWebhookPayload)(nil),
 	(*webhookDto.SubscriptionPhaseWebhookPayload)(nil),
 	(*webhookDto.CustomerWebhookPayload)(nil),
@@ -26,13 +27,14 @@ var _ = []any{
 	(*webhookDto.TransactionWebhookPayload)(nil),
 	(*webhookDto.TransactionUpdatedWebhookPayload)(nil),
 	(*webhookDto.CreditNoteWebhookPayload)(nil),
+	(*webhookDto.RefundWebhookPayload)(nil),
 	(*webhookDto.CheckoutSessionWebhookPayload)(nil),
 	(*webhookDto.RejectedEventWebhookPayload)(nil),
 }
 
 // WebhookEventInvoiceCreateDrafted godoc
 // @Summary invoice.create.drafted
-// @Description Fired when a new invoice is created in draft state. Doc-only for parsing.
+// @Description Fired when a new invoice is created in draft state. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -42,7 +44,7 @@ func WebhookEventInvoiceCreateDrafted() {}
 
 // WebhookEventInvoiceUpdateFinalized godoc
 // @Summary invoice.update.finalized
-// @Description Fired when an invoice is finalized and locked for payment. Doc-only for parsing.
+// @Description Fired when an invoice is finalized and locked for payment. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -52,7 +54,7 @@ func WebhookEventInvoiceUpdateFinalized() {}
 
 // WebhookEventInvoiceUpdateVoided godoc
 // @Summary invoice.update.voided
-// @Description Fired when an invoice is voided (e.g. order cancelled or duplicate). Doc-only for parsing.
+// @Description Fired when an invoice is voided (e.g. order cancelled or duplicate). `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -62,7 +64,7 @@ func WebhookEventInvoiceUpdateVoided() {}
 
 // WebhookEventInvoiceUpdatePayment godoc
 // @Summary invoice.update.payment
-// @Description Fired when an invoice payment status changes. Doc-only for parsing.
+// @Description Fired when an invoice payment status changes. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -72,7 +74,7 @@ func WebhookEventInvoiceUpdatePayment() {}
 
 // WebhookEventInvoiceUpdate godoc
 // @Summary invoice.update
-// @Description Fired when an invoice is updated. Doc-only for parsing.
+// @Description Fired when an invoice is updated. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -82,7 +84,7 @@ func WebhookEventInvoiceUpdate() {}
 
 // WebhookEventInvoicePaymentOverdue godoc
 // @Summary invoice.payment.overdue
-// @Description Fired when an invoice payment is overdue past the due date. Doc-only for parsing.
+// @Description Fired when an invoice payment is overdue past the due date. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -90,9 +92,29 @@ func WebhookEventInvoiceUpdate() {}
 // @Router /webhook-events/invoice.payment.overdue [post]
 func WebhookEventInvoicePaymentOverdue() {}
 
+// WebhookEventInvoiceSyncSuccess godoc
+// @Summary invoice.sync.success
+// @Description Fired once per provider when an invoice is synced to that provider.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.sync.success [post]
+func WebhookEventInvoiceSyncSuccess() {}
+
+// WebhookEventInvoiceSyncFailed godoc
+// @Summary invoice.sync.failed
+// @Description Fired once per provider when an invoice sync fails after its last retry.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.InvoiceSyncWebhookPayload "Webhook payload"
+// @Router /webhook-events/invoice.sync.failed [post]
+func WebhookEventInvoiceSyncFailed() {}
+
 // WebhookEventInvoiceCommunicationTriggered godoc
 // @Summary invoice.communication.triggered
-// @Description Fired when an invoice communication (e.g. email notification) is triggered. Doc-only for parsing.
+// @Description Fired when an invoice communication (e.g. email notification) is triggered. `invoice.line_items` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and `invoice.subscription.plan.prices` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.
 // @Tags Webhook Events
 // @Accept json
 // @Produce json
@@ -549,6 +571,36 @@ func WebhookEventCreditNoteCreated() {}
 // @Success 200 {object} webhookDto.CreditNoteWebhookPayload "Webhook payload"
 // @Router /webhook-events/credit_note.updated [post]
 func WebhookEventCreditNoteUpdated() {}
+
+// WebhookEventRefundCreated godoc
+// @Summary refund.created
+// @Description Fired when a refund is planned against an invoice, before the money moves. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
+// @Router /webhook-events/refund.created [post]
+func WebhookEventRefundCreated() {}
+
+// WebhookEventRefundSucceeded godoc
+// @Summary refund.succeeded
+// @Description Fired when a refund settles, to the original payment gateway or to a wallet. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
+// @Router /webhook-events/refund.succeeded [post]
+func WebhookEventRefundSucceeded() {}
+
+// WebhookEventRefundFailed godoc
+// @Summary refund.failed
+// @Description Fired when a refund fails. A gateway refund that fails is retried into the customer's wallet. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.RefundWebhookPayload "Webhook payload"
+// @Router /webhook-events/refund.failed [post]
+func WebhookEventRefundFailed() {}
 
 // WebhookEventCheckoutSessionInitiated godoc
 // @Summary checkout.session.initiated

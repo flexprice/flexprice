@@ -153,7 +153,7 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CreditGrant fields.
-func (cg *CreditGrant) assignValues(columns []string, values []any) error {
+func (_m *CreditGrant) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -163,155 +163,155 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				cg.ID = value.String
+				_m.ID = value.String
 			}
 		case creditgrant.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				cg.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case creditgrant.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				cg.Status = value.String
+				_m.Status = value.String
 			}
 		case creditgrant.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				cg.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case creditgrant.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				cg.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case creditgrant.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				cg.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case creditgrant.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				cg.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case creditgrant.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				cg.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case creditgrant.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				cg.Name = value.String
+				_m.Name = value.String
 			}
 		case creditgrant.FieldScope:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field scope", values[i])
 			} else if value.Valid {
-				cg.Scope = types.CreditGrantScope(value.String)
+				_m.Scope = types.CreditGrantScope(value.String)
 			}
 		case creditgrant.FieldPlanID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field plan_id", values[i])
 			} else if value.Valid {
-				cg.PlanID = new(string)
-				*cg.PlanID = value.String
+				_m.PlanID = new(string)
+				*_m.PlanID = value.String
 			}
 		case creditgrant.FieldSubscriptionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_id", values[i])
 			} else if value.Valid {
-				cg.SubscriptionID = new(string)
-				*cg.SubscriptionID = value.String
+				_m.SubscriptionID = new(string)
+				*_m.SubscriptionID = value.String
 			}
 		case creditgrant.FieldAddonID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_id", values[i])
 			} else if value.Valid {
-				cg.AddonID = new(string)
-				*cg.AddonID = value.String
+				_m.AddonID = new(string)
+				*_m.AddonID = value.String
 			}
 		case creditgrant.FieldCredits:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
-				cg.Credits = *value
+				_m.Credits = *value
 			}
 		case creditgrant.FieldConversionRate:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
 			} else if value.Valid {
-				cg.ConversionRate = new(decimal.Decimal)
-				*cg.ConversionRate = *value.S.(*decimal.Decimal)
+				_m.ConversionRate = new(decimal.Decimal)
+				*_m.ConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case creditgrant.FieldTopupConversionRate:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field topup_conversion_rate", values[i])
 			} else if value.Valid {
-				cg.TopupConversionRate = new(decimal.Decimal)
-				*cg.TopupConversionRate = *value.S.(*decimal.Decimal)
+				_m.TopupConversionRate = new(decimal.Decimal)
+				*_m.TopupConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case creditgrant.FieldCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field cadence", values[i])
 			} else if value.Valid {
-				cg.Cadence = types.CreditGrantCadence(value.String)
+				_m.Cadence = types.CreditGrantCadence(value.String)
 			}
 		case creditgrant.FieldPeriod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field period", values[i])
 			} else if value.Valid {
-				cg.Period = new(types.CreditGrantPeriod)
-				*cg.Period = types.CreditGrantPeriod(value.String)
+				_m.Period = new(types.CreditGrantPeriod)
+				*_m.Period = types.CreditGrantPeriod(value.String)
 			}
 		case creditgrant.FieldPeriodCount:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field period_count", values[i])
 			} else if value.Valid {
-				cg.PeriodCount = new(int)
-				*cg.PeriodCount = int(value.Int64)
+				_m.PeriodCount = new(int)
+				*_m.PeriodCount = int(value.Int64)
 			}
 		case creditgrant.FieldExpirationType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field expiration_type", values[i])
 			} else if value.Valid {
-				cg.ExpirationType = types.CreditGrantExpiryType(value.String)
+				_m.ExpirationType = types.CreditGrantExpiryType(value.String)
 			}
 		case creditgrant.FieldExpirationDuration:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field expiration_duration", values[i])
 			} else if value.Valid {
-				cg.ExpirationDuration = new(int)
-				*cg.ExpirationDuration = int(value.Int64)
+				_m.ExpirationDuration = new(int)
+				*_m.ExpirationDuration = int(value.Int64)
 			}
 		case creditgrant.FieldExpirationDurationUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field expiration_duration_unit", values[i])
 			} else if value.Valid {
-				cg.ExpirationDurationUnit = new(types.CreditGrantExpiryDurationUnit)
-				*cg.ExpirationDurationUnit = types.CreditGrantExpiryDurationUnit(value.String)
+				_m.ExpirationDurationUnit = new(types.CreditGrantExpiryDurationUnit)
+				*_m.ExpirationDurationUnit = types.CreditGrantExpiryDurationUnit(value.String)
 			}
 		case creditgrant.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
-				cg.Priority = new(int)
-				*cg.Priority = int(value.Int64)
+				_m.Priority = new(int)
+				*_m.Priority = int(value.Int64)
 			}
 		case creditgrant.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cg.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -319,25 +319,25 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				cg.StartDate = new(time.Time)
-				*cg.StartDate = value.Time
+				_m.StartDate = new(time.Time)
+				*_m.StartDate = value.Time
 			}
 		case creditgrant.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				cg.EndDate = new(time.Time)
-				*cg.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case creditgrant.FieldCreditGrantAnchor:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_grant_anchor", values[i])
 			} else if value.Valid {
-				cg.CreditGrantAnchor = new(time.Time)
-				*cg.CreditGrantAnchor = value.Time
+				_m.CreditGrantAnchor = new(time.Time)
+				*_m.CreditGrantAnchor = value.Time
 			}
 		default:
-			cg.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -345,148 +345,148 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CreditGrant.
 // This includes values selected through modifiers, order, etc.
-func (cg *CreditGrant) Value(name string) (ent.Value, error) {
-	return cg.selectValues.Get(name)
+func (_m *CreditGrant) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryPlan queries the "plan" edge of the CreditGrant entity.
-func (cg *CreditGrant) QueryPlan() *PlanQuery {
-	return NewCreditGrantClient(cg.config).QueryPlan(cg)
+func (_m *CreditGrant) QueryPlan() *PlanQuery {
+	return NewCreditGrantClient(_m.config).QueryPlan(_m)
 }
 
 // QuerySubscription queries the "subscription" edge of the CreditGrant entity.
-func (cg *CreditGrant) QuerySubscription() *SubscriptionQuery {
-	return NewCreditGrantClient(cg.config).QuerySubscription(cg)
+func (_m *CreditGrant) QuerySubscription() *SubscriptionQuery {
+	return NewCreditGrantClient(_m.config).QuerySubscription(_m)
 }
 
 // QueryAddon queries the "addon" edge of the CreditGrant entity.
-func (cg *CreditGrant) QueryAddon() *AddonQuery {
-	return NewCreditGrantClient(cg.config).QueryAddon(cg)
+func (_m *CreditGrant) QueryAddon() *AddonQuery {
+	return NewCreditGrantClient(_m.config).QueryAddon(_m)
 }
 
 // Update returns a builder for updating this CreditGrant.
 // Note that you need to call CreditGrant.Unwrap() before calling this method if this CreditGrant
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (cg *CreditGrant) Update() *CreditGrantUpdateOne {
-	return NewCreditGrantClient(cg.config).UpdateOne(cg)
+func (_m *CreditGrant) Update() *CreditGrantUpdateOne {
+	return NewCreditGrantClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CreditGrant entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (cg *CreditGrant) Unwrap() *CreditGrant {
-	_tx, ok := cg.config.driver.(*txDriver)
+func (_m *CreditGrant) Unwrap() *CreditGrant {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CreditGrant is not a transactional entity")
 	}
-	cg.config.driver = _tx.drv
-	return cg
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (cg *CreditGrant) String() string {
+func (_m *CreditGrant) String() string {
 	var builder strings.Builder
 	builder.WriteString("CreditGrant(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", cg.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(cg.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(cg.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(cg.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(cg.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(cg.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(cg.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(cg.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(cg.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("scope=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Scope))
+	builder.WriteString(fmt.Sprintf("%v", _m.Scope))
 	builder.WriteString(", ")
-	if v := cg.PlanID; v != nil {
+	if v := _m.PlanID; v != nil {
 		builder.WriteString("plan_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cg.SubscriptionID; v != nil {
+	if v := _m.SubscriptionID; v != nil {
 		builder.WriteString("subscription_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := cg.AddonID; v != nil {
+	if v := _m.AddonID; v != nil {
 		builder.WriteString("addon_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("credits=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Credits))
+	builder.WriteString(fmt.Sprintf("%v", _m.Credits))
 	builder.WriteString(", ")
-	if v := cg.ConversionRate; v != nil {
+	if v := _m.ConversionRate; v != nil {
 		builder.WriteString("conversion_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.TopupConversionRate; v != nil {
+	if v := _m.TopupConversionRate; v != nil {
 		builder.WriteString("topup_conversion_rate=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("cadence=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Cadence))
+	builder.WriteString(fmt.Sprintf("%v", _m.Cadence))
 	builder.WriteString(", ")
-	if v := cg.Period; v != nil {
+	if v := _m.Period; v != nil {
 		builder.WriteString("period=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.PeriodCount; v != nil {
+	if v := _m.PeriodCount; v != nil {
 		builder.WriteString("period_count=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("expiration_type=")
-	builder.WriteString(fmt.Sprintf("%v", cg.ExpirationType))
+	builder.WriteString(fmt.Sprintf("%v", _m.ExpirationType))
 	builder.WriteString(", ")
-	if v := cg.ExpirationDuration; v != nil {
+	if v := _m.ExpirationDuration; v != nil {
 		builder.WriteString("expiration_duration=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.ExpirationDurationUnit; v != nil {
+	if v := _m.ExpirationDurationUnit; v != nil {
 		builder.WriteString("expiration_duration_unit=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := cg.Priority; v != nil {
+	if v := _m.Priority; v != nil {
 		builder.WriteString("priority=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", cg.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	if v := cg.StartDate; v != nil {
+	if v := _m.StartDate; v != nil {
 		builder.WriteString("start_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cg.EndDate; v != nil {
+	if v := _m.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := cg.CreditGrantAnchor; v != nil {
+	if v := _m.CreditGrantAnchor; v != nil {
 		builder.WriteString("credit_grant_anchor=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}

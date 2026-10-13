@@ -6,11 +6,9 @@ name: PR Security Scan
 #   - trivy fs   -> go.sum dependency CVEs (the shift-left dep-CVE gate)
 #   - trivy config -> Dockerfile / Dockerfile.e2eprobe misconfiguration
 #
-# Phase 1 is soft-fail (exit-code 0): like the Checkov rollout there is likely
-# legacy dep-CVE debt, and a hard gate on day one would block every PR. It
-# reports without failing while the baseline is triaged. Phase 2 flips the
-# `trivy fs` step to exit-code 1 on HIGH/CRITICAL fixable vulns once triage is
-# done; `trivy config` stays soft-fail until the Dockerfile findings are cleared.
+# Both are hard gates: their HIGH/CRITICAL baselines are 0 on develop.
+# `trivy fs` fails the PR on fixable dep CVEs; `trivy config` fails it on
+# Dockerfile misconfiguration.
 
 on:
   pull_request:
@@ -30,7 +28,7 @@ jobs:
       # Dependency CVEs from go.sum. Secret/license scanners are disabled
       # (scanners: vuln) — GitGuardian already owns secret detection, so
       # running Trivy's secret scanner here would only duplicate findings.
-      # Phase 2: flip exit-code to '1' after the CVE baseline is triaged.
+      # Hard gate: baseline triaged to 0 fixable HIGH/CRITICAL (FLE-1232).
       - name: Trivy fs scan (Go dependency CVEs)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -40,10 +38,11 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
-          exit-code: '0'
+          exit-code: '1'
 
       # Dockerfile / IaC misconfiguration (Dockerfile, Dockerfile.e2eprobe).
-      # Stays soft-fail through phase 2 until the findings are cleared.
+      # Hard gate: HIGH/CRITICAL baseline is 0 on develop, so a new Dockerfile
+      # misconfig blocks the PR.
       - name: Trivy config scan (Dockerfile misconfig)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -51,4 +50,4 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           format: table
-          exit-code: '0'
+          exit-code: '1'

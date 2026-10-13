@@ -142,7 +142,7 @@ func (s *migrationScript) updateEntitiesWithEnvironmentID(ctx context.Context, t
 		if result.Next() {
 			rowsAffected = 1
 		}
-		result.Close()
+		result.Close() // #nosec G104 -- seed tooling, non-prod
 
 		s.log.Infow("Updated entity", "entity", entity, "tenant_id", tenantID, "environment_id", environmentID, "rows_affected", rowsAffected)
 	}

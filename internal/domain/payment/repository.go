@@ -39,6 +39,8 @@ type Repository interface {
 	// Payment operations
 	Create(ctx context.Context, payment *Payment) error
 	Get(ctx context.Context, id string) (*Payment, error)
+	// GetLinkedCustomerID returns the customer the payment is linked to, in any status; "" when it has none.
+	GetLinkedCustomerID(ctx context.Context, id string) (string, error)
 	Update(ctx context.Context, payment *Payment) error
 	// UpdateWithExpectedStatus writes the payment only while its stored status
 	// still equals expectedStatus, so a lifecycle check made against a value

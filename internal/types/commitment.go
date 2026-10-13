@@ -191,3 +191,12 @@ type CommitmentInfo struct {
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount" swaggertype:"string"`
 	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount" swaggertype:"string"`
 }
+
+// DefaultOverageFactor returns the overage factor applied when a commitment is
+// configured without an explicit one. 1.0 means usage beyond the commitment
+// bills at the base rate (no premium), which matches the API contract where
+// overage_factor / commitment_overage_factor are optional fields.
+func DefaultOverageFactor() *decimal.Decimal {
+	f := decimal.NewFromInt(1)
+	return &f
+}

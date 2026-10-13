@@ -13,6 +13,7 @@ type CheckoutConfiguration struct {
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
+	PayInvoiceParams         *PayInvoiceParams         `json:"pay_invoice_params,omitempty"`
 }
 
 // Validate validates that the configuration holds all required fields
@@ -48,6 +49,13 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.AddAddonParams.Validate()
+	case CheckoutActionPayInvoice:
+		if c.PayInvoiceParams == nil {
+			return ierr.NewError("pay_invoice_params is required for pay_invoice action").
+				WithHint("Provide pay_invoice_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		return c.PayInvoiceParams.Validate()
 	}
 	return nil
 }
@@ -108,18 +116,37 @@ func (p *CreateSubscriptionParams) Validate() error {
 	return nil
 }
 
+type ModifySubscriptionType string
+
+const (
+	ModifySubscriptionTypeQuantityChange ModifySubscriptionType = "quantity_change"
+	ModifySubscriptionTypeLineItemChange ModifySubscriptionType = "line_item_change"
+)
+
 // ModifySubscriptionParams is persisted on checkout sessions for payment-gated
 // subscription modifications (e.g. quantity_change). Applied on payment success.
 type ModifySubscriptionParams struct {
 	SubscriptionID        string                       `json:"subscription_id"`
+	ModifyType            ModifySubscriptionType       `json:"modify_type,omitempty"`
 	LineItemModifications []ModifySubscriptionLineItem `json:"line_item_modifications"`
 }
 
 // ModifySubscriptionLineItem is one close-and-replace intent for a line item.
 type ModifySubscriptionLineItem struct {
-	LineItemID    string          `json:"line_item_id"`
-	Quantity      decimal.Decimal `json:"quantity" swaggertype:"string"`
-	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+	LineItemID    string           `json:"line_item_id"`
+	Quantity      *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	Amount        *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	EffectiveDate *time.Time       `json:"effective_date,omitempty"`
+	Coupons       []CouponRef      `json:"coupons,omitempty"`
+}
+
+// CouponRef is a coupon resolved at quote time, applied as-is at execute time and on replay.
+type CouponRef struct {
+	AssociationID string     `json:"association_id"`
+	CouponID      string     `json:"coupon_id"`
+	PriceID       *string    `json:"price_id,omitempty"`
+	StartDate     time.Time  `json:"start_date"`
+	EndDate       *time.Time `json:"end_date,omitempty"`
 }
 
 func (p *ModifySubscriptionParams) Validate() error {
@@ -144,9 +171,15 @@ func (p *ModifySubscriptionParams) Validate() error {
 				WithReportableDetails(map[string]any{"index": i}).
 				Mark(ierr.ErrValidation)
 		}
-		if mod.Quantity.IsNegative() {
+		if mod.Quantity != nil && mod.Quantity.IsNegative() {
 			return ierr.NewError("quantity must be non-negative").
 				WithHint("Quantity cannot be negative").
+				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
+				Mark(ierr.ErrValidation)
+		}
+		if mod.Amount != nil && mod.Amount.IsNegative() {
+			return ierr.NewError("amount must be non-negative").
+				WithHint("Amount cannot be negative").
 				WithReportableDetails(map[string]any{"index": i, "line_item_id": mod.LineItemID}).
 				Mark(ierr.ErrValidation)
 		}
@@ -160,8 +193,9 @@ func (p *ModifySubscriptionParams) Validate() error {
 // List-shaped so batching more than one addon per session is additive; the attach endpoint
 // is single-addon today, so sessions carry one, but completion loops the list.
 type AddAddonParams struct {
-	SubscriptionID string        `json:"subscription_id"`
-	Addons         []AddAddonRef `json:"addons"`
+	SubscriptionID string           `json:"subscription_id"`
+	Addons         []AddAddonRef    `json:"addons"`
+	Removes        []RemoveAddonRef `json:"removes,omitempty"`
 }
 
 // AddAddonRef is one pending addon attach, carrying everything needed to replay the attach
@@ -173,6 +207,16 @@ type AddAddonRef struct {
 	// Needed to prorate the addon's first credit grant.
 	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         time.Time         `json:"start_date"`
+	Coupons           []CouponRef       `json:"coupons,omitempty"`
+}
+
+// RemoveAddonRef is one removal riding along with a payment-gated attach. It persists nothing
+// at execute time, so it replays by association rather than by addon.
+type RemoveAddonRef struct {
+	AssociationID     string            `json:"association_id"`
+	Reason            string            `json:"reason,omitempty"`
+	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
+	EffectiveDate     time.Time         `json:"effective_date"`
 }
 
 func (p *AddAddonParams) Validate() error {
@@ -220,6 +264,35 @@ func (p *AddAddonParams) Validate() error {
 		}
 	}
 
+	seen := make(map[string]struct{}, len(p.Removes))
+	for i, ref := range p.Removes {
+		if ref.AssociationID == "" {
+			return ierr.NewError("association_id is required").
+				WithHint("Each remove must reference the addon association being removed").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if _, ok := seen[ref.AssociationID]; ok {
+			return ierr.NewError("duplicate association_id in removes").
+				WithHint("Each addon association can be removed at most once per checkout session").
+				WithReportableDetails(map[string]any{"index": i, "association_id": ref.AssociationID}).
+				Mark(ierr.ErrValidation)
+		}
+		seen[ref.AssociationID] = struct{}{}
+
+		if ref.ProrationBehavior != "" {
+			if err := ref.ProrationBehavior.Validate(); err != nil {
+				return err
+			}
+		}
+		if ref.EffectiveDate.IsZero() {
+			return ierr.NewError("effective_date is required").
+				WithHint("effective_date must be resolved at execute time so completion replays the same removal date").
+				WithReportableDetails(map[string]any{"index": i, "association_id": ref.AssociationID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -229,6 +302,20 @@ func (p *AddAddonParams) Validate() error {
 type WalletTopupParams struct {
 	WalletID            string `json:"wallet_id" validate:"required"`
 	WalletTransactionID string `json:"wallet_transaction_id,omitempty"`
+}
+
+// PayInvoiceParams is persisted on checkout sessions for payment-gated one-off invoices.
+// InvoiceID duplicates session.CheckoutInvoiceID so completion can cross-check the two.
+type PayInvoiceParams struct {
+	InvoiceID string `json:"invoice_id" validate:"required"`
+}
+
+func (p *PayInvoiceParams) Validate() error {
+	if p == nil {
+		return ierr.NewError("pay_invoice_params is required").
+			Mark(ierr.ErrValidation)
+	}
+	return validator.ValidateRequest(p)
 }
 
 func (p *WalletTopupParams) Validate() error {
@@ -279,6 +366,74 @@ type CheckoutProviderResult struct {
 	ProviderMetadata map[string]string `json:"provider_metadata,omitempty"`
 }
 
+// CheckoutProviderResultBuilder assembles a CheckoutProviderResult, optionally on top
+// of one already stored.
+//
+// Most callers only learn part of the result — a webhook knows the gateway payment id
+// but not the redirect action recorded at link creation — so the value that gets
+// persisted has to combine what a caller brings with what is already there. Writing a
+// caller's fragment straight to the column would drop the NextAction and
+// ProviderSessionID, leaving no trace back to the provider object.
+type CheckoutProviderResultBuilder struct {
+	result CheckoutProviderResult
+}
+
+// NewCheckoutProviderResultFrom starts from an existing result — typically the one
+// already stored on the session — so an overlay only has to supply what it knows.
+// A nil base starts empty.
+func NewCheckoutProviderResultFrom(base *CheckoutProviderResult) *CheckoutProviderResultBuilder {
+	b := &CheckoutProviderResultBuilder{}
+	if base != nil {
+		b.result = *base
+		// Clone rather than alias: the base belongs to the caller and the built value
+		// gets persisted.
+		if base.ProviderMetadata != nil {
+			b.result.ProviderMetadata = make(map[string]string, len(base.ProviderMetadata))
+			for k, v := range base.ProviderMetadata {
+				b.result.ProviderMetadata[k] = v
+			}
+		}
+	}
+	return b
+}
+
+// Overlay applies the non-empty fields of r, leaving everything else as it was.
+// Emptiness is the signal for "I do not know this", which is why a caller passing a
+// fragment cannot erase what is already recorded.
+func (b *CheckoutProviderResultBuilder) Overlay(r *CheckoutProviderResult) *CheckoutProviderResultBuilder {
+	if b == nil || r == nil {
+		return b
+	}
+	if r.NextAction != nil {
+		b.result.NextAction = r.NextAction
+	}
+	if r.ProviderSessionID != "" {
+		b.result.ProviderSessionID = r.ProviderSessionID
+	}
+	if r.ProviderPaymentIntentID != "" {
+		b.result.ProviderPaymentIntentID = r.ProviderPaymentIntentID
+	}
+	if r.ExpiresAt != nil {
+		b.result.ExpiresAt = r.ExpiresAt
+	}
+	for k, v := range r.ProviderMetadata {
+		if b.result.ProviderMetadata == nil {
+			b.result.ProviderMetadata = make(map[string]string, len(r.ProviderMetadata))
+		}
+		b.result.ProviderMetadata[k] = v
+	}
+	return b
+}
+
+// Build returns the assembled result. Safe on a nil builder.
+func (b *CheckoutProviderResultBuilder) Build() *CheckoutProviderResult {
+	if b == nil {
+		return nil
+	}
+	result := b.result
+	return &result
+}
+
 func (r *CheckoutProviderResult) PaymentAction() *PaymentAction {
 	if r == nil {
 		return nil
@@ -293,12 +448,10 @@ type CheckoutPaymentProviderConfig struct {
 	PaymentMethod    PaymentMethodType `json:"payment_method,omitempty"`
 	MaxMandateLimit  *decimal.Decimal  `json:"max_mandate_limit,omitempty" swaggertype:"string"`
 
-	// CustomerPresent declares the charge as customer-initiated (CIT) rather than
-	// merchant-initiated (MIT). It changes which SCA/3DS exemptions the gateway may
-	// claim and who carries chargeback liability, so it must describe reality: true
-	// only when the customer is actually at the keyboard, as in a portal one-click
-	// top-up. Unattended charges (auto top-up, dunning) leave it false.
-	CustomerPresent bool `json:"customer_present,omitempty"`
+	// CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means
+	// the customer is present, so a missed auto-charge may fall back to a hosted
+	// authorization link. Set true only from merchant-initiated paths (auto top-up).
+	CustomerNotPresent bool `json:"customer_not_present,omitempty"`
 }
 
 func (c *CheckoutPaymentProviderConfig) Validate() error {

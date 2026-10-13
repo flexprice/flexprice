@@ -90,6 +90,7 @@ generate-wl-sdks.yml fires
               ├── speakeasy run         (generate all 4 SDKs)
               ├── apply-wl-custom-branding.sh  (fix custom files)
               ├── verify-sdk-builds.sh  (compile check + branding check)
+              ├── make ts-sdk-check     (TypeScript SDK tests)
               ├── Push Go / Python / TypeScript / MCP → client GitHub repos
               ├── Create GitHub release in client's Go repo
               └── Publish to npm / PyPI (if enabled)

@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+# Hosted MCP server: runs the published @flexprice/mcp-server package unchanged.
+#
+#   docker build -f Dockerfile.mcp -t flexprice-mcp .
+#
+# Builds npm's latest version. For a specific one: --build-arg MCP_VERSION=<version>
+
+# Fetch stage
+FROM --platform=$BUILDPLATFORM node:24-alpine AS fetch
+
+ARG MCP_VERSION=latest
+
+WORKDIR /fetch
+
+# Downloaded again on every build, so Docker's cache cannot hide a new release.
+ADD https://registry.npmjs.org/@flexprice/mcp-server/${MCP_VERSION} manifest.json
+
+RUN --mount=type=cache,target=/root/.npm \
+    VERSION="$(node -p "require('./manifest.json').version")" && \
+    npm pack --ignore-scripts "@flexprice/mcp-server@${VERSION}" && \
+    tar -xzf "flexprice-mcp-server-${VERSION}.tgz" package/bin/mcp-server.js
+
+# Final stage
+FROM alpine:3.24
+
+RUN apk --no-cache add nodejs ca-certificates && \
+    addgroup -S app && adduser -S -G app app
+
+WORKDIR /app
+COPY --from=fetch /fetch/package/bin/mcp-server.js .
+
+LABEL org.opencontainers.image.title="flexprice-mcp" \
+      org.opencontainers.image.description="Flexprice MCP server over Streamable HTTP (@flexprice/mcp-server, unchanged)"
+
+USER app
+
+EXPOSE 2718
+
+# Keep --log-level at info: debug logs customers' API keys in plain text.
+ENTRYPOINT ["node", "/app/mcp-server.js", "serve", "--disable-static-auth", "--log-level", "info"]
+# Default region. Each container overrides it with its own --server-url.
+CMD ["--server-url", "https://api.cloud.flexprice.io/v1", "--port", "2718"]

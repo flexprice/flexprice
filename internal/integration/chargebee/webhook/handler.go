@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/metrics"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,7 +23,7 @@ type ServiceDependencies = interfaces.ServiceDependencies
 // Handler handles Chargebee webhook events
 type Handler struct {
 	client     chargebee.ChargebeeClient
-	invoiceSvc *chargebee.InvoiceService
+	invoiceSvc chargebee.ChargebeeInvoiceService
 	paymentSvc *chargebee.PaymentService
 	logger     *logger.Logger
 }
@@ -30,7 +31,7 @@ type Handler struct {
 // NewHandler creates a new Chargebee webhook handler
 func NewHandler(
 	client chargebee.ChargebeeClient,
-	invoiceSvc *chargebee.InvoiceService,
+	invoiceSvc chargebee.ChargebeeInvoiceService,
 	paymentSvc *chargebee.PaymentService,
 	logger *logger.Logger,
 ) *Handler {
@@ -43,7 +44,16 @@ func NewHandler(
 }
 
 // HandleWebhookEvent processes a Chargebee webhook event
-func (h *Handler) HandleWebhookEvent(ctx context.Context, event *ChargebeeWebhookEvent, environmentID string, services *ServiceDependencies) error {
+func (h *Handler) HandleWebhookEvent(ctx context.Context, event *ChargebeeWebhookEvent, environmentID string, services *ServiceDependencies) (err error) {
+	metricEventType, handled := string(event.EventType), true
+	defer func() {
+		metrics.RecordCounter(ctx, metrics.GatewayWebhooks, 1,
+			metrics.L(metrics.KeyProvider, string(types.SecretProviderChargebee)),
+			metrics.L(metrics.KeyEventType, metricEventType),
+			metrics.L(metrics.KeyOutcome, lo.Ternary(err != nil, "failed", lo.Ternary(handled, "processed", "ignored"))),
+		)
+	}()
+
 	h.logger.Info(ctx, "processing Chargebee webhook event",
 		"event_type", event.EventType,
 		"event_id", event.ID,
@@ -58,8 +68,15 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *ChargebeeWebhoo
 		return h.handlePaymentSucceeded(ctx, event, services)
 	case EventPaymentFailed:
 		return h.handlePaymentFailed(ctx, event, services)
+	case EventPaymentRefunded:
+		return h.handleRefund(ctx, event, services)
+	case EventRefundInitiated:
+		// The refund row is already PROCESSING from the API call that created it.
+		h.logger.Info(ctx, "received refund_initiated webhook", "event_id", event.ID)
+		return nil
 	default:
 		h.logger.Info(ctx, "unhandled Chargebee webhook event type", "type", event.EventType)
+		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
 }
@@ -80,8 +97,8 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	)
 
 	// A hosted checkout page creates its own Chargebee invoice, which has no entity
-	// mapping — po_number carries the Flexprice payment id for those.
-	flexpricePaymentID := invoice.PONumber
+	// mapping — the invoice note carries the Flexprice payment id for those.
+	flexpricePaymentID := invoice.ResolvePaymentID()
 	flexpriceInvoiceID, err := h.invoiceSvc.GetFlexPriceInvoiceIDByChargebeeInvoiceID(ctx, invoice.ID)
 	if err != nil {
 		if flexpricePaymentID == "" {
@@ -115,7 +132,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 
 	// A payment link created for an existing invoice has no checkout session, and the
 	// hosted page invoices the charge on a Chargebee invoice of its own, so there is no
-	// mapping either — po_number is the only thread back. Settle that payment directly.
+	// mapping either — the note is the only thread back. Settle that payment directly.
 	if handled, err := h.settleLinkedPayment(ctx, flexpricePaymentID, transaction.ID, services); err != nil {
 		return nil // Already logged; don't fail webhook processing
 	} else if handled {
@@ -130,19 +147,17 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 		return nil
 	}
 
-	// Convert amount from cents to standard unit
-	paymentAmount := decimal.NewFromInt(transaction.Amount).Div(decimal.NewFromInt(100))
+	paymentAmount := decimal.NewFromInt(transaction.Amount).
+		Shift(-types.GetCurrencyPrecision(transaction.CurrencyCode))
 
-	// Process payment via service method
-	err = h.invoiceSvc.ProcessChargebeePaymentFromWebhook(
-		ctx,
-		flexpriceInvoiceID,
-		transaction.ID,
-		invoice.ID,
-		paymentAmount,
-		transaction.CurrencyCode,
-		transaction.PaymentMethod,
-	)
+	err = h.invoiceSvc.ProcessChargebeePaymentFromWebhook(ctx, chargebee.ChargebeeWebhookPaymentRequest{
+		FlexpriceInvoiceID:     flexpriceInvoiceID,
+		ChargebeeTransactionID: transaction.ID,
+		ChargebeeInvoiceID:     invoice.ID,
+		Amount:                 paymentAmount,
+		Currency:               transaction.CurrencyCode,
+		PaymentMethod:          transaction.PaymentMethod,
+	})
 	if err != nil {
 		h.logger.Error(ctx, "failed to process Chargebee payment",
 			"error", err,
@@ -169,9 +184,10 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *ChargebeeWebho
 		return nil
 	}
 
+	flexpricePaymentID := content.Invoice.ResolvePaymentID()
 	flexpriceInvoiceID, err := h.invoiceSvc.GetFlexPriceInvoiceIDByChargebeeInvoiceID(ctx, content.Invoice.ID)
 	if err != nil {
-		if content.Invoice.PONumber == "" {
+		if flexpricePaymentID == "" {
 			h.logger.Info(ctx, "no FlexPrice invoice for failed Chargebee payment, ignoring",
 				"error", err,
 				"chargebee_invoice_id", content.Invoice.ID,
@@ -181,7 +197,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *ChargebeeWebho
 		flexpriceInvoiceID = ""
 	}
 
-	session, err := h.findCheckoutSessionForPayment(ctx, content.Invoice.PONumber, services)
+	session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
 	if err != nil || session == nil {
 		return nil
 	}
@@ -284,9 +300,9 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	return true, nil
 }
 
-// settleLinkedPayment settles the FlexPrice payment named by po_number when no
-// checkout session owns it — the /invoices/{id}/pay link path. Returns false when
-// po_number names no payment of ours, leaving the caller its invoice-mapping route.
+// settleLinkedPayment settles the FlexPrice payment named by the invoice note when
+// no checkout session owns it — the /invoices/{id}/pay link path. Returns false when
+// the note names no payment of ours, leaving the caller its invoice-mapping route.
 //
 // Settlement goes through PaymentLifecycle (not ReconcileInvoicePayment) so the
 // payment record itself moves to SUCCEEDED and the invoice is reconciled by the
@@ -301,8 +317,8 @@ func (h *Handler) settleLinkedPayment(
 		return false, nil
 	}
 
-	// po_number is free text on a Chargebee invoice, so anything that is not one of
-	// our payment ids simply is not ours to settle.
+	// A tenant's own notes land in the same array, so anything that is not one of our
+	// payment ids simply is not ours to settle.
 	if _, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID); err != nil {
 		return false, nil
 	}
@@ -377,4 +393,59 @@ func (h *Handler) parseContent(ctx context.Context, event *ChargebeeWebhookEvent
 	}
 
 	return &content, true
+}
+
+// handleRefund records the outcome Chargebee reports for a refund transaction.
+// Chargebee redelivers this event; the transition guards inside Settle and Fail are
+// what make the second delivery a no-op.
+func (h *Handler) handleRefund(ctx context.Context, event *ChargebeeWebhookEvent, services *ServiceDependencies) error {
+	var content ChargebeeWebhookContent
+	if err := json.Unmarshal(event.Content, &content); err != nil {
+		h.logger.Error(ctx, "failed to parse refund webhook content", "error", err, "event_id", event.ID)
+		return nil
+	}
+	if content.Transaction == nil {
+		h.logger.Info(ctx, "no transaction in refund event content", "event_id", event.ID)
+		return nil
+	}
+	txn := content.Transaction
+
+	row, err := services.RefundService.GetRefundByGatewayRefundID(ctx, string(types.PaymentGatewayTypeChargebee), txn.ID)
+	if err != nil {
+		h.logger.Info(ctx, "no refund row for chargebee transaction, skipping event",
+			"chargebee_transaction_id", txn.ID,
+			"error", err)
+		return nil
+	}
+
+	if refundTransactionFailed(txn.Status) {
+		if err := services.RefundService.Fail(ctx, row.ID, "chargebee reported the refund as "+txn.Status); err != nil {
+			h.logger.Error(ctx, "failed to record refund failure from webhook",
+				"error", err,
+				"refund_id", row.ID,
+				"chargebee_transaction_id", txn.ID)
+		}
+		return nil
+	}
+
+	err = services.RefundService.Settle(ctx, &dto.SettleRefundRequest{
+		RefundID:      row.ID,
+		SettledAmount: decimal.NewFromInt(txn.Amount).Shift(-types.GetCurrencyPrecision(txn.CurrencyCode)),
+		DestinationID: lo.ToPtr(txn.ID),
+		GatewayMetadata: map[string]interface{}{
+			"status":       txn.Status,
+			"amount_minor": txn.Amount,
+		},
+	})
+	if err != nil {
+		h.logger.Error(ctx, "failed to settle refund from webhook",
+			"error", err,
+			"refund_id", row.ID,
+			"chargebee_transaction_id", txn.ID)
+	}
+	return nil
+}
+
+func refundTransactionFailed(status string) bool {
+	return status == "failure" || status == "timeout"
 }

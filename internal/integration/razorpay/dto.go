@@ -1,6 +1,10 @@
 package razorpay
 
 import (
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/shopspring/decimal"
 )
 
@@ -77,6 +81,9 @@ type CreatePaymentLinkRequest struct {
 	CancelURL  string // Not used by Razorpay (only SuccessURL is used as callback_url)
 	Metadata   map[string]string
 	PaymentID  string
+	// ExpiresAt, when set, is sent as expire_by so the link stops accepting new
+	// payments at a known time. Razorpay's minimum is 15 minutes from now.
+	ExpiresAt *time.Time
 }
 
 // RazorpayPaymentLinkResponse represents the response after creating a payment link
@@ -89,6 +96,7 @@ type RazorpayPaymentLinkResponse struct {
 	CreatedAt             int64           // Unix timestamp
 	PaymentID             string          // FlexPrice payment ID
 	IsRazorpayInvoiceLink bool            // Whether the payment link is a Razorpay invoice link
+	ExpiresAt             *time.Time      // expire_by echoed back by Razorpay, when present
 }
 
 // RazorpayInvoiceSyncRequest represents a request to sync FlexPrice invoice to Razorpay
@@ -129,3 +137,52 @@ const (
 	RazorpayInvoiceStatusExpired       RazorpayInvoiceStatus = "expired"
 	RazorpayInvoiceStatusDeleted       RazorpayInvoiceStatus = "deleted"
 )
+
+type Token struct {
+	ID               string                 `json:"id"`
+	Method           string                 `json:"method"`
+	Status           string                 `json:"status"`
+	Recurring        bool                   `json:"recurring"`
+	RecurringDetails *TokenRecurringDetails `json:"recurring_details"`
+	Card             *TokenCard             `json:"card"`
+	VPA              *TokenVPA              `json:"vpa"`
+	MaxAmount        float64                `json:"max_amount"`
+	ExpiredAt        int64                  `json:"expired_at"`
+	CreatedAt        int64                  `json:"created_at"`
+}
+
+type TokenRecurringDetails struct {
+	Status string `json:"status"`
+}
+
+type TokenCard struct {
+	Last4       string          `json:"last4"`
+	Network     string          `json:"network"`
+	ExpiryMonth flexInt         `json:"expiry_month"`
+	ExpiryYear  flexInt         `json:"expiry_year"`
+	Flows       *TokenCardFlows `json:"flows"`
+}
+
+type TokenCardFlows struct {
+	Recurring *bool `json:"recurring"`
+}
+
+type TokenVPA struct {
+	Username string `json:"username"`
+	Handle   string `json:"handle"`
+}
+
+type flexInt int
+
+func (f *flexInt) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		return nil
+	}
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	*f = flexInt(i)
+	return nil
+}

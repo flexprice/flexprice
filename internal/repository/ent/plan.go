@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPlan "github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -353,7 +354,7 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 		SetNillableDisplayOrder(p.DisplayOrder).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -402,6 +403,7 @@ func (r *planRepository) Delete(ctx context.Context, p *domainPlan.Plan) error {
 	})
 	defer FinishSpan(span)
 
+	ctx = activity.WithAction(ctx, p.ID, activity.PlanArchived)
 	_, err := client.Plan.Update().
 		Where(
 			plan.ID(p.ID),
@@ -411,7 +413,7 @@ func (r *planRepository) Delete(ctx context.Context, p *domainPlan.Plan) error {
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

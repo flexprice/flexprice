@@ -131,12 +131,12 @@ func (InvoiceLineItem) Fields() []ent.Field {
 				"postgres": "numeric(20,8)",
 			}).
 			Default(decimal.Zero),
+		// Not immutable: conversion at finalize rewrites the line into the billing currency (§3.6).
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
-			NotEmpty().
-			Immutable(),
+			NotEmpty(),
 		field.Time("period_start").
 			Optional().
 			Nillable(),
@@ -208,6 +208,17 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Nillable().
 			Immutable().
 			Comment("ID of the line item this one replaced, if it was created by editing an existing line item"),
+
+		field.JSON("custom_currency", &types.CustomCurrencyLineItem{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+		field.JSON("fx_conversion", &types.FxConversion{}).
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Optional(),
 	}
 }
 

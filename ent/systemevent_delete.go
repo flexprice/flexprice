@@ -20,56 +20,56 @@ type SystemEventDelete struct {
 }
 
 // Where appends a list predicates to the SystemEventDelete builder.
-func (sed *SystemEventDelete) Where(ps ...predicate.SystemEvent) *SystemEventDelete {
-	sed.mutation.Where(ps...)
-	return sed
+func (_d *SystemEventDelete) Where(ps ...predicate.SystemEvent) *SystemEventDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (sed *SystemEventDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, sed.sqlExec, sed.mutation, sed.hooks)
+func (_d *SystemEventDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sed *SystemEventDelete) ExecX(ctx context.Context) int {
-	n, err := sed.Exec(ctx)
+func (_d *SystemEventDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (sed *SystemEventDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *SystemEventDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(systemevent.Table, sqlgraph.NewFieldSpec(systemevent.FieldID, field.TypeString))
-	if ps := sed.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, sed.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	sed.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // SystemEventDeleteOne is the builder for deleting a single SystemEvent entity.
 type SystemEventDeleteOne struct {
-	sed *SystemEventDelete
+	_d *SystemEventDelete
 }
 
 // Where appends a list predicates to the SystemEventDelete builder.
-func (sedo *SystemEventDeleteOne) Where(ps ...predicate.SystemEvent) *SystemEventDeleteOne {
-	sedo.sed.mutation.Where(ps...)
-	return sedo
+func (_d *SystemEventDeleteOne) Where(ps ...predicate.SystemEvent) *SystemEventDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (sedo *SystemEventDeleteOne) Exec(ctx context.Context) error {
-	n, err := sedo.sed.Exec(ctx)
+func (_d *SystemEventDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (sedo *SystemEventDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (sedo *SystemEventDeleteOne) ExecX(ctx context.Context) {
-	if err := sedo.Exec(ctx); err != nil {
+func (_d *SystemEventDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -24,257 +24,257 @@ type SecretUpdate struct {
 }
 
 // Where appends a list predicates to the SecretUpdate builder.
-func (su *SecretUpdate) Where(ps ...predicate.Secret) *SecretUpdate {
-	su.mutation.Where(ps...)
-	return su
+func (_u *SecretUpdate) Where(ps ...predicate.Secret) *SecretUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (su *SecretUpdate) SetStatus(s string) *SecretUpdate {
-	su.mutation.SetStatus(s)
-	return su
+func (_u *SecretUpdate) SetStatus(v string) *SecretUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableStatus(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetStatus(*s)
+func (_u *SecretUpdate) SetNillableStatus(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return su
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (su *SecretUpdate) SetUpdatedAt(t time.Time) *SecretUpdate {
-	su.mutation.SetUpdatedAt(t)
-	return su
+func (_u *SecretUpdate) SetUpdatedAt(v time.Time) *SecretUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (su *SecretUpdate) SetUpdatedBy(s string) *SecretUpdate {
-	su.mutation.SetUpdatedBy(s)
-	return su
+func (_u *SecretUpdate) SetUpdatedBy(v string) *SecretUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableUpdatedBy(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetUpdatedBy(*s)
+func (_u *SecretUpdate) SetNillableUpdatedBy(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (su *SecretUpdate) ClearUpdatedBy() *SecretUpdate {
-	su.mutation.ClearUpdatedBy()
-	return su
+func (_u *SecretUpdate) ClearUpdatedBy() *SecretUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (su *SecretUpdate) SetName(s string) *SecretUpdate {
-	su.mutation.SetName(s)
-	return su
+func (_u *SecretUpdate) SetName(v string) *SecretUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableName(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetName(*s)
+func (_u *SecretUpdate) SetNillableName(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return su
+	return _u
 }
 
 // SetType sets the "type" field.
-func (su *SecretUpdate) SetType(s string) *SecretUpdate {
-	su.mutation.SetType(s)
-	return su
+func (_u *SecretUpdate) SetType(v string) *SecretUpdate {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableType(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetType(*s)
+func (_u *SecretUpdate) SetNillableType(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return su
+	return _u
 }
 
 // SetProvider sets the "provider" field.
-func (su *SecretUpdate) SetProvider(s string) *SecretUpdate {
-	su.mutation.SetProvider(s)
-	return su
+func (_u *SecretUpdate) SetProvider(v string) *SecretUpdate {
+	_u.mutation.SetProvider(v)
+	return _u
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableProvider(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetProvider(*s)
+func (_u *SecretUpdate) SetNillableProvider(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetProvider(*v)
 	}
-	return su
+	return _u
 }
 
 // SetValue sets the "value" field.
-func (su *SecretUpdate) SetValue(s string) *SecretUpdate {
-	su.mutation.SetValue(s)
-	return su
+func (_u *SecretUpdate) SetValue(v string) *SecretUpdate {
+	_u.mutation.SetValue(v)
+	return _u
 }
 
 // SetNillableValue sets the "value" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableValue(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetValue(*s)
+func (_u *SecretUpdate) SetNillableValue(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetValue(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearValue clears the value of the "value" field.
-func (su *SecretUpdate) ClearValue() *SecretUpdate {
-	su.mutation.ClearValue()
-	return su
+func (_u *SecretUpdate) ClearValue() *SecretUpdate {
+	_u.mutation.ClearValue()
+	return _u
 }
 
 // SetDisplayID sets the "display_id" field.
-func (su *SecretUpdate) SetDisplayID(s string) *SecretUpdate {
-	su.mutation.SetDisplayID(s)
-	return su
+func (_u *SecretUpdate) SetDisplayID(v string) *SecretUpdate {
+	_u.mutation.SetDisplayID(v)
+	return _u
 }
 
 // SetNillableDisplayID sets the "display_id" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableDisplayID(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetDisplayID(*s)
+func (_u *SecretUpdate) SetNillableDisplayID(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetDisplayID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearDisplayID clears the value of the "display_id" field.
-func (su *SecretUpdate) ClearDisplayID() *SecretUpdate {
-	su.mutation.ClearDisplayID()
-	return su
+func (_u *SecretUpdate) ClearDisplayID() *SecretUpdate {
+	_u.mutation.ClearDisplayID()
+	return _u
 }
 
 // SetExpiresAt sets the "expires_at" field.
-func (su *SecretUpdate) SetExpiresAt(t time.Time) *SecretUpdate {
-	su.mutation.SetExpiresAt(t)
-	return su
+func (_u *SecretUpdate) SetExpiresAt(v time.Time) *SecretUpdate {
+	_u.mutation.SetExpiresAt(v)
+	return _u
 }
 
 // SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableExpiresAt(t *time.Time) *SecretUpdate {
-	if t != nil {
-		su.SetExpiresAt(*t)
+func (_u *SecretUpdate) SetNillableExpiresAt(v *time.Time) *SecretUpdate {
+	if v != nil {
+		_u.SetExpiresAt(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearExpiresAt clears the value of the "expires_at" field.
-func (su *SecretUpdate) ClearExpiresAt() *SecretUpdate {
-	su.mutation.ClearExpiresAt()
-	return su
+func (_u *SecretUpdate) ClearExpiresAt() *SecretUpdate {
+	_u.mutation.ClearExpiresAt()
+	return _u
 }
 
 // SetLastUsedAt sets the "last_used_at" field.
-func (su *SecretUpdate) SetLastUsedAt(t time.Time) *SecretUpdate {
-	su.mutation.SetLastUsedAt(t)
-	return su
+func (_u *SecretUpdate) SetLastUsedAt(v time.Time) *SecretUpdate {
+	_u.mutation.SetLastUsedAt(v)
+	return _u
 }
 
 // SetNillableLastUsedAt sets the "last_used_at" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableLastUsedAt(t *time.Time) *SecretUpdate {
-	if t != nil {
-		su.SetLastUsedAt(*t)
+func (_u *SecretUpdate) SetNillableLastUsedAt(v *time.Time) *SecretUpdate {
+	if v != nil {
+		_u.SetLastUsedAt(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearLastUsedAt clears the value of the "last_used_at" field.
-func (su *SecretUpdate) ClearLastUsedAt() *SecretUpdate {
-	su.mutation.ClearLastUsedAt()
-	return su
+func (_u *SecretUpdate) ClearLastUsedAt() *SecretUpdate {
+	_u.mutation.ClearLastUsedAt()
+	return _u
 }
 
 // SetProviderData sets the "provider_data" field.
-func (su *SecretUpdate) SetProviderData(m map[string]string) *SecretUpdate {
-	su.mutation.SetProviderData(m)
-	return su
+func (_u *SecretUpdate) SetProviderData(v map[string]string) *SecretUpdate {
+	_u.mutation.SetProviderData(v)
+	return _u
 }
 
 // ClearProviderData clears the value of the "provider_data" field.
-func (su *SecretUpdate) ClearProviderData() *SecretUpdate {
-	su.mutation.ClearProviderData()
-	return su
+func (_u *SecretUpdate) ClearProviderData() *SecretUpdate {
+	_u.mutation.ClearProviderData()
+	return _u
 }
 
 // SetRoles sets the "roles" field.
-func (su *SecretUpdate) SetRoles(s []string) *SecretUpdate {
-	su.mutation.SetRoles(s)
-	return su
+func (_u *SecretUpdate) SetRoles(v []string) *SecretUpdate {
+	_u.mutation.SetRoles(v)
+	return _u
 }
 
-// AppendRoles appends s to the "roles" field.
-func (su *SecretUpdate) AppendRoles(s []string) *SecretUpdate {
-	su.mutation.AppendRoles(s)
-	return su
+// AppendRoles appends value to the "roles" field.
+func (_u *SecretUpdate) AppendRoles(v []string) *SecretUpdate {
+	_u.mutation.AppendRoles(v)
+	return _u
 }
 
 // ClearRoles clears the value of the "roles" field.
-func (su *SecretUpdate) ClearRoles() *SecretUpdate {
-	su.mutation.ClearRoles()
-	return su
+func (_u *SecretUpdate) ClearRoles() *SecretUpdate {
+	_u.mutation.ClearRoles()
+	return _u
 }
 
 // SetUserType sets the "user_type" field.
-func (su *SecretUpdate) SetUserType(s string) *SecretUpdate {
-	su.mutation.SetUserType(s)
-	return su
+func (_u *SecretUpdate) SetUserType(v string) *SecretUpdate {
+	_u.mutation.SetUserType(v)
+	return _u
 }
 
 // SetNillableUserType sets the "user_type" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableUserType(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetUserType(*s)
+func (_u *SecretUpdate) SetNillableUserType(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetUserType(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearUserType clears the value of the "user_type" field.
-func (su *SecretUpdate) ClearUserType() *SecretUpdate {
-	su.mutation.ClearUserType()
-	return su
+func (_u *SecretUpdate) ClearUserType() *SecretUpdate {
+	_u.mutation.ClearUserType()
+	return _u
 }
 
 // SetUserID sets the "user_id" field.
-func (su *SecretUpdate) SetUserID(s string) *SecretUpdate {
-	su.mutation.SetUserID(s)
-	return su
+func (_u *SecretUpdate) SetUserID(v string) *SecretUpdate {
+	_u.mutation.SetUserID(v)
+	return _u
 }
 
 // SetNillableUserID sets the "user_id" field if the given value is not nil.
-func (su *SecretUpdate) SetNillableUserID(s *string) *SecretUpdate {
-	if s != nil {
-		su.SetUserID(*s)
+func (_u *SecretUpdate) SetNillableUserID(v *string) *SecretUpdate {
+	if v != nil {
+		_u.SetUserID(*v)
 	}
-	return su
+	return _u
 }
 
 // ClearUserID clears the value of the "user_id" field.
-func (su *SecretUpdate) ClearUserID() *SecretUpdate {
-	su.mutation.ClearUserID()
-	return su
+func (_u *SecretUpdate) ClearUserID() *SecretUpdate {
+	_u.mutation.ClearUserID()
+	return _u
 }
 
 // Mutation returns the SecretMutation object of the builder.
-func (su *SecretUpdate) Mutation() *SecretMutation {
-	return su.mutation
+func (_u *SecretUpdate) Mutation() *SecretMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (su *SecretUpdate) Save(ctx context.Context) (int, error) {
-	su.defaults()
-	return withHooks(ctx, su.sqlSave, su.mutation, su.hooks)
+func (_u *SecretUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (su *SecretUpdate) SaveX(ctx context.Context) int {
-	affected, err := su.Save(ctx)
+func (_u *SecretUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -282,39 +282,39 @@ func (su *SecretUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (su *SecretUpdate) Exec(ctx context.Context) error {
-	_, err := su.Save(ctx)
+func (_u *SecretUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (su *SecretUpdate) ExecX(ctx context.Context) {
-	if err := su.Exec(ctx); err != nil {
+func (_u *SecretUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (su *SecretUpdate) defaults() {
-	if _, ok := su.mutation.UpdatedAt(); !ok {
+func (_u *SecretUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := secret.UpdateDefaultUpdatedAt()
-		su.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (su *SecretUpdate) check() error {
-	if v, ok := su.mutation.Name(); ok {
+func (_u *SecretUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := secret.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Secret.name": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.GetType(); ok {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := secret.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Secret.type": %w`, err)}
 		}
 	}
-	if v, ok := su.mutation.Provider(); ok {
+	if v, ok := _u.mutation.Provider(); ok {
 		if err := secret.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Secret.provider": %w`, err)}
 		}
@@ -322,99 +322,99 @@ func (su *SecretUpdate) check() error {
 	return nil
 }
 
-func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := su.check(); err != nil {
-		return n, err
+func (_u *SecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(secret.Table, secret.Columns, sqlgraph.NewFieldSpec(secret.FieldID, field.TypeString))
-	if ps := su.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := su.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(secret.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := su.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(secret.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if su.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(secret.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := su.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(secret.FieldUpdatedBy, field.TypeString, value)
 	}
-	if su.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(secret.FieldUpdatedBy, field.TypeString)
 	}
-	if su.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(secret.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := su.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(secret.FieldName, field.TypeString, value)
 	}
-	if value, ok := su.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(secret.FieldType, field.TypeString, value)
 	}
-	if value, ok := su.mutation.Provider(); ok {
+	if value, ok := _u.mutation.Provider(); ok {
 		_spec.SetField(secret.FieldProvider, field.TypeString, value)
 	}
-	if value, ok := su.mutation.Value(); ok {
+	if value, ok := _u.mutation.Value(); ok {
 		_spec.SetField(secret.FieldValue, field.TypeString, value)
 	}
-	if su.mutation.ValueCleared() {
+	if _u.mutation.ValueCleared() {
 		_spec.ClearField(secret.FieldValue, field.TypeString)
 	}
-	if value, ok := su.mutation.DisplayID(); ok {
+	if value, ok := _u.mutation.DisplayID(); ok {
 		_spec.SetField(secret.FieldDisplayID, field.TypeString, value)
 	}
-	if su.mutation.DisplayIDCleared() {
+	if _u.mutation.DisplayIDCleared() {
 		_spec.ClearField(secret.FieldDisplayID, field.TypeString)
 	}
-	if value, ok := su.mutation.ExpiresAt(); ok {
+	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 	}
-	if su.mutation.ExpiresAtCleared() {
+	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(secret.FieldExpiresAt, field.TypeTime)
 	}
-	if value, ok := su.mutation.LastUsedAt(); ok {
+	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(secret.FieldLastUsedAt, field.TypeTime, value)
 	}
-	if su.mutation.LastUsedAtCleared() {
+	if _u.mutation.LastUsedAtCleared() {
 		_spec.ClearField(secret.FieldLastUsedAt, field.TypeTime)
 	}
-	if value, ok := su.mutation.ProviderData(); ok {
+	if value, ok := _u.mutation.ProviderData(); ok {
 		_spec.SetField(secret.FieldProviderData, field.TypeJSON, value)
 	}
-	if su.mutation.ProviderDataCleared() {
+	if _u.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
 	}
-	if value, ok := su.mutation.Roles(); ok {
+	if value, ok := _u.mutation.Roles(); ok {
 		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
 	}
-	if value, ok := su.mutation.AppendedRoles(); ok {
+	if value, ok := _u.mutation.AppendedRoles(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, secret.FieldRoles, value)
 		})
 	}
-	if su.mutation.RolesCleared() {
+	if _u.mutation.RolesCleared() {
 		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
 	}
-	if value, ok := su.mutation.UserType(); ok {
+	if value, ok := _u.mutation.UserType(); ok {
 		_spec.SetField(secret.FieldUserType, field.TypeString, value)
 	}
-	if su.mutation.UserTypeCleared() {
+	if _u.mutation.UserTypeCleared() {
 		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
-	if value, ok := su.mutation.UserID(); ok {
+	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(secret.FieldUserID, field.TypeString, value)
 	}
-	if su.mutation.UserIDCleared() {
+	if _u.mutation.UserIDCleared() {
 		_spec.ClearField(secret.FieldUserID, field.TypeString)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{secret.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -422,8 +422,8 @@ func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	su.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SecretUpdateOne is the builder for updating a single Secret entity.
@@ -435,264 +435,264 @@ type SecretUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (suo *SecretUpdateOne) SetStatus(s string) *SecretUpdateOne {
-	suo.mutation.SetStatus(s)
-	return suo
+func (_u *SecretUpdateOne) SetStatus(v string) *SecretUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableStatus(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetStatus(*s)
+func (_u *SecretUpdateOne) SetNillableStatus(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (suo *SecretUpdateOne) SetUpdatedAt(t time.Time) *SecretUpdateOne {
-	suo.mutation.SetUpdatedAt(t)
-	return suo
+func (_u *SecretUpdateOne) SetUpdatedAt(v time.Time) *SecretUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (suo *SecretUpdateOne) SetUpdatedBy(s string) *SecretUpdateOne {
-	suo.mutation.SetUpdatedBy(s)
-	return suo
+func (_u *SecretUpdateOne) SetUpdatedBy(v string) *SecretUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableUpdatedBy(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetUpdatedBy(*s)
+func (_u *SecretUpdateOne) SetNillableUpdatedBy(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (suo *SecretUpdateOne) ClearUpdatedBy() *SecretUpdateOne {
-	suo.mutation.ClearUpdatedBy()
-	return suo
+func (_u *SecretUpdateOne) ClearUpdatedBy() *SecretUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (suo *SecretUpdateOne) SetName(s string) *SecretUpdateOne {
-	suo.mutation.SetName(s)
-	return suo
+func (_u *SecretUpdateOne) SetName(v string) *SecretUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableName(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetName(*s)
+func (_u *SecretUpdateOne) SetNillableName(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetType sets the "type" field.
-func (suo *SecretUpdateOne) SetType(s string) *SecretUpdateOne {
-	suo.mutation.SetType(s)
-	return suo
+func (_u *SecretUpdateOne) SetType(v string) *SecretUpdateOne {
+	_u.mutation.SetType(v)
+	return _u
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableType(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetType(*s)
+func (_u *SecretUpdateOne) SetNillableType(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetType(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetProvider sets the "provider" field.
-func (suo *SecretUpdateOne) SetProvider(s string) *SecretUpdateOne {
-	suo.mutation.SetProvider(s)
-	return suo
+func (_u *SecretUpdateOne) SetProvider(v string) *SecretUpdateOne {
+	_u.mutation.SetProvider(v)
+	return _u
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableProvider(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetProvider(*s)
+func (_u *SecretUpdateOne) SetNillableProvider(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetProvider(*v)
 	}
-	return suo
+	return _u
 }
 
 // SetValue sets the "value" field.
-func (suo *SecretUpdateOne) SetValue(s string) *SecretUpdateOne {
-	suo.mutation.SetValue(s)
-	return suo
+func (_u *SecretUpdateOne) SetValue(v string) *SecretUpdateOne {
+	_u.mutation.SetValue(v)
+	return _u
 }
 
 // SetNillableValue sets the "value" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableValue(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetValue(*s)
+func (_u *SecretUpdateOne) SetNillableValue(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetValue(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearValue clears the value of the "value" field.
-func (suo *SecretUpdateOne) ClearValue() *SecretUpdateOne {
-	suo.mutation.ClearValue()
-	return suo
+func (_u *SecretUpdateOne) ClearValue() *SecretUpdateOne {
+	_u.mutation.ClearValue()
+	return _u
 }
 
 // SetDisplayID sets the "display_id" field.
-func (suo *SecretUpdateOne) SetDisplayID(s string) *SecretUpdateOne {
-	suo.mutation.SetDisplayID(s)
-	return suo
+func (_u *SecretUpdateOne) SetDisplayID(v string) *SecretUpdateOne {
+	_u.mutation.SetDisplayID(v)
+	return _u
 }
 
 // SetNillableDisplayID sets the "display_id" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableDisplayID(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetDisplayID(*s)
+func (_u *SecretUpdateOne) SetNillableDisplayID(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetDisplayID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearDisplayID clears the value of the "display_id" field.
-func (suo *SecretUpdateOne) ClearDisplayID() *SecretUpdateOne {
-	suo.mutation.ClearDisplayID()
-	return suo
+func (_u *SecretUpdateOne) ClearDisplayID() *SecretUpdateOne {
+	_u.mutation.ClearDisplayID()
+	return _u
 }
 
 // SetExpiresAt sets the "expires_at" field.
-func (suo *SecretUpdateOne) SetExpiresAt(t time.Time) *SecretUpdateOne {
-	suo.mutation.SetExpiresAt(t)
-	return suo
+func (_u *SecretUpdateOne) SetExpiresAt(v time.Time) *SecretUpdateOne {
+	_u.mutation.SetExpiresAt(v)
+	return _u
 }
 
 // SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableExpiresAt(t *time.Time) *SecretUpdateOne {
-	if t != nil {
-		suo.SetExpiresAt(*t)
+func (_u *SecretUpdateOne) SetNillableExpiresAt(v *time.Time) *SecretUpdateOne {
+	if v != nil {
+		_u.SetExpiresAt(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearExpiresAt clears the value of the "expires_at" field.
-func (suo *SecretUpdateOne) ClearExpiresAt() *SecretUpdateOne {
-	suo.mutation.ClearExpiresAt()
-	return suo
+func (_u *SecretUpdateOne) ClearExpiresAt() *SecretUpdateOne {
+	_u.mutation.ClearExpiresAt()
+	return _u
 }
 
 // SetLastUsedAt sets the "last_used_at" field.
-func (suo *SecretUpdateOne) SetLastUsedAt(t time.Time) *SecretUpdateOne {
-	suo.mutation.SetLastUsedAt(t)
-	return suo
+func (_u *SecretUpdateOne) SetLastUsedAt(v time.Time) *SecretUpdateOne {
+	_u.mutation.SetLastUsedAt(v)
+	return _u
 }
 
 // SetNillableLastUsedAt sets the "last_used_at" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableLastUsedAt(t *time.Time) *SecretUpdateOne {
-	if t != nil {
-		suo.SetLastUsedAt(*t)
+func (_u *SecretUpdateOne) SetNillableLastUsedAt(v *time.Time) *SecretUpdateOne {
+	if v != nil {
+		_u.SetLastUsedAt(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearLastUsedAt clears the value of the "last_used_at" field.
-func (suo *SecretUpdateOne) ClearLastUsedAt() *SecretUpdateOne {
-	suo.mutation.ClearLastUsedAt()
-	return suo
+func (_u *SecretUpdateOne) ClearLastUsedAt() *SecretUpdateOne {
+	_u.mutation.ClearLastUsedAt()
+	return _u
 }
 
 // SetProviderData sets the "provider_data" field.
-func (suo *SecretUpdateOne) SetProviderData(m map[string]string) *SecretUpdateOne {
-	suo.mutation.SetProviderData(m)
-	return suo
+func (_u *SecretUpdateOne) SetProviderData(v map[string]string) *SecretUpdateOne {
+	_u.mutation.SetProviderData(v)
+	return _u
 }
 
 // ClearProviderData clears the value of the "provider_data" field.
-func (suo *SecretUpdateOne) ClearProviderData() *SecretUpdateOne {
-	suo.mutation.ClearProviderData()
-	return suo
+func (_u *SecretUpdateOne) ClearProviderData() *SecretUpdateOne {
+	_u.mutation.ClearProviderData()
+	return _u
 }
 
 // SetRoles sets the "roles" field.
-func (suo *SecretUpdateOne) SetRoles(s []string) *SecretUpdateOne {
-	suo.mutation.SetRoles(s)
-	return suo
+func (_u *SecretUpdateOne) SetRoles(v []string) *SecretUpdateOne {
+	_u.mutation.SetRoles(v)
+	return _u
 }
 
-// AppendRoles appends s to the "roles" field.
-func (suo *SecretUpdateOne) AppendRoles(s []string) *SecretUpdateOne {
-	suo.mutation.AppendRoles(s)
-	return suo
+// AppendRoles appends value to the "roles" field.
+func (_u *SecretUpdateOne) AppendRoles(v []string) *SecretUpdateOne {
+	_u.mutation.AppendRoles(v)
+	return _u
 }
 
 // ClearRoles clears the value of the "roles" field.
-func (suo *SecretUpdateOne) ClearRoles() *SecretUpdateOne {
-	suo.mutation.ClearRoles()
-	return suo
+func (_u *SecretUpdateOne) ClearRoles() *SecretUpdateOne {
+	_u.mutation.ClearRoles()
+	return _u
 }
 
 // SetUserType sets the "user_type" field.
-func (suo *SecretUpdateOne) SetUserType(s string) *SecretUpdateOne {
-	suo.mutation.SetUserType(s)
-	return suo
+func (_u *SecretUpdateOne) SetUserType(v string) *SecretUpdateOne {
+	_u.mutation.SetUserType(v)
+	return _u
 }
 
 // SetNillableUserType sets the "user_type" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableUserType(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetUserType(*s)
+func (_u *SecretUpdateOne) SetNillableUserType(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetUserType(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearUserType clears the value of the "user_type" field.
-func (suo *SecretUpdateOne) ClearUserType() *SecretUpdateOne {
-	suo.mutation.ClearUserType()
-	return suo
+func (_u *SecretUpdateOne) ClearUserType() *SecretUpdateOne {
+	_u.mutation.ClearUserType()
+	return _u
 }
 
 // SetUserID sets the "user_id" field.
-func (suo *SecretUpdateOne) SetUserID(s string) *SecretUpdateOne {
-	suo.mutation.SetUserID(s)
-	return suo
+func (_u *SecretUpdateOne) SetUserID(v string) *SecretUpdateOne {
+	_u.mutation.SetUserID(v)
+	return _u
 }
 
 // SetNillableUserID sets the "user_id" field if the given value is not nil.
-func (suo *SecretUpdateOne) SetNillableUserID(s *string) *SecretUpdateOne {
-	if s != nil {
-		suo.SetUserID(*s)
+func (_u *SecretUpdateOne) SetNillableUserID(v *string) *SecretUpdateOne {
+	if v != nil {
+		_u.SetUserID(*v)
 	}
-	return suo
+	return _u
 }
 
 // ClearUserID clears the value of the "user_id" field.
-func (suo *SecretUpdateOne) ClearUserID() *SecretUpdateOne {
-	suo.mutation.ClearUserID()
-	return suo
+func (_u *SecretUpdateOne) ClearUserID() *SecretUpdateOne {
+	_u.mutation.ClearUserID()
+	return _u
 }
 
 // Mutation returns the SecretMutation object of the builder.
-func (suo *SecretUpdateOne) Mutation() *SecretMutation {
-	return suo.mutation
+func (_u *SecretUpdateOne) Mutation() *SecretMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the SecretUpdate builder.
-func (suo *SecretUpdateOne) Where(ps ...predicate.Secret) *SecretUpdateOne {
-	suo.mutation.Where(ps...)
-	return suo
+func (_u *SecretUpdateOne) Where(ps ...predicate.Secret) *SecretUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (suo *SecretUpdateOne) Select(field string, fields ...string) *SecretUpdateOne {
-	suo.fields = append([]string{field}, fields...)
-	return suo
+func (_u *SecretUpdateOne) Select(field string, fields ...string) *SecretUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Secret entity.
-func (suo *SecretUpdateOne) Save(ctx context.Context) (*Secret, error) {
-	suo.defaults()
-	return withHooks(ctx, suo.sqlSave, suo.mutation, suo.hooks)
+func (_u *SecretUpdateOne) Save(ctx context.Context) (*Secret, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (suo *SecretUpdateOne) SaveX(ctx context.Context) *Secret {
-	node, err := suo.Save(ctx)
+func (_u *SecretUpdateOne) SaveX(ctx context.Context) *Secret {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -700,39 +700,39 @@ func (suo *SecretUpdateOne) SaveX(ctx context.Context) *Secret {
 }
 
 // Exec executes the query on the entity.
-func (suo *SecretUpdateOne) Exec(ctx context.Context) error {
-	_, err := suo.Save(ctx)
+func (_u *SecretUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (suo *SecretUpdateOne) ExecX(ctx context.Context) {
-	if err := suo.Exec(ctx); err != nil {
+func (_u *SecretUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (suo *SecretUpdateOne) defaults() {
-	if _, ok := suo.mutation.UpdatedAt(); !ok {
+func (_u *SecretUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := secret.UpdateDefaultUpdatedAt()
-		suo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (suo *SecretUpdateOne) check() error {
-	if v, ok := suo.mutation.Name(); ok {
+func (_u *SecretUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := secret.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Secret.name": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.GetType(); ok {
+	if v, ok := _u.mutation.GetType(); ok {
 		if err := secret.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Secret.type": %w`, err)}
 		}
 	}
-	if v, ok := suo.mutation.Provider(); ok {
+	if v, ok := _u.mutation.Provider(); ok {
 		if err := secret.ProviderValidator(v); err != nil {
 			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Secret.provider": %w`, err)}
 		}
@@ -740,17 +740,17 @@ func (suo *SecretUpdateOne) check() error {
 	return nil
 }
 
-func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err error) {
-	if err := suo.check(); err != nil {
+func (_u *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(secret.Table, secret.Columns, sqlgraph.NewFieldSpec(secret.FieldID, field.TypeString))
-	id, ok := suo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Secret.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := suo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, secret.FieldID)
 		for _, f := range fields {
@@ -762,97 +762,97 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 			}
 		}
 	}
-	if ps := suo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := suo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(secret.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(secret.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if suo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(secret.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := suo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(secret.FieldUpdatedBy, field.TypeString, value)
 	}
-	if suo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(secret.FieldUpdatedBy, field.TypeString)
 	}
-	if suo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(secret.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := suo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(secret.FieldName, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.GetType(); ok {
+	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(secret.FieldType, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.Provider(); ok {
+	if value, ok := _u.mutation.Provider(); ok {
 		_spec.SetField(secret.FieldProvider, field.TypeString, value)
 	}
-	if value, ok := suo.mutation.Value(); ok {
+	if value, ok := _u.mutation.Value(); ok {
 		_spec.SetField(secret.FieldValue, field.TypeString, value)
 	}
-	if suo.mutation.ValueCleared() {
+	if _u.mutation.ValueCleared() {
 		_spec.ClearField(secret.FieldValue, field.TypeString)
 	}
-	if value, ok := suo.mutation.DisplayID(); ok {
+	if value, ok := _u.mutation.DisplayID(); ok {
 		_spec.SetField(secret.FieldDisplayID, field.TypeString, value)
 	}
-	if suo.mutation.DisplayIDCleared() {
+	if _u.mutation.DisplayIDCleared() {
 		_spec.ClearField(secret.FieldDisplayID, field.TypeString)
 	}
-	if value, ok := suo.mutation.ExpiresAt(); ok {
+	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 	}
-	if suo.mutation.ExpiresAtCleared() {
+	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(secret.FieldExpiresAt, field.TypeTime)
 	}
-	if value, ok := suo.mutation.LastUsedAt(); ok {
+	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(secret.FieldLastUsedAt, field.TypeTime, value)
 	}
-	if suo.mutation.LastUsedAtCleared() {
+	if _u.mutation.LastUsedAtCleared() {
 		_spec.ClearField(secret.FieldLastUsedAt, field.TypeTime)
 	}
-	if value, ok := suo.mutation.ProviderData(); ok {
+	if value, ok := _u.mutation.ProviderData(); ok {
 		_spec.SetField(secret.FieldProviderData, field.TypeJSON, value)
 	}
-	if suo.mutation.ProviderDataCleared() {
+	if _u.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
 	}
-	if value, ok := suo.mutation.Roles(); ok {
+	if value, ok := _u.mutation.Roles(); ok {
 		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
 	}
-	if value, ok := suo.mutation.AppendedRoles(); ok {
+	if value, ok := _u.mutation.AppendedRoles(); ok {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, secret.FieldRoles, value)
 		})
 	}
-	if suo.mutation.RolesCleared() {
+	if _u.mutation.RolesCleared() {
 		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
 	}
-	if value, ok := suo.mutation.UserType(); ok {
+	if value, ok := _u.mutation.UserType(); ok {
 		_spec.SetField(secret.FieldUserType, field.TypeString, value)
 	}
-	if suo.mutation.UserTypeCleared() {
+	if _u.mutation.UserTypeCleared() {
 		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
-	if value, ok := suo.mutation.UserID(); ok {
+	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(secret.FieldUserID, field.TypeString, value)
 	}
-	if suo.mutation.UserIDCleared() {
+	if _u.mutation.UserIDCleared() {
 		_spec.ClearField(secret.FieldUserID, field.TypeString)
 	}
-	_node = &Secret{config: suo.config}
+	_node = &Secret{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, suo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{secret.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -860,6 +860,6 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 		}
 		return nil, err
 	}
-	suo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

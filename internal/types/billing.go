@@ -51,6 +51,10 @@ const (
 	// ReferencePointInternalPreview indicates a preview invoice using the regular usage path
 	// (GetUsageBySubscription) instead of the meter_usage ClickHouse FINAL path.
 	ReferencePointInternalPreview InvoiceReferencePoint = "internal_preview"
+	// ReferencePointRevenueFacts is the revenue_facts rollup preview: currently
+	// identical to ReferencePointPreview, declared separately so facts-specific
+	// behavior (coupon application without DB writes, etc.) has its own branch.
+	ReferencePointRevenueFacts InvoiceReferencePoint = "revenue_facts"
 )
 
 func (r InvoiceReferencePoint) String() string {
@@ -64,6 +68,7 @@ func (r InvoiceReferencePoint) Validate() error {
 		ReferencePointPreview,
 		ReferencePointCancel,
 		ReferencePointInternalPreview,
+		ReferencePointRevenueFacts,
 	}
 
 	if !lo.Contains(allowedValues, r) {

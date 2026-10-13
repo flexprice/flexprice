@@ -20,56 +20,56 @@ type EntitlementGrantDelete struct {
 }
 
 // Where appends a list predicates to the EntitlementGrantDelete builder.
-func (egd *EntitlementGrantDelete) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantDelete {
-	egd.mutation.Where(ps...)
-	return egd
+func (_d *EntitlementGrantDelete) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (egd *EntitlementGrantDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, egd.sqlExec, egd.mutation, egd.hooks)
+func (_d *EntitlementGrantDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (egd *EntitlementGrantDelete) ExecX(ctx context.Context) int {
-	n, err := egd.Exec(ctx)
+func (_d *EntitlementGrantDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (egd *EntitlementGrantDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *EntitlementGrantDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(entitlementgrant.Table, sqlgraph.NewFieldSpec(entitlementgrant.FieldID, field.TypeString))
-	if ps := egd.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, egd.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	egd.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // EntitlementGrantDeleteOne is the builder for deleting a single EntitlementGrant entity.
 type EntitlementGrantDeleteOne struct {
-	egd *EntitlementGrantDelete
+	_d *EntitlementGrantDelete
 }
 
 // Where appends a list predicates to the EntitlementGrantDelete builder.
-func (egdo *EntitlementGrantDeleteOne) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantDeleteOne {
-	egdo.egd.mutation.Where(ps...)
-	return egdo
+func (_d *EntitlementGrantDeleteOne) Where(ps ...predicate.EntitlementGrant) *EntitlementGrantDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (egdo *EntitlementGrantDeleteOne) Exec(ctx context.Context) error {
-	n, err := egdo.egd.Exec(ctx)
+func (_d *EntitlementGrantDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (egdo *EntitlementGrantDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (egdo *EntitlementGrantDeleteOne) ExecX(ctx context.Context) {
-	if err := egdo.Exec(ctx); err != nil {
+func (_d *EntitlementGrantDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

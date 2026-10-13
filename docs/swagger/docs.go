@@ -22,6 +22,112 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/activity": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the audit trail of changes to billing entities: who changed what, when, from where. Filter by entity, customer, actor, action or request; pages are newest first.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "List activity",
+                "operationId": "listActivity",
+                "parameters": [
+                    {
+                        "description": "Filters",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ListActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/activity/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need one activity entry with the state of the entity right after the change.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity"
+                ],
+                "summary": "Get activity",
+                "operationId": "getActivity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Activity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ActivityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid activity id",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Activity not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/addons": {
             "post": {
                 "security": [
@@ -755,6 +861,236 @@ const docTemplate = `{
                 }
             }
         },
+        "/analytics/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Resolves the given view definition against the supplied variables and executes it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Run an ad-hoc analytics query",
+                "operationId": "queryAnalytics",
+                "parameters": [
+                    {
+                        "description": "Analytics query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/analytics/revenue": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Aggregates revenue_facts by the requested dimensions at day/period/total granularity. allocation_policy places whole-period charges on their booked day (billed) or spreads them across the period (amortized); include_adjustments breaks out true-up/overage/revert amounts as labeled rows. Requires the tenant's revenue analytics setting.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Query revenue analytics",
+                "operationId": "getRevenueAnalytics",
+                "parameters": [
+                    {
+                        "description": "Revenue analytics request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/RevenueAnalyticsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RevenueAnalyticsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Revenue analytics not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/analytics/views": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Persists a named view definition that can later be queried by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Create an analytics view",
+                "operationId": "createAnalyticsView",
+                "parameters": [
+                    {
+                        "description": "View request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateViewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/ViewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/views/{id}/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Resolves the view's definition against the supplied variables and executes it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Query an analytics view",
+                "operationId": "queryAnalyticsView",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "View ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "View query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ViewQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "View not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/checkout/sessions": {
             "post": {
                 "security": [
@@ -883,6 +1219,58 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/checkout/sessions/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Cancel checkout session",
+                "operationId": "cancelCheckoutSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Checkout session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
                     },
                     "404": {
                         "description": "Not Found",
@@ -2163,6 +2551,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Finalize options",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/FinalizeCreditNoteRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -3018,6 +3414,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/payment-methods": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need a customer's saved payment methods across every connected gateway, including whether each can be auto-charged. Only gateways that can list saved methods are included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customer payment methods",
+                "operationId": "listCustomerPaymentMethods",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Limit to these payment gateways",
+                        "name": "providers",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SavedPaymentMethodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/customers/{id}/wallets": {
             "get": {
                 "security": [
@@ -3607,52 +4067,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/events/huggingface-inference": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation). Reads the meter-usage pipeline.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Events"
-                ],
-                "summary": "Get Hugging Face inference data",
-                "operationId": "getHuggingfaceInferenceData",
-                "parameters": [
-                    {
-                        "description": "Request body",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/GetHuggingFaceBillingDataRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/GetHuggingFaceBillingDataResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/events/lookup": {
             "get": {
                 "security": [
@@ -3676,6 +4090,25 @@ const docTemplate = `{
                         "name": "id",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "External customer ID the event was ingested with",
+                        "name": "external_customer_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the event timestamp window (RFC3339); defaults to 14 days before end_time",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the event timestamp window (RFC3339); defaults to now",
+                        "name": "end_time",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3683,6 +4116,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/GetEventByIDResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing event ID or external customer ID",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
@@ -4157,6 +4596,270 @@ const docTemplate = `{
                 "x-scope": "write"
             }
         },
+        "/forex": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Configure a fixed exchange rate at tenant, customer or subscription scope. Overrides need a tenant rate for the same pair.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FX Rates"
+                ],
+                "summary": "Create an FX rate",
+                "operationId": "createFXRate",
+                "parameters": [
+                    {
+                        "description": "FX rate to create",
+                        "name": "fx_rate",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateFXRateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/FXRateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forex/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Filter FX rates via a request body (POST used for a complex query, but read-only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FX Rates"
+                ],
+                "summary": "Query FX rates",
+                "operationId": "queryFXRates",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.FXRateFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListFXRatesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/forex/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Load a single FX rate by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FX Rates"
+                ],
+                "summary": "Get an FX rate",
+                "operationId": "getFXRate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FX rate ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/FXRateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a rate's value, validity window (overrides only) or metadata. Scope, scope_id and the currency pair are immutable.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FX Rates"
+                ],
+                "summary": "Update an FX rate",
+                "operationId": "updateFXRate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FX rate ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "FX rate fields to update",
+                        "name": "fx_rate",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateFXRateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/FXRateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Archive a customer or subscription override. Tenant rates cannot be deleted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FX Rates"
+                ],
+                "summary": "Delete an FX rate",
+                "operationId": "deleteFXRate",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "FX rate ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
         "/groups": {
             "post": {
                 "security": [
@@ -4569,7 +5272,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.",
+                "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.\nPass a ` + "`" + `checkout` + "`" + ` object to gate the invoice behind a hosted payment session: the invoice stays DRAFT with no invoice number, and the response carries ` + "`" + `checkout_session.payment_action.url` + "`" + ` for the customer to pay. It finalizes only when the payment webhook lands; if the session expires the invoice is voided and archived. Poll ` + "`" + `GET /checkout/sessions/{id}` + "`" + ` until ` + "`" + `terminal` + "`" + ` is true. One-off invoices only.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4958,6 +5661,72 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "delete"
+            }
+        },
+        "/invoices/{id}/modify/execute": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Execute a modification on a draft or finalized invoice. Supports line item changes: add (bulk), update (one line item per call; the edit is versioned, so the line item id changes), and remove (bulk, soft delete). Totals are recalculated from the remaining line items; a manual edit marks the invoice as manually edited, which disables recompute. Modifying a FINALIZED invoice voids it and recreates it as a draft copy carrying all current data (description, billing period, due date, metadata, line items); the modification lands on the copy and the response returns the new draft — chain subsequent calls to the returned invoice id; a call that still targets the voided original is rejected with an error naming the replacement.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Execute invoice modification",
+                "operationId": "executeInvoiceModify",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Modification request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ExecuteInvoiceModifyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/InvoiceModifyResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/invoices/{id}/payment": {
@@ -7152,6 +7921,244 @@ const docTemplate = `{
                 }
             }
         },
+        "/refunds": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to see where refunded money actually went and whether it has settled. Filter by invoice_ids to get every settlement row for one invoice.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "List refunds",
+                "operationId": "listRefunds",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by invoice IDs",
+                        "name": "invoice_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by payment IDs",
+                        "name": "payment_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by credit note IDs",
+                        "name": "credit_note_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by refund status",
+                        "name": "refund_statuses",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by refund destination",
+                        "name": "refund_destinations",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by payment gateway",
+                        "name": "gateway",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only refunds that have settled",
+                        "name": "only_settled",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListRefundsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/refunds/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to inspect a single refund: its destination, settled amount and failure reason.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "Get refund",
+                "operationId": "getRefund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Refund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RefundResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/refunds/{id}/retry": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a refund failed or is stuck pending. A failed gateway refund is retried into the customer's wallet; an already-settled refund is rejected.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Refunds"
+                ],
+                "summary": "Retry refund",
+                "operationId": "retryRefund",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Refund ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RefundResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/secrets/api/keys": {
             "get": {
                 "security": [
@@ -7635,6 +8642,170 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscriptions/schedules": {
+            "get": {
+                "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "List all subscription schedules",
+                "operationId": "listAllSubscriptionSchedules",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Filter to pending schedules only",
+                        "name": "pending_only",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by subscription ID",
+                        "name": "subscription_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filter by subscription IDs",
+                        "name": "subscription_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "plan_change",
+                                "cancellation"
+                            ],
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filter by schedule type",
+                        "name": "schedule_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "pending",
+                                "executing",
+                                "executed",
+                                "cancelled",
+                                "failed"
+                            ],
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filter by schedule status",
+                        "name": "schedule_status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit results",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/GetPendingSchedulesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/schedules/{schedule_id}": {
+            "get": {
+                "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription schedule",
+                "operationId": "getSubscriptionSchedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID",
+                        "name": "schedule_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SubscriptionScheduleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/schedules/{schedule_id}/cancel": {
+            "post": {
+                "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Cancel subscription schedule",
+                "operationId": "cancelSubscriptionSchedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID (optional if using request body)",
+                        "name": "schedule_id",
+                        "in": "path"
+                    },
+                    {
+                        "description": "Cancel request (optional if using path parameter)",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/CancelScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CancelScheduleResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions/search": {
             "post": {
                 "security": [
@@ -7931,10 +9102,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/AddonAssociationResponse"
-                            }
+                            "$ref": "#/definitions/ListAddonAssociationsResponse"
                         }
                     },
                     "400": {
@@ -8470,7 +9638,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove).",
+                "description": "Execute a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes settled as one netted document).\nType \"quantity_change\" is deprecated: use \"line_item_change\", which changes a fixed charge's quantity, price, or both, with the same proration and checkout behaviour.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8536,7 +9704,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, tax, or addon add/remove) without committing changes.",
+                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, line item change, grouped invoicing, trial end, coupon, tax, a single addon add/remove, or a batch of addon adds and removes) without committing changes.\nType \"quantity_change\" is deprecated: use \"line_item_change\".",
                 "consumes": [
                     "application/json"
                 ],
@@ -8593,6 +9761,39 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "read"
+            }
+        },
+        "/subscriptions/{id}/schedules": {
+            "get": {
+                "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "List subscription schedules",
+                "operationId": "listSubscriptionSchedules",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/GetPendingSchedulesResponse"
+                        }
+                    }
+                }
             }
         },
         "/subscriptions/{id}/v2": {
@@ -8803,6 +10004,57 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to submit a CSV of usage events for async ingestion. The CSV must already have been uploaded to the Flexprice-managed imports bucket (currently via CSV Box) — pass the upload_id and the backend fetches the file from S3 and streams rows into ClickHouse. Returns the task ID and Temporal workflow IDs for polling.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Import a CSV of usage events",
+                "operationId": "createTask",
+                "parameters": [
+                    {
+                        "description": "Import request",
+                        "name": "task",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/tasks/result": {
@@ -10610,6 +11862,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{id}/remove": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Remove user from tenant",
+                "operationId": "removeUser",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/{id}/roles": {
             "put": {
                 "security": [
@@ -10676,162 +11978,6 @@ const docTemplate = `{
                         "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/subscription-schedules": {
-            "get": {
-                "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "List all subscription schedules",
-                "operationId": "listAllSubscriptionSchedules",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "description": "Filter to pending schedules only",
-                        "name": "pending_only",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by subscription ID",
-                        "name": "subscription_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit results",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset for pagination",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/GetPendingSchedulesResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/subscription-schedules/{id}": {
-            "get": {
-                "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Get subscription schedule",
-                "operationId": "getSubscriptionSchedule",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Schedule ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/SubscriptionScheduleResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/subscriptions/schedules/{schedule_id}/cancel": {
-            "post": {
-                "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Cancel subscription schedule",
-                "operationId": "cancelSubscriptionSchedule",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Schedule ID (optional if using request body)",
-                        "name": "schedule_id",
-                        "in": "path"
-                    },
-                    {
-                        "description": "Cancel request (optional if using path parameter)",
-                        "name": "request",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/CancelScheduleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/CancelScheduleResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/subscriptions/{subscription_id}/schedules": {
-            "get": {
-                "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "List subscription schedules",
-                "operationId": "listSubscriptionSchedules",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "subscription_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/GetPendingSchedulesResponse"
                         }
                     }
                 }
@@ -11897,7 +13043,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.communication.triggered": {
             "post": {
-                "description": "Fired when an invoice communication (e.g. email notification) is triggered. Doc-only for parsing.",
+                "description": "Fired when an invoice communication (e.g. email notification) is triggered. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11920,7 +13066,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.create.drafted": {
             "post": {
-                "description": "Fired when a new invoice is created in draft state. Doc-only for parsing.",
+                "description": "Fired when a new invoice is created in draft state. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11943,7 +13089,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.payment.overdue": {
             "post": {
-                "description": "Fired when an invoice payment is overdue past the due date. Doc-only for parsing.",
+                "description": "Fired when an invoice payment is overdue past the due date. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11964,9 +13110,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/invoice.sync.failed": {
+            "post": {
+                "description": "Fired once per provider when an invoice sync fails after its last retry.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.sync.success": {
+            "post": {
+                "description": "Fired once per provider when an invoice is synced to that provider.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.sync.success",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceSyncWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/invoice.update": {
             "post": {
-                "description": "Fired when an invoice is updated. Doc-only for parsing.",
+                "description": "Fired when an invoice is updated. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11989,7 +13181,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.update.finalized": {
             "post": {
-                "description": "Fired when an invoice is finalized and locked for payment. Doc-only for parsing.",
+                "description": "Fired when an invoice is finalized and locked for payment. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12012,7 +13204,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.update.payment": {
             "post": {
-                "description": "Fired when an invoice payment status changes. Doc-only for parsing.",
+                "description": "Fired when an invoice payment status changes. ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12035,7 +13227,7 @@ const docTemplate = `{
         },
         "/webhook-events/invoice.update.voided": {
             "post": {
-                "description": "Fired when an invoice is voided (e.g. order cancelled or duplicate). Doc-only for parsing.",
+                "description": "Fired when an invoice is voided (e.g. order cancelled or duplicate). ` + "`" + `invoice.line_items` + "`" + ` omits line items with neither an amount nor a quantity (period fan-out emits one per window whether or not usage landed in it), and ` + "`" + `invoice.subscription.plan.prices` + "`" + ` carries only the prices this invoice references, not the plan's full catalogue. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12166,6 +13358,75 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/refund.created": {
+            "post": {
+                "description": "Fired when a refund is planned against an invoice, before the money moves. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/refund.failed": {
+            "post": {
+                "description": "Fired when a refund fails. A gateway refund that fails is retried into the customer's wallet. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/refund.succeeded": {
+            "post": {
+                "description": "Fired when a refund settles, to the original payment gateway or to a wallet. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "refund.succeeded",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.RefundWebhookPayload"
                         }
                     }
                 }
@@ -12869,6 +14130,20 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "ListAddonAssociationsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AddonAssociationResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListAddonsResponse": {
             "type": "object",
             "properties": {
@@ -13164,74 +14439,154 @@ const docTemplate = `{
                 }
             }
         },
-        "checkout.JSONBCheckoutConfiguration": {
+        "analytics.Filter": {
             "type": "object",
             "properties": {
-                "add_addon_params": {
-                    "$ref": "#/definitions/types.AddAddonParams"
-                },
-                "create_subscription_params": {
-                    "$ref": "#/definitions/types.CreateSubscriptionParams"
-                },
-                "modify_subscription_params": {
-                    "$ref": "#/definitions/types.ModifySubscriptionParams"
-                },
-                "wallet_topup_params": {
-                    "$ref": "#/definitions/types.WalletTopupParams"
-                }
-            }
-        },
-        "checkout.JSONBCheckoutPaymentProviderConfig": {
-            "type": "object",
-            "properties": {
-                "collection_method": {
-                    "$ref": "#/definitions/types.CollectionMethod"
-                },
-                "max_mandate_limit": {
+                "field": {
                     "type": "string"
                 },
-                "payment_method": {
-                    "$ref": "#/definitions/types.PaymentMethodType"
-                }
-            }
-        },
-        "checkout.JSONBCheckoutProviderResult": {
-            "type": "object",
-            "properties": {
-                "expires_at": {
-                    "description": "ExpiresAt is the provider URL expiry. When set and earlier than the session expiry,\nexecuteCheckoutAction tightens the session expiry to match.",
-                    "type": "string"
-                },
-                "next_action": {
-                    "description": "NextAction is what the customer must do to complete payment.",
+                "op": {
+                    "enum": [
+                        "eq",
+                        "in"
+                    ],
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.PaymentAction"
+                            "$ref": "#/definitions/types.FilterOperatorType"
                         }
                     ]
                 },
-                "provider_metadata": {
-                    "description": "ProviderMetadata holds provider-specific data not needed for business logic.",
-                    "type": "object",
-                    "additionalProperties": {
+                "optional": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "analytics.SortSpec": {
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "$ref": "#/definitions/types.SortDirection"
                 },
-                "provider_payment_intent_id": {
-                    "description": "ProviderPaymentIntentID is the provider-side charge/intent ID.\nStripe returns this at link creation (pi_xxx); others populate it from the webhook payload.",
-                    "type": "string"
-                },
-                "provider_session_id": {
-                    "description": "ProviderSessionID is stored in EntityIntegrationMapping at link creation.\n  Stripe:   Checkout Session ID  (cs_xxx)\n  Razorpay: Payment Link ID      (plink_xxx)\n  Nomod:    Payment Link ID      (NOTE: webhook uses Charge ID; look up by PaymentLinkID field)\n  Moyasar:  Payment ID",
+                "field": {
                     "type": "string"
                 }
             }
         },
-        "checkout.JSONBCheckoutResult": {
+        "analytics.TimeSpecRaw": {
             "type": "object",
             "properties": {
-                "create_subscription_result": {
-                    "$ref": "#/definitions/types.CreateSubscriptionResult"
+                "grain": {
+                    "$ref": "#/definitions/types.Grain"
+                },
+                "range": {
+                    "type": "string"
+                }
+            }
+        },
+        "analytics.Variable": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "default": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "enum": [
+                        "date_range",
+                        "string",
+                        "string_list",
+                        "number",
+                        "enum",
+                        "boolean"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.VariableType"
+                        }
+                    ]
+                }
+            }
+        },
+        "analytics.ViewDefinition": {
+            "type": "object",
+            "required": [
+                "metrics",
+                "shape"
+            ],
+            "properties": {
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/analytics.Filter"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "metrics": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "enum": [
+                            "usage_quantity",
+                            "event_count"
+                        ],
+                        "$ref": "#/definitions/types.Metric"
+                    }
+                },
+                "shape": {
+                    "enum": [
+                        "timeseries",
+                        "breakdown"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Shape"
+                        }
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/analytics.SortSpec"
+                    }
+                },
+                "time": {
+                    "description": "Time is optional: an omitted range defaults to last_7_days (see\nresolveTime), so it is intentionally not marked required.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/analytics.TimeSpecRaw"
+                        }
+                    ]
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/analytics.Variable"
+                    }
                 }
             }
         },
@@ -13483,6 +14838,47 @@ const docTemplate = `{
                 }
             }
         },
+        "customer.ContactPerson": {
+            "type": "object",
+            "required": [
+                "first_name"
+            ],
+            "properties": {
+                "department": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "designation": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "mobile": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "salutation": {
+                    "type": "string",
+                    "maxLength": 25
+                }
+            }
+        },
         "AWSMarketplaceAgreement": {
             "type": "object",
             "required": [
@@ -13526,6 +14922,86 @@ const docTemplate = `{
                 }
             }
         },
+        "ActivityActor": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityEntity": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityPagination": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "ActivityResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "actor": {
+                    "$ref": "#/definitions/ActivityActor"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "entity": {
+                    "$ref": "#/definitions/ActivityEntity"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ip": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "object"
+                },
+                "user_agent": {
+                    "type": "string"
+                }
+            }
+        },
         "AddAddonRequest": {
             "type": "object",
             "required": [
@@ -13539,8 +15015,23 @@ const docTemplate = `{
                 "cadence": {
                     "$ref": "#/definitions/types.AddonCadence"
                 },
+                "change_at": {
+                    "description": "ChangeAt names when the attach applies without computing a date. Mutually exclusive\nwith StartDate; omit both to attach now.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleType"
+                        }
+                    ]
+                },
                 "checkout": {
                     "$ref": "#/definitions/CheckoutParams"
+                },
+                "coupons": {
+                    "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
@@ -13582,6 +15073,21 @@ const docTemplate = `{
                 },
                 "cadence": {
                     "$ref": "#/definitions/types.AddonCadence"
+                },
+                "change_at": {
+                    "description": "ChangeAt names when the attach applies without computing a date. Mutually exclusive\nwith StartDate; omit both to attach now.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleType"
+                        }
+                    ]
+                },
+                "coupons": {
+                    "description": "Coupons apply to this addon's line items; price_id targets one price, omitted targets all.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
@@ -13668,6 +15174,34 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "AddLineItemRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "display_name",
+                "quantity"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "quantity": {
                     "type": "string"
                 }
             }
@@ -13843,6 +15377,24 @@ const docTemplate = `{
                         "additionalProperties": {}
                     }
                 },
+                "grant_duration_unit": {
+                    "$ref": "#/definitions/types.EntitlementGrantDurationUnit"
+                },
+                "grant_duration_value": {
+                    "type": "integer"
+                },
+                "grant_measure": {
+                    "$ref": "#/definitions/types.EntitlementGrantMeasure"
+                },
+                "grant_quota": {
+                    "type": "string"
+                },
+                "grant_state": {
+                    "$ref": "#/definitions/GrantState"
+                },
+                "grant_unlimited": {
+                    "type": "boolean"
+                },
                 "is_enabled": {
                     "type": "boolean"
                 },
@@ -13880,6 +15432,9 @@ const docTemplate = `{
                 },
                 "grant_quota": {
                     "type": "string"
+                },
+                "grant_unlimited": {
+                    "type": "boolean"
                 },
                 "source_entity_id": {
                     "type": "string"
@@ -14017,6 +15572,74 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                }
+            }
+        },
+        "AnalyticsColumn": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/types.ColumnRole"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.ColumnType"
+                }
+            }
+        },
+        "AnalyticsQueryMeta": {
+            "type": "object",
+            "properties": {
+                "query_source": {
+                    "type": "string"
+                }
+            }
+        },
+        "AnalyticsQueryRequest": {
+            "type": "object",
+            "required": [
+                "definition"
+            ],
+            "properties": {
+                "definition": {
+                    "$ref": "#/definitions/analytics.ViewDefinition"
+                },
+                "variables": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "AnalyticsQueryResult": {
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AnalyticsColumn"
+                    }
+                },
+                "meta": {
+                    "$ref": "#/definitions/AnalyticsQueryMeta"
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 }
             }
         },
@@ -14315,6 +15938,49 @@ const docTemplate = `{
                 }
             }
         },
+        "ChangedAddonAssociation": {
+            "type": "object",
+            "properties": {
+                "addon_id": {
+                    "type": "string"
+                },
+                "addon_status": {
+                    "$ref": "#/definitions/types.AddonStatus"
+                },
+                "change_action": {
+                    "enum": [
+                        "created",
+                        "ended"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ChangedAddonAssociationAction"
+                        }
+                    ]
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "ChangedAddonAssociationAction": {
+            "description": "created | ended",
+            "type": "string",
+            "enum": [
+                "created",
+                "ended"
+            ],
+            "x-enum-varnames": [
+                "ChangedAddonAssociationActionCreated",
+                "ChangedAddonAssociationActionEnded"
+            ]
+        },
         "ChangedInvoice": {
             "type": "object",
             "properties": {
@@ -14339,6 +16005,19 @@ const docTemplate = `{
                 },
                 "status": {
                     "description": "Status is preview (dry-run), issued (wallet credit applied), or a PaymentStatus string for real invoices.",
+                    "enum": [
+                        "preview",
+                        "issued",
+                        "INITIATED",
+                        "PENDING",
+                        "PROCESSING",
+                        "SUCCEEDED",
+                        "OVERPAID",
+                        "FAILED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "VOIDED"
+                    ],
                     "allOf": [
                         {
                             "$ref": "#/definitions/ChangedInvoiceStatus"
@@ -14368,7 +16047,6 @@ const docTemplate = `{
             ]
         },
         "ChangedInvoiceStatus": {
-            "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED",
             "type": "string",
             "enum": [
                 "preview",
@@ -14428,6 +16106,12 @@ const docTemplate = `{
         "ChangedResources": {
             "type": "object",
             "properties": {
+                "addon_associations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ChangedAddonAssociation"
+                    }
+                },
                 "invoices": {
                     "type": "array",
                     "items": {
@@ -14489,6 +16173,9 @@ const docTemplate = `{
                 "cancel_url": {
                     "type": "string"
                 },
+                "entity_creation_options": {
+                    "$ref": "#/definitions/EntityCreationOptions"
+                },
                 "failure_url": {
                     "type": "string"
                 },
@@ -14512,16 +16199,25 @@ const docTemplate = `{
                 }
             }
         },
+        "CheckoutPaymentBlock": {
+            "type": "object",
+            "properties": {
+                "gateway": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
+                }
+            }
+        },
         "CheckoutSessionResponse": {
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "Action is the billing operation this session will perform.\nImmutable after creation; determines which sub-struct inside\nConfiguration is populated.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.CheckoutAction"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.CheckoutAction"
                 },
                 "cancel_url": {
                     "type": "string"
@@ -14530,49 +16226,35 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "checkout_invoice_id": {
-                    "description": "CheckoutInvoiceID and CheckoutPaymentID are set once the apply step\ncreates the corresponding Flexprice entities (completed sessions only).",
                     "type": "string"
                 },
                 "checkout_payment_id": {
                     "type": "string"
                 },
                 "checkout_status": {
-                    "description": "CheckoutStatus tracks the session lifecycle. Starts at \"initiated\"\nwhen the session row is inserted; advances to \"pending\" once the\nprovider call succeeds; settles to completed/failed/expired.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.CheckoutStatus"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.CheckoutStatus"
                 },
                 "completed_at": {
                     "type": "string"
                 },
-                "configuration": {
-                    "description": "Configuration holds the immutable caller inputs set at creation time.\nOnly the sub-struct matching Action is populated; the others are nil.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/checkout.JSONBCheckoutConfiguration"
-                        }
-                    ]
-                },
                 "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
                     "type": "string"
                 },
                 "customer_id": {
                     "type": "string"
                 },
-                "environment_id": {
-                    "type": "string"
+                "entity_creation_result": {
+                    "description": "Describes the call that returned this session, not the session itself; never persisted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/EntityCreationResult"
+                        }
+                    ]
                 },
                 "expires_at": {
-                    "description": "ExpiresAt is required. A Temporal timer fires at this time for any\nsession still in initiated|pending, marking it expired. The caller\nmust create a new session after expiry (expire-and-restart model).",
                     "type": "string"
                 },
                 "failure_reason": {
-                    "description": "FailureReason is a human-readable string set on failed sessions.",
                     "type": "string"
                 },
                 "failure_url": {
@@ -14582,61 +16264,41 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "idempotency_key": {
-                    "description": "IdempotencyKey is caller-supplied. It is unique only while the session\nis active (initiated|pending). The same key may be reused once the\nsession reaches a terminal state (completed|failed|expired).",
                     "type": "string"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
+                "next_poll_after_ms": {
+                    "description": "NextPollAfterMs is how long a client should wait before reading again.\nZero means stop — either the session is terminal, or this response did not\ncome from a polling read.",
+                    "type": "integer"
+                },
+                "payment": {
+                    "description": "Payment is the payment this session is waiting on, when one exists.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CheckoutPaymentBlock"
+                        }
+                    ]
+                },
                 "payment_action": {
                     "$ref": "#/definitions/types.PaymentAction"
                 },
                 "payment_provider": {
-                    "description": "PaymentProvider is required and immutable after creation.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.CheckoutPaymentProvider"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.CheckoutPaymentProvider"
                 },
-                "payment_provider_config": {
-                    "description": "PaymentProviderConfig holds provider-specific payment configuration\n(e.g. Razorpay UPI Autopay preferences) supplied at session creation.\nNil if not set on the request.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/checkout.JSONBCheckoutPaymentProviderConfig"
-                        }
-                    ]
-                },
-                "provider_result": {
-                    "description": "ProviderResult holds the external provider response (session URL,\npayment intent ID, etc.). Set after the provider call in the create\nstep. Source of truth for deriving PaymentActions in API responses.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/checkout.JSONBCheckoutProviderResult"
-                        }
-                    ]
-                },
-                "result": {
-                    "description": "Result holds the Flexprice entity IDs created during the apply step.\nNil until the session reaches completed status.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/checkout.JSONBCheckoutResult"
-                        }
-                    ]
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
+                "stale": {
+                    "description": "Stale reports that this response is stored state that was not checked against\nthe payment provider on this request — the read was debounced, or the gateway\ndid not answer. A UI should say \"still checking\" rather than presenting a\nstale answer as fact.",
+                    "type": "boolean"
                 },
                 "success_url": {
-                    "description": "Redirect URLs sent to the payment provider. The provider redirects the\nuser browser to the appropriate URL after the payment flow completes.",
                     "type": "string"
                 },
-                "tenant_id": {
-                    "type": "string"
+                "terminal": {
+                    "description": "Terminal reports whether the session has finished. Clients poll until this is\ntrue rather than hardcoding the status set, which would go stale if a status\nis ever added.",
+                    "type": "boolean"
                 },
                 "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
                     "type": "string"
                 }
             }
@@ -14745,6 +16407,14 @@ const docTemplate = `{
                 }
             }
         },
+        "ConfigurationDetails": {
+            "type": "object",
+            "properties": {
+                "plan_change": {
+                    "$ref": "#/definitions/PlanChangeScheduleDetails"
+                }
+            }
+        },
         "CostAnalyticItem": {
             "type": "object",
             "properties": {
@@ -14772,7 +16442,7 @@ const docTemplate = `{
                     "description": "Expanded data (populated when expand options are specified)",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -15321,6 +16991,9 @@ const docTemplate = `{
                 "customer_external_id": {
                     "type": "string"
                 },
+                "entity_creation_options": {
+                    "$ref": "#/definitions/EntityCreationOptions"
+                },
                 "failure_url": {
                     "type": "string"
                 },
@@ -15501,6 +17174,14 @@ const docTemplate = `{
                 "priority": {
                     "type": "integer"
                 },
+                "proration_behavior": {
+                    "description": "ProrationBehavior applies to SUBSCRIPTION scope only. create_prorations scales the first\napplication to the rest of the current billing period and puts later ones on the\nsubscription's billing dates, when the grant recurs on the subscription's billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
                 "scope": {
                     "$ref": "#/definitions/types.CreditGrantScope"
                 },
@@ -15595,6 +17276,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.CreditNoteReason"
                         }
                     ]
+                },
+                "refund_target": {
+                    "description": "refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE\nreturns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.\nOnly honoured when the credit note is processed by this same call; a separately\nfinalized credit note takes it from the finalize request instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RefundTarget"
+                        }
+                    ]
                 }
             }
         },
@@ -15635,10 +17324,23 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "billing_currency": {
+                    "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is",
+                    "type": "string",
+                    "maxLength": 10
+                },
                 "contact": {
                     "description": "contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string",
                     "maxLength": 20
+                },
+                "contact_persons": {
+                    "description": "contact_persons are people at the customer; at most one may be primary",
+                    "type": "array",
+                    "maxItems": 5,
+                    "items": {
+                        "$ref": "#/definitions/customer.ContactPerson"
+                    }
                 },
                 "email": {
                     "description": "email is the customer's email address and must be a valid email format if provided",
@@ -15681,6 +17383,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/TaxRateOverride"
                     }
+                },
+                "tax_treatment": {
+                    "description": "tax_treatment is the customer's tax treatment. Defaults to \"taxable\" if not provided.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTreatment"
+                        }
+                    ]
                 },
                 "timezone": {
                     "description": "timezone is the customer's IANA timezone name (e.g. \"Asia/Kolkata\", \"America/New_York\")\nDefaults to \"UTC\" if not provided",
@@ -15737,6 +17447,9 @@ const docTemplate = `{
                 "grant_quota": {
                     "type": "string"
                 },
+                "grant_unlimited": {
+                    "type": "boolean"
+                },
                 "is_enabled": {
                     "type": "boolean"
                 },
@@ -15790,6 +17503,51 @@ const docTemplate = `{
                 "provider_type": {
                     "type": "string",
                     "maxLength": 50
+                }
+            }
+        },
+        "CreateFXRateRequest": {
+            "type": "object",
+            "required": [
+                "from_currency",
+                "scope",
+                "to_currency"
+            ],
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "from_currency": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.FXRateScope"
+                },
+                "scope_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Source defaults to \"fixed\". A fixed rate requires ` + "`" + `rate` + "`" + `; a market rate ignores it\n(the value comes from the market-rate integration at conversion time).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FXRateSource"
+                        }
+                    ]
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "to_currency": {
+                    "type": "string"
                 }
             }
         },
@@ -15997,6 +17755,14 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "checkout": {
+                    "description": "checkout gates this invoice behind a hosted payment session: created DRAFT, finalized\nonly when the payment webhook lands. One-off invoices only.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CheckoutParams"
+                        }
+                    ]
+                },
                 "coupons": {
                     "description": "coupons",
                     "type": "array",
@@ -16100,13 +17866,6 @@ const docTemplate = `{
                 "period_start": {
                     "description": "period_start is the start date of the billing period",
                     "type": "string"
-                },
-                "prepared_tax_rates": {
-                    "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/TaxRateResponse"
-                    }
                 },
                 "subscription_id": {
                     "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice",
@@ -16275,6 +18034,14 @@ const docTemplate = `{
                 "billing_period_count": {
                     "type": "integer",
                     "default": 1
+                },
+                "bucket_size": {
+                    "description": "BucketSize windows the meter's aggregation for this price. The meter\naggregates within each window and the window results are summed, so the\nbillable unit becomes per-window (e.g. seats -\u003e seat-hours). Valid only on\nUSAGE prices whose meter aggregates MAX or SUM.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "currency": {
                     "type": "string"
@@ -16646,8 +18413,22 @@ const docTemplate = `{
                 "external_customer_id": {
                     "type": "string"
                 },
+                "fx_rates": {
+                    "description": "FxRates sets subscription-scope rates to the invoicing customer's billing currency, one per\nnon-overlapping window. Rejected when nothing needs converting or the pair has no tenant rate.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InlineFXRate"
+                    }
+                },
                 "gateway_payment_method_id": {
                     "type": "string"
+                },
+                "include_price_ids": {
+                    "description": "IncludePriceIDs selects which plan prices to attach. Nil/omitted attaches matching-cadence\nprices plus ONETIME; [] attaches none (LineItems extras still apply); a non-empty list\nattaches only those IDs. Each listed ID must belong to the plan, match the subscription\ncurrency, and have a cadence that equals or strictly divides the subscription cadence.\nPointer-slice distinguishes nil from [].\nNOTE: no ` + "`" + `dive,required` + "`" + ` on this tag — swaggo misinterprets ` + "`" + `required` + "`" + `\ninside ` + "`" + `dive` + "`" + ` as marking the whole field required, which then shows up\nin the OpenAPI schema and breaks callers that omit the field. Per-element\nnon-emptiness is enforced explicitly in Validate() below.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "inheritance": {
                     "description": "Inheritance groups customer-hierarchy fields; providing child IDs makes this a PARENT subscription.",
@@ -16673,6 +18454,14 @@ const docTemplate = `{
                             "type": "string"
                         }
                     }
+                },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping: per_charge_period (default) bills a monthly price on a quarterly\nsub as 3 line items, per_billing_period as 1. Same total either way.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
+                        }
+                    ]
                 },
                 "line_items": {
                     "description": "LineItems are extra (non-plan) line items added at creation.",
@@ -16762,6 +18551,40 @@ const docTemplate = `{
                 }
             }
         },
+        "CreateTaskRequest": {
+            "type": "object",
+            "required": [
+                "entity_type",
+                "file_provider",
+                "file_type",
+                "task_type",
+                "upload_id"
+            ],
+            "properties": {
+                "entity_type": {
+                    "$ref": "#/definitions/types.EntityType"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_provider": {
+                    "type": "string"
+                },
+                "file_type": {
+                    "$ref": "#/definitions/types.FileType"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "task_type": {
+                    "$ref": "#/definitions/types.TaskType"
+                },
+                "upload_id": {
+                    "type": "string"
+                }
+            }
+        },
         "CreateTaxAssociationRequest": {
             "type": "object",
             "required": [
@@ -16800,6 +18623,14 @@ const docTemplate = `{
                     "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
                     "type": "string"
                 },
+                "tax_behavior": {
+                    "description": "TaxBehavior is inclusive or exclusive. Settable at any level. If left empty on a\nsubscription-level association, it defaults to exclusive at creation time —\ntenant/customer-level templates only need this set explicitly if the tenant wants\none; otherwise it stays null and is resolved when the template is copied down to\na subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxBehavior"
+                        }
+                    ]
+                },
                 "tax_rate_code": {
                     "type": "string"
                 }
@@ -16820,10 +18651,6 @@ const docTemplate = `{
                     "description": "description is an optional text description providing details about the tax rate",
                     "type": "string"
                 },
-                "fixed_value": {
-                    "description": "fixed_value is the fixed monetary amount when tax_rate_type is \"fixed\"",
-                    "type": "string"
-                },
                 "metadata": {
                     "description": "metadata contains additional key-value pairs for storing extra information",
                     "type": "object",
@@ -16836,7 +18663,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "percentage_value": {
-                    "description": "percentage_value is the percentage value (0-100) when tax_rate_type is \"percentage\"",
+                    "description": "percentage_value is the percentage value (0-100)",
                     "type": "string"
                 },
                 "scope": {
@@ -16848,7 +18675,7 @@ const docTemplate = `{
                     ]
                 },
                 "tax_rate_type": {
-                    "description": "tax_rate_type determines how the tax is calculated (\"percentage\" or \"fixed\")",
+                    "description": "tax_rate_type is always \"percentage\" — fixed-amount tax rates are not supported",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.TaxRateType"
@@ -16921,6 +18748,21 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/types.UserType"
+                }
+            }
+        },
+        "CreateViewRequest": {
+            "type": "object",
+            "required": [
+                "definition",
+                "name"
+            ],
+            "properties": {
+                "definition": {
+                    "$ref": "#/definitions/analytics.ViewDefinition"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -17444,9 +19286,19 @@ const docTemplate = `{
                     "description": "AddressState is the state of the customer's address",
                     "type": "string"
                 },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
                 "contact": {
                     "description": "Contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string"
+                },
+                "contact_persons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/customer.ContactPerson"
+                    }
                 },
                 "created_at": {
                     "type": "string"
@@ -17489,6 +19341,14 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
+                },
+                "tax_treatment": {
+                    "description": "TaxTreatment is the customer's tax treatment — taxable (default) or exempt.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTreatment"
+                        }
+                    ]
                 },
                 "tenant_id": {
                     "type": "string"
@@ -17803,6 +19663,33 @@ const docTemplate = `{
                 }
             }
         },
+        "EntityCreationConflictPolicies": {
+            "type": "object",
+            "properties": {
+                "on_existing_entity": {
+                    "$ref": "#/definitions/types.OnExistingEntityPolicy"
+                }
+            }
+        },
+        "EntityCreationOptions": {
+            "type": "object",
+            "properties": {
+                "entity_creation_conflict_policies": {
+                    "$ref": "#/definitions/EntityCreationConflictPolicies"
+                }
+            }
+        },
+        "EntityCreationResult": {
+            "type": "object",
+            "properties": {
+                "entity_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.EntityCreationStatus"
+                }
+            }
+        },
         "EntityIntegrationMappingResponse": {
             "type": "object",
             "properties": {
@@ -17866,6 +19753,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "ingested_at": {
+                    "type": "string"
+                },
                 "properties": {
                     "type": "object",
                     "additionalProperties": true
@@ -17878,14 +19768,17 @@ const docTemplate = `{
                 }
             }
         },
-        "EventCostInfo": {
+        "ExecuteInvoiceModifyRequest": {
             "type": "object",
+            "required": [
+                "type"
+            ],
             "properties": {
-                "costNanoUsd": {
-                    "type": "string"
+                "line_item_params": {
+                    "$ref": "#/definitions/InvoiceModifyLineItemParams"
                 },
-                "requestId": {
-                    "type": "string"
+                "type": {
+                    "$ref": "#/definitions/InvoiceModifyType"
                 }
             }
         },
@@ -17895,6 +19788,9 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
+                "addon_bulk_params": {
+                    "$ref": "#/definitions/SubModifyBulkAddonParams"
+                },
                 "addon_params": {
                     "$ref": "#/definitions/SubModifyAddonParams"
                 },
@@ -17910,6 +19806,9 @@ const docTemplate = `{
                 "inheritance_params": {
                     "$ref": "#/definitions/SubModifyInheritanceRequest"
                 },
+                "line_item_change_params": {
+                    "$ref": "#/definitions/SubModifyLineItemChangeRequest"
+                },
                 "quantity_change_params": {
                     "$ref": "#/definitions/SubModifyQuantityChangeRequest"
                 },
@@ -17921,6 +19820,73 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/SubscriptionModifyType"
+                }
+            }
+        },
+        "ExecutionDetails": {
+            "type": "object",
+            "properties": {
+                "plan_change": {
+                    "$ref": "#/definitions/PlanChangeScheduleResult"
+                }
+            }
+        },
+        "FXRateResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "from_currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.FXRateScope"
+                },
+                "scope_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "$ref": "#/definitions/types.FXRateSource"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "to_currency": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -18029,11 +19995,36 @@ const docTemplate = `{
         "FeatureUsageSummary": {
             "type": "object",
             "properties": {
+                "buckets": {
+                    "description": "Buckets is one entry per independent budget on a parallel feature. The scalar\nfigures above cannot describe several budgets at once — a sum is not spendable\nfrom any one of them — so a client showing a parallel feature reads these instead.\nEmpty for additive features, where the scalars are the whole truth.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AggregatedEntitlementBucket"
+                    }
+                },
                 "current_usage": {
                     "type": "string"
                 },
                 "feature": {
                     "$ref": "#/definitions/FeatureResponse"
+                },
+                "grant_duration_unit": {
+                    "$ref": "#/definitions/types.EntitlementGrantDurationUnit"
+                },
+                "grant_duration_value": {
+                    "type": "integer"
+                },
+                "grant_measure": {
+                    "$ref": "#/definitions/types.EntitlementGrantMeasure"
+                },
+                "grant_quota": {
+                    "type": "string"
+                },
+                "grant_state": {
+                    "$ref": "#/definitions/GrantState"
+                },
+                "grant_unlimited": {
+                    "type": "boolean"
                 },
                 "is_enabled": {
                     "type": "boolean"
@@ -18058,6 +20049,19 @@ const docTemplate = `{
                 },
                 "usage_percent": {
                     "type": "string"
+                }
+            }
+        },
+        "FinalizeCreditNoteRequest": {
+            "type": "object",
+            "properties": {
+                "refund_target": {
+                    "description": "refund_target asks where a refund credit note should send the money: BACK_TO_SOURCE\nreturns it the way it arrived, PREPAID_WALLET (the default) keeps it as customer credit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RefundTarget"
+                        }
+                    ]
                 }
             }
         },
@@ -18200,6 +20204,12 @@ const docTemplate = `{
                 "event": {
                     "$ref": "#/definitions/Event"
                 },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Event"
+                    }
+                },
                 "processed_events": {
                     "type": "array",
                     "items": {
@@ -18301,32 +20311,6 @@ const docTemplate = `{
                 },
                 "total_count": {
                     "type": "integer"
-                }
-            }
-        },
-        "GetHuggingFaceBillingDataRequest": {
-            "type": "object",
-            "required": [
-                "requestIds"
-            ],
-            "properties": {
-                "requestIds": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "GetHuggingFaceBillingDataResponse": {
-            "type": "object",
-            "properties": {
-                "requests": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/EventCostInfo"
-                    }
                 }
             }
         },
@@ -18689,6 +20673,61 @@ const docTemplate = `{
                 }
             }
         },
+        "GrantAllowanceState": {
+            "type": "object",
+            "properties": {
+                "entitlement_id": {
+                    "type": "string"
+                },
+                "grant_id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_computed_at": {
+                    "type": "string"
+                },
+                "measure": {
+                    "$ref": "#/definitions/types.EntitlementGrantMeasure"
+                },
+                "quota": {
+                    "type": "string"
+                },
+                "quota_crossed_at": {
+                    "type": "string"
+                },
+                "remaining": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.EntitlementGrantStatus"
+                },
+                "unlimited": {
+                    "type": "boolean"
+                },
+                "usage": {
+                    "type": "string"
+                },
+                "valid_from": {
+                    "type": "string"
+                },
+                "valid_to": {
+                    "type": "string"
+                }
+            }
+        },
+        "GrantState": {
+            "type": "object",
+            "properties": {
+                "allowances": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GrantAllowanceState"
+                    }
+                }
+            }
+        },
         "GroupResponse": {
             "type": "object",
             "properties": {
@@ -18905,6 +20944,20 @@ const docTemplate = `{
                 "InheritanceActionRemove"
             ]
         },
+        "InlineFXRate": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
         "IntegrationConfigEntry": {
             "type": "object",
             "properties": {
@@ -19021,6 +21074,14 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "custom_currency": {
+                    "description": "custom_currency holds this line item's amounts in the tenant's custom currency.\nThe fields above are fiat projections of it; nil for fiat invoices.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CustomCurrencyLineItem"
+                        }
+                    ]
+                },
                 "customer_id": {
                     "type": "string"
                 },
@@ -19035,6 +21096,14 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
@@ -19129,6 +21198,70 @@ const docTemplate = `{
                 }
             }
         },
+        "InvoiceModifyLineItemAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "update",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "InvoiceModifyLineItemActionAdd",
+                "InvoiceModifyLineItemActionUpdate",
+                "InvoiceModifyLineItemActionRemove"
+            ]
+        },
+        "InvoiceModifyLineItemParams": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/InvoiceModifyLineItemAction"
+                },
+                "items": {
+                    "description": "Required for action 'add'. Must contain at least one line item.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/AddLineItemRequest"
+                    }
+                },
+                "line_item_id": {
+                    "description": "Required for action 'update' (one line item per call; edits are versioned, so the id changes).",
+                    "type": "string"
+                },
+                "line_item_ids": {
+                    "description": "Required for action 'remove'. Must contain at least one line item ID.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "update": {
+                    "$ref": "#/definitions/UpdateLineItemRequest"
+                }
+            }
+        },
+        "InvoiceModifyResponse": {
+            "type": "object",
+            "properties": {
+                "invoice": {
+                    "$ref": "#/definitions/InvoiceResponse"
+                }
+            }
+        },
+        "InvoiceModifyType": {
+            "type": "string",
+            "enum": [
+                "line_item"
+            ],
+            "x-enum-varnames": [
+                "InvoiceModifyTypeLineItem"
+            ]
+        },
         "InvoicePreview": {
             "type": "object",
             "properties": {
@@ -19192,6 +21325,14 @@ const docTemplate = `{
                     "description": "billing_sequence is the sequential number indicating the billing cycle for subscription invoices",
                     "type": "integer"
                 },
+                "checkout_session": {
+                    "description": "checkout_session is the payment session gating this invoice, when it was created with checkout",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    ]
+                },
                 "coupon_applications": {
                     "description": "coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)",
                     "type": "array",
@@ -19208,6 +21349,14 @@ const docTemplate = `{
                 "currency": {
                     "description": "currency is the three-letter ISO currency code (e.g., USD, EUR, GBP) that applies to all monetary amounts on this invoice",
                     "type": "string"
+                },
+                "custom_currency": {
+                    "description": "custom_currency is the custom-currency equivalent; Currency itself is always fiat",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CustomCurrency"
+                        }
+                    ]
                 },
                 "customer": {
                     "description": "customer contains the customer information associated with this invoice",
@@ -19236,6 +21385,14 @@ const docTemplate = `{
                 "finalized_at": {
                     "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "description": "id is the unique identifier for this invoice",
@@ -19328,6 +21485,9 @@ const docTemplate = `{
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
                     "type": "string"
                 },
+                "source_type": {
+                    "$ref": "#/definitions/types.InvoiceSourceType"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -19350,6 +21510,22 @@ const docTemplate = `{
                 "subtotal": {
                     "description": "subtotal is the sum of all line items before any taxes, discounts, or additional fees",
                     "type": "string"
+                },
+                "tax_exemption_reason_code": {
+                    "description": "tax_exemption_reason_code is why no tax was charged; null only when tax was actually charged.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxExemptionReasonCode"
+                        }
+                    ]
+                },
+                "tax_summary": {
+                    "description": "tax_summary breaks total_tax down by behavior and states why no tax was charged, when\nnone was. Set by WithTaxes once Taxes and TaxExemptionReasonCode are both known.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/TaxSummary"
+                        }
+                    ]
                 },
                 "taxes": {
                     "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -19389,6 +21565,34 @@ const docTemplate = `{
                 },
                 "voided_at": {
                     "description": "voided_at is the timestamp when this invoice was voided or cancelled",
+                    "type": "string"
+                }
+            }
+        },
+        "LineItemChange": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "amount": {
+                    "description": "Amount reprices the charge. Flat fee only for now.",
+                    "type": "string"
+                },
+                "coupons": {
+                    "description": "Coupons apply to the new line item created by this change.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "quantity": {
                     "type": "string"
                 }
             }
@@ -19490,6 +21694,70 @@ const docTemplate = `{
                 }
             }
         },
+        "ListActivityRequest": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "actor_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "cursor": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "ListActivityResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ActivityResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/ActivityPagination"
+                }
+            }
+        },
         "ListAlertLogsResponse": {
             "type": "object",
             "properties": {
@@ -19546,6 +21814,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListFXRatesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/FXRateResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListPaymentsResponse": {
             "type": "object",
             "properties": {
@@ -19553,6 +21835,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/PaymentResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListRefundsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RefundResponse"
                     }
                 },
                 "pagination": {
@@ -19609,7 +21905,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "meter": {
-                    "$ref": "#/definitions/meter.Meter"
+                    "$ref": "#/definitions/Meter"
                 },
                 "meter_id": {
                     "type": "string"
@@ -19744,6 +22040,9 @@ const docTemplate = `{
                 "entitlement_id"
             ],
             "properties": {
+                "aggregation_mode": {
+                    "$ref": "#/definitions/types.EntitlementAggregationMode"
+                },
                 "config_value": {
                     "description": "ConfigValue is the config value for config features",
                     "type": "object",
@@ -19752,6 +22051,24 @@ const docTemplate = `{
                 "entitlement_id": {
                     "description": "EntitlementID references the plan/addon entitlement to override",
                     "type": "string"
+                },
+                "grant_allocation_behavior": {
+                    "$ref": "#/definitions/types.EntitlementGrantAllocationBehavior"
+                },
+                "grant_duration_unit": {
+                    "$ref": "#/definitions/types.EntitlementGrantDurationUnit"
+                },
+                "grant_duration_value": {
+                    "type": "integer"
+                },
+                "grant_measure": {
+                    "$ref": "#/definitions/types.EntitlementGrantMeasure"
+                },
+                "grant_quota": {
+                    "type": "string"
+                },
+                "grant_unlimited": {
+                    "type": "boolean"
                 },
                 "is_enabled": {
                     "description": "IsEnabled determines if the entitlement is enabled or disabled",
@@ -19779,6 +22096,14 @@ const docTemplate = `{
                 },
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
+                },
+                "bucket_size": {
+                    "description": "BucketSize overrides the windowing used to turn this meter's usage into\nbillable units for this subscription. See CreatePriceRequest.BucketSize.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "price_id": {
                     "description": "PriceID references the plan price to override",
@@ -19965,6 +22290,44 @@ const docTemplate = `{
                 }
             }
         },
+        "PlanChangeScheduleDetails": {
+            "type": "object",
+            "properties": {
+                "billing_period_behaviour": {
+                    "$ref": "#/definitions/types.BillingPeriodBehaviour"
+                },
+                "entity_policies": {
+                    "$ref": "#/definitions/SubscriptionChangeEntityPolicies"
+                },
+                "target_plan_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "PlanChangeScheduleResult": {
+            "type": "object",
+            "properties": {
+                "change_type": {
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "from_plan_id": {
+                    "type": "string"
+                },
+                "previous_subscription_id": {
+                    "description": "previous_subscription_id is set when the change replaced the subscription with a new one",
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "to_plan_id": {
+                    "type": "string"
+                }
+            }
+        },
         "PlanPriceSyncStatusResponse": {
             "type": "object",
             "properties": {
@@ -20130,6 +22493,14 @@ const docTemplate = `{
                     "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12",
                     "type": "integer",
                     "default": 1
+                },
+                "bucket_size": {
+                    "description": "BucketSize windows the meter's aggregation for this price: the meter\naggregates within each window and the window results are summed. Empty\nmeans unbucketed. Only valid on USAGE prices whose meter aggregates MAX\nor SUM. Resolved through ResolveBucketSize, never read directly.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "conversion_rate": {
                     "description": "ConversionRate is the conversion rate of the price unit to the fiat currency",
@@ -20440,6 +22811,130 @@ const docTemplate = `{
                 }
             }
         },
+        "ProviderError": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "ProviderSavedPaymentMethods": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/ProviderError"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SavedPaymentMethod"
+                    }
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
+        "RefundResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_note_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "failed_at": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "gateway_idempotency_token": {
+                    "type": "string"
+                },
+                "gateway_metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "gateway_refund_id": {
+                    "type": "string"
+                },
+                "gateway_tracking_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "initiated_at": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "refund_destination": {
+                    "$ref": "#/definitions/types.RefundDestination"
+                },
+                "refund_destination_id": {
+                    "type": "string"
+                },
+                "refund_reason": {
+                    "$ref": "#/definitions/types.RefundReason"
+                },
+                "refund_status": {
+                    "$ref": "#/definitions/types.RefundStatus"
+                },
+                "settled_amount": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "succeeded_at": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "RegisterMarketplaceAgreementRequest": {
             "type": "object",
             "required": [
@@ -20518,6 +23013,14 @@ const docTemplate = `{
                 "addon_association_id": {
                     "type": "string"
                 },
+                "change_at": {
+                    "description": "ChangeAt names when the removal applies without computing a date. Mutually exclusive\nwith EffectiveDate; omit both to remove at period end.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleType"
+                        }
+                    ]
+                },
                 "effective_date": {
                     "description": "EffectiveDate defaults to period end when nil; mid-period with create_prorations issues a wallet credit.",
                     "type": "string"
@@ -20526,6 +23029,252 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "RevenueAnalyticsRequest": {
+            "type": "object",
+            "required": [
+                "start_time"
+            ],
+            "properties": {
+                "allocation_policy": {
+                    "description": "AllocationPolicy applies to the day granularity: billed keeps\nwhole-period amounts on their booked day; amortized spreads them evenly\nacross their period's days.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RevenueAllocationPolicy"
+                        }
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "description": "Filters restrict the rows before aggregation.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "granularity": {
+                    "description": "Granularity buckets results by day, by billing period, or into one total.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RevenueGranularity"
+                        }
+                    ]
+                },
+                "group_by": {
+                    "description": "GroupBy dimensions: revenue_source, source (the event source recorded in\nmeter_usage; requires customer_ids or subscription_ids), customer_id,\nsubscription_id, price_id, meter_id, currency. revenue_source is always\napplied — every row says what kind of revenue it is — and requested\ndimensions are added on top.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "include_adjustments": {
+                    "description": "IncludeAdjustments breaks the non-obvious components — commitment\ntrue-ups, overage and revert (contra) rows — out as their own rows,\neach labeled with its kind in adjustment_type. Off, they fold into\ntheir parent buckets (true-up/overage into usage, reverts into their\nown source) so visible rows read as plain usage/fixed. Totals are\nidentical either way.",
+                    "type": "boolean"
+                },
+                "meter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "price_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "start_time": {
+                    "description": "StartTime/EndTime bound the day range (inclusive days derived in UTC).\nEndTime is optional and defaults to now.",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status restricts the response to booked (FINAL) or in-progress\n(PROVISIONAL) rows. Optional: left empty, both are returned and each\nrow says which it is, so the two are never silently summed together.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FactStatus"
+                        }
+                    ]
+                },
+                "subscription_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "RevenueAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "contains_allocated": {
+                    "description": "ContainsAllocated is true when any bucket includes whole-period amounts\nspread across days (amortized) or booked on a single day (billed) —\ni.e. the day view carries period-shaped charges, not only true daily\naccruals.",
+                    "type": "boolean"
+                },
+                "query": {
+                    "description": "Query echoes the request with defaults resolved. Rows carry only the\nrequested group dimensions, so this is what says which customers,\nsubscriptions and window they cover — add customer_id/subscription_id\nto group_by for per-entity rows.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/RevenueAnalyticsRequest"
+                        }
+                    ]
+                },
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RevenueAnalyticsRow"
+                    }
+                }
+            }
+        },
+        "RevenueAnalyticsRow": {
+            "type": "object",
+            "properties": {
+                "adjustment_type": {
+                    "description": "AdjustmentType labels rows broken out by include_adjustments:\n\"commitment_trueup\", \"overage\" or \"revert\". Empty for plain rows.",
+                    "type": "string"
+                },
+                "billable_qty": {
+                    "type": "number"
+                },
+                "day": {
+                    "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period.",
+                    "type": "string"
+                },
+                "entitlement_amount": {
+                    "type": "number"
+                },
+                "entitlement_qty": {
+                    "type": "number"
+                },
+                "group": {
+                    "description": "Group holds the requested dimensions and their values for this bucket.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "invoice_discount": {
+                    "type": "number"
+                },
+                "line_discount": {
+                    "type": "number"
+                },
+                "net_amount": {
+                    "type": "number"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is the row's fact status. It is part of the row's identity, so a\nFINAL and a PROVISIONAL row for the same bucket stay separate.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FactStatus"
+                        }
+                    ]
+                },
+                "tier_delta": {
+                    "type": "number"
+                },
+                "usage_at_list_rate": {
+                    "type": "number"
+                }
+            }
+        },
+        "SavedCardDetails": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "exp_month": {
+                    "type": "integer"
+                },
+                "exp_year": {
+                    "type": "integer"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "SavedPaymentMethod": {
+            "type": "object",
+            "properties": {
+                "can_auto_charge": {
+                    "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate.",
+                    "type": "boolean"
+                },
+                "card": {
+                    "$ref": "#/definitions/SavedCardDetails"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "instantly_chargeable": {
+                    "type": "boolean"
+                },
+                "is_default": {
+                    "description": "Which method to use when several are saved at this provider.\nScoped to the provider: two providers means two defaults.",
+                    "type": "boolean"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                },
+                "recurring": {
+                    "$ref": "#/definitions/SavedRecurringPaymentDetails"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.PaymentMethodStatus"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                },
+                "upi": {
+                    "$ref": "#/definitions/SavedUPIDetails"
+                }
+            }
+        },
+        "SavedPaymentMethodsResponse": {
+            "type": "object",
+            "properties": {
+                "providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ProviderSavedPaymentMethods"
+                    }
+                }
+            }
+        },
+        "SavedRecurringPaymentDetails": {
+            "type": "object",
+            "properties": {
+                "auto_chargeable_till": {
+                    "type": "string"
+                },
+                "max_amount": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.RecurringPaymentStatus"
+                }
+            }
+        },
+        "SavedUPIDetails": {
+            "type": "object",
+            "properties": {
+                "vpa": {
                     "type": "string"
                 }
             }
@@ -20686,6 +23435,23 @@ const docTemplate = `{
                 }
             }
         },
+        "SubModifyBulkAddonParams": {
+            "type": "object",
+            "properties": {
+                "adds": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AddAddonToSubscriptionRequest"
+                    }
+                },
+                "removes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RemoveAddonRequest"
+                    }
+                }
+            }
+        },
         "SubModifyCouponAction": {
             "type": "string",
             "enum": [
@@ -20786,6 +23552,21 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "SubModifyLineItemChangeRequest": {
+            "type": "object",
+            "required": [
+                "line_items"
+            ],
+            "properties": {
+                "line_items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/LineItemChange"
                     }
                 }
             }
@@ -21404,7 +24185,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -21507,7 +24288,8 @@ const docTemplate = `{
                 "trial_end",
                 "coupon",
                 "tax",
-                "addon"
+                "addon",
+                "line_item_change"
             ],
             "x-enum-varnames": [
                 "SubscriptionModifyTypeInheritance",
@@ -21516,7 +24298,8 @@ const docTemplate = `{
                 "SubscriptionModifyTypeTrialEnd",
                 "SubscriptionModifyTypeCoupon",
                 "SubscriptionModifyTypeTax",
-                "SubscriptionModifyTypeAddon"
+                "SubscriptionModifyTypeAddon",
+                "SubscriptionModifyTypeLineItemChange"
             ]
         },
         "SubscriptionPhaseCreateRequest": {
@@ -21649,6 +24432,14 @@ const docTemplate = `{
                 },
                 "billing_period_count": {
                     "type": "integer"
+                },
+                "bucket_size": {
+                    "description": "BucketSize windows the meter's aggregation for this price. See\nCreatePriceRequest.BucketSize.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "description": {
                     "type": "string"
@@ -21854,6 +24645,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/InvoiceResponse"
+                        }
+                    ]
+                },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping controls whether a charge shorter than the billing period bills\nas one line item per charge period (default) or one per billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
                         }
                     ]
                 },
@@ -22093,6 +24892,14 @@ const docTemplate = `{
                     "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)",
                     "type": "string"
                 },
+                "line_item_grouping": {
+                    "description": "LineItemGrouping controls whether a charge shorter than the billing period bills\nas one line item per charge period (default) or one per billing period.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.LineItemGrouping"
+                        }
+                    ]
+                },
                 "line_items": {
                     "description": "LineItems is expanded only if \"subscription_line_items\" is in expand parameter\nEach line item can optionally include expanded price data",
                     "type": "array",
@@ -22224,7 +25031,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "configuration": {
-                    "description": "configuration contains type-specific configuration (e.g., target_plan_id for plan changes)"
+                    "description": "configuration is the raw type-specific configuration. Deprecated: use configuration_details.",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "configuration_details": {
+                    "description": "configuration_details is the typed counterpart of configuration",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ConfigurationDetails"
+                        }
+                    ]
                 },
                 "created_at": {
                     "description": "created_at timestamp",
@@ -22242,8 +25059,18 @@ const docTemplate = `{
                     "description": "executed_at is when the schedule was executed",
                     "type": "string"
                 },
+                "execution_details": {
+                    "description": "execution_details is the typed counterpart of execution_result",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ExecutionDetails"
+                        }
+                    ]
+                },
                 "execution_result": {
-                    "description": "execution_result contains type-specific execution result"
+                    "description": "execution_result is the raw type-specific execution result. Deprecated: use execution_details.",
+                    "type": "object",
+                    "additionalProperties": true
                 },
                 "id": {
                     "description": "id of the schedule",
@@ -22502,6 +25329,9 @@ const docTemplate = `{
                 "tax_association_id": {
                     "type": "string"
                 },
+                "tax_behavior": {
+                    "$ref": "#/definitions/types.TaxBehavior"
+                },
                 "tax_rate": {
                     "$ref": "#/definitions/TaxRateResponse"
                 },
@@ -22581,6 +25411,14 @@ const docTemplate = `{
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
+                "tax_behavior": {
+                    "description": "TaxBehavior is inclusive or exclusive. Absent means exclusive; inclusive is only\never set explicitly.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxBehavior"
+                        }
+                    ]
+                },
                 "tax_rate": {
                     "$ref": "#/definitions/TaxRateResponse"
                 },
@@ -22613,6 +25451,20 @@ const docTemplate = `{
                 },
                 "priority": {
                     "type": "integer"
+                },
+                "tax_behavior": {
+                    "$ref": "#/definitions/types.TaxBehavior"
+                }
+            }
+        },
+        "TaxExemptionSummary": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
+                },
+                "reason_code": {
+                    "$ref": "#/definitions/types.TaxExemptionReasonCode"
                 }
             }
         },
@@ -22639,6 +25491,9 @@ const docTemplate = `{
                 "priority": {
                     "type": "integer"
                 },
+                "tax_behavior": {
+                    "$ref": "#/definitions/types.TaxBehavior"
+                },
                 "tax_rate_code": {
                     "type": "string"
                 }
@@ -22660,9 +25515,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "environment_id": {
-                    "type": "string"
-                },
-                "fixed_value": {
                     "type": "string"
                 },
                 "id": {
@@ -22699,6 +25551,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "TaxSummary": {
+            "type": "object",
+            "properties": {
+                "exclusive_tax": {
+                    "type": "string"
+                },
+                "exemption": {
+                    "$ref": "#/definitions/TaxExemptionSummary"
+                },
+                "inclusive_tax": {
+                    "type": "string"
+                },
+                "total_tax": {
                     "type": "string"
                 }
             }
@@ -22760,6 +25629,17 @@ const docTemplate = `{
                 }
             }
         },
+        "TopUpCoupon": {
+            "type": "object",
+            "required": [
+                "coupon_code"
+            ],
+            "properties": {
+                "coupon_code": {
+                    "type": "string"
+                }
+            }
+        },
         "TopUpWalletRequest": {
             "type": "object",
             "required": [
@@ -22785,6 +25665,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/CheckoutParams"
                         }
                     ]
+                },
+                "coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/TopUpCoupon"
+                    }
                 },
                 "credits_to_add": {
                     "description": "credits_to_add is the number of credits to add to the wallet",
@@ -23017,10 +25903,23 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100
                 },
+                "billing_currency": {
+                    "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency",
+                    "type": "string",
+                    "maxLength": 10
+                },
                 "contact": {
                     "description": "contact is the updated contact number for the customer (e.g. phone)",
                     "type": "string",
                     "maxLength": 20
+                },
+                "contact_persons": {
+                    "description": "contact_persons replaces the customer's contact persons when provided; at most one may be primary",
+                    "type": "array",
+                    "maxItems": 5,
+                    "items": {
+                        "$ref": "#/definitions/customer.ContactPerson"
+                    }
                 },
                 "email": {
                     "description": "email is the updated email address and must be a valid email format if provided",
@@ -23048,6 +25947,14 @@ const docTemplate = `{
                     "description": "name is the updated name or company name for the customer",
                     "type": "string"
                 },
+                "tax_treatment": {
+                    "description": "tax_treatment is the updated tax treatment for the customer",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTreatment"
+                        }
+                    ]
+                },
                 "timezone": {
                     "description": "timezone is the updated IANA timezone name for the customer (e.g. \"Asia/Kolkata\", \"America/New_York\")",
                     "type": "string"
@@ -23059,10 +25966,6 @@ const docTemplate = `{
             "properties": {
                 "aggregation_mode": {
                     "$ref": "#/definitions/types.EntitlementAggregationMode"
-                },
-                "clear_grant_config": {
-                    "description": "Grant config — nil fields leave the current value alone.\nClearGrantConfig=true wipes the whole grant config (back to a legacy entitlement).",
-                    "type": "boolean"
                 },
                 "config_value": {
                     "type": "object",
@@ -23083,6 +25986,9 @@ const docTemplate = `{
                 "grant_quota": {
                     "type": "string"
                 },
+                "grant_unlimited": {
+                    "type": "boolean"
+                },
                 "is_enabled": {
                     "type": "boolean"
                 },
@@ -23097,6 +26003,26 @@ const docTemplate = `{
                 },
                 "usage_reset_period": {
                     "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
+                }
+            }
+        },
+        "UpdateFXRateRequest": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "rate": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
                 }
             }
         },
@@ -23160,6 +26086,29 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateLineItemRequest": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                }
+            }
+        },
         "UpdatePaymentRequest": {
             "type": "object",
             "properties": {
@@ -23170,6 +26119,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "gateway_payment_id": {
+                    "type": "string"
+                },
+                "gateway_tracking_id": {
+                    "description": "GatewayTrackingID is the pre-payment handle at the gateway — link, hosted page,\ninvoice or order — recorded at checkout creation so the payment can be reconciled.",
                     "type": "string"
                 },
                 "metadata": {
@@ -23244,6 +26197,14 @@ const docTemplate = `{
                 },
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
+                },
+                "bucket_size": {
+                    "description": "BucketSize windows the meter's aggregation for this price. Changing it\nchanges the billable unit, so it versions the price rather than editing\nit in place. Send \"none\" to remove bucketing from the successor.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "description": {
                     "type": "string"
@@ -23380,6 +26341,14 @@ const docTemplate = `{
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
                 },
+                "bucket_size": {
+                    "description": "BucketSize overrides the windowing used to turn this meter's usage into\nbillable units for this line item. See CreatePriceRequest.BucketSize.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
+                },
                 "commitment_amount": {
                     "description": "Commitment fields",
                     "type": "number"
@@ -23418,6 +26387,17 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
+                    }
+                },
+                "price_unit_amount": {
+                    "description": "PriceUnitAmount is the amount for a CUSTOM price unit price (FLAT_FEE/PACKAGE billing models)",
+                    "type": "string"
+                },
+                "price_unit_tiers": {
+                    "description": "PriceUnitTiers are the tiers for a CUSTOM price unit price (TIERED billing model)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreatePriceTier"
                     }
                 },
                 "tier_mode": {
@@ -23497,7 +26477,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tax_rate_status": {
-                    "description": "tax_rate_type determines how the tax is calculated (\"percentage\" or \"fixed\")",
+                    "description": "tax_rate_status is the updated status of the tax rate",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.TaxRateStatus"
@@ -23506,11 +26486,51 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateTenantAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "UpdateTenantBillingDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/UpdateTenantAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
         "UpdateTenantRequest": {
             "type": "object",
             "properties": {
                 "billing_details": {
-                    "$ref": "#/definitions/TenantBillingDetails"
+                    "$ref": "#/definitions/UpdateTenantBillingDetails"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -23671,6 +26691,10 @@ const docTemplate = `{
                 "event_name": {
                     "type": "string"
                 },
+                "external_customer_id": {
+                    "description": "Populated only when \"external_customer_id\" is a group_by dimension",
+                    "type": "string"
+                },
                 "feature": {
                     "description": "Full feature object (only if expand includes \"feature\")",
                     "allOf": [
@@ -23694,7 +26718,7 @@ const docTemplate = `{
                     "description": "Full meter object (only if expand includes \"meter\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -23987,6 +27011,37 @@ const docTemplate = `{
                 }
             }
         },
+        "ViewQueryRequest": {
+            "type": "object",
+            "properties": {
+                "variables": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "ViewResponse": {
+            "type": "object",
+            "properties": {
+                "definition": {
+                    "$ref": "#/definitions/analytics.ViewDefinition"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "WalletBalanceResponse": {
             "type": "object",
             "properties": {
@@ -24176,6 +27231,13 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "consumption_breakdown": {
+                    "description": "ConsumptionBreakdown is set on debits: the credits drawn from each credit batch.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.WalletTxConsumption"
+                    }
+                },
                 "conversion_rate": {
                     "description": "conversion_rate is the conversion rate for the transaction to the currency",
                     "type": "string"
@@ -24240,6 +27302,17 @@ const docTemplate = `{
                 },
                 "reference_type": {
                     "$ref": "#/definitions/types.WalletTxReferenceType"
+                },
+                "source_id": {
+                    "type": "string"
+                },
+                "source_type": {
+                    "description": "SourceType/SourceID identify the entity this transaction's value comes from or goes to\n(e.g. an invoice). Empty when there is none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WalletTxSourceType"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -24508,9 +27581,19 @@ const docTemplate = `{
                     "description": "AddressState is the state of the customer's address",
                     "type": "string"
                 },
+                "billing_currency": {
+                    "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
                 "contact": {
                     "description": "Contact is an optional contact number for the customer (e.g. phone)",
                     "type": "string"
+                },
+                "contact_persons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/customer.ContactPerson"
+                    }
                 },
                 "created_at": {
                     "type": "string"
@@ -24547,6 +27630,14 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
+                },
+                "tax_treatment": {
+                    "description": "TaxTreatment is the customer's tax treatment — taxable (default) or exempt.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTreatment"
+                        }
+                    ]
                 },
                 "tenant_id": {
                     "type": "string"
@@ -24623,6 +27714,68 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "unit_singular": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "Meter": {
+            "type": "object",
+            "properties": {
+                "aggregation": {
+                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/meter.Aggregation"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the meter",
+                    "type": "string"
+                },
+                "event_name": {
+                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/meter.Filter"
+                    }
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the meter",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name is the display name of the meter",
+                    "type": "string"
+                },
+                "reset_usage": {
+                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ResetUsage"
+                        }
+                    ]
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -24798,6 +27951,14 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "custom_currency": {
+                    "description": "custom_currency holds this line item's amounts in the tenant's custom currency.\nThe fields above are fiat projections of it; nil for fiat invoices.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CustomCurrencyLineItem"
+                        }
+                    ]
+                },
                 "customer_id": {
                     "type": "string"
                 },
@@ -24812,6 +27973,14 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds this line's charge-currency amounts from before conversion (charge_currency\nand source only; the rate lives on the invoice). Nil for lines that were never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
@@ -24896,12 +28065,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bucket_size": {
-                    "description": "BucketSize is used only for MAX aggregation when windowed aggregation is needed\nIt defines the size of time windows to calculate max values within",
+                    "description": "BucketSize windows the aggregation: the meter aggregates within each window\nand the window results are summed.\n\nDeprecated: configure bucket_size on the price instead. Still read and\nhonoured — meters that carry it keep billing exactly as before, and new\nmeters may still set it — but a price-level bucket_size takes precedence\nand is the only place new configuration should go. See\nprice.ResolveBucketSize.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.WindowSize"
                         }
-                    ]
+                    ],
+                    "x-speakeasy-deprecation-message": "Deprecated: set bucket_size on the price instead. Still honoured for existing meters."
                 },
                 "expression": {
                     "description": "Expression is an optional CEL expression to compute per-event quantity from event.properties.\nWhen set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel).",
@@ -24912,7 +28082,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "group_by": {
-                    "description": "GroupBy is the property name in event.properties to group by before aggregating.\nCurrently only supported for MAX aggregation with bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.",
+                    "description": "GroupBy is the property name in event.properties to group by before aggregating.\nRequires MAX aggregation. Windowing comes from the price, so this no longer\nimplies a meter-level bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.",
                     "type": "string"
                 },
                 "multiplier": {
@@ -24937,68 +28107,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "meter.Meter": {
-            "type": "object",
-            "properties": {
-                "aggregation": {
-                    "description": "Aggregation defines the aggregation type and field for the meter\nIt is used to aggregate the events into a single value for calculating the usage",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/meter.Aggregation"
-                        }
-                    ]
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the meter",
-                    "type": "string"
-                },
-                "event_name": {
-                    "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation",
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/meter.Filter"
-                    }
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the meter",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Name is the display name of the meter",
-                    "type": "string"
-                },
-                "reset_usage": {
-                    "description": "ResetUsage defines whether the usage should be reset periodically or not\nFor ex meters tracking total storage used do not get reset but meters tracking\ntotal API requests do.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ResetUsage"
-                        }
-                    ]
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
                 }
             }
         },
@@ -25068,6 +28176,14 @@ const docTemplate = `{
                     "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12",
                     "type": "integer",
                     "default": 1
+                },
+                "bucket_size": {
+                    "description": "BucketSize windows the meter's aggregation for this price: the meter\naggregates within each window and the window results are summed. Empty\nmeans unbucketed. Only valid on USAGE prices whose meter aggregates MAX\nor SUM. Resolved through ResolveBucketSize, never read directly.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.WindowSize"
+                        }
+                    ]
                 },
                 "conversion_rate": {
                     "description": "ConversionRate is the conversion rate of the price unit to the fiat currency",
@@ -25336,7 +28452,7 @@ const docTemplate = `{
                     "description": "Meter is populated when the caller adds \"meters\" to a subscription-scoped\nexpand string alongside \"subscription_line_items\". Only usage line items\n(PriceType == USAGE with a non-empty MeterID) will have a non-nil Meter.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/meter.Meter"
+                            "$ref": "#/definitions/Meter"
                         }
                     ]
                 },
@@ -25529,6 +28645,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.AddAddonRef"
                     }
                 },
+                "removes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RemoveAddonRef"
+                    }
+                },
                 "subscription_id": {
                     "type": "string"
                 }
@@ -25545,6 +28667,12 @@ const docTemplate = `{
                 },
                 "cadence": {
                     "$ref": "#/definitions/types.AddonCadence"
+                },
+                "coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CouponRef"
+                    }
                 },
                 "proration_behavior": {
                     "description": "Needed to prorate the addon's first credit grant.",
@@ -25791,6 +28919,9 @@ const docTemplate = `{
                 "alert_enabled": {
                     "type": "boolean"
                 },
+                "alert_threshold_type": {
+                    "$ref": "#/definitions/types.AlertThresholdType"
+                },
                 "critical": {
                     "$ref": "#/definitions/types.AlertThreshold"
                 },
@@ -25900,6 +29031,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.AlertThresholdType": {
+            "type": "string",
+            "enum": [
+                "absolute",
+                "percentage"
+            ],
+            "x-enum-varnames": [
+                "AlertThresholdTypeAbsolute",
+                "AlertThresholdTypePercentage"
+            ]
         },
         "types.AlertType": {
             "type": "string",
@@ -26074,13 +29216,15 @@ const docTemplate = `{
                 "create_subscription",
                 "modify_subscription",
                 "wallet_topup",
-                "add_addon"
+                "add_addon",
+                "pay_invoice"
             ],
             "x-enum-varnames": [
                 "CheckoutActionCreateSubscription",
                 "CheckoutActionModifySubscription",
                 "CheckoutActionWalletTopup",
-                "CheckoutActionAddAddon"
+                "CheckoutActionAddAddon",
+                "CheckoutActionPayInvoice"
             ]
         },
         "types.CheckoutConfiguration": {
@@ -26095,6 +29239,9 @@ const docTemplate = `{
                 "modify_subscription_params": {
                     "$ref": "#/definitions/types.ModifySubscriptionParams"
                 },
+                "pay_invoice_params": {
+                    "$ref": "#/definitions/types.PayInvoiceParams"
+                },
                 "wallet_topup_params": {
                     "$ref": "#/definitions/types.WalletTopupParams"
                 }
@@ -26103,10 +29250,14 @@ const docTemplate = `{
         "types.CheckoutPaymentProvider": {
             "type": "string",
             "enum": [
-                "razorpay"
+                "razorpay",
+                "chargebee",
+                "stripe"
             ],
             "x-enum-varnames": [
-                "CheckoutPaymentProviderRazorpay"
+                "CheckoutPaymentProviderRazorpay",
+                "CheckoutPaymentProviderChargebee",
+                "CheckoutPaymentProviderStripe"
             ]
         },
         "types.CheckoutPaymentProviderConfig": {
@@ -26114,6 +29265,10 @@ const docTemplate = `{
             "properties": {
                 "collection_method": {
                     "$ref": "#/definitions/types.CollectionMethod"
+                },
+                "customer_not_present": {
+                    "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up).",
+                    "type": "boolean"
                 },
                 "max_mandate_limit": {
                     "type": "string"
@@ -26149,6 +29304,30 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "CollectionMethodChargeAutomatically",
                 "CollectionMethodSendInvoice"
+            ]
+        },
+        "types.ColumnRole": {
+            "type": "string",
+            "enum": [
+                "dimension",
+                "metric"
+            ],
+            "x-enum-varnames": [
+                "ColumnRoleDimension",
+                "ColumnRoleMetric"
+            ]
+        },
+        "types.ColumnType": {
+            "type": "string",
+            "enum": [
+                "string",
+                "decimal",
+                "datetime"
+            ],
+            "x-enum-varnames": [
+                "ColumnTypeString",
+                "ColumnTypeDecimal",
+                "ColumnTypeDatetime"
             ]
         },
         "types.CommitmentInfo": {
@@ -26263,6 +29442,26 @@ const docTemplate = `{
                 }
             }
         },
+        "types.CouponRef": {
+            "type": "object",
+            "properties": {
+                "association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
         "types.CouponType": {
             "type": "string",
             "enum": [
@@ -26306,20 +29505,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.CreateSubscriptionResult": {
-            "type": "object",
-            "properties": {
-                "invoice_id": {
-                    "type": "string"
-                },
-                "payment_id": {
-                    "type": "string"
-                },
-                "subscription_id": {
-                    "type": "string"
-                }
-            }
-        },
         "types.CreditBreakdown": {
             "type": "object",
             "properties": {
@@ -26338,6 +29523,9 @@ const docTemplate = `{
                 "recurring_credit_grant",
                 "onetime_credit_grant"
             ],
+            "x-enum-comments": {
+                "ApplicationReasonFirstTimeRecurringCreditGrant": "#nosec G101 -- enum value name, not a secret"
+            },
             "x-enum-varnames": [
                 "ApplicationReasonFirstTimeRecurringCreditGrant",
                 "ApplicationReasonRecurringCreditGrant",
@@ -26459,6 +29647,53 @@ const docTemplate = `{
                 "CreditNoteTypeAdjustment",
                 "CreditNoteTypeRefund"
             ]
+        },
+        "types.CustomCurrency": {
+            "type": "object",
+            "properties": {
+                "amount_due": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "fiat per 1 unit of Code; the live factor while draft, frozen at finalization",
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_prepaid_credits_applied": {
+                    "type": "string"
+                },
+                "total_tax": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CustomCurrencyLineItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "invoice_level_discount": {
+                    "type": "string"
+                },
+                "line_item_discount": {
+                    "type": "string"
+                },
+                "prepaid_credits_applied": {
+                    "type": "string"
+                }
+            }
         },
         "types.CustomerFilter": {
             "type": "object",
@@ -26716,6 +29951,17 @@ const docTemplate = `{
                 "EntitlementGrantMeasureAmount"
             ]
         },
+        "types.EntitlementGrantStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "exhausted"
+            ],
+            "x-enum-varnames": [
+                "EntitlementGrantStatusActive",
+                "EntitlementGrantStatusExhausted"
+            ]
+        },
         "types.EntitlementUsageResetPeriod": {
             "type": "string",
             "enum": [
@@ -26748,6 +29994,19 @@ const docTemplate = `{
                 "EntityChangeBehaviourCarry",
                 "EntityChangeBehaviourDrop",
                 "EntityChangeBehaviourAdd"
+            ]
+        },
+        "types.EntityCreationStatus": {
+            "type": "string",
+            "enum": [
+                "created",
+                "superseded",
+                "failed_already_exists"
+            ],
+            "x-enum-varnames": [
+                "EntityCreationStatusCreated",
+                "EntityCreationStatusSuperseded",
+                "EntityCreationStatusFailedAlreadyExists"
             ]
         },
         "types.EntitySyncConfig": {
@@ -26837,6 +30096,104 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.FXRateFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "from_currency": {
+                    "type": "string"
+                },
+                "fx_rate_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "scope": {
+                    "$ref": "#/definitions/types.FXRateScope"
+                },
+                "scope_id": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "to_currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.FXRateScope": {
+            "type": "string",
+            "enum": [
+                "tenant",
+                "customer",
+                "subscription"
+            ],
+            "x-enum-varnames": [
+                "FXRateScopeTenant",
+                "FXRateScopeCustomer",
+                "FXRateScopeSubscription"
+            ]
+        },
+        "types.FXRateSource": {
+            "type": "string",
+            "enum": [
+                "fixed",
+                "market"
+            ],
+            "x-enum-varnames": [
+                "FXRateSourceFixed",
+                "FXRateSourceMarket"
+            ]
+        },
+        "types.FactStatus": {
+            "type": "string",
+            "enum": [
+                "PROVISIONAL",
+                "FINAL"
+            ],
+            "x-enum-varnames": [
+                "FactProvisional",
+                "FactFinal"
+            ]
         },
         "types.FailurePoint": {
             "type": "object",
@@ -27005,6 +30362,90 @@ const docTemplate = `{
                 "NOT_IN",
                 "BEFORE",
                 "AFTER"
+            ]
+        },
+        "types.FxConversion": {
+            "type": "object",
+            "properties": {
+                "billing_currency": {
+                    "description": "BillingCurrency is the currency the invoice was issued in.",
+                    "type": "string"
+                },
+                "charge_currency": {
+                    "description": "ChargeCurrency is the invoice's original (draft) currency.",
+                    "type": "string"
+                },
+                "converted_at": {
+                    "description": "ConvertedAt is when the conversion ran.",
+                    "type": "string"
+                },
+                "rate": {
+                    "description": "Rate is the frozen rate: billing per 1 charge unit.",
+                    "type": "string"
+                },
+                "rate_id": {
+                    "description": "RateID is the fx_rates row used, for reference only; never read again.",
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "Scope is where the rate was resolved: subscription, customer or tenant.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FXRateScope"
+                        }
+                    ]
+                },
+                "source": {
+                    "description": "Source holds the original charge-currency amounts, before tax.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversionSource"
+                        }
+                    ]
+                }
+            }
+        },
+        "types.FxConversionSource": {
+            "type": "object",
+            "properties": {
+                "net": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_prepaid_credits_applied": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.GlobalCustomField": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.Grain": {
+            "type": "string",
+            "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+            ],
+            "x-enum-varnames": [
+                "GrainHour",
+                "GrainDay",
+                "GrainWeek",
+                "GrainMonth"
             ]
         },
         "types.GroupEntityType": {
@@ -27190,6 +30631,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.FilterCondition"
                     }
                 },
+                "finalized_at_gte": {
+                    "description": "finalized_at_gte filters invoices finalized at or after the given instant",
+                    "type": "string"
+                },
                 "invoice_ids": {
                     "description": "invoice_ids restricts results to invoices with the specified IDs\nUse this to retrieve specific invoices when you know their exact identifiers",
                     "type": "array",
@@ -27277,8 +30722,21 @@ const docTemplate = `{
                 "subscription_id": {
                     "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing",
                     "type": "string"
+                },
+                "voided_at_gte": {
+                    "description": "voided_at_gte filters invoices voided at or after the given instant",
+                    "type": "string"
                 }
             }
+        },
+        "types.InvoiceSourceType": {
+            "type": "string",
+            "enum": [
+                "checkout"
+            ],
+            "x-enum-varnames": [
+                "InvoiceSourceTypeCheckout"
+            ]
         },
         "types.InvoiceStatus": {
             "type": "string",
@@ -27298,8 +30756,19 @@ const docTemplate = `{
         "types.InvoiceSyncSettings": {
             "type": "object",
             "properties": {
+                "deposit_to_account_id": {
+                    "description": "Zoho chart-of-accounts id (\"Deposit To\"). Empty omits account_id, leaving Zoho's\nUndeposited Funds default.a",
+                    "type": "string"
+                },
+                "global_custom_fields": {
+                    "description": "Fixed values written to Zoho invoice custom fields on every sync, independent of\nany metadata source.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.GlobalCustomField"
+                    }
+                },
                 "metadata_custom_fields": {
-                    "description": "MetadataCustomFields copies metadata values onto Zoho invoice custom fields\nverbatim.",
+                    "description": "Copies metadata values onto Zoho invoice custom fields verbatim.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/types.MetadataCustomField"
@@ -27313,13 +30782,21 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "payment_mode": {
+                    "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode.",
+                    "type": "string"
+                },
                 "service_period_custom_fields": {
-                    "description": "ServicePeriodCustomFields names the Zoho custom fields that receive the\ninvoice's service start and end dates.",
+                    "description": "Zoho custom fields that receive the invoice's service start and end dates.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ServicePeriodCustomFields"
                         }
                     ]
+                },
+                "submit_for_approval": {
+                    "description": "Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval\nrule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.",
+                    "type": "boolean"
                 }
             }
         },
@@ -27334,6 +30811,17 @@ const docTemplate = `{
                 "InvoiceTypeSubscription",
                 "InvoiceTypeOneOff",
                 "InvoiceTypeCredit"
+            ]
+        },
+        "types.LineItemGrouping": {
+            "type": "string",
+            "enum": [
+                "per_charge_period",
+                "per_billing_period"
+            ],
+            "x-enum-varnames": [
+                "LineItemGroupingPerChargePeriod",
+                "LineItemGroupingPerBillingPeriod"
             ]
         },
         "types.ListResponse-dto_WalletResponse": {
@@ -27381,9 +30869,29 @@ const docTemplate = `{
                 "MetadataCustomFieldSourceInvoice"
             ]
         },
+        "types.Metric": {
+            "type": "string",
+            "enum": [
+                "usage_quantity",
+                "event_count"
+            ],
+            "x-enum-varnames": [
+                "MetricUsageQuantity",
+                "MetricEventCount"
+            ]
+        },
         "types.ModifySubscriptionLineItem": {
             "type": "object",
             "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "coupons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CouponRef"
+                    }
+                },
                 "effective_date": {
                     "type": "string"
                 },
@@ -27404,10 +30912,35 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ModifySubscriptionLineItem"
                     }
                 },
+                "modify_type": {
+                    "$ref": "#/definitions/types.ModifySubscriptionType"
+                },
                 "subscription_id": {
                     "type": "string"
                 }
             }
+        },
+        "types.ModifySubscriptionType": {
+            "type": "string",
+            "enum": [
+                "quantity_change",
+                "line_item_change"
+            ],
+            "x-enum-varnames": [
+                "ModifySubscriptionTypeQuantityChange",
+                "ModifySubscriptionTypeLineItemChange"
+            ]
+        },
+        "types.OnExistingEntityPolicy": {
+            "type": "string",
+            "enum": [
+                "reject",
+                "supersede"
+            ],
+            "x-enum-varnames": [
+                "OnExistingEntityPolicyReject",
+                "OnExistingEntityPolicySupersede"
+            ]
         },
         "types.OnPendingSchedulePolicy": {
             "type": "string",
@@ -27463,6 +30996,17 @@ const docTemplate = `{
                 "PauseStatusCompleted",
                 "PauseStatusCancelled"
             ]
+        },
+        "types.PayInvoiceParams": {
+            "type": "object",
+            "required": [
+                "invoice_id"
+            ],
+            "properties": {
+                "invoice_id": {
+                    "type": "string"
+                }
+            }
         },
         "types.PaymentAction": {
             "type": "object",
@@ -27520,7 +31064,8 @@ const docTemplate = `{
                 "nomod",
                 "moyasar",
                 "paddle",
-                "whop"
+                "whop",
+                "chargebee"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
@@ -27528,7 +31073,21 @@ const docTemplate = `{
                 "PaymentGatewayTypeNomod",
                 "PaymentGatewayTypeMoyasar",
                 "PaymentGatewayTypePaddle",
-                "PaymentGatewayTypeWhop"
+                "PaymentGatewayTypeWhop",
+                "PaymentGatewayTypeChargebee"
+            ]
+        },
+        "types.PaymentMethodStatus": {
+            "type": "string",
+            "enum": [
+                "ACTIVE",
+                "INACTIVE",
+                "EXPIRED"
+            ],
+            "x-enum-varnames": [
+                "PaymentMethodStatusActive",
+                "PaymentMethodStatusInactive",
+                "PaymentMethodStatusExpired"
             ]
         },
         "types.PaymentMethodType": {
@@ -27759,6 +31318,10 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "type": "string"
+                },
+                "updated_after": {
+                    "description": "UpdatedAfter matches prices edited since the given time. TimeRangeFilter\nabove filters on created_at, so it cannot see an edit to an existing\nprice.",
+                    "type": "string"
                 }
             }
         },
@@ -27881,6 +31444,87 @@ const docTemplate = `{
                 }
             }
         },
+        "types.RecurringPaymentStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "ACTIVE",
+                "PAUSED",
+                "REJECTED",
+                "CANCELLED",
+                "EXPIRED",
+                "UNKNOWN"
+            ],
+            "x-enum-varnames": [
+                "RecurringPaymentStatusPending",
+                "RecurringPaymentStatusActive",
+                "RecurringPaymentStatusPaused",
+                "RecurringPaymentStatusRejected",
+                "RecurringPaymentStatusCancelled",
+                "RecurringPaymentStatusExpired",
+                "RecurringPaymentStatusUnknown"
+            ]
+        },
+        "types.RefundDestination": {
+            "type": "string",
+            "enum": [
+                "GATEWAY",
+                "WALLET",
+                "OUT_OF_BAND"
+            ],
+            "x-enum-varnames": [
+                "RefundDestinationGateway",
+                "RefundDestinationWallet",
+                "RefundDestinationOutOfBand"
+            ]
+        },
+        "types.RefundReason": {
+            "type": "string",
+            "enum": [
+                "DUPLICATE",
+                "FRAUDULENT",
+                "REQUESTED_BY_CUSTOMER",
+                "ORDER_CHANGE",
+                "SERVICE_ISSUE",
+                "OTHER"
+            ],
+            "x-enum-varnames": [
+                "RefundReasonDuplicate",
+                "RefundReasonFraudulent",
+                "RefundReasonRequestedByCustomer",
+                "RefundReasonOrderChange",
+                "RefundReasonServiceIssue",
+                "RefundReasonOther"
+            ]
+        },
+        "types.RefundStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "PROCESSING",
+                "SUCCEEDED",
+                "FAILED",
+                "CANCELLED"
+            ],
+            "x-enum-varnames": [
+                "RefundStatusPending",
+                "RefundStatusProcessing",
+                "RefundStatusSucceeded",
+                "RefundStatusFailed",
+                "RefundStatusCancelled"
+            ]
+        },
+        "types.RefundTarget": {
+            "type": "string",
+            "enum": [
+                "PREPAID_WALLET",
+                "BACK_TO_SOURCE"
+            ],
+            "x-enum-varnames": [
+                "RefundTargetPrepaidWallet",
+                "RefundTargetBackToSource"
+            ]
+        },
         "types.RejectedEventReason": {
             "type": "string",
             "enum": [
@@ -27891,6 +31535,23 @@ const docTemplate = `{
                 "RejectedEventReasonNoMeterForName",
                 "RejectedEventReasonNoMatchingMeter"
             ]
+        },
+        "types.RemoveAddonRef": {
+            "type": "object",
+            "properties": {
+                "association_id": {
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
         },
         "types.ReportingUnit": {
             "type": "object",
@@ -27933,6 +31594,30 @@ const docTemplate = `{
                 "ResumeModeAuto"
             ]
         },
+        "types.RevenueAllocationPolicy": {
+            "type": "string",
+            "enum": [
+                "billed",
+                "amortized"
+            ],
+            "x-enum-varnames": [
+                "RevenueAllocationBilled",
+                "RevenueAllocationAmortized"
+            ]
+        },
+        "types.RevenueGranularity": {
+            "type": "string",
+            "enum": [
+                "day",
+                "period",
+                "total"
+            ],
+            "x-enum-varnames": [
+                "RevenueGranularityDay",
+                "RevenueGranularityPeriod",
+                "RevenueGranularityTotal"
+            ]
+        },
         "types.RoundType": {
             "type": "string",
             "enum": [
@@ -27967,43 +31652,6 @@ const docTemplate = `{
                 "S3EncryptionTypeAwsKms",
                 "S3EncryptionTypeAwsKmsDsse"
             ]
-        },
-        "types.S3ExportConfig": {
-            "type": "object",
-            "properties": {
-                "bucket": {
-                    "description": "S3 bucket name",
-                    "type": "string"
-                },
-                "compression": {
-                    "description": "Compression type: \"gzip\", \"none\" (default: \"none\")",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.S3CompressionType"
-                        }
-                    ]
-                },
-                "encryption": {
-                    "description": "Encryption type: \"AES256\", \"aws:kms\", \"aws:kms:dsse\" (default: \"AES256\")",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.S3EncryptionType"
-                        }
-                    ]
-                },
-                "is_flexprice_managed": {
-                    "description": "If true, use Flexprice-managed S3 credentials instead of user-provided",
-                    "type": "boolean"
-                },
-                "key_prefix": {
-                    "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")",
-                    "type": "string"
-                },
-                "region": {
-                    "description": "AWS region (e.g., \"us-west-2\")",
-                    "type": "string"
-                }
-            }
         },
         "types.S3JobConfig": {
             "type": "object",
@@ -28042,6 +31690,14 @@ const docTemplate = `{
                 "key_prefix": {
                     "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")",
                     "type": "string"
+                },
+                "provider": {
+                    "description": "Empty means S3 for back-compat.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SecretProvider"
+                        }
+                    ]
                 },
                 "region": {
                     "description": "AWS region (e.g., \"us-west-2\")",
@@ -28087,15 +31743,19 @@ const docTemplate = `{
                 "events",
                 "invoice",
                 "credit_topups",
+                "wallet_debits",
                 "credit_usage",
-                "usage_analytics"
+                "usage_analytics",
+                "revenue_facts"
             ],
             "x-enum-varnames": [
                 "ScheduledTaskEntityTypeEvents",
                 "ScheduledTaskEntityTypeInvoice",
                 "ScheduledTaskEntityTypeCreditTopups",
+                "ScheduledTaskEntityTypeWalletDebits",
                 "ScheduledTaskEntityTypeCreditUsage",
-                "ScheduledTaskEntityTypeUsageAnalytics"
+                "ScheduledTaskEntityTypeUsageAnalytics",
+                "ScheduledTaskEntityTypeRevenueFacts"
             ]
         },
         "types.ScheduledTaskInterval": {
@@ -28124,6 +31784,7 @@ const docTemplate = `{
                 "flexprice",
                 "stripe",
                 "s3",
+                "gcs",
                 "hubspot",
                 "razorpay",
                 "chargebee",
@@ -28139,12 +31800,16 @@ const docTemplate = `{
                 "azure_marketplace"
             ],
             "x-enum-comments": {
+                "SecretProviderAzureMarketplace": "#nosec G101 -- provider enum value, not a secret",
+                "SecretProviderGCS": "supports multiple connections per environment, service-account JSON creds",
+                "SecretProviderQuickBooks": "#nosec G101 -- enum value name, not a secret",
                 "SecretProviderS3": "supports multiple connections per environment"
             },
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
                 "SecretProviderStripe",
                 "SecretProviderS3",
+                "SecretProviderGCS",
                 "SecretProviderHubSpot",
                 "SecretProviderRazorpay",
                 "SecretProviderChargebee",
@@ -28184,6 +31849,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.Shape": {
+            "type": "string",
+            "enum": [
+                "timeseries",
+                "breakdown"
+            ],
+            "x-enum-varnames": [
+                "ShapeTimeseries",
+                "ShapeBreakdown"
+            ]
+        },
         "types.SortCondition": {
             "type": "object",
             "properties": {
@@ -28219,18 +31895,55 @@ const docTemplate = `{
                 "StatusArchived"
             ]
         },
+        "types.StorageExportConfig": {
+            "type": "object",
+            "properties": {
+                "bucket": {
+                    "description": "Storage bucket name",
+                    "type": "string"
+                },
+                "compression": {
+                    "description": "Compression type: \"gzip\", \"none\" (default: \"none\")",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.S3CompressionType"
+                        }
+                    ]
+                },
+                "encryption": {
+                    "description": "Encryption type: \"AES256\", \"aws:kms\", \"aws:kms:dsse\" (default: \"AES256\")",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.S3EncryptionType"
+                        }
+                    ]
+                },
+                "is_flexprice_managed": {
+                    "description": "If true, use Flexprice-managed storage credentials instead of user-provided",
+                    "type": "boolean"
+                },
+                "key_prefix": {
+                    "description": "Optional prefix for object keys (e.g., \"flexprice-exports/\")",
+                    "type": "string"
+                },
+                "region": {
+                    "description": "Cloud region (e.g., \"us-west-2\"); unused for GCS",
+                    "type": "string"
+                }
+            }
+        },
         "types.SubscriptionChangeEntityType": {
             "type": "string",
             "enum": [
                 "plan",
-                "addon",
+                "addon_association",
                 "credit_grant",
                 "entitlement",
                 "entitlement_grant"
             ],
             "x-enum-varnames": [
                 "SubscriptionChangeEntityTypePlan",
-                "SubscriptionChangeEntityTypeAddon",
+                "SubscriptionChangeEntityTypeAddonAssociation",
                 "SubscriptionChangeEntityTypeCreditGrant",
                 "SubscriptionChangeEntityTypeEntitlement",
                 "SubscriptionChangeEntityTypeEntitlementGrant"
@@ -28612,10 +32325,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.EntitySyncConfig"
                 },
                 "s3": {
-                    "description": "S3 connection metadata (for Flexprice-managed S3 connections)",
+                    "description": "Tag stays \"s3\" for back-compat.",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.S3ExportConfig"
+                            "$ref": "#/definitions/types.StorageExportConfig"
                         }
                     ]
                 },
@@ -28648,6 +32361,28 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "TaskTypeImport",
                 "TaskTypeExport"
+            ]
+        },
+        "types.TaxBehavior": {
+            "type": "string",
+            "enum": [
+                "inclusive",
+                "exclusive"
+            ],
+            "x-enum-varnames": [
+                "TaxBehaviorInclusive",
+                "TaxBehaviorExclusive"
+            ]
+        },
+        "types.TaxExemptionReasonCode": {
+            "type": "string",
+            "enum": [
+                "customer_exempt",
+                "no_tax_configured"
+            ],
+            "x-enum-varnames": [
+                "TaxExemptionReasonCustomerExempt",
+                "TaxExemptionReasonNoTaxConfigured"
             ]
         },
         "types.TaxRateEntityType": {
@@ -28692,12 +32427,21 @@ const docTemplate = `{
         "types.TaxRateType": {
             "type": "string",
             "enum": [
-                "percentage",
-                "fixed"
+                "percentage"
             ],
             "x-enum-varnames": [
-                "TaxRateTypePercentage",
-                "TaxRateTypeFixed"
+                "TaxRateTypePercentage"
+            ]
+        },
+        "types.TaxTreatment": {
+            "type": "string",
+            "enum": [
+                "taxable",
+                "exempt"
+            ],
+            "x-enum-varnames": [
+                "TaxTreatmentTaxable",
+                "TaxTreatmentExempt"
             ]
         },
         "types.TimeOfDayBucket": {
@@ -28975,6 +32719,25 @@ const docTemplate = `{
                 "UserTypeServiceAccount"
             ]
         },
+        "types.VariableType": {
+            "type": "string",
+            "enum": [
+                "date_range",
+                "string",
+                "string_list",
+                "number",
+                "enum",
+                "boolean"
+            ],
+            "x-enum-varnames": [
+                "VariableTypeDateRange",
+                "VariableTypeString",
+                "VariableTypeStringList",
+                "VariableTypeNumber",
+                "VariableTypeEnum",
+                "VariableTypeBoolean"
+            ]
+        },
         "types.WalletConfig": {
             "type": "object",
             "properties": {
@@ -29145,6 +32908,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.WalletTxConsumption": {
+            "type": "object",
+            "properties": {
+                "credit_transaction_id": {
+                    "type": "string"
+                },
+                "credits": {
+                    "type": "string"
+                }
+            }
+        },
         "types.WalletTxReferenceType": {
             "type": "string",
             "enum": [
@@ -29158,6 +32932,15 @@ const docTemplate = `{
                 "WalletTxReferenceTypeExternal",
                 "WalletTxReferenceTypeRequest",
                 "WalletTxReferenceTypeInvoice"
+            ]
+        },
+        "types.WalletTxSourceType": {
+            "type": "string",
+            "enum": [
+                "INVOICE"
+            ],
+            "x-enum-varnames": [
+                "WalletTxSourceTypeInvoice"
             ]
         },
         "types.WalletType": {
@@ -29202,6 +32985,9 @@ const docTemplate = `{
                 "payment.failed",
                 "payment.success",
                 "payment.pending",
+                "refund.created",
+                "refund.succeeded",
+                "refund.failed",
                 "customer.created",
                 "customer.updated",
                 "customer.deleted",
@@ -29210,6 +32996,8 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.sync.success",
+                "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
                 "wallet.credit_balance.recovered",
                 "wallet.ongoing_balance.dropped",
@@ -29261,6 +33049,9 @@ const docTemplate = `{
                 "WebhookEventPaymentFailed",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
+                "WebhookEventRefundCreated",
+                "WebhookEventRefundSucceeded",
+                "WebhookEventRefundFailed",
                 "WebhookEventCustomerCreated",
                 "WebhookEventCustomerUpdated",
                 "WebhookEventCustomerDeleted",
@@ -29269,6 +33060,8 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoiceSyncSuccess",
+                "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
                 "WebhookEventWalletCreditBalanceRecovered",
                 "WebhookEventWalletOngoingBalanceDropped",
@@ -29476,6 +33269,86 @@ const docTemplate = `{
                 },
                 "invoice": {
                     "$ref": "#/definitions/webhookDto.Invoice"
+                }
+            }
+        },
+        "webhookDto.CouponApplication": {
+            "type": "object",
+            "properties": {
+                "applied_at": {
+                    "type": "string"
+                },
+                "coupon_association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "coupon_snapshot": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "discount_percentage": {
+                    "type": "string"
+                },
+                "discount_type": {
+                    "$ref": "#/definitions/types.CouponType"
+                },
+                "discounted_amount": {
+                    "type": "string"
+                },
+                "final_price": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "original_price": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.CouponAssociation": {
+            "type": "object",
+            "properties": {
+                "coupon_id": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "subscription_line_item_id": {
+                    "type": "string"
                 }
             }
         },
@@ -29699,7 +33572,22 @@ const docTemplate = `{
                 "amount_remaining": {
                     "type": "string"
                 },
+                "billing_period": {
+                    "type": "string"
+                },
                 "billing_reason": {
+                    "type": "string"
+                },
+                "billing_sequence": {
+                    "type": "integer"
+                },
+                "coupon_applications": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/webhookDto.CouponApplication"
+                    }
+                },
+                "created_at": {
                     "type": "string"
                 },
                 "currency": {
@@ -29711,6 +33599,9 @@ const docTemplate = `{
                 "customer_id": {
                     "type": "string"
                 },
+                "description": {
+                    "type": "string"
+                },
                 "due_date": {
                     "type": "string"
                 },
@@ -29720,7 +33611,18 @@ const docTemplate = `{
                 "finalized_at": {
                     "type": "string"
                 },
+                "fx_conversion": {
+                    "description": "fx_conversion is the frozen fiat→fiat conversion snapshot; nil when the invoice was never converted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
+                },
                 "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
                     "type": "string"
                 },
                 "invoice_number": {
@@ -29765,7 +33667,28 @@ const docTemplate = `{
                 "subtotal": {
                     "type": "string"
                 },
+                "tax_summary": {
+                    "$ref": "#/definitions/TaxSummary"
+                },
+                "taxes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/webhookDto.TaxApplied"
+                    }
+                },
                 "total": {
+                    "type": "string"
+                },
+                "total_discount": {
+                    "type": "string"
+                },
+                "total_prepaid_credits_applied": {
+                    "type": "string"
+                },
+                "total_tax": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "voided_at": {
@@ -29776,13 +33699,51 @@ const docTemplate = `{
         "webhookDto.InvoiceLineItem": {
             "type": "object",
             "properties": {
+                "adjusted_entitlement_quantity": {
+                    "type": "string"
+                },
                 "amount": {
+                    "type": "string"
+                },
+                "commitment_info": {
+                    "$ref": "#/definitions/types.CommitmentInfo"
+                },
+                "currency": {
                     "type": "string"
                 },
                 "display_name": {
                     "type": "string"
                 },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "fx_conversion": {
+                    "description": "fx_conversion holds the line's pre-conversion charge amounts; nil on non-converted invoices.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.FxConversion"
+                        }
+                    ]
+                },
                 "id": {
+                    "type": "string"
+                },
+                "invoice_level_discount": {
+                    "type": "string"
+                },
+                "line_item_discount": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "meter_display_name": {
+                    "type": "string"
+                },
+                "meter_id": {
                     "type": "string"
                 },
                 "period_end": {
@@ -29794,11 +33755,43 @@ const docTemplate = `{
                 "plan_display_name": {
                     "type": "string"
                 },
+                "prepaid_credits_applied": {
+                    "type": "string"
+                },
                 "price_id": {
+                    "type": "string"
+                },
+                "price_type": {
+                    "type": "string"
+                },
+                "price_unit": {
+                    "type": "string"
+                },
+                "price_unit_amount": {
                     "type": "string"
                 },
                 "quantity": {
                     "type": "string"
+                },
+                "subscription_line_item_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.InvoiceSyncWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "provider_details": {
+                    "$ref": "#/definitions/webhookDto.ProviderDetails"
                 }
             }
         },
@@ -29809,7 +33802,27 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.WebhookEventName"
                 },
                 "invoice": {
-                    "$ref": "#/definitions/InvoiceResponse"
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                }
+            }
+        },
+        "webhookDto.Meter": {
+            "type": "object",
+            "properties": {
+                "aggregation": {
+                    "$ref": "#/definitions/meter.Aggregation"
+                },
+                "event_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reset_usage": {
+                    "$ref": "#/definitions/types.ResetUsage"
                 }
             }
         },
@@ -29868,6 +33881,190 @@ const docTemplate = `{
                 },
                 "payment": {
                     "$ref": "#/definitions/webhookDto.Payment"
+                }
+            }
+        },
+        "webhookDto.Plan": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/webhookDto.Price"
+                    }
+                }
+            }
+        },
+        "webhookDto.Price": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "billing_cadence": {
+                    "$ref": "#/definitions/types.BillingCadence"
+                },
+                "billing_model": {
+                    "$ref": "#/definitions/types.BillingModel"
+                },
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_amount": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "display_price_unit_amount": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/price.JSONBMetadata"
+                },
+                "meter": {
+                    "$ref": "#/definitions/webhookDto.Meter"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "price_unit": {
+                    "type": "string"
+                },
+                "price_unit_amount": {
+                    "type": "string"
+                },
+                "tier_mode": {
+                    "$ref": "#/definitions/types.BillingTier"
+                },
+                "tiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/price.PriceTier"
+                    }
+                },
+                "transform_quantity": {
+                    "$ref": "#/definitions/price.JSONBTransformQuantity"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PriceType"
+                }
+            }
+        },
+        "webhookDto.ProviderDetails": {
+            "type": "object",
+            "properties": {
+                "hosted_invoice_url": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                }
+            }
+        },
+        "webhookDto.Refund": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "attempt": {
+                    "type": "integer"
+                },
+                "credit_note_id": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "failed_at": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "gateway_refund_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "refund_destination": {
+                    "$ref": "#/definitions/types.RefundDestination"
+                },
+                "refund_destination_id": {
+                    "type": "string"
+                },
+                "refund_reason": {
+                    "$ref": "#/definitions/types.RefundReason"
+                },
+                "refund_status": {
+                    "$ref": "#/definitions/types.RefundStatus"
+                },
+                "settled_amount": {
+                    "type": "string"
+                },
+                "succeeded_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.RefundWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "refund": {
+                    "$ref": "#/definitions/webhookDto.Refund"
                 }
             }
         },
@@ -29962,6 +34159,12 @@ const docTemplate = `{
                 "cancelled_at": {
                     "type": "string"
                 },
+                "coupon_associations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/webhookDto.CouponAssociation"
+                    }
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -29983,6 +34186,15 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "invoicing_customer_id": {
+                    "type": "string"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/webhookDto.SubscriptionLineItem"
+                    }
+                },
                 "lookup_key": {
                     "type": "string"
                 },
@@ -29994,6 +34206,14 @@ const docTemplate = `{
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
+                },
+                "plan": {
+                    "description": "Plan, LineItems and CouponAssociations are populated only on the invoice\nwebhook (newInvoiceSubscription), where a consumer needs to price a line.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/webhookDto.Plan"
+                        }
+                    ]
                 },
                 "plan_id": {
                     "type": "string"
@@ -30011,6 +34231,74 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "trial_start": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.SubscriptionLineItem": {
+            "type": "object",
+            "properties": {
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "meter_display_name": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "plan_display_name": {
+                    "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/webhookDto.Price"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "price_type": {
+                    "$ref": "#/definitions/types.PriceType"
+                },
+                "price_unit": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -30046,11 +34334,72 @@ const docTemplate = `{
         "webhookDto.SubscriptionWebhookPayload": {
             "type": "object",
             "properties": {
+                "customer": {
+                    "$ref": "#/definitions/webhookDto.Customer"
+                },
                 "event_type": {
                     "$ref": "#/definitions/types.WebhookEventName"
                 },
                 "subscription": {
                     "$ref": "#/definitions/webhookDto.Subscription"
+                }
+            }
+        },
+        "webhookDto.TaxApplied": {
+            "type": "object",
+            "properties": {
+                "applied_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "tax_amount": {
+                    "type": "string"
+                },
+                "tax_behavior": {
+                    "$ref": "#/definitions/types.TaxBehavior"
+                },
+                "tax_rate": {
+                    "$ref": "#/definitions/webhookDto.TaxRate"
+                },
+                "tax_rate_id": {
+                    "type": "string"
+                },
+                "taxable_amount": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.TaxRate": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "percentage_value": {
+                    "type": "string"
+                },
+                "tax_rate_type": {
+                    "$ref": "#/definitions/types.TaxRateType"
                 }
             }
         },
@@ -30134,6 +34483,12 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "consumption_breakdown": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.WalletTxConsumption"
+                    }
+                },
                 "credit_amount": {
                     "type": "string"
                 },
@@ -30167,6 +34522,12 @@ const docTemplate = `{
                 "reference_type": {
                     "$ref": "#/definitions/types.WalletTxReferenceType"
                 },
+                "source_id": {
+                    "type": "string"
+                },
+                "source_type": {
+                    "$ref": "#/definitions/types.WalletTxSourceType"
+                },
                 "transaction_reason": {
                     "$ref": "#/definitions/types.TransactionReason"
                 },
@@ -30186,6 +34547,9 @@ const docTemplate = `{
             "properties": {
                 "alert": {
                     "$ref": "#/definitions/webhookDto.WalletAlertInfo"
+                },
+                "customer": {
+                    "$ref": "#/definitions/webhookDto.Customer"
                 },
                 "event_type": {
                     "$ref": "#/definitions/types.WebhookEventName"

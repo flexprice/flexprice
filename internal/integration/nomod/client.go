@@ -45,7 +45,7 @@ func NewClient(
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
-		httpClient:        httpclient.NewDefaultClient(),
+		httpClient:        httpclient.NewProviderClient(logger, string(types.SecretProviderNomod)),
 		logger:            logger,
 	}
 }

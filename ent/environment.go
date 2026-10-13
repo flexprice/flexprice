@@ -54,7 +54,7 @@ func (*Environment) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Environment fields.
-func (e *Environment) assignValues(columns []string, values []any) error {
+func (_m *Environment) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -64,58 +64,58 @@ func (e *Environment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				e.ID = value.String
+				_m.ID = value.String
 			}
 		case environment.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				e.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case environment.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				e.Status = value.String
+				_m.Status = value.String
 			}
 		case environment.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				e.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case environment.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				e.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case environment.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				e.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case environment.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				e.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case environment.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				e.Name = value.String
+				_m.Name = value.String
 			}
 		case environment.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				e.Type = value.String
+				_m.Type = value.String
 			}
 		default:
-			e.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -123,56 +123,56 @@ func (e *Environment) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Environment.
 // This includes values selected through modifiers, order, etc.
-func (e *Environment) Value(name string) (ent.Value, error) {
-	return e.selectValues.Get(name)
+func (_m *Environment) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Environment.
 // Note that you need to call Environment.Unwrap() before calling this method if this Environment
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (e *Environment) Update() *EnvironmentUpdateOne {
-	return NewEnvironmentClient(e.config).UpdateOne(e)
+func (_m *Environment) Update() *EnvironmentUpdateOne {
+	return NewEnvironmentClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Environment entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (e *Environment) Unwrap() *Environment {
-	_tx, ok := e.config.driver.(*txDriver)
+func (_m *Environment) Unwrap() *Environment {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Environment is not a transactional entity")
 	}
-	e.config.driver = _tx.drv
-	return e
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (e *Environment) String() string {
+func (_m *Environment) String() string {
 	var builder strings.Builder
 	builder.WriteString("Environment(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", e.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(e.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(e.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(e.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(e.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(e.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(e.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(e.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(e.Type)
+	builder.WriteString(_m.Type)
 	builder.WriteByte(')')
 	return builder.String()
 }

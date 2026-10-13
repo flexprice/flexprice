@@ -664,11 +664,14 @@ func (s *stripeSubscriptionService) handleNormalChange(ctx context.Context, exis
 		Status: s.mapStripeStatusToFlexPrice(stripeSubscription.Status),
 	}
 
-	// Handle cancellation dates if subscription is cancelled in Stripe
+	// Always propagate the flag (incl. false); nil would let a stale true survive after Stripe clears it.
+	cancelAtPeriodEnd := stripeSubscription.CancelAtPeriodEnd
+	updateReq.CancelAtPeriodEnd = &cancelAtPeriodEnd
+
+	// Zero CancelAt means Stripe removed the cancellation; leaving it nil lets the false flag clear it.
 	if stripeSubscription.CancelAt != 0 {
 		cancelAt := time.Unix(stripeSubscription.CancelAt, 0).UTC()
 		updateReq.CancelAt = &cancelAt
-		updateReq.CancelAtPeriodEnd = stripeSubscription.CancelAtPeriodEnd
 	}
 
 	// Log the changes that will be made
@@ -677,7 +680,7 @@ func (s *stripeSubscriptionService) handleNormalChange(ctx context.Context, exis
 		"stripe_status", stripeSubscription.Status,
 		"flexprice_status", updateReq.Status,
 		"cancel_at", updateReq.CancelAt,
-		"cancel_at_period_end", updateReq.CancelAtPeriodEnd)
+		"cancel_at_period_end", stripeSubscription.CancelAtPeriodEnd)
 
 	// Update the subscription using the subscription service
 	_, err := services.SubscriptionService.UpdateSubscription(ctx, existingSubscription.ID, updateReq)

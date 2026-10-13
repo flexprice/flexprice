@@ -82,10 +82,11 @@ func (f *fakeSyncMappingRepo) Create(_ context.Context, m *entityintegrationmapp
 
 type fakeSyncCustomerRepo struct {
 	customer.Repository
+	metadata map[string]string
 }
 
 func (f *fakeSyncCustomerRepo) Get(_ context.Context, id string) (*customer.Customer, error) {
-	return &customer.Customer{ID: id, Name: "Gobblecube"}, nil
+	return &customer.Customer{ID: id, Name: "Gobblecube", Metadata: f.metadata}, nil
 }
 
 func (f *fakeSyncCustomerRepo) List(_ context.Context, _ *types.CustomerFilter) ([]*customer.Customer, error) {
@@ -367,6 +368,21 @@ func TestSyncInvoiceToZoho_NormalizedQuantityKeepsLineTotalDiscount(t *testing.T
 	assert.True(t, decimal.NewFromInt(600).Equal(li.Discount), "discount = %s, want 600", li.Discount)
 }
 
+func TestSyncInvoiceToZoho_ReceivableAccount(t *testing.T) {
+	line := []testLineItem{{name: "Charge", priceID: "price_1", amount: "100"}}
+
+	svc, client := newSyncTestService(buildTestInvoice("INR", "0", "", "", line), nil)
+	_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+	require.NoError(t, err)
+	assert.Empty(t, client.createInvoiceReq.AccountID, "unset leaves Zoho's default")
+
+	svc, client = newSyncTestService(buildTestInvoice("INR", "0", "", "", line), nil)
+	svc.customerRepo = &fakeSyncCustomerRepo{metadata: map[string]string{zohoReceivableAccountKey: " 460000000000462 "}}
+	_, err = svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+	require.NoError(t, err)
+	assert.Equal(t, "460000000000462", client.createInvoiceReq.AccountID)
+}
+
 // Zero-amount line items are skipped, and they can never carry a discount.
 func TestSyncInvoiceToZoho_SkipsZeroAmountLines(t *testing.T) {
 	inv := buildTestInvoice("INR", "600", "", "", []testLineItem{
@@ -465,6 +481,7 @@ func TestSyncInvoiceToZoho_MarksPaidWhenFlexpriceAlreadyPaid(t *testing.T) {
 				customerRepo: &fakeSyncCustomerRepo{},
 				invoiceRepo:  &fakeSyncInvoiceRepo{inv: inv},
 				mappingRepo:  mappingRepo,
+				paymentRepo:  &fakePaymentRepo{},
 				logger:       logger.NewNoopLogger(),
 			}
 

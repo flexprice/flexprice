@@ -15,6 +15,7 @@ const (
 	ProrationActionCancellation   ProrationAction = "cancellation"
 	ProrationActionAddItem        ProrationAction = "add_item"
 	ProrationActionRemoveItem     ProrationAction = "remove_item"
+	ProrationActionPriceChange    ProrationAction = "price_change"
 )
 
 // ProrationStrategy defines how the proration coefficient is calculated.

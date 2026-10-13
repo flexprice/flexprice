@@ -3,6 +3,7 @@ package payload
 import (
 	"context"
 	"encoding/json"
+	"github.com/flexprice/flexprice/internal/api/dto"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -49,7 +50,7 @@ func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventTyp
 	}
 
 	// inject the invoice pdf url into the invoice response
-	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, invoiceID, false)
+	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})
 	if err != nil {
 		b.services.Tracing.CaptureException(ctx, err)
 	}

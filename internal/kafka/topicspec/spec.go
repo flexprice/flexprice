@@ -3,6 +3,7 @@ package topicspec
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 )
@@ -72,6 +73,9 @@ func (s *Spec) Resolve() ([]ResolvedTopic, error) {
 		}
 		if r.Partitions < 1 {
 			return nil, fmt.Errorf("topic %q: partitions must be >= 1 (got %d)", name, r.Partitions)
+		}
+		if r.Partitions > math.MaxInt32 {
+			return nil, fmt.Errorf("topic %q: partitions must be <= %d (got %d)", name, math.MaxInt32, r.Partitions)
 		}
 		if r.ReplicationFactor < 1 {
 			return nil, fmt.Errorf("topic %q: replicationFactor must be >= 1 (got %d)", name, r.ReplicationFactor)

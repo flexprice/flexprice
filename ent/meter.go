@@ -66,7 +66,7 @@ func (*Meter) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Meter fields.
-func (m *Meter) assignValues(columns []string, values []any) error {
+func (_m *Meter) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -76,67 +76,67 @@ func (m *Meter) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				m.ID = value.String
+				_m.ID = value.String
 			}
 		case meter.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				m.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case meter.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				m.Status = value.String
+				_m.Status = value.String
 			}
 		case meter.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				m.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case meter.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				m.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case meter.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				m.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case meter.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				m.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case meter.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				m.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case meter.FieldEventName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field event_name", values[i])
 			} else if value.Valid {
-				m.EventName = value.String
+				_m.EventName = value.String
 			}
 		case meter.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				m.Name = value.String
+				_m.Name = value.String
 			}
 		case meter.FieldAggregation:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field aggregation", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &m.Aggregation); err != nil {
+				if err := json.Unmarshal(*value, &_m.Aggregation); err != nil {
 					return fmt.Errorf("unmarshal field aggregation: %w", err)
 				}
 			}
@@ -144,7 +144,7 @@ func (m *Meter) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field filters", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &m.Filters); err != nil {
+				if err := json.Unmarshal(*value, &_m.Filters); err != nil {
 					return fmt.Errorf("unmarshal field filters: %w", err)
 				}
 			}
@@ -152,10 +152,10 @@ func (m *Meter) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reset_usage", values[i])
 			} else if value.Valid {
-				m.ResetUsage = value.String
+				_m.ResetUsage = value.String
 			}
 		default:
-			m.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -163,68 +163,68 @@ func (m *Meter) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Meter.
 // This includes values selected through modifiers, order, etc.
-func (m *Meter) Value(name string) (ent.Value, error) {
-	return m.selectValues.Get(name)
+func (_m *Meter) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Meter.
 // Note that you need to call Meter.Unwrap() before calling this method if this Meter
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (m *Meter) Update() *MeterUpdateOne {
-	return NewMeterClient(m.config).UpdateOne(m)
+func (_m *Meter) Update() *MeterUpdateOne {
+	return NewMeterClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Meter entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (m *Meter) Unwrap() *Meter {
-	_tx, ok := m.config.driver.(*txDriver)
+func (_m *Meter) Unwrap() *Meter {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Meter is not a transactional entity")
 	}
-	m.config.driver = _tx.drv
-	return m
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (m *Meter) String() string {
+func (_m *Meter) String() string {
 	var builder strings.Builder
 	builder.WriteString("Meter(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", m.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(m.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(m.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(m.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(m.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(m.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("event_name=")
-	builder.WriteString(m.EventName)
+	builder.WriteString(_m.EventName)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(m.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("aggregation=")
-	builder.WriteString(fmt.Sprintf("%v", m.Aggregation))
+	builder.WriteString(fmt.Sprintf("%v", _m.Aggregation))
 	builder.WriteString(", ")
 	builder.WriteString("filters=")
-	builder.WriteString(fmt.Sprintf("%v", m.Filters))
+	builder.WriteString(fmt.Sprintf("%v", _m.Filters))
 	builder.WriteString(", ")
 	builder.WriteString("reset_usage=")
-	builder.WriteString(m.ResetUsage)
+	builder.WriteString(_m.ResetUsage)
 	builder.WriteByte(')')
 	return builder.String()
 }

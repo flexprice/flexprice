@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -32,6 +33,11 @@ type CreateCreditGrantRequest struct {
 	CreditGrantAnchor      *time.Time                           `json:"-"`
 	StartDate              *time.Time                           `json:"start_date,omitempty"`
 	EndDate                *time.Time                           `json:"end_date,omitempty"`
+
+	// ProrationBehavior applies to SUBSCRIPTION scope only. create_prorations scales the first
+	// application to the rest of the current billing period and puts later ones on the
+	// subscription's billing dates, when the grant recurs on the subscription's billing period.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
@@ -82,17 +88,18 @@ func NewSubscriptionScopedCreditGrantRequest(
 // deliberately never persisted on the grant: every later period is a whole period
 // and must grant the full amount.
 type FirstPeriodProration struct {
-	// PeriodStart/PeriodEnd bound the subscription billing period containing the grant.
-	PeriodStart time.Time
-	PeriodEnd   time.Time
+	// PeriodEnd is the end of the subscription billing period containing the grant.
+	PeriodEnd time.Time
 
 	// ProrationDate is when coverage begins, e.g. the addon attach date.
 	ProrationDate time.Time
 
-	Strategy types.ProrationStrategy
-
 	// Source labels the trigger in audit metadata, e.g. "addon_attach".
 	Source string
+
+	// Prorate scales the first application to [ProrationDate, PeriodEnd). Without it the first
+	// application grants in full and only the alignment to billing dates applies.
+	Prorate bool
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
@@ -519,13 +526,33 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 	}
 }
 
+type CreateSubscriptionCreditGrantsRequest struct {
+	Subscription *subscription.Subscription
+	Grants       []CreateCreditGrantRequest
+	StartDate    time.Time
+	// EndDate caps recurring grants at a time-bounded (onetime) addon's boundary. Nil keeps
+	// the subscription's own end.
+	EndDate *time.Time
+	// FirstPeriodProration scales the first grant to the part of the period it covers.
+	FirstPeriodProration *FirstPeriodProration
+}
+
+func (r *CreateSubscriptionCreditGrantsRequest) Validate() error {
+	if r.Subscription == nil {
+		return errors.NewError("subscription is required to materialize credit grants").
+			Mark(errors.ErrValidation)
+	}
+
+	return nil
+}
+
 // CancelFutureSubscriptionGrantsRequest represents the request to cancel future credit grants for a subscription
 type CancelFutureSubscriptionGrantsRequest struct {
 	SubscriptionID string     `json:"subscription_id" binding:"required"`
 	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
-	// AddonID, when set, scopes cancellation to grants materialized from this addon
+	// AddonIDs, when set, scopes cancellation to grants materialized from these addons
 	// (via addon_id provenance). Leave empty to cancel all of the subscription's grants.
-	AddonID *string `json:"addon_id,omitempty"`
+	AddonIDs []string `json:"addon_ids,omitempty"`
 	// PlanID, when set, scopes cancellation to grants materialized from this plan
 	// (via plan_id provenance), so a plan swap leaves addon-sourced grants alone.
 	PlanID *string `json:"plan_id,omitempty"`

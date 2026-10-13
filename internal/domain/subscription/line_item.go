@@ -62,7 +62,7 @@ func (li *SubscriptionLineItem) GetMeterID() string {
 	if li == nil {
 		return ""
 	}
-	
+
 	return li.MeterID
 }
 

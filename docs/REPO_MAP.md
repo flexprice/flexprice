@@ -8,7 +8,7 @@ This document is repository **census and orientation**: where major systems live
 
 ## Executive summary
 
-FlexPrice is a **Go monolith** (Gin HTTP + Uber Fx DI) that can split by **deployment mode** into API-only, Kafka consumer-heavy, or Temporal worker processes. Persistence is **PostgreSQL (Ent)** for transactional state and **ClickHouse** for high-volume metering/analytics paths. **Kafka** feeds Watermill-backed consumers; **Temporal** orchestrates billing, invoicing sync, exports, and cron-style schedules.
+FlexPrice is a **Go monolith** (Gin HTTP + Uber Fx DI) that can split by **deployment mode** into API-only, Kafka consumer-heavy, Temporal worker, or admin-portal processes. Persistence is **PostgreSQL (Ent)** for transactional state and **ClickHouse** for high-volume metering/analytics paths. **Kafka** feeds Watermill-backed consumers; **Temporal** orchestrates billing, invoicing sync, exports, and cron-style schedules.
 
 ---
 
@@ -33,6 +33,24 @@ Controlled by configuration (`deployment.mode`). Same codebase, different runtim
 | `api` | Yes | Router runs; ingestion handlers **not** registered | No |
 | `consumer` | No | Full processing registrations | No |
 | `temporal_worker` | No | Minimal (webhook/integration paths for activity-side publishing) | Yes |
+| `admin` | Admin portal API only. Public API is not mounted | No | No |
+
+### Admin portal
+
+`admin` (`make run-local-admin`, `FLEXPRICE_DEPLOYMENT_MODE=admin`) is the backend for the internal admin portal. Flexprice staff use it to manage tenant accounts and settings — users, environments, and the rest of tenant-scoped administration — without exposing those operations on the customer API.
+
+It is its own Gin engine and its own packages, extended the same way as the public API:
+
+| Piece | Path |
+| --- | --- |
+| Router and `Handlers` | `internal/api/admin` (`provideAdminHandlers`, `provideAdminRouter` in `cmd/server/main.go`) |
+| Handlers | `internal/api/admin/v1` |
+| DTOs | `internal/api/dto/admin` (shared enums come from `internal/types`) |
+| Services | `internal/ee/service/admin` (constructed with `service.ServiceParams`) |
+
+These routes stay out of the public OpenAPI spec and the generated SDKs.
+
+`/v1` requires `X-Admin-Secret`, checked against `admin.secret` (`FLEXPRICE_ADMIN_SECRET`). `/health` stays open for probes. The secret authorizes the caller; naming a tenant by id or email is still cross-tenant on purpose. Per-operator RBAC and an audit log of actions are not built yet. Keep this process off the public internet.
 
 Implementation reference: `startServer`, `registerRouterHandlers`, `includeProcessingHandlers` in `cmd/server/main.go`.
 
@@ -66,6 +84,7 @@ flowchart TB
 - **Repository** (`internal/repository/*`): PostgreSQL via **Ent generated code** under `repository/ent/`, analytics via **`repository/clickhouse/`**.
 - **Service** (`internal/ee/service/*`): Business orchestration; primary consumer of domain interfaces and infrastructure facades.
 - **API** (`internal/api/v1`, `internal/api/cron` — one remaining legacy trigger, `internal/api/dto`): HTTP adapters; validates and maps DTOs; **no duplicated business rules**.
+- **Admin portal** (`internal/api/admin`, `internal/api/dto/admin`, `internal/ee/service/admin`): operator API for tenant accounts and settings. Served only when `deployment.mode=admin`. Not part of the public API.
 - **Enterprise** (`internal/ee/`): Commercial features layered on core; services composed in Fx alongside open-core services (`cmd/server/main.go`).
 
 ---
@@ -75,6 +94,7 @@ flowchart TB
 | Area | Path | Responsibility |
 | ---- | ---- | -------------- |
 | HTTP surface | `internal/api/v1/` | REST handlers (~one file per bounded context) |
+| Admin portal | `internal/api/admin/`, `internal/api/dto/admin/`, `internal/ee/service/admin/` | Operator API for tenant accounts and settings. Own router, DTOs, and services. See the Admin portal section above |
 | Cron HTTP trigger | `internal/api/cron/` | Legacy manual `/v1/cron/invoices/void-old-pending` trigger (no Temporal equivalent); all other cron-style jobs run as Temporal schedules |
 | Middleware | `internal/rest/middleware/` | Auth (JWT / API key), RBAC permission checks, tenancy headers, observability hooks |
 | Services | `internal/ee/service/` | Core business logic (~50+ cohesive files plus tests) |

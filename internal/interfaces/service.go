@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -41,6 +42,7 @@ type PaymentService interface {
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
+	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
 }
 
 // InvoiceService defines the interface for invoice operations
@@ -48,7 +50,7 @@ type InvoiceService interface {
 	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
-	FinalizeInvoice(ctx context.Context, id string) error
+	FinalizeInvoice(ctx context.Context, id string, req dto.FinalizeInvoiceRequest) error
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -56,7 +58,8 @@ type InvoiceService interface {
 	ReconcilePaymentStatus(ctx context.Context, invoiceID string, paymentStatus types.PaymentStatus, paymentAmount *decimal.Decimal) error
 
 	ApplyExternalInvoiceDiscount(ctx context.Context, invoiceID string, req dto.ApplyExternalInvoiceDiscountRequest) error
-	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
+	// VoidInvoice voids the invoice and returns its updated (voided) state.
+	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error)
 }
 
 type PlanService interface {
@@ -80,6 +83,35 @@ type EntityIntegrationMappingService interface {
 	DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.SuccessResponse, error)
 }
 
+// RevenueService writes and maintains revenue_facts rows and serves their
+// analytics reads. Implemented by internal/ee/service/revenue; declared here
+// so the service layer can invoke the invoice-side hooks without importing
+// the implementation package.
+type RevenueService interface {
+	// RollupSubscription splits the subscription's current billing period
+	// into PROVISIONAL revenue_facts rows.
+	RollupSubscription(ctx context.Context, subscriptionID string) error
+
+	// RollupDirty rolls every opted-in subscription with activity since the
+	// given time. Over-rolling is harmless: the upsert is idempotent.
+	RollupDirty(ctx context.Context, req types.RollupDirtyRequest) (types.RollupDirtyResult, error)
+
+	// FinalizeSubscriptionPeriod flips the invoice's PROVISIONAL rows to
+	// FINAL and stamps them with the invoice.
+	FinalizeSubscriptionPeriod(ctx context.Context, invoiceID string) error
+
+	// RevertInvoiceFacts writes a negating twin for every FINAL row of a
+	// voided invoice. Idempotent.
+	RevertInvoiceFacts(ctx context.Context, invoiceID string) error
+
+	// ReconcileBookedInvoices re-checks every invoice finalized or voided
+	// since the given time against its booked rows.
+	ReconcileBookedInvoices(ctx context.Context, since time.Time) (checked, drifted, corrected int, err error)
+
+	// GetRevenueAnalytics aggregates facts into grouped, time-bucketed rows.
+	GetRevenueAnalytics(ctx context.Context, req *dto.RevenueAnalyticsRequest) (*dto.RevenueAnalyticsResponse, error)
+}
+
 // RevenueAnalyticsService defines the interface for revenue analytics operations
 type RevenueAnalyticsService interface {
 	// GetDetailedCostAnalytics retrieves detailed cost analytics with derived metrics
@@ -98,8 +130,9 @@ type SubscriptionService interface {
 	GetSubscriptionV2(ctx context.Context, id string, expand types.Expand) (*dto.SubscriptionResponseV2, error)
 	UpdateSubscription(ctx context.Context, subscriptionID string, req dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error)
 	CancelSubscription(ctx context.Context, subscriptionID string, req *dto.CancelSubscriptionRequest) (*dto.CancelSubscriptionResponse, error)
-	ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error
 	HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error
+	// MarkSubscriptionIncomplete moves an active payment-gated subscription to incomplete when its renewal invoice is unpaid.
+	MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error)
 
@@ -126,9 +159,6 @@ type SubscriptionService interface {
 	AddAddonToSubscription(ctx context.Context, req *dto.AddAddonRequest) (*dto.AddAddonToSubscriptionResponse, error)
 	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
 
-	AttachAddon(ctx context.Context, sub *subscription.Subscription, req *dto.AddAddonToSubscriptionRequest, checkout *dto.CheckoutParams) (*dto.AddonChangeResult, error)
-	DetachAddon(ctx context.Context, req *dto.RemoveAddonRequest, subscriptionID string) (*dto.AddonChangeResult, error)
-
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
@@ -137,6 +167,8 @@ type SubscriptionService interface {
 
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
+	// ProcessOverdueSubscriptionInvoices marks subscriptions incomplete for renewal invoices within due date + grace.
+	ProcessOverdueSubscriptionInvoices(ctx context.Context) error
 	// Renewal due alert methods
 	ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error
 
@@ -235,13 +267,26 @@ type PriceUnitService interface {
 type CreditAdjustmentService interface {
 	// ApplyCreditsToInvoice applies wallet credits to invoice line items
 	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
+
+	// ApplyExpiringCreditToInvoice debits credits from an expiring credit onto a draft subscription
+	// invoice and returns the amount applied; repeats, non-drafts and other currencies apply nothing.
+	ApplyExpiringCreditToInvoice(ctx context.Context, invoiceID string, w *wallet.Wallet, creditTx *wallet.Transaction, credits decimal.Decimal) (decimal.Decimal, error)
 }
 
 type CheckoutSessionService interface {
 	Create(ctx context.Context, req dto.CreateCheckoutSessionRequest) (*dto.CheckoutSessionResponse, error)
 	Get(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	// GetByPaymentID returns the session owning a checkout payment, or (nil, nil) if none.
+	GetByPaymentID(ctx context.Context, paymentID string) (*dto.CheckoutSessionResponse, error)
+	// GetAndReconcile is Get plus reconciliation against the payment provider. It
+	// contacts the gateway and can complete the session, so only callers acting for
+	// the customer should use it; internal readers use Get.
+	GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
 	Delete(ctx context.Context, id string) error
+	// Cancel terminates an in-flight session without archiving the row. Completed
+	// sessions are rejected; failed/expired sessions are returned as-is.
+	Cancel(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
 	// CleanupCheckoutSession fetches the session by ID, archives all fulfillment entities
 	// (subscription, invoice, payment), and marks the session failed or expired.
 	// Pass reason=nil to mark as expired; pass a non-nil error to mark as failed.
@@ -258,6 +303,14 @@ type CheckoutSessionService interface {
 	StartPayFirstCheckoutSession(ctx context.Context, req *dto.PayFirstCheckoutRequest) (*dto.CheckoutSessionResponse, error)
 }
 
+// RefundService is the slice of the refund service a gateway webhook handler needs:
+// resolve the row the provider is talking about, then record the outcome.
+type RefundService interface {
+	GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error)
+	Settle(ctx context.Context, req *dto.SettleRefundRequest) error
+	Fail(ctx context.Context, refundID, reason string) error
+}
+
 type ServiceDependencies struct {
 	CustomerService                 CustomerService
 	PaymentService                  PaymentService
@@ -268,25 +321,6 @@ type ServiceDependencies struct {
 	PriceUnitService                PriceUnitService
 	CreditAdjustmentService         CreditAdjustmentService
 	CheckoutSessionService          CheckoutSessionService
+	RefundService                   RefundService
 	DB                              postgres.IClient
-}
-
-// PaymentProviderResolver answers which payment gateway an operation runs
-// against, from the tenant's published connections intersected with the
-// capabilities FlexPrice implements per gateway. Takes a customer id rather than
-// a session so an admin caller resolves identically to a portal one.
-type PaymentProviderResolver interface {
-	// ResolveProvider picks the gateway serving capability. An empty requested
-	// means "the only candidate"; a non-empty one is validated against them.
-	// ErrNotFound when nothing qualifies, ErrValidation when ambiguous or refused.
-	ResolveProvider(ctx context.Context, customerID string, capability types.IntegrationCapabilityType, requested types.PaymentGatewayType) (types.PaymentGatewayType, error)
-
-	// ListProviders returns configured gateways with a usable capability, ordered
-	// by gateway name.
-	ListProviders(ctx context.Context, customerID string) ([]ProviderCapabilities, error)
-}
-
-type ProviderCapabilities struct {
-	Gateway      types.PaymentGatewayType
-	Capabilities []types.IntegrationCapability
 }

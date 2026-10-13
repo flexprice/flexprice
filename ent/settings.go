@@ -59,7 +59,7 @@ func (*Settings) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Settings fields.
-func (s *Settings) assignValues(columns []string, values []any) error {
+func (_m *Settings) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -69,66 +69,66 @@ func (s *Settings) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				s.ID = value.String
+				_m.ID = value.String
 			}
 		case settings.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				s.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case settings.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				s.Status = value.String
+				_m.Status = value.String
 			}
 		case settings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				s.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case settings.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				s.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case settings.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				s.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case settings.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				s.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case settings.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				s.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case settings.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field key", values[i])
 			} else if value.Valid {
-				s.Key = value.String
+				_m.Key = value.String
 			}
 		case settings.FieldValue:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field value", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &s.Value); err != nil {
+				if err := json.Unmarshal(*value, &_m.Value); err != nil {
 					return fmt.Errorf("unmarshal field value: %w", err)
 				}
 			}
 		default:
-			s.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -136,59 +136,59 @@ func (s *Settings) assignValues(columns []string, values []any) error {
 
 // GetValue returns the ent.Value that was dynamically selected and assigned to the Settings.
 // This includes values selected through modifiers, order, etc.
-func (s *Settings) GetValue(name string) (ent.Value, error) {
-	return s.selectValues.Get(name)
+func (_m *Settings) GetValue(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Settings.
 // Note that you need to call Settings.Unwrap() before calling this method if this Settings
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (s *Settings) Update() *SettingsUpdateOne {
-	return NewSettingsClient(s.config).UpdateOne(s)
+func (_m *Settings) Update() *SettingsUpdateOne {
+	return NewSettingsClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Settings entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (s *Settings) Unwrap() *Settings {
-	_tx, ok := s.config.driver.(*txDriver)
+func (_m *Settings) Unwrap() *Settings {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Settings is not a transactional entity")
 	}
-	s.config.driver = _tx.drv
-	return s
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (s *Settings) String() string {
+func (_m *Settings) String() string {
 	var builder strings.Builder
 	builder.WriteString("Settings(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", s.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(s.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(s.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(s.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(s.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(s.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(s.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(s.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("key=")
-	builder.WriteString(s.Key)
+	builder.WriteString(_m.Key)
 	builder.WriteString(", ")
 	builder.WriteString("value=")
-	builder.WriteString(fmt.Sprintf("%v", s.Value))
+	builder.WriteString(fmt.Sprintf("%v", _m.Value))
 	builder.WriteByte(')')
 	return builder.String()
 }

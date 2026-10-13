@@ -24,341 +24,341 @@ type CheckoutSessionUpdate struct {
 }
 
 // Where appends a list predicates to the CheckoutSessionUpdate builder.
-func (csu *CheckoutSessionUpdate) Where(ps ...predicate.CheckoutSession) *CheckoutSessionUpdate {
-	csu.mutation.Where(ps...)
-	return csu
+func (_u *CheckoutSessionUpdate) Where(ps ...predicate.CheckoutSession) *CheckoutSessionUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (csu *CheckoutSessionUpdate) SetStatus(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetStatus(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetStatus(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableStatus(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetStatus(*s)
+func (_u *CheckoutSessionUpdate) SetNillableStatus(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return csu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (csu *CheckoutSessionUpdate) SetUpdatedAt(t time.Time) *CheckoutSessionUpdate {
-	csu.mutation.SetUpdatedAt(t)
-	return csu
+func (_u *CheckoutSessionUpdate) SetUpdatedAt(v time.Time) *CheckoutSessionUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (csu *CheckoutSessionUpdate) SetUpdatedBy(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetUpdatedBy(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetUpdatedBy(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableUpdatedBy(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetUpdatedBy(*s)
+func (_u *CheckoutSessionUpdate) SetNillableUpdatedBy(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (csu *CheckoutSessionUpdate) ClearUpdatedBy() *CheckoutSessionUpdate {
-	csu.mutation.ClearUpdatedBy()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearUpdatedBy() *CheckoutSessionUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCheckoutStatus sets the "checkout_status" field.
-func (csu *CheckoutSessionUpdate) SetCheckoutStatus(ts types.CheckoutStatus) *CheckoutSessionUpdate {
-	csu.mutation.SetCheckoutStatus(ts)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCheckoutStatus(v types.CheckoutStatus) *CheckoutSessionUpdate {
+	_u.mutation.SetCheckoutStatus(v)
+	return _u
 }
 
 // SetNillableCheckoutStatus sets the "checkout_status" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCheckoutStatus(ts *types.CheckoutStatus) *CheckoutSessionUpdate {
-	if ts != nil {
-		csu.SetCheckoutStatus(*ts)
+func (_u *CheckoutSessionUpdate) SetNillableCheckoutStatus(v *types.CheckoutStatus) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCheckoutStatus(*v)
 	}
-	return csu
+	return _u
 }
 
 // SetCheckoutInvoiceID sets the "checkout_invoice_id" field.
-func (csu *CheckoutSessionUpdate) SetCheckoutInvoiceID(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetCheckoutInvoiceID(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCheckoutInvoiceID(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetCheckoutInvoiceID(v)
+	return _u
 }
 
 // SetNillableCheckoutInvoiceID sets the "checkout_invoice_id" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCheckoutInvoiceID(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetCheckoutInvoiceID(*s)
+func (_u *CheckoutSessionUpdate) SetNillableCheckoutInvoiceID(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCheckoutInvoiceID(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearCheckoutInvoiceID clears the value of the "checkout_invoice_id" field.
-func (csu *CheckoutSessionUpdate) ClearCheckoutInvoiceID() *CheckoutSessionUpdate {
-	csu.mutation.ClearCheckoutInvoiceID()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearCheckoutInvoiceID() *CheckoutSessionUpdate {
+	_u.mutation.ClearCheckoutInvoiceID()
+	return _u
 }
 
 // SetCheckoutPaymentID sets the "checkout_payment_id" field.
-func (csu *CheckoutSessionUpdate) SetCheckoutPaymentID(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetCheckoutPaymentID(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCheckoutPaymentID(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetCheckoutPaymentID(v)
+	return _u
 }
 
 // SetNillableCheckoutPaymentID sets the "checkout_payment_id" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCheckoutPaymentID(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetCheckoutPaymentID(*s)
+func (_u *CheckoutSessionUpdate) SetNillableCheckoutPaymentID(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCheckoutPaymentID(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearCheckoutPaymentID clears the value of the "checkout_payment_id" field.
-func (csu *CheckoutSessionUpdate) ClearCheckoutPaymentID() *CheckoutSessionUpdate {
-	csu.mutation.ClearCheckoutPaymentID()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearCheckoutPaymentID() *CheckoutSessionUpdate {
+	_u.mutation.ClearCheckoutPaymentID()
+	return _u
 }
 
 // SetConfiguration sets the "configuration" field.
-func (csu *CheckoutSessionUpdate) SetConfiguration(tc types.CheckoutConfiguration) *CheckoutSessionUpdate {
-	csu.mutation.SetConfiguration(tc)
-	return csu
+func (_u *CheckoutSessionUpdate) SetConfiguration(v types.CheckoutConfiguration) *CheckoutSessionUpdate {
+	_u.mutation.SetConfiguration(v)
+	return _u
 }
 
 // SetNillableConfiguration sets the "configuration" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableConfiguration(tc *types.CheckoutConfiguration) *CheckoutSessionUpdate {
-	if tc != nil {
-		csu.SetConfiguration(*tc)
+func (_u *CheckoutSessionUpdate) SetNillableConfiguration(v *types.CheckoutConfiguration) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetConfiguration(*v)
 	}
-	return csu
+	return _u
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (csu *CheckoutSessionUpdate) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
-	csu.mutation.SetPaymentProviderConfig(tppc)
-	return csu
+func (_u *CheckoutSessionUpdate) SetPaymentProviderConfig(v *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdate {
+	_u.mutation.SetPaymentProviderConfig(v)
+	return _u
 }
 
 // ClearPaymentProviderConfig clears the value of the "payment_provider_config" field.
-func (csu *CheckoutSessionUpdate) ClearPaymentProviderConfig() *CheckoutSessionUpdate {
-	csu.mutation.ClearPaymentProviderConfig()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearPaymentProviderConfig() *CheckoutSessionUpdate {
+	_u.mutation.ClearPaymentProviderConfig()
+	return _u
 }
 
 // SetResult sets the "result" field.
-func (csu *CheckoutSessionUpdate) SetResult(tr *types.CheckoutResult) *CheckoutSessionUpdate {
-	csu.mutation.SetResult(tr)
-	return csu
+func (_u *CheckoutSessionUpdate) SetResult(v *types.CheckoutResult) *CheckoutSessionUpdate {
+	_u.mutation.SetResult(v)
+	return _u
 }
 
 // ClearResult clears the value of the "result" field.
-func (csu *CheckoutSessionUpdate) ClearResult() *CheckoutSessionUpdate {
-	csu.mutation.ClearResult()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearResult() *CheckoutSessionUpdate {
+	_u.mutation.ClearResult()
+	return _u
 }
 
 // SetProviderResult sets the "provider_result" field.
-func (csu *CheckoutSessionUpdate) SetProviderResult(tpr *types.CheckoutProviderResult) *CheckoutSessionUpdate {
-	csu.mutation.SetProviderResult(tpr)
-	return csu
+func (_u *CheckoutSessionUpdate) SetProviderResult(v *types.CheckoutProviderResult) *CheckoutSessionUpdate {
+	_u.mutation.SetProviderResult(v)
+	return _u
 }
 
 // ClearProviderResult clears the value of the "provider_result" field.
-func (csu *CheckoutSessionUpdate) ClearProviderResult() *CheckoutSessionUpdate {
-	csu.mutation.ClearProviderResult()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearProviderResult() *CheckoutSessionUpdate {
+	_u.mutation.ClearProviderResult()
+	return _u
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (csu *CheckoutSessionUpdate) SetIdempotencyKey(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetIdempotencyKey(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetIdempotencyKey(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableIdempotencyKey(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetIdempotencyKey(*s)
+func (_u *CheckoutSessionUpdate) SetNillableIdempotencyKey(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (csu *CheckoutSessionUpdate) ClearIdempotencyKey() *CheckoutSessionUpdate {
-	csu.mutation.ClearIdempotencyKey()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearIdempotencyKey() *CheckoutSessionUpdate {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
 }
 
 // SetSuccessURL sets the "success_url" field.
-func (csu *CheckoutSessionUpdate) SetSuccessURL(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetSuccessURL(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetSuccessURL(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetSuccessURL(v)
+	return _u
 }
 
 // SetNillableSuccessURL sets the "success_url" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableSuccessURL(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetSuccessURL(*s)
+func (_u *CheckoutSessionUpdate) SetNillableSuccessURL(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetSuccessURL(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearSuccessURL clears the value of the "success_url" field.
-func (csu *CheckoutSessionUpdate) ClearSuccessURL() *CheckoutSessionUpdate {
-	csu.mutation.ClearSuccessURL()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearSuccessURL() *CheckoutSessionUpdate {
+	_u.mutation.ClearSuccessURL()
+	return _u
 }
 
 // SetFailureURL sets the "failure_url" field.
-func (csu *CheckoutSessionUpdate) SetFailureURL(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetFailureURL(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetFailureURL(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetFailureURL(v)
+	return _u
 }
 
 // SetNillableFailureURL sets the "failure_url" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableFailureURL(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetFailureURL(*s)
+func (_u *CheckoutSessionUpdate) SetNillableFailureURL(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetFailureURL(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearFailureURL clears the value of the "failure_url" field.
-func (csu *CheckoutSessionUpdate) ClearFailureURL() *CheckoutSessionUpdate {
-	csu.mutation.ClearFailureURL()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearFailureURL() *CheckoutSessionUpdate {
+	_u.mutation.ClearFailureURL()
+	return _u
 }
 
 // SetCancelURL sets the "cancel_url" field.
-func (csu *CheckoutSessionUpdate) SetCancelURL(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetCancelURL(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCancelURL(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetCancelURL(v)
+	return _u
 }
 
 // SetNillableCancelURL sets the "cancel_url" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCancelURL(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetCancelURL(*s)
+func (_u *CheckoutSessionUpdate) SetNillableCancelURL(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCancelURL(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearCancelURL clears the value of the "cancel_url" field.
-func (csu *CheckoutSessionUpdate) ClearCancelURL() *CheckoutSessionUpdate {
-	csu.mutation.ClearCancelURL()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearCancelURL() *CheckoutSessionUpdate {
+	_u.mutation.ClearCancelURL()
+	return _u
 }
 
 // SetExpiresAt sets the "expires_at" field.
-func (csu *CheckoutSessionUpdate) SetExpiresAt(t time.Time) *CheckoutSessionUpdate {
-	csu.mutation.SetExpiresAt(t)
-	return csu
+func (_u *CheckoutSessionUpdate) SetExpiresAt(v time.Time) *CheckoutSessionUpdate {
+	_u.mutation.SetExpiresAt(v)
+	return _u
 }
 
 // SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableExpiresAt(t *time.Time) *CheckoutSessionUpdate {
-	if t != nil {
-		csu.SetExpiresAt(*t)
+func (_u *CheckoutSessionUpdate) SetNillableExpiresAt(v *time.Time) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetExpiresAt(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearExpiresAt clears the value of the "expires_at" field.
-func (csu *CheckoutSessionUpdate) ClearExpiresAt() *CheckoutSessionUpdate {
-	csu.mutation.ClearExpiresAt()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearExpiresAt() *CheckoutSessionUpdate {
+	_u.mutation.ClearExpiresAt()
+	return _u
 }
 
 // SetCompletedAt sets the "completed_at" field.
-func (csu *CheckoutSessionUpdate) SetCompletedAt(t time.Time) *CheckoutSessionUpdate {
-	csu.mutation.SetCompletedAt(t)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCompletedAt(v time.Time) *CheckoutSessionUpdate {
+	_u.mutation.SetCompletedAt(v)
+	return _u
 }
 
 // SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCompletedAt(t *time.Time) *CheckoutSessionUpdate {
-	if t != nil {
-		csu.SetCompletedAt(*t)
+func (_u *CheckoutSessionUpdate) SetNillableCompletedAt(v *time.Time) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCompletedAt(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearCompletedAt clears the value of the "completed_at" field.
-func (csu *CheckoutSessionUpdate) ClearCompletedAt() *CheckoutSessionUpdate {
-	csu.mutation.ClearCompletedAt()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearCompletedAt() *CheckoutSessionUpdate {
+	_u.mutation.ClearCompletedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (csu *CheckoutSessionUpdate) SetCancelledAt(t time.Time) *CheckoutSessionUpdate {
-	csu.mutation.SetCancelledAt(t)
-	return csu
+func (_u *CheckoutSessionUpdate) SetCancelledAt(v time.Time) *CheckoutSessionUpdate {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableCancelledAt(t *time.Time) *CheckoutSessionUpdate {
-	if t != nil {
-		csu.SetCancelledAt(*t)
+func (_u *CheckoutSessionUpdate) SetNillableCancelledAt(v *time.Time) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (csu *CheckoutSessionUpdate) ClearCancelledAt() *CheckoutSessionUpdate {
-	csu.mutation.ClearCancelledAt()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearCancelledAt() *CheckoutSessionUpdate {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (csu *CheckoutSessionUpdate) SetFailureReason(s string) *CheckoutSessionUpdate {
-	csu.mutation.SetFailureReason(s)
-	return csu
+func (_u *CheckoutSessionUpdate) SetFailureReason(v string) *CheckoutSessionUpdate {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (csu *CheckoutSessionUpdate) SetNillableFailureReason(s *string) *CheckoutSessionUpdate {
-	if s != nil {
-		csu.SetFailureReason(*s)
+func (_u *CheckoutSessionUpdate) SetNillableFailureReason(v *string) *CheckoutSessionUpdate {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return csu
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (csu *CheckoutSessionUpdate) ClearFailureReason() *CheckoutSessionUpdate {
-	csu.mutation.ClearFailureReason()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearFailureReason() *CheckoutSessionUpdate {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (csu *CheckoutSessionUpdate) SetMetadata(m map[string]string) *CheckoutSessionUpdate {
-	csu.mutation.SetMetadata(m)
-	return csu
+func (_u *CheckoutSessionUpdate) SetMetadata(v map[string]string) *CheckoutSessionUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (csu *CheckoutSessionUpdate) ClearMetadata() *CheckoutSessionUpdate {
-	csu.mutation.ClearMetadata()
-	return csu
+func (_u *CheckoutSessionUpdate) ClearMetadata() *CheckoutSessionUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CheckoutSessionMutation object of the builder.
-func (csu *CheckoutSessionUpdate) Mutation() *CheckoutSessionMutation {
-	return csu.mutation
+func (_u *CheckoutSessionUpdate) Mutation() *CheckoutSessionMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (csu *CheckoutSessionUpdate) Save(ctx context.Context) (int, error) {
-	csu.defaults()
-	return withHooks(ctx, csu.sqlSave, csu.mutation, csu.hooks)
+func (_u *CheckoutSessionUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (csu *CheckoutSessionUpdate) SaveX(ctx context.Context) int {
-	affected, err := csu.Save(ctx)
+func (_u *CheckoutSessionUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -366,144 +366,144 @@ func (csu *CheckoutSessionUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (csu *CheckoutSessionUpdate) Exec(ctx context.Context) error {
-	_, err := csu.Save(ctx)
+func (_u *CheckoutSessionUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (csu *CheckoutSessionUpdate) ExecX(ctx context.Context) {
-	if err := csu.Exec(ctx); err != nil {
+func (_u *CheckoutSessionUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (csu *CheckoutSessionUpdate) defaults() {
-	if _, ok := csu.mutation.UpdatedAt(); !ok {
+func (_u *CheckoutSessionUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := checkoutsession.UpdateDefaultUpdatedAt()
-		csu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (csu *CheckoutSessionUpdate) sqlSave(ctx context.Context) (n int, err error) {
+func (_u *CheckoutSessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(checkoutsession.Table, checkoutsession.Columns, sqlgraph.NewFieldSpec(checkoutsession.FieldID, field.TypeString))
-	if ps := csu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := csu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(checkoutsession.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := csu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(checkoutsession.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if csu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(checkoutsession.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := csu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(checkoutsession.FieldUpdatedBy, field.TypeString, value)
 	}
-	if csu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(checkoutsession.FieldUpdatedBy, field.TypeString)
 	}
-	if csu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(checkoutsession.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := csu.mutation.CheckoutStatus(); ok {
+	if value, ok := _u.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutStatus, field.TypeString, value)
 	}
-	if value, ok := csu.mutation.CheckoutInvoiceID(); ok {
+	if value, ok := _u.mutation.CheckoutInvoiceID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString, value)
 	}
-	if csu.mutation.CheckoutInvoiceIDCleared() {
+	if _u.mutation.CheckoutInvoiceIDCleared() {
 		_spec.ClearField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString)
 	}
-	if value, ok := csu.mutation.CheckoutPaymentID(); ok {
+	if value, ok := _u.mutation.CheckoutPaymentID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutPaymentID, field.TypeString, value)
 	}
-	if csu.mutation.CheckoutPaymentIDCleared() {
+	if _u.mutation.CheckoutPaymentIDCleared() {
 		_spec.ClearField(checkoutsession.FieldCheckoutPaymentID, field.TypeString)
 	}
-	if value, ok := csu.mutation.Configuration(); ok {
+	if value, ok := _u.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
 	}
-	if value, ok := csu.mutation.PaymentProviderConfig(); ok {
+	if value, ok := _u.mutation.PaymentProviderConfig(); ok {
 		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
 	}
-	if csu.mutation.PaymentProviderConfigCleared() {
+	if _u.mutation.PaymentProviderConfigCleared() {
 		_spec.ClearField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON)
 	}
-	if value, ok := csu.mutation.Result(); ok {
+	if value, ok := _u.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)
 	}
-	if csu.mutation.ResultCleared() {
+	if _u.mutation.ResultCleared() {
 		_spec.ClearField(checkoutsession.FieldResult, field.TypeJSON)
 	}
-	if value, ok := csu.mutation.ProviderResult(); ok {
+	if value, ok := _u.mutation.ProviderResult(); ok {
 		_spec.SetField(checkoutsession.FieldProviderResult, field.TypeJSON, value)
 	}
-	if csu.mutation.ProviderResultCleared() {
+	if _u.mutation.ProviderResultCleared() {
 		_spec.ClearField(checkoutsession.FieldProviderResult, field.TypeJSON)
 	}
-	if value, ok := csu.mutation.IdempotencyKey(); ok {
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
 		_spec.SetField(checkoutsession.FieldIdempotencyKey, field.TypeString, value)
 	}
-	if csu.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(checkoutsession.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := csu.mutation.SuccessURL(); ok {
+	if value, ok := _u.mutation.SuccessURL(); ok {
 		_spec.SetField(checkoutsession.FieldSuccessURL, field.TypeString, value)
 	}
-	if csu.mutation.SuccessURLCleared() {
+	if _u.mutation.SuccessURLCleared() {
 		_spec.ClearField(checkoutsession.FieldSuccessURL, field.TypeString)
 	}
-	if value, ok := csu.mutation.FailureURL(); ok {
+	if value, ok := _u.mutation.FailureURL(); ok {
 		_spec.SetField(checkoutsession.FieldFailureURL, field.TypeString, value)
 	}
-	if csu.mutation.FailureURLCleared() {
+	if _u.mutation.FailureURLCleared() {
 		_spec.ClearField(checkoutsession.FieldFailureURL, field.TypeString)
 	}
-	if value, ok := csu.mutation.CancelURL(); ok {
+	if value, ok := _u.mutation.CancelURL(); ok {
 		_spec.SetField(checkoutsession.FieldCancelURL, field.TypeString, value)
 	}
-	if csu.mutation.CancelURLCleared() {
+	if _u.mutation.CancelURLCleared() {
 		_spec.ClearField(checkoutsession.FieldCancelURL, field.TypeString)
 	}
-	if value, ok := csu.mutation.ExpiresAt(); ok {
+	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(checkoutsession.FieldExpiresAt, field.TypeTime, value)
 	}
-	if csu.mutation.ExpiresAtCleared() {
+	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(checkoutsession.FieldExpiresAt, field.TypeTime)
 	}
-	if value, ok := csu.mutation.CompletedAt(); ok {
+	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(checkoutsession.FieldCompletedAt, field.TypeTime, value)
 	}
-	if csu.mutation.CompletedAtCleared() {
+	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(checkoutsession.FieldCompletedAt, field.TypeTime)
 	}
-	if value, ok := csu.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(checkoutsession.FieldCancelledAt, field.TypeTime, value)
 	}
-	if csu.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(checkoutsession.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := csu.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(checkoutsession.FieldFailureReason, field.TypeString, value)
 	}
-	if csu.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(checkoutsession.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := csu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(checkoutsession.FieldMetadata, field.TypeJSON, value)
 	}
-	if csu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(checkoutsession.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, csu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{checkoutsession.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -511,8 +511,8 @@ func (csu *CheckoutSessionUpdate) sqlSave(ctx context.Context) (n int, err error
 		}
 		return 0, err
 	}
-	csu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // CheckoutSessionUpdateOne is the builder for updating a single CheckoutSession entity.
@@ -524,348 +524,348 @@ type CheckoutSessionUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (csuo *CheckoutSessionUpdateOne) SetStatus(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetStatus(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetStatus(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableStatus(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetStatus(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableStatus(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return csuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (csuo *CheckoutSessionUpdateOne) SetUpdatedAt(t time.Time) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetUpdatedAt(t)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetUpdatedAt(v time.Time) *CheckoutSessionUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (csuo *CheckoutSessionUpdateOne) SetUpdatedBy(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetUpdatedBy(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetUpdatedBy(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableUpdatedBy(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetUpdatedBy(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableUpdatedBy(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (csuo *CheckoutSessionUpdateOne) ClearUpdatedBy() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearUpdatedBy()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearUpdatedBy() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetCheckoutStatus sets the "checkout_status" field.
-func (csuo *CheckoutSessionUpdateOne) SetCheckoutStatus(ts types.CheckoutStatus) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCheckoutStatus(ts)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCheckoutStatus(v types.CheckoutStatus) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCheckoutStatus(v)
+	return _u
 }
 
 // SetNillableCheckoutStatus sets the "checkout_status" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCheckoutStatus(ts *types.CheckoutStatus) *CheckoutSessionUpdateOne {
-	if ts != nil {
-		csuo.SetCheckoutStatus(*ts)
+func (_u *CheckoutSessionUpdateOne) SetNillableCheckoutStatus(v *types.CheckoutStatus) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCheckoutStatus(*v)
 	}
-	return csuo
+	return _u
 }
 
 // SetCheckoutInvoiceID sets the "checkout_invoice_id" field.
-func (csuo *CheckoutSessionUpdateOne) SetCheckoutInvoiceID(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCheckoutInvoiceID(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCheckoutInvoiceID(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCheckoutInvoiceID(v)
+	return _u
 }
 
 // SetNillableCheckoutInvoiceID sets the "checkout_invoice_id" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCheckoutInvoiceID(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetCheckoutInvoiceID(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableCheckoutInvoiceID(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCheckoutInvoiceID(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearCheckoutInvoiceID clears the value of the "checkout_invoice_id" field.
-func (csuo *CheckoutSessionUpdateOne) ClearCheckoutInvoiceID() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearCheckoutInvoiceID()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearCheckoutInvoiceID() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearCheckoutInvoiceID()
+	return _u
 }
 
 // SetCheckoutPaymentID sets the "checkout_payment_id" field.
-func (csuo *CheckoutSessionUpdateOne) SetCheckoutPaymentID(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCheckoutPaymentID(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCheckoutPaymentID(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCheckoutPaymentID(v)
+	return _u
 }
 
 // SetNillableCheckoutPaymentID sets the "checkout_payment_id" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCheckoutPaymentID(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetCheckoutPaymentID(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableCheckoutPaymentID(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCheckoutPaymentID(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearCheckoutPaymentID clears the value of the "checkout_payment_id" field.
-func (csuo *CheckoutSessionUpdateOne) ClearCheckoutPaymentID() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearCheckoutPaymentID()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearCheckoutPaymentID() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearCheckoutPaymentID()
+	return _u
 }
 
 // SetConfiguration sets the "configuration" field.
-func (csuo *CheckoutSessionUpdateOne) SetConfiguration(tc types.CheckoutConfiguration) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetConfiguration(tc)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetConfiguration(v types.CheckoutConfiguration) *CheckoutSessionUpdateOne {
+	_u.mutation.SetConfiguration(v)
+	return _u
 }
 
 // SetNillableConfiguration sets the "configuration" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableConfiguration(tc *types.CheckoutConfiguration) *CheckoutSessionUpdateOne {
-	if tc != nil {
-		csuo.SetConfiguration(*tc)
+func (_u *CheckoutSessionUpdateOne) SetNillableConfiguration(v *types.CheckoutConfiguration) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetConfiguration(*v)
 	}
-	return csuo
+	return _u
 }
 
 // SetPaymentProviderConfig sets the "payment_provider_config" field.
-func (csuo *CheckoutSessionUpdateOne) SetPaymentProviderConfig(tppc *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetPaymentProviderConfig(tppc)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetPaymentProviderConfig(v *types.CheckoutPaymentProviderConfig) *CheckoutSessionUpdateOne {
+	_u.mutation.SetPaymentProviderConfig(v)
+	return _u
 }
 
 // ClearPaymentProviderConfig clears the value of the "payment_provider_config" field.
-func (csuo *CheckoutSessionUpdateOne) ClearPaymentProviderConfig() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearPaymentProviderConfig()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearPaymentProviderConfig() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearPaymentProviderConfig()
+	return _u
 }
 
 // SetResult sets the "result" field.
-func (csuo *CheckoutSessionUpdateOne) SetResult(tr *types.CheckoutResult) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetResult(tr)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetResult(v *types.CheckoutResult) *CheckoutSessionUpdateOne {
+	_u.mutation.SetResult(v)
+	return _u
 }
 
 // ClearResult clears the value of the "result" field.
-func (csuo *CheckoutSessionUpdateOne) ClearResult() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearResult()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearResult() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearResult()
+	return _u
 }
 
 // SetProviderResult sets the "provider_result" field.
-func (csuo *CheckoutSessionUpdateOne) SetProviderResult(tpr *types.CheckoutProviderResult) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetProviderResult(tpr)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetProviderResult(v *types.CheckoutProviderResult) *CheckoutSessionUpdateOne {
+	_u.mutation.SetProviderResult(v)
+	return _u
 }
 
 // ClearProviderResult clears the value of the "provider_result" field.
-func (csuo *CheckoutSessionUpdateOne) ClearProviderResult() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearProviderResult()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearProviderResult() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearProviderResult()
+	return _u
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
-func (csuo *CheckoutSessionUpdateOne) SetIdempotencyKey(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetIdempotencyKey(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetIdempotencyKey(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetIdempotencyKey(v)
+	return _u
 }
 
 // SetNillableIdempotencyKey sets the "idempotency_key" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableIdempotencyKey(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetIdempotencyKey(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableIdempotencyKey(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetIdempotencyKey(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearIdempotencyKey clears the value of the "idempotency_key" field.
-func (csuo *CheckoutSessionUpdateOne) ClearIdempotencyKey() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearIdempotencyKey()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearIdempotencyKey() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearIdempotencyKey()
+	return _u
 }
 
 // SetSuccessURL sets the "success_url" field.
-func (csuo *CheckoutSessionUpdateOne) SetSuccessURL(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetSuccessURL(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetSuccessURL(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetSuccessURL(v)
+	return _u
 }
 
 // SetNillableSuccessURL sets the "success_url" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableSuccessURL(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetSuccessURL(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableSuccessURL(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetSuccessURL(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearSuccessURL clears the value of the "success_url" field.
-func (csuo *CheckoutSessionUpdateOne) ClearSuccessURL() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearSuccessURL()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearSuccessURL() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearSuccessURL()
+	return _u
 }
 
 // SetFailureURL sets the "failure_url" field.
-func (csuo *CheckoutSessionUpdateOne) SetFailureURL(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetFailureURL(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetFailureURL(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetFailureURL(v)
+	return _u
 }
 
 // SetNillableFailureURL sets the "failure_url" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableFailureURL(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetFailureURL(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableFailureURL(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetFailureURL(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearFailureURL clears the value of the "failure_url" field.
-func (csuo *CheckoutSessionUpdateOne) ClearFailureURL() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearFailureURL()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearFailureURL() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearFailureURL()
+	return _u
 }
 
 // SetCancelURL sets the "cancel_url" field.
-func (csuo *CheckoutSessionUpdateOne) SetCancelURL(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCancelURL(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCancelURL(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCancelURL(v)
+	return _u
 }
 
 // SetNillableCancelURL sets the "cancel_url" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCancelURL(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetCancelURL(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableCancelURL(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCancelURL(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearCancelURL clears the value of the "cancel_url" field.
-func (csuo *CheckoutSessionUpdateOne) ClearCancelURL() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearCancelURL()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearCancelURL() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearCancelURL()
+	return _u
 }
 
 // SetExpiresAt sets the "expires_at" field.
-func (csuo *CheckoutSessionUpdateOne) SetExpiresAt(t time.Time) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetExpiresAt(t)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetExpiresAt(v time.Time) *CheckoutSessionUpdateOne {
+	_u.mutation.SetExpiresAt(v)
+	return _u
 }
 
 // SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableExpiresAt(t *time.Time) *CheckoutSessionUpdateOne {
-	if t != nil {
-		csuo.SetExpiresAt(*t)
+func (_u *CheckoutSessionUpdateOne) SetNillableExpiresAt(v *time.Time) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetExpiresAt(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearExpiresAt clears the value of the "expires_at" field.
-func (csuo *CheckoutSessionUpdateOne) ClearExpiresAt() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearExpiresAt()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearExpiresAt() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearExpiresAt()
+	return _u
 }
 
 // SetCompletedAt sets the "completed_at" field.
-func (csuo *CheckoutSessionUpdateOne) SetCompletedAt(t time.Time) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCompletedAt(t)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCompletedAt(v time.Time) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCompletedAt(v)
+	return _u
 }
 
 // SetNillableCompletedAt sets the "completed_at" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCompletedAt(t *time.Time) *CheckoutSessionUpdateOne {
-	if t != nil {
-		csuo.SetCompletedAt(*t)
+func (_u *CheckoutSessionUpdateOne) SetNillableCompletedAt(v *time.Time) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCompletedAt(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearCompletedAt clears the value of the "completed_at" field.
-func (csuo *CheckoutSessionUpdateOne) ClearCompletedAt() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearCompletedAt()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearCompletedAt() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearCompletedAt()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (csuo *CheckoutSessionUpdateOne) SetCancelledAt(t time.Time) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetCancelledAt(t)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetCancelledAt(v time.Time) *CheckoutSessionUpdateOne {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableCancelledAt(t *time.Time) *CheckoutSessionUpdateOne {
-	if t != nil {
-		csuo.SetCancelledAt(*t)
+func (_u *CheckoutSessionUpdateOne) SetNillableCancelledAt(v *time.Time) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (csuo *CheckoutSessionUpdateOne) ClearCancelledAt() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearCancelledAt()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearCancelledAt() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetFailureReason sets the "failure_reason" field.
-func (csuo *CheckoutSessionUpdateOne) SetFailureReason(s string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetFailureReason(s)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetFailureReason(v string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetFailureReason(v)
+	return _u
 }
 
 // SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
-func (csuo *CheckoutSessionUpdateOne) SetNillableFailureReason(s *string) *CheckoutSessionUpdateOne {
-	if s != nil {
-		csuo.SetFailureReason(*s)
+func (_u *CheckoutSessionUpdateOne) SetNillableFailureReason(v *string) *CheckoutSessionUpdateOne {
+	if v != nil {
+		_u.SetFailureReason(*v)
 	}
-	return csuo
+	return _u
 }
 
 // ClearFailureReason clears the value of the "failure_reason" field.
-func (csuo *CheckoutSessionUpdateOne) ClearFailureReason() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearFailureReason()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearFailureReason() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearFailureReason()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (csuo *CheckoutSessionUpdateOne) SetMetadata(m map[string]string) *CheckoutSessionUpdateOne {
-	csuo.mutation.SetMetadata(m)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) SetMetadata(v map[string]string) *CheckoutSessionUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (csuo *CheckoutSessionUpdateOne) ClearMetadata() *CheckoutSessionUpdateOne {
-	csuo.mutation.ClearMetadata()
-	return csuo
+func (_u *CheckoutSessionUpdateOne) ClearMetadata() *CheckoutSessionUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the CheckoutSessionMutation object of the builder.
-func (csuo *CheckoutSessionUpdateOne) Mutation() *CheckoutSessionMutation {
-	return csuo.mutation
+func (_u *CheckoutSessionUpdateOne) Mutation() *CheckoutSessionMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the CheckoutSessionUpdate builder.
-func (csuo *CheckoutSessionUpdateOne) Where(ps ...predicate.CheckoutSession) *CheckoutSessionUpdateOne {
-	csuo.mutation.Where(ps...)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) Where(ps ...predicate.CheckoutSession) *CheckoutSessionUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (csuo *CheckoutSessionUpdateOne) Select(field string, fields ...string) *CheckoutSessionUpdateOne {
-	csuo.fields = append([]string{field}, fields...)
-	return csuo
+func (_u *CheckoutSessionUpdateOne) Select(field string, fields ...string) *CheckoutSessionUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated CheckoutSession entity.
-func (csuo *CheckoutSessionUpdateOne) Save(ctx context.Context) (*CheckoutSession, error) {
-	csuo.defaults()
-	return withHooks(ctx, csuo.sqlSave, csuo.mutation, csuo.hooks)
+func (_u *CheckoutSessionUpdateOne) Save(ctx context.Context) (*CheckoutSession, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (csuo *CheckoutSessionUpdateOne) SaveX(ctx context.Context) *CheckoutSession {
-	node, err := csuo.Save(ctx)
+func (_u *CheckoutSessionUpdateOne) SaveX(ctx context.Context) *CheckoutSession {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -873,34 +873,34 @@ func (csuo *CheckoutSessionUpdateOne) SaveX(ctx context.Context) *CheckoutSessio
 }
 
 // Exec executes the query on the entity.
-func (csuo *CheckoutSessionUpdateOne) Exec(ctx context.Context) error {
-	_, err := csuo.Save(ctx)
+func (_u *CheckoutSessionUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (csuo *CheckoutSessionUpdateOne) ExecX(ctx context.Context) {
-	if err := csuo.Exec(ctx); err != nil {
+func (_u *CheckoutSessionUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (csuo *CheckoutSessionUpdateOne) defaults() {
-	if _, ok := csuo.mutation.UpdatedAt(); !ok {
+func (_u *CheckoutSessionUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := checkoutsession.UpdateDefaultUpdatedAt()
-		csuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
-func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *CheckoutSession, err error) {
+func (_u *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *CheckoutSession, err error) {
 	_spec := sqlgraph.NewUpdateSpec(checkoutsession.Table, checkoutsession.Columns, sqlgraph.NewFieldSpec(checkoutsession.FieldID, field.TypeString))
-	id, ok := csuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CheckoutSession.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := csuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, checkoutsession.FieldID)
 		for _, f := range fields {
@@ -912,125 +912,125 @@ func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *Check
 			}
 		}
 	}
-	if ps := csuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := csuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(checkoutsession.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := csuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(checkoutsession.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if csuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(checkoutsession.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := csuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(checkoutsession.FieldUpdatedBy, field.TypeString, value)
 	}
-	if csuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(checkoutsession.FieldUpdatedBy, field.TypeString)
 	}
-	if csuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(checkoutsession.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := csuo.mutation.CheckoutStatus(); ok {
+	if value, ok := _u.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutStatus, field.TypeString, value)
 	}
-	if value, ok := csuo.mutation.CheckoutInvoiceID(); ok {
+	if value, ok := _u.mutation.CheckoutInvoiceID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString, value)
 	}
-	if csuo.mutation.CheckoutInvoiceIDCleared() {
+	if _u.mutation.CheckoutInvoiceIDCleared() {
 		_spec.ClearField(checkoutsession.FieldCheckoutInvoiceID, field.TypeString)
 	}
-	if value, ok := csuo.mutation.CheckoutPaymentID(); ok {
+	if value, ok := _u.mutation.CheckoutPaymentID(); ok {
 		_spec.SetField(checkoutsession.FieldCheckoutPaymentID, field.TypeString, value)
 	}
-	if csuo.mutation.CheckoutPaymentIDCleared() {
+	if _u.mutation.CheckoutPaymentIDCleared() {
 		_spec.ClearField(checkoutsession.FieldCheckoutPaymentID, field.TypeString)
 	}
-	if value, ok := csuo.mutation.Configuration(); ok {
+	if value, ok := _u.mutation.Configuration(); ok {
 		_spec.SetField(checkoutsession.FieldConfiguration, field.TypeJSON, value)
 	}
-	if value, ok := csuo.mutation.PaymentProviderConfig(); ok {
+	if value, ok := _u.mutation.PaymentProviderConfig(); ok {
 		_spec.SetField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON, value)
 	}
-	if csuo.mutation.PaymentProviderConfigCleared() {
+	if _u.mutation.PaymentProviderConfigCleared() {
 		_spec.ClearField(checkoutsession.FieldPaymentProviderConfig, field.TypeJSON)
 	}
-	if value, ok := csuo.mutation.Result(); ok {
+	if value, ok := _u.mutation.Result(); ok {
 		_spec.SetField(checkoutsession.FieldResult, field.TypeJSON, value)
 	}
-	if csuo.mutation.ResultCleared() {
+	if _u.mutation.ResultCleared() {
 		_spec.ClearField(checkoutsession.FieldResult, field.TypeJSON)
 	}
-	if value, ok := csuo.mutation.ProviderResult(); ok {
+	if value, ok := _u.mutation.ProviderResult(); ok {
 		_spec.SetField(checkoutsession.FieldProviderResult, field.TypeJSON, value)
 	}
-	if csuo.mutation.ProviderResultCleared() {
+	if _u.mutation.ProviderResultCleared() {
 		_spec.ClearField(checkoutsession.FieldProviderResult, field.TypeJSON)
 	}
-	if value, ok := csuo.mutation.IdempotencyKey(); ok {
+	if value, ok := _u.mutation.IdempotencyKey(); ok {
 		_spec.SetField(checkoutsession.FieldIdempotencyKey, field.TypeString, value)
 	}
-	if csuo.mutation.IdempotencyKeyCleared() {
+	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(checkoutsession.FieldIdempotencyKey, field.TypeString)
 	}
-	if value, ok := csuo.mutation.SuccessURL(); ok {
+	if value, ok := _u.mutation.SuccessURL(); ok {
 		_spec.SetField(checkoutsession.FieldSuccessURL, field.TypeString, value)
 	}
-	if csuo.mutation.SuccessURLCleared() {
+	if _u.mutation.SuccessURLCleared() {
 		_spec.ClearField(checkoutsession.FieldSuccessURL, field.TypeString)
 	}
-	if value, ok := csuo.mutation.FailureURL(); ok {
+	if value, ok := _u.mutation.FailureURL(); ok {
 		_spec.SetField(checkoutsession.FieldFailureURL, field.TypeString, value)
 	}
-	if csuo.mutation.FailureURLCleared() {
+	if _u.mutation.FailureURLCleared() {
 		_spec.ClearField(checkoutsession.FieldFailureURL, field.TypeString)
 	}
-	if value, ok := csuo.mutation.CancelURL(); ok {
+	if value, ok := _u.mutation.CancelURL(); ok {
 		_spec.SetField(checkoutsession.FieldCancelURL, field.TypeString, value)
 	}
-	if csuo.mutation.CancelURLCleared() {
+	if _u.mutation.CancelURLCleared() {
 		_spec.ClearField(checkoutsession.FieldCancelURL, field.TypeString)
 	}
-	if value, ok := csuo.mutation.ExpiresAt(); ok {
+	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(checkoutsession.FieldExpiresAt, field.TypeTime, value)
 	}
-	if csuo.mutation.ExpiresAtCleared() {
+	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(checkoutsession.FieldExpiresAt, field.TypeTime)
 	}
-	if value, ok := csuo.mutation.CompletedAt(); ok {
+	if value, ok := _u.mutation.CompletedAt(); ok {
 		_spec.SetField(checkoutsession.FieldCompletedAt, field.TypeTime, value)
 	}
-	if csuo.mutation.CompletedAtCleared() {
+	if _u.mutation.CompletedAtCleared() {
 		_spec.ClearField(checkoutsession.FieldCompletedAt, field.TypeTime)
 	}
-	if value, ok := csuo.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(checkoutsession.FieldCancelledAt, field.TypeTime, value)
 	}
-	if csuo.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(checkoutsession.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := csuo.mutation.FailureReason(); ok {
+	if value, ok := _u.mutation.FailureReason(); ok {
 		_spec.SetField(checkoutsession.FieldFailureReason, field.TypeString, value)
 	}
-	if csuo.mutation.FailureReasonCleared() {
+	if _u.mutation.FailureReasonCleared() {
 		_spec.ClearField(checkoutsession.FieldFailureReason, field.TypeString)
 	}
-	if value, ok := csuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(checkoutsession.FieldMetadata, field.TypeJSON, value)
 	}
-	if csuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(checkoutsession.FieldMetadata, field.TypeJSON)
 	}
-	_node = &CheckoutSession{config: csuo.config}
+	_node = &CheckoutSession{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, csuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{checkoutsession.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -1038,6 +1038,6 @@ func (csuo *CheckoutSessionUpdateOne) sqlSave(ctx context.Context) (_node *Check
 		}
 		return nil, err
 	}
-	csuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

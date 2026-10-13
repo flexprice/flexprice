@@ -59,7 +59,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"Nomod connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

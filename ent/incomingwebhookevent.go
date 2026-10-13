@@ -67,7 +67,7 @@ func (*IncomingWebhookEvent) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the IncomingWebhookEvent fields.
-func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) error {
+func (_m *IncomingWebhookEvent) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -77,79 +77,79 @@ func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				iwe.ID = value.String
+				_m.ID = value.String
 			}
 		case incomingwebhookevent.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				iwe.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case incomingwebhookevent.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				iwe.Status = value.String
+				_m.Status = value.String
 			}
 		case incomingwebhookevent.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				iwe.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case incomingwebhookevent.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				iwe.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case incomingwebhookevent.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				iwe.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case incomingwebhookevent.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				iwe.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case incomingwebhookevent.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				iwe.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case incomingwebhookevent.FieldProvider:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider", values[i])
 			} else if value.Valid {
-				iwe.Provider = value.String
+				_m.Provider = value.String
 			}
 		case incomingwebhookevent.FieldMethod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field method", values[i])
 			} else if value.Valid {
-				iwe.Method = value.String
+				_m.Method = value.String
 			}
 		case incomingwebhookevent.FieldPath:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field path", values[i])
 			} else if value.Valid {
-				iwe.Path = value.String
+				_m.Path = value.String
 			}
 		case incomingwebhookevent.FieldRequestID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field request_id", values[i])
 			} else if value.Valid {
-				iwe.RequestID = value.String
+				_m.RequestID = value.String
 			}
 		case incomingwebhookevent.FieldHeaders:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field headers", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &iwe.Headers); err != nil {
+				if err := json.Unmarshal(*value, &_m.Headers); err != nil {
 					return fmt.Errorf("unmarshal field headers: %w", err)
 				}
 			}
@@ -157,10 +157,10 @@ func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field body", values[i])
 			} else if value.Valid {
-				iwe.Body = value.String
+				_m.Body = value.String
 			}
 		default:
-			iwe.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -168,71 +168,71 @@ func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) er
 
 // Value returns the ent.Value that was dynamically selected and assigned to the IncomingWebhookEvent.
 // This includes values selected through modifiers, order, etc.
-func (iwe *IncomingWebhookEvent) Value(name string) (ent.Value, error) {
-	return iwe.selectValues.Get(name)
+func (_m *IncomingWebhookEvent) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this IncomingWebhookEvent.
 // Note that you need to call IncomingWebhookEvent.Unwrap() before calling this method if this IncomingWebhookEvent
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (iwe *IncomingWebhookEvent) Update() *IncomingWebhookEventUpdateOne {
-	return NewIncomingWebhookEventClient(iwe.config).UpdateOne(iwe)
+func (_m *IncomingWebhookEvent) Update() *IncomingWebhookEventUpdateOne {
+	return NewIncomingWebhookEventClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the IncomingWebhookEvent entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (iwe *IncomingWebhookEvent) Unwrap() *IncomingWebhookEvent {
-	_tx, ok := iwe.config.driver.(*txDriver)
+func (_m *IncomingWebhookEvent) Unwrap() *IncomingWebhookEvent {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: IncomingWebhookEvent is not a transactional entity")
 	}
-	iwe.config.driver = _tx.drv
-	return iwe
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (iwe *IncomingWebhookEvent) String() string {
+func (_m *IncomingWebhookEvent) String() string {
 	var builder strings.Builder
 	builder.WriteString("IncomingWebhookEvent(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", iwe.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(iwe.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(iwe.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(iwe.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(iwe.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(iwe.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(iwe.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(iwe.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("provider=")
-	builder.WriteString(iwe.Provider)
+	builder.WriteString(_m.Provider)
 	builder.WriteString(", ")
 	builder.WriteString("method=")
-	builder.WriteString(iwe.Method)
+	builder.WriteString(_m.Method)
 	builder.WriteString(", ")
 	builder.WriteString("path=")
-	builder.WriteString(iwe.Path)
+	builder.WriteString(_m.Path)
 	builder.WriteString(", ")
 	builder.WriteString("request_id=")
-	builder.WriteString(iwe.RequestID)
+	builder.WriteString(_m.RequestID)
 	builder.WriteString(", ")
 	builder.WriteString("headers=")
-	builder.WriteString(fmt.Sprintf("%v", iwe.Headers))
+	builder.WriteString(fmt.Sprintf("%v", _m.Headers))
 	builder.WriteString(", ")
 	builder.WriteString("body=")
-	builder.WriteString(iwe.Body)
+	builder.WriteString(_m.Body)
 	builder.WriteByte(')')
 	return builder.String()
 }

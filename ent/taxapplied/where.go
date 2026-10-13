@@ -152,6 +152,23 @@ func TaxBehavior(v types.TaxBehavior) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldTaxBehavior, vc))
 }
 
+// Provider applies equality check predicate on the "provider" field. It's identical to ProviderEQ.
+func Provider(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldProvider, vc))
+}
+
+// TaxTransactionID applies equality check predicate on the "tax_transaction_id" field. It's identical to TaxTransactionIDEQ.
+func TaxTransactionID(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionType applies equality check predicate on the "tax_transaction_type" field. It's identical to TaxTransactionTypeEQ.
+func TaxTransactionType(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxTransactionType, vc))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldEQ(FieldTenantID, v))
@@ -640,6 +657,16 @@ func TaxRateIDHasPrefix(v string) predicate.TaxApplied {
 // TaxRateIDHasSuffix applies the HasSuffix predicate on the "tax_rate_id" field.
 func TaxRateIDHasSuffix(v string) predicate.TaxApplied {
 	return predicate.TaxApplied(sql.FieldHasSuffix(FieldTaxRateID, v))
+}
+
+// TaxRateIDIsNil applies the IsNil predicate on the "tax_rate_id" field.
+func TaxRateIDIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldTaxRateID))
+}
+
+// TaxRateIDNotNil applies the NotNil predicate on the "tax_rate_id" field.
+func TaxRateIDNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldTaxRateID))
 }
 
 // TaxRateIDEqualFold applies the EqualFold predicate on the "tax_rate_id" field.
@@ -1219,6 +1246,279 @@ func TaxBehaviorEqualFold(v types.TaxBehavior) predicate.TaxApplied {
 func TaxBehaviorContainsFold(v types.TaxBehavior) predicate.TaxApplied {
 	vc := string(v)
 	return predicate.TaxApplied(sql.FieldContainsFold(FieldTaxBehavior, vc))
+}
+
+// ProviderEQ applies the EQ predicate on the "provider" field.
+func ProviderEQ(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldProvider, vc))
+}
+
+// ProviderNEQ applies the NEQ predicate on the "provider" field.
+func ProviderNEQ(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldNEQ(FieldProvider, vc))
+}
+
+// ProviderIn applies the In predicate on the "provider" field.
+func ProviderIn(vs ...types.TaxProvider) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldIn(FieldProvider, v...))
+}
+
+// ProviderNotIn applies the NotIn predicate on the "provider" field.
+func ProviderNotIn(vs ...types.TaxProvider) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldNotIn(FieldProvider, v...))
+}
+
+// ProviderGT applies the GT predicate on the "provider" field.
+func ProviderGT(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGT(FieldProvider, vc))
+}
+
+// ProviderGTE applies the GTE predicate on the "provider" field.
+func ProviderGTE(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGTE(FieldProvider, vc))
+}
+
+// ProviderLT applies the LT predicate on the "provider" field.
+func ProviderLT(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLT(FieldProvider, vc))
+}
+
+// ProviderLTE applies the LTE predicate on the "provider" field.
+func ProviderLTE(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLTE(FieldProvider, vc))
+}
+
+// ProviderContains applies the Contains predicate on the "provider" field.
+func ProviderContains(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContains(FieldProvider, vc))
+}
+
+// ProviderHasPrefix applies the HasPrefix predicate on the "provider" field.
+func ProviderHasPrefix(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasPrefix(FieldProvider, vc))
+}
+
+// ProviderHasSuffix applies the HasSuffix predicate on the "provider" field.
+func ProviderHasSuffix(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasSuffix(FieldProvider, vc))
+}
+
+// ProviderIsNil applies the IsNil predicate on the "provider" field.
+func ProviderIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldProvider))
+}
+
+// ProviderNotNil applies the NotNil predicate on the "provider" field.
+func ProviderNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldProvider))
+}
+
+// ProviderEqualFold applies the EqualFold predicate on the "provider" field.
+func ProviderEqualFold(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEqualFold(FieldProvider, vc))
+}
+
+// ProviderContainsFold applies the ContainsFold predicate on the "provider" field.
+func ProviderContainsFold(v types.TaxProvider) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContainsFold(FieldProvider, vc))
+}
+
+// TaxTransactionIDEQ applies the EQ predicate on the "tax_transaction_id" field.
+func TaxTransactionIDEQ(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDNEQ applies the NEQ predicate on the "tax_transaction_id" field.
+func TaxTransactionIDNEQ(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNEQ(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDIn applies the In predicate on the "tax_transaction_id" field.
+func TaxTransactionIDIn(vs ...string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIn(FieldTaxTransactionID, vs...))
+}
+
+// TaxTransactionIDNotIn applies the NotIn predicate on the "tax_transaction_id" field.
+func TaxTransactionIDNotIn(vs ...string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotIn(FieldTaxTransactionID, vs...))
+}
+
+// TaxTransactionIDGT applies the GT predicate on the "tax_transaction_id" field.
+func TaxTransactionIDGT(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldGT(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDGTE applies the GTE predicate on the "tax_transaction_id" field.
+func TaxTransactionIDGTE(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldGTE(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDLT applies the LT predicate on the "tax_transaction_id" field.
+func TaxTransactionIDLT(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldLT(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDLTE applies the LTE predicate on the "tax_transaction_id" field.
+func TaxTransactionIDLTE(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldLTE(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDContains applies the Contains predicate on the "tax_transaction_id" field.
+func TaxTransactionIDContains(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldContains(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDHasPrefix applies the HasPrefix predicate on the "tax_transaction_id" field.
+func TaxTransactionIDHasPrefix(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldHasPrefix(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDHasSuffix applies the HasSuffix predicate on the "tax_transaction_id" field.
+func TaxTransactionIDHasSuffix(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldHasSuffix(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDIsNil applies the IsNil predicate on the "tax_transaction_id" field.
+func TaxTransactionIDIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldTaxTransactionID))
+}
+
+// TaxTransactionIDNotNil applies the NotNil predicate on the "tax_transaction_id" field.
+func TaxTransactionIDNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldTaxTransactionID))
+}
+
+// TaxTransactionIDEqualFold applies the EqualFold predicate on the "tax_transaction_id" field.
+func TaxTransactionIDEqualFold(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldEqualFold(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionIDContainsFold applies the ContainsFold predicate on the "tax_transaction_id" field.
+func TaxTransactionIDContainsFold(v string) predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldContainsFold(FieldTaxTransactionID, v))
+}
+
+// TaxTransactionTypeEQ applies the EQ predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeEQ(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEQ(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeNEQ applies the NEQ predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeNEQ(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldNEQ(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeIn applies the In predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeIn(vs ...types.TaxTransactionType) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldIn(FieldTaxTransactionType, v...))
+}
+
+// TaxTransactionTypeNotIn applies the NotIn predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeNotIn(vs ...types.TaxTransactionType) predicate.TaxApplied {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.TaxApplied(sql.FieldNotIn(FieldTaxTransactionType, v...))
+}
+
+// TaxTransactionTypeGT applies the GT predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeGT(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGT(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeGTE applies the GTE predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeGTE(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldGTE(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeLT applies the LT predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeLT(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLT(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeLTE applies the LTE predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeLTE(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldLTE(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeContains applies the Contains predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeContains(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContains(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeHasPrefix applies the HasPrefix predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeHasPrefix(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasPrefix(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeHasSuffix applies the HasSuffix predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeHasSuffix(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldHasSuffix(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeIsNil applies the IsNil predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldTaxTransactionType))
+}
+
+// TaxTransactionTypeNotNil applies the NotNil predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldTaxTransactionType))
+}
+
+// TaxTransactionTypeEqualFold applies the EqualFold predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeEqualFold(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldEqualFold(FieldTaxTransactionType, vc))
+}
+
+// TaxTransactionTypeContainsFold applies the ContainsFold predicate on the "tax_transaction_type" field.
+func TaxTransactionTypeContainsFold(v types.TaxTransactionType) predicate.TaxApplied {
+	vc := string(v)
+	return predicate.TaxApplied(sql.FieldContainsFold(FieldTaxTransactionType, vc))
+}
+
+// ExternalTaxDetailsIsNil applies the IsNil predicate on the "external_tax_details" field.
+func ExternalTaxDetailsIsNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldIsNull(FieldExternalTaxDetails))
+}
+
+// ExternalTaxDetailsNotNil applies the NotNil predicate on the "external_tax_details" field.
+func ExternalTaxDetailsNotNil() predicate.TaxApplied {
+	return predicate.TaxApplied(sql.FieldNotNull(FieldExternalTaxDetails))
 }
 
 // And groups predicates with the AND operator between them.

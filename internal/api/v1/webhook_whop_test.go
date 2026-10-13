@@ -120,6 +120,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 		nil, // subscriptionService
 		nil, // entityIntegrationMappingService
 		nil, // checkoutSessionService
+		nil, // refundService
 		nil, // db
 		nil, // webhookService
 	)

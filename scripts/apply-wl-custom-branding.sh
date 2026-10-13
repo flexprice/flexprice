@@ -6,7 +6,7 @@
 # embed hardcoded Flexprice names that this script replaces with WL values.
 #
 # Run order in CI:
-#   generate-wl-configs.sh → make sdk-all → apply-wl-custom-branding.sh → verify-sdk-builds.sh
+#   generate-wl-configs.sh → make sdk-all → apply-wl-custom-branding.sh → verify-sdk-builds.sh → make ts-sdk-check
 #
 # Reads from environment (set by the 'Parse and export client config' step):
 #   WL_SDK_CLASS_NAME, WL_GO_MODULE_PATH, WL_GO_PACKAGE_NAME,

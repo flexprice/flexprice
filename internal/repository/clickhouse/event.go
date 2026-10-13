@@ -140,8 +140,11 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 	eventsBatches := lo.Chunk(events, 100)
 
 	for _, eventsBatch := range eventsBatches {
+		batchCtx, cancel := context.WithTimeout(ctx, insertTimeout)
+		defer cancel()
+
 		// Prepare batch statement
-		batch, err := r.store.GetConn().PrepareBatch(ctx, `
+		batch, err := r.store.GetConn().PrepareBatch(batchCtx, `
 		INSERT INTO events (
 			id, external_customer_id, customer_id, tenant_id, event_name, timestamp, source, properties, environment_id
 		)
@@ -855,138 +858,6 @@ func (r *EventRepository) FindUnprocessedEvents(ctx context.Context, params *eve
 	return eventsList, nil
 }
 
-// FindUnprocessedEvents finds events that haven't been processed yet
-// Uses keyset pagination for better performance with large datasets
-func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
-	span := StartRepositorySpan(ctx, "event", "find_unprocessed_events", map[string]interface{}{
-		"batch_size":           params.BatchSize,
-		"external_customer_id": params.ExternalCustomerID,
-	})
-	defer FinishSpan(span)
-
-	// Use ANTI JOIN for better performance with ClickHouse
-	// This avoids the need for subqueries in the WHERE clause
-	// Also using the primary key ORDER BY for efficiency
-	query := `
-		SELECT 
-			e.id, e.external_customer_id, e.customer_id, e.tenant_id, 
-			e.event_name, e.timestamp, e.source, e.properties, 
-			e.environment_id, e.ingested_at
-		FROM events e
-		ANTI JOIN (
-			SELECT id, tenant_id, environment_id
-			FROM feature_usage
-			WHERE tenant_id = ?
-			AND environment_id = ?
-		) AS p
-		ON e.id = p.id AND e.tenant_id = p.tenant_id AND e.environment_id = p.environment_id
-		WHERE e.tenant_id = ?
-		AND e.environment_id = ?
-	`
-
-	args := []interface{}{
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-	}
-
-	// Add the last seen ID and timestamp for keyset pagination if provided
-	if params.LastID != "" && !params.LastTimestamp.IsZero() {
-		// Use keyset pagination for better performance
-		query += " AND (e.timestamp, e.id) < (?, ?)"
-		args = append(args, params.LastTimestamp, params.LastID)
-	}
-
-	// Add filters if provided
-	if params.ExternalCustomerID != "" {
-		query += " AND e.external_customer_id = ?"
-		args = append(args, params.ExternalCustomerID)
-	}
-
-	if params.EventName != "" {
-		query += " AND e.event_name = ?"
-		args = append(args, params.EventName)
-	}
-
-	if !params.StartTime.IsZero() {
-		query += " AND e.timestamp >= ?"
-		args = append(args, params.StartTime)
-	}
-
-	if !params.EndTime.IsZero() {
-		query += " AND e.timestamp <= ?"
-		args = append(args, params.EndTime)
-	}
-
-	// Add sorting for consistent keyset pagination
-	// Using the same fields we're filtering on for the keyset
-	query += " ORDER BY e.timestamp DESC, e.id DESC"
-
-	// Add batch size limit
-	if params.BatchSize > 0 {
-		query += " LIMIT ?"
-		args = append(args, params.BatchSize)
-	} else {
-		// Default to a reasonable batch size to avoid huge result sets
-		query += " LIMIT 100"
-	}
-
-	r.logger.Debug(ctx, "executing find unprocessed events query",
-		"query", query,
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
-		"batch_size", params.BatchSize,
-	)
-
-	// Execute the query
-	rows, err := r.store.GetConn().Query(ctx, query, args...)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to query unprocessed events").
-			Mark(ierr.ErrDatabase)
-	}
-	defer rows.Close()
-
-	var eventsList []*events.Event
-	for rows.Next() {
-		var event events.Event
-		var propertiesJSON string
-
-		err := rows.Scan(
-			&event.ID,
-			&event.ExternalCustomerID,
-			&event.CustomerID,
-			&event.TenantID,
-			&event.EventName,
-			&event.Timestamp,
-			&event.Source,
-			&propertiesJSON,
-			&event.EnvironmentID,
-			&event.IngestedAt,
-		)
-		if err != nil {
-			SetSpanError(span, err)
-			return nil, ierr.WithError(err).
-				WithHint("Failed to scan event").
-				Mark(ierr.ErrDatabase)
-		}
-
-		if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
-			SetSpanError(span, err)
-			return nil, ierr.WithError(err).
-				WithHint("Failed to unmarshal event properties").
-				Mark(ierr.ErrValidation)
-		}
-
-		eventsList = append(eventsList, &event)
-	}
-
-	SetSpanSuccess(span)
-	return eventsList, nil
-}
-
 // GetDistinctEventNames retrieves distinct event names for the given external customer IDs
 func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error) {
 	if len(externalCustomerIDs) == 0 {
@@ -1276,6 +1147,107 @@ func (r *EventRepository) GetEventByID(ctx context.Context, eventID string) (*ev
 
 	SetSpanSuccess(span)
 	return &event, nil
+}
+
+func (r *EventRepository) ListEventsByID(ctx context.Context, externalCustomerID, eventID string, window events.TimeRange, limit int) ([]*events.Event, error) {
+	span := StartRepositorySpan(ctx, "event", "list_events_by_id", map[string]interface{}{
+		"external_customer_id": externalCustomerID,
+		"event_id":             eventID,
+		"start_time":           window.Start,
+		"end_time":             window.End,
+		"limit":                limit,
+	})
+	defer FinishSpan(span)
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	query := `
+		SELECT
+			id,
+			external_customer_id,
+			customer_id,
+			tenant_id,
+			event_name,
+			timestamp,
+			source,
+			properties,
+			environment_id,
+			ingested_at
+		FROM events
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND external_customer_id = ?
+		AND timestamp >= ?
+		AND timestamp < ?
+		AND id = ?
+		ORDER BY ingested_at DESC
+		LIMIT ?
+		SETTINGS max_memory_usage = 96636764160
+	`
+	args := []interface{}{
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		externalCustomerID,
+		window.Start,
+		window.End,
+		eventID,
+		limit,
+	}
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list events by ID").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": eventID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	out := make([]*events.Event, 0)
+	for rows.Next() {
+		var event events.Event
+		var propertiesJSON string
+		if err := rows.Scan(
+			&event.ID,
+			&event.ExternalCustomerID,
+			&event.CustomerID,
+			&event.TenantID,
+			&event.EventName,
+			&event.Timestamp,
+			&event.Source,
+			&propertiesJSON,
+			&event.EnvironmentID,
+			&event.IngestedAt,
+		); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan event").
+				Mark(ierr.ErrDatabase)
+		}
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to unmarshal event properties").
+					Mark(ierr.ErrValidation)
+			}
+		}
+		out = append(out, &event)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate events").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return out, nil
 }
 
 // GetDistinctEventNames retrieves distinct event names for the given external customer IDs

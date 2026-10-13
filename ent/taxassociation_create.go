@@ -22,223 +22,223 @@ type TaxAssociationCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (tac *TaxAssociationCreate) SetTenantID(s string) *TaxAssociationCreate {
-	tac.mutation.SetTenantID(s)
-	return tac
+func (_c *TaxAssociationCreate) SetTenantID(v string) *TaxAssociationCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (tac *TaxAssociationCreate) SetStatus(s string) *TaxAssociationCreate {
-	tac.mutation.SetStatus(s)
-	return tac
+func (_c *TaxAssociationCreate) SetStatus(v string) *TaxAssociationCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableStatus(s *string) *TaxAssociationCreate {
-	if s != nil {
-		tac.SetStatus(*s)
+func (_c *TaxAssociationCreate) SetNillableStatus(v *string) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (tac *TaxAssociationCreate) SetCreatedAt(t time.Time) *TaxAssociationCreate {
-	tac.mutation.SetCreatedAt(t)
-	return tac
+func (_c *TaxAssociationCreate) SetCreatedAt(v time.Time) *TaxAssociationCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableCreatedAt(t *time.Time) *TaxAssociationCreate {
-	if t != nil {
-		tac.SetCreatedAt(*t)
+func (_c *TaxAssociationCreate) SetNillableCreatedAt(v *time.Time) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (tac *TaxAssociationCreate) SetUpdatedAt(t time.Time) *TaxAssociationCreate {
-	tac.mutation.SetUpdatedAt(t)
-	return tac
+func (_c *TaxAssociationCreate) SetUpdatedAt(v time.Time) *TaxAssociationCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableUpdatedAt(t *time.Time) *TaxAssociationCreate {
-	if t != nil {
-		tac.SetUpdatedAt(*t)
+func (_c *TaxAssociationCreate) SetNillableUpdatedAt(v *time.Time) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (tac *TaxAssociationCreate) SetCreatedBy(s string) *TaxAssociationCreate {
-	tac.mutation.SetCreatedBy(s)
-	return tac
+func (_c *TaxAssociationCreate) SetCreatedBy(v string) *TaxAssociationCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableCreatedBy(s *string) *TaxAssociationCreate {
-	if s != nil {
-		tac.SetCreatedBy(*s)
+func (_c *TaxAssociationCreate) SetNillableCreatedBy(v *string) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (tac *TaxAssociationCreate) SetUpdatedBy(s string) *TaxAssociationCreate {
-	tac.mutation.SetUpdatedBy(s)
-	return tac
+func (_c *TaxAssociationCreate) SetUpdatedBy(v string) *TaxAssociationCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableUpdatedBy(s *string) *TaxAssociationCreate {
-	if s != nil {
-		tac.SetUpdatedBy(*s)
+func (_c *TaxAssociationCreate) SetNillableUpdatedBy(v *string) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (tac *TaxAssociationCreate) SetEnvironmentID(s string) *TaxAssociationCreate {
-	tac.mutation.SetEnvironmentID(s)
-	return tac
+func (_c *TaxAssociationCreate) SetEnvironmentID(v string) *TaxAssociationCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableEnvironmentID(s *string) *TaxAssociationCreate {
-	if s != nil {
-		tac.SetEnvironmentID(*s)
+func (_c *TaxAssociationCreate) SetNillableEnvironmentID(v *string) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetTaxRateID sets the "tax_rate_id" field.
-func (tac *TaxAssociationCreate) SetTaxRateID(s string) *TaxAssociationCreate {
-	tac.mutation.SetTaxRateID(s)
-	return tac
+func (_c *TaxAssociationCreate) SetTaxRateID(v string) *TaxAssociationCreate {
+	_c.mutation.SetTaxRateID(v)
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (tac *TaxAssociationCreate) SetEntityType(s string) *TaxAssociationCreate {
-	tac.mutation.SetEntityType(s)
-	return tac
+func (_c *TaxAssociationCreate) SetEntityType(v string) *TaxAssociationCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (tac *TaxAssociationCreate) SetEntityID(s string) *TaxAssociationCreate {
-	tac.mutation.SetEntityID(s)
-	return tac
+func (_c *TaxAssociationCreate) SetEntityID(v string) *TaxAssociationCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetPriority sets the "priority" field.
-func (tac *TaxAssociationCreate) SetPriority(i int) *TaxAssociationCreate {
-	tac.mutation.SetPriority(i)
-	return tac
+func (_c *TaxAssociationCreate) SetPriority(v int) *TaxAssociationCreate {
+	_c.mutation.SetPriority(v)
+	return _c
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillablePriority(i *int) *TaxAssociationCreate {
-	if i != nil {
-		tac.SetPriority(*i)
+func (_c *TaxAssociationCreate) SetNillablePriority(v *int) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetPriority(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetAutoApply sets the "auto_apply" field.
-func (tac *TaxAssociationCreate) SetAutoApply(b bool) *TaxAssociationCreate {
-	tac.mutation.SetAutoApply(b)
-	return tac
+func (_c *TaxAssociationCreate) SetAutoApply(v bool) *TaxAssociationCreate {
+	_c.mutation.SetAutoApply(v)
+	return _c
 }
 
 // SetNillableAutoApply sets the "auto_apply" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableAutoApply(b *bool) *TaxAssociationCreate {
-	if b != nil {
-		tac.SetAutoApply(*b)
+func (_c *TaxAssociationCreate) SetNillableAutoApply(v *bool) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetAutoApply(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetCurrency sets the "currency" field.
-func (tac *TaxAssociationCreate) SetCurrency(s string) *TaxAssociationCreate {
-	tac.mutation.SetCurrency(s)
-	return tac
+func (_c *TaxAssociationCreate) SetCurrency(v string) *TaxAssociationCreate {
+	_c.mutation.SetCurrency(v)
+	return _c
 }
 
 // SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableCurrency(s *string) *TaxAssociationCreate {
-	if s != nil {
-		tac.SetCurrency(*s)
+func (_c *TaxAssociationCreate) SetNillableCurrency(v *string) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetCurrency(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (tac *TaxAssociationCreate) SetMetadata(m map[string]string) *TaxAssociationCreate {
-	tac.mutation.SetMetadata(m)
-	return tac
+func (_c *TaxAssociationCreate) SetMetadata(v map[string]string) *TaxAssociationCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (tac *TaxAssociationCreate) SetStartDate(t time.Time) *TaxAssociationCreate {
-	tac.mutation.SetStartDate(t)
-	return tac
+func (_c *TaxAssociationCreate) SetStartDate(v time.Time) *TaxAssociationCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableStartDate(t *time.Time) *TaxAssociationCreate {
-	if t != nil {
-		tac.SetStartDate(*t)
+func (_c *TaxAssociationCreate) SetNillableStartDate(v *time.Time) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (tac *TaxAssociationCreate) SetEndDate(t time.Time) *TaxAssociationCreate {
-	tac.mutation.SetEndDate(t)
-	return tac
+func (_c *TaxAssociationCreate) SetEndDate(v time.Time) *TaxAssociationCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableEndDate(t *time.Time) *TaxAssociationCreate {
-	if t != nil {
-		tac.SetEndDate(*t)
+func (_c *TaxAssociationCreate) SetNillableEndDate(v *time.Time) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetTaxBehavior sets the "tax_behavior" field.
-func (tac *TaxAssociationCreate) SetTaxBehavior(tb types.TaxBehavior) *TaxAssociationCreate {
-	tac.mutation.SetTaxBehavior(tb)
-	return tac
+func (_c *TaxAssociationCreate) SetTaxBehavior(v types.TaxBehavior) *TaxAssociationCreate {
+	_c.mutation.SetTaxBehavior(v)
+	return _c
 }
 
 // SetNillableTaxBehavior sets the "tax_behavior" field if the given value is not nil.
-func (tac *TaxAssociationCreate) SetNillableTaxBehavior(tb *types.TaxBehavior) *TaxAssociationCreate {
-	if tb != nil {
-		tac.SetTaxBehavior(*tb)
+func (_c *TaxAssociationCreate) SetNillableTaxBehavior(v *types.TaxBehavior) *TaxAssociationCreate {
+	if v != nil {
+		_c.SetTaxBehavior(*v)
 	}
-	return tac
+	return _c
 }
 
 // SetID sets the "id" field.
-func (tac *TaxAssociationCreate) SetID(s string) *TaxAssociationCreate {
-	tac.mutation.SetID(s)
-	return tac
+func (_c *TaxAssociationCreate) SetID(v string) *TaxAssociationCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the TaxAssociationMutation object of the builder.
-func (tac *TaxAssociationCreate) Mutation() *TaxAssociationMutation {
-	return tac.mutation
+func (_c *TaxAssociationCreate) Mutation() *TaxAssociationMutation {
+	return _c.mutation
 }
 
 // Save creates the TaxAssociation in the database.
-func (tac *TaxAssociationCreate) Save(ctx context.Context) (*TaxAssociation, error) {
-	tac.defaults()
-	return withHooks(ctx, tac.sqlSave, tac.mutation, tac.hooks)
+func (_c *TaxAssociationCreate) Save(ctx context.Context) (*TaxAssociation, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (tac *TaxAssociationCreate) SaveX(ctx context.Context) *TaxAssociation {
-	v, err := tac.Save(ctx)
+func (_c *TaxAssociationCreate) SaveX(ctx context.Context) *TaxAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -246,101 +246,101 @@ func (tac *TaxAssociationCreate) SaveX(ctx context.Context) *TaxAssociation {
 }
 
 // Exec executes the query.
-func (tac *TaxAssociationCreate) Exec(ctx context.Context) error {
-	_, err := tac.Save(ctx)
+func (_c *TaxAssociationCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tac *TaxAssociationCreate) ExecX(ctx context.Context) {
-	if err := tac.Exec(ctx); err != nil {
+func (_c *TaxAssociationCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (tac *TaxAssociationCreate) defaults() {
-	if _, ok := tac.mutation.Status(); !ok {
+func (_c *TaxAssociationCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := taxassociation.DefaultStatus
-		tac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := tac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := taxassociation.DefaultCreatedAt()
-		tac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := tac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := taxassociation.DefaultUpdatedAt()
-		tac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := tac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := taxassociation.DefaultEnvironmentID
-		tac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := tac.mutation.Priority(); !ok {
+	if _, ok := _c.mutation.Priority(); !ok {
 		v := taxassociation.DefaultPriority
-		tac.mutation.SetPriority(v)
+		_c.mutation.SetPriority(v)
 	}
-	if _, ok := tac.mutation.AutoApply(); !ok {
+	if _, ok := _c.mutation.AutoApply(); !ok {
 		v := taxassociation.DefaultAutoApply
-		tac.mutation.SetAutoApply(v)
+		_c.mutation.SetAutoApply(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (tac *TaxAssociationCreate) check() error {
-	if _, ok := tac.mutation.TenantID(); !ok {
+func (_c *TaxAssociationCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "TaxAssociation.tenant_id"`)}
 	}
-	if v, ok := tac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := taxassociation.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := tac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "TaxAssociation.status"`)}
 	}
-	if _, ok := tac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TaxAssociation.created_at"`)}
 	}
-	if _, ok := tac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "TaxAssociation.updated_at"`)}
 	}
-	if _, ok := tac.mutation.TaxRateID(); !ok {
+	if _, ok := _c.mutation.TaxRateID(); !ok {
 		return &ValidationError{Name: "tax_rate_id", err: errors.New(`ent: missing required field "TaxAssociation.tax_rate_id"`)}
 	}
-	if v, ok := tac.mutation.TaxRateID(); ok {
+	if v, ok := _c.mutation.TaxRateID(); ok {
 		if err := taxassociation.TaxRateIDValidator(v); err != nil {
 			return &ValidationError{Name: "tax_rate_id", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tax_rate_id": %w`, err)}
 		}
 	}
-	if _, ok := tac.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "TaxAssociation.entity_type"`)}
 	}
-	if v, ok := tac.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := taxassociation.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := tac.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "TaxAssociation.entity_id"`)}
 	}
-	if v, ok := tac.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := taxassociation.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.entity_id": %w`, err)}
 		}
 	}
-	if _, ok := tac.mutation.Priority(); !ok {
+	if _, ok := _c.mutation.Priority(); !ok {
 		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "TaxAssociation.priority"`)}
 	}
-	if _, ok := tac.mutation.AutoApply(); !ok {
+	if _, ok := _c.mutation.AutoApply(); !ok {
 		return &ValidationError{Name: "auto_apply", err: errors.New(`ent: missing required field "TaxAssociation.auto_apply"`)}
 	}
-	if v, ok := tac.mutation.Currency(); ok {
+	if v, ok := _c.mutation.Currency(); ok {
 		if err := taxassociation.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.currency": %w`, err)}
 		}
 	}
-	if v, ok := tac.mutation.TaxBehavior(); ok {
+	if v, ok := _c.mutation.TaxBehavior(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "tax_behavior", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.tax_behavior": %w`, err)}
 		}
@@ -348,12 +348,12 @@ func (tac *TaxAssociationCreate) check() error {
 	return nil
 }
 
-func (tac *TaxAssociationCreate) sqlSave(ctx context.Context) (*TaxAssociation, error) {
-	if err := tac.check(); err != nil {
+func (_c *TaxAssociationCreate) sqlSave(ctx context.Context) (*TaxAssociation, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := tac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, tac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -366,85 +366,85 @@ func (tac *TaxAssociationCreate) sqlSave(ctx context.Context) (*TaxAssociation, 
 			return nil, fmt.Errorf("unexpected TaxAssociation.ID type: %T", _spec.ID.Value)
 		}
 	}
-	tac.mutation.id = &_node.ID
-	tac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (tac *TaxAssociationCreate) createSpec() (*TaxAssociation, *sqlgraph.CreateSpec) {
+func (_c *TaxAssociationCreate) createSpec() (*TaxAssociation, *sqlgraph.CreateSpec) {
 	var (
-		_node = &TaxAssociation{config: tac.config}
+		_node = &TaxAssociation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(taxassociation.Table, sqlgraph.NewFieldSpec(taxassociation.FieldID, field.TypeString))
 	)
-	if id, ok := tac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := tac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(taxassociation.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := tac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(taxassociation.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := tac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(taxassociation.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := tac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(taxassociation.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := tac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(taxassociation.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := tac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(taxassociation.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := tac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(taxassociation.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := tac.mutation.TaxRateID(); ok {
+	if value, ok := _c.mutation.TaxRateID(); ok {
 		_spec.SetField(taxassociation.FieldTaxRateID, field.TypeString, value)
 		_node.TaxRateID = value
 	}
-	if value, ok := tac.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(taxassociation.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := tac.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(taxassociation.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := tac.mutation.Priority(); ok {
+	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(taxassociation.FieldPriority, field.TypeInt, value)
 		_node.Priority = value
 	}
-	if value, ok := tac.mutation.AutoApply(); ok {
+	if value, ok := _c.mutation.AutoApply(); ok {
 		_spec.SetField(taxassociation.FieldAutoApply, field.TypeBool, value)
 		_node.AutoApply = value
 	}
-	if value, ok := tac.mutation.Currency(); ok {
+	if value, ok := _c.mutation.Currency(); ok {
 		_spec.SetField(taxassociation.FieldCurrency, field.TypeString, value)
 		_node.Currency = value
 	}
-	if value, ok := tac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(taxassociation.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := tac.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(taxassociation.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = &value
 	}
-	if value, ok := tac.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := tac.mutation.TaxBehavior(); ok {
+	if value, ok := _c.mutation.TaxBehavior(); ok {
 		_spec.SetField(taxassociation.FieldTaxBehavior, field.TypeString, value)
 		_node.TaxBehavior = &value
 	}
@@ -459,16 +459,16 @@ type TaxAssociationCreateBulk struct {
 }
 
 // Save creates the TaxAssociation entities in the database.
-func (tacb *TaxAssociationCreateBulk) Save(ctx context.Context) ([]*TaxAssociation, error) {
-	if tacb.err != nil {
-		return nil, tacb.err
+func (_c *TaxAssociationCreateBulk) Save(ctx context.Context) ([]*TaxAssociation, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(tacb.builders))
-	nodes := make([]*TaxAssociation, len(tacb.builders))
-	mutators := make([]Mutator, len(tacb.builders))
-	for i := range tacb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*TaxAssociation, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := tacb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*TaxAssociationMutation)
@@ -482,11 +482,11 @@ func (tacb *TaxAssociationCreateBulk) Save(ctx context.Context) ([]*TaxAssociati
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, tacb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, tacb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -506,7 +506,7 @@ func (tacb *TaxAssociationCreateBulk) Save(ctx context.Context) ([]*TaxAssociati
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, tacb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -514,8 +514,8 @@ func (tacb *TaxAssociationCreateBulk) Save(ctx context.Context) ([]*TaxAssociati
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (tacb *TaxAssociationCreateBulk) SaveX(ctx context.Context) []*TaxAssociation {
-	v, err := tacb.Save(ctx)
+func (_c *TaxAssociationCreateBulk) SaveX(ctx context.Context) []*TaxAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -523,14 +523,14 @@ func (tacb *TaxAssociationCreateBulk) SaveX(ctx context.Context) []*TaxAssociati
 }
 
 // Exec executes the query.
-func (tacb *TaxAssociationCreateBulk) Exec(ctx context.Context) error {
-	_, err := tacb.Save(ctx)
+func (_c *TaxAssociationCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (tacb *TaxAssociationCreateBulk) ExecX(ctx context.Context) {
-	if err := tacb.Exec(ctx); err != nil {
+func (_c *TaxAssociationCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -1,0 +1,60 @@
+# GCE Application Load Balancer ingress, as CI exercises it.
+#
+# Shapes mirror the real deployments; names are placeholders.
+
+api:
+  enabled: true
+
+secrets:
+  existingSecret: flexprice-secrets
+
+ingress:
+  # Retired nginx path. Kept false so only the gce block renders.
+  enabled: false
+  type: gce
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+  gce:
+    globalStaticIpName: example-api-lb
+    ownService: true
+    allowHttp: false
+
+    tls:
+      mode: certManager
+      clusterIssuer: letsencrypt-prod
+      certificateName: api-example-com-gce
+      secretName: api-example-com-gce-tls
+
+    # pathType Prefix is required. The chart default of /* with
+    # ImplementationSpecific emits only the wildcard, so a bare
+    # /health on the UI host would not route.
+    hosts:
+      - host: api.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+      - host: app.example.com
+        paths:
+          - path: /v1
+            pathType: Prefix
+          - path: /health
+            pathType: Prefix
+          - path: /
+            pathType: Prefix
+            service: flexprice-frontend
+            port: 3000
+
+    backendConfig:
+      timeoutSec: 60
+      cloudArmor:
+        securityPolicyName: example-api-policy
+      logging:
+        enable: true
+        sampleRate: 0.1
+
+    frontendConfig:
+      sslPolicy: example-api-tls12

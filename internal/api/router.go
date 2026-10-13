@@ -33,11 +33,13 @@ type Handlers struct {
 	Subscription             *v1.SubscriptionHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
 	SubscriptionModification *v1.SubscriptionModificationHandler
+	InvoiceModification      *v1.InvoiceModificationHandler
 	SubscriptionSchedule     *v1.SubscriptionScheduleHandler
 	Wallet                   *v1.WalletHandler
 	Tenant                   *v1.TenantHandler
 	Invoice                  *v1.InvoiceHandler
 	Feature                  *v1.FeatureHandler
+	Activity                 *v1.ActivityHandler
 	Entitlement              *v1.EntitlementHandler
 	CreditGrant              *v1.CreditGrantHandler
 	Payment                  *v1.PaymentHandler
@@ -46,7 +48,9 @@ type Handlers struct {
 	Costsheet                *v1.CostsheetHandler
 	RevenueAnalytics         *v1.RevenueAnalyticsHandler
 	CreditNote               *v1.CreditNoteHandler
+	Refund                   *v1.RefundHandler
 	Tax                      *v1.TaxHandler
+	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
@@ -64,6 +68,7 @@ type Handlers struct {
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
 	CheckoutSession          *v1.CheckoutSessionHandler
+	Analytics                *v1.AnalyticsHandler
 
 	// Enterprise handlers
 	SAML *saml.Handler
@@ -97,6 +102,7 @@ func NewRouter(
 	// Add our custom middleware in order
 	router.Use(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
+		middleware.RequestMetaMiddleware,     // Client IP and user agent for activity entries
 		middleware.DBWriterPinMiddleware,     // Per-request read-your-writes pin for DB routing
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
@@ -211,7 +217,6 @@ func NewRouter(
 			events.POST("/usage", handlers.Events.GetUsage)
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
-			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
 			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
@@ -224,6 +229,15 @@ func NewRouter(
 			meterUsage.POST("/query", handlers.MeterUsage.QueryUsage)
 			meterUsage.POST("/analytics", handlers.MeterUsage.GetAnalytics)
 			meterUsage.POST("/detailed-analytics", handlers.MeterUsage.GetDetailedAnalytics)
+		}
+
+		// Analytics query + view endpoints
+		analytics := v1Private.Group("/analytics")
+		{
+			analytics.POST("/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.Query)
+			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
+			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
+			analytics.POST("/views/:id/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryView)
 		}
 
 		meters := v1Private.Group("/meters")
@@ -284,6 +298,7 @@ func NewRouter(
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
 			customer.GET("/:id/invoices/summary", handlers.Invoice.GetCustomerInvoiceSummary)
+			customer.GET("/:id/payment-methods", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentMethods)
 			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation. Minting a session token is an
@@ -423,6 +438,7 @@ func NewRouter(
 			invoices.GET("", handlers.Invoice.ListInvoices)
 			invoices.GET("/:id", handlers.Invoice.GetInvoice)
 			invoices.PUT("/:id", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.UpdateInvoice)
+			invoices.POST("/:id/modify/execute", write(types.EntityInvoice, types.ActionWrite), handlers.InvoiceModification.Execute)
 			invoices.POST("/:id/finalize", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.FinalizeInvoice)
 			invoices.POST("/:id/compute", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.ComputeInvoice)
 			invoices.POST("/:id/void", write(types.EntityInvoice, types.ActionWrite), handlers.Invoice.VoidInvoice)
@@ -448,10 +464,19 @@ func NewRouter(
 			feature.POST("/:id/clone", write(types.EntityFeature, types.ActionWrite), handlers.Feature.CloneFeature)
 		}
 
+		if cfg.Activity.Enabled {
+			activityRoutes := v1Private.Group("/activity")
+			{
+				activityRoutes.POST("", read(types.EntityActivity, types.ActionRead), handlers.Activity.ListActivity)
+				activityRoutes.GET("/:id", read(types.EntityActivity, types.ActionRead), handlers.Activity.GetActivity)
+			}
+		}
+
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
 			checkoutSessions.POST("", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Create)
 			checkoutSessions.GET("/:id", handlers.CheckoutSession.Get)
+			checkoutSessions.POST("/:id/cancel", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Cancel)
 			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)
 		}
 
@@ -522,6 +547,17 @@ func NewRouter(
 			taxRates.DELETE("/:id", write(types.EntityTax, types.ActionWrite), handlers.Tax.DeleteTaxRate)
 		}
 
+		// FX rate routes. /resolve and /search are registered before /:id so the
+		// param route does not capture them.
+		fxRates := v1Private.Group("/forex")
+		{
+			fxRates.POST("", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.CreateFXRate)
+			fxRates.POST("/query", handlers.FXRate.QueryFXRates)
+			fxRates.GET("/:id", handlers.FXRate.GetFXRate)
+			fxRates.PUT("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.UpdateFXRate)
+			fxRates.DELETE("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.DeleteFXRate)
+		}
+
 		taxAssociations := tax.Group("/associations")
 		{
 			taxAssociations.POST("", write(types.EntityTax, types.ActionWrite), handlers.Tax.CreateTaxAssociation)
@@ -579,9 +615,18 @@ func NewRouter(
 		}
 
 		// Credit note routes
+		refunds := v1Private.Group("/refunds")
+		{
+			refunds.GET("", handlers.Refund.ListRefunds)
+			refunds.GET("/:id", handlers.Refund.GetRefund)
+			refunds.POST("/:id/retry", write(types.EntityPayment, types.ActionWrite), handlers.Refund.RetryRefund)
+		}
+
 		creditNotes := v1Private.Group("/creditnotes")
 		{
 			creditNotes.POST("", write(types.EntityCreditNote, types.ActionWrite), handlers.CreditNote.CreateCreditNote)
+			// Quotes the tax a credit would carry and writes nothing, so it reads like a GET.
+			creditNotes.POST("/preview", handlers.CreditNote.PreviewCreditNote)
 			creditNotes.GET("", handlers.CreditNote.ListCreditNotes)
 			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
 			creditNotes.POST("/:id/void", write(types.EntityCreditNote, types.ActionWrite), handlers.CreditNote.VoidCreditNote)
@@ -660,7 +705,7 @@ func NewRouter(
 	// The session token carries the tenant, so the portal is subject to the same
 	// tenant suspension rules as the rest of the API. Without this a suspended
 	// tenant's customers could keep mutating data through the portal.
-	
+
 	// No RBAC middleware: the portal authenticates with a session token, which
 	// carries no API-key role, so any permission check here denies every caller.
 	// The session token is itself the authorization — it names the one customer
@@ -715,7 +760,7 @@ func NewRouter(
 
 	// Public webhook endpoints (no authentication required)
 	webhooks := v1Public.Group("/webhooks")
-	webhooks.Use(middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
+	webhooks.Use(middleware.WebhookActorMiddleware, middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
 	{
 		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)

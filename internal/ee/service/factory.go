@@ -3,10 +3,12 @@ package service
 import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
+	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
+	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -24,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -33,6 +36,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/domain/refund"
+	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -48,6 +53,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -63,11 +69,11 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger          *logger.Logger
-	Config          *config.Configuration
-	DB              postgres.IClient
-	PDFGenerator    pdf.Generator
-	TracingSvc      *tracing.Service
+	Logger        *logger.Logger
+	Config        *config.Configuration
+	DB            postgres.IClient
+	PDFGenerator  pdf.Generator
+	TracingSvc    *tracing.Service
 	InMemoryCache cache.InMemoryCache
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
@@ -76,7 +82,6 @@ type ServiceParams struct {
 	AuthRepo                     auth.Repository
 	UserRepo                     user.Repository
 	EventRepo                    events.Repository
-	CostSheetUsageRepo           events.CostSheetUsageRepository
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
@@ -97,6 +102,7 @@ type ServiceParams struct {
 	EntitlementRepo              entitlement.Repository
 	EntitlementGrantRepo         entitlementgrant.Repository
 	PaymentRepo                  payment.Repository
+	RefundRepo                   refund.Repository
 	SecretRepo                   secret.Repository
 	EnvironmentRepo              environment.Repository
 	TaskRepo                     task.Repository
@@ -106,6 +112,7 @@ type ServiceParams struct {
 	CreditNoteLineItemRepo       creditnote.CreditNoteLineItemRepository
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	TaxRateRepo                  taxrate.Repository
+	FXRateRepo                   fxrate.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	CouponRepo                   coupon.Repository
@@ -124,6 +131,9 @@ type ServiceParams struct {
 	PlanPriceSyncRepo            planpricesync.Repository
 	WorkflowExecutionRepo        workflowexecution.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
+	AnalyticsViewRepo            domainAnalytics.Repository
+	RevenueFactRepo              revenuefact.Repository
+	ActivityRepo                 domainActivity.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -149,6 +159,12 @@ type ServiceParams struct {
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
 	WebhookPubSub            pubsub.PubSub
+
+	// RevenueFacts is the revenue_facts service the invoice hooks call after
+	// finalize/void. Implemented by internal/ee/service/revenue and injected
+	// in main — a plain constructor here would import that package back into
+	// this one. Nil skips the hooks (facts not wired in this deployment).
+	RevenueFacts interfaces.RevenueService
 }
 
 // Common service params
@@ -164,7 +180,6 @@ func NewServiceParams(
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
-	costSheetUsageRepo events.CostSheetUsageRepository,
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
@@ -186,6 +201,7 @@ func NewServiceParams(
 	entitlementRepo entitlement.Repository,
 	entitlementGrantRepo entitlementgrant.Repository,
 	paymentRepo payment.Repository,
+	refundRepo refund.Repository,
 	secretRepo secret.Repository,
 	environmentRepo environment.Repository,
 	creditGrantRepo creditgrant.Repository,
@@ -196,6 +212,7 @@ func NewServiceParams(
 	costSheetRepo costsheet.Repository,
 	taxAppliedRepo taxapplied.Repository,
 	taxRateRepo taxrate.Repository,
+	fxRateRepo fxrate.Repository,
 	couponRepo coupon.Repository,
 	couponAssociationRepo coupon_association.Repository,
 	couponApplicationRepo coupon_application.Repository,
@@ -221,6 +238,9 @@ func NewServiceParams(
 	checkoutSessionRepo domainCheckout.Repository,
 	usageRecordRepo usagerecord.Repository,
 	encryptionService security.EncryptionService,
+	analyticsViewRepo domainAnalytics.Repository,
+	revenueFactRepo revenuefact.Repository,
+	activityRepo domainActivity.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -234,7 +254,6 @@ func NewServiceParams(
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
-		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
@@ -255,6 +274,7 @@ func NewServiceParams(
 		EntitlementRepo:              entitlementRepo,
 		EntitlementGrantRepo:         entitlementGrantRepo,
 		PaymentRepo:                  paymentRepo,
+		RefundRepo:                   refundRepo,
 		SecretRepo:                   secretRepo,
 		EnvironmentRepo:              environmentRepo,
 		CreditGrantRepo:              creditGrantRepo,
@@ -264,6 +284,7 @@ func NewServiceParams(
 		CreditNoteRepo:               creditNoteRepo,
 		CreditNoteLineItemRepo:       creditNoteLineItemRepo,
 		TaxRateRepo:                  taxRateRepo,
+		FXRateRepo:                   fxRateRepo,
 		TaxAssociationRepo:           taxConfigRepo,
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
@@ -291,5 +312,8 @@ func NewServiceParams(
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,
 		CheckoutSessionRepo:          checkoutSessionRepo,
+		AnalyticsViewRepo:            analyticsViewRepo,
+		RevenueFactRepo:              revenueFactRepo,
+		ActivityRepo:                 activityRepo,
 	}
 }

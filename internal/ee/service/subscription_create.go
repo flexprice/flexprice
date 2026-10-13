@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,7 +23,9 @@ func (s *subscriptionService) startCreateSubscriptionCheckout(
 
 	checkoutParams := &types.CreateSubscriptionParams{SubscriptionID: sub.ID}
 	if err := checkoutParams.Validate(); err != nil {
-		s.archiveDraftCheckoutSubscription(ctx, sub.ID)
+		if archErr := s.archiveDraftCheckoutSubscription(ctx, sub.ID); archErr != nil {
+			s.Logger.Error(ctx, "failed to archive draft checkout subscription", "error", archErr, "subscription_id", sub.ID)
+		}
 		return err
 	}
 
@@ -37,7 +40,9 @@ func (s *subscriptionService) startCreateSubscriptionCheckout(
 		Checkout:     checkout,
 	})
 	if err != nil {
-		s.archiveDraftCheckoutSubscription(ctx, sub.ID)
+		if archErr := s.archiveDraftCheckoutSubscription(ctx, sub.ID); archErr != nil {
+			s.Logger.Error(ctx, "failed to archive draft checkout subscription", "error", archErr, "subscription_id", sub.ID)
+		}
 		return err
 	}
 
@@ -85,7 +90,7 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 
 	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		if err := s.SubRepo.Update(ctx, sub); err != nil {
+		if err := s.SubRepo.Update(activity.WithAction(ctx, sub.ID, activity.SubscriptionActivated), sub); err != nil {
 			return err
 		}
 	}
@@ -101,78 +106,53 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 	return nil
 }
 
-func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Context, subscriptionID string) {
+func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Context, subscriptionID string) error {
 	if subscriptionID == "" {
-		return
+		return nil
 	}
 
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to load subscription for checkout cleanup",
-			"error", err,
-			"subscription_id", subscriptionID,
-		)
-		return
+		return err
 	}
 
 	if sub.SubscriptionStatus != types.SubscriptionStatusDraft {
-		s.Logger.Info(ctx, "checkout subscription is no longer draft, skipping archival",
-			"subscription_id", subscriptionID,
-			"subscription_status", sub.SubscriptionStatus,
-		)
-		return
+		return ierr.NewError("checkout subscription is no longer draft").
+			WithHint("subscription was already activated").
+			Mark(ierr.ErrAlreadyExists)
 	}
 
-	// Every status: the parent is still draft, so nothing here was ever paid for, whatever
-	// status its children resolved to.
 	children, err := s.childSubscriptions(ctx, subscriptionID)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list children for checkout cleanup, leaving the group intact",
-			"error", err,
-			"subscription_id", subscriptionID,
-		)
-		return
+		return err
 	}
 
 	for _, child := range children {
-		s.archiveDraftSubscriptionDependencies(ctx, child.ID)
+		if err := s.archiveDraftSubscriptionDependencies(ctx, child.ID); err != nil {
+			return err
+		}
 		if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
-			// Dependency archival was attempted for this child just above and
-			// reports failures only through its own logs, so an unknown subset of
-			// them is already gone. This child row survives without them, and the
-			// parent and any remaining children are untouched.
-			s.Logger.Error(ctx, "failed to archive child subscription, group cleanup attempted and may be partial",
-				"error", err,
-				"subscription_id", subscriptionID,
-				"child_subscription_id", child.ID,
-			)
-			return
+			return err
 		}
 	}
 
-	s.archiveDraftSubscriptionDependencies(ctx, subscriptionID)
-
-	if err := s.SubRepo.Delete(ctx, subscriptionID); err != nil {
-		s.Logger.Error(ctx, "failed to archive draft checkout subscription",
-			"error", err,
-			"subscription_id", subscriptionID,
-		)
+	if err := s.archiveDraftSubscriptionDependencies(ctx, subscriptionID); err != nil {
+		return err
 	}
+	return s.SubRepo.Delete(ctx, subscriptionID)
 }
 
-func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.Context, subscriptionID string) {
+func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.Context, subscriptionID string) error {
 	addonFilter := types.NewNoLimitAddonAssociationFilter()
 	addonFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	addonFilter.EntityIDs = []string{subscriptionID}
-	if associations, err := s.AddonAssociationRepo.List(ctx, addonFilter); err != nil {
-		s.Logger.Error(ctx, "failed to list addon associations for draft subscription cleanup",
-			"error", err, "subscription_id", subscriptionID)
-	} else {
-		for _, association := range associations {
-			if err := s.AddonAssociationRepo.Delete(ctx, association.ID); err != nil {
-				s.Logger.Error(ctx, "failed to archive addon association for draft subscription",
-					"error", err, "subscription_id", subscriptionID, "association_id", association.ID)
-			}
+	associations, err := s.AddonAssociationRepo.List(ctx, addonFilter)
+	if err != nil {
+		return err
+	}
+	for _, association := range associations {
+		if err := s.AddonAssociationRepo.Delete(ctx, association.ID); err != nil {
+			return err
 		}
 	}
 
@@ -180,15 +160,13 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 		SubscriptionIDs: []string{subscriptionID},
 	}
-	if associations, err := s.CouponAssociationRepo.List(ctx, couponFilter); err != nil {
-		s.Logger.Error(ctx, "failed to list coupon associations for draft subscription cleanup",
-			"error", err, "subscription_id", subscriptionID)
-	} else {
-		for _, association := range associations {
-			if err := s.CouponAssociationRepo.Delete(ctx, association.ID); err != nil {
-				s.Logger.Error(ctx, "failed to archive coupon association for draft subscription",
-					"error", err, "subscription_id", subscriptionID, "association_id", association.ID)
-			}
+	couponAssociations, err := s.CouponAssociationRepo.List(ctx, couponFilter)
+	if err != nil {
+		return err
+	}
+	for _, association := range couponAssociations {
+		if err := s.CouponAssociationRepo.Delete(ctx, association.ID); err != nil {
+			return err
 		}
 	}
 
@@ -196,29 +174,25 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 	// archiving their grant is the one ordering that could still credit a wallet.
 	applicationFilter := types.NewNoLimitCreditGrantApplicationFilter()
 	applicationFilter.SubscriptionIDs = []string{subscriptionID}
-	if applications, err := s.CreditGrantApplicationRepo.List(ctx, applicationFilter); err != nil {
-		s.Logger.Error(ctx, "failed to list credit grant applications for draft subscription cleanup",
-			"error", err, "subscription_id", subscriptionID)
-	} else {
-		for _, application := range applications {
-			if err := s.CreditGrantApplicationRepo.Delete(ctx, application); err != nil {
-				s.Logger.Error(ctx, "failed to archive credit grant application for draft subscription",
-					"error", err, "subscription_id", subscriptionID, "application_id", application.ID)
-			}
+	applications, err := s.CreditGrantApplicationRepo.List(ctx, applicationFilter)
+	if err != nil {
+		return err
+	}
+	for _, application := range applications {
+		if err := s.CreditGrantApplicationRepo.Delete(ctx, application); err != nil {
+			return err
 		}
 	}
 
 	grantFilter := types.NewNoLimitCreditGrantFilter()
 	grantFilter.SubscriptionIDs = []string{subscriptionID}
-	if grants, err := s.CreditGrantRepo.List(ctx, grantFilter); err != nil {
-		s.Logger.Error(ctx, "failed to list credit grants for draft subscription cleanup",
-			"error", err, "subscription_id", subscriptionID)
-	} else {
-		for _, grant := range grants {
-			if err := s.CreditGrantRepo.Delete(ctx, grant.ID); err != nil {
-				s.Logger.Error(ctx, "failed to archive credit grant for draft subscription",
-					"error", err, "subscription_id", subscriptionID, "credit_grant_id", grant.ID)
-			}
+	grants, err := s.CreditGrantRepo.List(ctx, grantFilter)
+	if err != nil {
+		return err
+	}
+	for _, grant := range grants {
+		if err := s.CreditGrantRepo.Delete(ctx, grant.ID); err != nil {
+			return err
 		}
 	}
 
@@ -227,15 +201,14 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		EntityType:  types.TaxRateEntityTypeSubscription,
 		EntityID:    subscriptionID,
 	}
-	if associations, err := s.TaxAssociationRepo.List(ctx, taxFilter); err != nil {
-		s.Logger.Error(ctx, "failed to list tax associations for draft subscription cleanup",
-			"error", err, "subscription_id", subscriptionID)
-	} else {
-		for _, association := range associations {
-			if err := s.TaxAssociationRepo.Delete(ctx, association); err != nil {
-				s.Logger.Error(ctx, "failed to archive tax association for draft subscription",
-					"error", err, "subscription_id", subscriptionID, "tax_association_id", association.ID)
-			}
+	taxAssociations, err := s.TaxAssociationRepo.List(ctx, taxFilter)
+	if err != nil {
+		return err
+	}
+	for _, association := range taxAssociations {
+		if err := s.TaxAssociationRepo.Delete(ctx, association); err != nil {
+			return err
 		}
 	}
+	return nil
 }

@@ -181,7 +181,7 @@ func newCSVFeatureProcessor(tenantID, environmentID, userID string) (*CSVFeature
 
 // parseCSV parses the CSV file
 func (p *CSVFeatureProcessor) parseCSV(filePath string) ([]CSVFeatureRecord, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G703,G304 -- CLI file path, dev tooling
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}

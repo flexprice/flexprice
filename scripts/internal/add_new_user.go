@@ -129,7 +129,7 @@ func AddNewUserToTenant() error {
 
 	if email == "" || tenantID == "" || password == "" {
 		log, _ := logger.NewLogger(config.GetDefaultConfig())
-		log.Fatalf("Usage: go run scripts/local/main.go -user-email=<email> -tenant-name=<tenant_name> -user-password=<password>")
+		log.Fatalf("Usage: go run scripts/local/main.go -user-email=<email> -tenant-id=<tenant_id> -user-password=<password>")
 		return nil
 	}
 

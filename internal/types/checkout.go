@@ -38,6 +38,24 @@ func (s CheckoutStatus) Validate() error {
 	return nil
 }
 
+// ActiveCheckoutStatuses is the complement of IsTerminal, as a slice because the
+// repository builds SQL predicates from it. The same set is encoded in the partial
+// indexes on checkout_sessions, so adding a status needs a migration too.
+func ActiveCheckoutStatuses() []CheckoutStatus {
+	return []CheckoutStatus{CheckoutStatusInitiated, CheckoutStatusPending}
+}
+
+// IsTerminal reports whether the session has finished. Declared here because the set
+// was otherwise retyped by hand at every call site.
+func (s CheckoutStatus) IsTerminal() bool {
+	switch s {
+	case CheckoutStatusCompleted, CheckoutStatusFailed, CheckoutStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 type CheckoutAction string
 
 const (
@@ -45,6 +63,7 @@ const (
 	CheckoutActionModifySubscription CheckoutAction = "modify_subscription"
 	CheckoutActionWalletTopup        CheckoutAction = "wallet_topup"
 	CheckoutActionAddAddon           CheckoutAction = "add_addon"
+	CheckoutActionPayInvoice         CheckoutAction = "pay_invoice"
 )
 
 func (a CheckoutAction) String() string { return string(a) }
@@ -55,10 +74,11 @@ func (a CheckoutAction) Validate() error {
 		CheckoutActionModifySubscription,
 		CheckoutActionWalletTopup,
 		CheckoutActionAddAddon,
+		CheckoutActionPayInvoice,
 	}
 	if a != "" && !lo.Contains(allowed, a) {
 		return ierr.NewError("invalid checkout action").
-			WithHint("Allowed values: create_subscription, modify_subscription, wallet_topup, add_addon").
+			WithHint("Allowed values: create_subscription, modify_subscription, wallet_topup, add_addon, pay_invoice").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -70,6 +90,7 @@ type CheckoutPaymentProvider string
 const (
 	CheckoutPaymentProviderRazorpay  CheckoutPaymentProvider = "razorpay"
 	CheckoutPaymentProviderChargebee CheckoutPaymentProvider = "chargebee"
+	CheckoutPaymentProviderStripe    CheckoutPaymentProvider = "stripe"
 )
 
 func (p CheckoutPaymentProvider) String() string { return string(p) }
@@ -78,10 +99,11 @@ func (p CheckoutPaymentProvider) Validate() error {
 	allowed := []CheckoutPaymentProvider{
 		CheckoutPaymentProviderRazorpay,
 		CheckoutPaymentProviderChargebee,
+		CheckoutPaymentProviderStripe,
 	}
 	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid checkout payment provider").
-			WithHint("Allowed values: razorpay, chargebee").
+			WithHint("Allowed values: razorpay, chargebee, stripe").
 			WithReportableDetails(map[string]any{"allowed_values": allowed}).
 			Mark(ierr.ErrValidation)
 	}
@@ -95,6 +117,8 @@ func (p CheckoutPaymentProvider) ToPaymentGateway() (PaymentGatewayType, bool) {
 		return PaymentGatewayTypeRazorpay, true
 	case CheckoutPaymentProviderChargebee:
 		return PaymentGatewayTypeChargebee, true
+	case CheckoutPaymentProviderStripe:
+		return PaymentGatewayTypeStripe, true
 	default:
 		return "", false
 	}
@@ -108,23 +132,58 @@ func CheckoutProviderFromGateway(g PaymentGatewayType) (CheckoutPaymentProvider,
 		return CheckoutPaymentProviderRazorpay, true
 	case PaymentGatewayTypeChargebee:
 		return CheckoutPaymentProviderChargebee, true
+	case PaymentGatewayTypeStripe:
+		return CheckoutPaymentProviderStripe, true
 	default:
 		return "", false
 	}
 }
 
-// SessionExpiry returns the default lifetime for a checkout session with this provider.
-func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
+// LinkExpiry is how long the provider-hosted payment object stays payable. Sent to
+// the provider at creation, so the gateway stops accepting payments at a known time.
+func (p CheckoutPaymentProvider) LinkExpiry() time.Duration {
 	switch p {
 	case CheckoutPaymentProviderRazorpay:
-		return 15 * time.Minute
+		// Razorpay's floor is 15m, checked on receipt — asking for exactly 15 arrives
+		// under it. Leave headroom rather than race the boundary.
+		return 20 * time.Minute
 	case CheckoutPaymentProviderChargebee:
-		// Chargebee hosted pages live 5 days and payment_intents 30 min. We pin the
-		// shorter of the two so an abandoned session dies before the intent's fund hold does.
-		return 30 * time.Minute
+		// Chargebee hosted pages live 5 days and payment_intents 30 min, and the adapter
+		// cannot shorten either. Sized so SessionExpiry lands on the 30m intent rather
+		// than past it: an abandoned session must die before the intent's fund hold does.
+		return 25 * time.Minute
+	case CheckoutPaymentProviderStripe:
+		// Stripe rejects an expires_at under 30m, so asking for exactly 30 sits on the
+		// floor and arrives under it. Leave headroom rather than race the boundary.
+		return 35 * time.Minute
 	default:
-		return 30 * time.Minute // Default to 30 minutes
+		return 30 * time.Minute
 	}
+}
+
+// SessionGrace is how long the session outlives the provider link. The gateway must
+// close first: once the link is dead no new payment can start, so this window only
+// covers a payment already in flight. Without it we tear the drafts down under a slow
+// payer and their payment lands on an expired session, where the only outcome is a refund.
+func (p CheckoutPaymentProvider) SessionGrace() time.Duration {
+	return 5 * time.Minute
+}
+
+// SavedMethodSettlement is how long a charge on a saved method can take to settle.
+// Razorpay debits a mandate 24-36h after the pre-debit notice; zero means it settles at once.
+func (p CheckoutPaymentProvider) SavedMethodSettlement() time.Duration {
+	switch p {
+	case CheckoutPaymentProviderRazorpay:
+		return 72 * time.Hour
+	default:
+		return 0
+	}
+}
+
+// SessionExpiry is the link's lifetime plus the grace window, derived from LinkExpiry
+// so the two cannot drift apart.
+func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
+	return p.LinkExpiry() + p.SessionGrace()
 }
 
 type PaymentActionType string
@@ -163,6 +222,7 @@ type CheckoutSessionFilter struct {
 	PaymentProviders   []CheckoutPaymentProvider    `json:"payment_providers,omitempty"`
 	CheckoutStatuses   []CheckoutStatus             `json:"checkout_statuses,omitempty"`
 	ExpiresAtLT        *time.Time                   `json:"expires_at_lt,omitempty"`
+	ExpiresAtGT        *time.Time                   `json:"expires_at_gt,omitempty"`
 	CheckoutInvoiceIDs []string                     `json:"checkout_invoice_ids,omitempty"`
 	CheckoutPaymentIDs []string                     `json:"checkout_payment_ids,omitempty"`
 	Configuration      *CheckoutConfigurationFilter `json:"configuration,omitempty"`

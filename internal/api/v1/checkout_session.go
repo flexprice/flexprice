@@ -59,7 +59,7 @@ func (h *CheckoutSessionHandler) Create(c *gin.Context) {
 // @Router /checkout/sessions/{id} [get]
 func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 	id := c.Param("id")
-	resp, err := h.service.Get(c.Request.Context(), id)
+	resp, err := h.service.GetAndReconcile(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return
@@ -85,4 +85,26 @@ func (h *CheckoutSessionHandler) Delete(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// Cancel godoc
+// @Summary Cancel checkout session
+// @ID cancelCheckoutSession
+// @Tags Checkout
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Checkout session ID"
+// @Success 200 {object} dto.CheckoutSessionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /checkout/sessions/{id}/cancel [post]
+func (h *CheckoutSessionHandler) Cancel(c *gin.Context) {
+	id := c.Param("id")
+	resp, err := h.service.Cancel(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/logger"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/shopspring/decimal"
@@ -90,8 +91,13 @@ func NewSeedEnsure(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *log
 func (s *SeedEnsure) Name() string        { return "seed-ensure" }
 func (s *SeedEnsure) Kind() e2eprobe.Kind { return e2eprobe.KindBootstrap }
 func (s *SeedEnsure) Run(ctx context.Context) error {
+	// Carried from the previous tick so recordTaxedSub can tell a first sighting
+	// of the association from a repeat one; everything else is rebuilt.
+	previous := s.reg.Seeds()
 	seeds := e2eprobe.Seeds{
-		MeterIDs: map[string]string{},
+		MeterIDs:                 map[string]string{},
+		TaxedSubID:               previous.TaxedSubID,
+		TaxAssociationActiveFrom: previous.TaxAssociationActiveFrom,
 	}
 	// Order matters: features first (provides MeterIDs), then customers, plan, prices,
 	// subscriptions (needs plan + customers), wallets (needs customers).
@@ -726,6 +732,21 @@ func (s *SeedEnsure) ensureAlertCanaryCustomer(ctx context.Context) error {
 
 const e2eprobePlanLookupKey = "e2eprobe_plan"
 
+// planPriceQueryFilter lists published PLAN prices for one plan. Always use
+// entity_ids + entity_type — PriceFilter.PlanIds was historically ignored by
+// the server and returned the first page of every published price in the env.
+func planPriceQueryFilter(planID string) types.PriceFilter {
+	published := types.StatusPublished
+	entityType := types.PriceEntityTypePlan
+	limit := int64(1000)
+	return types.PriceFilter{
+		EntityIds:  []string{planID},
+		EntityType: &entityType,
+		Status:     &published,
+		Limit:      &limit,
+	}
+}
+
 // ensurePlan creates a single e2eprobe plan if it doesn't exist.
 func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error {
 	resp, err := s.client.Plans().Query(ctx, types.PlanFilter{
@@ -769,13 +790,8 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 		return nil // no plan, skip
 	}
 	planID := seeds.PlanIDs[0]
-	planEntityType := types.PriceEntityTypePlan
 
-	// Query existing prices for this plan.
-	existResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds:    []string{planID},
-		EntityType: &planEntityType,
-	})
+	existResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
 	}
@@ -1058,11 +1074,12 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 		if err != nil {
 			return e2eprobe.Errorf(map[string]string{"external_customer_id": extID, "plan_id": planID}, "query subs for customer %s: %w", extID, err)
 		}
-		if existResp.ListSubscriptionsResponse != nil && len(existResp.ListSubscriptionsResponse.Items) > 0 {
-			existing := existResp.ListSubscriptionsResponse.Items[0]
-			if existing.ID != nil {
-				seeds.PersistentSubIDs = append(seeds.PersistentSubIDs, *existing.ID)
-			}
+		// Cust #0 also owns the multi-cadence quarterly sub on this same plan, so
+		// Items[0] is not stable across runs. Match the cohort tag instead —
+		// otherwise PersistentSubIDs[0] flips and the tax association lands on a
+		// different sub each tick.
+		if existing := findPersistentCohortSub(existResp); existing != "" {
+			seeds.PersistentSubIDs = append(seeds.PersistentSubIDs, existing)
 			continue
 		}
 
@@ -1087,7 +1104,7 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 			Metadata: map[string]string{
 				"e2eprobe":        "true",
 				"e2eprobe_role":   "seed",
-				"e2eprobe_cohort": "persistent",
+				"e2eprobe_cohort": persistentCohort,
 			},
 		}
 		// Attach shared coupon to persistent cust #1 at sub-create time (the
@@ -1137,6 +1154,39 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 	return nil
 }
 
+// findPersistentCohortSub returns the id of the sub tagged with the persistent
+// cohort. Subs predating the cohort tag carry no metadata, so untagged subs are
+// a fallback, resolved by lowest id — ULIDs sort by creation time, so that is
+// the oldest and the same one on every run. Returning "" for a listing that
+// holds a candidate would make the caller create a duplicate subscription.
+func findPersistentCohortSub(resp *sdkdtos.QuerySubscriptionResponse) string {
+	if resp == nil || resp.ListSubscriptionsResponse == nil {
+		return ""
+	}
+	var untagged []string
+	for _, sub := range resp.ListSubscriptionsResponse.Items {
+		if sub.ID == nil {
+			continue
+		}
+		cohort, ok := sub.Metadata["e2eprobe_cohort"]
+		if ok && cohort == persistentCohort {
+			return *sub.ID
+		}
+		if !ok || cohort == "" {
+			untagged = append(untagged, *sub.ID)
+		}
+	}
+	if len(untagged) == 0 {
+		return ""
+	}
+	sort.Strings(untagged)
+	return untagged[0]
+}
+
+// persistentCohort tags the standard monthly seed sub, distinguishing it from
+// the quarterly multiCadenceCohort sub that shares the customer and the plan.
+const persistentCohort = "persistent"
+
 // multiCadenceCohort tags the quarterly-with-monthly-charges seed sub so
 // ensureMultiCadenceSubscription can find it without name collision against
 // the standard PersistentSub cohort.
@@ -1183,15 +1233,11 @@ func (s *SeedEnsure) ensureMultiCadenceSubscription(
 		}
 	}
 
-	// Fetch every published plan price so we can pass their IDs via
+	// Fetch this plan's published prices so we can pass their IDs via
 	// include_price_ids. Without the opt-in, the plan-attach filter now
 	// defaults to strict-equal cadence (post-PR #2713) and a QUARTERLY sub
 	// against a MONTHLY-only plan returns "no prices found for entity".
-	published := types.StatusPublished
-	pricesResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds: []string{planID},
-		Status:  &published,
-	})
+	pricesResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"step": "multi_cadence_prices_query", "plan_id": planID}, "list plan prices: %w", err)
 	}
@@ -1309,11 +1355,7 @@ func (s *SeedEnsure) ensureSubscriptionPriceSync(ctx context.Context, seeds *e2e
 	}
 	planID := seeds.PlanIDs[0]
 
-	planEntityType := types.PriceEntityTypePlan
-	priceResp, err := s.client.Prices().Query(ctx, types.PriceFilter{
-		PlanIds:    []string{planID},
-		EntityType: &planEntityType,
-	})
+	priceResp, err := s.client.Prices().Query(ctx, planPriceQueryFilter(planID))
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
 	}
@@ -1440,12 +1482,14 @@ func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2
 	if listResp.ListTaxAssociationsResponse != nil {
 		for _, ta := range listResp.ListTaxAssociationsResponse.Items {
 			if out.SharedTaxRateID != "" && ta.TaxRateID != nil && *ta.TaxRateID == out.SharedTaxRateID {
+				recordTaxedSub(out, subID, ta.StartDate)
 				return nil
 			}
 			if ta.TaxRate != nil && ta.TaxRate.Code != nil && *ta.TaxRate.Code == out.SharedTaxRateCode {
 				if out.SharedTaxRateID == "" && ta.TaxRateID != nil {
 					out.SharedTaxRateID = *ta.TaxRateID
 				}
+				recordTaxedSub(out, subID, ta.StartDate)
 				return nil
 			}
 			// Unknown-code, unknown-ID fallback: seed invariant guarantees only
@@ -1453,6 +1497,7 @@ func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2
 			// association wins. Backfill the ID from it.
 			if out.SharedTaxRateID == "" && ta.TaxRateID != nil {
 				out.SharedTaxRateID = *ta.TaxRateID
+				recordTaxedSub(out, subID, ta.StartDate)
 				return nil
 			}
 		}
@@ -1478,10 +1523,33 @@ func (s *SeedEnsure) ensurePersistentTaxAssociation(ctx context.Context, out *e2
 	}
 	// Opportunistically backfill SharedTaxRateID from the association response
 	// so downstream janitor / probe assertions can use the stronger ID match.
-	if out.SharedTaxRateID == "" && createResp.TaxAssociationResponse != nil && createResp.TaxAssociationResponse.TaxRateID != nil {
-		out.SharedTaxRateID = *createResp.TaxAssociationResponse.TaxRateID
+	if createResp.TaxAssociationResponse != nil {
+		if out.SharedTaxRateID == "" && createResp.TaxAssociationResponse.TaxRateID != nil {
+			out.SharedTaxRateID = *createResp.TaxAssociationResponse.TaxRateID
+		}
+		recordTaxedSub(out, subID, createResp.TaxAssociationResponse.StartDate)
 	}
 	return nil
+}
+
+// recordTaxedSub pins the subscription carrying the shared tax association and
+// when it became active. Falls back to now when the server omits start_date, so
+// the probe never treats an unknown activation as "applies to every invoice".
+//
+// That fallback is only taken once per subscription: Run rebuilds Seeds every
+// tick, so re-stamping now on each run would walk the boundary forward forever
+// and silently retire the invariant.
+func recordTaxedSub(out *e2eprobe.Seeds, subID string, startDate *time.Time) {
+	if startDate == nil && out.TaxedSubID == subID && out.TaxAssociationActiveFrom != nil {
+		return
+	}
+	out.TaxedSubID = subID
+	if startDate != nil {
+		out.TaxAssociationActiveFrom = startDate
+		return
+	}
+	now := time.Now().UTC()
+	out.TaxAssociationActiveFrom = &now
 }
 
 // ensureWallets creates and tops up a wallet for the first 3 persistent customers

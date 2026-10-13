@@ -36,9 +36,13 @@ type RazorpayClient interface {
 	// FetchOrdersByReceipt looks up Razorpay orders by receipt field (= FlexPrice invoiceID).
 	// Returns the first matching order or ierr.ErrNotFound if none exist.
 	FetchOrdersByReceipt(ctx context.Context, receipt string) (map[string]interface{}, error)
-	// RefundPayment issues a full refund for a captured payment (POST /v1/payments/{id}/refund).
+	// FetchOrder retrieves an order by ID; the response has no payment id.
+	FetchOrder(ctx context.Context, orderID string) (map[string]interface{}, error)
+	// FetchOrderPayments retrieves the payments made against an order.
+	FetchOrderPayments(ctx context.Context, orderID string) ([]map[string]interface{}, error)
+	// RefundPayment issues a refund for a captured payment (POST /v1/payments/{id}/refund).
 	// amountPaise must be in the smallest currency unit (e.g. paise for INR).
-	RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error)
+	RefundPayment(ctx context.Context, paymentID string, amountPaise int64, idempotencyKey string) (map[string]interface{}, error)
 	// FetchPayment retrieves a payment's current state from Razorpay (GET /v1/payments/{id}),
 	// including its refund state ("refund_status" string: null/"partial"/"full", and
 	// "amount_refunded" int in the smallest currency unit). There is no boolean
@@ -206,11 +210,11 @@ func (c *Client) GetRazorpaySDKClient(ctx context.Context) (*razorpay.Client, *R
 	// Initialize Razorpay SDK client
 	razorpayClient := razorpay.NewClient(config.KeyID, config.SecretKey)
 
-	// Instrument the SDK's HTTP client so outbound Razorpay calls surface in
-	// SigNoz External API Monitoring. We wrap the existing transport in place to
-	// preserve the SDK's configured timeout.
+	// Wrap the SDK's transport in place to keep its timeout. The SDK sends requests without
+	// a context and this client lives for one operation, so bind the caller's ctx.
 	if razorpayClient.Request != nil && razorpayClient.Request.HTTPClient != nil {
-		razorpayClient.Request.HTTPClient.Transport = httpclient.OtelTransport(razorpayClient.Request.HTTPClient.Transport)
+		instrumented := httpclient.ProviderTransport(razorpayClient.Request.HTTPClient.Transport, c.logger, string(types.SecretProviderRazorpay))
+		razorpayClient.Request.HTTPClient.Transport = httpclient.ContextTransport(ctx, instrumented)
 	}
 
 	return razorpayClient, config, nil
@@ -238,6 +242,15 @@ func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, err
 	return conn, nil
 }
 
+func applyCustomerCreateIdempotency(customerData map[string]interface{}) map[string]interface{} {
+	if customerData == nil {
+		customerData = map[string]interface{}{}
+	}
+
+	customerData["fail_existing"] = "0"
+	return customerData
+}
+
 // CreateCustomer creates a customer in Razorpay
 func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]interface{}) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
@@ -248,10 +261,12 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 			Mark(ierr.ErrInternal)
 	}
 
+	customerData = applyCustomerCreateIdempotency(customerData)
+
 	razorpayCustomer, err := razorpayClient.Customer.Create(customerData, nil)
 	if err != nil {
 		c.logger.Error(ctx, "failed to create customer in Razorpay", "error", err)
-		return nil, ierr.NewError("failed to create customer in Razorpay").
+		return nil, ierr.WithError(err).
 			WithHint("Unable to create customer in Razorpay").
 			WithReportableDetails(map[string]interface{}{
 				"error": err.Error(),
@@ -545,22 +560,72 @@ func (c *Client) FetchOrdersByReceipt(ctx context.Context, receipt string) (map[
 	return order, nil
 }
 
-// RefundPayment issues a refund for a captured Razorpay payment. POST
-// /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
-//
-// Sends X-Refund-Idempotency deterministically derived from paymentID (this flow
-// only ever issues one full refund per payment): retrying with the same key
-// returns the original refund instead of creating a duplicate, per
-// https://razorpay.com/docs/api/refunds/normal-refunds-idempotent/. The key must
-// be at least 10 chars of [A-Za-z0-9_-]; "refund_" + paymentID always satisfies
-// that given Razorpay's own payment ID format (e.g. pay_XXXXXXXXXXXXXX).
-func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64) (map[string]interface{}, error) {
+// FetchOrder retrieves an order by ID. The response carries its status
+// ("created" | "attempted" | "paid") but not the payment id — use FetchOrderPayments.
+func (c *Client) FetchOrder(ctx context.Context, orderID string) (map[string]interface{}, error) {
 	rc, err := c.sdkClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	headers := map[string]string{"X-Refund-Idempotency": "refund_" + paymentID}
+	order, err := rc.Order.Fetch(orderID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch Razorpay order", "error", err, "order_id", orderID)
+		return nil, ierr.NewError("failed to fetch order from Razorpay").
+			WithHint("Unable to retrieve order from Razorpay").
+			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return order, nil
+}
+
+// FetchOrderPayments retrieves the payments made against an order, to recover the
+// pay_xxx when a retry took the existing-order branch and never saw it.
+func (c *Client) FetchOrderPayments(ctx context.Context, orderID string) ([]map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := rc.Order.Payments(orderID, nil, nil)
+	if err != nil {
+		c.logger.Error(ctx, "failed to fetch payments for Razorpay order", "error", err, "order_id", orderID)
+		return nil, ierr.NewError("failed to fetch payments for order").
+			WithHint("Unable to retrieve order payments from Razorpay").
+			WithReportableDetails(map[string]interface{}{"order_id": orderID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+
+	items, _ := result["items"].([]interface{})
+	payments := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		if pm, ok := item.(map[string]interface{}); ok {
+			payments = append(payments, pm)
+		}
+	}
+	return payments, nil
+}
+
+// RefundPayment issues a refund for a captured Razorpay payment. POST
+// /v1/payments/{id}/refund — SDK: Payment.Refund(paymentID, amount, data, headers).
+//
+// Sends X-Refund-Idempotency: retrying with the same key returns the original
+// refund instead of creating a duplicate, per
+// https://razorpay.com/docs/api/refunds/normal-refunds-idempotent/. The key must
+// be at least 10 chars of [A-Za-z0-9_-].
+//
+// An empty idempotencyKey falls back to "refund_" + paymentID, which is only safe
+// for callers issuing at most one full refund per payment.
+func (c *Client) RefundPayment(ctx context.Context, paymentID string, amountPaise int64, idempotencyKey string) (map[string]interface{}, error) {
+	rc, err := c.sdkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if idempotencyKey == "" {
+		idempotencyKey = "refund_" + paymentID
+	}
+	headers := map[string]string{"X-Refund-Idempotency": idempotencyKey}
 	result, err := rc.Payment.Refund(paymentID, int(amountPaise), nil, headers)
 	if err != nil {
 		c.logger.Error(ctx, "failed to refund Razorpay payment",

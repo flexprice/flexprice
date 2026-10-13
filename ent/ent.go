@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/alertsettings"
+	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
@@ -34,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -47,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -123,13 +126,14 @@ var (
 )
 
 // checkColumn checks if the column exists in the given table.
-func checkColumn(table, column string) error {
+func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			addon.Table:                    addon.ValidColumn,
 			addonassociation.Table:         addonassociation.ValidColumn,
 			alertlogs.Table:                alertlogs.ValidColumn,
 			alertsettings.Table:            alertsettings.ValidColumn,
+			analyticsview.Table:            analyticsview.ValidColumn,
 			auth.Table:                     auth.ValidColumn,
 			billingsequence.Table:          billingsequence.ValidColumn,
 			checkoutsession.Table:          checkoutsession.ValidColumn,
@@ -147,6 +151,7 @@ func checkColumn(table, column string) error {
 			entitlementgrant.Table:         entitlementgrant.ValidColumn,
 			entityintegrationmapping.Table: entityintegrationmapping.ValidColumn,
 			environment.Table:              environment.ValidColumn,
+			fxrate.Table:                   fxrate.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
 			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
@@ -161,6 +166,7 @@ func checkColumn(table, column string) error {
 			price.Table:                    price.ValidColumn,
 			priceunit.Table:                priceunit.ValidColumn,
 			refund.Table:                   refund.ValidColumn,
+			revenuefact.Table:              revenuefact.ValidColumn,
 			scheduledtask.Table:            scheduledtask.ValidColumn,
 			secret.Table:                   secret.ValidColumn,
 			settings.Table:                 settings.ValidColumn,
@@ -182,7 +188,7 @@ func checkColumn(table, column string) error {
 			workflowexecution.Table:        workflowexecution.ValidColumn,
 		})
 	})
-	return columnCheck(table, column)
+	return columnCheck(t, c)
 }
 
 // Asc applies the given fields in ASC order.

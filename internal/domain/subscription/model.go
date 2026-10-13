@@ -79,9 +79,9 @@ type Subscription struct {
 	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
 
 	// Version is used for optimistic locking
-	Version int `db:"version" json:"version"`
+	Version int `db:"version" json:"version" activity:"drop"`
 
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
+	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the subscription
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
@@ -108,7 +108,7 @@ type Subscription struct {
 	CollectionMethod string `db:"collection_method" json:"collection_method"`
 
 	// GatewayPaymentMethodID is the gateway payment method ID for this subscription
-	GatewayPaymentMethodID *string `db:"gateway_payment_method_id" json:"gateway_payment_method_id,omitempty"`
+	GatewayPaymentMethodID *string `db:"gateway_payment_method_id" json:"gateway_payment_method_id,omitempty" activity:"redact"`
 
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 
@@ -121,6 +121,10 @@ type Subscription struct {
 	Timezone string `json:"timezone"`
 
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
+
+	// LineItemGrouping controls whether a charge shorter than the billing period bills
+	// as one line item per charge period (default) or one per billing period.
+	LineItemGrouping types.LineItemGrouping `db:"line_item_grouping" json:"line_item_grouping"`
 
 	EnableTrueUp bool `json:"enable_true_up"`
 	// InvoicingCustomerID is the customer ID to use for invoicing
@@ -144,7 +148,7 @@ type Subscription struct {
 	// SyncedPriceSequence is the plan-price sequence up to which this
 	// subscription's line items have been reconciled. Bumped by the
 	// plan-price sync after a successful pass.
-	SyncedPriceSequence int64 `db:"synced_price_sequence" json:"synced_price_sequence,omitempty"`
+	SyncedPriceSequence int64 `db:"synced_price_sequence" json:"synced_price_sequence,omitempty" activity:"drop"`
 
 	types.BaseModel
 }
@@ -270,6 +274,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		Phases:               phases,
 		Timezone:             sub.Timezone,
 		ProrationBehavior:    types.ProrationBehavior(sub.ProrationBehavior),
+		LineItemGrouping:     types.LineItemGrouping(sub.LineItemGrouping),
 		EnableTrueUp:         sub.EnableTrueUp,
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,

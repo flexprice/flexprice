@@ -57,6 +57,8 @@ const (
 	WebhookEventTypeCustomerCreated                      WebhookEventType = "customer.created"
 	WebhookEventTypePaymentIntentPaymentFailed           WebhookEventType = "payment_intent.payment_failed"
 	WebhookEventTypeInvoicePaymentPaid                   WebhookEventType = "invoice_payment.paid"
+	WebhookEventTypeInvoicePaid                          WebhookEventType = "invoice.paid"
+	WebhookEventTypeInvoicePaymentFailed                 WebhookEventType = "invoice.payment_failed"
 	WebhookEventTypeSetupIntentSucceeded                 WebhookEventType = "setup_intent.succeeded"
 	WebhookEventTypeProductCreated                       WebhookEventType = "product.created"
 	WebhookEventTypeProductUpdated                       WebhookEventType = "product.updated"

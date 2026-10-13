@@ -77,6 +77,7 @@ func (s *EntitlementQuantityTestSuite) GetContext() context.Context {
 func (s *EntitlementQuantityTestSuite) setupServices() {
 	stores := s.GetStores()
 	params := ServiceParams{
+		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),

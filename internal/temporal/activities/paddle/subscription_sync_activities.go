@@ -54,7 +54,7 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 		if ierr.IsNotFound(err) {
 			return temporal.NewNonRetryableApplicationError(
 				"Paddle connection not configured",
-				"ConnectionNotFound",
+				ierr.ErrConnectionNotFound,
 				err,
 			)
 		}

@@ -25,6 +25,8 @@ const (
 	SettingKeyTenantConfig                SettingKey = "tenant_config"
 	SettingKeyCustomerOnboarding          SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig    SettingKey = "wallet_balance_alert_config"
+	SettingKeySubscriptionAlertConfig     SettingKey = "subscription_alert_config"
+	SettingKeyEntitlementAlertConfig      SettingKey = "entitlement_alert_config"
 	SettingKeyPrepareProcessedEvents      SettingKey = "prepare_processed_events_config"
 	SettingKeyCustomAnalytics             SettingKey = "custom_analytics_config"
 	SettingKeyCustomerPortalConfig        SettingKey = "customer_portal_config"
@@ -34,6 +36,10 @@ const (
 	SettingKeyDraftInvoiceRecomputeConfig SettingKey = "draft_invoice_recompute_config"
 	SettingKeySAMLConfig                  SettingKey = "saml_config"
 	SettingKeyWalletTopupConfig           SettingKey = "wallet_topup_config"
+	SettingKeyCustomCurrencyConfig        SettingKey = "custom_currency_config"
+	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
+	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
+	SettingKeyTaxConfig                   SettingKey = "tax_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -45,6 +51,8 @@ func (s *SettingKey) Validate() error {
 		SettingKeyTenantConfig,
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
+		SettingKeySubscriptionAlertConfig,
+		SettingKeyEntitlementAlertConfig,
 		SettingKeyPrepareProcessedEvents,
 		SettingKeyCustomAnalytics,
 		SettingKeyCustomerPortalConfig,
@@ -54,6 +62,10 @@ func (s *SettingKey) Validate() error {
 		SettingKeyDraftInvoiceRecomputeConfig,
 		SettingKeySAMLConfig,
 		SettingKeyWalletTopupConfig,
+		SettingKeyCustomCurrencyConfig,
+		SettingKeyRevenueAnalyticsConfig,
+		SettingKeyUsageAlertConfig,
+		SettingKeyTaxConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -110,6 +122,12 @@ type TenantConfig struct {
 // Validate implements SettingConfig interface
 func (c TenantConfig) Validate() error {
 	return validator.ValidateRequest(c)
+}
+
+// TenantEnvironment identifies one tenant and environment pair.
+type TenantEnvironment struct {
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
 }
 
 // TenantEnvConfig represents a generic configuration for a specific tenant and environment
@@ -503,6 +521,22 @@ func (c PaymentMandateLimits) Validate() error {
 	return nil
 }
 
+const (
+	UsageAlertConfigFieldScheduleDelaySeconds = "schedule_delay_seconds"
+	UsageAlertConfigFieldStaleAfterSeconds    = "stale_after_seconds"
+)
+
+// UsageAlertConfig overrides the usage alert workflow timing per environment; 0 keeps the deployment default.
+type UsageAlertConfig struct {
+	ScheduleDelaySeconds int `json:"schedule_delay_seconds" validate:"omitempty,min=30,max=3600"`
+	StaleAfterSeconds    int `json:"stale_after_seconds" validate:"omitempty,min=60,max=86400"`
+}
+
+// Validate implements SettingConfig.
+func (c UsageAlertConfig) Validate() error {
+	return validator.ValidateRequest(c)
+}
+
 // DraftInvoiceRecomputeConfig enables daily draft invoice recomputation.
 type DraftInvoiceRecomputeConfig struct {
 	Enabled bool `json:"enabled"`
@@ -510,6 +544,16 @@ type DraftInvoiceRecomputeConfig struct {
 
 // Validate implements SettingConfig.
 func (c DraftInvoiceRecomputeConfig) Validate() error {
+	return nil
+}
+
+// RevenueAnalyticsConfig gates the revenue_facts rollup per tenant/environment.
+type RevenueAnalyticsConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+// Validate implements SettingConfig.
+func (c RevenueAnalyticsConfig) Validate() error {
 	return nil
 }
 
@@ -568,6 +612,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		DueDateDays:                            lo.ToPtr(1),
 		AutoCompletePurchasedCreditTransaction: false,
 		FinalizationDelaySeconds:               7200, // 2 hours
+		IncludeZeroValueLineItems:              false,
 	}
 
 	defaultSubscriptionConfig := SubscriptionConfig{
@@ -599,6 +644,9 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Condition: AlertConditionBelow,
 		},
 		AlertEnabled: lo.ToPtr(false), // Disabled by default, users must explicitly enable
+		// Stated explicitly: this default is the base map that stored tenant values are
+		// overlaid onto, so omitting it leaves the resolved config with no threshold type.
+		AlertThresholdType: AlertThresholdTypeAbsolute,
 	}
 
 	// Defaults for prepare_processed_events_config (plan_id intentionally omitted from action)
@@ -629,6 +677,19 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	customerOnboardingConfigMap := defaultCustomerOnboardingConfig
 
 	defaultWalletBalanceAlertConfigMap, err := utils.ToMap(defaultWalletBalanceAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Subscription and entitlement alert toggles: pure on/off — thresholds live
+	// per-row in alert_settings (subscription) and per-grant (entitlement).
+	defaultSubscriptionAlertConfig := AlertToggleConfig{AlertEnabled: lo.ToPtr(false)}
+	defaultSubscriptionAlertConfigMap, err := utils.ToMap(defaultSubscriptionAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+	defaultEntitlementAlertConfig := AlertToggleConfig{AlertEnabled: lo.ToPtr(false)}
+	defaultEntitlementAlertConfigMap, err := utils.ToMap(defaultEntitlementAlertConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -736,6 +797,19 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		return nil, err
 	}
 
+	defaultRevenueAnalyticsConfig := RevenueAnalyticsConfig{
+		Enabled: false,
+	}
+	defaultRevenueAnalyticsConfigMap, err := utils.ToMap(defaultRevenueAnalyticsConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultUsageAlertConfigMap, err := utils.ToMap(UsageAlertConfig{})
+	if err != nil {
+		return nil, err
+	}
+
 	defaultWalletTopupConfig := WalletTopupConfig{
 		FreeCreditLimitPerTransaction: decimal.Zero,
 		MinTopupAmountPerCurrency: map[string]decimal.Decimal{
@@ -777,6 +851,16 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyWalletBalanceAlertConfig,
 			DefaultValue: defaultWalletBalanceAlertConfigMap,
 			Description:  "Default configuration for wallet balance alert configuration",
+		},
+		SettingKeySubscriptionAlertConfig: {
+			Key:          SettingKeySubscriptionAlertConfig,
+			DefaultValue: defaultSubscriptionAlertConfigMap,
+			Description:  "Tenant-wide toggle for subscription spend alert evaluation (per-row thresholds live in alert_settings)",
+		},
+		SettingKeyEntitlementAlertConfig: {
+			Key:          SettingKeyEntitlementAlertConfig,
+			DefaultValue: defaultEntitlementAlertConfigMap,
+			Description:  "Tenant-wide toggle for entitlement grant alert evaluation (threshold/exhaustion)",
 		},
 		SettingKeyPrepareProcessedEvents: {
 			Key:          SettingKeyPrepareProcessedEvents,
@@ -829,10 +913,35 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultDraftInvoiceRecomputeConfigMap,
 			Description:  "Gates the daily draft-and-compute job: when enabled, every active subscription's current-period draft invoice is created if missing and recomputed once per day (never finalized)",
 		},
+		SettingKeyRevenueAnalyticsConfig: {
+			Key:          SettingKeyRevenueAnalyticsConfig,
+			DefaultValue: defaultRevenueAnalyticsConfigMap,
+			Description:  "Gates the revenue_facts rollup for this tenant/environment: when enabled, the scheduled dirty-scan decomposes its active subscriptions into provisional revenue facts",
+		},
+		SettingKeyUsageAlertConfig: {
+			Key:          SettingKeyUsageAlertConfig,
+			DefaultValue: defaultUsageAlertConfigMap,
+			Description:  "Flexprice-managed tuning of the usage alert workflow (debounce delay, staleness bound); zero uses the deployment default",
+		},
 		SettingKeyWalletTopupConfig: {
 			Key:          SettingKeyWalletTopupConfig,
 			DefaultValue: defaultWalletTopupConfigMap,
 			Description:  "Guard rails for wallet top-up operations (e.g. free credit limit per transaction)",
+		},
+		SettingKeyCustomCurrencyConfig: {
+			Key: SettingKeyCustomCurrencyConfig,
+			DefaultValue: map[string]interface{}{
+				"custom_currencies":     map[string]interface{}{},
+				"default_fiat_currency": "",
+			},
+			Description: "Tenant-defined custom currencies and their fiat conversion factors. Empty means no enforcement",
+		},
+		SettingKeyTaxConfig: {
+			Key: SettingKeyTaxConfig,
+			// Empty, so the zero value decides: no external engine, and tax is calculated
+			// natively exactly as it is for a tenant that has never held this setting.
+			DefaultValue: map[string]interface{}{},
+			Description:  "Which external tax engine calculates tax, if any. Absent or disabled means the native engine",
 		},
 	}, nil
 }
@@ -912,6 +1021,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
+	case SettingKeySubscriptionAlertConfig, SettingKeyEntitlementAlertConfig:
+		config, err := utils.ToStruct[AlertToggleConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	case SettingKeyPrepareProcessedEvents:
 		config, err := utils.ToStruct[PrepareProcessedEventsConfig](value)
 		if err != nil {
@@ -961,6 +1077,20 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
+	case SettingKeyRevenueAnalyticsConfig:
+		config, err := utils.ToStruct[RevenueAnalyticsConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyUsageAlertConfig:
+		config, err := utils.ToStruct[UsageAlertConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	case SettingKeySAMLConfig:
 		// Validated against the raw value rather than the decoded struct: the
 		// rules that matter (certificate parses, identity provider is https,
@@ -969,6 +1099,17 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyWalletTopupConfig:
 		config, err := utils.ToStruct[WalletTopupConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyCustomCurrencyConfig:
+		// Lenient here: a partial update fragment may omit required fields the merged result already has.
+		return nil
+
+	case SettingKeyTaxConfig:
+		config, err := utils.ToStruct[TaxConfig](value)
 		if err != nil {
 			return err
 		}

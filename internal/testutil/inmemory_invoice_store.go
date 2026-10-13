@@ -43,6 +43,15 @@ func (s *InMemoryInvoiceStore) SetLineItemStore(lineItemStore *InMemoryInvoiceLi
 }
 
 // Helper to copy invoice
+// clonePtr returns a pointer to a copy of *p, or nil, so stored records are not aliased.
+func clonePtr[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
 func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 	if inv == nil {
 		return nil
@@ -77,6 +86,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			PeriodEnd:                   item.PeriodEnd,
 			Metadata:                    item.Metadata,
 			CommitmentInfo:              item.CommitmentInfo,
+			CustomCurrency:              item.CustomCurrency,
+			FxConversion:                clonePtr(item.FxConversion),
 			PrepaidCreditsApplied:       item.PrepaidCreditsApplied,
 			LineItemDiscount:            item.LineItemDiscount,
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
@@ -99,6 +110,8 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Currency:                   inv.Currency,
 		AmountDue:                  inv.AmountDue,
 		AmountPaid:                 inv.AmountPaid,
+		CustomCurrency:             inv.CustomCurrency,
+		FxConversion:               clonePtr(inv.FxConversion),
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -128,6 +141,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		LastComputedAt:             inv.LastComputedAt,
+		SourceType:                 inv.SourceType,
 		IsManuallyEdited:           inv.IsManuallyEdited,
 		BaseModel:                  inv.BaseModel,
 	}
@@ -271,7 +285,37 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
 	}
-	return s.InMemoryStore.Update(ctx, inv.ID, copyInvoice(inv))
+
+	updated := copyInvoice(inv)
+	// The ent repository never clears custom_currency, so a caller that did not load it
+	// leaves the stored value in place. Match that here or the double hides the bug.
+	if updated.CustomCurrency == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.CustomCurrency = existing.CustomCurrency
+		}
+	}
+	// fx_conversion is frozen at finalize and never cleared; preserve it like custom_currency.
+	if updated.FxConversion == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.FxConversion = existing.FxConversion
+		}
+	}
+	return s.InMemoryStore.Update(ctx, inv.ID, updated)
+}
+
+func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+	inv, err := s.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return ierr.NewError("draft invoice not found").WithHint("Only a draft invoice can have its period moved").Mark(ierr.ErrNotFound)
+	}
+	updated := copyInvoice(inv)
+	updated.PeriodEnd = &periodEnd
+	updated.BillingReason = billingReason
+	updated.IdempotencyKey = &idempotencyKey
+	return s.InMemoryStore.Update(ctx, id, updated)
 }
 
 // Delete marks the invoice and its line items deleted, matching the ent repository, which soft
@@ -292,7 +336,18 @@ func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
+	sortFn := invoiceSortFn
+	if filter != nil && len(filter.Sort) > 0 && filter.Sort[0].Field == "period_end" {
+		desc := filter.Sort[0].Direction == types.SortDirectionDesc
+		sortFn = func(i, j *invoice.Invoice) bool {
+			a, b := lo.FromPtr(i.PeriodEnd), lo.FromPtr(j.PeriodEnd)
+			if desc {
+				return a.After(b)
+			}
+			return a.Before(b)
+		}
+	}
+	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, sortFn)
 }
 
 func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
@@ -493,6 +548,11 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by currency
+	if f.Currency != "" && inv.Currency != f.Currency {
+		return false
+	}
+
 	// Filter by invoice status — mirrors repository default: when no explicit status
 	// filter is set, exclude SKIPPED invoices (zero-dollar drafts with no financial data).
 	if len(f.InvoiceStatus) > 0 {
@@ -530,21 +590,46 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 
 	// Filter by time range
 	if f.TimeRangeFilter != nil && (f.TimeRangeFilter.StartTime != nil || f.TimeRangeFilter.EndTime != nil) {
+		// Matches the ent repository: the invoice's period lies inside the range.
 		if f.TimeRangeFilter.StartTime != nil {
-			if inv.PeriodStart == nil || inv.PeriodStart.After(*f.TimeRangeFilter.StartTime) {
+			if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.TimeRangeFilter.StartTime) {
 				return false
 			}
 		}
 		if f.TimeRangeFilter.EndTime != nil {
-			if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.TimeRangeFilter.EndTime) {
+			if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.TimeRangeFilter.EndTime) {
 				return false
 			}
 		}
 	}
 
 	// Filter by period_start_gte (periodStart >= value)
+	if f.FinalizedAtGTE != nil {
+		if inv.FinalizedAt == nil || inv.FinalizedAt.Before(*f.FinalizedAtGTE) {
+			return false
+		}
+	}
+	if f.VoidedAtGTE != nil {
+		if inv.VoidedAt == nil || inv.VoidedAt.Before(*f.VoidedAtGTE) {
+			return false
+		}
+	}
 	if f.PeriodStartGTE != nil {
 		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+
+	// Filter by period_start_lte (periodStart <= value)
+	if f.PeriodStartLTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.After(*f.PeriodStartLTE) {
+			return false
+		}
+	}
+
+	// Filter by period_end_gte (periodEnd >= value)
+	if f.PeriodEndGTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {
 			return false
 		}
 	}

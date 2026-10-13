@@ -31,8 +31,8 @@ type TaxAssociation struct {
 	// EndDate is the optional date until which this association is active
 	EndDate *time.Time `json:"end_date,omitempty"`
 
-	// TaxBehavior is inclusive or exclusive; null on tenant/customer-level rows,
-	// resolved when copied down to a subscription
+	// TaxBehavior is inclusive or exclusive. Absent means exclusive; inclusive is only
+	// ever set explicitly.
 	TaxBehavior *types.TaxBehavior `json:"tax_behavior,omitempty"`
 
 	// EnvironmentID is the ID of the environment this tax rate config belongs to
@@ -42,6 +42,12 @@ type TaxAssociation struct {
 }
 
 func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
+	// Rows stored without a behavior read back as exclusive.
+	taxBehavior := ent.TaxBehavior
+	if taxBehavior == nil || *taxBehavior == "" {
+		taxBehavior = lo.ToPtr(types.TaxBehaviorExclusive)
+	}
+
 	return &TaxAssociation{
 		ID:            ent.ID,
 		TaxRateID:     ent.TaxRateID,
@@ -54,7 +60,7 @@ func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
 		Metadata:      ent.Metadata,
 		StartDate:     lo.FromPtrOr(ent.StartDate, time.Now().UTC()),
 		EndDate:       ent.EndDate,
-		TaxBehavior:   ent.TaxBehavior,
+		TaxBehavior:   taxBehavior,
 		BaseModel: types.BaseModel{
 			TenantID:  ent.TenantID,
 			Status:    types.Status(ent.Status),

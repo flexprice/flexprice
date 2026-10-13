@@ -94,7 +94,7 @@ func (*CreditNoteLineItem) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the CreditNoteLineItem fields.
-func (cnli *CreditNoteLineItem) assignValues(columns []string, values []any) error {
+func (_m *CreditNoteLineItem) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -104,90 +104,90 @@ func (cnli *CreditNoteLineItem) assignValues(columns []string, values []any) err
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				cnli.ID = value.String
+				_m.ID = value.String
 			}
 		case creditnotelineitem.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				cnli.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case creditnotelineitem.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				cnli.Status = value.String
+				_m.Status = value.String
 			}
 		case creditnotelineitem.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				cnli.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case creditnotelineitem.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				cnli.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case creditnotelineitem.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				cnli.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case creditnotelineitem.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				cnli.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case creditnotelineitem.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				cnli.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case creditnotelineitem.FieldCreditNoteID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field credit_note_id", values[i])
 			} else if value.Valid {
-				cnli.CreditNoteID = value.String
+				_m.CreditNoteID = value.String
 			}
 		case creditnotelineitem.FieldInvoiceLineItemID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_line_item_id", values[i])
 			} else if value.Valid {
-				cnli.InvoiceLineItemID = value.String
+				_m.InvoiceLineItemID = value.String
 			}
 		case creditnotelineitem.FieldDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field display_name", values[i])
 			} else if value.Valid {
-				cnli.DisplayName = value.String
+				_m.DisplayName = value.String
 			}
 		case creditnotelineitem.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value != nil {
-				cnli.Amount = *value
+				_m.Amount = *value
 			}
 		case creditnotelineitem.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field currency", values[i])
 			} else if value.Valid {
-				cnli.Currency = value.String
+				_m.Currency = value.String
 			}
 		case creditnotelineitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &cnli.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
 		default:
-			cnli.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -195,76 +195,76 @@ func (cnli *CreditNoteLineItem) assignValues(columns []string, values []any) err
 
 // Value returns the ent.Value that was dynamically selected and assigned to the CreditNoteLineItem.
 // This includes values selected through modifiers, order, etc.
-func (cnli *CreditNoteLineItem) Value(name string) (ent.Value, error) {
-	return cnli.selectValues.Get(name)
+func (_m *CreditNoteLineItem) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // QueryCreditNote queries the "credit_note" edge of the CreditNoteLineItem entity.
-func (cnli *CreditNoteLineItem) QueryCreditNote() *CreditNoteQuery {
-	return NewCreditNoteLineItemClient(cnli.config).QueryCreditNote(cnli)
+func (_m *CreditNoteLineItem) QueryCreditNote() *CreditNoteQuery {
+	return NewCreditNoteLineItemClient(_m.config).QueryCreditNote(_m)
 }
 
 // Update returns a builder for updating this CreditNoteLineItem.
 // Note that you need to call CreditNoteLineItem.Unwrap() before calling this method if this CreditNoteLineItem
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (cnli *CreditNoteLineItem) Update() *CreditNoteLineItemUpdateOne {
-	return NewCreditNoteLineItemClient(cnli.config).UpdateOne(cnli)
+func (_m *CreditNoteLineItem) Update() *CreditNoteLineItemUpdateOne {
+	return NewCreditNoteLineItemClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the CreditNoteLineItem entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (cnli *CreditNoteLineItem) Unwrap() *CreditNoteLineItem {
-	_tx, ok := cnli.config.driver.(*txDriver)
+func (_m *CreditNoteLineItem) Unwrap() *CreditNoteLineItem {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: CreditNoteLineItem is not a transactional entity")
 	}
-	cnli.config.driver = _tx.drv
-	return cnli
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (cnli *CreditNoteLineItem) String() string {
+func (_m *CreditNoteLineItem) String() string {
 	var builder strings.Builder
 	builder.WriteString("CreditNoteLineItem(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", cnli.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(cnli.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(cnli.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(cnli.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(cnli.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(cnli.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(cnli.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(cnli.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("credit_note_id=")
-	builder.WriteString(cnli.CreditNoteID)
+	builder.WriteString(_m.CreditNoteID)
 	builder.WriteString(", ")
 	builder.WriteString("invoice_line_item_id=")
-	builder.WriteString(cnli.InvoiceLineItemID)
+	builder.WriteString(_m.InvoiceLineItemID)
 	builder.WriteString(", ")
 	builder.WriteString("display_name=")
-	builder.WriteString(cnli.DisplayName)
+	builder.WriteString(_m.DisplayName)
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", cnli.Amount))
+	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
-	builder.WriteString(cnli.Currency)
+	builder.WriteString(_m.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", cnli.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteByte(')')
 	return builder.String()
 }

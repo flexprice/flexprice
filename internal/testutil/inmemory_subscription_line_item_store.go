@@ -181,6 +181,11 @@ func (s *InMemorySubscriptionLineItemStore) Get(ctx context.Context, id string) 
 	return item, nil
 }
 
+// GetForUpdate has no lock to take: the in-memory store already serializes access.
+func (s *InMemorySubscriptionLineItemStore) GetForUpdate(ctx context.Context, id string) (*subscription.SubscriptionLineItem, error) {
+	return s.Get(ctx, id)
+}
+
 // Update updates a subscription line item
 func (s *InMemorySubscriptionLineItemStore) Update(ctx context.Context, item *subscription.SubscriptionLineItem) error {
 	if item == nil {
@@ -219,6 +224,9 @@ func (s *InMemorySubscriptionLineItemStore) BulkTerminate(ctx context.Context, s
 
 	affected := 0
 	for _, item := range items {
+		if !item.StartDate.IsZero() && item.StartDate.After(effectiveDate) {
+			continue
+		}
 		if !item.EndDate.IsZero() && item.EndDate.Before(effectiveDate) {
 			continue
 		}
@@ -295,6 +303,35 @@ func (s *InMemorySubscriptionLineItemStore) List(ctx context.Context, filter *ty
 			Mark(ierr.ErrDatabase)
 	}
 	return items, nil
+}
+
+// SubscriptionIDsWithWindowedCommitment mirrors the ent repository: published
+// line items carrying a windowed commitment, by subscription.
+func (s *InMemorySubscriptionLineItemStore) SubscriptionIDsWithWindowedCommitment(ctx context.Context) ([]string, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.ActiveFilter = false
+	if filter.QueryFilter != nil {
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	}
+
+	items, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := map[string]struct{}{}
+	var ids []string
+	for _, li := range items {
+		if !li.CommitmentWindowed {
+			continue
+		}
+		if _, ok := seen[li.SubscriptionID]; ok {
+			continue
+		}
+		seen[li.SubscriptionID] = struct{}{}
+		ids = append(ids, li.SubscriptionID)
+	}
+	return ids, nil
 }
 
 // GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -27,6 +28,35 @@ const (
 	// in a grouped-invoicing scenario.
 	InvoiceLineItemMetadataKeyChildCustomerID InvoiceLineItemMetadataKey = "child_customer_id"
 )
+
+// InvoiceMetadataKey represents well-known metadata keys on invoices.
+type InvoiceMetadataKey = string
+
+const (
+	// InvoiceMetadataKeyCollapsedInvoiceDisplayName is the customer-facing label to use when a
+	// collector clubs the invoice lines into a single amount due item.
+	InvoiceMetadataKeyCollapsedInvoiceDisplayName InvoiceMetadataKey = "collapsed_invoice_display_name"
+	InvoiceMetadataKeyStripeHostedInvoiceURL      InvoiceMetadataKey = "stripe_hosted_invoice_url"
+)
+
+func CollapsedInvoiceDisplayName(md Metadata) string {
+	if md == nil {
+		return ""
+	}
+	return strings.TrimSpace(md[InvoiceMetadataKeyCollapsedInvoiceDisplayName])
+}
+
+func WithCollapsedInvoiceDisplayName(md Metadata, name string) Metadata {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return md
+	}
+	if md == nil {
+		md = Metadata{}
+	}
+	md[InvoiceMetadataKeyCollapsedInvoiceDisplayName] = name
+	return md
+}
 
 // InvoiceCadence defines when an invoice is generated relative to the billing period
 // ARREAR: Invoice generated at the end of the billing period (after service delivery)
@@ -169,6 +199,29 @@ func (s InvoiceStatus) Validate() error {
 	return nil
 }
 
+// InvoiceSourceType is immutable provenance: how the invoice came into being.
+type InvoiceSourceType string
+
+const (
+	// InvoiceSourceTypeCheckout lets the invoice guards skip the session lookup for
+	// everything a checkout did not create.
+	InvoiceSourceTypeCheckout InvoiceSourceType = "checkout"
+)
+
+func (s InvoiceSourceType) String() string { return string(s) }
+
+func (s InvoiceSourceType) Validate() error {
+	allowed := []InvoiceSourceType{InvoiceSourceTypeCheckout}
+	if s != "" && !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid invoice source type").
+			WithHint("Allowed values: checkout").
+			WithReportableDetails(map[string]any{"allowed_values": allowed}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // InvoiceBillingReason indicates why an invoice was generated. It drives diverging
 // behavior throughout the compute → finalize → payment pipeline — see each constant
 // for which flows it affects.
@@ -295,6 +348,16 @@ func (r InvoiceBillingReason) IsFirstSubscriptionOpenInvoiceReason() bool {
 	}
 }
 
+// IsPaymentGatingAllowedInvoiceReason reports whether this invoice's payment can change subscription status or grants.
+func (r InvoiceBillingReason) IsPaymentGatingAllowedInvoiceReason() bool {
+	return lo.Contains([]InvoiceBillingReason{
+		InvoiceBillingReasonSubscriptionCreate,
+		InvoiceBillingReasonSubscriptionTrialEnd,
+		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonSubscriptionCycle,
+	}, r)
+}
+
 const (
 	// InvoiceDefaultDueDays is the default number of days after invoice creation when payment is due
 	InvoiceDefaultDueDays = 1
@@ -364,6 +427,7 @@ type InvoiceConfig struct {
 	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
+	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
 }
 
 // Validate implements SettingConfig interface
@@ -465,6 +529,11 @@ type InvoiceFilter struct {
 	PeriodEndGTE *time.Time `json:"period_end_gte,omitempty" form:"period_end_gte" validate:"omitempty,time_rfc3339"`
 	// period_end_lte filters invoices with period_end <= value
 	PeriodEndLTE *time.Time `json:"period_end_lte,omitempty" form:"period_end_lte" validate:"omitempty,time_rfc3339"`
+
+	// finalized_at_gte filters invoices finalized at or after the given instant
+	FinalizedAtGTE *time.Time `json:"finalized_at_gte,omitempty" form:"finalized_at_gte" validate:"omitempty,time_rfc3339"`
+	// voided_at_gte filters invoices voided at or after the given instant
+	VoidedAtGTE *time.Time `json:"voided_at_gte,omitempty" form:"voided_at_gte" validate:"omitempty,time_rfc3339"`
 
 	// SkipLineItems if true, will not include line items in the response
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`

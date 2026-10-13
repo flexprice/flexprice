@@ -160,7 +160,7 @@ func (r *paymentMethodRepository) Update(ctx context.Context, pm *domainPaymentM
 		SetStatus(string(pm.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(pm.UpdatedBy).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -206,7 +206,7 @@ func (r *paymentMethodRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetStatus(string(types.StatusDeleted)).
 		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

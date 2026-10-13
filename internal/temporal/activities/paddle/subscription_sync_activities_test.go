@@ -2,6 +2,7 @@ package paddle_test
 
 import (
 	"context"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -137,11 +138,11 @@ func TestSyncSubscriptionToPaddle_NoPaddleConnection(t *testing.T) {
 	err := act.SyncSubscriptionToPaddle(ctx, input)
 	require.Error(t, err)
 
-	// Must be a NonRetryableApplicationError with type "ConnectionNotFound".
+	// Must be a NonRetryableApplicationError with type ierr.ErrConnectionNotFound.
 	var appErr *temporal.ApplicationError
 	require.ErrorAs(t, err, &appErr)
 	assert.True(t, appErr.NonRetryable(), "error must be non-retryable")
-	assert.Equal(t, "ConnectionNotFound", appErr.Type())
+	assert.Equal(t, ierr.ErrConnectionNotFound, appErr.Type())
 }
 
 // TestSyncSubscriptionToPaddle_ValidationError verifies that an invalid input (missing subscription_id)

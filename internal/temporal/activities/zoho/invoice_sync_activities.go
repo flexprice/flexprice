@@ -31,7 +31,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 	zohoIntegration, err := a.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", "ConnectionNotFound", err)
+			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", ierr.ErrConnectionNotFound, err)
 		}
 		a.logger.Error(ctx, "SyncInvoiceToZoho activity failed to get Zoho Books integration",
 			"error", err,
@@ -62,7 +62,7 @@ func (a *InvoiceSyncActivities) MarkZohoBooksInvoicePaid(ctx context.Context, in
 	zohoIntegration, err := a.integrationFactory.GetZohoBooksIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", "ConnectionNotFound", err)
+			return temporal.NewNonRetryableApplicationError("Zoho Books connection not configured", ierr.ErrConnectionNotFound, err)
 		}
 		a.logger.Error(ctx, "MarkZohoBooksInvoicePaid activity failed to get Zoho Books integration",
 			"error", err,

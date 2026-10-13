@@ -32,7 +32,11 @@ type CreditTopupCSV struct {
 	CreditBalanceAfter  string `csv:"credit_balance_after"`  // Decimal as string
 	ReferenceID         string `csv:"reference_id"`
 	TransactionReason   string `csv:"transaction_reason"`
-	CreatedAt           string `csv:"created_at"` // RFC3339 format
+	Credits             string `csv:"credits"`
+	Currency            string `csv:"currency"`
+	InvoiceID           string `csv:"invoice_id"`
+	AmountPaid          string `csv:"amount_paid"` // Empty when the credits were not bought or given free
+	CreatedAt           string `csv:"created_at"`  // RFC3339 format
 }
 
 // NewCreditTopupExporter creates a new credit topup exporter
@@ -151,7 +155,13 @@ func (e *CreditTopupExporter) convertToCSVRecords(topupData []*wallet.CreditTopu
 			CreditBalanceAfter:  topup.CreditBalanceAfter.String(),
 			ReferenceID:         topup.ReferenceID,
 			TransactionReason:   string(topup.TransactionReason),
+			Credits:             topup.Credits.String(),
+			Currency:            topup.Currency,
+			InvoiceID:           topup.InvoiceID,
 			CreatedAt:           topup.CreatedAt.Format(time.RFC3339),
+		}
+		if topup.AmountPaid != nil {
+			record.AmountPaid = topup.AmountPaid.String()
 		}
 
 		records = append(records, record)

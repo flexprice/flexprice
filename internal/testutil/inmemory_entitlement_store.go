@@ -163,6 +163,12 @@ func (s *InMemoryEntitlementStore) Create(ctx context.Context, e *entitlement.En
 	return e, nil
 }
 
+// GetForUpdate is Get here: the in-memory store has no concurrent writers to serialize
+// against, so there is no lock to take.
+func (s *InMemoryEntitlementStore) GetForUpdate(ctx context.Context, id string) (*entitlement.Entitlement, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemoryEntitlementStore) Get(ctx context.Context, id string) (*entitlement.Entitlement, error) {
 	e, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {

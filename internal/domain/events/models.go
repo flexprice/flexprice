@@ -51,25 +51,27 @@ type UsageAnalyticsParams struct {
 
 // DetailedUsageAnalytic represents detailed usage and cost data for analytics
 type DetailedUsageAnalytic struct {
-	FeatureID       string
-	FeatureName     string
-	EventName       string
-	Source          string
-	Sources         []string // List of distinct sources when source is not in group_by
-	MeterID         string
-	PriceID         string // Price ID used for this usage - allows tracking different prices per subscription
-	SubLineItemID   string // Subscription line item ID
-	SubscriptionID  string // Subscription ID
-	AggregationType types.AggregationType
-	Unit            string
-	UnitPlural      string
-	TotalUsage      decimal.Decimal `swaggertype:"string"`
-	TotalCost       decimal.Decimal `swaggertype:"string"` // Always gross (pre-discount); the DTO layer may reinterpret its own same-named TotalCost as final cost after discount
-	Currency        string
-	EventCount      uint64                // Number of events that contributed to this aggregation
-	Properties      map[string]string     // Stores property values for flexible grouping (e.g., org_id -> "org123")
-	CommitmentInfo  *types.CommitmentInfo // Stores commitment info if applicable
-	Points          []UsageAnalyticPoint
+	FeatureID   string
+	FeatureName string
+	EventName   string
+	Source      string
+	Sources     []string // List of distinct sources when source is not in group_by
+	// ExternalCustomerID is populated only when "external_customer_id" is a group_by dimension.
+	ExternalCustomerID string
+	MeterID            string
+	PriceID            string // Price ID used for this usage - allows tracking different prices per subscription
+	SubLineItemID      string // Subscription line item ID
+	SubscriptionID     string // Subscription ID
+	AggregationType    types.AggregationType
+	Unit               string
+	UnitPlural         string
+	TotalUsage         decimal.Decimal `swaggertype:"string"`
+	TotalCost          decimal.Decimal `swaggertype:"string"` // Always gross (pre-discount); the DTO layer may reinterpret its own same-named TotalCost as final cost after discount
+	Currency           string
+	EventCount         uint64                // Number of events that contributed to this aggregation
+	Properties         map[string]string     // Stores property values for flexible grouping (e.g., org_id -> "org123")
+	CommitmentInfo     *types.CommitmentInfo // Stores commitment info if applicable
+	Points             []UsageAnalyticPoint
 
 	// BucketPoints holds the bucket-grain (meter BucketSize) points BEFORE they are
 	// rolled up to the requested window in Points. Each carries its BucketID from the

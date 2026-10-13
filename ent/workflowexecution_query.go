@@ -28,40 +28,40 @@ type WorkflowExecutionQuery struct {
 }
 
 // Where adds a new predicate for the WorkflowExecutionQuery builder.
-func (weq *WorkflowExecutionQuery) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionQuery {
-	weq.predicates = append(weq.predicates, ps...)
-	return weq
+func (_q *WorkflowExecutionQuery) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionQuery {
+	_q.predicates = append(_q.predicates, ps...)
+	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (weq *WorkflowExecutionQuery) Limit(limit int) *WorkflowExecutionQuery {
-	weq.ctx.Limit = &limit
-	return weq
+func (_q *WorkflowExecutionQuery) Limit(limit int) *WorkflowExecutionQuery {
+	_q.ctx.Limit = &limit
+	return _q
 }
 
 // Offset to start from.
-func (weq *WorkflowExecutionQuery) Offset(offset int) *WorkflowExecutionQuery {
-	weq.ctx.Offset = &offset
-	return weq
+func (_q *WorkflowExecutionQuery) Offset(offset int) *WorkflowExecutionQuery {
+	_q.ctx.Offset = &offset
+	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (weq *WorkflowExecutionQuery) Unique(unique bool) *WorkflowExecutionQuery {
-	weq.ctx.Unique = &unique
-	return weq
+func (_q *WorkflowExecutionQuery) Unique(unique bool) *WorkflowExecutionQuery {
+	_q.ctx.Unique = &unique
+	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (weq *WorkflowExecutionQuery) Order(o ...workflowexecution.OrderOption) *WorkflowExecutionQuery {
-	weq.order = append(weq.order, o...)
-	return weq
+func (_q *WorkflowExecutionQuery) Order(o ...workflowexecution.OrderOption) *WorkflowExecutionQuery {
+	_q.order = append(_q.order, o...)
+	return _q
 }
 
 // First returns the first WorkflowExecution entity from the query.
 // Returns a *NotFoundError when no WorkflowExecution was found.
-func (weq *WorkflowExecutionQuery) First(ctx context.Context) (*WorkflowExecution, error) {
-	nodes, err := weq.Limit(1).All(setContextOp(ctx, weq.ctx, ent.OpQueryFirst))
+func (_q *WorkflowExecutionQuery) First(ctx context.Context) (*WorkflowExecution, error) {
+	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (weq *WorkflowExecutionQuery) First(ctx context.Context) (*WorkflowExecutio
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) FirstX(ctx context.Context) *WorkflowExecution {
-	node, err := weq.First(ctx)
+func (_q *WorkflowExecutionQuery) FirstX(ctx context.Context) *WorkflowExecution {
+	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -82,9 +82,9 @@ func (weq *WorkflowExecutionQuery) FirstX(ctx context.Context) *WorkflowExecutio
 
 // FirstID returns the first WorkflowExecution ID from the query.
 // Returns a *NotFoundError when no WorkflowExecution ID was found.
-func (weq *WorkflowExecutionQuery) FirstID(ctx context.Context) (id string, err error) {
+func (_q *WorkflowExecutionQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = weq.Limit(1).IDs(setContextOp(ctx, weq.ctx, ent.OpQueryFirstID)); err != nil {
+	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -95,8 +95,8 @@ func (weq *WorkflowExecutionQuery) FirstID(ctx context.Context) (id string, err 
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) FirstIDX(ctx context.Context) string {
-	id, err := weq.FirstID(ctx)
+func (_q *WorkflowExecutionQuery) FirstIDX(ctx context.Context) string {
+	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
 	}
@@ -106,8 +106,8 @@ func (weq *WorkflowExecutionQuery) FirstIDX(ctx context.Context) string {
 // Only returns a single WorkflowExecution entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one WorkflowExecution entity is found.
 // Returns a *NotFoundError when no WorkflowExecution entities are found.
-func (weq *WorkflowExecutionQuery) Only(ctx context.Context) (*WorkflowExecution, error) {
-	nodes, err := weq.Limit(2).All(setContextOp(ctx, weq.ctx, ent.OpQueryOnly))
+func (_q *WorkflowExecutionQuery) Only(ctx context.Context) (*WorkflowExecution, error) {
+	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +122,8 @@ func (weq *WorkflowExecutionQuery) Only(ctx context.Context) (*WorkflowExecution
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) OnlyX(ctx context.Context) *WorkflowExecution {
-	node, err := weq.Only(ctx)
+func (_q *WorkflowExecutionQuery) OnlyX(ctx context.Context) *WorkflowExecution {
+	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -133,9 +133,9 @@ func (weq *WorkflowExecutionQuery) OnlyX(ctx context.Context) *WorkflowExecution
 // OnlyID is like Only, but returns the only WorkflowExecution ID in the query.
 // Returns a *NotSingularError when more than one WorkflowExecution ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (weq *WorkflowExecutionQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *WorkflowExecutionQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
-	if ids, err = weq.Limit(2).IDs(setContextOp(ctx, weq.ctx, ent.OpQueryOnlyID)); err != nil {
+	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -150,8 +150,8 @@ func (weq *WorkflowExecutionQuery) OnlyID(ctx context.Context) (id string, err e
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) OnlyIDX(ctx context.Context) string {
-	id, err := weq.OnlyID(ctx)
+func (_q *WorkflowExecutionQuery) OnlyIDX(ctx context.Context) string {
+	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -159,18 +159,18 @@ func (weq *WorkflowExecutionQuery) OnlyIDX(ctx context.Context) string {
 }
 
 // All executes the query and returns a list of WorkflowExecutions.
-func (weq *WorkflowExecutionQuery) All(ctx context.Context) ([]*WorkflowExecution, error) {
-	ctx = setContextOp(ctx, weq.ctx, ent.OpQueryAll)
-	if err := weq.prepareQuery(ctx); err != nil {
+func (_q *WorkflowExecutionQuery) All(ctx context.Context) ([]*WorkflowExecution, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
 	qr := querierAll[[]*WorkflowExecution, *WorkflowExecutionQuery]()
-	return withInterceptors[[]*WorkflowExecution](ctx, weq, qr, weq.inters)
+	return withInterceptors[[]*WorkflowExecution](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) AllX(ctx context.Context) []*WorkflowExecution {
-	nodes, err := weq.All(ctx)
+func (_q *WorkflowExecutionQuery) AllX(ctx context.Context) []*WorkflowExecution {
+	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -178,20 +178,20 @@ func (weq *WorkflowExecutionQuery) AllX(ctx context.Context) []*WorkflowExecutio
 }
 
 // IDs executes the query and returns a list of WorkflowExecution IDs.
-func (weq *WorkflowExecutionQuery) IDs(ctx context.Context) (ids []string, err error) {
-	if weq.ctx.Unique == nil && weq.path != nil {
-		weq.Unique(true)
+func (_q *WorkflowExecutionQuery) IDs(ctx context.Context) (ids []string, err error) {
+	if _q.ctx.Unique == nil && _q.path != nil {
+		_q.Unique(true)
 	}
-	ctx = setContextOp(ctx, weq.ctx, ent.OpQueryIDs)
-	if err = weq.Select(workflowexecution.FieldID).Scan(ctx, &ids); err != nil {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
+	if err = _q.Select(workflowexecution.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) IDsX(ctx context.Context) []string {
-	ids, err := weq.IDs(ctx)
+func (_q *WorkflowExecutionQuery) IDsX(ctx context.Context) []string {
+	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -199,17 +199,17 @@ func (weq *WorkflowExecutionQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (weq *WorkflowExecutionQuery) Count(ctx context.Context) (int, error) {
-	ctx = setContextOp(ctx, weq.ctx, ent.OpQueryCount)
-	if err := weq.prepareQuery(ctx); err != nil {
+func (_q *WorkflowExecutionQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
+	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, weq, querierCount[*WorkflowExecutionQuery](), weq.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*WorkflowExecutionQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) CountX(ctx context.Context) int {
-	count, err := weq.Count(ctx)
+func (_q *WorkflowExecutionQuery) CountX(ctx context.Context) int {
+	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -217,9 +217,9 @@ func (weq *WorkflowExecutionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (weq *WorkflowExecutionQuery) Exist(ctx context.Context) (bool, error) {
-	ctx = setContextOp(ctx, weq.ctx, ent.OpQueryExist)
-	switch _, err := weq.FirstID(ctx); {
+func (_q *WorkflowExecutionQuery) Exist(ctx context.Context) (bool, error) {
+	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
+	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -230,8 +230,8 @@ func (weq *WorkflowExecutionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (weq *WorkflowExecutionQuery) ExistX(ctx context.Context) bool {
-	exist, err := weq.Exist(ctx)
+func (_q *WorkflowExecutionQuery) ExistX(ctx context.Context) bool {
+	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -240,19 +240,19 @@ func (weq *WorkflowExecutionQuery) ExistX(ctx context.Context) bool {
 
 // Clone returns a duplicate of the WorkflowExecutionQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (weq *WorkflowExecutionQuery) Clone() *WorkflowExecutionQuery {
-	if weq == nil {
+func (_q *WorkflowExecutionQuery) Clone() *WorkflowExecutionQuery {
+	if _q == nil {
 		return nil
 	}
 	return &WorkflowExecutionQuery{
-		config:     weq.config,
-		ctx:        weq.ctx.Clone(),
-		order:      append([]workflowexecution.OrderOption{}, weq.order...),
-		inters:     append([]Interceptor{}, weq.inters...),
-		predicates: append([]predicate.WorkflowExecution{}, weq.predicates...),
+		config:     _q.config,
+		ctx:        _q.ctx.Clone(),
+		order:      append([]workflowexecution.OrderOption{}, _q.order...),
+		inters:     append([]Interceptor{}, _q.inters...),
+		predicates: append([]predicate.WorkflowExecution{}, _q.predicates...),
 		// clone intermediate query.
-		sql:  weq.sql.Clone(),
-		path: weq.path,
+		sql:  _q.sql.Clone(),
+		path: _q.path,
 	}
 }
 
@@ -270,10 +270,10 @@ func (weq *WorkflowExecutionQuery) Clone() *WorkflowExecutionQuery {
 //		GroupBy(workflowexecution.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (weq *WorkflowExecutionQuery) GroupBy(field string, fields ...string) *WorkflowExecutionGroupBy {
-	weq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &WorkflowExecutionGroupBy{build: weq}
-	grbuild.flds = &weq.ctx.Fields
+func (_q *WorkflowExecutionQuery) GroupBy(field string, fields ...string) *WorkflowExecutionGroupBy {
+	_q.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &WorkflowExecutionGroupBy{build: _q}
+	grbuild.flds = &_q.ctx.Fields
 	grbuild.label = workflowexecution.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
@@ -291,62 +291,62 @@ func (weq *WorkflowExecutionQuery) GroupBy(field string, fields ...string) *Work
 //	client.WorkflowExecution.Query().
 //		Select(workflowexecution.FieldTenantID).
 //		Scan(ctx, &v)
-func (weq *WorkflowExecutionQuery) Select(fields ...string) *WorkflowExecutionSelect {
-	weq.ctx.Fields = append(weq.ctx.Fields, fields...)
-	sbuild := &WorkflowExecutionSelect{WorkflowExecutionQuery: weq}
+func (_q *WorkflowExecutionQuery) Select(fields ...string) *WorkflowExecutionSelect {
+	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
+	sbuild := &WorkflowExecutionSelect{WorkflowExecutionQuery: _q}
 	sbuild.label = workflowexecution.Label
-	sbuild.flds, sbuild.scan = &weq.ctx.Fields, sbuild.Scan
+	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
 // Aggregate returns a WorkflowExecutionSelect configured with the given aggregations.
-func (weq *WorkflowExecutionQuery) Aggregate(fns ...AggregateFunc) *WorkflowExecutionSelect {
-	return weq.Select().Aggregate(fns...)
+func (_q *WorkflowExecutionQuery) Aggregate(fns ...AggregateFunc) *WorkflowExecutionSelect {
+	return _q.Select().Aggregate(fns...)
 }
 
-func (weq *WorkflowExecutionQuery) prepareQuery(ctx context.Context) error {
-	for _, inter := range weq.inters {
+func (_q *WorkflowExecutionQuery) prepareQuery(ctx context.Context) error {
+	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
 		}
 		if trv, ok := inter.(Traverser); ok {
-			if err := trv.Traverse(ctx, weq); err != nil {
+			if err := trv.Traverse(ctx, _q); err != nil {
 				return err
 			}
 		}
 	}
-	for _, f := range weq.ctx.Fields {
+	for _, f := range _q.ctx.Fields {
 		if !workflowexecution.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
-	if weq.path != nil {
-		prev, err := weq.path(ctx)
+	if _q.path != nil {
+		prev, err := _q.path(ctx)
 		if err != nil {
 			return err
 		}
-		weq.sql = prev
+		_q.sql = prev
 	}
 	return nil
 }
 
-func (weq *WorkflowExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*WorkflowExecution, error) {
+func (_q *WorkflowExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*WorkflowExecution, error) {
 	var (
 		nodes = []*WorkflowExecution{}
-		_spec = weq.querySpec()
+		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*WorkflowExecution).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &WorkflowExecution{config: weq.config}
+		node := &WorkflowExecution{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
-	if err := sqlgraph.QueryNodes(ctx, weq.driver, _spec); err != nil {
+	if err := sqlgraph.QueryNodes(ctx, _q.driver, _spec); err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
@@ -355,24 +355,24 @@ func (weq *WorkflowExecutionQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	return nodes, nil
 }
 
-func (weq *WorkflowExecutionQuery) sqlCount(ctx context.Context) (int, error) {
-	_spec := weq.querySpec()
-	_spec.Node.Columns = weq.ctx.Fields
-	if len(weq.ctx.Fields) > 0 {
-		_spec.Unique = weq.ctx.Unique != nil && *weq.ctx.Unique
+func (_q *WorkflowExecutionQuery) sqlCount(ctx context.Context) (int, error) {
+	_spec := _q.querySpec()
+	_spec.Node.Columns = _q.ctx.Fields
+	if len(_q.ctx.Fields) > 0 {
+		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
 	}
-	return sqlgraph.CountNodes(ctx, weq.driver, _spec)
+	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (weq *WorkflowExecutionQuery) querySpec() *sqlgraph.QuerySpec {
+func (_q *WorkflowExecutionQuery) querySpec() *sqlgraph.QuerySpec {
 	_spec := sqlgraph.NewQuerySpec(workflowexecution.Table, workflowexecution.Columns, sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString))
-	_spec.From = weq.sql
-	if unique := weq.ctx.Unique; unique != nil {
+	_spec.From = _q.sql
+	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
-	} else if weq.path != nil {
+	} else if _q.path != nil {
 		_spec.Unique = true
 	}
-	if fields := weq.ctx.Fields; len(fields) > 0 {
+	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, workflowexecution.FieldID)
 		for i := range fields {
@@ -381,20 +381,20 @@ func (weq *WorkflowExecutionQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if ps := weq.predicates; len(ps) > 0 {
+	if ps := _q.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if limit := weq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := weq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
-	if ps := weq.order; len(ps) > 0 {
+	if ps := _q.order; len(ps) > 0 {
 		_spec.Order = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
@@ -404,33 +404,33 @@ func (weq *WorkflowExecutionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (weq *WorkflowExecutionQuery) sqlQuery(ctx context.Context) *sql.Selector {
-	builder := sql.Dialect(weq.driver.Dialect())
+func (_q *WorkflowExecutionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+	builder := sql.Dialect(_q.driver.Dialect())
 	t1 := builder.Table(workflowexecution.Table)
-	columns := weq.ctx.Fields
+	columns := _q.ctx.Fields
 	if len(columns) == 0 {
 		columns = workflowexecution.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
-	if weq.sql != nil {
-		selector = weq.sql
+	if _q.sql != nil {
+		selector = _q.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if weq.ctx.Unique != nil && *weq.ctx.Unique {
+	if _q.ctx.Unique != nil && *_q.ctx.Unique {
 		selector.Distinct()
 	}
-	for _, p := range weq.predicates {
+	for _, p := range _q.predicates {
 		p(selector)
 	}
-	for _, p := range weq.order {
+	for _, p := range _q.order {
 		p(selector)
 	}
-	if offset := weq.ctx.Offset; offset != nil {
+	if offset := _q.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := weq.ctx.Limit; limit != nil {
+	if limit := _q.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -443,41 +443,41 @@ type WorkflowExecutionGroupBy struct {
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (wegb *WorkflowExecutionGroupBy) Aggregate(fns ...AggregateFunc) *WorkflowExecutionGroupBy {
-	wegb.fns = append(wegb.fns, fns...)
-	return wegb
+func (_g *WorkflowExecutionGroupBy) Aggregate(fns ...AggregateFunc) *WorkflowExecutionGroupBy {
+	_g.fns = append(_g.fns, fns...)
+	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (wegb *WorkflowExecutionGroupBy) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, wegb.build.ctx, ent.OpQueryGroupBy)
-	if err := wegb.build.prepareQuery(ctx); err != nil {
+func (_g *WorkflowExecutionGroupBy) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
+	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WorkflowExecutionQuery, *WorkflowExecutionGroupBy](ctx, wegb.build, wegb, wegb.build.inters, v)
+	return scanWithInterceptors[*WorkflowExecutionQuery, *WorkflowExecutionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (wegb *WorkflowExecutionGroupBy) sqlScan(ctx context.Context, root *WorkflowExecutionQuery, v any) error {
+func (_g *WorkflowExecutionGroupBy) sqlScan(ctx context.Context, root *WorkflowExecutionQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
-	aggregation := make([]string, 0, len(wegb.fns))
-	for _, fn := range wegb.fns {
+	aggregation := make([]string, 0, len(_g.fns))
+	for _, fn := range _g.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
 	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(*wegb.flds)+len(wegb.fns))
-		for _, f := range *wegb.flds {
+		columns := make([]string, 0, len(*_g.flds)+len(_g.fns))
+		for _, f := range *_g.flds {
 			columns = append(columns, selector.C(f))
 		}
 		columns = append(columns, aggregation...)
 		selector.Select(columns...)
 	}
-	selector.GroupBy(selector.Columns(*wegb.flds...)...)
+	selector.GroupBy(selector.Columns(*_g.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := wegb.build.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _g.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
@@ -491,27 +491,27 @@ type WorkflowExecutionSelect struct {
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (wes *WorkflowExecutionSelect) Aggregate(fns ...AggregateFunc) *WorkflowExecutionSelect {
-	wes.fns = append(wes.fns, fns...)
-	return wes
+func (_s *WorkflowExecutionSelect) Aggregate(fns ...AggregateFunc) *WorkflowExecutionSelect {
+	_s.fns = append(_s.fns, fns...)
+	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (wes *WorkflowExecutionSelect) Scan(ctx context.Context, v any) error {
-	ctx = setContextOp(ctx, wes.ctx, ent.OpQuerySelect)
-	if err := wes.prepareQuery(ctx); err != nil {
+func (_s *WorkflowExecutionSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
+	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*WorkflowExecutionQuery, *WorkflowExecutionSelect](ctx, wes.WorkflowExecutionQuery, wes, wes.inters, v)
+	return scanWithInterceptors[*WorkflowExecutionQuery, *WorkflowExecutionSelect](ctx, _s.WorkflowExecutionQuery, _s, _s.inters, v)
 }
 
-func (wes *WorkflowExecutionSelect) sqlScan(ctx context.Context, root *WorkflowExecutionQuery, v any) error {
+func (_s *WorkflowExecutionSelect) sqlScan(ctx context.Context, root *WorkflowExecutionQuery, v any) error {
 	selector := root.sqlQuery(ctx)
-	aggregation := make([]string, 0, len(wes.fns))
-	for _, fn := range wes.fns {
+	aggregation := make([]string, 0, len(_s.fns))
+	for _, fn := range _s.fns {
 		aggregation = append(aggregation, fn(selector))
 	}
-	switch n := len(*wes.selector.flds); {
+	switch n := len(*_s.selector.flds); {
 	case n == 0 && len(aggregation) > 0:
 		selector.Select(aggregation...)
 	case n != 0 && len(aggregation) > 0:
@@ -519,7 +519,7 @@ func (wes *WorkflowExecutionSelect) sqlScan(ctx context.Context, root *WorkflowE
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := wes.driver.Query(ctx, query, args, rows); err != nil {
+	if err := _s.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()

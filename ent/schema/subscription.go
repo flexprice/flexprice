@@ -168,6 +168,13 @@ func (Subscription) Fields() []ent.Field {
 			Immutable().
 			Default(string(types.ProrationBehaviorNone)).
 			GoType(types.ProrationBehavior("")),
+		field.String("line_item_grouping").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.LineItemGroupingPerChargePeriod)).
+			GoType(types.LineItemGrouping("")).
+			Comment("Whether a charge shorter than the billing period bills as one line item per charge period or one per billing period"),
 		field.Bool("enable_true_up").
 			Default(false).
 			Comment("Enable Commitment True Up Fee"),
@@ -255,5 +262,10 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence", "id").
 			Annotations(entsql.IndexWhere(
 				"(((status)::text = 'published'::text) AND ((subscription_type)::text = ANY (ARRAY[('standalone'::character varying)::text, ('delegated_invoicing'::character varying)::text, ('parent'::character varying)::text, ('grouped_invoicing'::character varying)::text])))")),
+		// Holds only active payment-gated subscriptions, so the overdue sweep skips everything else.
+		index.Fields("tenant_id", "environment_id").
+			StorageKey("idx_subscriptions_gated_active").
+			Annotations(entsql.IndexWhere(
+				"(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))")),
 	}
 }

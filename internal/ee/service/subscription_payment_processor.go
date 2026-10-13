@@ -79,13 +79,18 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		)
 
 		// If payment succeeded completely, mark subscription as active
-		if result.Success {
+		if result.Success && sub.SubscriptionStatus != types.SubscriptionStatusCancelled {
 			s.Logger.Info(ctx, "manual flow payment successful - activating subscription",
 				"subscription_id", sub.ID,
 				"amount_paid", result.AmountPaid,
 			)
 			sub.SubscriptionStatus = types.SubscriptionStatusActive
 			return s.SubRepo.Update(ctx, sub)
+		}
+
+		// A failed renewal charge marks the subscription incomplete.
+		if !result.Success && types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionCycle {
+			return NewSubscriptionService(*s.ServiceParams).MarkSubscriptionIncomplete(ctx, inv.ID)
 		}
 
 		// If payment failed or partial, keep subscription status unchanged
@@ -100,7 +105,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 	// Handle different collection methods
 	switch types.CollectionMethod(sub.CollectionMethod) {
 	case types.CollectionMethodSendInvoice:
-		return s.handleSendInvoiceMethod(ctx, sub, inv, behavior)
+		return s.handleSendInvoiceMethod(ctx, sub, inv, behavior, flowType)
 	case types.CollectionMethodChargeAutomatically:
 		return s.handleChargeAutomaticallyMethod(ctx, sub, inv, behavior, flowType)
 	default:
@@ -119,6 +124,7 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 	sub *subscription.Subscription,
 	inv *dto.InvoiceResponse,
 	behavior types.PaymentBehavior,
+	flowType types.InvoiceFlowType,
 ) error {
 	switch behavior {
 	case types.PaymentBehaviorDefaultActive:
@@ -132,6 +138,17 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 		return s.SubRepo.Update(ctx, sub)
 
 	case types.PaymentBehaviorDefaultIncomplete:
+		// Nothing owed → active; renewals stay active until the overdue pass flips them at due date.
+		if !inv.AmountRemaining.IsPositive() {
+			if sub.SubscriptionStatus == types.SubscriptionStatusActive || sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+				return nil
+			}
+			sub.SubscriptionStatus = types.SubscriptionStatusActive
+			return s.SubRepo.Update(ctx, sub)
+		}
+		if flowType != types.InvoiceFlowSubscriptionCreation {
+			return nil
+		}
 		// Default incomplete behavior - set subscription to incomplete without payment attempt
 		s.Logger.Info(ctx, "send_invoice with default_incomplete - setting subscription to incomplete",
 			"subscription_id", sub.ID,
@@ -169,6 +186,10 @@ func (s *subscriptionPaymentProcessor) handleChargeAutomaticallyMethod(
 		return s.attemptPaymentAllowIncomplete(ctx, sub, inv, flowType)
 
 	case types.PaymentBehaviorErrorIfIncomplete:
+		// Only creation can surface the error; later flows are async, so treat it as allow_incomplete.
+		if flowType != types.InvoiceFlowSubscriptionCreation {
+			return s.attemptPaymentAllowIncomplete(ctx, sub, inv, flowType)
+		}
 		return s.attemptPaymentErrorIfIncomplete(ctx, sub, inv, flowType)
 
 	case types.PaymentBehaviorDefaultActive:
@@ -198,6 +219,11 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 	flowType types.InvoiceFlowType,
 ) error {
 	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorAllowIncomplete, flowType)
+
+	// Only creation, trial-end and renewal invoices drive status; threshold and cancel invoices don't.
+	if flowType == types.InvoiceFlowCancel || !types.InvoiceBillingReason(inv.BillingReason).IsPaymentGatingAllowedInvoiceReason() {
+		return nil
+	}
 
 	// Get the latest subscription status to check if it was already activated
 	// by payment reconciliation (this can happen when payment succeeds and
@@ -229,7 +255,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 	)
 
 	// Only update if the subscription status needs to change
-	if latestSub.SubscriptionStatus != targetStatus {
+	if latestSub.SubscriptionStatus != targetStatus && latestSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
 		latestSub.SubscriptionStatus = targetStatus
 		err := s.SubRepo.Update(ctx, latestSub)
 		if err != nil {
@@ -733,11 +759,12 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	// Use invoicing customer ID for Stripe operations - payment should use invoicing customer's payment methods
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	customerService := NewCustomerService(*s.ServiceParams)
-	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, invoicingCustomerID, customerService) {
+	if _, err := stripeIntegration.CustomerSvc.GetStripeCustomerID(ctx, invoicingCustomerID, customerService); err != nil {
 		s.Logger.Info(context.Background(), "no Stripe entity mapping found for invoicing customer",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
+			"error", err,
 		)
 		return decimal.Zero
 	}

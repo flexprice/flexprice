@@ -18,6 +18,9 @@ type AlertLogs func(*sql.Selector)
 // AlertSettings is the predicate function for alertsettings builders.
 type AlertSettings func(*sql.Selector)
 
+// AnalyticsView is the predicate function for analyticsview builders.
+type AnalyticsView func(*sql.Selector)
+
 // Auth is the predicate function for auth builders.
 type Auth func(*sql.Selector)
 
@@ -69,6 +72,9 @@ type EntityIntegrationMapping func(*sql.Selector)
 // Environment is the predicate function for environment builders.
 type Environment func(*sql.Selector)
 
+// FXRate is the predicate function for fxrate builders.
+type FXRate func(*sql.Selector)
+
 // Feature is the predicate function for feature builders.
 type Feature func(*sql.Selector)
 
@@ -110,6 +116,9 @@ type PriceUnit func(*sql.Selector)
 
 // Refund is the predicate function for refund builders.
 type Refund func(*sql.Selector)
+
+// RevenueFact is the predicate function for revenuefact builders.
+type RevenueFact func(*sql.Selector)
 
 // ScheduledTask is the predicate function for scheduledtask builders.
 type ScheduledTask func(*sql.Selector)

@@ -68,6 +68,7 @@ func (r *entitlementGrantRepository) Create(ctx context.Context, g *domainGrant.
 		SetScopeEntityID(g.ScopeEntityID).
 		SetMeasure(g.Measure).
 		SetQuota(g.Quota).
+		SetUnlimited(g.Unlimited).
 		SetUsage(g.Usage).
 		SetValidFrom(g.ValidFrom).
 		SetValidTo(g.ValidTo).
@@ -404,6 +405,61 @@ func (r *entitlementGrantRepository) List(ctx context.Context, filter *types.Ent
 			Mark(ierr.ErrDatabase)
 	}
 	return domainGrant.FromEntList(rows), nil
+}
+
+func (r *entitlementGrantRepository) ListLatestWindows(
+	ctx context.Context,
+	filter *types.EntitlementGrantFilter,
+	perSlot int,
+) ([]*domainGrant.EntitlementGrant, error) {
+	span := StartRepositorySpan(ctx, "entitlement_grant", "list_latest_windows", map[string]interface{}{
+		"tenant_id": types.GetTenantID(ctx),
+		"per_slot":  perSlot,
+	})
+	defer FinishSpan(span)
+
+	if filter == nil {
+		filter = types.NewNoLimitEntitlementGrantFilter()
+	}
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+	if perSlot <= 0 {
+		return nil, nil
+	}
+
+	// The slots first, so the per-slot reads below are each a plain index lookup.
+	configIDs, err := applyEntitlementGrantFilter(r.scoped(ctx), filter).
+		GroupBy(entitlementgrant.FieldEntitlementConfigID).
+		Strings(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list entitlement grant slots").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(configIDs) == 0 {
+		return nil, nil
+	}
+
+	out := make([]*domainGrant.EntitlementGrant, 0, len(configIDs)*perSlot)
+	for _, configID := range configIDs {
+		rows, err := applyEntitlementGrantFilter(r.scoped(ctx), filter).
+			Where(entitlementgrant.EntitlementConfigID(configID)).
+			Order(ent.Desc(entitlementgrant.FieldValidFrom)).
+			Limit(perSlot).
+			All(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to list entitlement grants for slot").
+				WithReportableDetails(map[string]interface{}{"entitlement_config_id": configID}).
+				Mark(ierr.ErrDatabase)
+		}
+		out = append(out, domainGrant.FromEntList(rows)...)
+	}
+
+	return out, nil
 }
 
 func (r *entitlementGrantRepository) Count(ctx context.Context, filter *types.EntitlementGrantFilter) (int, error) {

@@ -651,7 +651,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		missingPairs, subIDsInPage, listErr := s.PlanPriceSyncRepo.ListPlanLineItemsToCreateV2(ctx, planpricesync.ListPlanLineItemsToCreateV2Params{
 			PlanID:    planID,
 			TargetSeq: targetSeq,
-			Limit:     2000,
+			Limit:     4000,
 		})
 		if listErr != nil {
 			return nil, listErr
@@ -712,7 +712,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 				lineItems = append(lineItems, createPlanLineItem(ctx, sub, price, plan))
 			}
 
-			// Page size is 10000 subs but each sub can match multiple prices,
+			// Page size is 4000 subs but each sub can match multiple prices,
 			// so total line items per page can exceed a sensible single-
 			// statement insert size. Chunk the bulk insert.
 			const bulkInsertBatchSize = 1500

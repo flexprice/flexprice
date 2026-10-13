@@ -24,122 +24,122 @@ type SubscriptionPhaseUpdate struct {
 }
 
 // Where appends a list predicates to the SubscriptionPhaseUpdate builder.
-func (spu *SubscriptionPhaseUpdate) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseUpdate {
-	spu.mutation.Where(ps...)
-	return spu
+func (_u *SubscriptionPhaseUpdate) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (spu *SubscriptionPhaseUpdate) SetStatus(s string) *SubscriptionPhaseUpdate {
-	spu.mutation.SetStatus(s)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetStatus(v string) *SubscriptionPhaseUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spu *SubscriptionPhaseUpdate) SetNillableStatus(s *string) *SubscriptionPhaseUpdate {
-	if s != nil {
-		spu.SetStatus(*s)
+func (_u *SubscriptionPhaseUpdate) SetNillableStatus(v *string) *SubscriptionPhaseUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spu *SubscriptionPhaseUpdate) SetUpdatedAt(t time.Time) *SubscriptionPhaseUpdate {
-	spu.mutation.SetUpdatedAt(t)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetUpdatedAt(v time.Time) *SubscriptionPhaseUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spu *SubscriptionPhaseUpdate) SetUpdatedBy(s string) *SubscriptionPhaseUpdate {
-	spu.mutation.SetUpdatedBy(s)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetUpdatedBy(v string) *SubscriptionPhaseUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spu *SubscriptionPhaseUpdate) SetNillableUpdatedBy(s *string) *SubscriptionPhaseUpdate {
-	if s != nil {
-		spu.SetUpdatedBy(*s)
+func (_u *SubscriptionPhaseUpdate) SetNillableUpdatedBy(v *string) *SubscriptionPhaseUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (spu *SubscriptionPhaseUpdate) ClearUpdatedBy() *SubscriptionPhaseUpdate {
-	spu.mutation.ClearUpdatedBy()
-	return spu
+func (_u *SubscriptionPhaseUpdate) ClearUpdatedBy() *SubscriptionPhaseUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (spu *SubscriptionPhaseUpdate) SetMetadata(m map[string]string) *SubscriptionPhaseUpdate {
-	spu.mutation.SetMetadata(m)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetMetadata(v map[string]string) *SubscriptionPhaseUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (spu *SubscriptionPhaseUpdate) ClearMetadata() *SubscriptionPhaseUpdate {
-	spu.mutation.ClearMetadata()
-	return spu
+func (_u *SubscriptionPhaseUpdate) ClearMetadata() *SubscriptionPhaseUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spu *SubscriptionPhaseUpdate) SetSubscriptionID(s string) *SubscriptionPhaseUpdate {
-	spu.mutation.SetSubscriptionID(s)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetSubscriptionID(v string) *SubscriptionPhaseUpdate {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (spu *SubscriptionPhaseUpdate) SetNillableSubscriptionID(s *string) *SubscriptionPhaseUpdate {
-	if s != nil {
-		spu.SetSubscriptionID(*s)
+func (_u *SubscriptionPhaseUpdate) SetNillableSubscriptionID(v *string) *SubscriptionPhaseUpdate {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return spu
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (spu *SubscriptionPhaseUpdate) SetEndDate(t time.Time) *SubscriptionPhaseUpdate {
-	spu.mutation.SetEndDate(t)
-	return spu
+func (_u *SubscriptionPhaseUpdate) SetEndDate(v time.Time) *SubscriptionPhaseUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (spu *SubscriptionPhaseUpdate) SetNillableEndDate(t *time.Time) *SubscriptionPhaseUpdate {
-	if t != nil {
-		spu.SetEndDate(*t)
+func (_u *SubscriptionPhaseUpdate) SetNillableEndDate(v *time.Time) *SubscriptionPhaseUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return spu
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (spu *SubscriptionPhaseUpdate) ClearEndDate() *SubscriptionPhaseUpdate {
-	spu.mutation.ClearEndDate()
-	return spu
+func (_u *SubscriptionPhaseUpdate) ClearEndDate() *SubscriptionPhaseUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spu *SubscriptionPhaseUpdate) SetSubscription(s *Subscription) *SubscriptionPhaseUpdate {
-	return spu.SetSubscriptionID(s.ID)
+func (_u *SubscriptionPhaseUpdate) SetSubscription(v *Subscription) *SubscriptionPhaseUpdate {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
-func (spu *SubscriptionPhaseUpdate) Mutation() *SubscriptionPhaseMutation {
-	return spu.mutation
+func (_u *SubscriptionPhaseUpdate) Mutation() *SubscriptionPhaseMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (spu *SubscriptionPhaseUpdate) ClearSubscription() *SubscriptionPhaseUpdate {
-	spu.mutation.ClearSubscription()
-	return spu
+func (_u *SubscriptionPhaseUpdate) ClearSubscription() *SubscriptionPhaseUpdate {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (spu *SubscriptionPhaseUpdate) Save(ctx context.Context) (int, error) {
-	spu.defaults()
-	return withHooks(ctx, spu.sqlSave, spu.mutation, spu.hooks)
+func (_u *SubscriptionPhaseUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spu *SubscriptionPhaseUpdate) SaveX(ctx context.Context) int {
-	affected, err := spu.Save(ctx)
+func (_u *SubscriptionPhaseUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -147,82 +147,82 @@ func (spu *SubscriptionPhaseUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (spu *SubscriptionPhaseUpdate) Exec(ctx context.Context) error {
-	_, err := spu.Save(ctx)
+func (_u *SubscriptionPhaseUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spu *SubscriptionPhaseUpdate) ExecX(ctx context.Context) {
-	if err := spu.Exec(ctx); err != nil {
+func (_u *SubscriptionPhaseUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spu *SubscriptionPhaseUpdate) defaults() {
-	if _, ok := spu.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionPhaseUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionphase.UpdateDefaultUpdatedAt()
-		spu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spu *SubscriptionPhaseUpdate) check() error {
-	if v, ok := spu.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionPhaseUpdate) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionphase.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.subscription_id": %w`, err)}
 		}
 	}
-	if spu.mutation.SubscriptionCleared() && len(spu.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPhase.subscription"`)
 	}
 	return nil
 }
 
-func (spu *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := spu.check(); err != nil {
-		return n, err
+func (_u *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionphase.Table, subscriptionphase.Columns, sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString))
-	if ps := spu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := spu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionphase.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := spu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if spu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionphase.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := spu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedBy, field.TypeString, value)
 	}
-	if spu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionphase.FieldUpdatedBy, field.TypeString)
 	}
-	if spu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionphase.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := spu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionphase.FieldMetadata, field.TypeJSON, value)
 	}
-	if spu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionphase.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := spu.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 	}
-	if spu.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionphase.FieldEndDate, field.TypeTime)
 	}
-	if spu.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -235,7 +235,7 @@ func (spu *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := spu.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -251,7 +251,7 @@ func (spu *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, spu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionphase.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -259,8 +259,8 @@ func (spu *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (n int, err err
 		}
 		return 0, err
 	}
-	spu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // SubscriptionPhaseUpdateOne is the builder for updating a single SubscriptionPhase entity.
@@ -272,129 +272,129 @@ type SubscriptionPhaseUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetStatus(s string) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetStatus(s)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetStatus(v string) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (spuo *SubscriptionPhaseUpdateOne) SetNillableStatus(s *string) *SubscriptionPhaseUpdateOne {
-	if s != nil {
-		spuo.SetStatus(*s)
+func (_u *SubscriptionPhaseUpdateOne) SetNillableStatus(v *string) *SubscriptionPhaseUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetUpdatedAt(t time.Time) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetUpdatedAt(t)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetUpdatedAt(v time.Time) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetUpdatedBy(s string) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetUpdatedBy(s)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetUpdatedBy(v string) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (spuo *SubscriptionPhaseUpdateOne) SetNillableUpdatedBy(s *string) *SubscriptionPhaseUpdateOne {
-	if s != nil {
-		spuo.SetUpdatedBy(*s)
+func (_u *SubscriptionPhaseUpdateOne) SetNillableUpdatedBy(v *string) *SubscriptionPhaseUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (spuo *SubscriptionPhaseUpdateOne) ClearUpdatedBy() *SubscriptionPhaseUpdateOne {
-	spuo.mutation.ClearUpdatedBy()
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) ClearUpdatedBy() *SubscriptionPhaseUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetMetadata(m map[string]string) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetMetadata(m)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetMetadata(v map[string]string) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (spuo *SubscriptionPhaseUpdateOne) ClearMetadata() *SubscriptionPhaseUpdateOne {
-	spuo.mutation.ClearMetadata()
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) ClearMetadata() *SubscriptionPhaseUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetSubscriptionID(s string) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetSubscriptionID(s)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetSubscriptionID(v string) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetSubscriptionID(v)
+	return _u
 }
 
 // SetNillableSubscriptionID sets the "subscription_id" field if the given value is not nil.
-func (spuo *SubscriptionPhaseUpdateOne) SetNillableSubscriptionID(s *string) *SubscriptionPhaseUpdateOne {
-	if s != nil {
-		spuo.SetSubscriptionID(*s)
+func (_u *SubscriptionPhaseUpdateOne) SetNillableSubscriptionID(v *string) *SubscriptionPhaseUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionID(*v)
 	}
-	return spuo
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (spuo *SubscriptionPhaseUpdateOne) SetEndDate(t time.Time) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.SetEndDate(t)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) SetEndDate(v time.Time) *SubscriptionPhaseUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (spuo *SubscriptionPhaseUpdateOne) SetNillableEndDate(t *time.Time) *SubscriptionPhaseUpdateOne {
-	if t != nil {
-		spuo.SetEndDate(*t)
+func (_u *SubscriptionPhaseUpdateOne) SetNillableEndDate(v *time.Time) *SubscriptionPhaseUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return spuo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (spuo *SubscriptionPhaseUpdateOne) ClearEndDate() *SubscriptionPhaseUpdateOne {
-	spuo.mutation.ClearEndDate()
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) ClearEndDate() *SubscriptionPhaseUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetSubscription sets the "subscription" edge to the Subscription entity.
-func (spuo *SubscriptionPhaseUpdateOne) SetSubscription(s *Subscription) *SubscriptionPhaseUpdateOne {
-	return spuo.SetSubscriptionID(s.ID)
+func (_u *SubscriptionPhaseUpdateOne) SetSubscription(v *Subscription) *SubscriptionPhaseUpdateOne {
+	return _u.SetSubscriptionID(v.ID)
 }
 
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
-func (spuo *SubscriptionPhaseUpdateOne) Mutation() *SubscriptionPhaseMutation {
-	return spuo.mutation
+func (_u *SubscriptionPhaseUpdateOne) Mutation() *SubscriptionPhaseMutation {
+	return _u.mutation
 }
 
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
-func (spuo *SubscriptionPhaseUpdateOne) ClearSubscription() *SubscriptionPhaseUpdateOne {
-	spuo.mutation.ClearSubscription()
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) ClearSubscription() *SubscriptionPhaseUpdateOne {
+	_u.mutation.ClearSubscription()
+	return _u
 }
 
 // Where appends a list predicates to the SubscriptionPhaseUpdate builder.
-func (spuo *SubscriptionPhaseUpdateOne) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseUpdateOne {
-	spuo.mutation.Where(ps...)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) Where(ps ...predicate.SubscriptionPhase) *SubscriptionPhaseUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (spuo *SubscriptionPhaseUpdateOne) Select(field string, fields ...string) *SubscriptionPhaseUpdateOne {
-	spuo.fields = append([]string{field}, fields...)
-	return spuo
+func (_u *SubscriptionPhaseUpdateOne) Select(field string, fields ...string) *SubscriptionPhaseUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated SubscriptionPhase entity.
-func (spuo *SubscriptionPhaseUpdateOne) Save(ctx context.Context) (*SubscriptionPhase, error) {
-	spuo.defaults()
-	return withHooks(ctx, spuo.sqlSave, spuo.mutation, spuo.hooks)
+func (_u *SubscriptionPhaseUpdateOne) Save(ctx context.Context) (*SubscriptionPhase, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (spuo *SubscriptionPhaseUpdateOne) SaveX(ctx context.Context) *SubscriptionPhase {
-	node, err := spuo.Save(ctx)
+func (_u *SubscriptionPhaseUpdateOne) SaveX(ctx context.Context) *SubscriptionPhase {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -402,50 +402,50 @@ func (spuo *SubscriptionPhaseUpdateOne) SaveX(ctx context.Context) *Subscription
 }
 
 // Exec executes the query on the entity.
-func (spuo *SubscriptionPhaseUpdateOne) Exec(ctx context.Context) error {
-	_, err := spuo.Save(ctx)
+func (_u *SubscriptionPhaseUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (spuo *SubscriptionPhaseUpdateOne) ExecX(ctx context.Context) {
-	if err := spuo.Exec(ctx); err != nil {
+func (_u *SubscriptionPhaseUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (spuo *SubscriptionPhaseUpdateOne) defaults() {
-	if _, ok := spuo.mutation.UpdatedAt(); !ok {
+func (_u *SubscriptionPhaseUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := subscriptionphase.UpdateDefaultUpdatedAt()
-		spuo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (spuo *SubscriptionPhaseUpdateOne) check() error {
-	if v, ok := spuo.mutation.SubscriptionID(); ok {
+func (_u *SubscriptionPhaseUpdateOne) check() error {
+	if v, ok := _u.mutation.SubscriptionID(); ok {
 		if err := subscriptionphase.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.subscription_id": %w`, err)}
 		}
 	}
-	if spuo.mutation.SubscriptionCleared() && len(spuo.mutation.SubscriptionIDs()) > 0 {
+	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPhase.subscription"`)
 	}
 	return nil
 }
 
-func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionPhase, err error) {
-	if err := spuo.check(); err != nil {
+func (_u *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *SubscriptionPhase, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(subscriptionphase.Table, subscriptionphase.Columns, sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString))
-	id, ok := spuo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "SubscriptionPhase.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := spuo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, subscriptionphase.FieldID)
 		for _, f := range fields {
@@ -457,44 +457,44 @@ func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 			}
 		}
 	}
-	if ps := spuo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := spuo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(subscriptionphase.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := spuo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if spuo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(subscriptionphase.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := spuo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(subscriptionphase.FieldUpdatedBy, field.TypeString, value)
 	}
-	if spuo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(subscriptionphase.FieldUpdatedBy, field.TypeString)
 	}
-	if spuo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(subscriptionphase.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := spuo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionphase.FieldMetadata, field.TypeJSON, value)
 	}
-	if spuo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionphase.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := spuo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 	}
-	if spuo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionphase.FieldEndDate, field.TypeTime)
 	}
-	if spuo.mutation.SubscriptionCleared() {
+	if _u.mutation.SubscriptionCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -507,7 +507,7 @@ func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := spuo.mutation.SubscriptionIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
 			Inverse: true,
@@ -523,10 +523,10 @@ func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &SubscriptionPhase{config: spuo.config}
+	_node = &SubscriptionPhase{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, spuo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscriptionphase.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -534,6 +534,6 @@ func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 		}
 		return nil, err
 	}
-	spuo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

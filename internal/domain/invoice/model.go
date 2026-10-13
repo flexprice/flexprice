@@ -44,6 +44,12 @@ type Invoice struct {
 	// amount_paid is the amount that has already been paid towards this invoice
 	AmountPaid decimal.Decimal `json:"amount_paid" swaggertype:"string"`
 
+	// custom_currency is the custom-currency equivalent; Currency itself is always fiat
+	CustomCurrency *types.CustomCurrency `json:"custom_currency,omitempty"`
+
+	// fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.
+	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -102,7 +108,7 @@ type Invoice struct {
 	BillingReason string `json:"billing_reason,omitempty"`
 
 	// metadata contains custom key-value pairs for storing additional information about this invoice
-	Metadata types.Metadata `json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
 	// line_items contains the individual items and charges that make up this invoice
 	LineItems []*InvoiceLineItem `json:"line_items,omitempty"`
@@ -111,7 +117,7 @@ type Invoice struct {
 	CouponApplications []*coupon_application.CouponApplication `json:"coupon_applications,omitempty"`
 
 	// version is the version number for tracking changes to this invoice
-	Version int `json:"version"`
+	Version int `json:"version" activity:"drop"`
 
 	// environment_id is the ID of the environment this invoice belongs to (for multi-environment setups)
 	EnvironmentID string `json:"environment_id"`
@@ -136,6 +142,8 @@ type Invoice struct {
 	// recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.
 	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
 	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+
+	SourceType types.InvoiceSourceType `json:"source_type,omitempty"`
 
 	// is_manually_edited is true once a user has manually added, edited, or removed a line item on this draft invoice.
 	// Once set, automated recomputation of this invoice's line items must no-op rather than overwrite the manual edit.
@@ -182,6 +190,8 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Currency:               e.Currency,
 		AmountDue:              e.AmountDue,
 		AmountPaid:             e.AmountPaid,
+		CustomCurrency:         e.CustomCurrency,
+		FxConversion:           e.FxConversion,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
@@ -213,6 +223,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Version:                    e.Version,
 		EnvironmentID:              e.EnvironmentID,
 		RecalculatedInvoiceID:      e.RecalculatedInvoiceID,
+		SourceType:                 e.SourceType,
 		IsManuallyEdited:           e.IsManuallyEdited,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
@@ -289,6 +300,105 @@ func (i *Invoice) Validate() error {
 	}
 
 	return nil
+}
+
+// DenominationCurrency is the currency money math runs in: the custom currency when set,
+// the invoice's fiat currency otherwise.
+func (i *Invoice) DenominationCurrency() string {
+	if i.CustomCurrency != nil {
+		return i.CustomCurrency.Code
+	}
+	return i.Currency
+}
+
+// RestoreFromDenomination copies the denomination back into the amount fields so money
+// math runs in the custom currency. Call it at the start of any write path that loaded
+// the invoice from the database, where the amount fields hold fiat. Pair with
+// CaptureCustomCurrencyDenomination and ProjectCustomCurrency, which snapshot the result
+// and convert it exactly once.
+func (i *Invoice) RestoreFromDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	i.Subtotal = cc.Subtotal
+	i.TotalDiscount = cc.TotalDiscount
+	i.TotalTax = cc.TotalTax
+	i.TotalPrepaidCreditsApplied = cc.TotalPrepaidCreditsApplied
+	i.Total = cc.Total
+	i.AmountDue = cc.AmountDue
+
+	for _, item := range i.LineItems {
+		if item.CustomCurrency == nil {
+			continue
+		}
+		item.Amount = item.CustomCurrency.Amount
+		item.LineItemDiscount = item.CustomCurrency.LineItemDiscount
+		item.InvoiceLevelDiscount = item.CustomCurrency.InvoiceLevelDiscount
+		item.PrepaidCreditsApplied = item.CustomCurrency.PrepaidCreditsApplied
+	}
+}
+
+// CaptureCustomCurrencyDenomination snapshots the amount fields into the denomination.
+// Compute runs the pricing, coupon and discount pipeline in the subscription's currency;
+// this is where that becomes explicit. Follow it with ProjectCustomCurrency to write the
+// fiat columns back.
+func (i *Invoice) CaptureCustomCurrencyDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	cc.Subtotal = i.Subtotal
+	cc.TotalDiscount = i.TotalDiscount
+	cc.TotalTax = i.TotalTax
+	cc.TotalPrepaidCreditsApplied = i.TotalPrepaidCreditsApplied
+	cc.Total = i.Total
+	cc.AmountDue = i.AmountDue
+
+	for _, item := range i.LineItems {
+		item.CustomCurrency = &types.CustomCurrencyLineItem{
+			Amount:                item.Amount,
+			LineItemDiscount:      item.LineItemDiscount,
+			InvoiceLevelDiscount:  item.InvoiceLevelDiscount,
+			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
+		}
+	}
+}
+
+// MirrorTaxIntoDenomination divides the tax totals back into the denomination. Tax is
+// calculated after the conversion, in fiat, so capture cannot pick it up — capture copies
+// the amount fields as they are, and by then they hold fiat.
+func (i *Invoice) MirrorTaxIntoDenomination() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	cc.TotalTax = cc.FromFiat(i.TotalTax)
+	cc.Total = cc.FromFiat(i.Total)
+	cc.AmountDue = cc.Total
+}
+
+// ProjectCustomCurrency recomputes the fiat amount columns from the denomination. Runs at
+// compute with the live rate and at finalization with the frozen one.
+func (i *Invoice) ProjectCustomCurrency() {
+	if i.CustomCurrency == nil {
+		return
+	}
+
+	cc := i.CustomCurrency
+	i.Subtotal = cc.ToFiat(cc.Subtotal, i.Currency)
+	i.TotalDiscount = cc.ToFiat(cc.TotalDiscount, i.Currency)
+	i.TotalTax = cc.ToFiat(cc.TotalTax, i.Currency)
+	i.TotalPrepaidCreditsApplied = cc.ToFiat(cc.TotalPrepaidCreditsApplied, i.Currency)
+	i.Total = cc.ToFiat(cc.Total, i.Currency)
+	i.AmountDue = cc.ToFiat(cc.AmountDue, i.Currency)
+
+	for _, item := range i.LineItems {
+		item.ProjectCustomCurrency(cc, i.Currency)
+	}
 }
 
 // PendingProviderInvoice is a lightweight projection of a finalized+unpaid invoice

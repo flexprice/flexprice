@@ -51,6 +51,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) GetContext() context.Context {
 func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 	stores := s.GetStores()
 	s.invoiceService = NewInvoiceService(ServiceParams{
+		CheckoutSessionRepo:   stores.CheckoutSessionRepo,
 		Logger:                s.GetLogger(),
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
@@ -63,11 +64,13 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		CouponApplicationRepo: stores.CouponApplicationRepo,
 		WalletRepo:            stores.WalletRepo,
 		SettingsRepo:          stores.SettingsRepo,
+		TaxAppliedRepo:        stores.TaxAppliedRepo,
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
 	})
 
 	s.couponApplicationService = NewCouponApplicationService(ServiceParams{
+		CheckoutSessionRepo:   stores.CheckoutSessionRepo,
 		Logger:                s.GetLogger(),
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
@@ -81,6 +84,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 
 	pubsub := testutil.NewInMemoryPubSub()
 	s.creditAdjustmentService = NewCreditAdjustmentService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
@@ -91,6 +95,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		InvoiceRepo:              stores.InvoiceRepo,
 		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		SettingsRepo:             stores.SettingsRepo,
+		TaxAppliedRepo:           stores.TaxAppliedRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
 		SubRepo:                  stores.SubscriptionRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
@@ -103,6 +108,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 	})
 
 	s.walletService = NewWalletService(ServiceParams{
+		CheckoutSessionRepo:      stores.CheckoutSessionRepo,
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),

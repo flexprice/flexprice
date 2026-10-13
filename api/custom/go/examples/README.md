@@ -6,4 +6,4 @@
 
 This sample creates a customer, ingests one event (sync), then enqueues via the **custom async client** (`NewAsyncClientWithConfig`). Custom SDK files live in `api/custom/go/`.
 
-**Integration tests:** Full API flows use a different env shape (host without scheme); see [api/tests/go/test_sdk.go](../../tests/go/test_sdk.go) and [api/tests/README.md](../../tests/README.md).
+**Integration tests:** Full API flows use a different env shape (host without scheme); see [api/tests/go/test_sdk.go](../../../tests/go/test_sdk.go) and [api/tests/README.md](../../../tests/README.md).

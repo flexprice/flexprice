@@ -3,7 +3,6 @@ package subscription
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -205,36 +204,59 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 		"new_period_start", input.PeriodStart,
 		"new_period_end", input.PeriodEnd)
 
-	// TODO: Think on this later, if we need to cascade the period update to inherited child subscriptions
-	// Cascade period update to INHERITED child subscriptions
-	// if sub.SubscriptionType == types.SubscriptionTypeParent {
-	// 	inheritedFilter := types.NewNoLimitSubscriptionFilter()
-	// 	inheritedFilter.ParentSubscriptionIDs = []string{sub.ID}
-	// 	inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	// 	inheritedFilter.SubscriptionStatus = []types.SubscriptionStatus{
-	// 		types.SubscriptionStatusActive,
-	// 		types.SubscriptionStatusTrialing,
-	// 	}
-
-	// 	inheritedSubs, err := s.serviceParams.SubRepo.List(ctx, inheritedFilter)
-	// 	if err != nil {
-	// 		s.logger.Errorw("failed to list inherited subs for period cascade", "error", err, "parent_sub", sub.ID)
-	// 	} else {
-	// 		for _, child := range inheritedSubs {
-	// 			child.CurrentPeriodStart = input.PeriodStart
-	// 			child.CurrentPeriodEnd = input.PeriodEnd
-	// 			if err := s.serviceParams.SubRepo.Update(ctx, child); err != nil {
-	// 				s.logger.Errorw("failed to update inherited sub period",
-	// 					"child_sub_id", child.ID, "parent_sub_id", sub.ID, "error", err)
-	// 			}
-	// 		}
-	// 	}
-	// }
+	if err := s.advanceGroupedInvoicingChildrenPeriod(ctx, sub, input.PeriodStart, input.PeriodEnd); err != nil {
+		return nil, err
+	}
 
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil
 }
+
+func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	periodStart time.Time,
+	periodEnd time.Time,
+) error {
+	if parent.SubscriptionType != types.SubscriptionTypeParent {
+		return nil
+	}
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	filter.ParentSubscriptionIDs = []string{parent.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+
+	children, err := s.serviceParams.SubRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Error(ctx, "failed to list grouped_invoicing children for period cascade",
+			"error", err,
+			"parent_subscription_id", parent.ID)
+		return err
+	}
+
+	for _, child := range children {
+		child.CurrentPeriodStart = periodStart
+		child.CurrentPeriodEnd = periodEnd
+		if err := s.serviceParams.SubRepo.Update(ctx, child); err != nil {
+			s.logger.Error(ctx, "failed to update grouped_invoicing child period",
+				"error", err,
+				"child_subscription_id", child.ID,
+				"parent_subscription_id", parent.ID)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Lets late-arriving events and pipeline lag settle.
+const processInvoiceStartDelay = 1 * time.Hour
 
 // TriggerInvoiceWorkflowActivity triggers invoice workflows for each invoice (fire-and-forget)
 // If triggering fails for any invoice, it logs the error and continues with the rest
@@ -269,7 +291,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
-			900+rand.Intn(300), // adding a random delay between 900 and 1200 seconds
+			int(processInvoiceStartDelay/time.Second),
 		)
 		if err != nil {
 			s.logger.Error(ctx, "failed to trigger invoice workflow",

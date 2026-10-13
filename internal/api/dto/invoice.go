@@ -29,6 +29,48 @@ type InvoiceLineItemCoupon struct {
 	CouponAssociationID    *string `json:"coupon_association_id,omitempty"`
 }
 
+// InvoiceStateChangeSourceType names the kind of caller behind a guarded state change.
+type InvoiceStateChangeSourceType string
+
+const (
+	InvoiceStateChangeSourceCheckoutSession InvoiceStateChangeSourceType = "checkout_session"
+)
+
+// InvoiceStateChangeSource identifies the caller of a guarded state change, so the session
+// owning an invoice can act on it. Unexported and json:"-" — server-set only.
+type InvoiceStateChangeSource struct {
+	sourceType InvoiceStateChangeSourceType
+	sourceID   string
+}
+
+func NewCheckoutSessionSource(sessionID string) InvoiceStateChangeSource {
+	return InvoiceStateChangeSource{
+		sourceType: InvoiceStateChangeSourceCheckoutSession,
+		sourceID:   sessionID,
+	}
+}
+
+func (i *InvoiceStateChangeSource) SourceID() string {
+	if i == nil {
+		return ""
+	}
+
+	return i.sourceID
+}
+
+// FinalizeInvoiceRequest carries caller identity for the finalization guard.
+type FinalizeInvoiceRequest struct {
+	InvoiceStateChangeSource
+}
+
+func (r *FinalizeInvoiceRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
+}
+
 // CreateInvoiceRequest represents the request payload for creating a new invoice
 type CreateInvoiceRequest struct {
 	// invoice_number is an optional human-readable identifier for the invoice
@@ -127,6 +169,13 @@ type CreateInvoiceRequest struct {
 	// Kafka + Temporal vendor-sync pipeline. Only honored by CreateOneOffInvoice.
 	// Best-effort: sync failures do not fail invoice creation.
 	ForceSyncInvoice bool `json:"force_sync_invoice,omitempty"`
+
+	// checkout gates this invoice behind a hosted payment session: created DRAFT, finalized
+	// only when the payment webhook lands. One-off invoices only.
+	Checkout *CheckoutParams `json:"checkout,omitempty"`
+
+	// SourceType is server-set only; a caller must not be able to claim provenance.
+	SourceType types.InvoiceSourceType `json:"-"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
@@ -147,6 +196,7 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 		IdempotencyKey: r.IdempotencyKey,
 		InvoicePDFURL:  r.InvoicePDFURL,
 		IssueDate:      r.IssueDate,
+		SourceType:     r.SourceType,
 	}
 }
 
@@ -203,6 +253,18 @@ type CreateDraftInvoiceRequest struct {
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
 	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
+	// SourceType is server-set only; a caller must not be able to claim provenance.
+	SourceType types.InvoiceSourceType `json:"-"`
+}
+
+// CreateSubscriptionDraftInvoiceRequest is the input for CreateDraftInvoiceForSubscription.
+type CreateSubscriptionDraftInvoiceRequest struct {
+	SubscriptionID string
+	PeriodStart    time.Time
+	PeriodEnd      time.Time
+	ReferencePoint types.InvoiceReferencePoint
+	// SourceType stamps provenance on the draft; empty for ordinary billing.
+	SourceType types.InvoiceSourceType
 }
 
 // Validate validates the draft invoice creation request.
@@ -277,6 +339,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		BillingPeriod:          r.BillingPeriod,
 		PeriodEnd:              r.PeriodEnd,
 		BillingReason:          string(r.BillingReason),
+		SourceType:             r.SourceType,
 		Metadata:               r.Metadata,
 		InvoicePDFURL:          r.InvoicePDFURL,
 		InvoiceStatus:          types.InvoiceStatusDraft,
@@ -304,10 +367,20 @@ type InvoiceComputeRequest struct {
 	// json:"-" — this request is also bound directly from client JSON (POST /invoices/{id}/compute).
 	PreparedTaxRates *InvoiceTaxRates `json:"-"`
 
+	InvoiceStateChangeSource
+
 	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
 	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
 	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+}
+
+func (r *InvoiceComputeRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
 }
 
 // ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
@@ -392,6 +465,77 @@ type ProrationLineItem struct {
 
 	// is_credit indicates if this is a credit (true) or charge (false)
 	IsCredit bool `json:"is_credit"`
+}
+
+// ValidateForCheckout validates the payment-gated variant of POST /invoices. Called
+// explicitly from CreateOneOffInvoice — Validate() is not wired into that path.
+func (r *CreateInvoiceRequest) ValidateForCheckout() error {
+	if err := r.Checkout.Validate(); err != nil {
+		return err
+	}
+
+	if r.InvoiceType == "" {
+		r.InvoiceType = types.InvoiceTypeOneOff
+	}
+	if r.InvoiceType != types.InvoiceTypeOneOff {
+		return ierr.NewError("invoice_type must be ONE_OFF when checkout is provided").
+			WithHint("Payment-gated checkout is only supported for one-off invoices").
+			WithReportableDetails(map[string]any{"invoice_type": r.InvoiceType}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.InvoiceStatus != nil {
+		return ierr.NewError("invoice_status is not supported when checkout is provided").
+			WithHint("A gated invoice is created as DRAFT and finalized on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.PaymentStatus != nil {
+		return ierr.NewError("payment_status is not supported when checkout is provided").
+			WithHint("Payment status is set by the checkout session on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.AmountPaid != nil {
+		return ierr.NewError("amount_paid is not supported when checkout is provided").
+			WithHint("Amount paid is recorded by the checkout session on payment").
+			Mark(ierr.ErrValidation)
+	}
+	if r.TotalPrepaidApplied != nil {
+		return ierr.NewError("total_prepaid_applied is not supported when checkout is provided").
+			WithHint("Prepaid credits are applied while computing the gated draft").
+			Mark(ierr.ErrValidation)
+	}
+	if r.SubscriptionID != nil {
+		return ierr.NewError("subscription_id is not supported when checkout is provided").
+			WithHint("Payment-gated checkout is only supported for one-off invoices").
+			Mark(ierr.ErrValidation)
+	}
+	if r.ForceSyncInvoice {
+		return ierr.NewError("force_sync_invoice is not supported when checkout is provided").
+			WithHint("A gated invoice syncs to vendors after it is finalized on payment").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.LineItems) == 0 {
+		return ierr.NewError("line_items is required when checkout is provided").
+			WithHint("Provide at least one line item to charge for").
+			Mark(ierr.ErrValidation)
+	}
+	if !r.AmountDue.IsPositive() {
+		return ierr.NewError("amount_due must be greater than zero when checkout is provided").
+			WithHint("Checkout requires a non-zero invoice").
+			WithReportableDetails(map[string]any{"amount_due": r.AmountDue.String()}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// A past due_date fires invoice.payment.overdue against a draft nobody could pay yet.
+	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+		return ierr.NewError("due_date must be in the future when checkout is provided").
+			WithHint("A gated invoice cannot be overdue before its payment link expires").
+			WithReportableDetails(map[string]any{"due_date": r.DueDate}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 func (r *CreateInvoiceRequest) Validate() error {
@@ -737,16 +881,8 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 		return err
 	}
 
-	// Allow negative amounts for credit invoices (credits to customers)
-	if r.Amount.IsNegative() && invoiceType != types.InvoiceTypeCredit {
-		return ierr.NewError("amount must be non-negative for non-credit invoices").
-			WithHint("Amount cannot be negative for non-credit invoices").
-			WithReportableDetails(map[string]any{
-				"amount":       r.Amount.String(),
-				"invoice_type": invoiceType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
+	// Amount may be negative on any invoice type: a credit line offsets charges on the same
+	// document (plan change, multi-addon). Non-negativity is enforced on the invoice aggregates.
 
 	if r.Quantity.IsNegative() {
 		return ierr.NewError("quantity must be non-negative").
@@ -817,7 +953,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 	if r.SubscriptionID != nil {
 		subscriptionID = r.SubscriptionID
 	}
-	return &invoice.InvoiceLineItem{
+
+	lineItem := &invoice.InvoiceLineItem{
 		ID:                          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:                   inv.ID,
 		CustomerID:                  inv.CustomerID,
@@ -847,6 +984,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
+
+	return lineItem
 }
 
 // InvoiceLineItemResponse represents a line item in invoice response payloads
@@ -941,11 +1080,20 @@ type AddLineItemRequest struct {
 	DisplayName string          `json:"display_name" validate:"required"`
 	Amount      decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
 	Quantity    decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
+	Description *string         `json:"description,omitempty"`
+	PeriodStart *time.Time      `json:"period_start,omitempty"`
+	PeriodEnd   *time.Time      `json:"period_end,omitempty"`
 }
 
 func (r *AddLineItemRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.PeriodStart != nil && r.PeriodEnd != nil && r.PeriodEnd.Before(*r.PeriodStart) {
+		return ierr.NewError("period_end must not be before period_start").
+			WithHint("period_end must not be before period_start").
+			Mark(ierr.ErrValidation)
 	}
 
 	if r.Amount.IsNegative() {
@@ -1005,12 +1153,20 @@ type UpdateLineItemRequest struct {
 	DisplayName *string          `json:"display_name,omitempty"`
 	Amount      *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 	Quantity    *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+	Description *string          `json:"description,omitempty"`
+	PeriodStart *time.Time       `json:"period_start,omitempty"`
+	PeriodEnd   *time.Time       `json:"period_end,omitempty"`
 }
 
 func (r *UpdateLineItemRequest) Validate() error {
-	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil {
+	if r.DisplayName == nil && r.Amount == nil && r.Quantity == nil && r.Description == nil && r.PeriodStart == nil && r.PeriodEnd == nil {
 		return ierr.NewError("at least one field must be provided").
-			WithHint("at least one of display_name, amount, or quantity must be provided").
+			WithHint("at least one of display_name, amount, quantity, description, period_start, or period_end must be provided").
+			Mark(ierr.ErrValidation)
+	}
+	if r.PeriodStart != nil && r.PeriodEnd != nil && r.PeriodEnd.Before(*r.PeriodStart) {
+		return ierr.NewError("period_end must not be before period_start").
+			WithHint("period_end must not be before period_start").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1099,6 +1255,9 @@ type InvoiceResponse struct {
 
 	// coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)
 	CouponApplications []*CouponApplicationResponse `json:"coupon_applications,omitempty"`
+
+	// checkout_session is the payment session gating this invoice, when it was created with checkout
+	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
@@ -1191,6 +1350,12 @@ func (r *InvoiceResponse) WithLineItems(lineItems []*InvoiceLineItemResponse) *I
 // WithSubscription adds subscription information to the invoice response
 func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceResponse {
 	r.Subscription = sub
+	return r
+}
+
+// WithCheckoutSession adds the gating checkout session to the invoice response
+func (r *InvoiceResponse) WithCheckoutSession(session *CheckoutSessionResponse) *InvoiceResponse {
+	r.CheckoutSession = session
 	return r
 }
 
@@ -1443,6 +1608,16 @@ type InvoiceVoidRequest struct {
 	// metadata will only add/override the values of key-value pairs provided in this request.
 	// for a complete override of metadata field, refer update invoice (PUT /invoices) endpoint
 	Metadata types.Metadata `json:"metadata,omitempty"`
+
+	InvoiceStateChangeSource
+}
+
+func (r *InvoiceVoidRequest) SourceID() string {
+	if r == nil {
+		return ""
+	}
+
+	return r.InvoiceStateChangeSource.SourceID()
 }
 
 func (r *InvoiceVoidRequest) Validate() error {
@@ -1500,6 +1675,10 @@ type GetUnpaidInvoicesToBePaidRequest struct {
 
 	// currency is the three-letter ISO currency code for this request
 	Currency string `json:"currency" validate:"required"`
+
+	// CurrentPeriodStarts maps subscription ID to the period start whose usage the caller counts
+	// live; that period's draft is skipped and its applied credits reported instead.
+	CurrentPeriodStarts map[string]time.Time `json:"-"`
 }
 
 func (r *GetUnpaidInvoicesToBePaidRequest) Validate() error {
@@ -1524,6 +1703,10 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 
 	// total paid invoice amount
 	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
+
+	// CurrentPeriodCreditsApplied maps subscription ID to credits already applied to its
+	// current-period draft (credits settled at expiry), in the wallet's currency.
+	CurrentPeriodCreditsApplied map[string]decimal.Decimal `json:"-"`
 }
 
 type ApplyExternalInvoiceDiscountRequest struct {
@@ -1556,18 +1739,12 @@ type TaxExemptionSummary struct {
 }
 
 func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemptionReasonCode) *TaxSummary {
-	// A reason code means nothing was charged, so the totals are zero by definition.
-	if reasonCode != nil {
-		return &TaxSummary{
-			Exemption: &TaxExemptionSummary{
-				ReasonCode: *reasonCode,
-				Reason:     reasonCode.DisplayLabel(),
-			},
-		}
-	}
-
 	var inclusiveTax, exclusiveTax decimal.Decimal
 	for _, t := range taxes {
+		// A reversal records tax being un-filed, not a tax the invoice charges.
+		if t.IsReversal() {
+			continue
+		}
 		switch t.TaxBehavior {
 		case types.TaxBehaviorInclusive:
 			inclusiveTax = inclusiveTax.Add(t.TaxAmount)
@@ -1576,9 +1753,28 @@ func buildTaxSummary(taxes []*TaxAppliedResponse, reasonCode *types.TaxExemption
 		}
 	}
 
-	return &TaxSummary{
+	summary := &TaxSummary{
 		TotalInclusiveTax: inclusiveTax,
 		TotalExclusiveTax: exclusiveTax,
 		TotalTax:          inclusiveTax.Add(exclusiveTax),
 	}
+
+	// A reason does not mean nothing was charged. An invoice can reverse charge one
+	// jurisdiction and be taxed in another, and reporting that one as zero hides the tax
+	// the customer actually owes.
+	if reasonCode != nil {
+		summary.Exemption = &TaxExemptionSummary{
+			ReasonCode: *reasonCode,
+			Reason:     reasonCode.DisplayLabel(),
+		}
+	}
+
+	return summary
+}
+
+// InvoicePDFRequest selects which rendering of an invoice to return.
+type InvoicePDFRequest struct {
+	InvoiceID string `json:"invoice_id" validate:"required"`
+	// ForceGenerate re-renders even when a stored PDF exists.
+	ForceGenerate bool `json:"force_generate"`
 }

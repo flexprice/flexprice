@@ -23,171 +23,171 @@ type AddonAssociationUpdate struct {
 }
 
 // Where appends a list predicates to the AddonAssociationUpdate builder.
-func (aau *AddonAssociationUpdate) Where(ps ...predicate.AddonAssociation) *AddonAssociationUpdate {
-	aau.mutation.Where(ps...)
-	return aau
+func (_u *AddonAssociationUpdate) Where(ps ...predicate.AddonAssociation) *AddonAssociationUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (aau *AddonAssociationUpdate) SetStatus(s string) *AddonAssociationUpdate {
-	aau.mutation.SetStatus(s)
-	return aau
+func (_u *AddonAssociationUpdate) SetStatus(v string) *AddonAssociationUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableStatus(s *string) *AddonAssociationUpdate {
-	if s != nil {
-		aau.SetStatus(*s)
+func (_u *AddonAssociationUpdate) SetNillableStatus(v *string) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return aau
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (aau *AddonAssociationUpdate) SetUpdatedAt(t time.Time) *AddonAssociationUpdate {
-	aau.mutation.SetUpdatedAt(t)
-	return aau
+func (_u *AddonAssociationUpdate) SetUpdatedAt(v time.Time) *AddonAssociationUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (aau *AddonAssociationUpdate) SetUpdatedBy(s string) *AddonAssociationUpdate {
-	aau.mutation.SetUpdatedBy(s)
-	return aau
+func (_u *AddonAssociationUpdate) SetUpdatedBy(v string) *AddonAssociationUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableUpdatedBy(s *string) *AddonAssociationUpdate {
-	if s != nil {
-		aau.SetUpdatedBy(*s)
+func (_u *AddonAssociationUpdate) SetNillableUpdatedBy(v *string) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return aau
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (aau *AddonAssociationUpdate) ClearUpdatedBy() *AddonAssociationUpdate {
-	aau.mutation.ClearUpdatedBy()
-	return aau
+func (_u *AddonAssociationUpdate) ClearUpdatedBy() *AddonAssociationUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (aau *AddonAssociationUpdate) SetStartDate(t time.Time) *AddonAssociationUpdate {
-	aau.mutation.SetStartDate(t)
-	return aau
+func (_u *AddonAssociationUpdate) SetStartDate(v time.Time) *AddonAssociationUpdate {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableStartDate(t *time.Time) *AddonAssociationUpdate {
-	if t != nil {
-		aau.SetStartDate(*t)
+func (_u *AddonAssociationUpdate) SetNillableStartDate(v *time.Time) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return aau
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (aau *AddonAssociationUpdate) ClearStartDate() *AddonAssociationUpdate {
-	aau.mutation.ClearStartDate()
-	return aau
+func (_u *AddonAssociationUpdate) ClearStartDate() *AddonAssociationUpdate {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (aau *AddonAssociationUpdate) SetEndDate(t time.Time) *AddonAssociationUpdate {
-	aau.mutation.SetEndDate(t)
-	return aau
+func (_u *AddonAssociationUpdate) SetEndDate(v time.Time) *AddonAssociationUpdate {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableEndDate(t *time.Time) *AddonAssociationUpdate {
-	if t != nil {
-		aau.SetEndDate(*t)
+func (_u *AddonAssociationUpdate) SetNillableEndDate(v *time.Time) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return aau
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (aau *AddonAssociationUpdate) ClearEndDate() *AddonAssociationUpdate {
-	aau.mutation.ClearEndDate()
-	return aau
+func (_u *AddonAssociationUpdate) ClearEndDate() *AddonAssociationUpdate {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetAddonStatus sets the "addon_status" field.
-func (aau *AddonAssociationUpdate) SetAddonStatus(s string) *AddonAssociationUpdate {
-	aau.mutation.SetAddonStatus(s)
-	return aau
+func (_u *AddonAssociationUpdate) SetAddonStatus(v string) *AddonAssociationUpdate {
+	_u.mutation.SetAddonStatus(v)
+	return _u
 }
 
 // SetNillableAddonStatus sets the "addon_status" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableAddonStatus(s *string) *AddonAssociationUpdate {
-	if s != nil {
-		aau.SetAddonStatus(*s)
+func (_u *AddonAssociationUpdate) SetNillableAddonStatus(v *string) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetAddonStatus(*v)
 	}
-	return aau
+	return _u
 }
 
 // SetCancellationReason sets the "cancellation_reason" field.
-func (aau *AddonAssociationUpdate) SetCancellationReason(s string) *AddonAssociationUpdate {
-	aau.mutation.SetCancellationReason(s)
-	return aau
+func (_u *AddonAssociationUpdate) SetCancellationReason(v string) *AddonAssociationUpdate {
+	_u.mutation.SetCancellationReason(v)
+	return _u
 }
 
 // SetNillableCancellationReason sets the "cancellation_reason" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableCancellationReason(s *string) *AddonAssociationUpdate {
-	if s != nil {
-		aau.SetCancellationReason(*s)
+func (_u *AddonAssociationUpdate) SetNillableCancellationReason(v *string) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetCancellationReason(*v)
 	}
-	return aau
+	return _u
 }
 
 // ClearCancellationReason clears the value of the "cancellation_reason" field.
-func (aau *AddonAssociationUpdate) ClearCancellationReason() *AddonAssociationUpdate {
-	aau.mutation.ClearCancellationReason()
-	return aau
+func (_u *AddonAssociationUpdate) ClearCancellationReason() *AddonAssociationUpdate {
+	_u.mutation.ClearCancellationReason()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (aau *AddonAssociationUpdate) SetCancelledAt(t time.Time) *AddonAssociationUpdate {
-	aau.mutation.SetCancelledAt(t)
-	return aau
+func (_u *AddonAssociationUpdate) SetCancelledAt(v time.Time) *AddonAssociationUpdate {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (aau *AddonAssociationUpdate) SetNillableCancelledAt(t *time.Time) *AddonAssociationUpdate {
-	if t != nil {
-		aau.SetCancelledAt(*t)
+func (_u *AddonAssociationUpdate) SetNillableCancelledAt(v *time.Time) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return aau
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (aau *AddonAssociationUpdate) ClearCancelledAt() *AddonAssociationUpdate {
-	aau.mutation.ClearCancelledAt()
-	return aau
+func (_u *AddonAssociationUpdate) ClearCancelledAt() *AddonAssociationUpdate {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (aau *AddonAssociationUpdate) SetMetadata(m map[string]interface{}) *AddonAssociationUpdate {
-	aau.mutation.SetMetadata(m)
-	return aau
+func (_u *AddonAssociationUpdate) SetMetadata(v map[string]interface{}) *AddonAssociationUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (aau *AddonAssociationUpdate) ClearMetadata() *AddonAssociationUpdate {
-	aau.mutation.ClearMetadata()
-	return aau
+func (_u *AddonAssociationUpdate) ClearMetadata() *AddonAssociationUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the AddonAssociationMutation object of the builder.
-func (aau *AddonAssociationUpdate) Mutation() *AddonAssociationMutation {
-	return aau.mutation
+func (_u *AddonAssociationUpdate) Mutation() *AddonAssociationMutation {
+	return _u.mutation
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (aau *AddonAssociationUpdate) Save(ctx context.Context) (int, error) {
-	aau.defaults()
-	return withHooks(ctx, aau.sqlSave, aau.mutation, aau.hooks)
+func (_u *AddonAssociationUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (aau *AddonAssociationUpdate) SaveX(ctx context.Context) int {
-	affected, err := aau.Save(ctx)
+func (_u *AddonAssociationUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -195,29 +195,29 @@ func (aau *AddonAssociationUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (aau *AddonAssociationUpdate) Exec(ctx context.Context) error {
-	_, err := aau.Save(ctx)
+func (_u *AddonAssociationUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aau *AddonAssociationUpdate) ExecX(ctx context.Context) {
-	if err := aau.Exec(ctx); err != nil {
+func (_u *AddonAssociationUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (aau *AddonAssociationUpdate) defaults() {
-	if _, ok := aau.mutation.UpdatedAt(); !ok {
+func (_u *AddonAssociationUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := addonassociation.UpdateDefaultUpdatedAt()
-		aau.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (aau *AddonAssociationUpdate) check() error {
-	if v, ok := aau.mutation.AddonStatus(); ok {
+func (_u *AddonAssociationUpdate) check() error {
+	if v, ok := _u.mutation.AddonStatus(); ok {
 		if err := addonassociation.AddonStatusValidator(v); err != nil {
 			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.addon_status": %w`, err)}
 		}
@@ -225,70 +225,70 @@ func (aau *AddonAssociationUpdate) check() error {
 	return nil
 }
 
-func (aau *AddonAssociationUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := aau.check(); err != nil {
-		return n, err
+func (_u *AddonAssociationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(addonassociation.Table, addonassociation.Columns, sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString))
-	if ps := aau.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := aau.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(addonassociation.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := aau.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if aau.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(addonassociation.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := aau.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedBy, field.TypeString, value)
 	}
-	if aau.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(addonassociation.FieldUpdatedBy, field.TypeString)
 	}
-	if aau.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(addonassociation.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := aau.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(addonassociation.FieldStartDate, field.TypeTime, value)
 	}
-	if aau.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(addonassociation.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := aau.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(addonassociation.FieldEndDate, field.TypeTime, value)
 	}
-	if aau.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(addonassociation.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := aau.mutation.AddonStatus(); ok {
+	if value, ok := _u.mutation.AddonStatus(); ok {
 		_spec.SetField(addonassociation.FieldAddonStatus, field.TypeString, value)
 	}
-	if value, ok := aau.mutation.CancellationReason(); ok {
+	if value, ok := _u.mutation.CancellationReason(); ok {
 		_spec.SetField(addonassociation.FieldCancellationReason, field.TypeString, value)
 	}
-	if aau.mutation.CancellationReasonCleared() {
+	if _u.mutation.CancellationReasonCleared() {
 		_spec.ClearField(addonassociation.FieldCancellationReason, field.TypeString)
 	}
-	if value, ok := aau.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(addonassociation.FieldCancelledAt, field.TypeTime, value)
 	}
-	if aau.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(addonassociation.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := aau.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(addonassociation.FieldMetadata, field.TypeJSON, value)
 	}
-	if aau.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(addonassociation.FieldMetadata, field.TypeJSON)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, aau.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{addonassociation.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -296,8 +296,8 @@ func (aau *AddonAssociationUpdate) sqlSave(ctx context.Context) (n int, err erro
 		}
 		return 0, err
 	}
-	aau.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // AddonAssociationUpdateOne is the builder for updating a single AddonAssociation entity.
@@ -309,178 +309,178 @@ type AddonAssociationUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (aauo *AddonAssociationUpdateOne) SetStatus(s string) *AddonAssociationUpdateOne {
-	aauo.mutation.SetStatus(s)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetStatus(v string) *AddonAssociationUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableStatus(s *string) *AddonAssociationUpdateOne {
-	if s != nil {
-		aauo.SetStatus(*s)
+func (_u *AddonAssociationUpdateOne) SetNillableStatus(v *string) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return aauo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (aauo *AddonAssociationUpdateOne) SetUpdatedAt(t time.Time) *AddonAssociationUpdateOne {
-	aauo.mutation.SetUpdatedAt(t)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetUpdatedAt(v time.Time) *AddonAssociationUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (aauo *AddonAssociationUpdateOne) SetUpdatedBy(s string) *AddonAssociationUpdateOne {
-	aauo.mutation.SetUpdatedBy(s)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetUpdatedBy(v string) *AddonAssociationUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableUpdatedBy(s *string) *AddonAssociationUpdateOne {
-	if s != nil {
-		aauo.SetUpdatedBy(*s)
+func (_u *AddonAssociationUpdateOne) SetNillableUpdatedBy(v *string) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return aauo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (aauo *AddonAssociationUpdateOne) ClearUpdatedBy() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearUpdatedBy()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearUpdatedBy() *AddonAssociationUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetStartDate sets the "start_date" field.
-func (aauo *AddonAssociationUpdateOne) SetStartDate(t time.Time) *AddonAssociationUpdateOne {
-	aauo.mutation.SetStartDate(t)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetStartDate(v time.Time) *AddonAssociationUpdateOne {
+	_u.mutation.SetStartDate(v)
+	return _u
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableStartDate(t *time.Time) *AddonAssociationUpdateOne {
-	if t != nil {
-		aauo.SetStartDate(*t)
+func (_u *AddonAssociationUpdateOne) SetNillableStartDate(v *time.Time) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetStartDate(*v)
 	}
-	return aauo
+	return _u
 }
 
 // ClearStartDate clears the value of the "start_date" field.
-func (aauo *AddonAssociationUpdateOne) ClearStartDate() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearStartDate()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearStartDate() *AddonAssociationUpdateOne {
+	_u.mutation.ClearStartDate()
+	return _u
 }
 
 // SetEndDate sets the "end_date" field.
-func (aauo *AddonAssociationUpdateOne) SetEndDate(t time.Time) *AddonAssociationUpdateOne {
-	aauo.mutation.SetEndDate(t)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetEndDate(v time.Time) *AddonAssociationUpdateOne {
+	_u.mutation.SetEndDate(v)
+	return _u
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableEndDate(t *time.Time) *AddonAssociationUpdateOne {
-	if t != nil {
-		aauo.SetEndDate(*t)
+func (_u *AddonAssociationUpdateOne) SetNillableEndDate(v *time.Time) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetEndDate(*v)
 	}
-	return aauo
+	return _u
 }
 
 // ClearEndDate clears the value of the "end_date" field.
-func (aauo *AddonAssociationUpdateOne) ClearEndDate() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearEndDate()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearEndDate() *AddonAssociationUpdateOne {
+	_u.mutation.ClearEndDate()
+	return _u
 }
 
 // SetAddonStatus sets the "addon_status" field.
-func (aauo *AddonAssociationUpdateOne) SetAddonStatus(s string) *AddonAssociationUpdateOne {
-	aauo.mutation.SetAddonStatus(s)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetAddonStatus(v string) *AddonAssociationUpdateOne {
+	_u.mutation.SetAddonStatus(v)
+	return _u
 }
 
 // SetNillableAddonStatus sets the "addon_status" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableAddonStatus(s *string) *AddonAssociationUpdateOne {
-	if s != nil {
-		aauo.SetAddonStatus(*s)
+func (_u *AddonAssociationUpdateOne) SetNillableAddonStatus(v *string) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetAddonStatus(*v)
 	}
-	return aauo
+	return _u
 }
 
 // SetCancellationReason sets the "cancellation_reason" field.
-func (aauo *AddonAssociationUpdateOne) SetCancellationReason(s string) *AddonAssociationUpdateOne {
-	aauo.mutation.SetCancellationReason(s)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetCancellationReason(v string) *AddonAssociationUpdateOne {
+	_u.mutation.SetCancellationReason(v)
+	return _u
 }
 
 // SetNillableCancellationReason sets the "cancellation_reason" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableCancellationReason(s *string) *AddonAssociationUpdateOne {
-	if s != nil {
-		aauo.SetCancellationReason(*s)
+func (_u *AddonAssociationUpdateOne) SetNillableCancellationReason(v *string) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetCancellationReason(*v)
 	}
-	return aauo
+	return _u
 }
 
 // ClearCancellationReason clears the value of the "cancellation_reason" field.
-func (aauo *AddonAssociationUpdateOne) ClearCancellationReason() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearCancellationReason()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearCancellationReason() *AddonAssociationUpdateOne {
+	_u.mutation.ClearCancellationReason()
+	return _u
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (aauo *AddonAssociationUpdateOne) SetCancelledAt(t time.Time) *AddonAssociationUpdateOne {
-	aauo.mutation.SetCancelledAt(t)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetCancelledAt(v time.Time) *AddonAssociationUpdateOne {
+	_u.mutation.SetCancelledAt(v)
+	return _u
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (aauo *AddonAssociationUpdateOne) SetNillableCancelledAt(t *time.Time) *AddonAssociationUpdateOne {
-	if t != nil {
-		aauo.SetCancelledAt(*t)
+func (_u *AddonAssociationUpdateOne) SetNillableCancelledAt(v *time.Time) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetCancelledAt(*v)
 	}
-	return aauo
+	return _u
 }
 
 // ClearCancelledAt clears the value of the "cancelled_at" field.
-func (aauo *AddonAssociationUpdateOne) ClearCancelledAt() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearCancelledAt()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearCancelledAt() *AddonAssociationUpdateOne {
+	_u.mutation.ClearCancelledAt()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (aauo *AddonAssociationUpdateOne) SetMetadata(m map[string]interface{}) *AddonAssociationUpdateOne {
-	aauo.mutation.SetMetadata(m)
-	return aauo
+func (_u *AddonAssociationUpdateOne) SetMetadata(v map[string]interface{}) *AddonAssociationUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (aauo *AddonAssociationUpdateOne) ClearMetadata() *AddonAssociationUpdateOne {
-	aauo.mutation.ClearMetadata()
-	return aauo
+func (_u *AddonAssociationUpdateOne) ClearMetadata() *AddonAssociationUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // Mutation returns the AddonAssociationMutation object of the builder.
-func (aauo *AddonAssociationUpdateOne) Mutation() *AddonAssociationMutation {
-	return aauo.mutation
+func (_u *AddonAssociationUpdateOne) Mutation() *AddonAssociationMutation {
+	return _u.mutation
 }
 
 // Where appends a list predicates to the AddonAssociationUpdate builder.
-func (aauo *AddonAssociationUpdateOne) Where(ps ...predicate.AddonAssociation) *AddonAssociationUpdateOne {
-	aauo.mutation.Where(ps...)
-	return aauo
+func (_u *AddonAssociationUpdateOne) Where(ps ...predicate.AddonAssociation) *AddonAssociationUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (aauo *AddonAssociationUpdateOne) Select(field string, fields ...string) *AddonAssociationUpdateOne {
-	aauo.fields = append([]string{field}, fields...)
-	return aauo
+func (_u *AddonAssociationUpdateOne) Select(field string, fields ...string) *AddonAssociationUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated AddonAssociation entity.
-func (aauo *AddonAssociationUpdateOne) Save(ctx context.Context) (*AddonAssociation, error) {
-	aauo.defaults()
-	return withHooks(ctx, aauo.sqlSave, aauo.mutation, aauo.hooks)
+func (_u *AddonAssociationUpdateOne) Save(ctx context.Context) (*AddonAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (aauo *AddonAssociationUpdateOne) SaveX(ctx context.Context) *AddonAssociation {
-	node, err := aauo.Save(ctx)
+func (_u *AddonAssociationUpdateOne) SaveX(ctx context.Context) *AddonAssociation {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -488,29 +488,29 @@ func (aauo *AddonAssociationUpdateOne) SaveX(ctx context.Context) *AddonAssociat
 }
 
 // Exec executes the query on the entity.
-func (aauo *AddonAssociationUpdateOne) Exec(ctx context.Context) error {
-	_, err := aauo.Save(ctx)
+func (_u *AddonAssociationUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aauo *AddonAssociationUpdateOne) ExecX(ctx context.Context) {
-	if err := aauo.Exec(ctx); err != nil {
+func (_u *AddonAssociationUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (aauo *AddonAssociationUpdateOne) defaults() {
-	if _, ok := aauo.mutation.UpdatedAt(); !ok {
+func (_u *AddonAssociationUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := addonassociation.UpdateDefaultUpdatedAt()
-		aauo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (aauo *AddonAssociationUpdateOne) check() error {
-	if v, ok := aauo.mutation.AddonStatus(); ok {
+func (_u *AddonAssociationUpdateOne) check() error {
+	if v, ok := _u.mutation.AddonStatus(); ok {
 		if err := addonassociation.AddonStatusValidator(v); err != nil {
 			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.addon_status": %w`, err)}
 		}
@@ -518,17 +518,17 @@ func (aauo *AddonAssociationUpdateOne) check() error {
 	return nil
 }
 
-func (aauo *AddonAssociationUpdateOne) sqlSave(ctx context.Context) (_node *AddonAssociation, err error) {
-	if err := aauo.check(); err != nil {
+func (_u *AddonAssociationUpdateOne) sqlSave(ctx context.Context) (_node *AddonAssociation, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(addonassociation.Table, addonassociation.Columns, sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString))
-	id, ok := aauo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "AddonAssociation.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := aauo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, addonassociation.FieldID)
 		for _, f := range fields {
@@ -540,68 +540,68 @@ func (aauo *AddonAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Addo
 			}
 		}
 	}
-	if ps := aauo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := aauo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(addonassociation.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := aauo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if aauo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(addonassociation.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := aauo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedBy, field.TypeString, value)
 	}
-	if aauo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(addonassociation.FieldUpdatedBy, field.TypeString)
 	}
-	if aauo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(addonassociation.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := aauo.mutation.StartDate(); ok {
+	if value, ok := _u.mutation.StartDate(); ok {
 		_spec.SetField(addonassociation.FieldStartDate, field.TypeTime, value)
 	}
-	if aauo.mutation.StartDateCleared() {
+	if _u.mutation.StartDateCleared() {
 		_spec.ClearField(addonassociation.FieldStartDate, field.TypeTime)
 	}
-	if value, ok := aauo.mutation.EndDate(); ok {
+	if value, ok := _u.mutation.EndDate(); ok {
 		_spec.SetField(addonassociation.FieldEndDate, field.TypeTime, value)
 	}
-	if aauo.mutation.EndDateCleared() {
+	if _u.mutation.EndDateCleared() {
 		_spec.ClearField(addonassociation.FieldEndDate, field.TypeTime)
 	}
-	if value, ok := aauo.mutation.AddonStatus(); ok {
+	if value, ok := _u.mutation.AddonStatus(); ok {
 		_spec.SetField(addonassociation.FieldAddonStatus, field.TypeString, value)
 	}
-	if value, ok := aauo.mutation.CancellationReason(); ok {
+	if value, ok := _u.mutation.CancellationReason(); ok {
 		_spec.SetField(addonassociation.FieldCancellationReason, field.TypeString, value)
 	}
-	if aauo.mutation.CancellationReasonCleared() {
+	if _u.mutation.CancellationReasonCleared() {
 		_spec.ClearField(addonassociation.FieldCancellationReason, field.TypeString)
 	}
-	if value, ok := aauo.mutation.CancelledAt(); ok {
+	if value, ok := _u.mutation.CancelledAt(); ok {
 		_spec.SetField(addonassociation.FieldCancelledAt, field.TypeTime, value)
 	}
-	if aauo.mutation.CancelledAtCleared() {
+	if _u.mutation.CancelledAtCleared() {
 		_spec.ClearField(addonassociation.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := aauo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(addonassociation.FieldMetadata, field.TypeJSON, value)
 	}
-	if aauo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(addonassociation.FieldMetadata, field.TypeJSON)
 	}
-	_node = &AddonAssociation{config: aauo.config}
+	_node = &AddonAssociation{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, aauo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{addonassociation.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -609,6 +609,6 @@ func (aauo *AddonAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Addo
 		}
 		return nil, err
 	}
-	aauo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

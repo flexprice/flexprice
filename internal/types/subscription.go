@@ -78,6 +78,14 @@ const (
 	SubscriptionLineItemEntityTypeSubscription SubscriptionLineItemEntityType = "subscription"
 )
 
+// SubscriptionLineItemMetadataKeyPredecessorID is stored on a successor line item
+// created by an update so cancellation can restore only that predecessor.
+const SubscriptionLineItemMetadataKeyPredecessorID = "predecessor_line_item_id"
+
+// SubscriptionLineItemMetadataKeySuccessorID is stored on a predecessor so delete
+// can reject a line that still has a later scheduled version.
+const SubscriptionLineItemMetadataKeySuccessorID = "successor_line_item_id"
+
 // SubscriptionStatus is the status of a subscription
 // For now taking inspiration from Stripe's subscription statuses
 // https://stripe.com/docs/api/subscriptions/object#subscription_object-status
@@ -139,6 +147,23 @@ func (p PaymentBehavior) String() string {
 	return string(p)
 }
 
+// CancellationReasonPaymentOverdue is set by auto-cancellation when an invoice stays unpaid past due date + grace.
+const CancellationReasonPaymentOverdue = "payment_overdue"
+
+// IncompletePaymentBehaviors returns the behaviors that gate a subscription on invoice payment.
+func IncompletePaymentBehaviors() []PaymentBehavior {
+	return []PaymentBehavior{
+		PaymentBehaviorAllowIncomplete,
+		PaymentBehaviorDefaultIncomplete,
+		PaymentBehaviorErrorIfIncomplete,
+	}
+}
+
+// IsIncompleteType reports whether the behavior gates the subscription on invoice payment.
+func (p PaymentBehavior) IsIncompleteType() bool {
+	return lo.Contains(IncompletePaymentBehaviors(), p)
+}
+
 func (p PaymentBehavior) Validate() error {
 	allowed := []PaymentBehavior{
 		PaymentBehaviorAllowIncomplete,
@@ -190,6 +215,53 @@ func (c CollectionMethod) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// LineItemGrouping controls how many invoice line items a charge produces when its
+// cadence is shorter than the subscription's. Presentation only: charges are always
+// computed per charge period, so the total is the same under either value.
+type LineItemGrouping string
+
+const (
+	// LineItemGroupingPerChargePeriod - one line item per charge period (monthly price on a quarterly sub bills as 3 rows)
+	LineItemGroupingPerChargePeriod LineItemGrouping = "per_charge_period"
+
+	// LineItemGroupingPerBillingPeriod - those rows collapsed into one spanning the billing period
+	LineItemGroupingPerBillingPeriod LineItemGrouping = "per_billing_period"
+)
+
+func (g LineItemGrouping) String() string {
+	return string(g)
+}
+
+func (g LineItemGrouping) Validate() error {
+	allowed := []LineItemGrouping{
+		LineItemGroupingPerChargePeriod,
+		LineItemGroupingPerBillingPeriod,
+	}
+
+	if g != "" && !lo.Contains(allowed, g) {
+		return ierr.NewError("invalid line item grouping").
+			WithHint("Invalid line item grouping").
+			WithReportableDetails(map[string]any{
+				"line_item_grouping": g,
+				"allowed_values":     allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// Default resolves an unset value to the fan-out behavior that predates this setting.
+func (g LineItemGrouping) Default() LineItemGrouping {
+	if g == "" {
+		return LineItemGroupingPerChargePeriod
+	}
+	return g
+}
+
+func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
+	return g.Default() == LineItemGroupingPerBillingPeriod
 }
 
 // PaymentTerms represents net payment terms (e.g. "30 NET" = payment due in 30 days).

@@ -120,11 +120,12 @@ func (s *PlanSwapEnablementSuite) createPlanPrice(planID string, seq int64) *pri
 
 func (s *PlanSwapEnablementSuite) swapPlan(toPlanID string) {
 	ctx := s.GetContext()
-	sub, err := s.GetStores().SubscriptionRepo.GetForUpdate(ctx, s.td.sub.ID)
+	_, err := s.GetStores().SubscriptionRepo.GetForUpdate(ctx, s.td.sub.ID)
 	s.Require().NoError(err)
 
-	sub.PlanID = toPlanID
-	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	// UpdatePlan, not Update: the repository writes plan_id only through this method so
+	// a plan move cannot ride along with an unrelated write.
+	s.Require().NoError(s.GetStores().SubscriptionRepo.UpdatePlan(ctx, s.td.sub.ID, toPlanID))
 }
 
 func (s *PlanSwapEnablementSuite) staleForPlan(planID string) ([]string, []planpricesync.PlanLineItemCreationDelta) {

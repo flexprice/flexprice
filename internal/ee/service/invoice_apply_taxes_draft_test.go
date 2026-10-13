@@ -1,9 +1,16 @@
 package service
 
 import (
+	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/types"
@@ -154,7 +161,7 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_FinalizeNoDoubleTax(
 	taxAfterApply := updated.TotalTax
 	s.True(decimal.NewFromInt(10).Equal(taxAfterApply), "expected tax 10 after apply, got %s", taxAfterApply)
 
-	err = s.service.FinalizeInvoice(ctx, inv.ID)
+	err = s.service.FinalizeInvoice(ctx, inv.ID, dto.FinalizeInvoiceRequest{})
 	s.Require().NoError(err)
 
 	afterFinalize, err := s.invoiceRepo.Get(ctx, inv.ID)
@@ -164,4 +171,188 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_FinalizeNoDoubleTax(
 		"finalize must not double-tax: apply=%s finalize=%s", taxAfterApply, afterFinalize.TotalTax)
 	s.True(subtotal.Add(taxAfterApply).Equal(afterFinalize.AmountDue),
 		"expected amount_due %s after finalize, got %s", subtotal.Add(taxAfterApply), afterFinalize.AmountDue)
+}
+
+func (s *InvoiceServiceSuite) markCustomerExempt() {
+	ctx := s.GetContext()
+	s.testData.customer.TaxTreatment = types.TaxTreatmentExempt
+	s.Require().NoError(s.GetStores().CustomerRepo.Update(ctx, s.testData.customer))
+}
+
+func (s *InvoiceServiceSuite) selectStripeTaxEngine() {
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().SettingsRepo.Create(ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyTaxConfig,
+		Value:         map[string]interface{}{"enabled": true, "provider": string(types.TaxProviderStripe)},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+}
+
+func (s *InvoiceServiceSuite) invoiceTaxApplied(invoiceID string) int {
+	filter := types.NewNoLimitTaxAppliedFilter()
+	filter.EntityType = types.TaxRateEntityTypeInvoice
+	filter.EntityID = invoiceID
+	records, err := s.GetStores().TaxAppliedRepo.List(s.GetContext(), filter)
+	s.Require().NoError(err)
+	return len(records)
+}
+
+// An exempt customer is billed the subtotal as priced. The subscription's tax association is
+// never resolved, and the rows written while the customer was taxable are archived.
+func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_ExemptCustomerIsNotTaxed() {
+	ctx := s.GetContext()
+	subtotal := decimal.NewFromInt(100)
+	inv := s.buildDraftSubscriptionInvoice("inv_draft_tax_exempt", subtotal, false)
+
+	tr := s.createPercentageTaxRate(10)
+	s.createSubscriptionTaxAssociation(tr.ID, s.testData.subscription.ID)
+
+	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	taxed, err := s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(10).Equal(taxed.TotalTax), "taxable first, got %s", taxed.TotalTax)
+	s.Equal(1, s.invoiceTaxApplied(inv.ID))
+
+	s.markCustomerExempt()
+
+	fresh, err = s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	_, err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	s.Require().NoError(err)
+
+	got, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.True(got.TotalTax.IsZero(), "expected zero total_tax, got %s", got.TotalTax)
+	s.True(subtotal.Equal(got.Total), "expected total %s, got %s", subtotal, got.Total)
+	s.True(subtotal.Equal(got.AmountDue), "expected amount_due %s, got %s", subtotal, got.AmountDue)
+	s.Require().NotNil(got.TaxExemptionReasonCode)
+	s.Equal(types.TaxExemptionReasonCustomerExempt, *got.TaxExemptionReasonCode)
+	s.Equal(0, s.invoiceTaxApplied(inv.ID), "earlier tax rows must be archived")
+}
+
+// With Stripe selected as the tax engine and no Stripe connection, an exempt customer's invoice
+// still computes and finalizes, because the engine is never resolved.
+func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_ExemptCustomerSkipsExternalEngine() {
+	ctx := s.GetContext()
+	s.selectStripeTaxEngine()
+	s.markCustomerExempt()
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
+	subtotal := decimal.NewFromInt(100)
+	inv := s.buildDraftSubscriptionInvoice("inv_draft_tax_exempt_stripe", subtotal, true)
+
+	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	_, err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	s.Require().NoError(err, "an exempt customer must not resolve the external engine")
+
+	s.Require().NoError(s.service.FinalizeInvoice(ctx, inv.ID, dto.FinalizeInvoiceRequest{}))
+
+	got, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+	s.True(got.TotalTax.IsZero(), "expected zero total_tax, got %s", got.TotalTax)
+	s.True(subtotal.Equal(got.Total), "expected total %s, got %s", subtotal, got.Total)
+	s.Require().NotNil(got.TaxExemptionReasonCode)
+	s.Equal(types.TaxExemptionReasonCustomerExempt, *got.TaxExemptionReasonCode)
+	s.Equal(0, s.invoiceTaxApplied(inv.ID))
+	s.NotContains(rec.getByProviderCalls, types.SecretProviderStripe,
+		"the Stripe connection must never be looked up for an exempt customer")
+}
+
+// Control for the test above: the same setup for a taxable customer does reach Stripe and fails.
+func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_TaxableCustomerReachesExternalEngine() {
+	ctx := s.GetContext()
+	s.selectStripeTaxEngine()
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            types.GenerateUUIDWithPrefix("conn"),
+		Name:          "stripe",
+		ProviderType:  types.SecretProviderStripe,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	inv := s.buildDraftSubscriptionInvoice("inv_draft_tax_taxable_stripe", decimal.NewFromInt(100), true)
+
+	fresh, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	_, err = s.service.RecalculateTaxesOnInvoice(ctx, fresh)
+	s.Require().Error(err, "a taxable customer is sent to Stripe, which has no credentials here")
+}
+
+// Subscription invoices finalize through ProcessDraftInvoice. With Stripe selected and no Stripe
+// connection, an exempt customer's invoice still finalizes, and tax adds no Stripe lookups on top
+// of the ones payment collection makes on its own.
+func (s *InvoiceServiceSuite) TestProcessDraftInvoice_ExemptCustomerSkipsExternalEngine() {
+	ctx := s.GetContext()
+	s.markCustomerExempt()
+
+	rec := &recordingConnectionRepo{Repository: s.GetStores().ConnectionRepo}
+	s.service.(*invoiceService).ConnectionRepo = rec
+
+	baseline := s.buildDraftSubscriptionInvoice("inv_draft_process_exempt_native", decimal.NewFromInt(100), true)
+	s.Require().NoError(s.service.ProcessDraftInvoice(ctx, baseline.ID, nil, s.testData.subscription, types.InvoiceFlowManual))
+	paymentLookups := len(rec.getByProviderCalls)
+
+	s.selectStripeTaxEngine()
+	rec.getByProviderCalls = nil
+
+	subtotal := decimal.NewFromInt(100)
+	inv := s.buildDraftSubscriptionInvoice("inv_draft_process_exempt_stripe", subtotal, true)
+
+	err := s.service.ProcessDraftInvoice(ctx, inv.ID, nil, s.testData.subscription, types.InvoiceFlowManual)
+	s.Require().NoError(err, "an exempt customer must not resolve the external engine")
+
+	got, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+	s.True(got.TotalTax.IsZero(), "expected zero total_tax, got %s", got.TotalTax)
+	s.True(subtotal.Equal(got.Total), "expected total %s, got %s", subtotal, got.Total)
+	s.Require().NotNil(got.TaxExemptionReasonCode)
+	s.Equal(types.TaxExemptionReasonCustomerExempt, *got.TaxExemptionReasonCode)
+	s.Len(rec.getByProviderCalls, paymentLookups,
+		"selecting Stripe as the tax engine must add no connection lookups for an exempt customer")
+}
+
+// sealedInvoiceCustomerRepo fails customer reads once the watched invoice is finalized, so only
+// reads made after sealing fail.
+type sealedInvoiceCustomerRepo struct {
+	customer.Repository
+	invoices  invoice.Repository
+	invoiceID string
+}
+
+func (r *sealedInvoiceCustomerRepo) Get(ctx context.Context, id string) (*customer.Customer, error) {
+	inv, err := r.invoices.Get(ctx, r.invoiceID)
+	if err == nil && inv.InvoiceStatus == types.InvoiceStatusFinalized {
+		return nil, ierr.NewError("customer read failed").Mark(ierr.ErrDatabase)
+	}
+	return r.Repository.Get(ctx, id)
+}
+
+// The customer is read after the invoice is sealed and only to decide tax filing, so a failed
+// read is logged and the finalize still succeeds.
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_CustomerReadFailureDoesNotFailFinalize() {
+	ctx := s.GetContext()
+	inv := s.buildDraftSubscriptionInvoice("inv_draft_oneoff_customer_read_fails", decimal.NewFromInt(100), true)
+	inv.InvoiceType = types.InvoiceTypeOneOff
+	inv.SubscriptionID = nil
+	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+	s.service.(*invoiceService).CustomerRepo = &sealedInvoiceCustomerRepo{
+		Repository: s.GetStores().CustomerRepo,
+		invoices:   s.invoiceRepo,
+		invoiceID:  inv.ID,
+	}
+
+	s.Require().NoError(s.service.FinalizeInvoice(ctx, inv.ID, dto.FinalizeInvoiceRequest{}))
+
+	got, err := s.invoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
 }

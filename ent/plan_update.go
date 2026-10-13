@@ -24,188 +24,188 @@ type PlanUpdate struct {
 }
 
 // Where appends a list predicates to the PlanUpdate builder.
-func (pu *PlanUpdate) Where(ps ...predicate.Plan) *PlanUpdate {
-	pu.mutation.Where(ps...)
-	return pu
+func (_u *PlanUpdate) Where(ps ...predicate.Plan) *PlanUpdate {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // SetStatus sets the "status" field.
-func (pu *PlanUpdate) SetStatus(s string) *PlanUpdate {
-	pu.mutation.SetStatus(s)
-	return pu
+func (_u *PlanUpdate) SetStatus(v string) *PlanUpdate {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableStatus(s *string) *PlanUpdate {
-	if s != nil {
-		pu.SetStatus(*s)
+func (_u *PlanUpdate) SetNillableStatus(v *string) *PlanUpdate {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return pu
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (pu *PlanUpdate) SetUpdatedAt(t time.Time) *PlanUpdate {
-	pu.mutation.SetUpdatedAt(t)
-	return pu
+func (_u *PlanUpdate) SetUpdatedAt(v time.Time) *PlanUpdate {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (pu *PlanUpdate) SetUpdatedBy(s string) *PlanUpdate {
-	pu.mutation.SetUpdatedBy(s)
-	return pu
+func (_u *PlanUpdate) SetUpdatedBy(v string) *PlanUpdate {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableUpdatedBy(s *string) *PlanUpdate {
-	if s != nil {
-		pu.SetUpdatedBy(*s)
+func (_u *PlanUpdate) SetNillableUpdatedBy(v *string) *PlanUpdate {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return pu
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (pu *PlanUpdate) ClearUpdatedBy() *PlanUpdate {
-	pu.mutation.ClearUpdatedBy()
-	return pu
+func (_u *PlanUpdate) ClearUpdatedBy() *PlanUpdate {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (pu *PlanUpdate) SetMetadata(m map[string]string) *PlanUpdate {
-	pu.mutation.SetMetadata(m)
-	return pu
+func (_u *PlanUpdate) SetMetadata(v map[string]string) *PlanUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (pu *PlanUpdate) ClearMetadata() *PlanUpdate {
-	pu.mutation.ClearMetadata()
-	return pu
+func (_u *PlanUpdate) ClearMetadata() *PlanUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (pu *PlanUpdate) SetLookupKey(s string) *PlanUpdate {
-	pu.mutation.SetLookupKey(s)
-	return pu
+func (_u *PlanUpdate) SetLookupKey(v string) *PlanUpdate {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableLookupKey(s *string) *PlanUpdate {
-	if s != nil {
-		pu.SetLookupKey(*s)
+func (_u *PlanUpdate) SetNillableLookupKey(v *string) *PlanUpdate {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return pu
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (pu *PlanUpdate) ClearLookupKey() *PlanUpdate {
-	pu.mutation.ClearLookupKey()
-	return pu
+func (_u *PlanUpdate) ClearLookupKey() *PlanUpdate {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (pu *PlanUpdate) SetName(s string) *PlanUpdate {
-	pu.mutation.SetName(s)
-	return pu
+func (_u *PlanUpdate) SetName(v string) *PlanUpdate {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableName(s *string) *PlanUpdate {
-	if s != nil {
-		pu.SetName(*s)
+func (_u *PlanUpdate) SetNillableName(v *string) *PlanUpdate {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return pu
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (pu *PlanUpdate) SetDescription(s string) *PlanUpdate {
-	pu.mutation.SetDescription(s)
-	return pu
+func (_u *PlanUpdate) SetDescription(v string) *PlanUpdate {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableDescription(s *string) *PlanUpdate {
-	if s != nil {
-		pu.SetDescription(*s)
+func (_u *PlanUpdate) SetNillableDescription(v *string) *PlanUpdate {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return pu
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (pu *PlanUpdate) ClearDescription() *PlanUpdate {
-	pu.mutation.ClearDescription()
-	return pu
+func (_u *PlanUpdate) ClearDescription() *PlanUpdate {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetDisplayOrder sets the "display_order" field.
-func (pu *PlanUpdate) SetDisplayOrder(i int) *PlanUpdate {
-	pu.mutation.ResetDisplayOrder()
-	pu.mutation.SetDisplayOrder(i)
-	return pu
+func (_u *PlanUpdate) SetDisplayOrder(v int) *PlanUpdate {
+	_u.mutation.ResetDisplayOrder()
+	_u.mutation.SetDisplayOrder(v)
+	return _u
 }
 
 // SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
-func (pu *PlanUpdate) SetNillableDisplayOrder(i *int) *PlanUpdate {
-	if i != nil {
-		pu.SetDisplayOrder(*i)
+func (_u *PlanUpdate) SetNillableDisplayOrder(v *int) *PlanUpdate {
+	if v != nil {
+		_u.SetDisplayOrder(*v)
 	}
-	return pu
+	return _u
 }
 
-// AddDisplayOrder adds i to the "display_order" field.
-func (pu *PlanUpdate) AddDisplayOrder(i int) *PlanUpdate {
-	pu.mutation.AddDisplayOrder(i)
-	return pu
+// AddDisplayOrder adds value to the "display_order" field.
+func (_u *PlanUpdate) AddDisplayOrder(v int) *PlanUpdate {
+	_u.mutation.AddDisplayOrder(v)
+	return _u
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
-func (pu *PlanUpdate) AddCreditGrantIDs(ids ...string) *PlanUpdate {
-	pu.mutation.AddCreditGrantIDs(ids...)
-	return pu
+func (_u *PlanUpdate) AddCreditGrantIDs(ids ...string) *PlanUpdate {
+	_u.mutation.AddCreditGrantIDs(ids...)
+	return _u
 }
 
 // AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
-func (pu *PlanUpdate) AddCreditGrants(c ...*CreditGrant) *PlanUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *PlanUpdate) AddCreditGrants(v ...*CreditGrant) *PlanUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return pu.AddCreditGrantIDs(ids...)
+	return _u.AddCreditGrantIDs(ids...)
 }
 
 // Mutation returns the PlanMutation object of the builder.
-func (pu *PlanUpdate) Mutation() *PlanMutation {
-	return pu.mutation
+func (_u *PlanUpdate) Mutation() *PlanMutation {
+	return _u.mutation
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
-func (pu *PlanUpdate) ClearCreditGrants() *PlanUpdate {
-	pu.mutation.ClearCreditGrants()
-	return pu
+func (_u *PlanUpdate) ClearCreditGrants() *PlanUpdate {
+	_u.mutation.ClearCreditGrants()
+	return _u
 }
 
 // RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
-func (pu *PlanUpdate) RemoveCreditGrantIDs(ids ...string) *PlanUpdate {
-	pu.mutation.RemoveCreditGrantIDs(ids...)
-	return pu
+func (_u *PlanUpdate) RemoveCreditGrantIDs(ids ...string) *PlanUpdate {
+	_u.mutation.RemoveCreditGrantIDs(ids...)
+	return _u
 }
 
 // RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
-func (pu *PlanUpdate) RemoveCreditGrants(c ...*CreditGrant) *PlanUpdate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *PlanUpdate) RemoveCreditGrants(v ...*CreditGrant) *PlanUpdate {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return pu.RemoveCreditGrantIDs(ids...)
+	return _u.RemoveCreditGrantIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
-func (pu *PlanUpdate) Save(ctx context.Context) (int, error) {
-	pu.defaults()
-	return withHooks(ctx, pu.sqlSave, pu.mutation, pu.hooks)
+func (_u *PlanUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (pu *PlanUpdate) SaveX(ctx context.Context) int {
-	affected, err := pu.Save(ctx)
+func (_u *PlanUpdate) SaveX(ctx context.Context) int {
+	affected, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -213,29 +213,29 @@ func (pu *PlanUpdate) SaveX(ctx context.Context) int {
 }
 
 // Exec executes the query.
-func (pu *PlanUpdate) Exec(ctx context.Context) error {
-	_, err := pu.Save(ctx)
+func (_u *PlanUpdate) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (pu *PlanUpdate) ExecX(ctx context.Context) {
-	if err := pu.Exec(ctx); err != nil {
+func (_u *PlanUpdate) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (pu *PlanUpdate) defaults() {
-	if _, ok := pu.mutation.UpdatedAt(); !ok {
+func (_u *PlanUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := plan.UpdateDefaultUpdatedAt()
-		pu.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (pu *PlanUpdate) check() error {
-	if v, ok := pu.mutation.Name(); ok {
+func (_u *PlanUpdate) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := plan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Plan.name": %w`, err)}
 		}
@@ -243,64 +243,64 @@ func (pu *PlanUpdate) check() error {
 	return nil
 }
 
-func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := pu.check(); err != nil {
-		return n, err
+func (_u *PlanUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(plan.Table, plan.Columns, sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString))
-	if ps := pu.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := pu.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(plan.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := pu.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(plan.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if pu.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(plan.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := pu.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(plan.FieldUpdatedBy, field.TypeString, value)
 	}
-	if pu.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(plan.FieldUpdatedBy, field.TypeString)
 	}
-	if pu.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(plan.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := pu.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(plan.FieldMetadata, field.TypeJSON, value)
 	}
-	if pu.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(plan.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := pu.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(plan.FieldLookupKey, field.TypeString, value)
 	}
-	if pu.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(plan.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := pu.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(plan.FieldName, field.TypeString, value)
 	}
-	if value, ok := pu.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(plan.FieldDescription, field.TypeString, value)
 	}
-	if pu.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(plan.FieldDescription, field.TypeString)
 	}
-	if value, ok := pu.mutation.DisplayOrder(); ok {
+	if value, ok := _u.mutation.DisplayOrder(); ok {
 		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := pu.mutation.AddedDisplayOrder(); ok {
+	if value, ok := _u.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if pu.mutation.CreditGrantsCleared() {
+	if _u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -313,7 +313,7 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := pu.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !pu.mutation.CreditGrantsCleared() {
+	if nodes := _u.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !_u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -329,7 +329,7 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := pu.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -345,7 +345,7 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if n, err = sqlgraph.UpdateNodes(ctx, pu.driver, _spec); err != nil {
+	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{plan.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -353,8 +353,8 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
-	pu.mutation.done = true
-	return n, nil
+	_u.mutation.done = true
+	return _node, nil
 }
 
 // PlanUpdateOne is the builder for updating a single Plan entity.
@@ -366,195 +366,195 @@ type PlanUpdateOne struct {
 }
 
 // SetStatus sets the "status" field.
-func (puo *PlanUpdateOne) SetStatus(s string) *PlanUpdateOne {
-	puo.mutation.SetStatus(s)
-	return puo
+func (_u *PlanUpdateOne) SetStatus(v string) *PlanUpdateOne {
+	_u.mutation.SetStatus(v)
+	return _u
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableStatus(s *string) *PlanUpdateOne {
-	if s != nil {
-		puo.SetStatus(*s)
+func (_u *PlanUpdateOne) SetNillableStatus(v *string) *PlanUpdateOne {
+	if v != nil {
+		_u.SetStatus(*v)
 	}
-	return puo
+	return _u
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (puo *PlanUpdateOne) SetUpdatedAt(t time.Time) *PlanUpdateOne {
-	puo.mutation.SetUpdatedAt(t)
-	return puo
+func (_u *PlanUpdateOne) SetUpdatedAt(v time.Time) *PlanUpdateOne {
+	_u.mutation.SetUpdatedAt(v)
+	return _u
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (puo *PlanUpdateOne) SetUpdatedBy(s string) *PlanUpdateOne {
-	puo.mutation.SetUpdatedBy(s)
-	return puo
+func (_u *PlanUpdateOne) SetUpdatedBy(v string) *PlanUpdateOne {
+	_u.mutation.SetUpdatedBy(v)
+	return _u
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableUpdatedBy(s *string) *PlanUpdateOne {
-	if s != nil {
-		puo.SetUpdatedBy(*s)
+func (_u *PlanUpdateOne) SetNillableUpdatedBy(v *string) *PlanUpdateOne {
+	if v != nil {
+		_u.SetUpdatedBy(*v)
 	}
-	return puo
+	return _u
 }
 
 // ClearUpdatedBy clears the value of the "updated_by" field.
-func (puo *PlanUpdateOne) ClearUpdatedBy() *PlanUpdateOne {
-	puo.mutation.ClearUpdatedBy()
-	return puo
+func (_u *PlanUpdateOne) ClearUpdatedBy() *PlanUpdateOne {
+	_u.mutation.ClearUpdatedBy()
+	return _u
 }
 
 // SetMetadata sets the "metadata" field.
-func (puo *PlanUpdateOne) SetMetadata(m map[string]string) *PlanUpdateOne {
-	puo.mutation.SetMetadata(m)
-	return puo
+func (_u *PlanUpdateOne) SetMetadata(v map[string]string) *PlanUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
 }
 
 // ClearMetadata clears the value of the "metadata" field.
-func (puo *PlanUpdateOne) ClearMetadata() *PlanUpdateOne {
-	puo.mutation.ClearMetadata()
-	return puo
+func (_u *PlanUpdateOne) ClearMetadata() *PlanUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
 }
 
 // SetLookupKey sets the "lookup_key" field.
-func (puo *PlanUpdateOne) SetLookupKey(s string) *PlanUpdateOne {
-	puo.mutation.SetLookupKey(s)
-	return puo
+func (_u *PlanUpdateOne) SetLookupKey(v string) *PlanUpdateOne {
+	_u.mutation.SetLookupKey(v)
+	return _u
 }
 
 // SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableLookupKey(s *string) *PlanUpdateOne {
-	if s != nil {
-		puo.SetLookupKey(*s)
+func (_u *PlanUpdateOne) SetNillableLookupKey(v *string) *PlanUpdateOne {
+	if v != nil {
+		_u.SetLookupKey(*v)
 	}
-	return puo
+	return _u
 }
 
 // ClearLookupKey clears the value of the "lookup_key" field.
-func (puo *PlanUpdateOne) ClearLookupKey() *PlanUpdateOne {
-	puo.mutation.ClearLookupKey()
-	return puo
+func (_u *PlanUpdateOne) ClearLookupKey() *PlanUpdateOne {
+	_u.mutation.ClearLookupKey()
+	return _u
 }
 
 // SetName sets the "name" field.
-func (puo *PlanUpdateOne) SetName(s string) *PlanUpdateOne {
-	puo.mutation.SetName(s)
-	return puo
+func (_u *PlanUpdateOne) SetName(v string) *PlanUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
 }
 
 // SetNillableName sets the "name" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableName(s *string) *PlanUpdateOne {
-	if s != nil {
-		puo.SetName(*s)
+func (_u *PlanUpdateOne) SetNillableName(v *string) *PlanUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
 	}
-	return puo
+	return _u
 }
 
 // SetDescription sets the "description" field.
-func (puo *PlanUpdateOne) SetDescription(s string) *PlanUpdateOne {
-	puo.mutation.SetDescription(s)
-	return puo
+func (_u *PlanUpdateOne) SetDescription(v string) *PlanUpdateOne {
+	_u.mutation.SetDescription(v)
+	return _u
 }
 
 // SetNillableDescription sets the "description" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableDescription(s *string) *PlanUpdateOne {
-	if s != nil {
-		puo.SetDescription(*s)
+func (_u *PlanUpdateOne) SetNillableDescription(v *string) *PlanUpdateOne {
+	if v != nil {
+		_u.SetDescription(*v)
 	}
-	return puo
+	return _u
 }
 
 // ClearDescription clears the value of the "description" field.
-func (puo *PlanUpdateOne) ClearDescription() *PlanUpdateOne {
-	puo.mutation.ClearDescription()
-	return puo
+func (_u *PlanUpdateOne) ClearDescription() *PlanUpdateOne {
+	_u.mutation.ClearDescription()
+	return _u
 }
 
 // SetDisplayOrder sets the "display_order" field.
-func (puo *PlanUpdateOne) SetDisplayOrder(i int) *PlanUpdateOne {
-	puo.mutation.ResetDisplayOrder()
-	puo.mutation.SetDisplayOrder(i)
-	return puo
+func (_u *PlanUpdateOne) SetDisplayOrder(v int) *PlanUpdateOne {
+	_u.mutation.ResetDisplayOrder()
+	_u.mutation.SetDisplayOrder(v)
+	return _u
 }
 
 // SetNillableDisplayOrder sets the "display_order" field if the given value is not nil.
-func (puo *PlanUpdateOne) SetNillableDisplayOrder(i *int) *PlanUpdateOne {
-	if i != nil {
-		puo.SetDisplayOrder(*i)
+func (_u *PlanUpdateOne) SetNillableDisplayOrder(v *int) *PlanUpdateOne {
+	if v != nil {
+		_u.SetDisplayOrder(*v)
 	}
-	return puo
+	return _u
 }
 
-// AddDisplayOrder adds i to the "display_order" field.
-func (puo *PlanUpdateOne) AddDisplayOrder(i int) *PlanUpdateOne {
-	puo.mutation.AddDisplayOrder(i)
-	return puo
+// AddDisplayOrder adds value to the "display_order" field.
+func (_u *PlanUpdateOne) AddDisplayOrder(v int) *PlanUpdateOne {
+	_u.mutation.AddDisplayOrder(v)
+	return _u
 }
 
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
-func (puo *PlanUpdateOne) AddCreditGrantIDs(ids ...string) *PlanUpdateOne {
-	puo.mutation.AddCreditGrantIDs(ids...)
-	return puo
+func (_u *PlanUpdateOne) AddCreditGrantIDs(ids ...string) *PlanUpdateOne {
+	_u.mutation.AddCreditGrantIDs(ids...)
+	return _u
 }
 
 // AddCreditGrants adds the "credit_grants" edges to the CreditGrant entity.
-func (puo *PlanUpdateOne) AddCreditGrants(c ...*CreditGrant) *PlanUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *PlanUpdateOne) AddCreditGrants(v ...*CreditGrant) *PlanUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puo.AddCreditGrantIDs(ids...)
+	return _u.AddCreditGrantIDs(ids...)
 }
 
 // Mutation returns the PlanMutation object of the builder.
-func (puo *PlanUpdateOne) Mutation() *PlanMutation {
-	return puo.mutation
+func (_u *PlanUpdateOne) Mutation() *PlanMutation {
+	return _u.mutation
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
-func (puo *PlanUpdateOne) ClearCreditGrants() *PlanUpdateOne {
-	puo.mutation.ClearCreditGrants()
-	return puo
+func (_u *PlanUpdateOne) ClearCreditGrants() *PlanUpdateOne {
+	_u.mutation.ClearCreditGrants()
+	return _u
 }
 
 // RemoveCreditGrantIDs removes the "credit_grants" edge to CreditGrant entities by IDs.
-func (puo *PlanUpdateOne) RemoveCreditGrantIDs(ids ...string) *PlanUpdateOne {
-	puo.mutation.RemoveCreditGrantIDs(ids...)
-	return puo
+func (_u *PlanUpdateOne) RemoveCreditGrantIDs(ids ...string) *PlanUpdateOne {
+	_u.mutation.RemoveCreditGrantIDs(ids...)
+	return _u
 }
 
 // RemoveCreditGrants removes "credit_grants" edges to CreditGrant entities.
-func (puo *PlanUpdateOne) RemoveCreditGrants(c ...*CreditGrant) *PlanUpdateOne {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
+func (_u *PlanUpdateOne) RemoveCreditGrants(v ...*CreditGrant) *PlanUpdateOne {
+	ids := make([]string, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
 	}
-	return puo.RemoveCreditGrantIDs(ids...)
+	return _u.RemoveCreditGrantIDs(ids...)
 }
 
 // Where appends a list predicates to the PlanUpdate builder.
-func (puo *PlanUpdateOne) Where(ps ...predicate.Plan) *PlanUpdateOne {
-	puo.mutation.Where(ps...)
-	return puo
+func (_u *PlanUpdateOne) Where(ps ...predicate.Plan) *PlanUpdateOne {
+	_u.mutation.Where(ps...)
+	return _u
 }
 
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
-func (puo *PlanUpdateOne) Select(field string, fields ...string) *PlanUpdateOne {
-	puo.fields = append([]string{field}, fields...)
-	return puo
+func (_u *PlanUpdateOne) Select(field string, fields ...string) *PlanUpdateOne {
+	_u.fields = append([]string{field}, fields...)
+	return _u
 }
 
 // Save executes the query and returns the updated Plan entity.
-func (puo *PlanUpdateOne) Save(ctx context.Context) (*Plan, error) {
-	puo.defaults()
-	return withHooks(ctx, puo.sqlSave, puo.mutation, puo.hooks)
+func (_u *PlanUpdateOne) Save(ctx context.Context) (*Plan, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (puo *PlanUpdateOne) SaveX(ctx context.Context) *Plan {
-	node, err := puo.Save(ctx)
+func (_u *PlanUpdateOne) SaveX(ctx context.Context) *Plan {
+	node, err := _u.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -562,29 +562,29 @@ func (puo *PlanUpdateOne) SaveX(ctx context.Context) *Plan {
 }
 
 // Exec executes the query on the entity.
-func (puo *PlanUpdateOne) Exec(ctx context.Context) error {
-	_, err := puo.Save(ctx)
+func (_u *PlanUpdateOne) Exec(ctx context.Context) error {
+	_, err := _u.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (puo *PlanUpdateOne) ExecX(ctx context.Context) {
-	if err := puo.Exec(ctx); err != nil {
+func (_u *PlanUpdateOne) ExecX(ctx context.Context) {
+	if err := _u.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (puo *PlanUpdateOne) defaults() {
-	if _, ok := puo.mutation.UpdatedAt(); !ok {
+func (_u *PlanUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
 		v := plan.UpdateDefaultUpdatedAt()
-		puo.mutation.SetUpdatedAt(v)
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (puo *PlanUpdateOne) check() error {
-	if v, ok := puo.mutation.Name(); ok {
+func (_u *PlanUpdateOne) check() error {
+	if v, ok := _u.mutation.Name(); ok {
 		if err := plan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Plan.name": %w`, err)}
 		}
@@ -592,17 +592,17 @@ func (puo *PlanUpdateOne) check() error {
 	return nil
 }
 
-func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) {
-	if err := puo.check(); err != nil {
+func (_u *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) {
+	if err := _u.check(); err != nil {
 		return _node, err
 	}
 	_spec := sqlgraph.NewUpdateSpec(plan.Table, plan.Columns, sqlgraph.NewFieldSpec(plan.FieldID, field.TypeString))
-	id, ok := puo.mutation.ID()
+	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Plan.id" for update`)}
 	}
 	_spec.Node.ID.Value = id
-	if fields := puo.fields; len(fields) > 0 {
+	if fields := _u.fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, plan.FieldID)
 		for _, f := range fields {
@@ -614,59 +614,59 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 			}
 		}
 	}
-	if ps := puo.mutation.predicates; len(ps) > 0 {
+	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	if value, ok := puo.mutation.Status(); ok {
+	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(plan.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := puo.mutation.UpdatedAt(); ok {
+	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(plan.FieldUpdatedAt, field.TypeTime, value)
 	}
-	if puo.mutation.CreatedByCleared() {
+	if _u.mutation.CreatedByCleared() {
 		_spec.ClearField(plan.FieldCreatedBy, field.TypeString)
 	}
-	if value, ok := puo.mutation.UpdatedBy(); ok {
+	if value, ok := _u.mutation.UpdatedBy(); ok {
 		_spec.SetField(plan.FieldUpdatedBy, field.TypeString, value)
 	}
-	if puo.mutation.UpdatedByCleared() {
+	if _u.mutation.UpdatedByCleared() {
 		_spec.ClearField(plan.FieldUpdatedBy, field.TypeString)
 	}
-	if puo.mutation.EnvironmentIDCleared() {
+	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(plan.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := puo.mutation.Metadata(); ok {
+	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(plan.FieldMetadata, field.TypeJSON, value)
 	}
-	if puo.mutation.MetadataCleared() {
+	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(plan.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := puo.mutation.LookupKey(); ok {
+	if value, ok := _u.mutation.LookupKey(); ok {
 		_spec.SetField(plan.FieldLookupKey, field.TypeString, value)
 	}
-	if puo.mutation.LookupKeyCleared() {
+	if _u.mutation.LookupKeyCleared() {
 		_spec.ClearField(plan.FieldLookupKey, field.TypeString)
 	}
-	if value, ok := puo.mutation.Name(); ok {
+	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(plan.FieldName, field.TypeString, value)
 	}
-	if value, ok := puo.mutation.Description(); ok {
+	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(plan.FieldDescription, field.TypeString, value)
 	}
-	if puo.mutation.DescriptionCleared() {
+	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(plan.FieldDescription, field.TypeString)
 	}
-	if value, ok := puo.mutation.DisplayOrder(); ok {
+	if value, ok := _u.mutation.DisplayOrder(); ok {
 		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if value, ok := puo.mutation.AddedDisplayOrder(); ok {
+	if value, ok := _u.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
 	}
-	if puo.mutation.CreditGrantsCleared() {
+	if _u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -679,7 +679,7 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puo.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !puo.mutation.CreditGrantsCleared() {
+	if nodes := _u.mutation.RemovedCreditGrantsIDs(); len(nodes) > 0 && !_u.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -695,7 +695,7 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := puo.mutation.CreditGrantsIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
 			Inverse: false,
@@ -711,10 +711,10 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	_node = &Plan{config: puo.config}
+	_node = &Plan{config: _u.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues
-	if err = sqlgraph.UpdateNode(ctx, puo.driver, _spec); err != nil {
+	if err = sqlgraph.UpdateNode(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{plan.Label}
 		} else if sqlgraph.IsConstraintError(err) {
@@ -722,6 +722,6 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 		}
 		return nil, err
 	}
-	puo.mutation.done = true
+	_u.mutation.done = true
 	return _node, nil
 }

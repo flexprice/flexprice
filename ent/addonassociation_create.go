@@ -21,209 +21,209 @@ type AddonAssociationCreate struct {
 }
 
 // SetTenantID sets the "tenant_id" field.
-func (aac *AddonAssociationCreate) SetTenantID(s string) *AddonAssociationCreate {
-	aac.mutation.SetTenantID(s)
-	return aac
+func (_c *AddonAssociationCreate) SetTenantID(v string) *AddonAssociationCreate {
+	_c.mutation.SetTenantID(v)
+	return _c
 }
 
 // SetStatus sets the "status" field.
-func (aac *AddonAssociationCreate) SetStatus(s string) *AddonAssociationCreate {
-	aac.mutation.SetStatus(s)
-	return aac
+func (_c *AddonAssociationCreate) SetStatus(v string) *AddonAssociationCreate {
+	_c.mutation.SetStatus(v)
+	return _c
 }
 
 // SetNillableStatus sets the "status" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableStatus(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetStatus(*s)
+func (_c *AddonAssociationCreate) SetNillableStatus(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetStatus(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetCreatedAt sets the "created_at" field.
-func (aac *AddonAssociationCreate) SetCreatedAt(t time.Time) *AddonAssociationCreate {
-	aac.mutation.SetCreatedAt(t)
-	return aac
+func (_c *AddonAssociationCreate) SetCreatedAt(v time.Time) *AddonAssociationCreate {
+	_c.mutation.SetCreatedAt(v)
+	return _c
 }
 
 // SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableCreatedAt(t *time.Time) *AddonAssociationCreate {
-	if t != nil {
-		aac.SetCreatedAt(*t)
+func (_c *AddonAssociationCreate) SetNillableCreatedAt(v *time.Time) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetUpdatedAt sets the "updated_at" field.
-func (aac *AddonAssociationCreate) SetUpdatedAt(t time.Time) *AddonAssociationCreate {
-	aac.mutation.SetUpdatedAt(t)
-	return aac
+func (_c *AddonAssociationCreate) SetUpdatedAt(v time.Time) *AddonAssociationCreate {
+	_c.mutation.SetUpdatedAt(v)
+	return _c
 }
 
 // SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableUpdatedAt(t *time.Time) *AddonAssociationCreate {
-	if t != nil {
-		aac.SetUpdatedAt(*t)
+func (_c *AddonAssociationCreate) SetNillableUpdatedAt(v *time.Time) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetCreatedBy sets the "created_by" field.
-func (aac *AddonAssociationCreate) SetCreatedBy(s string) *AddonAssociationCreate {
-	aac.mutation.SetCreatedBy(s)
-	return aac
+func (_c *AddonAssociationCreate) SetCreatedBy(v string) *AddonAssociationCreate {
+	_c.mutation.SetCreatedBy(v)
+	return _c
 }
 
 // SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableCreatedBy(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetCreatedBy(*s)
+func (_c *AddonAssociationCreate) SetNillableCreatedBy(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetCreatedBy(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetUpdatedBy sets the "updated_by" field.
-func (aac *AddonAssociationCreate) SetUpdatedBy(s string) *AddonAssociationCreate {
-	aac.mutation.SetUpdatedBy(s)
-	return aac
+func (_c *AddonAssociationCreate) SetUpdatedBy(v string) *AddonAssociationCreate {
+	_c.mutation.SetUpdatedBy(v)
+	return _c
 }
 
 // SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableUpdatedBy(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetUpdatedBy(*s)
+func (_c *AddonAssociationCreate) SetNillableUpdatedBy(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetUpdatedBy(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetEnvironmentID sets the "environment_id" field.
-func (aac *AddonAssociationCreate) SetEnvironmentID(s string) *AddonAssociationCreate {
-	aac.mutation.SetEnvironmentID(s)
-	return aac
+func (_c *AddonAssociationCreate) SetEnvironmentID(v string) *AddonAssociationCreate {
+	_c.mutation.SetEnvironmentID(v)
+	return _c
 }
 
 // SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableEnvironmentID(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetEnvironmentID(*s)
+func (_c *AddonAssociationCreate) SetNillableEnvironmentID(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetEnvironmentID(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetEntityID sets the "entity_id" field.
-func (aac *AddonAssociationCreate) SetEntityID(s string) *AddonAssociationCreate {
-	aac.mutation.SetEntityID(s)
-	return aac
+func (_c *AddonAssociationCreate) SetEntityID(v string) *AddonAssociationCreate {
+	_c.mutation.SetEntityID(v)
+	return _c
 }
 
 // SetEntityType sets the "entity_type" field.
-func (aac *AddonAssociationCreate) SetEntityType(s string) *AddonAssociationCreate {
-	aac.mutation.SetEntityType(s)
-	return aac
+func (_c *AddonAssociationCreate) SetEntityType(v string) *AddonAssociationCreate {
+	_c.mutation.SetEntityType(v)
+	return _c
 }
 
 // SetAddonID sets the "addon_id" field.
-func (aac *AddonAssociationCreate) SetAddonID(s string) *AddonAssociationCreate {
-	aac.mutation.SetAddonID(s)
-	return aac
+func (_c *AddonAssociationCreate) SetAddonID(v string) *AddonAssociationCreate {
+	_c.mutation.SetAddonID(v)
+	return _c
 }
 
 // SetStartDate sets the "start_date" field.
-func (aac *AddonAssociationCreate) SetStartDate(t time.Time) *AddonAssociationCreate {
-	aac.mutation.SetStartDate(t)
-	return aac
+func (_c *AddonAssociationCreate) SetStartDate(v time.Time) *AddonAssociationCreate {
+	_c.mutation.SetStartDate(v)
+	return _c
 }
 
 // SetNillableStartDate sets the "start_date" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableStartDate(t *time.Time) *AddonAssociationCreate {
-	if t != nil {
-		aac.SetStartDate(*t)
+func (_c *AddonAssociationCreate) SetNillableStartDate(v *time.Time) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetStartDate(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetEndDate sets the "end_date" field.
-func (aac *AddonAssociationCreate) SetEndDate(t time.Time) *AddonAssociationCreate {
-	aac.mutation.SetEndDate(t)
-	return aac
+func (_c *AddonAssociationCreate) SetEndDate(v time.Time) *AddonAssociationCreate {
+	_c.mutation.SetEndDate(v)
+	return _c
 }
 
 // SetNillableEndDate sets the "end_date" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableEndDate(t *time.Time) *AddonAssociationCreate {
-	if t != nil {
-		aac.SetEndDate(*t)
+func (_c *AddonAssociationCreate) SetNillableEndDate(v *time.Time) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetAddonStatus sets the "addon_status" field.
-func (aac *AddonAssociationCreate) SetAddonStatus(s string) *AddonAssociationCreate {
-	aac.mutation.SetAddonStatus(s)
-	return aac
+func (_c *AddonAssociationCreate) SetAddonStatus(v string) *AddonAssociationCreate {
+	_c.mutation.SetAddonStatus(v)
+	return _c
 }
 
 // SetNillableAddonStatus sets the "addon_status" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableAddonStatus(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetAddonStatus(*s)
+func (_c *AddonAssociationCreate) SetNillableAddonStatus(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetAddonStatus(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetCancellationReason sets the "cancellation_reason" field.
-func (aac *AddonAssociationCreate) SetCancellationReason(s string) *AddonAssociationCreate {
-	aac.mutation.SetCancellationReason(s)
-	return aac
+func (_c *AddonAssociationCreate) SetCancellationReason(v string) *AddonAssociationCreate {
+	_c.mutation.SetCancellationReason(v)
+	return _c
 }
 
 // SetNillableCancellationReason sets the "cancellation_reason" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableCancellationReason(s *string) *AddonAssociationCreate {
-	if s != nil {
-		aac.SetCancellationReason(*s)
+func (_c *AddonAssociationCreate) SetNillableCancellationReason(v *string) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetCancellationReason(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetCancelledAt sets the "cancelled_at" field.
-func (aac *AddonAssociationCreate) SetCancelledAt(t time.Time) *AddonAssociationCreate {
-	aac.mutation.SetCancelledAt(t)
-	return aac
+func (_c *AddonAssociationCreate) SetCancelledAt(v time.Time) *AddonAssociationCreate {
+	_c.mutation.SetCancelledAt(v)
+	return _c
 }
 
 // SetNillableCancelledAt sets the "cancelled_at" field if the given value is not nil.
-func (aac *AddonAssociationCreate) SetNillableCancelledAt(t *time.Time) *AddonAssociationCreate {
-	if t != nil {
-		aac.SetCancelledAt(*t)
+func (_c *AddonAssociationCreate) SetNillableCancelledAt(v *time.Time) *AddonAssociationCreate {
+	if v != nil {
+		_c.SetCancelledAt(*v)
 	}
-	return aac
+	return _c
 }
 
 // SetMetadata sets the "metadata" field.
-func (aac *AddonAssociationCreate) SetMetadata(m map[string]interface{}) *AddonAssociationCreate {
-	aac.mutation.SetMetadata(m)
-	return aac
+func (_c *AddonAssociationCreate) SetMetadata(v map[string]interface{}) *AddonAssociationCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
 }
 
 // SetID sets the "id" field.
-func (aac *AddonAssociationCreate) SetID(s string) *AddonAssociationCreate {
-	aac.mutation.SetID(s)
-	return aac
+func (_c *AddonAssociationCreate) SetID(v string) *AddonAssociationCreate {
+	_c.mutation.SetID(v)
+	return _c
 }
 
 // Mutation returns the AddonAssociationMutation object of the builder.
-func (aac *AddonAssociationCreate) Mutation() *AddonAssociationMutation {
-	return aac.mutation
+func (_c *AddonAssociationCreate) Mutation() *AddonAssociationMutation {
+	return _c.mutation
 }
 
 // Save creates the AddonAssociation in the database.
-func (aac *AddonAssociationCreate) Save(ctx context.Context) (*AddonAssociation, error) {
-	aac.defaults()
-	return withHooks(ctx, aac.sqlSave, aac.mutation, aac.hooks)
+func (_c *AddonAssociationCreate) Save(ctx context.Context) (*AddonAssociation, error) {
+	_c.defaults()
+	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (aac *AddonAssociationCreate) SaveX(ctx context.Context) *AddonAssociation {
-	v, err := aac.Save(ctx)
+func (_c *AddonAssociationCreate) SaveX(ctx context.Context) *AddonAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -231,93 +231,93 @@ func (aac *AddonAssociationCreate) SaveX(ctx context.Context) *AddonAssociation 
 }
 
 // Exec executes the query.
-func (aac *AddonAssociationCreate) Exec(ctx context.Context) error {
-	_, err := aac.Save(ctx)
+func (_c *AddonAssociationCreate) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aac *AddonAssociationCreate) ExecX(ctx context.Context) {
-	if err := aac.Exec(ctx); err != nil {
+func (_c *AddonAssociationCreate) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // defaults sets the default values of the builder before save.
-func (aac *AddonAssociationCreate) defaults() {
-	if _, ok := aac.mutation.Status(); !ok {
+func (_c *AddonAssociationCreate) defaults() {
+	if _, ok := _c.mutation.Status(); !ok {
 		v := addonassociation.DefaultStatus
-		aac.mutation.SetStatus(v)
+		_c.mutation.SetStatus(v)
 	}
-	if _, ok := aac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := addonassociation.DefaultCreatedAt()
-		aac.mutation.SetCreatedAt(v)
+		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := aac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := addonassociation.DefaultUpdatedAt()
-		aac.mutation.SetUpdatedAt(v)
+		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := aac.mutation.EnvironmentID(); !ok {
+	if _, ok := _c.mutation.EnvironmentID(); !ok {
 		v := addonassociation.DefaultEnvironmentID
-		aac.mutation.SetEnvironmentID(v)
+		_c.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := aac.mutation.StartDate(); !ok {
+	if _, ok := _c.mutation.StartDate(); !ok {
 		v := addonassociation.DefaultStartDate()
-		aac.mutation.SetStartDate(v)
+		_c.mutation.SetStartDate(v)
 	}
-	if _, ok := aac.mutation.AddonStatus(); !ok {
+	if _, ok := _c.mutation.AddonStatus(); !ok {
 		v := addonassociation.DefaultAddonStatus
-		aac.mutation.SetAddonStatus(v)
+		_c.mutation.SetAddonStatus(v)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (aac *AddonAssociationCreate) check() error {
-	if _, ok := aac.mutation.TenantID(); !ok {
+func (_c *AddonAssociationCreate) check() error {
+	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "AddonAssociation.tenant_id"`)}
 	}
-	if v, ok := aac.mutation.TenantID(); ok {
+	if v, ok := _c.mutation.TenantID(); ok {
 		if err := addonassociation.TenantIDValidator(v); err != nil {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := aac.mutation.Status(); !ok {
+	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "AddonAssociation.status"`)}
 	}
-	if _, ok := aac.mutation.CreatedAt(); !ok {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AddonAssociation.created_at"`)}
 	}
-	if _, ok := aac.mutation.UpdatedAt(); !ok {
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "AddonAssociation.updated_at"`)}
 	}
-	if _, ok := aac.mutation.EntityID(); !ok {
+	if _, ok := _c.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "AddonAssociation.entity_id"`)}
 	}
-	if v, ok := aac.mutation.EntityID(); ok {
+	if v, ok := _c.mutation.EntityID(); ok {
 		if err := addonassociation.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.entity_id": %w`, err)}
 		}
 	}
-	if _, ok := aac.mutation.EntityType(); !ok {
+	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "AddonAssociation.entity_type"`)}
 	}
-	if v, ok := aac.mutation.EntityType(); ok {
+	if v, ok := _c.mutation.EntityType(); ok {
 		if err := addonassociation.EntityTypeValidator(v); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := aac.mutation.AddonID(); !ok {
+	if _, ok := _c.mutation.AddonID(); !ok {
 		return &ValidationError{Name: "addon_id", err: errors.New(`ent: missing required field "AddonAssociation.addon_id"`)}
 	}
-	if v, ok := aac.mutation.AddonID(); ok {
+	if v, ok := _c.mutation.AddonID(); ok {
 		if err := addonassociation.AddonIDValidator(v); err != nil {
 			return &ValidationError{Name: "addon_id", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.addon_id": %w`, err)}
 		}
 	}
-	if _, ok := aac.mutation.AddonStatus(); !ok {
+	if _, ok := _c.mutation.AddonStatus(); !ok {
 		return &ValidationError{Name: "addon_status", err: errors.New(`ent: missing required field "AddonAssociation.addon_status"`)}
 	}
-	if v, ok := aac.mutation.AddonStatus(); ok {
+	if v, ok := _c.mutation.AddonStatus(); ok {
 		if err := addonassociation.AddonStatusValidator(v); err != nil {
 			return &ValidationError{Name: "addon_status", err: fmt.Errorf(`ent: validator failed for field "AddonAssociation.addon_status": %w`, err)}
 		}
@@ -325,12 +325,12 @@ func (aac *AddonAssociationCreate) check() error {
 	return nil
 }
 
-func (aac *AddonAssociationCreate) sqlSave(ctx context.Context) (*AddonAssociation, error) {
-	if err := aac.check(); err != nil {
+func (_c *AddonAssociationCreate) sqlSave(ctx context.Context) (*AddonAssociation, error) {
+	if err := _c.check(); err != nil {
 		return nil, err
 	}
-	_node, _spec := aac.createSpec()
-	if err := sqlgraph.CreateNode(ctx, aac.driver, _spec); err != nil {
+	_node, _spec := _c.createSpec()
+	if err := sqlgraph.CreateNode(ctx, _c.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
 			err = &ConstraintError{msg: err.Error(), wrap: err}
 		}
@@ -343,81 +343,81 @@ func (aac *AddonAssociationCreate) sqlSave(ctx context.Context) (*AddonAssociati
 			return nil, fmt.Errorf("unexpected AddonAssociation.ID type: %T", _spec.ID.Value)
 		}
 	}
-	aac.mutation.id = &_node.ID
-	aac.mutation.done = true
+	_c.mutation.id = &_node.ID
+	_c.mutation.done = true
 	return _node, nil
 }
 
-func (aac *AddonAssociationCreate) createSpec() (*AddonAssociation, *sqlgraph.CreateSpec) {
+func (_c *AddonAssociationCreate) createSpec() (*AddonAssociation, *sqlgraph.CreateSpec) {
 	var (
-		_node = &AddonAssociation{config: aac.config}
+		_node = &AddonAssociation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(addonassociation.Table, sqlgraph.NewFieldSpec(addonassociation.FieldID, field.TypeString))
 	)
-	if id, ok := aac.mutation.ID(); ok {
+	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := aac.mutation.TenantID(); ok {
+	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(addonassociation.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
-	if value, ok := aac.mutation.Status(); ok {
+	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(addonassociation.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := aac.mutation.CreatedAt(); ok {
+	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(addonassociation.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
-	if value, ok := aac.mutation.UpdatedAt(); ok {
+	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
-	if value, ok := aac.mutation.CreatedBy(); ok {
+	if value, ok := _c.mutation.CreatedBy(); ok {
 		_spec.SetField(addonassociation.FieldCreatedBy, field.TypeString, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := aac.mutation.UpdatedBy(); ok {
+	if value, ok := _c.mutation.UpdatedBy(); ok {
 		_spec.SetField(addonassociation.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
 	}
-	if value, ok := aac.mutation.EnvironmentID(); ok {
+	if value, ok := _c.mutation.EnvironmentID(); ok {
 		_spec.SetField(addonassociation.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if value, ok := aac.mutation.EntityID(); ok {
+	if value, ok := _c.mutation.EntityID(); ok {
 		_spec.SetField(addonassociation.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := aac.mutation.EntityType(); ok {
+	if value, ok := _c.mutation.EntityType(); ok {
 		_spec.SetField(addonassociation.FieldEntityType, field.TypeString, value)
 		_node.EntityType = value
 	}
-	if value, ok := aac.mutation.AddonID(); ok {
+	if value, ok := _c.mutation.AddonID(); ok {
 		_spec.SetField(addonassociation.FieldAddonID, field.TypeString, value)
 		_node.AddonID = value
 	}
-	if value, ok := aac.mutation.StartDate(); ok {
+	if value, ok := _c.mutation.StartDate(); ok {
 		_spec.SetField(addonassociation.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = &value
 	}
-	if value, ok := aac.mutation.EndDate(); ok {
+	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(addonassociation.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
-	if value, ok := aac.mutation.AddonStatus(); ok {
+	if value, ok := _c.mutation.AddonStatus(); ok {
 		_spec.SetField(addonassociation.FieldAddonStatus, field.TypeString, value)
 		_node.AddonStatus = value
 	}
-	if value, ok := aac.mutation.CancellationReason(); ok {
+	if value, ok := _c.mutation.CancellationReason(); ok {
 		_spec.SetField(addonassociation.FieldCancellationReason, field.TypeString, value)
 		_node.CancellationReason = value
 	}
-	if value, ok := aac.mutation.CancelledAt(); ok {
+	if value, ok := _c.mutation.CancelledAt(); ok {
 		_spec.SetField(addonassociation.FieldCancelledAt, field.TypeTime, value)
 		_node.CancelledAt = &value
 	}
-	if value, ok := aac.mutation.Metadata(); ok {
+	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(addonassociation.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
@@ -432,16 +432,16 @@ type AddonAssociationCreateBulk struct {
 }
 
 // Save creates the AddonAssociation entities in the database.
-func (aacb *AddonAssociationCreateBulk) Save(ctx context.Context) ([]*AddonAssociation, error) {
-	if aacb.err != nil {
-		return nil, aacb.err
+func (_c *AddonAssociationCreateBulk) Save(ctx context.Context) ([]*AddonAssociation, error) {
+	if _c.err != nil {
+		return nil, _c.err
 	}
-	specs := make([]*sqlgraph.CreateSpec, len(aacb.builders))
-	nodes := make([]*AddonAssociation, len(aacb.builders))
-	mutators := make([]Mutator, len(aacb.builders))
-	for i := range aacb.builders {
+	specs := make([]*sqlgraph.CreateSpec, len(_c.builders))
+	nodes := make([]*AddonAssociation, len(_c.builders))
+	mutators := make([]Mutator, len(_c.builders))
+	for i := range _c.builders {
 		func(i int, root context.Context) {
-			builder := aacb.builders[i]
+			builder := _c.builders[i]
 			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*AddonAssociationMutation)
@@ -455,11 +455,11 @@ func (aacb *AddonAssociationCreateBulk) Save(ctx context.Context) ([]*AddonAssoc
 				var err error
 				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
-					_, err = mutators[i+1].Mutate(root, aacb.builders[i+1].mutation)
+					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
 					// Invoke the actual operation on the latest mutation in the chain.
-					if err = sqlgraph.BatchCreate(ctx, aacb.driver, spec); err != nil {
+					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
 							err = &ConstraintError{msg: err.Error(), wrap: err}
 						}
@@ -479,7 +479,7 @@ func (aacb *AddonAssociationCreateBulk) Save(ctx context.Context) ([]*AddonAssoc
 		}(i, ctx)
 	}
 	if len(mutators) > 0 {
-		if _, err := mutators[0].Mutate(ctx, aacb.builders[0].mutation); err != nil {
+		if _, err := mutators[0].Mutate(ctx, _c.builders[0].mutation); err != nil {
 			return nil, err
 		}
 	}
@@ -487,8 +487,8 @@ func (aacb *AddonAssociationCreateBulk) Save(ctx context.Context) ([]*AddonAssoc
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (aacb *AddonAssociationCreateBulk) SaveX(ctx context.Context) []*AddonAssociation {
-	v, err := aacb.Save(ctx)
+func (_c *AddonAssociationCreateBulk) SaveX(ctx context.Context) []*AddonAssociation {
+	v, err := _c.Save(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -496,14 +496,14 @@ func (aacb *AddonAssociationCreateBulk) SaveX(ctx context.Context) []*AddonAssoc
 }
 
 // Exec executes the query.
-func (aacb *AddonAssociationCreateBulk) Exec(ctx context.Context) error {
-	_, err := aacb.Save(ctx)
+func (_c *AddonAssociationCreateBulk) Exec(ctx context.Context) error {
+	_, err := _c.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (aacb *AddonAssociationCreateBulk) ExecX(ctx context.Context) {
-	if err := aacb.Exec(ctx); err != nil {
+func (_c *AddonAssociationCreateBulk) ExecX(ctx context.Context) {
+	if err := _c.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

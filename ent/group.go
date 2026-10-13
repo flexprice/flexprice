@@ -63,7 +63,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
 // to the Group fields.
-func (gr *Group) assignValues(columns []string, values []any) error {
+func (_m *Group) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
@@ -73,55 +73,55 @@ func (gr *Group) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				gr.ID = value.String
+				_m.ID = value.String
 			}
 		case group.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				gr.TenantID = value.String
+				_m.TenantID = value.String
 			}
 		case group.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
-				gr.Status = value.String
+				_m.Status = value.String
 			}
 		case group.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				gr.CreatedAt = value.Time
+				_m.CreatedAt = value.Time
 			}
 		case group.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
-				gr.UpdatedAt = value.Time
+				_m.UpdatedAt = value.Time
 			}
 		case group.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
-				gr.CreatedBy = value.String
+				_m.CreatedBy = value.String
 			}
 		case group.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
-				gr.UpdatedBy = value.String
+				_m.UpdatedBy = value.String
 			}
 		case group.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				gr.EnvironmentID = value.String
+				_m.EnvironmentID = value.String
 			}
 		case group.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &gr.Metadata); err != nil {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
@@ -129,22 +129,22 @@ func (gr *Group) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				gr.Name = value.String
+				_m.Name = value.String
 			}
 		case group.FieldEntityType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				gr.EntityType = value.String
+				_m.EntityType = value.String
 			}
 		case group.FieldLookupKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field lookup_key", values[i])
 			} else if value.Valid {
-				gr.LookupKey = value.String
+				_m.LookupKey = value.String
 			}
 		default:
-			gr.selectValues.Set(columns[i], values[i])
+			_m.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
@@ -152,65 +152,65 @@ func (gr *Group) assignValues(columns []string, values []any) error {
 
 // Value returns the ent.Value that was dynamically selected and assigned to the Group.
 // This includes values selected through modifiers, order, etc.
-func (gr *Group) Value(name string) (ent.Value, error) {
-	return gr.selectValues.Get(name)
+func (_m *Group) Value(name string) (ent.Value, error) {
+	return _m.selectValues.Get(name)
 }
 
 // Update returns a builder for updating this Group.
 // Note that you need to call Group.Unwrap() before calling this method if this Group
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (gr *Group) Update() *GroupUpdateOne {
-	return NewGroupClient(gr.config).UpdateOne(gr)
+func (_m *Group) Update() *GroupUpdateOne {
+	return NewGroupClient(_m.config).UpdateOne(_m)
 }
 
 // Unwrap unwraps the Group entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (gr *Group) Unwrap() *Group {
-	_tx, ok := gr.config.driver.(*txDriver)
+func (_m *Group) Unwrap() *Group {
+	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
 		panic("ent: Group is not a transactional entity")
 	}
-	gr.config.driver = _tx.drv
-	return gr
+	_m.config.driver = _tx.drv
+	return _m
 }
 
 // String implements the fmt.Stringer.
-func (gr *Group) String() string {
+func (_m *Group) String() string {
 	var builder strings.Builder
 	builder.WriteString("Group(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", gr.ID))
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(gr.TenantID)
+	builder.WriteString(_m.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
-	builder.WriteString(gr.Status)
+	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(gr.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("updated_at=")
-	builder.WriteString(gr.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("created_by=")
-	builder.WriteString(gr.CreatedBy)
+	builder.WriteString(_m.CreatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("updated_by=")
-	builder.WriteString(gr.UpdatedBy)
+	builder.WriteString(_m.UpdatedBy)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(gr.EnvironmentID)
+	builder.WriteString(_m.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
-	builder.WriteString(fmt.Sprintf("%v", gr.Metadata))
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
-	builder.WriteString(gr.Name)
+	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(gr.EntityType)
+	builder.WriteString(_m.EntityType)
 	builder.WriteString(", ")
 	builder.WriteString("lookup_key=")
-	builder.WriteString(gr.LookupKey)
+	builder.WriteString(_m.LookupKey)
 	builder.WriteByte(')')
 	return builder.String()
 }

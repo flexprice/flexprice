@@ -45,27 +45,10 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 			Mark(ierr.ErrValidation)
 	}
 
-	// Load customer timezone
-	loc, err := time.LoadLocation(params.Timezone)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHintf("failed to load customer timezone '%s': %v", params.Timezone, err).
-			Mark(ierr.ErrSystem)
-	}
-
-	// Convert times to customer timezone
-	prorationDateInTZ := params.ProrationDate.In(loc)
-	periodStartInTZ := params.CurrentPeriodStart.In(loc)
-	periodEndInTZ := params.CurrentPeriodEnd.In(loc)
-
-	// Calculate proration coefficient using shared helper
-	prorationCoefficient, err := calculateProrationCoefficient(
-		periodStartInTZ,
-		periodEndInTZ,
-		prorationDateInTZ,
-		loc,
-		params.ProrationStrategy,
-	)
+	// e.g. removal on Jan 20 of a $31 monthly item, window [Jan 1, Feb 1): credit 12/31 = $12.
+	serviceablePeriod := types.Period{Start: params.ProrationDate, End: params.CurrentPeriodEnd}
+	coefficient, _, err := CalculateProrationCoefficient(params.Subscription, params.BillingPeriod, params.BillingPeriodCount,
+		serviceablePeriod, types.StrategySecondBased)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +77,7 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 
 	if shouldIssueCredit {
 		oldItemTotal := params.OldPricePerUnit.Mul(params.OldQuantity)
-		potentialCredit := oldItemTotal.Mul(prorationCoefficient)
+		potentialCredit := oldItemTotal.Mul(coefficient)
 
 		// Only cap credit for non-quantity changes
 		var creditAmount decimal.Decimal
@@ -122,11 +105,12 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	shouldIssueCharge := params.Action == types.ProrationActionAddItem ||
 		params.Action == types.ProrationActionUpgrade ||
 		params.Action == types.ProrationActionDowngrade ||
-		params.Action == types.ProrationActionQuantityChange
+		params.Action == types.ProrationActionQuantityChange ||
+		params.Action == types.ProrationActionPriceChange
 
 	if shouldIssueCharge {
 		newItemTotal := params.NewPricePerUnit.Mul(params.NewQuantity)
-		proratedCharge := newItemTotal.Mul(prorationCoefficient)
+		proratedCharge := newItemTotal.Mul(coefficient)
 
 		if proratedCharge.GreaterThan(decimal.Zero) {
 			chargeItem := ProrationLineItem{
@@ -209,6 +193,7 @@ func (c *calculatorImpl) shouldIssueCreditForAction(params ProrationParams, bill
 	return (params.Action == types.ProrationActionUpgrade ||
 		params.Action == types.ProrationActionDowngrade ||
 		params.Action == types.ProrationActionQuantityChange ||
+		params.Action == types.ProrationActionPriceChange ||
 		params.Action == types.ProrationActionRemoveItem) &&
 		billingMode == types.BillingModeInAdvance
 }
@@ -254,6 +239,8 @@ func (c *calculatorImpl) generateCreditDescription(params ProrationParams) strin
 		return "Credit for unused time on previous plan before upgrade"
 	case types.ProrationActionQuantityChange:
 		return "Credit for unused time on previous quantity"
+	case types.ProrationActionPriceChange:
+		return "Credit for unused time at the previous price"
 	case types.ProrationActionRemoveItem:
 		return "Credit for unused time on removed item"
 	default:
@@ -277,6 +264,8 @@ func (c *calculatorImpl) generateChargeDescription(params ProrationParams) strin
 		return "Prorated charge for quantity change"
 	case types.ProrationActionAddItem:
 		return "Prorated charge for new item"
+	case types.ProrationActionPriceChange:
+		return "Prorated charge for price change"
 	default:
 		return "Prorated charge"
 	}
@@ -292,8 +281,8 @@ func validateParams(params ProrationParams) error {
 	if params.CurrentPeriodEnd.Before(params.CurrentPeriodStart) {
 		return fmt.Errorf("billing period end date cannot be before start date")
 	}
-	if params.Timezone == "" {
-		return fmt.Errorf("customer timezone is required")
+	if params.Subscription == nil {
+		return fmt.Errorf("subscription is required")
 	}
 
 	switch params.Action {
@@ -324,6 +313,13 @@ func validateParams(params ProrationParams) error {
 		}
 		if params.OldQuantity.LessThan(decimal.Zero) || params.NewQuantity.LessThan(decimal.Zero) {
 			return fmt.Errorf("both old and new quantities must be positive for quantity_change action")
+		}
+	case types.ProrationActionPriceChange:
+		if params.OldQuantity.LessThan(decimal.Zero) || params.NewQuantity.LessThan(decimal.Zero) {
+			return fmt.Errorf("both old and new quantities must be positive for price_change action")
+		}
+		if params.OldPricePerUnit.Equal(params.NewPricePerUnit) && params.OldQuantity.Equal(params.NewQuantity) {
+			return fmt.Errorf("old and new prices cannot both be unchanged for price_change action")
 		}
 	default:
 		return fmt.Errorf("invalid proration action: %s", params.Action)

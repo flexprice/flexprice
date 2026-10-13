@@ -20,56 +20,56 @@ type WorkflowExecutionDelete struct {
 }
 
 // Where appends a list predicates to the WorkflowExecutionDelete builder.
-func (wed *WorkflowExecutionDelete) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionDelete {
-	wed.mutation.Where(ps...)
-	return wed
+func (_d *WorkflowExecutionDelete) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (wed *WorkflowExecutionDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, wed.sqlExec, wed.mutation, wed.hooks)
+func (_d *WorkflowExecutionDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wed *WorkflowExecutionDelete) ExecX(ctx context.Context) int {
-	n, err := wed.Exec(ctx)
+func (_d *WorkflowExecutionDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (wed *WorkflowExecutionDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *WorkflowExecutionDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(workflowexecution.Table, sqlgraph.NewFieldSpec(workflowexecution.FieldID, field.TypeString))
-	if ps := wed.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, wed.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	wed.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // WorkflowExecutionDeleteOne is the builder for deleting a single WorkflowExecution entity.
 type WorkflowExecutionDeleteOne struct {
-	wed *WorkflowExecutionDelete
+	_d *WorkflowExecutionDelete
 }
 
 // Where appends a list predicates to the WorkflowExecutionDelete builder.
-func (wedo *WorkflowExecutionDeleteOne) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionDeleteOne {
-	wedo.wed.mutation.Where(ps...)
-	return wedo
+func (_d *WorkflowExecutionDeleteOne) Where(ps ...predicate.WorkflowExecution) *WorkflowExecutionDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (wedo *WorkflowExecutionDeleteOne) Exec(ctx context.Context) error {
-	n, err := wedo.wed.Exec(ctx)
+func (_d *WorkflowExecutionDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (wedo *WorkflowExecutionDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (wedo *WorkflowExecutionDeleteOne) ExecX(ctx context.Context) {
-	if err := wedo.Exec(ctx); err != nil {
+func (_d *WorkflowExecutionDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -20,56 +20,56 @@ type ScheduledTaskDelete struct {
 }
 
 // Where appends a list predicates to the ScheduledTaskDelete builder.
-func (std *ScheduledTaskDelete) Where(ps ...predicate.ScheduledTask) *ScheduledTaskDelete {
-	std.mutation.Where(ps...)
-	return std
+func (_d *ScheduledTaskDelete) Where(ps ...predicate.ScheduledTask) *ScheduledTaskDelete {
+	_d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query and returns how many vertices were deleted.
-func (std *ScheduledTaskDelete) Exec(ctx context.Context) (int, error) {
-	return withHooks(ctx, std.sqlExec, std.mutation, std.hooks)
+func (_d *ScheduledTaskDelete) Exec(ctx context.Context) (int, error) {
+	return withHooks(ctx, _d.sqlExec, _d.mutation, _d.hooks)
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (std *ScheduledTaskDelete) ExecX(ctx context.Context) int {
-	n, err := std.Exec(ctx)
+func (_d *ScheduledTaskDelete) ExecX(ctx context.Context) int {
+	n, err := _d.Exec(ctx)
 	if err != nil {
 		panic(err)
 	}
 	return n
 }
 
-func (std *ScheduledTaskDelete) sqlExec(ctx context.Context) (int, error) {
+func (_d *ScheduledTaskDelete) sqlExec(ctx context.Context) (int, error) {
 	_spec := sqlgraph.NewDeleteSpec(scheduledtask.Table, sqlgraph.NewFieldSpec(scheduledtask.FieldID, field.TypeString))
-	if ps := std.mutation.predicates; len(ps) > 0 {
+	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
 	}
-	affected, err := sqlgraph.DeleteNodes(ctx, std.driver, _spec)
+	affected, err := sqlgraph.DeleteNodes(ctx, _d.driver, _spec)
 	if err != nil && sqlgraph.IsConstraintError(err) {
 		err = &ConstraintError{msg: err.Error(), wrap: err}
 	}
-	std.mutation.done = true
+	_d.mutation.done = true
 	return affected, err
 }
 
 // ScheduledTaskDeleteOne is the builder for deleting a single ScheduledTask entity.
 type ScheduledTaskDeleteOne struct {
-	std *ScheduledTaskDelete
+	_d *ScheduledTaskDelete
 }
 
 // Where appends a list predicates to the ScheduledTaskDelete builder.
-func (stdo *ScheduledTaskDeleteOne) Where(ps ...predicate.ScheduledTask) *ScheduledTaskDeleteOne {
-	stdo.std.mutation.Where(ps...)
-	return stdo
+func (_d *ScheduledTaskDeleteOne) Where(ps ...predicate.ScheduledTask) *ScheduledTaskDeleteOne {
+	_d._d.mutation.Where(ps...)
+	return _d
 }
 
 // Exec executes the deletion query.
-func (stdo *ScheduledTaskDeleteOne) Exec(ctx context.Context) error {
-	n, err := stdo.std.Exec(ctx)
+func (_d *ScheduledTaskDeleteOne) Exec(ctx context.Context) error {
+	n, err := _d._d.Exec(ctx)
 	switch {
 	case err != nil:
 		return err
@@ -81,8 +81,8 @@ func (stdo *ScheduledTaskDeleteOne) Exec(ctx context.Context) error {
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (stdo *ScheduledTaskDeleteOne) ExecX(ctx context.Context) {
-	if err := stdo.Exec(ctx); err != nil {
+func (_d *ScheduledTaskDeleteOne) ExecX(ctx context.Context) {
+	if err := _d.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
