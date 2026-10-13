@@ -4,12 +4,15 @@
 # Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
 # Docs: generate uploads the spec plus the Go, Python and TypeScript code samples to the Speakeasy registry and promotes
 # them to the main tag, which rebuilds https://spec.speakeasy.com/flexprice/prod/swagger-json-with-code-samples.
-# refresh-docs waits for that URL to match the release, then adds the release to version.mdx in the docs repo so Mintlify redeploys.
+# refresh-docs waits for that URL to match the release, copies that file to S3 (served at https://swagger.flexprice.io),
+# then adds the release to version.mdx in the docs repo so Mintlify redeploys.
 #
 # Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Docs redeploy: secret DOCS_REPO_TOKEN (fine-grained PAT: Contents R/W on the docs repo); optional variables DOCS_REPO
 # (default flexprice/flexprice-docs) and DOCS_BRANCH (default main). refresh-docs fails when the token is unset.
+# Spec copy: variable OPENAPI_SPEC_S3, JSON {"role", "region", "bucket", "distribution"}; skipped while unset. The role needs
+# s3:PutObject on <bucket>/openapi.json, and cloudfront:CreateInvalidation and cloudfront:GetInvalidation on the distribution.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
 #
@@ -224,7 +227,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Docs: Mintlify re-reads the hosted spec only on deploy, so wait for Speakeasy to
-  # rebuild it (spec and code samples) from this release's upload, then redeploy the docs.
+  # rebuild it (spec and code samples) from this release's upload, copy it to S3, then redeploy the docs.
   # ---------------------------------------------------------------------------
   refresh-docs:
     needs: [version-check, generate]
@@ -232,6 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       # With an unchanged spec, the previous hosted spec would still pass the wait below, hiding a failed promote.
       - name: Check the spec and code samples were promoted
@@ -255,7 +259,33 @@ jobs:
           path: release-spec
 
       - name: Wait for the hosted docs spec to match this release
-        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json
+        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --save "$RUNNER_TEMP/openapi.json"
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.OPENAPI_SPEC_S3 != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.OPENAPI_SPEC_S3).role }}
+          aws-region: ${{ fromJson(vars.OPENAPI_SPEC_S3).region }}
+
+      # CloudFront serves openapi.json at the root of swagger.flexprice.io (its default root object).
+      - name: Upload the spec to S3 and clear the CloudFront cache
+        if: vars.OPENAPI_SPEC_S3 != ''
+        env:
+          OPENAPI_SPEC_S3: ${{ vars.OPENAPI_SPEC_S3 }}
+        run: |
+          set -euo pipefail
+          BUCKET=$(jq -er .bucket <<<"$OPENAPI_SPEC_S3")
+          DISTRIBUTION=$(jq -er .distribution <<<"$OPENAPI_SPEC_S3")
+          aws s3 cp "$RUNNER_TEMP/openapi.json" "s3://$BUCKET/openapi.json" --only-show-errors \
+            --content-type application/json --cache-control "public, max-age=300"
+          INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" \
+            --paths "/*" --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$INVALIDATION"
+
+      - name: Check swagger.flexprice.io serves this release
+        if: vars.OPENAPI_SPEC_S3 != ''
+        run: python3 scripts/wait-for-docs-spec.py release-spec/swagger-3-0.json --url https://swagger.flexprice.io
 
       # The release is recorded as a new row in the docs repo's version.mdx.
       - name: Redeploy docs

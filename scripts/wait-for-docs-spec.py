@@ -5,7 +5,7 @@ The hosted spec is the base spec plus x-codeSamples from each SDK, rebuilt after
 `speakeasy run` uploads. Mintlify only re-reads it on deploy, so redeploy the
 docs after this passes.
 
-Usage: scripts/wait-for-docs-spec.py docs/swagger/swagger-3-0.json [--url URL] [--timeout SECONDS]
+Usage: scripts/wait-for-docs-spec.py docs/swagger/swagger-3-0.json [--url URL] [--timeout SECONDS] [--save PATH]
 """
 
 import argparse
@@ -53,19 +53,19 @@ def sample_counts(spec):
     return counts
 
 
-def fetch_json(url):
+def fetch(url):
     opener = urllib.request.OpenerDirector()
     opener.add_handler(urllib.request.HTTPSHandler())
     opener.add_handler(urllib.request.UnknownHandler())
     with opener.open(url, timeout=60) as resp:
         if resp.status != 200:
             raise RuntimeError(f"HTTP {resp.status} from {url}")
-        return json.load(resp)
+        return resp.read()
 
 
-def check(url, expected):
+def check(body, expected):
     """Returns (why the hosted spec is stale or None, operations with samples per language)."""
-    hosted = fetch_json(url)
+    hosted = json.loads(body)
     if strip_added(hosted) != expected:
         return "base spec does not match this release yet", None
     missing = operations_missing_samples(hosted)
@@ -87,6 +87,7 @@ def main():
     parser.add_argument("--url", default=DEFAULT_URL, help="hosted spec URL (default: %(default)s)")
     parser.add_argument("--timeout", type=int, default=300, help="seconds to wait (default: %(default)s)")
     parser.add_argument("--interval", type=int, default=30, help="seconds between checks (default: %(default)s)")
+    parser.add_argument("--save", help="once the hosted spec matches, write it to this path unchanged")
     args = parser.parse_args()
 
     with open(args.spec) as f:
@@ -95,12 +96,16 @@ def main():
     deadline = time.monotonic() + args.timeout
     while True:
         try:
-            reason, counts = check(args.url, expected)
+            body = fetch(args.url)
+            reason, counts = check(body, expected)
         except Exception as err:  # transient fetch or parse errors: keep polling until the deadline
             reason, counts = f"fetch failed: {err}", None
         if reason is None:
+            if args.save:
+                with open(args.save, "wb") as f:
+                    f.write(body)
             samples = ", ".join(f"{lang} {n}" for lang, n in counts.items())
-            message = f"Hosted docs spec matches {args.spec}. Operations with code samples: {samples}."
+            message = f"{args.url} matches {args.spec}. Operations with code samples: {samples}."
             print(message, flush=True)
             write_step_summary(message)
             return 0
