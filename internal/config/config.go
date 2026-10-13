@@ -968,7 +968,7 @@ type ActivityConfig struct {
 	Enabled       bool                    `mapstructure:"enabled" default:"false"`
 	Topic         string                  `mapstructure:"topic" default:"activity_logs"`
 	TopicDLQ      string                  `mapstructure:"topic_dlq" default:"activity_logs_dlq"`
-	ConsumerGroup string                  `mapstructure:"consumer_group" default:"flexprice-activity-consumer"`
+	ConsumerGroup string                  `mapstructure:"consumer_group" default:"v1_activity_log"`
 	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
 	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
 }
