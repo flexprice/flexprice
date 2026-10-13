@@ -492,7 +492,7 @@ func (s *BillingServiceSuite) TestCommitmentV2_ImmediateCancelBeforeStart_Settle
 	s.Require().NoError(NewCommitmentService(s.service.(*billingService).ServiceParams).TerminateForSubscription(ctx, sub.ID, cancelAt))
 	stored, err := s.GetStores().CommitmentRepo.Get(ctx, c.ID)
 	s.Require().NoError(err)
-	s.True(stored.TerminatedAt.Equal(c.StartDate), "termination clamps to the start date")
+	s.True(stored.TerminatedAt.Equal(cancelAt), "terminated_at keeps the requested date")
 
 	// Built before the subscription records its end, then recomputed after.
 	first := s.settlementsFor(sub, usage, aug, cancelAt)
@@ -576,4 +576,36 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancelBeforeSta
 	}
 	s.Require().Len(settlements, 1)
 	s.True(settlements[0].Equal(dec("300")), "settlement %s", settlements[0])
+}
+
+// Terminated before the subscription started, the commitment settles its whole value on the first invoice only.
+func (s *BillingServiceSuite) TestCommitmentV2_TerminatedBeforeSubscriptionStart_SettlesOnce() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub, c, usage := s.settleFixture("sub_pre_sub")
+	jul, aug, sep := sub.CurrentPeriodStart.AddDate(0, -1, 0), sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	c.CommitmentStatus, c.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC))
+	_, err := s.GetStores().CommitmentRepo.Update(ctx, c)
+	s.Require().NoError(err)
+
+	s.Empty(s.settlementsFor(sub, usage, jul, aug))
+	got := s.settlementsFor(sub, usage, aug, sep)
+	s.Require().Len(got, 1)
+	s.True(got[0].Amount.Equal(dec("300")), "settlement %s", got[0].Amount)
+	s.Empty(s.settlementsFor(sub, usage, sep, sep.AddDate(0, 1, 0)))
+}
+
+func TestClipCommitmentPeriod_TerminatedBeforeStartEarnsNothing(t *testing.T) {
+	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	for _, m := range []types.CommitmentMeasurement{types.CommitmentMeasurementBillingPeriod, types.CommitmentMeasurementWindow} {
+		c := &commitment.Commitment{Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Measurement: m,
+			StartDate: aug, EndDate: aug.AddDate(0, 1, 0), TerminatedAt: lo.ToPtr(aug.AddDate(0, 0, -10))}
+		p := commitmentPeriod{Start: aug, End: aug.AddDate(0, 1, 0), FullStart: aug, FullEnd: aug.AddDate(0, 1, 0)}
+		got := clipCommitmentPeriod(c, p, *c.TerminatedAt, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug)
+		require.True(t, got.Amount.IsZero() && got.Capacity.IsZero(), "%s: amount %s", m, got.Amount)
+		require.False(t, got.End.Before(got.Start))
+		require.True(t, remainingValue(c, []commitmentPeriod{{Start: aug, End: aug.AddDate(0, 1, 0), FullStart: aug,
+			FullEnd: aug.AddDate(0, 1, 0), Amount: dec("100")}}, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug).Equal(dec("100")))
+	}
 }

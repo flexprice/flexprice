@@ -384,13 +384,14 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsEffectiveAtAfterEnd() {
 	s.True(ierr.IsValidation(err), "got %v", err)
 }
 
-func (s *CommitmentServiceSuite) TestTerminate_ClampsTerminatedAtToStartDate() {
+func (s *CommitmentServiceSuite) TestTerminate_KeepsRequestedDateBeforeStart() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	at := created.StartDate.AddDate(0, -1, 0)
 	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.Require().NoError(err)
-	s.True(resp.TerminatedAt.Equal(created.StartDate), "got %s", resp.TerminatedAt)
+	s.True(resp.TerminatedAt.Equal(at), "got %s", resp.TerminatedAt)
+	s.True(resp.CommitmentValue.IsPositive(), "value is still reported for a commitment terminated before start")
 }
 
 func (s *CommitmentServiceSuite) TestTerminate_StoresFlatCancellationFee() {
@@ -514,14 +515,14 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
 	s.Nil(got.CancellationFeeAmount)
 }
 
-func (s *CommitmentServiceSuite) TestTerminateForSubscription_ClampsAndIsIdempotent() {
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_KeepsRequestedDateAndIsIdempotent() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	at := created.StartDate.AddDate(0, -1, 0)
 	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at))
 	first, err := s.svc.Get(s.GetContext(), created.ID)
 	s.Require().NoError(err)
-	s.True(first.TerminatedAt.Equal(created.StartDate), "got %s", first.TerminatedAt)
+	s.True(first.TerminatedAt.Equal(at), "got %s", first.TerminatedAt)
 
 	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, at.AddDate(0, 2, 0)))
 	second, err := s.svc.Get(s.GetContext(), created.ID)
@@ -903,17 +904,4 @@ func (s *CommitmentServiceSuite) TestValidation_FutureScopeLineOnAnotherCadence(
 
 	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.requireValidation(err, "commitments require scope prices billed every subscription period")
-}
-
-func (s *CommitmentServiceSuite) TestTerminate_KeepsRequestedDateThroughMetadataEdits() {
-	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
-	s.Require().NoError(err)
-	at := created.StartDate.AddDate(0, -1, 0)
-	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
-	s.Require().NoError(err)
-
-	resp, err := s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Metadata: types.Metadata{"owner": "sales"}})
-	s.Require().NoError(err)
-	s.Equal("sales", resp.Metadata["owner"])
-	s.Equal(at.UTC().Format(time.RFC3339Nano), resp.Metadata[metadataKeyTerminationEffectiveAt])
 }
