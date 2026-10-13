@@ -78,6 +78,10 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
 
+		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate); err != nil {
+			return err
+		}
+
 		// Materialize bucket prices: create a SUBSCRIPTION-scoped Price for each
 		// CommitmentTimeBuckets entry and assign the resulting slice (with PriceIDs
 		// and stable UUIDs) onto the line item. This must happen inside the

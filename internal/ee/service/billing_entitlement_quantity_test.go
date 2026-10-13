@@ -83,6 +83,7 @@ func (s *EntitlementQuantityTestSuite) setupServices() {
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
 		SubRepo:                      stores.SubscriptionRepo,
+		CommitmentRepo:               stores.CommitmentRepo,
 		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:        stores.SubscriptionPhaseRepo,
 		SubScheduleRepo:              stores.SubscriptionScheduleRepo,
