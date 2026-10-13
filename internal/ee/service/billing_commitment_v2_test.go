@@ -805,3 +805,102 @@ func (s *BillingServiceSuite) TestCommitmentV2_RawPathScopeGuards() {
 		s.True(res.TotalAmount.Equal(dec("20")), "total %s", res.TotalAmount)
 	})
 }
+
+// recalcFixture stores an Aug 2026 subscription with $10 of usage (500 calls at $0.02), the given commitments
+// on its usage price, and a draft invoice for August holding one stale usage line.
+func (s *EntitlementQuantityTestSuite) recalcFixture(id string, commitments ...*commitment.Commitment) *invoicedomain.Invoice {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	sep := aug.AddDate(0, 1, 0)
+	sub := &subscription.Subscription{
+		ID: "sub_" + id, PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: aug,
+		BillingAnchor: aug, CurrentPeriodStart: aug, CurrentPeriodEnd: sep, Currency: "usd",
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	li := *s.testData.usageSubLineItem
+	li.ID, li.SubscriptionID, li.StartDate = "subs_line_"+id, sub.ID, aug
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{&li}))
+
+	records := make([]*events.MeterUsage, 0, 500)
+	for i := 0; i < 500; i++ {
+		muID := types.GenerateUUIDWithPrefix("mu")
+		ts := aug.Add(24 * time.Hour)
+		records = append(records, &events.MeterUsage{
+			Event: events.Event{ID: muID, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+				EventName: s.testData.meter.EventName, CustomerID: s.testData.customer.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID, Timestamp: ts, IngestedAt: ts},
+			MeterID: s.testData.meter.ID, QtyTotal: decimal.NewFromInt(1), UniqueHash: muID,
+		})
+	}
+	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
+
+	for _, c := range commitments {
+		c.SubscriptionID, c.CustomerID, c.ScopeEntityID = sub.ID, sub.CustomerID, li.PriceID
+		c.StartDate, c.EndDate = aug, aug.AddDate(0, 3, 0)
+		_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
+		s.Require().NoError(err)
+	}
+
+	bp := string(types.BILLING_PERIOD_MONTHLY)
+	inv := &invoicedomain.Invoice{
+		ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), CustomerID: sub.CustomerID,
+		SubscriptionID: lo.ToPtr(sub.ID), InvoiceType: types.InvoiceTypeSubscription,
+		InvoiceStatus: types.InvoiceStatusDraft, PaymentStatus: types.PaymentStatusPending, Currency: "usd",
+		BillingPeriod: &bp, PeriodStart: &aug, PeriodEnd: &sep, BaseModel: types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoicedomain.InvoiceLineItem{{
+			ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM), CustomerID: sub.CustomerID,
+			MeterID: lo.ToPtr(s.testData.meter.ID), PriceID: lo.ToPtr(li.PriceID), DisplayName: lo.ToPtr("stale"),
+			Amount: dec("1"), Quantity: dec("1"), Currency: "usd", EnvironmentID: types.GetEnvironmentID(ctx),
+			PeriodStart: &aug, PeriodEnd: &sep, SubscriptionLineItemID: lo.ToPtr(li.ID),
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}},
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv))
+	return inv
+}
+
+func (s *EntitlementQuantityTestSuite) recalcCommitment(id string, value string, priority int) *commitment.Commitment {
+	ctx := s.GetContext()
+	return &commitment.Commitment{
+		ID: id, Name: id, InvoiceLabel: id, Currency: "usd", ScopeEntityType: types.CommitmentScopePrice,
+		Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec(value), Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone: "UTC", Priority: priority, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		CommitmentStatus: types.CommitmentStatusActive, OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
+		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+}
+
+// requireStableRecalculation recalculates the draft three times and checks the stored lines stay the same.
+func (s *EntitlementQuantityTestSuite) requireStableRecalculation(inv *invoicedomain.Invoice, wantLines int, wantTotal string) {
+	ctx := s.GetContext()
+	for i := 0; i < 3; i++ {
+		_, err := s.invoiceSvc.RecalculateInvoiceV2(ctx, inv.ID, false)
+		s.Require().NoError(err, "recalculation %d", i+1)
+
+		// GetForUpdate reads the published line-item rows, as the database does.
+		stored, err := s.invoiceRepo.GetForUpdate(ctx, inv.ID)
+		s.Require().NoError(err)
+		sum := decimal.Zero
+		for _, l := range stored.LineItems {
+			sum = sum.Add(l.Amount)
+		}
+		s.Require().Len(stored.LineItems, wantLines, "recalculation %d line count", i+1)
+		s.True(sum.Equal(stored.Total), "recalculation %d: lines %s, total %s", i+1, sum, stored.Total)
+		s.True(stored.Total.Equal(dec(wantTotal)), "recalculation %d: total %s", i+1, stored.Total)
+	}
+}
+
+func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_TrueUpStaysStable() {
+	inv := s.recalcFixture("recalc_trueup", s.recalcCommitment("cmt_recalc_100", "100", 1))
+	// Within $10 plus a $90 true-up.
+	s.requireStableRecalculation(inv, 2, "100")
+}
+
+func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_StackedStaysStable() {
+	inv := s.recalcFixture("recalc_stack",
+		s.recalcCommitment("cmt_recalc_4", "4", 1), s.recalcCommitment("cmt_recalc_3", "3", 2))
+	// Within $4 and $3 on the same line item, plus $3 on-demand.
+	s.requireStableRecalculation(inv, 3, "10")
+}
