@@ -625,15 +625,15 @@ func (s *meterUsageTrackingService) checkMeterFilters(event *events.Event, filte
 
 // generateUniqueHash returns a SHA-256 hex string used for deduplication.
 // Two cases:
-//  1. COUNT_UNIQUE: hash(eventName + fieldName + fieldValue) — two events with
-//     the same field value produce the same hash and are deduplicated.
-//  2. All other types: hash(eventName + eventID) — every distinct event is unique.
+//  1. COUNT_UNIQUE: hash(tenantID + environmentID + eventName + fieldName + fieldValue) — two events with
+//     the same field value in the same tenant/env produce the same hash and are deduplicated.
+//  2. All other types: empty string (or not used).
 func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *meter.Meter) string {
 	var hashStr string
 
 	if m.Aggregation.Type == types.AggregationCountUnique {
 		if fieldValue, ok := event.Properties[m.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
+			hashStr = fmt.Sprintf("%s:%s:%s:%s:%v", event.TenantID, event.EnvironmentID, event.EventName, m.Aggregation.Field, fieldValue)
 		}
 	}
 
