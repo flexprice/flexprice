@@ -293,6 +293,7 @@ func main() {
 			service.NewTaxService,
 			service.NewFXRateService,
 			service.NewCouponService,
+			service.NewCommitmentService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
