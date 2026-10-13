@@ -17,7 +17,6 @@ import json
 import os
 import re
 import sys
-import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -39,6 +38,14 @@ def insert_row(text, tag, release_url, when):
     raise ValueError(f"{VERSION_FILE} has no table separator line such as '| --- | --- |'")
 
 
+def https_opener():
+    """Returns an opener that handles only https URLs, so file:// and other schemes are refused."""
+    opener = urllib.request.OpenerDirector()
+    opener.add_handler(urllib.request.HTTPSHandler())
+    opener.add_handler(urllib.request.UnknownHandler())
+    return opener
+
+
 def github(method, path, body=None, *, token=""):
     headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     if token:
@@ -49,14 +56,14 @@ def github(method, path, body=None, *, token=""):
         data = json.dumps(body).encode()
     request = urllib.request.Request(API + path, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=60) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as err:
-        try:
-            detail = err.read().decode(errors="replace")[:300]
-        except (OSError, http.client.HTTPException) as read_err:  # truncated or reset error body
-            detail = f"(body unreadable: {read_err})"
-        raise RuntimeError(f"{method} {path}: HTTP {err.code} {detail}") from None
+        with https_opener().open(request, timeout=60) as resp:
+            try:
+                raw = resp.read()
+            except (OSError, http.client.HTTPException) as err:  # truncated or reset body
+                raise RuntimeError(f"{method} {path}: HTTP {resp.status} (body unreadable: {err})") from None
+            if not 200 <= resp.status < 300:
+                raise RuntimeError(f"{method} {path}: HTTP {resp.status} {raw.decode(errors='replace')[:300]}")
+            return json.loads(raw)
     except (OSError, http.client.HTTPException, ValueError) as err:  # dropped connections, non-JSON bodies
         raise RuntimeError(f"{method} {path}: {err}") from None
 
@@ -65,6 +72,9 @@ def record_release(api, repo, branch, tag, release_url, when):
     """Adds the release row to version.mdx on branch and returns the new commit's SHA."""
     path = f"/repos/{repo}/contents/{VERSION_FILE}"
     current = api("GET", f"{path}?ref={urllib.parse.quote(branch)}")
+    if not (isinstance(current, dict) and current.get("type") == "file"
+            and isinstance(current.get("content"), str) and isinstance(current.get("sha"), str)):
+        raise ValueError(f"{VERSION_FILE} on {branch} is not a file")
     text = base64.b64decode(current["content"]).decode()
     updated = insert_row(text, tag, release_url, when)
     result = api("PUT", path, {
@@ -73,7 +83,10 @@ def record_release(api, repo, branch, tag, release_url, when):
         "sha": current["sha"],
         "branch": branch,
     })
-    return result["commit"]["sha"]
+    commit = result.get("commit") if isinstance(result, dict) else None
+    if not (isinstance(commit, dict) and isinstance(commit.get("sha"), str)):
+        raise ValueError(f"writing {VERSION_FILE} returned no commit SHA")
+    return commit["sha"]
 
 
 def main():
@@ -91,7 +104,7 @@ def main():
     now = datetime.datetime.now(datetime.timezone.utc)
     try:
         sha = record_release(api, args.repo, args.branch, args.tag, args.release_url, now)
-    except (RuntimeError, ValueError, KeyError) as err:
+    except (RuntimeError, ValueError) as err:
         reason = " ".join(str(err).split())  # annotations end at the first newline
         print(f"::error::Could not record {args.tag} in {args.repo}@{args.branch}:{VERSION_FILE}: {reason}", flush=True)
         return 1

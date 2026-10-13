@@ -11,6 +11,7 @@ import re
 import sys
 import unittest
 import urllib.error
+import urllib.request
 from unittest import mock
 
 sys.dont_write_bytecode = True  # keeps scripts/ free of __pycache__ when the tests import the script
@@ -30,6 +31,11 @@ hidden: true
 CONTENTS_PATH = "/repos/o/r/contents/version.mdx?ref=main"
 
 
+def file_response(text, sha="blob1"):
+    """A Contents API response for a file, shaped like GitHub's."""
+    return {"type": "file", "encoding": "base64", "sha": sha, "content": base64.encodebytes(text.encode()).decode()}
+
+
 class FakeApi:
     """Returns canned responses in order and records each call."""
 
@@ -45,24 +51,18 @@ class FakeApi:
         return response
 
 
-def response(body):
-    """A urlopen() result that yields body."""
-    return contextlib.nullcontext(io.BytesIO(body))
+class FakeResponse(io.BytesIO):
+    """An HTTP response with a status, whose body read can fail part-way like a truncated 502."""
 
-
-class BrokenBody(io.BytesIO):
-    """An HTTP error body whose read fails part-way, like a truncated 502."""
-
-    def __init__(self, failure):
-        super().__init__()
+    def __init__(self, status, body=b"", failure=None):
+        super().__init__(body)
+        self.status = status
         self.failure = failure
 
-    def read(self, *_args):
-        raise self.failure
-
-
-def bad_gateway(failure):
-    return urllib.error.HTTPError("https://api.github.com" + CONTENTS_PATH, 502, "Bad Gateway", {}, BrokenBody(failure))
+    def read(self, *args):
+        if self.failure is not None:
+            raise self.failure
+        return super().read(*args)
 
 
 class InsertRowTest(unittest.TestCase):
@@ -98,8 +98,7 @@ class InsertRowTest(unittest.TestCase):
 class RecordReleaseTest(unittest.TestCase):
     def test_writes_the_updated_file_on_the_branch(self):
         # GitHub returns file content as base64 with line breaks.
-        api = FakeApi([{"sha": "blob1", "content": base64.encodebytes(PAGE.encode()).decode()},
-                       {"commit": {"sha": "c0ffee"}}])
+        api = FakeApi([file_response(PAGE), {"commit": {"sha": "c0ffee"}}])
         sha = rd.record_release(api, "flexprice/flexprice-docs", "main", "v2.1.37", "https://x/v2.1.37", WHEN)
         self.assertEqual(sha, "c0ffee")
         self.assertEqual(api.calls[0][:2], ("GET", "/repos/flexprice/flexprice-docs/contents/version.mdx?ref=main"))
@@ -112,20 +111,43 @@ class RecordReleaseTest(unittest.TestCase):
         self.assertEqual(written, PAGE.replace(V36_ROW, f"{v37_row}\n{V36_ROW}"))
 
 
+class HttpsOpenerTest(unittest.TestCase):
+    def test_refuses_non_https_urls(self):
+        for url in ("file:///etc/passwd", "http://api.github.com/"):
+            with self.subTest(url=url), self.assertRaises(urllib.error.URLError):
+                rd.https_opener().open(url)
+
+
 class GithubTest(unittest.TestCase):
+    def setUp(self):
+        # github() must go through https_opener(); urlopen would also accept file:// URLs.
+        guard = mock.patch.object(urllib.request, "urlopen", side_effect=AssertionError("urlopen must not be used"))
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def opener_returns(self, *results):
+        return mock.patch.object(urllib.request.OpenerDirector, "open", side_effect=list(results))
+
+    def test_returns_the_decoded_json(self):
+        with self.opener_returns(FakeResponse(200, b'{"type": "file"}')):
+            self.assertEqual(rd.github("GET", CONTENTS_PATH), {"type": "file"})
+
+    def test_error_status_becomes_a_runtime_error_with_the_body(self):
+        with self.opener_returns(FakeResponse(404, b'{"message": "Not Found"}')), \
+                self.assertRaisesRegex(RuntimeError, f"^GET {re.escape(CONTENTS_PATH)}: HTTP 404 .*Not Found"):
+            rd.github("GET", CONTENTS_PATH)
+
     def test_network_faults_become_runtime_errors(self):
         faults = [ConnectionResetError("reset by peer"), http.client.RemoteDisconnected("closed"),
-                  http.client.IncompleteRead(b"{"), response(b"<html>502 Bad Gateway</html>")]
+                  http.client.IncompleteRead(b"{"), FakeResponse(200, b"<html>502 Bad Gateway</html>")]
         for fault in faults:
-            with self.subTest(fault=repr(fault)), \
-                    mock.patch.object(rd.urllib.request, "urlopen", side_effect=[fault]), \
+            with self.subTest(fault=repr(fault)), self.opener_returns(fault), \
                     self.assertRaisesRegex(RuntimeError, f"^GET {re.escape(CONTENTS_PATH)}: "):
                 rd.github("GET", CONTENTS_PATH)
 
     def test_unreadable_error_body_still_reports_the_status(self):
         for failure in (http.client.IncompleteRead(b"<html>"), ConnectionResetError("reset by peer")):
-            with self.subTest(failure=repr(failure)), \
-                    mock.patch.object(rd.urllib.request, "urlopen", side_effect=[bad_gateway(failure)]), \
+            with self.subTest(failure=repr(failure)), self.opener_returns(FakeResponse(502, failure=failure)), \
                     self.assertRaisesRegex(RuntimeError, f"^GET {re.escape(CONTENTS_PATH)}: HTTP 502 "):
                 rd.github("GET", CONTENTS_PATH)
 
@@ -147,7 +169,7 @@ class MainTest(unittest.TestCase):
         def github(method, path, body=None, *, token=""):
             calls.append((method, path))
             if (method, path) == ("GET", CONTENTS_PATH):
-                return {"sha": "blob1", "content": base64.b64encode(PAGE.encode()).decode()}
+                return file_response(PAGE)
             if (method, path) == ("PUT", "/repos/o/r/contents/version.mdx"):
                 return {"commit": {"sha": "c0ffee"}}
             raise AssertionError(f"unexpected call: {method} {path}")
@@ -168,12 +190,31 @@ class MainTest(unittest.TestCase):
 
     def test_version_file_without_a_table_fails_with_an_annotation(self):
         def github(method, path, body=None, *, token=""):
-            return {"sha": "blob1", "content": base64.b64encode(b"No table here.\n").decode()}
+            return file_response("No table here.\n")
 
         code, annotations = self.run_main(github)
         self.assertEqual(code, 1)
         self.assertEqual(len(annotations), 1)
         self.assertIn("no table separator", annotations[0])
+
+    def test_directory_instead_of_a_file_fails_with_an_annotation(self):
+        def github(method, path, body=None, *, token=""):
+            # GitHub lists a directory's entries instead of returning one file.
+            return [{"type": "file", "name": "a.mdx", "path": "version.mdx/a.mdx", "sha": "blob2"}]
+
+        code, annotations = self.run_main(github)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(annotations), 1)
+        self.assertIn("version.mdx on main is not a file", annotations[0])
+
+    def test_write_response_without_a_commit_fails_with_an_annotation(self):
+        def github(method, path, body=None, *, token=""):
+            return file_response(PAGE) if method == "GET" else []
+
+        code, annotations = self.run_main(github)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(annotations), 1)
+        self.assertIn("no commit SHA", annotations[0])
 
 
 if __name__ == "__main__":
