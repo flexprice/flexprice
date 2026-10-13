@@ -57,16 +57,18 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 				qty = proportionalQuantity(sl, used)
 				amount = used
 			}
-			withinValue = withinValue.Add(amount)
-			out = append(out, commitmentLine(in, sc, sl, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount))
+			line := commitmentLine(in, sc, sl, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount)
+			withinValue = withinValue.Add(line.Amount)
+			out = append(out, line)
 		}
 		if !sc.C.Binding {
 			continue
 		}
-		trueUp := alloc.Unused.Mul(sc.Rates.Committed)
+		// True-up is the rounded period amount minus the rounded within lines, so they sum exactly.
+		periodAmount := types.RoundToCurrencyPrecision(in.PeriodByCmt[sc.C.ID].Amount, in.Currency)
+		trueUp := decimal.Max(periodAmount.Sub(withinValue), decimal.Zero)
 		trueUpQty := alloc.Unused
 		if sc.C.Type == types.COMMITMENT_TYPE_AMOUNT {
-			trueUp = decimal.Max(in.PeriodByCmt[sc.C.ID].Amount.Sub(withinValue), decimal.Zero)
 			trueUpQty = decimal.NewFromInt(1)
 		}
 		if trueUp.IsPositive() {
@@ -143,7 +145,7 @@ func commitmentLine(in commitmentLineInput, sc *stackedCommitment, sl *scopedLin
 			types.MetadataKeyCommitmentID:       sc.C.ID,
 		},
 	}
-	if sc.C.InvoiceDescription != nil {
+	if sc.C.InvoiceDescription != nil && kind != types.CommitmentLineOnDemand {
 		line.Metadata[types.MetadataKeyDescription] = *sc.C.InvoiceDescription
 	}
 	if sl != nil {
