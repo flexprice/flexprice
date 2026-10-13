@@ -77,6 +77,8 @@ func (r *CreateCommitmentRequest) Validate() error {
 		return invalid("value must be greater than zero")
 	case !r.StartDate.Before(r.EndDate):
 		return invalid("start_date must be before end_date")
+	case r.Priority < 0:
+		return invalid("priority must be zero or greater")
 	case r.Type != types.COMMITMENT_TYPE_AMOUNT && r.Type != types.COMMITMENT_TYPE_QUANTITY:
 		return invalid("type must be amount or quantity")
 	case r.Type == types.COMMITMENT_TYPE_QUANTITY && (r.CommittedRate == nil || !r.CommittedRate.IsPositive()):
