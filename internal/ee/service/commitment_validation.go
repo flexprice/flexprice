@@ -155,7 +155,8 @@ func (s *commitmentService) validateAgainstSubscription(ctx context.Context, req
 
 func invalid(msg string) error { return ierr.NewError(msg).WithHint(msg).Mark(ierr.ErrValidation) }
 
-// validateOverlaps enforces C12, C14 and C20 against active commitments sharing a line item.
+// validateOverlaps requires active commitments sharing a line item to differ in priority and agree on
+// type, measurement and overage rate.
 func (s *commitmentService) validateOverlaps(ctx context.Context, req *dto.CreateCommitmentRequest, cc *commitmentContext, lines []*subscription.SubscriptionLineItem) error {
 	f := types.NewNoLimitCommitmentFilter()
 	f.SubscriptionIDs = []string{cc.Sub.ID}
@@ -200,10 +201,16 @@ func (s *commitmentService) sameOverage(ctx context.Context, other *commitment.C
 	return p.Amount.Equal(*req.OverageRate), nil
 }
 
-// validateBoundary requires end to fall on a subscription billing-period end or the subscription end.
+// validateBoundary requires end to fall on a subscription billing-period end or the subscription end,
+// and never after the subscription end.
 func validateBoundary(sub *subscription.Subscription, end time.Time) error {
-	if sub.EndDate != nil && end.Equal(*sub.EndDate) {
-		return nil
+	if sub.EndDate != nil {
+		if end.Equal(*sub.EndDate) {
+			return nil
+		}
+		if end.After(*sub.EndDate) {
+			return invalidf("end_date cannot be after the subscription end %s", sub.EndDate.Format(time.RFC3339))
+		}
 	}
 	// Extend one period past end so the last period is not clipped at end.
 	horizon, err := types.NextBillingDate(&types.NextBillingDateParams{
