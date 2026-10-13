@@ -520,3 +520,42 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_NoopCases() {
 	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
 	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), sub, p, at))
 }
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsBucketMismatchForMeterScopedWindow() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	req.Measurement = types.CommitmentMeasurementWindow
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	hourly := *s.fx.priceAPI
+	hourly.ID, hourly.BucketSize = "price_api_hourly", types.WindowSizeHour
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, &hourly, s.fx.sub.StartDate)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(err.Error(), created.ID)
+
+	same := *s.fx.priceAPI
+	same.ID = "price_api_same_bucket"
+	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, &same, s.fx.sub.StartDate))
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsOverlappingCommitmentsThatDisagree() {
+	a := validReq(s.fx.sub.ID, "")
+	a.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	a.Type, a.CommittedRate, a.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
+	ca, err := s.svc.Create(s.GetContext(), a)
+	s.Require().NoError(err)
+
+	b := validReq(s.fx.sub.ID, "")
+	b.Name = "Storage"
+	b.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterStorage.ID}
+	cb, err := s.svc.Create(s.GetContext(), b)
+	s.Require().NoError(err)
+
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, s.fx.sub.StartDate)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(err.Error(), ca.ID)
+	s.Contains(err.Error(), cb.ID)
+}
