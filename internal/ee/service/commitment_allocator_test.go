@@ -22,7 +22,7 @@ func TestAllocateCommitments_Waterfall(t *testing.T) {
 		}
 	}
 	tests := []struct {
-		usage                     string
+		usage                      string
 		wantA, wantB, wantOnDemand string
 	}{
 		{"6", "6", "0", "0"},
