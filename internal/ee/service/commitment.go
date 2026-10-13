@@ -67,25 +67,8 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 
 	var out *commitment.Commitment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Serialises creates per subscription so the overlap checks (C12, C14, C20) see committed rows.
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
-			return ierr.WithError(err).WithHint("Failed to lock subscription commitments").Mark(ierr.ErrInternal)
-		}
-		c, cc, _, err := s.prepare(txCtx, &req)
-		if err != nil {
-			return err
-		}
-		meterID := ""
-		if lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, c.StartDate); len(lines) > 0 {
-			meterID = lines[0].MeterID
-		}
-		if c.CommittedPriceID, err = s.createRatePrice(txCtx, c, cc.Sub, meterID, req.CommittedRate, "committed"); err != nil {
-			return err
-		}
-		if c.OveragePriceID, err = s.createRatePrice(txCtx, c, cc.Sub, meterID, req.OverageRate, "overage"); err != nil {
-			return err
-		}
-		out, err = s.CommitmentRepo.Create(txCtx, c)
+		var err error
+		out, err = s.createLocked(txCtx, &req)
 		return err
 	})
 	if err != nil && req.IdempotencyKey != nil && ierr.IsAlreadyExists(err) {
@@ -101,6 +84,38 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 	}
 	s.Logger.Info(ctx, "commitment created", "commitment_id", out.ID, "subscription_id", out.SubscriptionID)
 	return s.toResponse(ctx, out)
+}
+
+// createLocked serialises creates per subscription so the overlap checks (C12, C14, C20) see committed rows,
+// and must run inside a transaction. A replayed idempotency key returns the original commitment (first write wins).
+func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCommitmentRequest) (*commitment.Commitment, error) {
+	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to lock subscription commitments").Mark(ierr.ErrInternal)
+	}
+	if req.IdempotencyKey != nil {
+		existing, err := s.CommitmentRepo.GetByIdempotencyKey(ctx, *req.IdempotencyKey)
+		if err == nil {
+			return existing, nil
+		}
+		if !ierr.IsNotFound(err) {
+			return nil, err
+		}
+	}
+	c, cc, _, err := s.prepare(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	meterID := ""
+	if lines := resolveScopeLines(c.ScopeEntityType, c.ScopeEntityID, cc, c.StartDate); len(lines) > 0 {
+		meterID = lines[0].MeterID
+	}
+	if c.CommittedPriceID, err = s.createRatePrice(ctx, c, cc.Sub, meterID, req.CommittedRate, "committed"); err != nil {
+		return nil, err
+	}
+	if c.OveragePriceID, err = s.createRatePrice(ctx, c, cc.Sub, meterID, req.OverageRate, "overage"); err != nil {
+		return nil, err
+	}
+	return s.CommitmentRepo.Create(ctx, c)
 }
 
 // prepare validates the request and builds the commitment and its value without persisting anything.
@@ -308,6 +323,9 @@ func (s *commitmentService) terminate(ctx context.Context, id string, effectiveA
 	}
 	if !effectiveAt.Before(c.EndDate) {
 		return nil, invalidf("effective_at must be before the commitment end %s", c.EndDate.Format(time.RFC3339))
+	}
+	if effectiveAt.Before(c.StartDate) {
+		effectiveAt = c.StartDate
 	}
 	terminated := commitment.NewCommitmentBuilder(c).
 		WithStatus(types.CommitmentStatusTerminated).
