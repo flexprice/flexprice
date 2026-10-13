@@ -652,6 +652,9 @@ func (s *subscriptionModificationService) applyQuantityChange(
 				WithEndDate(newItemEndDate).
 				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
 				Build()
+			if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+				return err
+			}
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
 			}

@@ -840,6 +840,13 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := rejectLegacyCommitmentInScope(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+				return err
+			}
+			if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+				return err
+			}
+
 			// Create the line item directly using repository
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
@@ -900,6 +907,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		// Validate subscription-level commitment doesn't conflict
 		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+			return nil, err
+		}
+
+		if err := rejectLegacyCommitmentInScope(ctx, s.ServiceParams, sub, existingLineItem); err != nil {
 			return nil, err
 		}
 
