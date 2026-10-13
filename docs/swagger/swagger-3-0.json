@@ -1412,6 +1412,422 @@
         ]
       }
     },
+    "/commitments": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Create commitment",
+        "description": "Creates a commitment on a subscription: a minimum spend or quantity over a term, with optional committed and overage rates.",
+        "operationId": "createCommitment",
+        "requestBody": {
+          "description": "Commitment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/preview": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Preview commitment",
+        "description": "Validates a commitment and returns its computed value without creating it.",
+        "operationId": "previewCommitment",
+        "requestBody": {
+          "description": "Commitment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/search": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Query commitments",
+        "description": "Lists commitments with filtering and sorting. Returns a paginated list.",
+        "operationId": "queryCommitment",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.CommitmentFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCommitmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/commitments/{id}": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Get commitment",
+        "description": "Loads a single commitment by ID.",
+        "operationId": "getCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Update commitment",
+        "description": "Updates the descriptive fields of a commitment. Economic terms are immutable.",
+        "operationId": "updateCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Commitment update",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/{id}/terminate": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Terminate commitment",
+        "description": "Ends a commitment early, effective at the given time or now.",
+        "operationId": "terminateCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Termination request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateCommitmentRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/costs": {
       "post": {
         "tags": [
@@ -16537,6 +16953,20 @@
           }
         }
       },
+      "ListCommitmentsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListCouponsResponse": {
         "type": "object",
         "properties": {
@@ -18561,6 +18991,174 @@
           }
         }
       },
+      "CommitmentResponse": {
+        "type": "object",
+        "properties": {
+          "active_windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ActiveWindow"
+            }
+          },
+          "binding": {
+            "type": "boolean"
+          },
+          "collection_method": {
+            "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
+          },
+          "commitment_status": {
+            "$ref": "#/components/schemas/types.CommitmentStatus"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "committed_price_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "instalment_invoicing": {
+            "type": "string"
+          },
+          "invoice_description": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/types.CommitmentMeasurement"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string"
+          },
+          "on_early_termination": {
+            "$ref": "#/components/schemas/types.CommitmentEarlyTermination"
+          },
+          "overage_price_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "scope_entity_id": {
+            "type": "string"
+          },
+          "scope_entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "terminated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "total_amount": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitmentScopeInput": {
+        "required": [
+          "entity_id",
+          "entity_type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          }
+        }
+      },
+      "CommitmentUsageBreakdown": {
+        "type": "object",
+        "properties": {
+          "billed_amount": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "string"
+          },
+          "commitment_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "period_amount": {
+            "type": "string"
+          },
+          "unused": {
+            "type": "string"
+          },
+          "used": {
+            "type": "string"
+          },
+          "value_unused": {
+            "type": "string"
+          },
+          "value_within": {
+            "type": "string"
+          }
+        }
+      },
       "ConfigurationDetails": {
         "type": "object",
         "properties": {
@@ -19165,6 +19763,90 @@
           }
         }
       },
+      "CreateCommitmentRequest": {
+        "required": [
+          "end_date",
+          "measurement",
+          "name",
+          "scope",
+          "start_date",
+          "subscription_id",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "active_windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ActiveWindow"
+            }
+          },
+          "binding": {
+            "type": "boolean",
+            "description": "default true"
+          },
+          "collection_method": {
+            "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
+          },
+          "committed_rate": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "invoice_description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/types.CommitmentMeasurement"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "on_early_termination": {
+            "$ref": "#/components/schemas/types.CommitmentEarlyTermination"
+          },
+          "overage_rate": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/CommitmentScopeInput"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "CreateCostsheetRequest": {
         "required": [
           "name"
@@ -19397,6 +20079,7 @@
       },
       "CreateCustomerRequest": {
         "required": [
+          "contact_persons",
           "external_id",
           "name"
         ],
@@ -19727,6 +20410,10 @@
           "amount": {
             "type": "string",
             "description": "amount is the monetary amount for this line item"
+          },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -20417,6 +21104,13 @@
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are created with the subscription; their subscription_id is set server-side.",
+            "items": {
+              "$ref": "#/components/schemas/CreateCommitmentRequest"
+            }
           },
           "coupons": {
             "type": "array",
@@ -22513,6 +23207,13 @@
             "type": "number",
             "description": "Amount of commitment used"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentUsageBreakdown"
+            }
+          },
           "currency": {
             "type": "string"
           },
@@ -23028,6 +23729,10 @@
           },
           "amount": {
             "type": "string"
+          },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -26921,6 +27626,9 @@
           "environment_id": {
             "type": "string"
           },
+          "external_tax_details": {
+            "$ref": "#/components/schemas/types.ExternalTaxDetails"
+          },
           "id": {
             "type": "string"
           },
@@ -26932,6 +27640,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.TaxProvider"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -26949,7 +27660,15 @@
             "$ref": "#/components/schemas/TaxRateResponse"
           },
           "tax_rate_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Null when an external engine calculated the tax: there is no Flexprice rate to point at."
+          },
+          "tax_transaction_id": {
+            "type": "string",
+            "description": "TaxTransactionID is the provider transaction recording the filed tax, stamped at commit."
+          },
+          "tax_transaction_type": {
+            "$ref": "#/components/schemas/types.TaxTransactionType"
           },
           "taxable_amount": {
             "type": "string"
@@ -27241,6 +27960,15 @@
           }
         }
       },
+      "TerminateCommitmentRequest": {
+        "type": "object",
+        "properties": {
+          "effective_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "TopUpCoupon": {
         "required": [
           "coupon_code"
@@ -27401,6 +28129,26 @@
           }
         }
       },
+      "UpdateCommitmentRequest": {
+        "type": "object",
+        "properties": {
+          "invoice_description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "maxLength": 255,
+            "type": "string"
+          }
+        }
+      },
       "UpdateCostsheetRequest": {
         "type": "object",
         "properties": {
@@ -27463,6 +28211,9 @@
         }
       },
       "UpdateCustomerRequest": {
+        "required": [
+          "contact_persons"
+        ],
         "type": "object",
         "properties": {
           "address_city": {
@@ -27989,7 +28740,8 @@
             "format": "date-time"
           },
           "cancel_at_period_end": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Pointer so omitting the field leaves the stored value unchanged; sending it sets the flag."
           },
           "parent_subscription_id": {
             "type": "string",
@@ -29454,6 +30206,10 @@
           "amount": {
             "type": "string"
           },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
+          },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
           },
@@ -30122,6 +30878,18 @@
           }
         },
         "x-speakeasy-name-override": "AWSMarketplaceSyncConfig"
+      },
+      "types.ActiveWindow": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "ActiveWindow"
       },
       "types.AddAddonParams": {
         "type": "object",
@@ -30850,6 +31618,120 @@
         ],
         "x-speakeasy-name-override": "ColumnType"
       },
+      "types.CommitmentCollectionMethod": {
+        "type": "string",
+        "enum": [
+          "per_period",
+          "billing_terms"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCollectionPerPeriod",
+          "CommitmentCollectionBillingTerms"
+        ],
+        "x-speakeasy-name-override": "CommitmentCollectionMethod"
+      },
+      "types.CommitmentEarlyTermination": {
+        "type": "string",
+        "enum": [
+          "forfeit",
+          "credit_note",
+          "bill_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentTerminationForfeit",
+          "CommitmentTerminationCreditNote",
+          "CommitmentTerminationBillRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentEarlyTermination"
+      },
+      "types.CommitmentFilter": {
+        "type": "object",
+        "properties": {
+          "active_from": {
+            "type": "string",
+            "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo)."
+          },
+          "active_to": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "scope_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope_entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CommitmentStatus"
+            }
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "CommitmentFilter"
+      },
       "types.CommitmentInfo": {
         "type": "object",
         "properties": {
@@ -30887,6 +31769,48 @@
           }
         },
         "x-speakeasy-name-override": "CommitmentInfo"
+      },
+      "types.CommitmentMeasurement": {
+        "type": "string",
+        "enum": [
+          "billing_period",
+          "window"
+        ],
+        "x-enum-varnames": [
+          "CommitmentMeasurementBillingPeriod",
+          "CommitmentMeasurementWindow"
+        ],
+        "x-speakeasy-name-override": "CommitmentMeasurement"
+      },
+      "types.CommitmentScopeType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "group",
+          "meter",
+          "price"
+        ],
+        "x-enum-varnames": [
+          "CommitmentScopeSubscription",
+          "CommitmentScopeGroup",
+          "CommitmentScopeMeter",
+          "CommitmentScopePrice"
+        ],
+        "x-speakeasy-name-override": "CommitmentScopeType"
+      },
+      "types.CommitmentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "ended",
+          "terminated"
+        ],
+        "x-enum-varnames": [
+          "CommitmentStatusActive",
+          "CommitmentStatusEnded",
+          "CommitmentStatusTerminated"
+        ],
+        "x-speakeasy-name-override": "CommitmentStatus"
       },
       "types.CommitmentType": {
         "type": "string",
@@ -31658,6 +32582,55 @@
           }
         },
         "x-speakeasy-name-override": "ExportMetadataField"
+      },
+      "types.ExternalTaxDetails": {
+        "type": "object",
+        "properties": {
+          "calculation_expires_at": {
+            "type": "string",
+            "description": "CalculationExpiresAt is when the calculation can no longer be filed, RFC3339.",
+            "format": "date-time"
+          },
+          "calculation_id": {
+            "type": "string",
+            "description": "CalculationID is the provider calculation this row was written from. Commit files it."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "DisplayName is the engine's own name for the tax, such as\n\"Integrated goods and services tax (IGST)\"."
+          },
+          "jurisdiction": {
+            "$ref": "#/components/schemas/types.TaxJurisdiction"
+          },
+          "percentage": {
+            "type": "string",
+            "description": "Percentage is the resolved rate, such as \"18.0\". This is what was charged, not the\nrate that would apply if the tax were imposed."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Reference is what this row's provider transaction was filed under. It is unique across\nevery transaction on the account, so it is also the only way back to a transaction whose\nid failed to land here."
+          },
+          "reversal": {
+            "$ref": "#/components/schemas/types.TaxReversal"
+          },
+          "sourcing": {
+            "type": "string",
+            "description": "Sourcing is whether the jurisdiction followed the seller's address or the buyer's."
+          },
+          "tax_code": {
+            "type": "string",
+            "description": "TaxCode is the product tax category the engine priced against, such as txcd_10000000.\nIt belongs to the line rather than the rate, so today every row on an invoice carries\nthe account default. It only varies once tax is calculated per line item."
+          },
+          "tax_type": {
+            "type": "string",
+            "description": "TaxType is the tax family, such as vat, igst or sales_tax."
+          },
+          "taxability_reason": {
+            "type": "string",
+            "description": "TaxabilityReason is why the engine charged what it did, such as standard_rated or\nreverse_charge. Recorded, not yet rendered."
+          }
+        },
+        "x-speakeasy-name-override": "ExternalTaxDetails"
       },
       "types.FXRateFilter": {
         "type": "object",
@@ -33973,13 +34946,51 @@
         "type": "string",
         "enum": [
           "customer_exempt",
-          "no_tax_configured"
+          "no_tax_configured",
+          "reverse_charge",
+          "not_collecting",
+          "not_subject_to_tax",
+          "not_supported"
         ],
         "x-enum-varnames": [
           "TaxExemptionReasonCustomerExempt",
-          "TaxExemptionReasonNoTaxConfigured"
+          "TaxExemptionReasonNoTaxConfigured",
+          "TaxExemptionReasonReverseCharge",
+          "TaxExemptionReasonNotCollecting",
+          "TaxExemptionReasonNotSubjectToTax",
+          "TaxExemptionReasonNotSupported"
         ],
         "x-speakeasy-name-override": "TaxExemptionReasonCode"
+      },
+      "types.TaxJurisdiction": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "TaxJurisdiction"
+      },
+      "types.TaxProvider": {
+        "type": "string",
+        "enum": [
+          "flexprice",
+          "stripe"
+        ],
+        "x-enum-varnames": [
+          "TaxProviderFlexprice",
+          "TaxProviderStripe"
+        ],
+        "x-speakeasy-name-override": "TaxProvider"
       },
       "types.TaxRateEntityType": {
         "type": "string",
@@ -33987,13 +34998,15 @@
           "customer",
           "subscription",
           "invoice",
-          "tenant"
+          "tenant",
+          "credit_note"
         ],
         "x-enum-varnames": [
           "TaxRateEntityTypeCustomer",
           "TaxRateEntityTypeSubscription",
           "TaxRateEntityTypeInvoice",
-          "TaxRateEntityTypeTenant"
+          "TaxRateEntityTypeTenant",
+          "TaxRateEntityTypeCreditNote"
         ],
         "x-speakeasy-name-override": "TaxRateEntityType"
       },
@@ -34032,6 +35045,42 @@
           "TaxRateTypePercentage"
         ],
         "x-speakeasy-name-override": "TaxRateType"
+      },
+      "types.TaxReversal": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/types.TaxReversalMode"
+          },
+          "original_transaction": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "TaxReversal"
+      },
+      "types.TaxReversalMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "partial"
+        ],
+        "x-enum-varnames": [
+          "TaxReversalModeFull",
+          "TaxReversalModePartial"
+        ],
+        "x-speakeasy-name-override": "TaxReversalMode"
+      },
+      "types.TaxTransactionType": {
+        "type": "string",
+        "enum": [
+          "filing",
+          "reversal"
+        ],
+        "x-enum-varnames": [
+          "TaxTransactionTypeFiling",
+          "TaxTransactionTypeReversal"
+        ],
+        "x-speakeasy-name-override": "TaxTransactionType"
       },
       "types.TaxTreatment": {
         "type": "string",
@@ -36006,6 +37055,9 @@
           "currency": {
             "type": "string"
           },
+          "external_tax_details": {
+            "$ref": "#/components/schemas/types.ExternalTaxDetails"
+          },
           "id": {
             "type": "string"
           },
@@ -36014,6 +37066,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.TaxProvider"
           },
           "tax_amount": {
             "type": "string"
@@ -36026,6 +37081,9 @@
           },
           "tax_rate_id": {
             "type": "string"
+          },
+          "tax_transaction_type": {
+            "$ref": "#/components/schemas/types.TaxTransactionType"
           },
           "taxable_amount": {
             "type": "string"

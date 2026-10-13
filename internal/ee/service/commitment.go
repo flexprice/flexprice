@@ -48,16 +48,31 @@ func (s *commitmentService) IsEnabled(ctx context.Context) (bool, error) {
 }
 
 func (s *commitmentService) Preview(ctx context.Context, req dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
-	c, _, value, err := s.prepare(ctx, &req)
+	c, _, value, err := s.prepare(ctx, &req, commitmentCreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
 }
 
+// commitmentCreateOptions tunes validation for callers other than the commitments API.
+type commitmentCreateOptions struct {
+	// allowPendingSubscription accepts a subscription that is still incomplete or draft.
+	allowPendingSubscription bool
+}
+
 // Create validates and persists a commitment with its rate prices. A repeated idempotency key returns the
 // existing commitment; the repository's unique index on the key is the backstop for concurrent retries.
 func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
+	return s.create(ctx, req, commitmentCreateOptions{})
+}
+
+// createInline creates a commitment sent with a new subscription, which may not be active yet.
+func (s *commitmentService) createInline(ctx context.Context, req dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
+	return s.create(ctx, req, commitmentCreateOptions{allowPendingSubscription: true})
+}
+
+func (s *commitmentService) create(ctx context.Context, req dto.CreateCommitmentRequest, opts commitmentCreateOptions) (*dto.CommitmentResponse, error) {
 	if req.IdempotencyKey != nil {
 		existing, err := s.CommitmentRepo.GetByIdempotencyKey(ctx, *req.IdempotencyKey)
 		if err == nil {
@@ -71,7 +86,7 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 	var out *commitment.Commitment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
-		out, err = s.createLocked(txCtx, &req)
+		out, err = s.createLocked(txCtx, &req, opts)
 		return err
 	})
 	if err != nil && req.IdempotencyKey != nil && ierr.IsAlreadyExists(err) {
@@ -92,7 +107,7 @@ func (s *commitmentService) Create(ctx context.Context, req dto.CreateCommitment
 
 // createLocked serialises creates per subscription so the overlap checks see committed rows,
 // and must run inside a transaction. A replayed idempotency key returns the original commitment (first write wins).
-func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCommitmentRequest) (*commitment.Commitment, error) {
+func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCommitmentRequest, opts commitmentCreateOptions) (*commitment.Commitment, error) {
 	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to lock subscription commitments").Mark(ierr.ErrInternal)
 	}
@@ -105,7 +120,7 @@ func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCom
 			return nil, err
 		}
 	}
-	c, cc, _, err := s.prepare(ctx, req)
+	c, cc, _, err := s.prepare(ctx, req, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +138,7 @@ func (s *commitmentService) createLocked(ctx context.Context, req *dto.CreateCom
 }
 
 // prepare validates the request and builds the commitment and its value without persisting anything.
-func (s *commitmentService) prepare(ctx context.Context, req *dto.CreateCommitmentRequest) (*commitment.Commitment, *commitmentContext, decimal.Decimal, error) {
+func (s *commitmentService) prepare(ctx context.Context, req *dto.CreateCommitmentRequest, opts commitmentCreateOptions) (*commitment.Commitment, *commitmentContext, decimal.Decimal, error) {
 	enabled, err := s.IsEnabled(ctx)
 	if err != nil {
 		return nil, nil, decimal.Zero, err
@@ -140,7 +155,7 @@ func (s *commitmentService) prepare(ctx context.Context, req *dto.CreateCommitme
 	if err := req.Validate(); err != nil {
 		return nil, nil, decimal.Zero, err
 	}
-	if err := s.validateAgainstSubscription(ctx, req, cc); err != nil {
+	if err := s.validateAgainstSubscription(ctx, req, cc, opts); err != nil {
 		return nil, nil, decimal.Zero, err
 	}
 	c := req.ToCommitment(ctx, cc.Sub)

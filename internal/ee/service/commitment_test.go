@@ -224,7 +224,7 @@ func (s *CommitmentServiceSuite) TestCreateLocked_ReplayedKeyReturnsOriginalWith
 	pricesBefore, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
 	s.Require().NoError(err)
 
-	got, err := s.svc.(*commitmentService).createLocked(s.GetContext(), &req)
+	got, err := s.svc.(*commitmentService).createLocked(s.GetContext(), &req, commitmentCreateOptions{})
 	s.Require().NoError(err)
 	s.Equal(first.ID, got.ID)
 	pricesAfter, err := s.GetStores().PriceRepo.Count(s.GetContext(), types.NewNoLimitPriceFilter())
@@ -678,4 +678,14 @@ func (s *CommitmentServiceSuite) TestValidation_FutureScopeLineOnAnotherCadence(
 
 	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.requireValidation(err, "commitments require scope prices billed every subscription period")
+}
+
+func (s *CommitmentServiceSuite) TestCreate_RejectsIncompleteSubscription() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.SubscriptionStatus = types.SubscriptionStatusIncomplete
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.requireValidation(err, "must be active or trialing")
 }

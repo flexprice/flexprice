@@ -27,6 +27,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCommitmentsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CommitmentResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCouponsResponse:
     properties:
       items:
@@ -1488,6 +1497,114 @@ definitions:
       true_up_enabled:
         type: boolean
     type: object
+  CommitmentResponse:
+    properties:
+      active_windows:
+        items:
+          $ref: '#/definitions/types.ActiveWindow'
+        type: array
+      binding:
+        type: boolean
+      collection_method:
+        $ref: '#/definitions/types.CommitmentCollectionMethod'
+      commitment_status:
+        $ref: '#/definitions/types.CommitmentStatus'
+      commitment_value:
+        type: string
+      committed_price_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      end_date:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      instalment_invoicing:
+        type: string
+      invoice_description:
+        type: string
+      invoice_label:
+        type: string
+      measurement:
+        $ref: '#/definitions/types.CommitmentMeasurement'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+      on_early_termination:
+        $ref: '#/definitions/types.CommitmentEarlyTermination'
+      overage_price_id:
+        type: string
+      priority:
+        type: integer
+      scope_entity_id:
+        type: string
+      scope_entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+      start_date:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      terminated_at:
+        type: string
+      timezone:
+        type: string
+      total_amount:
+        type: string
+      type:
+        $ref: '#/definitions/types.CommitmentType'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      value:
+        type: string
+    type: object
+  CommitmentScopeInput:
+    properties:
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+    required:
+    - entity_id
+    - entity_type
+    type: object
+  CommitmentUsageBreakdown:
+    properties:
+      billed_amount:
+        type: string
+      capacity:
+        type: string
+      commitment_id:
+        type: string
+      invoice_label:
+        type: string
+      period_amount:
+        type: string
+      unused:
+        type: string
+      used:
+        type: string
+      value_unused:
+        type: string
+      value_within:
+        type: string
+    type: object
   ConfigurationDetails:
     properties:
       plan_change:
@@ -1900,6 +2017,64 @@ definitions:
     - customer_external_id
     - payment_provider
     type: object
+  CreateCommitmentRequest:
+    properties:
+      active_windows:
+        items:
+          $ref: '#/definitions/types.ActiveWindow'
+        type: array
+      binding:
+        description: default true
+        type: boolean
+      collection_method:
+        $ref: '#/definitions/types.CommitmentCollectionMethod'
+      committed_rate:
+        type: string
+      end_date:
+        type: string
+      idempotency_key:
+        maxLength: 128
+        type: string
+      invoice_description:
+        maxLength: 500
+        type: string
+      invoice_label:
+        maxLength: 255
+        type: string
+      measurement:
+        $ref: '#/definitions/types.CommitmentMeasurement'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        maxLength: 255
+        type: string
+      on_early_termination:
+        $ref: '#/definitions/types.CommitmentEarlyTermination'
+      overage_rate:
+        type: string
+      priority:
+        type: integer
+      scope:
+        $ref: '#/definitions/CommitmentScopeInput'
+      start_date:
+        type: string
+      subscription_id:
+        type: string
+      timezone:
+        type: string
+      type:
+        $ref: '#/definitions/types.CommitmentType'
+      value:
+        type: string
+    required:
+    - end_date
+    - measurement
+    - name
+    - scope
+    - start_date
+    - subscription_id
+    - type
+    type: object
   CreateCostsheetRequest:
     properties:
       description:
@@ -2201,6 +2376,7 @@ definitions:
           Defaults to "UTC" if not provided
         type: string
     required:
+    - contact_persons
     - external_id
     - name
     type: object
@@ -2360,6 +2536,9 @@ definitions:
         type: string
       amount:
         description: amount is the monetary amount for this line item
+        type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
         type: string
       commitment_info:
         allOf:
@@ -2947,6 +3126,12 @@ definitions:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration allows a different commitment period than
           billing (e.g. ANNUAL on MONTHLY).
+      commitments:
+        description: Commitments are created with the subscription; their subscription_id
+          is set server-side.
+        items:
+          $ref: '#/definitions/CreateCommitmentRequest'
+        type: array
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
@@ -4541,6 +4726,12 @@ definitions:
       commitment_utilized:
         description: Amount of commitment used
         type: number
+      commitments:
+        description: Commitments is the per-commitment usage breakdown for the window;
+          nil when commitments v2 is off or none apply.
+        items:
+          $ref: '#/definitions/CommitmentUsageBreakdown'
+        type: array
       currency:
         type: string
       display_amount:
@@ -4923,6 +5114,9 @@ definitions:
           Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
         type: string
       amount:
+        type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
         type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
@@ -7960,6 +8154,11 @@ definitions:
         $ref: '#/definitions/types.TaxRateEntityType'
       environment_id:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: ExternalTaxDetails is what the engine returned about this tax.
+          Null on a native row.
       id:
         type: string
       idempotency_key:
@@ -7968,6 +8167,11 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: Provider is the engine that produced this row. Empty means the
+          native engine.
       status:
         $ref: '#/definitions/types.Status'
       tax_amount:
@@ -7979,7 +8183,18 @@ definitions:
       tax_rate:
         $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
+        description: 'Null when an external engine calculated the tax: there is no
+          Flexprice rate to point at.'
         type: string
+      tax_transaction_id:
+        description: TaxTransactionID is the provider transaction recording the filed
+          tax, stamped at commit.
+        type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: TaxTransactionType is what the provider transaction did. Empty
+          means a filing.
       taxable_amount:
         type: string
       tenant_id:
@@ -8176,6 +8391,11 @@ definitions:
       updated_at:
         type: string
     type: object
+  TerminateCommitmentRequest:
+    properties:
+      effective_at:
+        type: string
+    type: object
   TopUpCoupon:
     properties:
       coupon_code:
@@ -8315,6 +8535,20 @@ definitions:
     required:
     - config
     type: object
+  UpdateCommitmentRequest:
+    properties:
+      invoice_description:
+        maxLength: 500
+        type: string
+      invoice_label:
+        maxLength: 255
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        maxLength: 255
+        type: string
+    type: object
   UpdateCostsheetRequest:
     properties:
       description:
@@ -8434,6 +8668,8 @@ definitions:
         description: timezone is the updated IANA timezone name for the customer (e.g.
           "Asia/Kolkata", "America/New_York")
         type: string
+    required:
+    - contact_persons
     type: object
   UpdateEntitlementRequest:
     properties:
@@ -8767,6 +9003,8 @@ definitions:
       cancel_at:
         type: string
       cancel_at_period_end:
+        description: Pointer so omitting the field leaves the stored value unchanged;
+          sending it sets the flag.
         type: boolean
       parent_subscription_id:
         description: ParentSubscriptionID sets or clears the parent subscription.
@@ -9835,6 +10073,9 @@ definitions:
         type: string
       amount:
         type: string
+      commitment_id:
+        description: commitment_id links this line item to the commitment it bills.
+        type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       created_at:
@@ -10369,6 +10610,13 @@ definitions:
       region:
         type: string
     type: object
+  types.ActiveWindow:
+    properties:
+      end:
+        type: string
+      start:
+        type: string
+    type: object
   types.AddAddonParams:
     properties:
       addons:
@@ -10876,6 +11124,83 @@ definitions:
     - ColumnTypeString
     - ColumnTypeDecimal
     - ColumnTypeDatetime
+  types.CommitmentCollectionMethod:
+    enum:
+    - per_period
+    - billing_terms
+    type: string
+    x-enum-varnames:
+    - CommitmentCollectionPerPeriod
+    - CommitmentCollectionBillingTerms
+  types.CommitmentEarlyTermination:
+    enum:
+    - forfeit
+    - credit_note
+    - bill_remaining
+    type: string
+    x-enum-varnames:
+    - CommitmentTerminationForfeit
+    - CommitmentTerminationCreditNote
+    - CommitmentTerminationBillRemaining
+  types.CommitmentFilter:
+    properties:
+      active_from:
+        description: ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom,
+          ActiveTo).
+        type: string
+      active_to:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      ids:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      scope_entity_ids:
+        items:
+          type: string
+        type: array
+      scope_entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      statuses:
+        items:
+          $ref: '#/definitions/types.CommitmentStatus'
+        type: array
+      subscription_ids:
+        items:
+          type: string
+        type: array
+    type: object
   types.CommitmentInfo:
     properties:
       amount:
@@ -10902,6 +11227,36 @@ definitions:
       type:
         $ref: '#/definitions/types.CommitmentType'
     type: object
+  types.CommitmentMeasurement:
+    enum:
+    - billing_period
+    - window
+    type: string
+    x-enum-varnames:
+    - CommitmentMeasurementBillingPeriod
+    - CommitmentMeasurementWindow
+  types.CommitmentScopeType:
+    enum:
+    - subscription
+    - group
+    - meter
+    - price
+    type: string
+    x-enum-varnames:
+    - CommitmentScopeSubscription
+    - CommitmentScopeGroup
+    - CommitmentScopeMeter
+    - CommitmentScopePrice
+  types.CommitmentStatus:
+    enum:
+    - active
+    - ended
+    - terminated
+    type: string
+    x-enum-varnames:
+    - CommitmentStatusActive
+    - CommitmentStatusEnded
+    - CommitmentStatusTerminated
   types.CommitmentType:
     enum:
     - amount
@@ -11436,6 +11791,57 @@ definitions:
     required:
     - entity_type
     - field_key
+    type: object
+  types.ExternalTaxDetails:
+    properties:
+      calculation_expires_at:
+        description: CalculationExpiresAt is when the calculation can no longer be
+          filed, RFC3339.
+        type: string
+      calculation_id:
+        description: CalculationID is the provider calculation this row was written
+          from. Commit files it.
+        type: string
+      display_name:
+        description: |-
+          DisplayName is the engine's own name for the tax, such as
+          "Integrated goods and services tax (IGST)".
+        type: string
+      jurisdiction:
+        $ref: '#/definitions/types.TaxJurisdiction'
+      percentage:
+        description: |-
+          Percentage is the resolved rate, such as "18.0". This is what was charged, not the
+          rate that would apply if the tax were imposed.
+        type: string
+      reference:
+        description: |-
+          Reference is what this row's provider transaction was filed under. It is unique across
+          every transaction on the account, so it is also the only way back to a transaction whose
+          id failed to land here.
+        type: string
+      reversal:
+        allOf:
+        - $ref: '#/definitions/types.TaxReversal'
+        description: Reversal is set only on a row that records tax being un-filed.
+      sourcing:
+        description: Sourcing is whether the jurisdiction followed the seller's address
+          or the buyer's.
+        type: string
+      tax_code:
+        description: |-
+          TaxCode is the product tax category the engine priced against, such as txcd_10000000.
+          It belongs to the line rather than the rate, so today every row on an invoice carries
+          the account default. It only varies once tax is calculated per line item.
+        type: string
+      tax_type:
+        description: TaxType is the tax family, such as vat, igst or sales_tax.
+        type: string
+      taxability_reason:
+        description: |-
+          TaxabilityReason is why the engine charged what it did, such as standard_rated or
+          reverse_charge. Recorded, not yet rendered.
+        type: string
     type: object
   types.FXRateFilter:
     properties:
@@ -13151,22 +13557,51 @@ definitions:
     enum:
     - customer_exempt
     - no_tax_configured
+    - reverse_charge
+    - not_collecting
+    - not_subject_to_tax
+    - not_supported
     type: string
     x-enum-varnames:
     - TaxExemptionReasonCustomerExempt
     - TaxExemptionReasonNoTaxConfigured
+    - TaxExemptionReasonReverseCharge
+    - TaxExemptionReasonNotCollecting
+    - TaxExemptionReasonNotSubjectToTax
+    - TaxExemptionReasonNotSupported
+  types.TaxJurisdiction:
+    properties:
+      country:
+        type: string
+      display_name:
+        type: string
+      level:
+        type: string
+      state:
+        type: string
+    type: object
+  types.TaxProvider:
+    enum:
+    - flexprice
+    - stripe
+    type: string
+    x-enum-varnames:
+    - TaxProviderFlexprice
+    - TaxProviderStripe
   types.TaxRateEntityType:
     enum:
     - customer
     - subscription
     - invoice
     - tenant
+    - credit_note
     type: string
     x-enum-varnames:
     - TaxRateEntityTypeCustomer
     - TaxRateEntityTypeSubscription
     - TaxRateEntityTypeInvoice
     - TaxRateEntityTypeTenant
+    - TaxRateEntityTypeCreditNote
   types.TaxRateScope:
     enum:
     - INTERNAL
@@ -13191,6 +13626,29 @@ definitions:
     type: string
     x-enum-varnames:
     - TaxRateTypePercentage
+  types.TaxReversal:
+    properties:
+      mode:
+        $ref: '#/definitions/types.TaxReversalMode'
+      original_transaction:
+        type: string
+    type: object
+  types.TaxReversalMode:
+    enum:
+    - full
+    - partial
+    type: string
+    x-enum-varnames:
+    - TaxReversalModeFull
+    - TaxReversalModePartial
+  types.TaxTransactionType:
+    enum:
+    - filing
+    - reversal
+    type: string
+    x-enum-varnames:
+    - TaxTransactionTypeFiling
+    - TaxTransactionTypeReversal
   types.TaxTreatment:
     enum:
     - taxable
@@ -14552,12 +15010,25 @@ definitions:
         type: string
       currency:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: |-
+          ExternalTaxDetails carries the name, code, rate and jurisdiction an external engine
+          resolved. An external row points at no Flexprice rate, so this is the only description
+          of what was charged.
       id:
         type: string
       metadata:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: |-
+          Provider names the engine that produced this row. Empty means the native engine, which
+          is what tells a subscriber an empty tax_rate_id is external rather than missing data.
       tax_amount:
         type: string
       tax_behavior:
@@ -14566,6 +15037,12 @@ definitions:
         $ref: '#/definitions/webhookDto.TaxRate'
       tax_rate_id:
         type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: |-
+          TaxTransactionType is empty for a filing and reversal for tax being un-filed. A reversal
+          is not a tax the invoice carries, so a subscriber totalling tax must skip it.
       taxable_amount:
         type: string
     type: object
@@ -15454,6 +15931,232 @@ paths:
       summary: Cancel checkout session
       tags:
       - Checkout
+  /commitments:
+    post:
+      consumes:
+      - application/json
+      description: 'Creates a commitment on a subscription: a minimum spend or quantity
+        over a term, with optional committed and overage rates.'
+      operationId: createCommitment
+      parameters:
+      - description: Commitment
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/CreateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create commitment
+      tags:
+      - Commitments
+  /commitments/{id}:
+    get:
+      description: Loads a single commitment by ID.
+      operationId: getCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get commitment
+      tags:
+      - Commitments
+    put:
+      consumes:
+      - application/json
+      description: Updates the descriptive fields of a commitment. Economic terms
+        are immutable.
+      operationId: updateCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Commitment update
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update commitment
+      tags:
+      - Commitments
+  /commitments/{id}/terminate:
+    post:
+      consumes:
+      - application/json
+      description: Ends a commitment early, effective at the given time or now.
+      operationId: terminateCommitment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Termination request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/TerminateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Terminate commitment
+      tags:
+      - Commitments
+      x-scope: delete
+  /commitments/preview:
+    post:
+      consumes:
+      - application/json
+      description: Validates a commitment and returns its computed value without creating
+        it.
+      operationId: previewCommitment
+      parameters:
+      - description: Commitment
+        in: body
+        name: commitment
+        required: true
+        schema:
+          $ref: '#/definitions/CreateCommitmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CommitmentResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Preview commitment
+      tags:
+      - Commitments
+      x-scope: read
+  /commitments/search:
+    post:
+      consumes:
+      - application/json
+      description: Lists commitments with filtering and sorting. Returns a paginated
+        list.
+      operationId: queryCommitment
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.CommitmentFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCommitmentsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query commitments
+      tags:
+      - Commitments
+      x-scope: read
   /costs:
     post:
       consumes:
