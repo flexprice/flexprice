@@ -111,7 +111,7 @@ type DatasetCatalogResponse struct {
 	Items []*DatasetCatalogEntry `json:"items"`
 }
 
-// DatasetQueryRequest is the body for POST /analytics/datasets/query.
+// DatasetQueryRequest is the dataset query body.
 type DatasetQueryRequest struct {
 	Definition *analytics.ViewDefinition `json:"definition" binding:"required"`
 }

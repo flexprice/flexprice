@@ -63,7 +63,7 @@ func TestReportsRepository_Datasets(t *testing.T) {
 	) ENGINE = MergeTree ORDER BY (tenant_id, environment_id, external_customer_id, meter_id, timestamp, id)`))
 
 	q := func(s string) string { return "'" + s + "'" }
-	// Omitted columns take type defaults (epoch times, zero amounts).
+	// Omitted columns take type defaults.
 	seed := func(dbName, table, cols string, rows ...string) {
 		require.NoError(t, admin.GetConn().Exec(ctx, "INSERT INTO "+dbName+"."+table+" ("+cols+") VALUES "+strings.Join(rows, ",")))
 	}
@@ -202,7 +202,7 @@ func TestReportsRepository_Datasets(t *testing.T) {
 			want: [][]string{{"US", "2"}, {"IN", "1"}},
 		},
 		{
-			// Archived duplicate external id must not double usage.
+			// Archived duplicates must not double count.
 			name: "usage",
 			def: analytics.ViewDefinition{Dataset: "usage", Measures: []*analytics.Measure{count, sum("quantity")},
 				Dimensions: []string{"customer"}, Time: analytics.TimeSpecRaw{Field: "timestamp"}},

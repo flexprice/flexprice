@@ -120,8 +120,23 @@ func TestValidateDatasetRejects(t *testing.T) {
 		"hour grain":              inv(func(d *ViewDefinition) { d.Time.Grain = types.GrainHour }),
 		"bad compare":             inv(func(d *ViewDefinition) { d.Compare = "yesterday" }),
 		"bad display":             inv(func(d *ViewDefinition) { d.Display = "pie" }),
-		"sort unknown field":      inv(func(d *ViewDefinition) { d.Sort = []*SortSpec{{Field: "total"}} }),
-		"sort measure oob":        inv(func(d *ViewDefinition) { d.Sort = []*SortSpec{{Field: "m1"}} }),
+		"sort unknown field": inv(func(d *ViewDefinition) {
+			d.Dimensions = []string{"currency"}
+			d.Time.Grain = ""
+			d.Sort = []*SortSpec{{Field: "total"}}
+		}),
+		"sort measure oob": inv(func(d *ViewDefinition) {
+			d.Dimensions = []string{"currency"}
+			d.Time.Grain = ""
+			d.Sort = []*SortSpec{{Field: "m1"}}
+		}),
+		"scalar with sort":  inv(func(d *ViewDefinition) { d.Sort = []*SortSpec{{Field: "m0"}} }),
+		"scalar with limit": inv(func(d *ViewDefinition) { d.Limit = 5 }),
+		"timeseries with limit": inv(func(d *ViewDefinition) {
+			d.Dimensions = []string{"currency"}
+			d.Time.Grain = types.GrainDay
+			d.Limit = 5
+		}),
 		"usage compare": datasetDef("usage", func(d *ViewDefinition) {
 			d.Time = TimeSpecRaw{Range: "last_7_days", Field: "timestamp"}
 			d.Compare = "previous_period"

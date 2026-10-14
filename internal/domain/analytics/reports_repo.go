@@ -20,7 +20,7 @@ type ReportResult struct {
 	Rows    [][]string
 }
 
-// DatasetQuery is a validated dataset definition and window.
+// DatasetQuery is a validated dataset request.
 type DatasetQuery struct {
 	Def     *ViewDefinition
 	From    time.Time

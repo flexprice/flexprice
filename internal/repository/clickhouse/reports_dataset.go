@@ -80,7 +80,7 @@ func buildDatasetQuery(q *analytics.DatasetQuery, db, usageDB, tenantID, environ
 		"to":             q.To.UTC().Format(chTimeLayout),
 	}
 	timeExpr := tf.Expr
-	// Mirrored tables store null times as epoch.
+	// Null times are stored as epoch.
 	if !ds.Usage {
 		timeExpr = fmt.Sprintf("nullIf(%s, %s)", tf.Expr, chEpoch)
 	}
@@ -231,7 +231,7 @@ func datasetFilterCond(expr string, op types.FilterOperatorType, ph []string) (s
 	return fmt.Sprintf("%s %s %s", expr, sym, ph[0]), nil
 }
 
-// joinSubquery dedups joins not keyed on id.
+// joinSubquery dedups non-id joins.
 func joinSubquery(db string, j analytics.DatasetJoin) string {
 	scope := strings.Join(mirroredScope(""), " AND ")
 	lhs, _, _ := strings.Cut(j.On, " = ")

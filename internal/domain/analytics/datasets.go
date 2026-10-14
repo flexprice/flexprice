@@ -324,6 +324,11 @@ func ValidateDataset(def ViewDefinition) error {
 	if def.Limit < 0 {
 		return invalid("limit must be zero or positive", "invalid limit %d", def.Limit)
 	}
+	if shape := DatasetShape(def); shape != types.ShapeBreakdown && (len(def.Sort) > 0 || def.Limit > 0) {
+		return ierr.NewErrorf("sort and limit are not supported for %s views", shape).
+			WithHint("sort and limit apply to breakdown views: group by a dimension without a time grain").
+			Mark(ierr.ErrValidation)
+	}
 	for _, s := range def.Sort {
 		if s == nil {
 			continue
