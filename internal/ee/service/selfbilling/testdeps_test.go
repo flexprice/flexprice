@@ -27,7 +27,7 @@ func newTestService(t *testing.T, fc *fakeClient) (*selfBillingService, *testDep
 	}}
 	params := service.ServiceParams{Logger: logger.NewNoopLogger(), Config: cfg, TenantRepo: d.tenants, EnvironmentRepo: d.envs, SettingsRepo: d.settings}
 	settings := service.NewSettingsService(params)
-	envs := service.NewEnvironmentService(d.envs, nil, settings, params)
+	envs := service.NewEnvironmentService(d.envs, service.NewEnvAccessService(cfg), settings, params)
 	return &selfBillingService{ServiceParams: params, client: fc, envs: envs, settings: settings}, d
 }
 

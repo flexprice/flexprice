@@ -17,6 +17,9 @@ type fakeClient struct {
 	trialsStarted  int
 	trialCheckouts int
 	err            error
+	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect.
+	freeFirstPeriod  bool
+	trialCheckoutErr error
 }
 
 func newFakeClient() *fakeClient {
@@ -53,6 +56,12 @@ func (f *fakeClient) StartTrialEndCheckout(_ context.Context, in checkoutInput) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.trialCheckouts++
+	if f.trialCheckoutErr != nil {
+		return nil, f.trialCheckoutErr
+	}
+	if f.freeFirstPeriod {
+		return &remoteCheckout{status: "completed", terminal: true, extID: in.extID}, f.err
+	}
 	co := &remoteCheckout{id: "cs_" + in.subscriptionID, status: "pending", url: "https://checkout.stripe.test/" + in.subscriptionID, extID: in.extID}
 	f.checkouts[co.id] = co
 	return co, f.err
