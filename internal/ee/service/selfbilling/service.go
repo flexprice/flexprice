@@ -88,5 +88,3 @@ func (s *selfBillingService) provision(ctx context.Context, tenantID, name, emai
 	}
 	return s.client.StartTrial(ctx, in.extID)
 }
-
-func (s *selfBillingService) RunHourly(context.Context) error { return nil }
