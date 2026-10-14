@@ -8054,6 +8054,11 @@ definitions:
         $ref: '#/definitions/types.TaxRateEntityType'
       environment_id:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: ExternalTaxDetails is what the engine returned about this tax.
+          Null on a native row.
       id:
         type: string
       idempotency_key:
@@ -8062,6 +8067,11 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: Provider is the engine that produced this row. Empty means the
+          native engine.
       status:
         $ref: '#/definitions/types.Status'
       tax_amount:
@@ -8073,7 +8083,18 @@ definitions:
       tax_rate:
         $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
+        description: 'Null when an external engine calculated the tax: there is no
+          Flexprice rate to point at.'
         type: string
+      tax_transaction_id:
+        description: TaxTransactionID is the provider transaction recording the filed
+          tax, stamped at commit.
+        type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: TaxTransactionType is what the provider transaction did. Empty
+          means a filing.
       taxable_amount:
         type: string
       tenant_id:
@@ -8861,6 +8882,8 @@ definitions:
       cancel_at:
         type: string
       cancel_at_period_end:
+        description: Pointer so omitting the field leaves the stored value unchanged;
+          sending it sets the flag.
         type: boolean
       parent_subscription_id:
         description: ParentSubscriptionID sets or clears the parent subscription.
@@ -11531,6 +11554,57 @@ definitions:
     - entity_type
     - field_key
     type: object
+  types.ExternalTaxDetails:
+    properties:
+      calculation_expires_at:
+        description: CalculationExpiresAt is when the calculation can no longer be
+          filed, RFC3339.
+        type: string
+      calculation_id:
+        description: CalculationID is the provider calculation this row was written
+          from. Commit files it.
+        type: string
+      display_name:
+        description: |-
+          DisplayName is the engine's own name for the tax, such as
+          "Integrated goods and services tax (IGST)".
+        type: string
+      jurisdiction:
+        $ref: '#/definitions/types.TaxJurisdiction'
+      percentage:
+        description: |-
+          Percentage is the resolved rate, such as "18.0". This is what was charged, not the
+          rate that would apply if the tax were imposed.
+        type: string
+      reference:
+        description: |-
+          Reference is what this row's provider transaction was filed under. It is unique across
+          every transaction on the account, so it is also the only way back to a transaction whose
+          id failed to land here.
+        type: string
+      reversal:
+        allOf:
+        - $ref: '#/definitions/types.TaxReversal'
+        description: Reversal is set only on a row that records tax being un-filed.
+      sourcing:
+        description: Sourcing is whether the jurisdiction followed the seller's address
+          or the buyer's.
+        type: string
+      tax_code:
+        description: |-
+          TaxCode is the product tax category the engine priced against, such as txcd_10000000.
+          It belongs to the line rather than the rate, so today every row on an invoice carries
+          the account default. It only varies once tax is calculated per line item.
+        type: string
+      tax_type:
+        description: TaxType is the tax family, such as vat, igst or sales_tax.
+        type: string
+      taxability_reason:
+        description: |-
+          TaxabilityReason is why the engine charged what it did, such as standard_rated or
+          reverse_charge. Recorded, not yet rendered.
+        type: string
+    type: object
   types.FXRateFilter:
     properties:
       end_time:
@@ -12327,6 +12401,8 @@ definitions:
     - 60 NET
     - 75 NET
     - 90 NET
+    - END_OF_MONTH
+    - END_OF_NEXT_MONTH
     type: string
     x-enum-varnames:
     - PaymentTerms15Net
@@ -12335,6 +12411,8 @@ definitions:
     - PaymentTerms60Net
     - PaymentTerms75Net
     - PaymentTerms90Net
+    - PaymentTermsEndOfMonth
+    - PaymentTermsEndOfNextMonth
   types.PlanFilter:
     properties:
       end_time:
@@ -13245,22 +13323,51 @@ definitions:
     enum:
     - customer_exempt
     - no_tax_configured
+    - reverse_charge
+    - not_collecting
+    - not_subject_to_tax
+    - not_supported
     type: string
     x-enum-varnames:
     - TaxExemptionReasonCustomerExempt
     - TaxExemptionReasonNoTaxConfigured
+    - TaxExemptionReasonReverseCharge
+    - TaxExemptionReasonNotCollecting
+    - TaxExemptionReasonNotSubjectToTax
+    - TaxExemptionReasonNotSupported
+  types.TaxJurisdiction:
+    properties:
+      country:
+        type: string
+      display_name:
+        type: string
+      level:
+        type: string
+      state:
+        type: string
+    type: object
+  types.TaxProvider:
+    enum:
+    - flexprice
+    - stripe
+    type: string
+    x-enum-varnames:
+    - TaxProviderFlexprice
+    - TaxProviderStripe
   types.TaxRateEntityType:
     enum:
     - customer
     - subscription
     - invoice
     - tenant
+    - credit_note
     type: string
     x-enum-varnames:
     - TaxRateEntityTypeCustomer
     - TaxRateEntityTypeSubscription
     - TaxRateEntityTypeInvoice
     - TaxRateEntityTypeTenant
+    - TaxRateEntityTypeCreditNote
   types.TaxRateScope:
     enum:
     - INTERNAL
@@ -13285,6 +13392,29 @@ definitions:
     type: string
     x-enum-varnames:
     - TaxRateTypePercentage
+  types.TaxReversal:
+    properties:
+      mode:
+        $ref: '#/definitions/types.TaxReversalMode'
+      original_transaction:
+        type: string
+    type: object
+  types.TaxReversalMode:
+    enum:
+    - full
+    - partial
+    type: string
+    x-enum-varnames:
+    - TaxReversalModeFull
+    - TaxReversalModePartial
+  types.TaxTransactionType:
+    enum:
+    - filing
+    - reversal
+    type: string
+    x-enum-varnames:
+    - TaxTransactionTypeFiling
+    - TaxTransactionTypeReversal
   types.TaxTreatment:
     enum:
     - taxable
@@ -14646,12 +14776,25 @@ definitions:
         type: string
       currency:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: |-
+          ExternalTaxDetails carries the name, code, rate and jurisdiction an external engine
+          resolved. An external row points at no Flexprice rate, so this is the only description
+          of what was charged.
       id:
         type: string
       metadata:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: |-
+          Provider names the engine that produced this row. Empty means the native engine, which
+          is what tells a subscriber an empty tax_rate_id is external rather than missing data.
       tax_amount:
         type: string
       tax_behavior:
@@ -14660,6 +14803,12 @@ definitions:
         $ref: '#/definitions/webhookDto.TaxRate'
       tax_rate_id:
         type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: |-
+          TaxTransactionType is empty for a filing and reversal for tax being un-filed. A reversal
+          is not a tax the invoice carries, so a subscriber totalling tax must skip it.
       taxable_amount:
         type: string
     type: object

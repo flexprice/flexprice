@@ -25308,6 +25308,14 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "external_tax_details": {
+                    "description": "ExternalTaxDetails is what the engine returned about this tax. Null on a native row.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExternalTaxDetails"
+                        }
+                    ]
+                },
                 "id": {
                     "type": "string"
                 },
@@ -25319,6 +25327,14 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "provider": {
+                    "description": "Provider is the engine that produced this row. Empty means the native engine.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxProvider"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -25336,7 +25352,20 @@ const docTemplate = `{
                     "$ref": "#/definitions/TaxRateResponse"
                 },
                 "tax_rate_id": {
+                    "description": "Null when an external engine calculated the tax: there is no Flexprice rate to point at.",
                     "type": "string"
+                },
+                "tax_transaction_id": {
+                    "description": "TaxTransactionID is the provider transaction recording the filed tax, stamped at commit.",
+                    "type": "string"
+                },
+                "tax_transaction_type": {
+                    "description": "TaxTransactionType is what the provider transaction did. Empty means a filing.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTransactionType"
+                        }
+                    ]
                 },
                 "taxable_amount": {
                     "type": "string"
@@ -26432,6 +26461,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "cancel_at_period_end": {
+                    "description": "Pointer so omitting the field leaves the stored value unchanged; sending it sets the flag.",
                     "type": "boolean"
                 },
                 "parent_subscription_id": {
@@ -30097,6 +30127,58 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ExternalTaxDetails": {
+            "type": "object",
+            "properties": {
+                "calculation_expires_at": {
+                    "description": "CalculationExpiresAt is when the calculation can no longer be filed, RFC3339.",
+                    "type": "string"
+                },
+                "calculation_id": {
+                    "description": "CalculationID is the provider calculation this row was written from. Commit files it.",
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "DisplayName is the engine's own name for the tax, such as\n\"Integrated goods and services tax (IGST)\".",
+                    "type": "string"
+                },
+                "jurisdiction": {
+                    "$ref": "#/definitions/types.TaxJurisdiction"
+                },
+                "percentage": {
+                    "description": "Percentage is the resolved rate, such as \"18.0\". This is what was charged, not the\nrate that would apply if the tax were imposed.",
+                    "type": "string"
+                },
+                "reference": {
+                    "description": "Reference is what this row's provider transaction was filed under. It is unique across\nevery transaction on the account, so it is also the only way back to a transaction whose\nid failed to land here.",
+                    "type": "string"
+                },
+                "reversal": {
+                    "description": "Reversal is set only on a row that records tax being un-filed.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxReversal"
+                        }
+                    ]
+                },
+                "sourcing": {
+                    "description": "Sourcing is whether the jurisdiction followed the seller's address or the buyer's.",
+                    "type": "string"
+                },
+                "tax_code": {
+                    "description": "TaxCode is the product tax category the engine priced against, such as txcd_10000000.\nIt belongs to the line rather than the rate, so today every row on an invoice carries\nthe account default. It only varies once tax is calculated per line item.",
+                    "type": "string"
+                },
+                "tax_type": {
+                    "description": "TaxType is the tax family, such as vat, igst or sales_tax.",
+                    "type": "string"
+                },
+                "taxability_reason": {
+                    "description": "TaxabilityReason is why the engine charged what it did, such as standard_rated or\nreverse_charge. Recorded, not yet rendered.",
+                    "type": "string"
+                }
+            }
+        },
         "types.FXRateFilter": {
             "type": "object",
             "properties": {
@@ -31142,7 +31224,9 @@ const docTemplate = `{
                 "45 NET",
                 "60 NET",
                 "75 NET",
-                "90 NET"
+                "90 NET",
+                "END_OF_MONTH",
+                "END_OF_NEXT_MONTH"
             ],
             "x-enum-varnames": [
                 "PaymentTerms15Net",
@@ -31150,7 +31234,9 @@ const docTemplate = `{
                 "PaymentTerms45Net",
                 "PaymentTerms60Net",
                 "PaymentTerms75Net",
-                "PaymentTerms90Net"
+                "PaymentTerms90Net",
+                "PaymentTermsEndOfMonth",
+                "PaymentTermsEndOfNextMonth"
             ]
         },
         "types.PlanFilter": {
@@ -32378,11 +32464,47 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "customer_exempt",
-                "no_tax_configured"
+                "no_tax_configured",
+                "reverse_charge",
+                "not_collecting",
+                "not_subject_to_tax",
+                "not_supported"
             ],
             "x-enum-varnames": [
                 "TaxExemptionReasonCustomerExempt",
-                "TaxExemptionReasonNoTaxConfigured"
+                "TaxExemptionReasonNoTaxConfigured",
+                "TaxExemptionReasonReverseCharge",
+                "TaxExemptionReasonNotCollecting",
+                "TaxExemptionReasonNotSubjectToTax",
+                "TaxExemptionReasonNotSupported"
+            ]
+        },
+        "types.TaxJurisdiction": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "level": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.TaxProvider": {
+            "type": "string",
+            "enum": [
+                "flexprice",
+                "stripe"
+            ],
+            "x-enum-varnames": [
+                "TaxProviderFlexprice",
+                "TaxProviderStripe"
             ]
         },
         "types.TaxRateEntityType": {
@@ -32391,13 +32513,15 @@ const docTemplate = `{
                 "customer",
                 "subscription",
                 "invoice",
-                "tenant"
+                "tenant",
+                "credit_note"
             ],
             "x-enum-varnames": [
                 "TaxRateEntityTypeCustomer",
                 "TaxRateEntityTypeSubscription",
                 "TaxRateEntityTypeInvoice",
-                "TaxRateEntityTypeTenant"
+                "TaxRateEntityTypeTenant",
+                "TaxRateEntityTypeCreditNote"
             ]
         },
         "types.TaxRateScope": {
@@ -32431,6 +32555,39 @@ const docTemplate = `{
             ],
             "x-enum-varnames": [
                 "TaxRateTypePercentage"
+            ]
+        },
+        "types.TaxReversal": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "$ref": "#/definitions/types.TaxReversalMode"
+                },
+                "original_transaction": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.TaxReversalMode": {
+            "type": "string",
+            "enum": [
+                "full",
+                "partial"
+            ],
+            "x-enum-varnames": [
+                "TaxReversalModeFull",
+                "TaxReversalModePartial"
+            ]
+        },
+        "types.TaxTransactionType": {
+            "type": "string",
+            "enum": [
+                "filing",
+                "reversal"
+            ],
+            "x-enum-varnames": [
+                "TaxTransactionTypeFiling",
+                "TaxTransactionTypeReversal"
             ]
         },
         "types.TaxTreatment": {
@@ -34354,6 +34511,14 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "external_tax_details": {
+                    "description": "ExternalTaxDetails carries the name, code, rate and jurisdiction an external engine\nresolved. An external row points at no Flexprice rate, so this is the only description\nof what was charged.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExternalTaxDetails"
+                        }
+                    ]
+                },
                 "id": {
                     "type": "string"
                 },
@@ -34362,6 +34527,14 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "provider": {
+                    "description": "Provider names the engine that produced this row. Empty means the native engine, which\nis what tells a subscriber an empty tax_rate_id is external rather than missing data.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxProvider"
+                        }
+                    ]
                 },
                 "tax_amount": {
                     "type": "string"
@@ -34374,6 +34547,14 @@ const docTemplate = `{
                 },
                 "tax_rate_id": {
                     "type": "string"
+                },
+                "tax_transaction_type": {
+                    "description": "TaxTransactionType is empty for a filing and reversal for tax being un-filed. A reversal\nis not a tax the invoice carries, so a subscriber totalling tax must skip it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxTransactionType"
+                        }
+                    ]
                 },
                 "taxable_amount": {
                     "type": "string"
