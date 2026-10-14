@@ -651,7 +651,6 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
-			IssueDate:        lo.ToPtr(lo.FromPtrOr(inv.IssueDate, inv.CreatedAt)),
 		}
 
 		if req != nil {
@@ -1236,6 +1235,32 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	return nil
 }
 
+// issueSubscriptionInvoice dates a subscription invoice as it is finalized: the issue date is the finalization
+// time unless the caller set one, and the due date counts from it. Manually edited copies keep their dates.
+func issueSubscriptionInvoice(ctx context.Context, params ServiceParams, inv *invoice.Invoice, finalizedAt time.Time) error {
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil || inv.IsManuallyEdited {
+		return nil
+	}
+	// A defaulted issue date equals created_at; anything else was set by the caller.
+	issueDate := finalizedAt
+	if inv.IssueDate != nil && !inv.IssueDate.Equal(inv.CreatedAt) {
+		issueDate = *inv.IssueDate
+	}
+
+	sub, err := params.SubRepo.Get(ctx, *inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	settingsSvc := NewSettingsService(params).(*settingsService)
+	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+	if err != nil {
+		return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
+	}
+	inv.IssueDate = &issueDate
+	inv.DueDate = lo.ToPtr(subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate))
+	return nil
+}
+
 func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv *invoice.Invoice, callerSessionID string) error {
 	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
 		// No-op: skipped invoices are not finalized
@@ -1393,6 +1418,9 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		now := time.Now().UTC()
 		lockedInv.InvoiceStatus = types.InvoiceStatusFinalized
 		lockedInv.FinalizedAt = &now
+		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
+			return err
+		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
@@ -4197,7 +4225,6 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			// nil PeriodStart/PeriodEnd, which the filter couldn't match on; once reconcile started requiring PeriodStart/PeriodEnd to
 			// key its update-in-place map, the missing exclusion surfaced.
 			ExcludeInvoiceID: inv.ID,
-			IssueDate:        lo.ToPtr(lo.FromPtrOr(inv.IssueDate, inv.CreatedAt)),
 		})
 		if err != nil {
 			return err

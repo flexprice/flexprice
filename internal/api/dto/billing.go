@@ -102,8 +102,6 @@ type PrepareSubscriptionInvoiceRequestParams struct {
 	// AsOf overrides the reference instant used for open-period clipping (inactive line items,
 	// windowed-commitment effective end). Zero value = now, i.e. today's behavior.
 	AsOf time.Time `json:"-"`
-	// IssueDate of an existing invoice being recomputed; payment terms count from it. Nil = now.
-	IssueDate *time.Time `json:"-"`
 }
 
 // Validate enforces struct tags and the reference point.
@@ -185,8 +183,6 @@ type CreateInvoiceRequestForChargesParams struct {
 	// ReferencePoint of the preparing call; revenue_facts additionally
 	// dry-runs coupon discounts onto the line items.
 	ReferencePoint types.InvoiceReferencePoint
-	// IssueDate payment terms count from. Nil = period end for previews, else now.
-	IssueDate *time.Time
 }
 
 // Validate enforces struct tags.

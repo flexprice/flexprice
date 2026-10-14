@@ -70,6 +70,24 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ImmediateCancelBillsTheDraf
 	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the cancel")
 	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
 	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
+	s.True(inv.IssueDate.Equal(*inv.FinalizedAt), "issued at the cancel's finalization")
+	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
+}
+
+// A draft opened by credit expiry mid-period is due from period end while open, and from the
+// moment it is finalized once billed.
+func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ExpiryDraftIsIssuedAtFinalization() {
+	_, draft := s.settledSubscription("subs_expiry_issue")
+	s.True(draft.IssueDate.Equal(draft.CreatedAt), "draft issue date defaults to its creation")
+	s.WithinDuration(draft.PeriodEnd.AddDate(0, 0, 1), *draft.DueDate, time.Second, "open draft is due from period end")
+
+	s.Require().NoError(s.invoiceService.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	inv := s.invoice(draft.ID)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.True(inv.IssueDate.Equal(*inv.FinalizedAt), "issued at finalization")
+	s.True(inv.IssueDate.After(inv.CreatedAt), "issue date moved off the draft's creation")
+	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
 }
 
 // Immediate cancel without an invoice: the draft is voided and its applied credits refunded.

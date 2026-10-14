@@ -790,6 +790,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			finalizedAt := time.Now().UTC()
 			invoice.FinalizedAt = &finalizedAt
 			finalizedNow = true
+			if err := issueSubscriptionInvoice(ctx, p.ServiceParams, invoice, finalizedAt); err != nil {
+				return err
+			}
 		}
 	} else if invoice.AmountRemaining.LessThan(invoice.AmountDue) {
 		invoice.PaymentStatus = types.PaymentStatusPending // Partial payment still keeps it pending

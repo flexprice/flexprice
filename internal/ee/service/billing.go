@@ -1649,7 +1649,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		PeriodEnd:      periodEnd,
 		Description:    "",
 		Metadata:       types.Metadata{},
-		IssueDate:      params.IssueDate,
 		ReferencePoint: params.ReferencePoint,
 	})
 	if err != nil {
@@ -1923,7 +1922,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Description:    description,
 		Metadata:       metadata,
 		ReferencePoint: referencePoint,
-		IssueDate:      params.IssueDate,
 	})
 	if err != nil {
 		return nil, err
@@ -2400,6 +2398,22 @@ func (s *billingService) calculateMeterUsageCharges(
 	}, nil
 }
 
+// subscriptionInvoiceDueDate returns the due date of a subscription invoice issued at issueDate: subscription
+// payment terms, else tenant payment terms, else tenant due_date_days. Months use the subscription's timezone.
+func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig types.InvoiceConfig, issueDate time.Time) time.Time {
+	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
+		issueDate = issueDate.In(loc)
+	}
+	dueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
+	if !ok {
+		dueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
+	}
+	if !ok {
+		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))
+	}
+	return dueDate.UTC()
+}
+
 // CreateInvoiceRequestForCharges creates an invoice for the given charges
 func (s *billingService) CreateInvoiceRequestForCharges(
 	ctx context.Context,
@@ -2427,24 +2441,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Prepare invoice due date from the issue date: subscription payment terms, else tenant payment terms,
-	// else tenant due_date_days. Previews are issued at period end. Months use the subscription's timezone.
+	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
+	// from when it is issued.
 	issueDate := time.Now().UTC()
-	if lo.Contains([]types.InvoiceReferencePoint{types.ReferencePointPreview, types.ReferencePointInternalPreview, types.ReferencePointRevenueFacts}, params.ReferencePoint) {
+	if periodEnd.After(issueDate) {
 		issueDate = periodEnd
 	}
-	issueDate = lo.FromPtrOr(params.IssueDate, issueDate)
-	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
-		issueDate = issueDate.In(loc)
-	}
-	invoiceDueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
-	if !ok {
-		invoiceDueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
-	}
-	if !ok {
-		invoiceDueDate = issueDate.AddDate(0, 0, *invoiceConfig.DueDateDays)
-	}
-	invoiceDueDate = invoiceDueDate.UTC()
+	invoiceDueDate := subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate)
 
 	if result == nil {
 		// prepare result for zero amount invoice
