@@ -308,7 +308,11 @@ func ValidateDataset(def ViewDefinition) error {
 		return err
 	}
 	switch def.Compare {
-	case "", "previous_period", "previous_year":
+	case "":
+	case "previous_period", "previous_year":
+		if ds.Usage {
+			return invalid("compare is not supported for usage", "compare not allowed on dataset %q", ds.Key)
+		}
 	default:
 		return invalid("compare must be previous_period or previous_year", "compare %q not allowed", def.Compare)
 	}
@@ -437,6 +441,13 @@ func validateDatasetFilters(ds *Dataset, filters []*Filter) error {
 		}
 		if !ok {
 			return invalid("in/not_in take 1+ values, between 2, others 1", "wrong value count %d for %q", n, flt.Op)
+		}
+		if flt.Op == FilterOpBetween && f.Kind == FieldKindNumber {
+			lo, lerr := decimal.NewFromString(flt.Value[0])
+			hi, herr := decimal.NewFromString(flt.Value[1])
+			if lerr == nil && herr == nil && lo.GreaterThan(hi) {
+				return invalid("between needs low then high", "between range reversed on field %q", flt.Field)
+			}
 		}
 		for _, v := range flt.Value {
 			if f.Kind == FieldKindNumber {

@@ -79,8 +79,8 @@ type ViewDefinition struct {
 	Family     types.Family   `json:"family,omitempty" enums:"usage,billing,report,dataset"`
 	Dataset    string         `json:"dataset,omitempty"`
 	Measures   []*Measure     `json:"measures,omitempty"`
-	Shape      types.Shape    `json:"shape" binding:"required" validate:"required" enums:"timeseries,breakdown,scalar"`
-	Metrics    []types.Metric `json:"metrics" binding:"required,min=1" validate:"required,min=1" enums:"usage_quantity,event_count,invoice_total"`
+	Shape      types.Shape    `json:"shape" enums:"timeseries,breakdown,scalar"`
+	Metrics    []types.Metric `json:"metrics" enums:"usage_quantity,event_count,invoice_total"`
 	Dimensions []string       `json:"dimensions,omitempty"`
 	Filters    []*Filter      `json:"filters,omitempty"`
 	// Time is optional: an omitted range defaults to last_7_days (see

@@ -122,7 +122,12 @@ func TestValidateDatasetRejects(t *testing.T) {
 		"bad display":             inv(func(d *ViewDefinition) { d.Display = "pie" }),
 		"sort unknown field":      inv(func(d *ViewDefinition) { d.Sort = []*SortSpec{{Field: "total"}} }),
 		"sort measure oob":        inv(func(d *ViewDefinition) { d.Sort = []*SortSpec{{Field: "m1"}} }),
-		"negative limit":          inv(func(d *ViewDefinition) { d.Limit = -1 }),
+		"usage compare": datasetDef("usage", func(d *ViewDefinition) {
+			d.Time = TimeSpecRaw{Range: "last_7_days", Field: "timestamp"}
+			d.Compare = "previous_period"
+		}),
+		"between reversed": inv(filter(&Filter{Field: "total", Op: FilterOpBetween, Value: []string{"10", "1"}})),
+		"negative limit":   inv(func(d *ViewDefinition) { d.Limit = -1 }),
 	}
 	for name, def := range cases {
 		t.Run(name, func(t *testing.T) {

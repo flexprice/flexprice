@@ -35,6 +35,7 @@ type stubAnalyticsService struct {
 	views    []*analytics.View
 	lastView *analytics.View
 	lastID   string
+	lastDef  *analytics.ViewDefinition
 }
 
 func (s *stubAnalyticsService) ListViews(_ context.Context, _ types.Family) ([]*analytics.View, error) {
@@ -79,6 +80,19 @@ func (s *stubAnalyticsService) QueryView(_ context.Context, _ string, _ map[stri
 	return s.result, s.err
 }
 
+func (s *stubAnalyticsService) ListDatasets(_ context.Context) (*dto.DatasetCatalogResponse, error) {
+	items := []*dto.DatasetCatalogEntry{}
+	for _, d := range analytics.Datasets() {
+		items = append(items, &dto.DatasetCatalogEntry{Key: d.Key, Label: d.Label, Description: d.Description, Fields: d.Fields})
+	}
+	return &dto.DatasetCatalogResponse{Items: items}, s.err
+}
+
+func (s *stubAnalyticsService) RunDataset(_ context.Context, def *analytics.ViewDefinition) (*dto.AnalyticsQueryResult, error) {
+	s.lastDef = def
+	return s.result, s.err
+}
+
 // canned AnalyticsQueryResult mirroring what shapeBreakdown produces for a
 // properties.region dimension plus a usage_quantity metric.
 func cannedBreakdownResult() *dto.AnalyticsQueryResult {
@@ -115,6 +129,8 @@ func setupAnalyticsRouter(t *testing.T, svc service.AnalyticsService) *gin.Engin
 	router.DELETE("/v1/analytics/views/:id", handler.DeleteView)
 	router.GET("/v1/analytics/reports", handler.ListReports)
 	router.POST("/v1/analytics/reports/:key/query", handler.RunReport)
+	router.GET("/v1/analytics/datasets", handler.ListDatasets)
+	router.POST("/v1/analytics/datasets/query", handler.QueryDataset)
 
 	return router
 }
@@ -350,4 +366,36 @@ func TestViewHandlers_Errors(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/views?family=bogus", nil))
 	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestListDatasetsHandler(t *testing.T) {
+	r := setupAnalyticsRouter(t, &stubAnalyticsService{})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/datasets", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), `"key":"invoices"`)
+	require.NotContains(t, w.Body.String(), `"expr"`)
+}
+
+func doDatasetQuery(r *gin.Engine, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/analytics/datasets/query", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestQueryDatasetHandler(t *testing.T) {
+	stub := &stubAnalyticsService{result: cannedBreakdownResult()}
+	r := setupAnalyticsRouter(t, stub)
+	w := doDatasetQuery(r, `{"definition":{"dataset":"invoices","measures":[{"agg":"count"}],"time":{"range":"2026-09-01..2026-10-01","field":"issue_date"}}}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "invoices", stub.lastDef.Dataset)
+	require.Equal(t, "count", stub.lastDef.Measures[0].Agg)
+}
+
+func TestQueryDatasetHandler_MalformedIs400(t *testing.T) {
+	r := setupAnalyticsRouter(t, &stubAnalyticsService{})
+	require.Equal(t, http.StatusBadRequest, doDatasetQuery(r, `{not-json`).Code)
+	require.Equal(t, http.StatusBadRequest, doDatasetQuery(r, `{}`).Code)
 }
