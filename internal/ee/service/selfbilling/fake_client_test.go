@@ -20,6 +20,7 @@ type fakeClient struct {
 	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect.
 	freeFirstPeriod  bool
 	trialCheckoutErr error
+	portalExtIDs     []string
 }
 
 func newFakeClient() *fakeClient {
@@ -86,7 +87,10 @@ func (f *fakeClient) CancelCheckout(_ context.Context, id string) error {
 	return f.err
 }
 
-func (f *fakeClient) PortalSession(context.Context, string) (*portalSession, error) {
+func (f *fakeClient) PortalSession(_ context.Context, ext string) (*portalSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.portalExtIDs = append(f.portalExtIDs, ext)
 	return &portalSession{url: "https://portal.test"}, f.err
 }
 
