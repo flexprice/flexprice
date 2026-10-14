@@ -41,7 +41,7 @@ func validateDimension(d string) error {
 // Filter is a single filter clause of a ViewDefinition.
 type Filter struct {
 	Field    string                   `json:"field"`
-	Op       types.FilterOperatorType `json:"op" enums:"eq,in"`
+	Op       types.FilterOperatorType `json:"op" enums:"eq,in,not_in,gt,gte,lt,lte,between"`
 	Value    []string                 `json:"value"`
 	Optional bool                     `json:"optional,omitempty"`
 }
@@ -66,6 +66,7 @@ type Variable struct {
 type TimeSpecRaw struct {
 	Range string      `json:"range,omitempty"`
 	Grain types.Grain `json:"grain"`
+	Field string      `json:"field,omitempty"`
 }
 
 type TimeSpec struct {
@@ -75,7 +76,9 @@ type TimeSpec struct {
 }
 
 type ViewDefinition struct {
-	Family     types.Family   `json:"family,omitempty" enums:"usage,billing,report"`
+	Family     types.Family   `json:"family,omitempty" enums:"usage,billing,report,dataset"`
+	Dataset    string         `json:"dataset,omitempty"`
+	Measures   []*Measure     `json:"measures,omitempty"`
 	Shape      types.Shape    `json:"shape" binding:"required" validate:"required" enums:"timeseries,breakdown,scalar"`
 	Metrics    []types.Metric `json:"metrics" binding:"required,min=1" validate:"required,min=1" enums:"usage_quantity,event_count,invoice_total"`
 	Dimensions []string       `json:"dimensions,omitempty"`
@@ -124,6 +127,8 @@ func (v ViewDefinition) Validate() error {
 		return v.validateBilling()
 	case types.FamilyReport:
 		return v.validateReport()
+	case types.FamilyDataset:
+		return ValidateDataset(v)
 	}
 	return v.validateUsage()
 }
