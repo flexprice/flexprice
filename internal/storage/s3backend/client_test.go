@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/s3backend"
@@ -194,6 +196,81 @@ func TestClient_Upload_SetsContentTypeAndKey(t *testing.T) {
 			assert.Equal(t, "test-bucket", resp.Bucket)
 		})
 	}
+}
+
+func TestClient_ValidateConnection_MapsHeadBucketFailures(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantHint string
+	}{
+		{name: "missing bucket", status: http.StatusNotFound, wantHint: "Bucket 'test-bucket' not found."},
+		{name: "access denied", status: http.StatusForbidden, wantHint: "Access denied to bucket 'test-bucket'. The AWS keys need s3:ListBucket and s3:PutObject on it."},
+		{name: "wrong region", status: http.StatusMovedPermanently, wantHint: "Bucket 'test-bucket' isn't in region 'us-east-1'."},
+		{name: "other status", status: http.StatusBadRequest, wantHint: "Could not reach bucket 'test-bucket' (HTTP 400)."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+			})
+			defer closeSrv()
+
+			s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+			require.NoError(t, err)
+
+			err = s.ValidateConnection(context.Background())
+			require.Error(t, err)
+			assert.True(t, ierr.IsValidation(err))
+			assert.Equal(t, []string{tt.wantHint}, errors.GetAllHints(err))
+		})
+	}
+}
+
+func TestClient_ValidateConnection_TimeoutHasClearHint(t *testing.T) {
+	cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeSrv()
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err = s.ValidateConnection(ctx)
+	require.Error(t, err)
+	assert.Equal(t, []string{"Could not reach bucket 'test-bucket': the request timed out."}, errors.GetAllHints(err))
+}
+
+func TestClient_ValidateConnection_UnreachableEndpointShowsCause(t *testing.T) {
+	cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {})
+	closeSrv()
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	err = s.ValidateConnection(context.Background())
+	require.Error(t, err)
+	hints := errors.GetAllHints(err)
+	require.Len(t, hints, 1)
+	assert.Contains(t, hints[0], "Could not reach bucket 'test-bucket': ")
+	assert.Contains(t, hints[0], "connection refused")
+}
+
+func TestClient_ValidateConnection_ReachableBucket(t *testing.T) {
+	cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeSrv()
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	require.NoError(t, s.ValidateConnection(context.Background()))
 }
 
 func TestClient_Exists_ReturnsFalseForMissingKey(t *testing.T) {

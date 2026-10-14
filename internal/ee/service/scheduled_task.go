@@ -211,10 +211,26 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		jobConfig = req.JobConfig
 	}
 
-	if _, err := s.storageResolver.ForConnectionExport(ctx, req.ConnectionID, jobConfig); err != nil {
+	exportStorage, err := s.storageResolver.ForConnectionExport(ctx, req.ConnectionID, jobConfig)
+	if err != nil {
 		s.logger.Error(ctx, "export storage is not resolvable for scheduled task",
 			"error", err, "connection_id", req.ConnectionID)
 		return nil, err
+	}
+
+	// Customer-owned buckets must be reachable with the connection's keys before the export is saved.
+	if !isManaged {
+		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		err = exportStorage.ValidateConnection(probeCtx)
+		cancel()
+		if err != nil {
+			s.logger.Error(ctx, "export bucket is not reachable with the connection's credentials",
+				"connection_id", req.ConnectionID,
+				"bucket", jobConfig.Bucket,
+				"region", jobConfig.Region,
+				"error", err)
+			return nil, err
+		}
 	}
 
 	// Generate task ID upfront
