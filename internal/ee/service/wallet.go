@@ -600,7 +600,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 	}
 
 	// Fetch users in bulk
-	userService := NewUserService(s.UserRepo, s.TenantRepo, s.AuthRepo, s.SecretRepo, s.EnvironmentRepo, s.DB, s.Config, nil, nil, s.Logger)
+	userService := NewUserService(s.UserRepo, s.TenantMembershipRepo, s.TenantRepo, s.AuthRepo, s.SecretRepo, s.EnvironmentRepo, s.DB, s.Config, nil, nil, s.Logger)
 	userFilter := &types.UserFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		UserIDs:     userIDs,

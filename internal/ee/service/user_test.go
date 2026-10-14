@@ -17,6 +17,7 @@ import (
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	domainMembership "github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
@@ -28,11 +29,12 @@ import (
 
 type UserServiceSuite struct {
 	suite.Suite
-	ctx         context.Context
-	userService *userService
-	userRepo    *testutil.InMemoryUserStore
-	tenantRepo  *testutil.InMemoryTenantStore
-	secretRepo  *testutil.InMemorySecretStore
+	ctx            context.Context
+	userService    *userService
+	userRepo       *testutil.InMemoryUserStore
+	membershipRepo *testutil.InMemoryTenantMembershipStore
+	tenantRepo     *testutil.InMemoryTenantStore
+	secretRepo     *testutil.InMemorySecretStore
 }
 
 func TestUserService(t *testing.T) {
@@ -42,10 +44,12 @@ func TestUserService(t *testing.T) {
 func (s *UserServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.userRepo = testutil.NewInMemoryUserStore()
+	s.membershipRepo = testutil.NewInMemoryTenantMembershipStore()
 	s.tenantRepo = testutil.NewInMemoryTenantStore()
 	s.secretRepo = testutil.NewInMemorySecretStore()
 	s.userService = &userService{
 		userRepo:        s.userRepo,
+		membershipRepo:  s.membershipRepo,
 		tenantRepo:      s.tenantRepo,
 		secretRepo:      s.secretRepo,
 		db:              testutil.NewMockPostgresClient(nil),
@@ -57,6 +61,16 @@ func (s *UserServiceSuite) SetupTest() {
 		ID:   types.DefaultTenantID,
 		Name: "Test Tenant",
 	})
+}
+
+
+func (s *UserServiceSuite) seedMembership(u *user.User) {
+	s.T().Helper()
+	if u == nil || u.Type == types.UserTypeServiceAccount {
+		return
+	}
+	m := domainMembership.New(u.ID, u.TenantID, u.Roles)
+	s.Require().NoError(s.membershipRepo.Create(s.ctx, m))
 }
 
 func (s *UserServiceSuite) TestGetUserInfo() {

@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -452,6 +453,15 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 
 	if err := s.UserRepo.Create(ctx, newUser); err != nil {
 		return err
+	}
+
+	if s.TenantMembershipRepo != nil {
+		membership := tenantmembership.New(newUser.ID, tenantID, newUser.Roles)
+		membership.CreatedBy = req.UserID
+		membership.UpdatedBy = req.UserID
+		if err := s.TenantMembershipRepo.Create(ctx, membership); err != nil {
+			return err
+		}
 	}
 
 	// Create default environments (development, production, sandbox)

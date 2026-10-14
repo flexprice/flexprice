@@ -14,6 +14,7 @@ import (
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	domainMembership "github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -31,12 +32,16 @@ type UserService interface {
 	UpdateUserRoles(ctx context.Context, id string, req *dto.UpdateUserRolesRequest) (*dto.UpdateUserRolesResponse, error)
 	DeleteUser(ctx context.Context, id string) error
 	RemoveUser(ctx context.Context, id string) error
+	LeaveTenant(ctx context.Context) error
+	ListMyTenants(ctx context.Context) (*dto.ListMyTenantsResponse, error)
+	SwitchTenant(ctx context.Context, req *dto.SwitchTenantRequest) (*dto.AuthResponse, error)
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 	CreateSupportChatToken(ctx context.Context) (*dto.SupportChatTokenResponse, error)
 }
 
 type userService struct {
 	userRepo        user.Repository
+	membershipRepo  domainMembership.Repository
 	tenantRepo      tenant.Repository
 	authRepo        domainAuth.Repository
 	secretRepo      domainSecret.Repository
@@ -50,6 +55,7 @@ type userService struct {
 
 func NewUserService(
 	userRepo user.Repository,
+	membershipRepo domainMembership.Repository,
 	tenantRepo tenant.Repository,
 	authRepo domainAuth.Repository,
 	secretRepo domainSecret.Repository,
@@ -62,6 +68,7 @@ func NewUserService(
 ) UserService {
 	return &userService{
 		userRepo:        userRepo,
+		membershipRepo:  membershipRepo,
 		tenantRepo:      tenantRepo,
 		authRepo:        authRepo,
 		secretRepo:      secretRepo,
@@ -89,12 +96,12 @@ func (s *userService) GetUserInfo(ctx context.Context) (*dto.UserResponse, error
 			Mark(ierr.ErrValidation)
 	}
 
-	user, err := s.userRepo.GetByID(ctx, userID)
+	user, err := s.loadUserForTenant(ctx, userID, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	tenant, err := s.tenantRepo.GetByID(ctx, user.TenantID)
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +188,6 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 }
 
 func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error) {
-	// Get tenant ID from context
 	tenantID := types.GetTenantID(ctx)
 	if tenantID == "" {
 		return nil, ierr.NewError("tenant_id not found in context").
@@ -189,19 +195,66 @@ func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserF
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get users by filter from repository (tenantID comes from context in repo)
-	users, total, err := s.userRepo.ListByFilter(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get tenant for response construction
 	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert to DTOs
+	wantType := (*types.UserType)(nil)
+	if filter != nil {
+		wantType = filter.Type
+	}
+
+	var users []*user.User
+
+	includeHumans := wantType == nil || *wantType == types.UserTypeUser
+	includeSA := wantType == nil || *wantType == types.UserTypeServiceAccount
+
+	if includeHumans && s.membershipRepo != nil {
+		memberships, err := s.membershipRepo.ListByTenant(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range memberships {
+			u, err := s.userRepo.GetByIDGlobal(ctx, m.UserID)
+			if err != nil {
+				if ierr.IsNotFound(err) {
+					continue
+				}
+				return nil, err
+			}
+			if u.Status != types.StatusPublished || u.Type != types.UserTypeUser {
+				continue
+			}
+			users = append(users, s.overlayMembershipRoles(u, m))
+		}
+	}
+
+	if includeSA {
+		saFilter := &types.UserFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			Type:        lo.ToPtr(types.UserTypeServiceAccount),
+		}
+		serviceAccounts, _, err := s.userRepo.ListByFilter(ctx, saFilter)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, serviceAccounts...)
+	}
+
+	total := int64(len(users))
+	limit := filter.GetLimit()
+	offset := filter.GetOffset()
+	if offset > len(users) {
+		users = []*user.User{}
+	} else {
+		end := offset + limit
+		if limit <= 0 || end > len(users) {
+			end = len(users)
+		}
+		users = users[offset:end]
+	}
+
 	userResponses := make([]*dto.UserResponse, len(users))
 	for i, u := range users {
 		userResponses[i] = dto.NewUserResponse(u, tenant)
@@ -232,7 +285,7 @@ func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest
 			Mark(ierr.ErrValidation)
 	}
 
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	existingUser, err := s.loadUserForTenant(ctx, userID, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +404,7 @@ func (s *userService) UpdateUserRoles(ctx context.Context, id string, req *dto.U
 			Mark(ierr.ErrPermissionDenied)
 	}
 
-	existingUser, err := s.userRepo.GetByID(ctx, id)
+	existingUser, err := s.loadUserForTenant(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +434,19 @@ func (s *userService) UpdateUserRoles(ctx context.Context, id string, req *dto.U
 		if err := s.ensureNoActiveAPIKeys(txCtx, id); err != nil {
 			return err
 		}
-		return s.userRepo.UpdateRoles(txCtx, id, req.Roles)
+		if s.membershipRepo != nil {
+			if err := s.membershipRepo.UpdateRoles(txCtx, id, tenantID, req.Roles); err != nil {
+				return err
+			}
+		}
+		home, err := s.userRepo.GetByIDGlobal(txCtx, id)
+		if err != nil {
+			return err
+		}
+		if home.TenantID == tenantID {
+			return s.userRepo.UpdateRoles(txCtx, id, req.Roles)
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
@@ -390,10 +455,7 @@ func (s *userService) UpdateUserRoles(ctx context.Context, id string, req *dto.U
 		"user_id", id, "tenant_id", tenantID, "actor_id", callerID,
 		"old_roles", existingUser.Roles, "new_roles", req.Roles)
 
-	// UpdateRoles invalidated the cache, so this reads the new state back and
-	// repopulates it — the response reflects what was actually stored, and the
-	// user's next /users/me is warm rather than waiting out the TTL.
-	updatedUser, err := s.userRepo.GetByID(ctx, id)
+	updatedUser, err := s.loadUserForTenant(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -493,16 +555,74 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		}
 	}
 
-	// Check if user by email already exists
-	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, nil, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required in context").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Look up globally so an existing account in another tenant can be invited in.
+	existingUser, err := s.userRepo.GetByEmail(types.SetTenantID(ctx, ""), req.Email)
 	if err != nil && !ierr.IsNotFound(err) {
 		return nil, nil, err
 	}
 	if existingUser != nil {
-		return nil, nil, ierr.NewError("email already in use").
-			WithHint("A user with this email already exists in this tenant").
-			WithReportableDetails(map[string]interface{}{"email": req.Email}).
-			Mark(ierr.ErrAlreadyExists)
+		if existingUser.Type != types.UserTypeUser {
+			return nil, nil, ierr.NewError("email already in use").
+				WithHint("This email cannot be invited").
+				WithReportableDetails(map[string]interface{}{"email": req.Email}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		if s.membershipRepo == nil {
+			return nil, nil, ierr.NewError("email already in use").
+				WithHint("A user with this email already exists").
+				WithReportableDetails(map[string]interface{}{"email": req.Email}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		if _, memErr := s.membershipRepo.GetByUserAndTenant(ctx, existingUser.ID, tenantID); memErr == nil {
+			return nil, nil, ierr.NewError("email already in use").
+				WithHint("A user with this email already exists in this tenant").
+				WithReportableDetails(map[string]interface{}{"email": req.Email}).
+				Mark(ierr.ErrAlreadyExists)
+		} else if !ierr.IsNotFound(memErr) {
+			return nil, nil, memErr
+		}
+		// Existing identity: add a membership only (no new auth provider user).
+		svc, ok := s.settingsService.(*settingsService)
+		if !ok || svc == nil {
+			return nil, nil, ierr.NewError("settings service not configured").
+				WithHint("User creation requires settings service for add_user_config.").
+				Mark(ierr.ErrValidation)
+		}
+		addUserConfig, err := GetSetting[types.TenantConfig](svc, ctx, types.SettingKeyTenantConfig)
+		if err != nil {
+			return nil, nil, err
+		}
+		activeCount, err := s.membershipRepo.CountByTenant(ctx, tenantID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if activeCount >= int64(addUserConfig.MaxUsers) {
+			return nil, nil, ierr.NewError("user limit reached: you cannot add any more users").
+				WithHintf("Maximum %d user(s) allowed for this tenant. Limit reached.", addUserConfig.MaxUsers).
+				WithReportableDetails(map[string]interface{}{"max_users": addUserConfig.MaxUsers, "current_active_users": activeCount}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := s.createMembership(ctx, existingUser.ID, tenantID, roles); err != nil {
+			return nil, nil, err
+		}
+		joined := s.overlayMembershipRoles(existingUser, &domainMembership.Membership{
+			UserID:    existingUser.ID,
+			Roles:     roles,
+			BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished},
+		})
+		s.logger.Info(ctx, "existing user joined tenant via invite",
+			"user_id", existingUser.ID,
+			"tenant_id", tenantID,
+			"actor_id", currentUserID,
+		)
+		return joined, nil, nil
 	}
 	// Enforce per-tenant user limit from add_user_config (GetSetting returns default when not set)
 	svc, ok := s.settingsService.(*settingsService)
@@ -515,16 +635,23 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 	if err != nil {
 		return nil, nil, err
 	}
-	// ListByFilter uses tenant from context and repo filters by StatusPublished
-	_, totalActiveUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
-		QueryFilter: &types.QueryFilter{
-			Limit:  lo.ToPtr(1),
-			Offset: lo.ToPtr(0),
-			Status: lo.ToPtr(types.StatusPublished),
-		},
-	})
-	if err != nil {
-		return nil, nil, err
+	var totalActiveUsers int64
+	if s.membershipRepo != nil {
+		totalActiveUsers, err = s.membershipRepo.CountByTenant(ctx, tenantID)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		_, totalActiveUsers, err = s.userRepo.ListByFilter(ctx, &types.UserFilter{
+			QueryFilter: &types.QueryFilter{
+				Limit:  lo.ToPtr(1),
+				Offset: lo.ToPtr(0),
+				Status: lo.ToPtr(types.StatusPublished),
+			},
+		})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	if totalActiveUsers >= int64(addUserConfig.MaxUsers) {
 		return nil, nil, ierr.NewError("user limit reached: you cannot add any more users").
@@ -576,6 +703,11 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 	}
 	if err := s.userRepo.Create(ctx, newUser); err != nil {
 		return nil, nil, err
+	}
+	if s.membershipRepo != nil {
+		if err := s.createMembership(ctx, newUser.ID, newUser.TenantID, roles); err != nil {
+			return nil, nil, err
+		}
 	}
 	return newUser, &password, nil
 }
@@ -659,6 +791,9 @@ func (s *userService) CreateSupportChatToken(ctx context.Context) (*dto.SupportC
 
 // RemoveUser removes a human user (type=user) from their tenant. Service accounts
 // are not supported here; use DeleteUser for those.
+// RemoveUser removes a human user (type=user) from the current tenant. Service accounts
+// are not supported here; use DeleteUser for those. The auth identity is deleted only
+// when the user has no remaining tenant memberships.
 func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("user ID is required").
@@ -675,13 +810,8 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	actorUserID := types.GetUserID(ctx)
 	if id == actorUserID {
 		return ierr.NewError("cannot remove yourself").
-			WithHint("Ask another super_admin to remove you").
+			WithHint("Use leave tenant to leave this organisation, or ask another super_admin to remove you").
 			Mark(ierr.ErrPermissionDenied)
-	}
-
-	existingUser, err := s.userRepo.GetByID(ctx, id)
-	if err != nil {
-		return err
 	}
 
 	authTenantID := types.GetTenantID(ctx)
@@ -690,61 +820,41 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			WithHint("Tenant ID is required in context").
 			Mark(ierr.ErrValidation)
 	}
-	if existingUser.TenantID != authTenantID {
-		return ierr.NewError("user not found").
-			WithHint("User does not belong to your tenant").
-			Mark(ierr.ErrNotFound)
-	}
 
+	existingUser, err := s.userRepo.GetByIDGlobal(ctx, id)
+	if err != nil {
+		return err
+	}
 	if existingUser.Type != types.UserTypeUser {
 		return ierr.NewError("only human users can be removed").
 			WithHint("Use the service account delete API to remove a service account").
 			Mark(ierr.ErrValidation)
 	}
-
-	if s.cfg == nil {
-		return ierr.NewError("auth configuration missing").
-			WithHint("User removal requires auth provider configuration").
-			Mark(ierr.ErrValidation)
+	if s.membershipRepo != nil {
+		if _, err := s.membershipRepo.GetByUserAndTenant(ctx, id, authTenantID); err != nil {
+			if !(ierr.IsNotFound(err) && existingUser.TenantID == authTenantID) {
+				if ierr.IsNotFound(err) {
+					return ierr.NewError("user not found").
+						WithHint("User does not belong to your tenant").
+						Mark(ierr.ErrNotFound)
+				}
+				return err
+			}
+		}
+	} else if existingUser.TenantID != authTenantID {
+		return ierr.NewError("user not found").
+			WithHint("User does not belong to your tenant").
+			Mark(ierr.ErrNotFound)
 	}
 
-	tenantID := existingUser.TenantID
-	provider := authProvider.NewProvider(s.cfg)
-
-	err = s.db.WithTx(ctx, func(ctx context.Context) error {
-		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to acquire tenant lock for user removal").
-				Mark(ierr.ErrInternal)
-		}
-
-		_, totalHumanUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
-			QueryFilter: types.NewNoLimitQueryFilter(),
-			Type:        lo.ToPtr(types.UserTypeUser),
-		})
-		if err != nil {
-			return err
-		}
-		if totalHumanUsers <= 1 {
-			return ierr.NewError("cannot remove the last user in the tenant").
-				WithHint("At least one human user must remain in the tenant").
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := provider.RemoveUser(ctx, id); err != nil {
-			return err
-		}
-
-		return s.userRepo.Delete(ctx, id)
-	})
-	if err != nil {
+	if err := s.removeMembershipFromTenant(ctx, existingUser, authTenantID); err != nil {
 		return err
 	}
 
 	s.logger.Info(ctx, "user removed from tenant",
 		"actor_user_id", actorUserID,
 		"target_user_id", id,
-		"tenant_id", tenantID,
+		"tenant_id", authTenantID,
 	)
 
 	return nil

@@ -171,3 +171,33 @@ type SupportChatTokenResponse struct {
 
 // ListUsersResponse is the response type for listing users with pagination
 type ListUsersResponse = types.ListResponse[*UserResponse] // @name ListUsersResponse
+
+// SwitchTenantRequest selects the active tenant for the current session.
+type SwitchTenantRequest struct {
+	TenantID string `json:"tenant_id" binding:"required" validate:"required"`
+}
+
+func (r *SwitchTenantRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if r.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Provide the tenant to switch to").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// TenantMembershipResponse describes one of the caller's tenant memberships.
+type TenantMembershipResponse struct {
+	TenantID   string   `json:"tenant_id"`
+	TenantName string   `json:"tenant_name"`
+	Roles      []string `json:"roles"`
+	Active     bool     `json:"active"`
+}
+
+// ListMyTenantsResponse lists tenants the current user belongs to.
+type ListMyTenantsResponse struct {
+	Items []*TenantMembershipResponse `json:"items"`
+}

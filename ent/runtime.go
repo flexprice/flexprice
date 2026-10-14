@@ -58,6 +58,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/tenantmembership"
 	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -2640,6 +2641,37 @@ func init() {
 	tenantDescBillingDetails := tenantFields[6].Descriptor()
 	// tenant.DefaultBillingDetails holds the default value on creation for the billing_details field.
 	tenant.DefaultBillingDetails = tenantDescBillingDetails.Default.(schema.TenantBillingDetails)
+	tenantmembershipMixin := schema.TenantMembership{}.Mixin()
+	tenantmembershipMixinFields0 := tenantmembershipMixin[0].Fields()
+	_ = tenantmembershipMixinFields0
+	tenantmembershipFields := schema.TenantMembership{}.Fields()
+	_ = tenantmembershipFields
+	// tenantmembershipDescTenantID is the schema descriptor for tenant_id field.
+	tenantmembershipDescTenantID := tenantmembershipMixinFields0[0].Descriptor()
+	// tenantmembership.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	tenantmembership.TenantIDValidator = tenantmembershipDescTenantID.Validators[0].(func(string) error)
+	// tenantmembershipDescStatus is the schema descriptor for status field.
+	tenantmembershipDescStatus := tenantmembershipMixinFields0[1].Descriptor()
+	// tenantmembership.DefaultStatus holds the default value on creation for the status field.
+	tenantmembership.DefaultStatus = tenantmembershipDescStatus.Default.(string)
+	// tenantmembershipDescCreatedAt is the schema descriptor for created_at field.
+	tenantmembershipDescCreatedAt := tenantmembershipMixinFields0[2].Descriptor()
+	// tenantmembership.DefaultCreatedAt holds the default value on creation for the created_at field.
+	tenantmembership.DefaultCreatedAt = tenantmembershipDescCreatedAt.Default.(func() time.Time)
+	// tenantmembershipDescUpdatedAt is the schema descriptor for updated_at field.
+	tenantmembershipDescUpdatedAt := tenantmembershipMixinFields0[3].Descriptor()
+	// tenantmembership.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	tenantmembership.DefaultUpdatedAt = tenantmembershipDescUpdatedAt.Default.(func() time.Time)
+	// tenantmembership.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	tenantmembership.UpdateDefaultUpdatedAt = tenantmembershipDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// tenantmembershipDescUserID is the schema descriptor for user_id field.
+	tenantmembershipDescUserID := tenantmembershipFields[1].Descriptor()
+	// tenantmembership.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	tenantmembership.UserIDValidator = tenantmembershipDescUserID.Validators[0].(func(string) error)
+	// tenantmembershipDescRoles is the schema descriptor for roles field.
+	tenantmembershipDescRoles := tenantmembershipFields[2].Descriptor()
+	// tenantmembership.DefaultRoles holds the default value on creation for the roles field.
+	tenantmembership.DefaultRoles = tenantmembershipDescRoles.Default.([]string)
 	usagerecordMixin := schema.UsageRecord{}.Mixin()
 	usagerecordMixinFields0 := usagerecordMixin[0].Fields()
 	_ = usagerecordMixinFields0

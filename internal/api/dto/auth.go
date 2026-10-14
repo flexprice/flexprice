@@ -16,6 +16,9 @@ type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email" validate:"email"`
 	Password string `json:"password" binding:"required" validate:"min=8"`
 	Token    string `json:"token" binding:"omitempty" validate:"omitempty"`
+	// TenantID selects which membership to activate when the user belongs to
+	// multiple tenants. Empty means the user's home tenant.
+	TenantID string `json:"tenant_id,omitempty" validate:"omitempty"`
 }
 
 type AuthResponse struct {

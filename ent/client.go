@@ -67,6 +67,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/tenantmembership"
 	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -185,6 +186,8 @@ type Client struct {
 	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
 	Tenant *TenantClient
+	// TenantMembership is the client for interacting with the TenantMembership builders.
+	TenantMembership *TenantMembershipClient
 	// UsageRecord is the client for interacting with the UsageRecord builders.
 	UsageRecord *UsageRecordClient
 	// User is the client for interacting with the User builders.
@@ -258,6 +261,7 @@ func (c *Client) init() {
 	c.TaxAssociation = NewTaxAssociationClient(c.config)
 	c.TaxRate = NewTaxRateClient(c.config)
 	c.Tenant = NewTenantClient(c.config)
+	c.TenantMembership = NewTenantMembershipClient(c.config)
 	c.UsageRecord = NewUsageRecordClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
@@ -407,6 +411,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		TaxAssociation:           NewTaxAssociationClient(cfg),
 		TaxRate:                  NewTaxRateClient(cfg),
 		Tenant:                   NewTenantClient(cfg),
+		TenantMembership:         NewTenantMembershipClient(cfg),
 		UsageRecord:              NewUsageRecordClient(cfg),
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
@@ -483,6 +488,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		TaxAssociation:           NewTaxAssociationClient(cfg),
 		TaxRate:                  NewTaxRateClient(cfg),
 		Tenant:                   NewTenantClient(cfg),
+		TenantMembership:         NewTenantMembershipClient(cfg),
 		UsageRecord:              NewUsageRecordClient(cfg),
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
@@ -528,7 +534,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.TenantMembership, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -549,7 +556,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.TenantMembership, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -662,6 +670,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TaxRate.mutate(ctx, m)
 	case *TenantMutation:
 		return c.Tenant.mutate(ctx, m)
+	case *TenantMembershipMutation:
+		return c.TenantMembership.mutate(ctx, m)
 	case *UsageRecordMutation:
 		return c.UsageRecord.mutate(ctx, m)
 	case *UserMutation:
@@ -8249,6 +8259,139 @@ func (c *TenantClient) mutate(ctx context.Context, m *TenantMutation) (Value, er
 	}
 }
 
+// TenantMembershipClient is a client for the TenantMembership schema.
+type TenantMembershipClient struct {
+	config
+}
+
+// NewTenantMembershipClient returns a client for the TenantMembership from the given config.
+func NewTenantMembershipClient(c config) *TenantMembershipClient {
+	return &TenantMembershipClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `tenantmembership.Hooks(f(g(h())))`.
+func (c *TenantMembershipClient) Use(hooks ...Hook) {
+	c.hooks.TenantMembership = append(c.hooks.TenantMembership, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `tenantmembership.Intercept(f(g(h())))`.
+func (c *TenantMembershipClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TenantMembership = append(c.inters.TenantMembership, interceptors...)
+}
+
+// Create returns a builder for creating a TenantMembership entity.
+func (c *TenantMembershipClient) Create() *TenantMembershipCreate {
+	mutation := newTenantMembershipMutation(c.config, OpCreate)
+	return &TenantMembershipCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TenantMembership entities.
+func (c *TenantMembershipClient) CreateBulk(builders ...*TenantMembershipCreate) *TenantMembershipCreateBulk {
+	return &TenantMembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TenantMembershipClient) MapCreateBulk(slice any, setFunc func(*TenantMembershipCreate, int)) *TenantMembershipCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TenantMembershipCreateBulk{err: fmt.Errorf("calling to TenantMembershipClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TenantMembershipCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TenantMembershipCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TenantMembership.
+func (c *TenantMembershipClient) Update() *TenantMembershipUpdate {
+	mutation := newTenantMembershipMutation(c.config, OpUpdate)
+	return &TenantMembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TenantMembershipClient) UpdateOne(_m *TenantMembership) *TenantMembershipUpdateOne {
+	mutation := newTenantMembershipMutation(c.config, OpUpdateOne, withTenantMembership(_m))
+	return &TenantMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TenantMembershipClient) UpdateOneID(id string) *TenantMembershipUpdateOne {
+	mutation := newTenantMembershipMutation(c.config, OpUpdateOne, withTenantMembershipID(id))
+	return &TenantMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TenantMembership.
+func (c *TenantMembershipClient) Delete() *TenantMembershipDelete {
+	mutation := newTenantMembershipMutation(c.config, OpDelete)
+	return &TenantMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TenantMembershipClient) DeleteOne(_m *TenantMembership) *TenantMembershipDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TenantMembershipClient) DeleteOneID(id string) *TenantMembershipDeleteOne {
+	builder := c.Delete().Where(tenantmembership.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TenantMembershipDeleteOne{builder}
+}
+
+// Query returns a query builder for TenantMembership.
+func (c *TenantMembershipClient) Query() *TenantMembershipQuery {
+	return &TenantMembershipQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTenantMembership},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TenantMembership entity by its id.
+func (c *TenantMembershipClient) Get(ctx context.Context, id string) (*TenantMembership, error) {
+	return c.Query().Where(tenantmembership.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TenantMembershipClient) GetX(ctx context.Context, id string) *TenantMembership {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TenantMembershipClient) Hooks() []Hook {
+	return c.hooks.TenantMembership
+}
+
+// Interceptors returns the client interceptors.
+func (c *TenantMembershipClient) Interceptors() []Interceptor {
+	return c.inters.TenantMembership
+}
+
+func (c *TenantMembershipClient) mutate(ctx context.Context, m *TenantMembershipMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TenantMembershipCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TenantMembershipUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TenantMembershipUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TenantMembershipDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TenantMembership mutation op: %q", m.Op())
+	}
+}
+
 // UsageRecordClient is a client for the UsageRecord schema.
 type UsageRecordClient struct {
 	config
@@ -8927,7 +9070,7 @@ type (
 		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
 		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		Tenant, TenantMembership, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -8941,7 +9084,7 @@ type (
 		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
 		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		Tenant, TenantMembership, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

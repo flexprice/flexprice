@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
+	domainMembership "github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -90,6 +91,7 @@ func NewRouter(
 	webhookRequestRepo domainIncomingWebhookEvent.Repository,
 	environmentRepo domainEnvironment.Repository,
 	userRepo domainUser.Repository,
+	membershipRepo domainMembership.Repository,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -169,7 +171,7 @@ func NewRouter(
 		}
 	}
 
-	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, environmentRepo, userRepo, logger))
+	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, environmentRepo, userRepo, membershipRepo, logger))
 	private.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
 	private.Use(middleware.TenantContextMiddleware)
@@ -180,6 +182,9 @@ func NewRouter(
 		user := v1Private.Group("/users")
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
+			user.GET("/me/tenants", handlers.User.ListMyTenants)
+			user.POST("/me/leave", write(types.EntityUser, types.ActionWrite), handlers.User.LeaveTenant)
+			user.POST("/me/switch-tenant", write(types.EntityUser, types.ActionWrite), handlers.User.SwitchTenant)
 			user.POST("", write(types.EntityUser, types.ActionWrite), handlers.User.CreateUser)
 			user.PUT("/me", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateUser)
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)

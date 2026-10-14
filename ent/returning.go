@@ -61,6 +61,7 @@ import (
 	"github.com/flexprice/flexprice/ent/taxassociation"
 	"github.com/flexprice/flexprice/ent/taxrate"
 	"github.com/flexprice/flexprice/ent/tenant"
+	"github.com/flexprice/flexprice/ent/tenantmembership"
 	"github.com/flexprice/flexprice/ent/usagerecord"
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -3366,6 +3367,68 @@ func scanReturningTenant(rows *sql.Rows) ([]*Tenant, error) {
 	var out []*Tenant
 	for rows.Next() {
 		node := &Tenant{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*TenantMembership.
+func (_u *TenantMembershipUpdate) SaveReturning(ctx context.Context) ([]*TenantMembership, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *TenantMembershipUpdate) sqlSaveReturning(ctx context.Context) ([]*TenantMembership, error) {
+	var out []*TenantMembership
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", tenantmembership.Table, tenantmembership.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningTenantMembership(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*TenantMembership.
+func (_d *TenantMembershipDelete) ExecReturning(ctx context.Context) ([]*TenantMembership, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *TenantMembershipDelete) sqlExecReturning(ctx context.Context) ([]*TenantMembership, error) {
+	var out []*TenantMembership
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", tenantmembership.Table, tenantmembership.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningTenantMembership(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningTenantMembership(rows *sql.Rows) ([]*TenantMembership, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*TenantMembership
+	for rows.Next() {
+		node := &TenantMembership{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err
