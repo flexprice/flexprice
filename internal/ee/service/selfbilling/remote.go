@@ -3,9 +3,11 @@ package selfbilling
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -39,16 +41,16 @@ func newRemoteClient(cfg config.BillingConfig) *remoteClient {
 func (c *remoteClient) EnsureCustomer(ctx context.Context, in customerInput) error {
 	_, err := c.sdk.Customers.GetCustomerByExternalID(ctx, in.extID)
 	if !isNotFound(err) {
-		return err
+		return mumbaiErr(err)
 	}
 	if in.legacyExtID != "" {
 		_, err := c.sdk.Customers.GetCustomerByExternalID(ctx, in.legacyExtID)
 		if err == nil {
 			_, err = c.sdk.Customers.UpdateCustomer(ctx, sdktypes.UpdateCustomerRequest{ExternalID: lo.ToPtr(in.extID)}, nil, lo.ToPtr(in.legacyExtID))
-			return err
+			return mumbaiErr(err)
 		}
 		if !isNotFound(err) {
-			return err
+			return mumbaiErr(err)
 		}
 	}
 	_, err = c.sdk.Customers.CreateCustomer(ctx, sdktypes.CreateCustomerRequest{
@@ -57,14 +59,15 @@ func (c *remoteClient) EnsureCustomer(ctx context.Context, in customerInput) err
 		Email:      lo.EmptyableToPtr(in.email),
 		Metadata:   map[string]string{"tenant_id": in.tenantID},
 	})
-	return err
+	return mumbaiErr(err)
 }
 
 // StartTrial subscribes the customer to the self-serve plan; the plan's prices carry the trial days.
+// CreateSubscription takes no idempotency key, so the subscription is re-checked right before creating it.
 func (c *remoteClient) StartTrial(ctx context.Context, extID string) error {
 	resp, err := c.sdk.Plans.GetPlan(ctx, c.planID)
 	if err != nil {
-		return err
+		return mumbaiErr(err)
 	}
 	prices := resp.PlanResponse.Prices
 	if len(prices) == 0 {
@@ -76,13 +79,16 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) error {
 	if !ok {
 		fixed = prices[0]
 	}
+	if sub, err := c.LatestSubscription(ctx, extID); err != nil || sub != nil {
+		return err
+	}
 	_, err = c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(extID),
 		PlanID:             c.planID,
 		Currency:           lo.FromPtr(fixed.Currency),
 		BillingPeriod:      lo.FromPtr(fixed.BillingPeriod),
 	})
-	return err
+	return mumbaiErr(err)
 }
 
 func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
@@ -91,7 +97,7 @@ func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*r
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, mumbaiErr(err)
 	}
 	var live, cancelled *sdktypes.SubscriptionResponse
 	newer := func(s, than *sdktypes.SubscriptionResponse) bool {
@@ -129,7 +135,7 @@ func (c *remoteClient) UpdateBillingDetails(ctx context.Context, extID string, d
 	if d.taxID != "" {
 		cust, err := c.sdk.Customers.GetCustomerByExternalID(ctx, extID)
 		if err != nil {
-			return err
+			return mumbaiErr(err)
 		}
 		metadata = lo.Assign(cust.CustomerResponse.GetMetadata(), map[string]string{metaTaxID: d.taxID})
 	}
@@ -144,7 +150,7 @@ func (c *remoteClient) UpdateBillingDetails(ctx context.Context, extID string, d
 		AddressPostalCode: lo.EmptyableToPtr(d.postalCode),
 		Metadata:          metadata,
 	}, nil, lo.ToPtr(extID))
-	return err
+	return mumbaiErr(err)
 }
 
 func (c *remoteClient) StartTrialEndCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error) {
@@ -160,7 +166,7 @@ func (c *remoteClient) StartTrialEndCheckout(ctx context.Context, in checkoutInp
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, mumbaiErr(err)
 	}
 	cs := resp.SubscriptionModifyResponse.CheckoutSession
 	if cs == nil { // $0 first period: Mumbai ended the trial with nothing to collect
@@ -172,14 +178,14 @@ func (c *remoteClient) StartTrialEndCheckout(ctx context.Context, in checkoutInp
 func (c *remoteClient) GetCheckout(ctx context.Context, id string) (*remoteCheckout, error) {
 	resp, err := c.sdk.Checkout.GetCheckoutSession(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, mumbaiErr(err)
 	}
 	return toRemoteCheckout(resp.CheckoutSessionResponse), nil
 }
 
 func (c *remoteClient) CancelCheckout(ctx context.Context, id string) error {
 	_, err := c.sdk.Checkout.CancelCheckoutSession(ctx, id)
-	return err
+	return mumbaiErr(err)
 }
 
 func toRemoteCheckout(cs *sdktypes.CheckoutSessionResponse) *remoteCheckout {
@@ -211,11 +217,11 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 	}
 	invs, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{ExternalCustomerID: lo.ToPtr(extID), Limit: lo.ToPtr(int64(summaryInvoiceLimit))})
 	if err != nil {
-		return nil, err
+		return nil, mumbaiErr(err)
 	}
 	usage, err := c.sdk.Customers.GetCustomerUsageSummary(ctx, sdkdtos.GetCustomerUsageSummaryRequest{CustomerLookupKey: lo.ToPtr(extID)})
 	if err != nil {
-		return nil, err
+		return nil, mumbaiErr(err)
 	}
 	out := &remoteSummary{subscription: sub, usage: usage.CustomerUsageSummaryResponse}
 	for _, i := range invs.ListInvoicesResponse.Items {
@@ -249,7 +255,67 @@ func (c *remoteClient) IngestBulk(ctx context.Context, events []usageEvent) erro
 			Timestamp:          lo.ToPtr(e.timestamp.UTC().Format(time.RFC3339)),
 		}
 	})})
-	return err
+	return mumbaiErr(err)
+}
+
+// errRemote marks every failure that came back from a billing tenant call.
+var errRemote = errors.New("billing tenant call failed")
+
+// mumbaiErr classifies a billing tenant SDK failure for API callers; the SDK error stays in the chain.
+func mumbaiErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	status := httpStatus(err)
+	var kind error
+	hint := remoteMessage(err)
+	switch {
+	case status == http.StatusNotFound:
+		kind = ierr.ErrNotFound
+	case status == http.StatusConflict:
+		kind = ierr.ErrAlreadyExists
+	case status >= 400 && status < 500:
+		kind = ierr.ErrValidation
+	default:
+		kind, hint = ierr.ErrHTTPClient, "The billing service is unavailable; try again shortly"
+	}
+	if hint == "" {
+		hint = "The billing service rejected the request"
+	}
+	out := ierr.WithError(err).
+		WithMessagef("billing tenant call failed with status %d", status).
+		WithHint(hint).
+		Mark(kind)
+	return errors.Mark(out, errRemote)
+}
+
+// isRemoteFailure reports whether err came from a billing tenant call.
+func isRemoteFailure(err error) bool { return errors.Is(err, errRemote) }
+
+// remoteMessage returns the user-facing message in a Flexprice API error body, if any.
+func remoteMessage(err error) string {
+	var errResp *sdkerrors.ErrorResponse
+	if errors.As(err, &errResp) {
+		return strings.TrimSpace(lo.FromPtr(errResp.Message))
+	}
+	var body string
+	var apiErr *sdkerrors.APIError
+	var validationErr *sdkerrors.ResponseValidationError
+	switch {
+	case errors.As(err, &apiErr):
+		body = apiErr.Body
+	case errors.As(err, &validationErr):
+		body = validationErr.Body
+	default:
+		return ""
+	}
+	var parsed struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal([]byte(body), &parsed) != nil {
+		return ""
+	}
+	return strings.TrimSpace(parsed.Message)
 }
 
 // isNotFound reports whether an SDK call failed with HTTP 404, whichever error type the SDK used for it.

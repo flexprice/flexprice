@@ -7,7 +7,8 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *selfBillingService) Summary(ctx context.Context, tenantID string) (*dto.SelfBillingSummaryResponse, error) {
+func (s *selfBillingService) Summary(ctx context.Context, tenantID string) (_ *dto.SelfBillingSummaryResponse, err error) {
+	defer func() { s.logRemoteFailure(ctx, "summary", tenantID, err) }()
 	if !s.Enabled() {
 		return nil, errDisabled
 	}
@@ -34,7 +35,8 @@ func (s *selfBillingService) Summary(ctx context.Context, tenantID string) (*dto
 	return out, nil
 }
 
-func (s *selfBillingService) PortalSession(ctx context.Context, tenantID string) (*dto.SelfBillingPortalResponse, error) {
+func (s *selfBillingService) PortalSession(ctx context.Context, tenantID string) (_ *dto.SelfBillingPortalResponse, err error) {
+	defer func() { s.logRemoteFailure(ctx, "portal_session", tenantID, err) }()
 	if !s.Enabled() {
 		return nil, errDisabled
 	}

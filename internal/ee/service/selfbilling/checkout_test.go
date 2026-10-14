@@ -130,6 +130,7 @@ func TestPollCheckout_PaidActivatesOnce(t *testing.T) {
 	s, d := newTestService(t, fc)
 	seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
 	fc.checkouts["cs1"] = &remoteCheckout{id: "cs1", status: "completed", terminal: true, extID: "us:t1"}
+	fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", status: "active"}
 	for i := 0; i < 3; i++ {
 		resp, err := s.PollCheckout(tenantCtx("t1"), "t1", "cs1")
 		require.NoError(t, err)
@@ -138,6 +139,54 @@ func TestPollCheckout_PaidActivatesOnce(t *testing.T) {
 	n, err := d.envs.CountByType(tenantCtx("t1"), types.EnvironmentProduction)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
+}
+
+func TestPollCheckout_CompletedActivatesOnlyWhenSubscriptionActive(t *testing.T) {
+	tests := []struct {
+		name         string
+		remoteStatus string // "" = no subscription
+		wantTenant   types.TenantInternalStatus
+	}{
+		{"active_subscription_activates", "active", types.TenantInternalStatusActive},
+		{"cancelled_subscription_stays_suspended", "cancelled", types.TenantInternalStatusSuspended},
+		{"incomplete_subscription_stays_suspended", "incomplete", types.TenantInternalStatusSuspended},
+		{"no_subscription_stays_suspended", "", types.TenantInternalStatusSuspended},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := newFakeClient()
+			s, d := newTestService(t, fc)
+			seedTenant(t, d, "t1", types.TenantInternalStatusSuspended)
+			fc.checkouts["cs_old"] = &remoteCheckout{id: "cs_old", status: "completed", terminal: true, extID: "us:t1"}
+			if tt.remoteStatus != "" {
+				fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", status: tt.remoteStatus}
+			}
+
+			resp, err := s.PollCheckout(tenantCtx("t1"), "t1", "cs_old")
+			require.NoError(t, err)
+			assert.Equal(t, "completed", resp.Status)
+			assert.Equal(t, tt.wantTenant, resp.Tenant)
+			n, err := d.envs.CountByType(tenantCtx("t1"), types.EnvironmentProduction)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantTenant == types.TenantInternalStatusActive, n == 1)
+		})
+	}
+}
+
+func TestStartCheckout_FreeFirstPeriodWaitsForActiveSubscription(t *testing.T) {
+	fc := newFakeClient()
+	fc.freeFirstPeriod, fc.staleAfterTrialEnd = true, true
+	s, d := newTestService(t, fc)
+	seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
+	fc.subs["us:t1"] = &remoteSubscription{id: "sub_us:t1", status: "trialing"}
+
+	resp, err := s.StartCheckout(tenantCtx("t1"), "t1", checkoutReq)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", resp.Status)
+	assert.Equal(t, types.TenantInternalStatusTrialing, resp.Tenant)
+	n, err := d.envs.CountByType(tenantCtx("t1"), types.EnvironmentProduction)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
 }
 
 func TestPollCheckout_ForeignSession(t *testing.T) {

@@ -29,7 +29,9 @@ func newTestService(t *testing.T, fc *fakeClient) (*selfBillingService, *testDep
 	params := service.ServiceParams{Logger: logger.NewNoopLogger(), Config: cfg, TenantRepo: d.tenants, EnvironmentRepo: d.envs, SettingsRepo: d.settings}
 	settings := service.NewSettingsService(params)
 	envs := service.NewEnvironmentService(d.envs, service.NewEnvAccessService(cfg), settings, params)
-	return &selfBillingService{ServiceParams: params, client: fc, envs: envs, settings: settings, events: d.store, invoices: d.store}, d
+	svc := &selfBillingService{ServiceParams: params, client: fc, envs: envs, settings: settings, events: d.store, invoices: d.store}
+	svc.spawn = func(run func()) { run() } // provisioning runs inline so tests stay deterministic
+	return svc, d
 }
 
 func seedTenant(t *testing.T, d *testDeps, id string, status types.TenantInternalStatus) {
