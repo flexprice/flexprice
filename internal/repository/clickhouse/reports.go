@@ -94,6 +94,21 @@ func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.Resolve
 	return reportResult(q, rows, r.cfg.MaxResultRows)
 }
 
+func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.DatasetQuery, tenantID, environmentID string) (*analytics.ReportResult, error) {
+	if r.conn == nil {
+		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
+	}
+	q, err := buildDatasetQuery(dq, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.run(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return reportResult(q, rows, r.cfg.MaxResultRows)
+}
+
 func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.ReportResult, error) {
 	if !q.TopN && maxRows > 0 && len(rows) > maxRows {
 		return nil, ierr.NewErrorf("result exceeds %d rows", maxRows).

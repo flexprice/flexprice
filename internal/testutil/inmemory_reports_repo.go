@@ -18,6 +18,15 @@ type InMemoryReportsRepo struct {
 	Last              *domainAnalytics.ResolvedView
 	LastTenantID      string
 	LastEnvironmentID string
+	LastDataset       *domainAnalytics.DatasetQuery
+}
+
+func (r *InMemoryReportsRepo) RunDataset(_ context.Context, q *domainAnalytics.DatasetQuery, tenantID, environmentID string) (*domainAnalytics.ReportResult, error) {
+	r.LastDataset, r.LastTenantID, r.LastEnvironmentID = q, tenantID, environmentID
+	if r.Err != nil {
+		return nil, r.Err
+	}
+	return &domainAnalytics.ReportResult{Columns: r.Columns, Rows: r.Rows}, nil
 }
 
 func (r *InMemoryReportsRepo) Enabled() bool { return r.On }
