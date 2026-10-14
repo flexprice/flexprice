@@ -21,4 +21,6 @@ type Repository interface {
 	Create(ctx context.Context, v *View) error
 	Get(ctx context.Context, id string) (*View, error)
 	List(ctx context.Context) ([]*View, error)
+	Update(ctx context.Context, v *View) error
+	Delete(ctx context.Context, id string) error
 }

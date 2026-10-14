@@ -19,15 +19,16 @@ type Family string
 const (
 	FamilyUsage   Family = "usage"
 	FamilyBilling Family = "billing"
+	FamilyReport  Family = "report"
 )
 
 func (f Family) Validate() error {
 	switch f {
-	case "", FamilyUsage, FamilyBilling:
+	case "", FamilyUsage, FamilyBilling, FamilyReport:
 		return nil
 	default:
 		return ierr.NewErrorf("invalid family %q", f).
-			WithHint("family must be one of: usage, billing").
+			WithHint("family must be one of: usage, billing, report").
 			Mark(ierr.ErrValidation)
 	}
 }

@@ -22,6 +22,10 @@ type AnalyticsService interface {
 	QueryView(ctx context.Context, id string, vars map[string][]string) (*dto.AnalyticsQueryResult, error)
 	ListReports(ctx context.Context) (*dto.ReportCatalogResponse, error)
 	RunReport(ctx context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error)
+	ListViews(ctx context.Context, family types.Family) ([]*analytics.View, error)
+	GetView(ctx context.Context, id string) (*analytics.View, error)
+	UpdateView(ctx context.Context, v *analytics.View) error
+	DeleteView(ctx context.Context, id string) error
 }
 
 type analyticsService struct {
@@ -160,6 +164,14 @@ func (s *analyticsService) executeTimeseries(ctx context.Context, rv *analytics.
 	return &res, nil
 }
 
+func trimViewName(v *analytics.View) error {
+	v.Name = strings.TrimSpace(v.Name)
+	if v.Name == "" {
+		return ierr.NewError("name is required").Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 func (s *analyticsService) CreateView(ctx context.Context, v *analytics.View) error {
 	if v == nil {
 		return ierr.NewError("view is required").Mark(ierr.ErrValidation)
@@ -167,7 +179,10 @@ func (s *analyticsService) CreateView(ctx context.Context, v *analytics.View) er
 	if v.Definition == nil {
 		return ierr.NewError("view definition is required").Mark(ierr.ErrValidation)
 	}
-	if err := v.Definition.Validate(); err != nil {
+	if err := trimViewName(v); err != nil {
+		return err
+	}
+	if err := s.validateDefinition(v.Definition); err != nil {
 		return err
 	}
 	if v.ID == "" {
@@ -188,8 +203,114 @@ func (s *analyticsService) QueryView(ctx context.Context, id string, vars map[st
 	if err != nil {
 		return nil, err
 	}
+	if v.Definition != nil && v.Definition.Family == types.FamilyReport {
+		return nil, ierr.NewError("custom reports run through the reports endpoint").
+			WithHint("POST /analytics/reports/{key}/query with the saved settings").
+			Mark(ierr.ErrValidation)
+	}
 
 	return s.ExecuteView(ctx, v.Definition, vars)
+}
+
+func validateCustomReport(def *analytics.ViewDefinition, maxRows int) error {
+	if err := def.Validate(); err != nil {
+		return err
+	}
+	entry, _ := analytics.LookupReport(string(def.Metrics[0]))
+	req := &dto.ReportQueryRequest{
+		Shape:      string(def.Shape),
+		Dimensions: def.Dimensions,
+		Grain:      string(def.Time.Grain),
+		Compare:    def.Compare,
+		Currency:   def.Currency,
+		Limit:      def.Limit,
+	}
+	for _, f := range def.Filters {
+		if f != nil {
+			req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: string(f.Op), Value: f.Value})
+		}
+	}
+	for _, so := range def.Sort {
+		if so != nil {
+			req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
+		}
+	}
+	if err := validateReportRequest(entry, req, maxRows); err != nil {
+		return err
+	}
+	days, _ := analytics.ReportRangeMaxDays(def.Time.Range)
+	if d := entry.MaxRangeDays; d > 0 && days > d {
+		return ierr.NewErrorf("range exceeds %d days for this report", d).
+			WithHint(fmt.Sprintf("Choose a range of %d days or less", d)).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (s *analyticsService) validateDefinition(def *analytics.ViewDefinition) error {
+	if def.Family == types.FamilyReport {
+		if err := s.requireReports(); err != nil {
+			return err
+		}
+		return validateCustomReport(def, s.ReportsRepo.MaxRows())
+	}
+	return def.Validate()
+}
+
+func (s *analyticsService) ListViews(ctx context.Context, family types.Family) ([]*analytics.View, error) {
+	all, err := s.views.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if family == "" {
+		return all, nil
+	}
+	out := make([]*analytics.View, 0, len(all))
+	for _, v := range all {
+		if v.Definition != nil && v.Definition.Family == family {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+func (s *analyticsService) GetView(ctx context.Context, id string) (*analytics.View, error) {
+	return s.views.Get(ctx, id)
+}
+
+func (s *analyticsService) UpdateView(ctx context.Context, v *analytics.View) error {
+	if v == nil || v.Definition == nil {
+		return ierr.NewError("view definition is required").Mark(ierr.ErrValidation)
+	}
+	if err := trimViewName(v); err != nil {
+		return err
+	}
+	cur, err := s.views.Get(ctx, v.ID)
+	if err != nil {
+		return err
+	}
+	if cur.Definition == nil || cur.Definition.Family != v.Definition.Family {
+		return ierr.NewError("view family cannot change").
+			WithHint("Create a new view instead").
+			Mark(ierr.ErrValidation)
+	}
+	if err := s.validateDefinition(v.Definition); err != nil {
+		return err
+	}
+	v.Version = cur.Version + 1
+	if err := s.views.Update(ctx, v); err != nil {
+		return err
+	}
+	updated, err := s.views.Get(ctx, v.ID)
+	if err != nil {
+		return err
+	}
+	*v = *updated
+	return nil
+}
+
+func (s *analyticsService) DeleteView(ctx context.Context, id string) error {
+	return s.views.Delete(ctx, id)
 }
 
 // translateDimensions applies translateDimension to every dim, preserving

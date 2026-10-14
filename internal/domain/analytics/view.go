@@ -75,7 +75,7 @@ type TimeSpec struct {
 }
 
 type ViewDefinition struct {
-	Family     types.Family   `json:"family,omitempty" enums:"usage,billing"`
+	Family     types.Family   `json:"family,omitempty" enums:"usage,billing,report"`
 	Shape      types.Shape    `json:"shape" binding:"required" validate:"required" enums:"timeseries,breakdown,scalar"`
 	Metrics    []types.Metric `json:"metrics" binding:"required,min=1" validate:"required,min=1" enums:"usage_quantity,event_count,invoice_total"`
 	Dimensions []string       `json:"dimensions,omitempty"`
@@ -86,6 +86,9 @@ type ViewDefinition struct {
 	Sort      []*SortSpec `json:"sort,omitempty"`
 	Limit     int         `json:"limit,omitempty"`
 	Variables []*Variable `json:"variables,omitempty"`
+	Compare   string      `json:"compare,omitempty" enums:"previous_period,previous_year"`
+	Currency  string      `json:"currency,omitempty"`
+	Display   string      `json:"display,omitempty" enums:"chart,table"`
 }
 
 // NewViewDefinition builds a ViewDefinition from its constituent parts. The
@@ -116,10 +119,31 @@ func (v ViewDefinition) Validate() error {
 	if err := v.Family.Validate(); err != nil {
 		return err
 	}
-	if v.Family == types.FamilyBilling {
+	switch v.Family {
+	case types.FamilyBilling:
 		return v.validateBilling()
+	case types.FamilyReport:
+		return v.validateReport()
 	}
 	return v.validateUsage()
+}
+
+func (v ViewDefinition) validateReport() error {
+	if len(v.Metrics) != 1 {
+		return ierr.NewError("custom reports take exactly one report").Mark(ierr.ErrValidation)
+	}
+	if _, ok := LookupReport(string(v.Metrics[0])); !ok {
+		return ierr.NewErrorf("unknown report %q", v.Metrics[0]).Mark(ierr.ErrValidation)
+	}
+	switch v.Display {
+	case "", "chart", "table":
+	default:
+		return ierr.NewErrorf("display %q not allowed", v.Display).
+			WithHint("display must be chart or table").
+			Mark(ierr.ErrValidation)
+	}
+	_, err := ReportRangeMaxDays(v.Time.Range)
+	return err
 }
 
 func (v ViewDefinition) validateUsage() error {

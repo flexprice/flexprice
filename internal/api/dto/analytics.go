@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -20,7 +22,7 @@ func (r *AnalyticsQueryRequest) Validate() error {
 
 // CreateViewRequest is the request for POST /v1/analytics/views.
 type CreateViewRequest struct {
-	Name       string                    `json:"name" validate:"required"`
+	Name       string                    `json:"name" validate:"required,max=255"`
 	Definition *analytics.ViewDefinition `json:"definition" binding:"required" validate:"required"`
 }
 
@@ -37,14 +39,20 @@ func (r *ViewQueryRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 
-// ViewResponse is the response for POST /v1/analytics/views. It exposes
-// only the fields a client needs, unlike the domain analytics.View which
-// embeds types.BaseModel (tenant_id, status, created_by, timestamps, ...).
+// ViewResponse omits internal fields.
 type ViewResponse struct {
 	ID         string                    `json:"id"`
 	Name       string                    `json:"name"`
 	Version    int                       `json:"version"`
 	Definition *analytics.ViewDefinition `json:"definition"`
+	CreatedBy  string                    `json:"created_by,omitempty"`
+	CreatedAt  time.Time                 `json:"created_at"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+}
+
+// ListViewsResponse wraps saved views.
+type ListViewsResponse struct {
+	Items []*ViewResponse `json:"items"`
 }
 
 // NewViewResponse maps a domain analytics.View onto its response DTO.
@@ -57,6 +65,9 @@ func NewViewResponse(v *analytics.View) *ViewResponse {
 		Name:       v.Name,
 		Version:    v.Version,
 		Definition: v.Definition,
+		CreatedBy:  v.CreatedBy,
+		CreatedAt:  v.CreatedAt,
+		UpdatedAt:  v.UpdatedAt,
 	}
 }
 

@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"slices"
+	"time"
 
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -30,6 +32,11 @@ func (s *InMemoryAnalyticsViewStore) Create(ctx context.Context, v *domainAnalyt
 	if v.Status == "" {
 		v.Status = types.StatusPublished
 	}
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = time.Now()
+	}
+	v.CreatedBy = types.GetUserID(ctx)
+	v.UpdatedBy = v.CreatedBy
 	return s.InMemoryStore.Create(ctx, v.ID, v)
 }
 
@@ -52,8 +59,32 @@ func (s *InMemoryAnalyticsViewStore) Get(ctx context.Context, id string) (*domai
 	return v, nil
 }
 
+func (s *InMemoryAnalyticsViewStore) Update(ctx context.Context, v *domainAnalytics.View) error {
+	cur, err := s.Get(ctx, v.ID)
+	if err != nil {
+		return err
+	}
+	cur.Name, cur.Definition, cur.Version = v.Name, v.Definition, v.Version
+	cur.UpdatedBy, cur.UpdatedAt = types.GetUserID(ctx), time.Now()
+	return s.InMemoryStore.Update(ctx, cur.ID, cur)
+}
+
+func (s *InMemoryAnalyticsViewStore) Delete(ctx context.Context, id string) error {
+	cur, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	cur.Status, cur.UpdatedBy = types.StatusDeleted, types.GetUserID(ctx)
+	return s.InMemoryStore.Update(ctx, id, cur)
+}
+
 func (s *InMemoryAnalyticsViewStore) List(ctx context.Context) ([]*domainAnalytics.View, error) {
-	return s.InMemoryStore.List(ctx, nil, func(ctx context.Context, v *domainAnalytics.View, _ interface{}) bool {
+	out, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, v *domainAnalytics.View, _ interface{}) bool {
 		return CheckTenantFilter(ctx, v.TenantID) && CheckEnvironmentFilter(ctx, v.EnvironmentID) && v.Status == types.StatusPublished
 	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	slices.SortFunc(out, func(a, b *domainAnalytics.View) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
 }
