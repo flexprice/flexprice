@@ -32,6 +32,12 @@ func (r *selfBillingInvoiceValueRepository) ListFinalized(ctx context.Context, f
 			invoice.FinalizedAtGTE(from.UTC()),
 			invoice.FinalizedAtLT(to.UTC()),
 		).
+		Select(
+			invoice.FieldID, invoice.FieldTenantID, invoice.FieldEnvironmentID, invoice.FieldSubscriptionID,
+			invoice.FieldInvoiceType, invoice.FieldBillingReason, invoice.FieldCurrency, invoice.FieldSubtotal,
+			invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidCreditsApplied, invoice.FieldTotalTax, invoice.FieldTotal,
+			invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldPeriodStart, invoice.FieldPeriodEnd, invoice.FieldFinalizedAt,
+		).
 		All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to list finalized invoices for self-billing").Mark(ierr.ErrDatabase)

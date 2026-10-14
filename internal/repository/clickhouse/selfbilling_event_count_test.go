@@ -9,7 +9,7 @@ import (
 
 func TestSelfBillingCountQuery(t *testing.T) {
 	for _, want := range []string{
-		"toStartOfHour(ingested_at) AS hour",
+		"toStartOfHour(ingested_at, 'UTC') AS hour",
 		"uniqExact(id)",
 		"ingested_at >= ?", "ingested_at < ?",
 		"GROUP BY tenant_id, environment_id, hour",

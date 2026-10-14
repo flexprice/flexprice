@@ -12,8 +12,9 @@ import (
 
 // Counts across every tenant on purpose: Flexprice bills each tenant on its ingest volume.
 // Filters on ingested_at only; the mm_ingested_at skip index keeps the scan to recent granules.
+// Hours are pinned to UTC so buckets do not depend on the server timezone.
 const selfBillingCountQuery = `
-SELECT tenant_id, environment_id, toStartOfHour(ingested_at) AS hour, uniqExact(id) AS cnt
+SELECT tenant_id, environment_id, toStartOfHour(ingested_at, 'UTC') AS hour, uniqExact(id) AS cnt
 FROM events
 WHERE ingested_at >= ? AND ingested_at < ?
 GROUP BY tenant_id, environment_id, hour`
@@ -39,7 +40,11 @@ func (r *selfBillingEventCountRepository) CountByTenantHour(ctx context.Context,
 		if err := rows.Scan(&c.TenantID, &c.EnvironmentID, &c.Hour, &c.Count); err != nil {
 			return nil, ierr.WithError(err).Mark(ierr.ErrDatabase)
 		}
+		c.Hour = c.Hour.UTC()
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read self-billing event counts").Mark(ierr.ErrDatabase)
+	}
+	return out, nil
 }
