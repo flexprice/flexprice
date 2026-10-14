@@ -428,7 +428,6 @@ func NewRouter(
 		{
 			tenantRoutes.PUT("/update", write(types.EntityTenant, types.ActionWrite), handlers.Tenant.UpdateTenant)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
-			tenantRoutes.GET("/billing", handlers.Tenant.GetTenantBillingUsage)
 		}
 
 		invoices := v1Private.Group("/invoices")

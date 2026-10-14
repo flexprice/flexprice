@@ -6,13 +6,19 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/clickhouse"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.temporal.io/api/serviceerror"
 	sdkclient "go.temporal.io/sdk/client"
+	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
 )
 
@@ -71,5 +77,50 @@ func TestProvideAdminHandlersBuildsEveryHandler(t *testing.T) {
 		if handlers.Field(i).IsNil() {
 			t.Errorf("provideAdminHandlers leaves %s nil", handlers.Type().Field(i).Name)
 		}
+	}
+}
+
+// serviceParamsGraph supplies what serviceParamsProviders consume and nothing more, as main's graph does.
+func serviceParamsGraph(cfg *config.Configuration, populate *service.ServiceParams) []fx.Option {
+	log := logger.NewNoopLogger()
+	base := service.ServiceParams{Config: cfg, Logger: log}
+	return []fx.Option{
+		fx.Supply(fx.Annotated{Name: "base", Target: base}),
+		fx.Supply(log),
+		fx.Provide(func() postgres.IClient { return nil }),
+		fx.Provide(func() *clickhouse.ClickHouseStore { return nil }),
+		serviceParamsProviders(),
+		fx.Populate(populate),
+	}
+}
+
+func TestServiceParamsProvidersResolve(t *testing.T) {
+	var params service.ServiceParams
+	require.NoError(t, fx.ValidateApp(serviceParamsGraph(&config.Configuration{}, &params)...))
+}
+
+func TestServiceParamsProvidersSelfBilling(t *testing.T) {
+	enabled := config.BillingConfig{
+		Enabled: true, Region: "us", APIHost: "https://billing.example.com/v1", APIKey: "sk_test",
+		PlanID: "plan_free", DashboardURL: "https://app.example.com",
+	}
+	tests := []struct {
+		name    string
+		billing config.BillingConfig
+		wantSet bool
+	}{
+		{"off_when_billing_is_not_configured", config.BillingConfig{}, false},
+		{"off_when_billing_is_partly_configured", config.BillingConfig{Enabled: true, Region: "us"}, false},
+		{"on_when_billing_is_fully_configured", enabled, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var params service.ServiceParams
+			app := fxtest.New(t, serviceParamsGraph(&config.Configuration{Billing: tt.billing}, &params)...)
+			app.RequireStart().RequireStop()
+
+			assert.NotNil(t, params.RevenueFacts)
+			assert.Equal(t, tt.wantSet, params.SelfBilling != nil)
+		})
 	}
 }

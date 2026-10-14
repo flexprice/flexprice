@@ -423,9 +423,10 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	tenantService := NewTenantService(s.ServiceParams)
 
 	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
-		Name:     tenantName,
-		ID:       req.TenantID,
-		Metadata: req.Metadata,
+		Name:           tenantName,
+		ID:             req.TenantID,
+		Metadata:       req.Metadata,
+		BillingDetails: &dto.TenantBillingDetails{Email: req.Email},
 	})
 	if err != nil {
 		return err
