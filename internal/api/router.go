@@ -126,9 +126,10 @@ func NewRouter(
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
-	write := permissionMW.RequirePermission       // shorthand used on every write route
-	read := permissionMW.RequirePermission        // shorthand used on read routes that opt in to an RBAC gate
-	superAdminOnly := middleware.SuperAdminOnly() // shorthand used on routes accessible only to super_admin users
+	write := permissionMW.RequirePermission           // shorthand used on every write route
+	read := permissionMW.RequirePermission            // shorthand used on read routes that opt in to an RBAC gate
+	superAdminOnly := middleware.SuperAdminOnly()     // shorthand used on routes accessible only to super_admin users
+	allowSuspended := middleware.AllowWhenSuspended() // shorthand for write routes a suspended tenant may still call
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -208,8 +209,8 @@ func NewRouter(
 			// takes none.
 			ingestBodyLimit := middleware.BodyLimitMiddleware(middleware.MaxEventIngestionBodyBytes)
 
-			events.POST("", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.IngestEvent)
-			events.POST("/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestEvent)
+			events.POST("", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.IngestEvent)
+			events.POST("/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
 			events.GET("/lookup", handlers.Events.GetEventByID)
 			events.GET("/:id", handlers.Events.GetEventByID) // legacy alias, remove once no caller uses /events/:id
@@ -218,7 +219,7 @@ func NewRouter(
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
-			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestRawEvent)
+			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
 			events.POST("/raw/reprocess/pending", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessUnprocessedRawEvents)
 		}
