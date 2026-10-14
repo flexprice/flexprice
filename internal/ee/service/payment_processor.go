@@ -790,8 +790,11 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			finalizedAt := time.Now().UTC()
 			invoice.FinalizedAt = &finalizedAt
 			finalizedNow = true
+			// Best effort: a failed lookup must not leave a paid invoice unfinalized, so it keeps its draft dates.
 			if err := issueSubscriptionInvoice(ctx, p.ServiceParams, invoice, finalizedAt); err != nil {
-				return err
+				p.Logger.Error(ctx, "failed to date invoice at finalization, keeping its draft dates",
+					"error", err,
+					"invoice_id", invoice.ID)
 			}
 		}
 	} else if invoice.AmountRemaining.LessThan(invoice.AmountDue) {

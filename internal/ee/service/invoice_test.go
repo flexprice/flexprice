@@ -1234,6 +1234,54 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 	s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
 }
 
+func (s *InvoiceServiceSuite) TestPaidDraftFinalizesWhenDatingFails() {
+	ctx := s.GetContext()
+	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.CreatedAt = early
+
+	draft := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr("subs_missing"),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		Total:           decimal.NewFromFloat(15),
+		Subtotal:        decimal.NewFromFloat(15),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(15),
+		IssueDate:       lo.ToPtr(early),
+		DueDate:         lo.ToPtr(early.AddDate(0, 0, 3)),
+		BaseModel:       baseModel,
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+
+	paid := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     draft.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            decimal.NewFromFloat(15),
+		Currency:          "usd",
+		PaymentStatus:     types.PaymentStatusSucceeded,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
+
+	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
+
+	got, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+	s.Equal(types.PaymentStatusSucceeded, got.PaymentStatus)
+	s.WithinDuration(early, *got.IssueDate, time.Second)
+	s.WithinDuration(early.AddDate(0, 0, 3), *got.DueDate, time.Second)
+}
+
 func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 	// Create a finalized invoice first with line items
 	finalizedInvoice := &invoice.Invoice{
