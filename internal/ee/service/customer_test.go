@@ -444,6 +444,13 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 			errorCode:     ierr.ErrCodeValidation,
 		},
 		{
+			name:          "contact_persons_missing_first_name",
+			id:            "cust-1",
+			request:       dto.UpdateCustomerRequest{ContactPersons: []*domainCustomer.ContactPerson{{Email: "x@example.com"}}},
+			expectedError: true,
+			errorCode:     ierr.ErrCodeValidation,
+		},
+		{
 			name:          "contact_persons_null_entry",
 			id:            "cust-1",
 			request:       dto.UpdateCustomerRequest{ContactPersons: []*domainCustomer.ContactPerson{nil}},

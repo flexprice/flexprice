@@ -215,6 +215,11 @@ func ValidatePersons(persons []*ContactPerson) error {
 	people := make(map[string]bool, len(persons))
 	primaries := 0
 	for _, p := range persons {
+		if p == nil {
+			return ierr.NewError("contact person is empty").
+				WithHint("Contact persons must not contain null entries").
+				Mark(ierr.ErrValidation)
+		}
 		person := strings.ToLower(p.Email + "|" + p.FirstName + "|" + p.LastName)
 		if people[person] {
 			return ierr.NewError("duplicate contact person").

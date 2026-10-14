@@ -66,7 +66,7 @@ type CreateCustomerRequest struct {
 	TaxTreatment types.TaxTreatment `json:"tax_treatment,omitempty"`
 
 	// contact_persons are people at the customer; at most one may be primary
-	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive,required"`
+	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -129,7 +129,7 @@ type UpdateCustomerRequest struct {
 	TaxTreatment *types.TaxTreatment `json:"tax_treatment,omitempty"`
 
 	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
-	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive,required"`
+	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
