@@ -47,6 +47,7 @@ func newConnectionServiceWithRealFactoryForTest(t *testing.T, cfg *config.Config
 		encSvc,
 		nil, // temporalSvc
 		nil, // locker
+		nil,
 	)
 
 	params := ServiceParams{

@@ -424,7 +424,8 @@ type InvoiceConfig struct {
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
 	InvoiceNumberSeparator                 string              `json:"separator,omitempty"` // Empty string ("") is valid for no separator
 	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
-	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
+	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after the issue date when payment is due
+	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default payment terms; takes precedence over due_date_days when set
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
 	IncludeZeroValueLineItems              bool                `json:"include_zero_value_line_items"`                                   // Keep usage line items with zero quantity and zero amount on the invoice. Skipped by default.
@@ -456,6 +457,12 @@ func (c InvoiceConfig) Validate() error {
 		return ierr.NewErrorf("invoice_config: 'format' must be one of %v, got %s", validFormats, c.InvoiceNumberFormat).
 			WithHintf("Invoice config format must be one of %v", validFormats).
 			Mark(ierr.ErrValidation)
+	}
+
+	if c.PaymentTerms != nil {
+		if err := c.PaymentTerms.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Validate timezone directly on the struct

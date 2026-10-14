@@ -651,6 +651,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
+			IssueDate:        lo.ToPtr(lo.FromPtrOr(inv.IssueDate, inv.CreatedAt)),
 		}
 
 		if req != nil {
@@ -4196,6 +4197,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			// nil PeriodStart/PeriodEnd, which the filter couldn't match on; once reconcile started requiring PeriodStart/PeriodEnd to
 			// key its update-in-place map, the missing exclusion surfaced.
 			ExcludeInvoiceID: inv.ID,
+			IssueDate:        lo.ToPtr(lo.FromPtrOr(inv.IssueDate, inv.CreatedAt)),
 		})
 		if err != nil {
 			return err

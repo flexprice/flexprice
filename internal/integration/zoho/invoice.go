@@ -11,9 +11,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -21,6 +24,10 @@ import (
 const (
 	zohoDiscountTypeItemLevel = "item_level"
 	zohoReceivableAccountKey  = "zoho_receivable_account_id"
+
+	// Zoho Books system payment terms values for end of month terms.
+	zohoPaymentTermsEndOfMonth     = -2
+	zohoPaymentTermsEndOfNextMonth = -3
 )
 
 type ZohoInvoiceService interface {
@@ -41,6 +48,8 @@ type InvoiceService struct {
 	priceRepo    price.Repository
 	mappingRepo  entityintegrationmapping.Repository
 	paymentRepo  payment.Repository
+	subRepo      subscription.Repository
+	settingsRepo settings.Repository
 	logger       *logger.Logger
 }
 
@@ -54,6 +63,8 @@ func NewInvoiceService(
 	priceRepo price.Repository,
 	mappingRepo entityintegrationmapping.Repository,
 	paymentRepo payment.Repository,
+	subRepo subscription.Repository,
+	settingsRepo settings.Repository,
 	logger *logger.Logger,
 ) ZohoInvoiceService {
 	return &InvoiceService{
@@ -66,6 +77,8 @@ func NewInvoiceService(
 		priceRepo:    priceRepo,
 		mappingRepo:  mappingRepo,
 		paymentRepo:  paymentRepo,
+		subRepo:      subRepo,
+		settingsRepo: settingsRepo,
 		logger:       logger,
 	}
 }
@@ -141,10 +154,8 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		reqPayload.IsDiscountBeforeTax = true
 	}
 
-	if flexInvoice.FinalizedAt != nil {
-		reqPayload.Date = flexInvoice.FinalizedAt.Format("2006-01-02")
-	} else {
-		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
+	if err := s.setDates(ctx, reqPayload, flexInvoice); err != nil {
+		return nil, err
 	}
 
 	settings, err := s.getInvoiceSyncSettings(ctx)
@@ -325,6 +336,73 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		"zoho_invoice_id", zohoInvoiceID,
 		"amount", zohoInv.Balance.String())
 	return nil
+}
+
+// setDates sends the invoice issue date and due date in the subscription's timezone, with the payment terms
+// that produced the due date so Zoho shows the matching terms. Zoho keeps an explicit due_date over its
+// terms, so terms are sent only when they still reproduce the due date.
+func (s *InvoiceService) setDates(ctx context.Context, req *InvoiceCreateRequest, inv *invoice.Invoice) error {
+	var sub *subscription.Subscription
+	loc := time.UTC
+	if inv.SubscriptionID != nil {
+		var err error
+		if sub, err = s.subRepo.Get(ctx, *inv.SubscriptionID); err != nil {
+			return err
+		}
+		if l, err := time.LoadLocation(sub.Timezone); err == nil {
+			loc = l
+		}
+	}
+	issueDate := lo.FromPtrOr(inv.IssueDate, inv.CreatedAt).In(loc)
+	req.Date = issueDate.Format("2006-01-02")
+
+	// Zoho rejects a due date before the invoice date, which an API-created invoice can carry.
+	if inv.DueDate == nil || inv.DueDate.In(loc).Format("2006-01-02") < req.Date {
+		return nil
+	}
+	req.DueDate = inv.DueDate.In(loc).Format("2006-01-02")
+	if sub == nil {
+		return nil
+	}
+
+	terms := lo.FromPtr(sub.PaymentTerms)
+	if terms == "" {
+		var err error
+		if terms, err = s.tenantPaymentTerms(ctx); err != nil {
+			return err
+		}
+	}
+	termsDue, ok := types.PaymentTermsDueDate(terms, issueDate)
+	if !ok || !termsDue.Equal(*inv.DueDate) {
+		return nil
+	}
+
+	switch terms {
+	case types.PaymentTermsEndOfMonth:
+		req.PaymentTerms = lo.ToPtr(zohoPaymentTermsEndOfMonth)
+	case types.PaymentTermsEndOfNextMonth:
+		req.PaymentTerms = lo.ToPtr(zohoPaymentTermsEndOfNextMonth)
+	default:
+		days, _ := types.PaymentTermsToDueDateDays(terms)
+		req.PaymentTerms = lo.ToPtr(days)
+		req.PaymentTermsLabel = fmt.Sprintf("Net %d", days)
+	}
+	return nil
+}
+
+func (s *InvoiceService) tenantPaymentTerms(ctx context.Context) (types.PaymentTerms, error) {
+	setting, err := s.settingsRepo.GetByKey(ctx, types.SettingKeyInvoiceConfig)
+	if ierr.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	cfg, err := utils.ToStruct[types.InvoiceConfig](setting.Value)
+	if err != nil {
+		return "", err
+	}
+	return lo.FromPtr(cfg.PaymentTerms), nil
 }
 
 // writeZohoInvoiceMetadata stores the Zoho Books invoice id on the FlexPrice invoice metadata.

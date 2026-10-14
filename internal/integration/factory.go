@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
@@ -73,6 +74,7 @@ type Factory struct {
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
 	locker                       cache.Locker
+	settingsRepo                 settings.Repository
 
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
@@ -106,6 +108,7 @@ func NewFactory(
 	encryptionService security.EncryptionService,
 	temporalSvc temporalservice.TemporalService,
 	locker cache.Locker,
+	settingsRepo settings.Repository,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -125,6 +128,7 @@ func NewFactory(
 		encryptionService:            encryptionService,
 		locker:                       locker,
 		temporalSvc:                  temporalSvc,
+		settingsRepo:                 settingsRepo,
 	}
 }
 
@@ -698,6 +702,8 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.priceRepo,
 		f.entityIntegrationMappingRepo,
 		f.paymentRepo,
+		f.subscriptionRepo,
+		f.settingsRepo,
 		f.logger,
 	)
 

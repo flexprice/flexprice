@@ -106,6 +106,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 		encryptionSvc,
 		nil, // temporalSvc
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 
 	handler := NewWebhookHandler(

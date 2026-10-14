@@ -3,10 +3,14 @@ package zoho
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -501,6 +505,75 @@ func TestSyncInvoiceToZoho_MarksPaidWhenFlexpriceAlreadyPaid(t *testing.T) {
 			} else {
 				assert.Equal(t, 0, client.createPaymentCalls)
 			}
+		})
+	}
+}
+
+type fakeDueDateSubRepo struct {
+	subscription.Repository
+	sub *subscription.Subscription
+}
+
+func (f *fakeDueDateSubRepo) Get(_ context.Context, _ string) (*subscription.Subscription, error) {
+	return f.sub, nil
+}
+
+type fakeDueDateSettingsRepo struct {
+	settings.Repository
+	terms *types.PaymentTerms
+}
+
+func (f *fakeDueDateSettingsRepo) GetByKey(_ context.Context, _ types.SettingKey) (*settings.Setting, error) {
+	if f.terms == nil {
+		return nil, ierr.NewError("not found").Mark(ierr.ErrNotFound)
+	}
+	return &settings.Setting{Value: map[string]interface{}{"payment_terms": string(*f.terms)}}, nil
+}
+
+func TestSetDates(t *testing.T) {
+	kolkata, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+	ist := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, kolkata) }
+	utc := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 10, 0, 0, 0, time.UTC) }
+
+	tests := []struct {
+		name        string
+		subTerms    *types.PaymentTerms
+		tenantTerms *types.PaymentTerms
+		issueDate   time.Time
+		dueDate     time.Time
+		noSub       bool
+		wantDate    string
+		wantDue     string
+		wantTerms   *int
+		wantLabel   string
+	}{
+		{name: "end of month issued 1st", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(9, 30), wantDate: "2026-09-01", wantDue: "2026-09-30", wantTerms: lo.ToPtr(-2)},
+		{name: "tenant end of next month", tenantTerms: lo.ToPtr(types.PaymentTermsEndOfNextMonth), issueDate: ist(9, 28), dueDate: ist(10, 31), wantDate: "2026-09-28", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-3)},
+		{name: "subscription net overrides tenant", subTerms: lo.ToPtr(types.PaymentTerms30Net), tenantTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 1), wantDate: "2026-09-01", wantDue: "2026-10-01", wantTerms: lo.ToPtr(30), wantLabel: "Net 30"},
+		{name: "due date no longer matches terms", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 15), wantDate: "2026-09-01", wantDue: "2026-10-15"},
+		{name: "no terms sends due date only", issueDate: ist(9, 1), dueDate: ist(9, 2), wantDate: "2026-09-01", wantDue: "2026-09-02"},
+		{name: "issue date in subscription timezone", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: time.Date(2026, 10, 1, 0, 30, 0, 0, kolkata), dueDate: time.Date(2026, 10, 31, 0, 30, 0, 0, kolkata), wantDate: "2026-10-01", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-2)},
+		{name: "no subscription", noSub: true, issueDate: utc(10, 1), dueDate: utc(10, 5), wantDate: "2026-10-01", wantDue: "2026-10-05"},
+		{name: "due before issue date is not sent", noSub: true, issueDate: utc(10, 13), dueDate: utc(10, 5), wantDate: "2026-10-13"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &InvoiceService{
+				subRepo:      &fakeDueDateSubRepo{sub: &subscription.Subscription{Timezone: "Asia/Kolkata", PaymentTerms: tt.subTerms}},
+				settingsRepo: &fakeDueDateSettingsRepo{terms: tt.tenantTerms},
+			}
+			inv := &invoice.Invoice{DueDate: lo.ToPtr(tt.dueDate.UTC()), IssueDate: lo.ToPtr(tt.issueDate.UTC())}
+			if !tt.noSub {
+				inv.SubscriptionID = lo.ToPtr("subs_1")
+			}
+
+			req := &InvoiceCreateRequest{}
+			require.NoError(t, svc.setDates(context.Background(), req, inv))
+			assert.Equal(t, tt.wantDate, req.Date)
+			assert.Equal(t, tt.wantDue, req.DueDate)
+			assert.Equal(t, tt.wantTerms, req.PaymentTerms)
+			assert.Equal(t, tt.wantLabel, req.PaymentTermsLabel)
 		})
 	}
 }

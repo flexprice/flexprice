@@ -156,6 +156,8 @@ type InvoiceCreateRequest struct {
 	ExchangeRate        float64           `json:"exchange_rate,omitempty"`
 	Date                string            `json:"date,omitempty"`
 	DueDate             string            `json:"due_date,omitempty"`
+	PaymentTerms        *int              `json:"payment_terms,omitempty"`
+	PaymentTermsLabel   string            `json:"payment_terms_label,omitempty"`
 	ReferenceNumber     string            `json:"reference_number,omitempty"`
 	Notes               string            `json:"notes,omitempty"`
 	Terms               string            `json:"terms,omitempty"`
