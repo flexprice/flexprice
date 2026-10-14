@@ -83,6 +83,66 @@ func TestSyncStatuses_OneFailureDoesNotStopOthers(t *testing.T) {
 	s.TenantRepo = failingUpdates{InMemoryTenantStore: d.tenants, failID: "a"}
 
 	require.NoError(t, s.syncStatuses(context.Background()))
-	got, _ := d.tenants.GetByID(context.Background(), "b")
+	got, err := d.tenants.GetByID(context.Background(), "b")
+	require.NoError(t, err)
 	assert.Equal(t, types.TenantInternalStatusSuspended, got.InternalStatus)
+	got, err = d.tenants.GetByID(context.Background(), "a")
+	require.NoError(t, err)
+	assert.Equal(t, types.TenantInternalStatusTrialing, got.InternalStatus)
+}
+
+func TestSyncStatuses_SkipsUnpublishedTenants(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(t, fc)
+	ctx := context.Background()
+	for _, st := range []types.Status{types.StatusArchived, types.StatusDeleted} {
+		id := string(st)
+		require.NoError(t, d.tenants.Create(ctx, &tenant.Tenant{ID: id, Name: id, Status: st, InternalStatus: types.TenantInternalStatusTrialing}))
+	}
+	fc.subs["us:archived"] = &remoteSubscription{id: "sa", status: "incomplete"}
+
+	require.NoError(t, s.syncStatuses(ctx))
+
+	assert.Empty(t, fc.customers, "unpublished tenants are not provisioned")
+	assert.Zero(t, fc.trialsStarted)
+	got, err := d.tenants.GetByID(ctx, "archived")
+	require.NoError(t, err)
+	assert.Equal(t, types.TenantInternalStatusTrialing, got.InternalStatus, "unpublished tenants are not suspended")
+}
+
+// staleList lists tenants as they were before a concurrent change, as a slow sync would see them.
+type staleList struct {
+	*testutil.InMemoryTenantStore
+	snapshot []*tenant.Tenant
+}
+
+func (s staleList) List(context.Context) ([]*tenant.Tenant, error) { return s.snapshot, nil }
+
+func TestSyncStatuses_DecidesFromFreshTenant(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(t, fc)
+	ctx := context.Background()
+	seedTenant(t, d, "manual", types.TenantInternalStatusTrialing)
+	fc.subs["us:manual"] = &remoteSubscription{id: "sm", status: "incomplete"}
+	listed, err := d.tenants.GetByID(ctx, "manual")
+	require.NoError(t, err)
+	snapshot := *listed
+	require.NoError(t, d.tenants.Update(ctx, tenant.NewBuilder(listed).WithInternalStatus(types.TenantInternalStatusActive).Build()))
+	s.TenantRepo = staleList{InMemoryTenantStore: d.tenants, snapshot: []*tenant.Tenant{&snapshot}}
+
+	require.NoError(t, s.syncStatuses(ctx))
+
+	got, err := d.tenants.GetByID(ctx, "manual")
+	require.NoError(t, err)
+	assert.Equal(t, types.TenantInternalStatusActive, got.InternalStatus, "tenant activated after listing is not suspended")
+}
+
+func TestSyncStatuses_StopsWhenCancelled(t *testing.T) {
+	fc := newFakeClient()
+	s, d := newTestService(t, fc)
+	seedTenant(t, d, "orphan", types.TenantInternalStatusTrialing)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorIs(t, s.syncStatuses(ctx), context.Canceled)
+	assert.Empty(t, fc.customers)
 }

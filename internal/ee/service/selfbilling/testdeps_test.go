@@ -34,7 +34,7 @@ func newTestService(t *testing.T, fc *fakeClient) (*selfBillingService, *testDep
 
 func seedTenant(t *testing.T, d *testDeps, id string, status types.TenantInternalStatus) {
 	t.Helper()
-	require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{ID: id, Name: id, InternalStatus: status}))
+	require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{ID: id, Name: id, Status: types.StatusPublished, InternalStatus: status}))
 }
 
 func tenantCtx(id string) context.Context { return types.SetTenantID(context.Background(), id) }

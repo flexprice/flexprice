@@ -14,17 +14,29 @@ func (s *selfBillingService) syncStatuses(ctx context.Context) error {
 		return err
 	}
 	for _, t := range tenants {
-		if s.Config.Billing.IsBillingTenant(t.ID) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if t.Status != types.StatusPublished || s.Config.Billing.IsBillingTenant(t.ID) {
 			continue
 		}
-		if err := s.syncTenant(types.SetTenantID(ctx, t.ID), t); err != nil {
+		tenantCtx := types.SetEnvironmentID(types.SetTenantID(ctx, t.ID), "")
+		if err := s.syncTenant(tenantCtx, t.ID); err != nil {
 			s.Logger.Error(ctx, "self-billing status sync failed", "error", err, "tenant_id", t.ID)
 		}
 	}
 	return nil
 }
 
-func (s *selfBillingService) syncTenant(ctx context.Context, t *tenant.Tenant) error {
+// syncTenant re-reads the tenant so a status changed since the listing is not overwritten.
+func (s *selfBillingService) syncTenant(ctx context.Context, tenantID string) error {
+	t, err := s.TenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if t.Status != types.StatusPublished {
+		return nil
+	}
 	remote, err := s.client.LatestSubscription(ctx, externalID(s.region(), t.ID))
 	if err != nil {
 		return err
