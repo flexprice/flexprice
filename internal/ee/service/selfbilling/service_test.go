@@ -37,10 +37,12 @@ func TestOnTenantCreated_Provisions(t *testing.T) {
 		existingSub   bool
 		wantCustomer  bool
 		wantTrial     bool
+		wantLegacyID  string
 	}{
-		{"new_tenant_gets_customer_and_trial", "t1", "", false, true, true},
-		{"existing_subscription_no_second_trial", "t1", "", true, true, false},
-		{"billing_tenant_skipped", "t_billing", "t_billing", false, false, false},
+		{"new_tenant_gets_customer_and_trial", "t1", "", false, true, true, ""},
+		{"existing_subscription_no_second_trial", "t1", "", true, true, false, ""},
+		{"billing_tenant_skipped", "t_billing", "t_billing", false, false, false, ""},
+		{"billing_tenant_region_looks_up_legacy_bare_id", "t1", "t_billing", false, true, true, "t1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,6 +55,7 @@ func TestOnTenantCreated_Provisions(t *testing.T) {
 			s.OnTenantCreated(context.Background(), tt.tenantID, "Acme", "a@acme.io")
 			assert.Equal(t, tt.wantCustomer, fc.customers["us:"+tt.tenantID])
 			assert.Equal(t, tt.wantTrial, fc.trialsStarted == 1)
+			assert.Equal(t, tt.wantLegacyID, fc.legacyExtIDs["us:"+tt.tenantID])
 		})
 	}
 }

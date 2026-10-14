@@ -10,6 +10,7 @@ import (
 type fakeClient struct {
 	mu             sync.Mutex
 	customers      map[string]bool
+	legacyExtIDs   map[string]string // extID -> legacyExtID passed to EnsureCustomer
 	subs           map[string]*remoteSubscription
 	checkouts      map[string]*remoteCheckout
 	ingested       [][]usageEvent
@@ -19,13 +20,14 @@ type fakeClient struct {
 }
 
 func newFakeClient() *fakeClient {
-	return &fakeClient{customers: map[string]bool{}, subs: map[string]*remoteSubscription{}, checkouts: map[string]*remoteCheckout{}}
+	return &fakeClient{customers: map[string]bool{}, legacyExtIDs: map[string]string{}, subs: map[string]*remoteSubscription{}, checkouts: map[string]*remoteCheckout{}}
 }
 
 func (f *fakeClient) EnsureCustomer(_ context.Context, in customerInput) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.customers[in.extID] = true
+	f.legacyExtIDs[in.extID] = in.legacyExtID
 	return f.err
 }
 

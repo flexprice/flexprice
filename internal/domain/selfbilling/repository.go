@@ -1,4 +1,4 @@
-package selfbilling // internal/domain/selfbilling
+package selfbilling
 
 import (
 	"context"

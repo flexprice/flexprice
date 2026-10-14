@@ -220,7 +220,13 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 	for _, i := range invs.ListInvoicesResponse.Items {
 		total := decimal.Zero
 		if t := lo.FromPtr(i.Total); t != "" {
-			total, _ = decimal.NewFromString(t)
+			total, err = decimal.NewFromString(t)
+			if err != nil {
+				return nil, ierr.WithError(err).
+					WithMessagef("billing invoice %s has an unparseable total %q", lo.FromPtr(i.ID), t).
+					WithHint("The billing invoice total could not be read").
+					Mark(ierr.ErrInternal)
+			}
 		}
 		out.invoices = append(out.invoices, remoteInvoice{
 			id: lo.FromPtr(i.ID), number: lo.FromPtr(i.InvoiceNumber),

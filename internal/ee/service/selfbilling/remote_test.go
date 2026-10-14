@@ -23,6 +23,8 @@ const (
 	pathCustomers            = "/customers"           // as CreateCustomer / UpdateCustomer build it
 	pathCustomerByExternalID = "/customers/external/" // as GetCustomerByExternalID builds it
 	pathSubscriptionsSuffix  = "/subscriptions"       // as GetSubscriptionsForCustomer appends it
+	pathInvoiceSearch        = "/invoices/search"     // as QueryInvoice builds it
+	pathCustomerUsage        = "/customers/usage"     // as GetCustomerUsageSummary builds it
 )
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
@@ -34,6 +36,7 @@ type fakeMumbai struct {
 	byExtID   map[string]string            // external_id -> customer id
 	metadata  map[string]map[string]string // customer id -> metadata
 	subs      map[string][]map[string]any  // external_id -> subscriptions
+	invoices  []map[string]any
 	created   []string
 	rekeyedTo []string
 	updates   []map[string]any
@@ -86,6 +89,10 @@ func (f *fakeMumbai) handler(t *testing.T) http.Handler {
 				f.rekeyedTo = append(f.rekeyedTo, newExt)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "external_id": lo.Ternary(renamed, newExt, old)})
+		case r.Method == http.MethodPost && r.URL.Path == pathInvoiceSearch:
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.invoices})
+		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
+			_ = json.NewEncoder(w).Encode(map[string]any{})
 		default:
 			t.Errorf("unexpected call %s %s", r.Method, r.URL.String())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -235,6 +242,36 @@ func TestUpdateBillingDetails_PreservesMetadata(t *testing.T) {
 			assert.Equal(t, tt.want, f.metadata["cust_1"])
 			require.Len(t, f.updates, 1)
 			assert.Equal(t, "Acme", f.updates[0]["name"])
+		})
+	}
+}
+
+func TestSummary_InvoiceTotal(t *testing.T) {
+	tests := []struct {
+		name      string
+		total     string
+		wantTotal string
+		wantErr   bool
+	}{
+		{"valid_total_parsed", "12.50", "12.5", false},
+		{"empty_total_is_zero", "", "0", false},
+		{"malformed_total_fails", "12,50", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMumbai(map[string]string{"in:t1": "cust_1"})
+			f.invoices = []map[string]any{{"id": "inv_1", "total": tt.total, "currency": "USD"}}
+			c := newTestRemoteClient(t, f)
+
+			got, err := c.Summary(context.Background(), "in:t1")
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "inv_1")
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, got.invoices, 1)
+			assert.Equal(t, tt.wantTotal, got.invoices[0].total.String())
 		})
 	}
 }
