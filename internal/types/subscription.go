@@ -343,7 +343,7 @@ func PaymentTermsDueDate(p PaymentTerms, issueDate time.Time) (time.Time, bool) 
 	if !ok {
 		return time.Time{}, false
 	}
-	return issueDate.Add(24 * time.Hour * time.Duration(days)), true
+	return issueDate.AddDate(0, 0, days), true
 }
 
 func endOfMonth(t time.Time, monthsAhead int) time.Time {

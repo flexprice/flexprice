@@ -2442,7 +2442,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		invoiceDueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
 	}
 	if !ok {
-		invoiceDueDate = issueDate.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
+		invoiceDueDate = issueDate.AddDate(0, 0, *invoiceConfig.DueDateDays)
 	}
 	invoiceDueDate = invoiceDueDate.UTC()
 

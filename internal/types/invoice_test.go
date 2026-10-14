@@ -64,6 +64,7 @@ func TestPaymentTermsDueDate(t *testing.T) {
 		wantOK    bool
 	}{
 		{"net 30 from issue date", PaymentTerms30Net, utc(2026, 10, 13), utc(2026, 11, 12), true},
+		{"net 30 keeps calendar day across dst", PaymentTerms30Net, time.Date(2026, 10, 15, 0, 30, 0, 0, newYork), time.Date(2026, 11, 14, 0, 30, 0, 0, newYork), true},
 		{"end of month issued 1st", PaymentTermsEndOfMonth, time.Date(2026, 9, 1, 0, 0, 0, 0, kolkata), time.Date(2026, 9, 30, 0, 0, 0, 0, kolkata), true},
 		{"end of next month issued 28th", PaymentTermsEndOfNextMonth, utc(2026, 9, 28), utc(2026, 10, 31), true},
 		{"end of month february", PaymentTermsEndOfMonth, utc(2028, 2, 10), utc(2028, 2, 29), true},
