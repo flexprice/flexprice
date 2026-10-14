@@ -42,10 +42,6 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 		return nil, err
 	}
 
-	if s.SelfBilling != nil {
-		s.SelfBilling.OnTenantCreated(ctx, newTenant.ID, newTenant.Name, newTenant.BillingDetails.Email)
-	}
-
 	return dto.NewTenantResponse(newTenant), nil
 }
 

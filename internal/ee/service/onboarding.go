@@ -29,7 +29,7 @@ import (
 type OnboardingService interface {
 	GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error)
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
-	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error
+	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) (*dto.TenantResponse, error)
 	SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error
 }
 
@@ -413,8 +413,9 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 	}
 }
 
-// OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments
-func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error {
+// OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments.
+// It returns the tenant so the caller can provision self-billing once its transaction commits.
+func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) (*dto.TenantResponse, error) {
 	tenantName := req.TenantName
 	if tenantName == "" {
 		tenantName = s.Config.Onboarding.DefaultTenantName
@@ -429,7 +430,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 		BillingDetails: &dto.TenantBillingDetails{Email: req.Email},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	tenantID := resp.ID
@@ -452,7 +453,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	}
 
 	if err := s.UserRepo.Create(ctx, newUser); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Create default environments (development, production, sandbox)
@@ -476,12 +477,12 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 		}
 
 		if err := s.EnvironmentRepo.Create(ctx, env); err != nil {
-			return err
+			return nil, err
 		}
 
 		// if envType == types.EnvironmentDevelopment {
 		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, req.UserID, env.ID); err != nil {
-		// 		return err
+		// 		return nil, err
 		// 	}
 		// }
 	}
@@ -489,7 +490,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
 	_ = s.sendZapierWebhook(ctx, req.Email)
 
-	return nil
+	return resp, nil
 }
 
 // SetupSandboxEnvironment sets up the sandbox environment with generic AI-focused features for hackathon participants
