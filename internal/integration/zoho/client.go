@@ -26,6 +26,7 @@ type ZohoClient interface {
 	UpdateContact(ctx context.Context, contactID string, req *ContactUpdateRequest) (*ContactResponse, error)
 	GetContact(ctx context.Context, contactID string) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
+	UpdateInvoice(ctx context.Context, zohoInvoiceID string, req *InvoiceCreateRequest) (*InvoiceResponse, error)
 	// GetInvoice fetches a Zoho Books invoice by ID (used to read the live balance/customer_id before mark-paid).
 	GetInvoice(ctx context.Context, zohoInvoiceID string) (*InvoiceResponse, error)
 	// CreateCustomerPayment records a payment against one or more Zoho Books invoices.
@@ -151,6 +152,17 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		Invoice InvoiceResponse `json:"invoice"`
 	}
 	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/invoices", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Invoice, nil
+}
+
+func (c *Client) UpdateInvoice(ctx context.Context, zohoInvoiceID string, req *InvoiceCreateRequest) (*InvoiceResponse, error) {
+	var resp struct {
+		Invoice InvoiceResponse `json:"invoice"`
+	}
+	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp.Invoice, nil

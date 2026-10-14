@@ -2,6 +2,8 @@ package zoho
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -27,6 +29,20 @@ type fakeSyncZohoClient struct {
 	getInvoiceResp     *InvoiceResponse
 	createPaymentCalls int
 	createPaymentReq   *CustomerPaymentCreateRequest
+	updateInvoiceReq   *InvoiceCreateRequest
+	updateInvoiceCalls int
+	submitCalls        int
+}
+
+func (f *fakeSyncZohoClient) UpdateInvoice(_ context.Context, zohoInvoiceID string, req *InvoiceCreateRequest) (*InvoiceResponse, error) {
+	f.updateInvoiceCalls++
+	f.updateInvoiceReq = req
+	return &InvoiceResponse{InvoiceID: zohoInvoiceID, Status: f.getInvoiceResp.Status}, nil
+}
+
+func (f *fakeSyncZohoClient) SubmitInvoiceForApproval(_ context.Context, _ string) error {
+	f.submitCalls++
+	return nil
 }
 
 func (f *fakeSyncZohoClient) CreateInvoice(_ context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error) {
@@ -115,6 +131,17 @@ func (fakeSyncCustomerSvc) GetOrCreateZohoCustomer(_ context.Context, _ *custome
 }
 
 func (fakeSyncCustomerSvc) SyncCustomerUpdate(_ context.Context, _ *customer.Customer) error {
+	return nil
+}
+
+// countingCustomerSvc counts SyncCustomerUpdate calls.
+type countingCustomerSvc struct {
+	fakeSyncCustomerSvc
+	updates int
+}
+
+func (c *countingCustomerSvc) SyncCustomerUpdate(_ context.Context, _ *customer.Customer) error {
+	c.updates++
 	return nil
 }
 
@@ -576,4 +603,72 @@ func TestSetDates(t *testing.T) {
 			assert.Equal(t, tt.wantLabel, req.PaymentTermsLabel)
 		})
 	}
+}
+
+func TestSyncInvoiceToZoho_Resync(t *testing.T) {
+	tests := []struct {
+		name       string
+		resync     bool
+		zohoStatus string
+		approval   bool
+		wantUpdate bool
+		wantSubmit bool
+	}{
+		{name: "draft is updated", resync: true, zohoStatus: "draft", wantUpdate: true},
+		{name: "draft is submitted when approval is on", resync: true, zohoStatus: "draft", approval: true, wantUpdate: true, wantSubmit: true},
+		{name: "pending approval is not submitted again", resync: true, zohoStatus: "pending_approval", approval: true, wantUpdate: true},
+		{name: "sent is updated", resync: true, zohoStatus: "sent", wantUpdate: true},
+		{name: "approved is updated and not submitted", resync: true, zohoStatus: "approved", approval: true, wantUpdate: true},
+		{name: "unpaid is updated", resync: true, zohoStatus: "unpaid", wantUpdate: true},
+		{name: "overdue is updated", resync: true, zohoStatus: "overdue", wantUpdate: true},
+		{name: "viewed is updated", resync: true, zohoStatus: "viewed", wantUpdate: true},
+		{name: "partially paid is not touched", resync: true, zohoStatus: "partially_paid"},
+		{name: "rejected is not touched", resync: true, zohoStatus: "rejected"},
+		{name: "paid is not touched", resync: true, zohoStatus: "paid", approval: true},
+		{name: "void is not touched", resync: true, zohoStatus: "void"},
+		{name: "without resync a mapped invoice is not touched", zohoStatus: "draft", approval: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			inv := buildTestInvoice("INR", "0", "", "", []testLineItem{{name: "Charge", priceID: "price_1", amount: "100"}})
+			svc, client := newSyncTestService(inv, syncConfigWithApproval(tc.approval))
+			svc.mappingRepo = &fakeSyncMappingRepo{mappings: []*entityintegrationmapping.EntityIntegrationMapping{
+				{EntityID: inv.ID, ProviderEntityID: "zoho_inv_existing"},
+			}}
+			client.getInvoiceResp = &InvoiceResponse{InvoiceID: "zoho_inv_existing", CustomerID: "zoho_cust_existing", Status: tc.zohoStatus}
+			customerSvc := &countingCustomerSvc{}
+			svc.customerSvc = customerSvc
+
+			_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: inv.ID, Resync: tc.resync})
+			require.NoError(t, err)
+
+			assert.Nil(t, client.createInvoiceReq)
+			assert.Equal(t, lo.Ternary(tc.resync, 1, 0), customerSvc.updates, "customer is synced on every resync")
+			if tc.wantUpdate {
+				assert.Equal(t, 1, client.updateInvoiceCalls)
+				assert.Equal(t, "zoho_cust_existing", client.updateInvoiceReq.CustomerID)
+				require.Len(t, client.updateInvoiceReq.LineItems, 1)
+			} else {
+				assert.Equal(t, 0, client.updateInvoiceCalls)
+			}
+			if tc.wantSubmit {
+				assert.Equal(t, 1, client.submitCalls)
+			} else {
+				assert.Equal(t, 0, client.submitCalls)
+			}
+		})
+	}
+}
+
+func TestIsZohoRequestRejected(t *testing.T) {
+	wrap := func(status int) error {
+		return ierr.WithError(&ZohoAPIError{Code: 11016, HTTPStatus: status}).Mark(ierr.ErrHTTPClient)
+	}
+
+	assert.True(t, IsZohoRequestRejected(wrap(http.StatusBadRequest)))
+	assert.False(t, IsZohoRequestRejected(wrap(http.StatusTooManyRequests)))
+	assert.False(t, IsZohoRequestRejected(wrap(http.StatusUnauthorized)))
+	assert.False(t, IsZohoRequestRejected(wrap(http.StatusInternalServerError)))
+	assert.False(t, IsZohoRequestRejected(errors.New("network down")))
 }

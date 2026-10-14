@@ -1164,7 +1164,7 @@ definitions:
           For "scheduled_date", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).
           For "immediate", accepts past/current dates only; use "scheduled_date" for future dates.
         type: string
-      cancel_immediately_inovice_policy:
+      cancel_immediately_invoice_policy:
         allOf:
         - $ref: '#/definitions/types.CancelImmediatelyInvoicePolicy'
         description: CancelImmediatelyInvoicePolicy controls whether to generate a

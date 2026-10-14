@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -26,6 +27,13 @@ func IsZohoErrorCode(err error, code int) bool {
 		return zohoErr.Code == code
 	}
 	return false
+}
+
+// IsZohoRequestRejected reports whether Zoho refused the request as invalid (HTTP 400).
+// Retrying such a request cannot succeed.
+func IsZohoRequestRejected(err error) bool {
+	var zohoErr *ZohoAPIError
+	return errors.As(err, &zohoErr) && zohoErr.HTTPStatus == http.StatusBadRequest
 }
 
 type ContactPerson struct {
@@ -187,6 +195,11 @@ type InvoiceResponse struct {
 const (
 	InvoiceStatusDraft           = "draft"
 	InvoiceStatusPendingApproval = "pending_approval"
+	InvoiceStatusSent            = "sent"
+	InvoiceStatusApproved        = "approved"
+	InvoiceStatusUnpaid          = "unpaid"
+	InvoiceStatusOverdue         = "overdue"
+	InvoiceStatusViewed          = "viewed"
 	InvoiceStatusRejected        = "rejected"
 	InvoiceStatusPaid            = "paid"
 	InvoiceStatusVoid            = "void"
@@ -406,6 +419,8 @@ type customerPaymentResponseWire struct {
 
 type ZohoInvoiceSyncRequest struct {
 	InvoiceID string `json:"invoice_id"`
+	// Resync updates the Zoho invoice when one is already mapped.
+	Resync bool `json:"resync"`
 }
 
 type ZohoInvoiceSyncResponse struct {

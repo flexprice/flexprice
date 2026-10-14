@@ -95,8 +95,16 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	mappings, err := s.mappingRepo.List(ctx, filter)
-	if err == nil && len(mappings) > 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(mappings) > 0 {
 		zohoID := mappings[0].ProviderEntityID
+		if req.Resync {
+			if err := s.resyncInvoice(ctx, flexInvoice, zohoID); err != nil {
+				return nil, err
+			}
+		}
 		status := "draft"
 		zohoInvNumber := ""
 		if mappings[0].Metadata != nil {
@@ -135,53 +143,10 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
-	lineItems, err := s.buildLineItems(ctx, flexInvoice)
+	reqPayload, err := s.buildInvoiceRequest(ctx, flexInvoice, flexCustomer, zohoCustomerID)
 	if err != nil {
 		return nil, err
 	}
-	if len(lineItems) == 0 {
-		return nil, ierr.NewError("invoice has no syncable line items").Mark(ierr.ErrValidation)
-	}
-
-	reqPayload := &InvoiceCreateRequest{
-		CustomerID: zohoCustomerID,
-		LineItems:  lineItems,
-		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
-	}
-
-	if s.totalLineItemDiscount(lineItems).IsPositive() {
-		reqPayload.DiscountType = zohoDiscountTypeItemLevel
-		reqPayload.IsDiscountBeforeTax = true
-	}
-
-	if err := s.setDates(ctx, reqPayload, flexInvoice); err != nil {
-		return nil, err
-	}
-
-	settings, err := s.getInvoiceSyncSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	reqPayload.AccountID = strings.TrimSpace(flexCustomer.Metadata[zohoReceivableAccountKey])
-	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
-	// Ordered least to most specific: Zoho keeps the last write to a given field.
-	reqPayload.CustomFields = append(globalCustomFields(settings),
-		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)...)
-	reqPayload.CustomFields = append(reqPayload.CustomFields,
-		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
-
-	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
-	if err != nil {
-		return nil, err
-	}
-	s.logger.Info(ctx, "resolved Zoho invoice currency for sync",
-		"invoice_id", req.InvoiceID,
-		"flexprice_currency", flexInvoice.Currency,
-		"zoho_currency_code", curCode,
-		"zoho_exchange_rate", exchRate)
-	reqPayload.CurrencyCode = curCode
-	reqPayload.ExchangeRate = exchRate
 
 	zohoInv, err := s.client.CreateInvoice(ctx, reqPayload)
 	if err != nil {
@@ -225,6 +190,111 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		Total:         zohoInv.Total,
 		Currency:      flexInvoice.Currency,
 	}, nil
+}
+
+// buildInvoiceRequest builds the Zoho invoice payload shared by create and resync.
+func (s *InvoiceService) buildInvoiceRequest(ctx context.Context, flexInvoice *invoice.Invoice, flexCustomer *customer.Customer, zohoCustomerID string) (*InvoiceCreateRequest, error) {
+	lineItems, err := s.buildLineItems(ctx, flexInvoice)
+	if err != nil {
+		return nil, err
+	}
+	if len(lineItems) == 0 {
+		return nil, ierr.NewError("invoice has no syncable line items").Mark(ierr.ErrValidation)
+	}
+
+	reqPayload := &InvoiceCreateRequest{
+		CustomerID: zohoCustomerID,
+		LineItems:  lineItems,
+		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
+	}
+
+	if s.totalLineItemDiscount(lineItems).IsPositive() {
+		reqPayload.DiscountType = zohoDiscountTypeItemLevel
+		reqPayload.IsDiscountBeforeTax = true
+	}
+
+	if err := s.setDates(ctx, reqPayload, flexInvoice); err != nil {
+		return nil, err
+	}
+
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	reqPayload.AccountID = strings.TrimSpace(flexCustomer.Metadata[zohoReceivableAccountKey])
+	reqPayload.PlaceOfSupply = types.TaxMetadataFromMap(flexCustomer.Metadata).PlaceOfSupply()
+	// Ordered least to most specific: Zoho keeps the last write to a given field.
+	reqPayload.CustomFields = append(globalCustomFields(settings),
+		servicePeriodCustomFields(settings, flexInvoice.PeriodStart, flexInvoice.PeriodEnd)...)
+	reqPayload.CustomFields = append(reqPayload.CustomFields,
+		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
+
+	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
+	if err != nil {
+		return nil, err
+	}
+	s.logger.Info(ctx, "resolved Zoho invoice currency for sync",
+		"invoice_id", flexInvoice.ID,
+		"flexprice_currency", flexInvoice.Currency,
+		"zoho_currency_code", curCode,
+		"zoho_exchange_rate", exchRate)
+	reqPayload.CurrencyCode = curCode
+	reqPayload.ExchangeRate = exchRate
+	return reqPayload, nil
+}
+
+// resyncInvoice updates the Zoho contact, then the Zoho invoice when it is still editable.
+// Invoices Zoho no longer allows editing (paid, void, ...) are left untouched.
+func (s *InvoiceService) resyncInvoice(ctx context.Context, flexInvoice *invoice.Invoice, zohoInvoiceID string) error {
+	flexCustomer, err := s.customerRepo.Get(ctx, flexInvoice.CustomerID)
+	if err != nil {
+		return err
+	}
+	if err := s.customerSvc.SyncCustomerUpdate(ctx, flexCustomer); err != nil {
+		return err
+	}
+
+	current, err := s.client.GetInvoice(ctx, zohoInvoiceID)
+	if err != nil {
+		return err
+	}
+
+	switch NormalizeInvoiceStatus(current.Status) {
+	case InvoiceStatusDraft, InvoiceStatusPendingApproval, InvoiceStatusApproved,
+		InvoiceStatusSent, InvoiceStatusUnpaid, InvoiceStatusOverdue, InvoiceStatusViewed:
+	default:
+		s.logger.Info(ctx, "Zoho invoice is not editable, skipping resync",
+			"invoice_id", flexInvoice.ID,
+			"zoho_invoice_id", zohoInvoiceID,
+			"zoho_status", current.Status)
+		return nil
+	}
+
+	reqPayload, err := s.buildInvoiceRequest(ctx, flexInvoice, flexCustomer, current.CustomerID)
+	if err != nil {
+		return err
+	}
+	updated, err := s.client.UpdateInvoice(ctx, zohoInvoiceID, reqPayload)
+	if err != nil {
+		return err
+	}
+
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if settings.IsSubmitForApprovalEnabled() && NormalizeInvoiceStatus(updated.Status) == InvoiceStatusDraft {
+		if err := s.client.SubmitInvoiceForApproval(ctx, zohoInvoiceID); err != nil {
+			return err
+		}
+	}
+
+	s.logger.Info(ctx, "resynced Zoho invoice",
+		"invoice_id", flexInvoice.ID,
+		"zoho_invoice_id", zohoInvoiceID,
+		"zoho_status", current.Status)
+	return nil
 }
 
 // markPaidIfFlexpricePaid re-reads the FlexPrice invoice and records a Zoho customer

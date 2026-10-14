@@ -778,7 +778,10 @@ type CancelSubscriptionRequest struct {
 	CancellationType types.CancellationType `json:"cancellation_type" validate:"required"`
 
 	// CancelImmediatelyInvoicePolicy controls whether to generate a final invoice on immediate cancellation. Defaults to skip.
-	CancelImmediatelyInvoicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_inovice_policy,omitempty"`
+	CancelImmediatelyInvoicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_invoice_policy,omitempty"`
+
+	// Deprecated: misspelled key still accepted from older clients; Validate copies it into CancelImmediatelyInvoicePolicy.
+	CancelImmediatelyInovicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_inovice_policy,omitempty" swaggerignore:"true"`
 
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
@@ -867,6 +870,9 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
 		r.ProrationBehavior = types.ProrationBehaviorNone
+	}
+	if r.CancelImmediatelyInvoicePolicy == "" {
+		r.CancelImmediatelyInvoicePolicy = r.CancelImmediatelyInovicePolicy
 	}
 	// Set default cancel immediately invoice policy if not provided or empty (default: skip = do not generate invoice)
 	if r.CancelImmediatelyInvoicePolicy == "" {

@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
@@ -304,11 +307,38 @@ func (c *client) PresignGet(ctx context.Context, key string, duration time.Durat
 func (c *client) ValidateConnection(ctx context.Context) error {
 	if _, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(c.cfg.Bucket)}); err != nil {
 		return ierr.WithError(err).
-			WithHint("failed to validate S3 connection - check credentials and bucket name").
+			WithHint(headBucketHint(err, c.cfg.Bucket, c.cfg.Region)).
 			WithMessagef("bucket:%s, region:%s", c.cfg.Bucket, c.cfg.Region).
-			Mark(ierr.ErrHTTPClient)
+			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// headBucketHint turns a HeadBucket failure into a message the user can act on.
+func headBucketHint(err error, bucket, region string) string {
+	var notFound *types.NotFound
+	if errors.As(err, &notFound) {
+		return fmt.Sprintf("Bucket '%s' not found.", bucket)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Sprintf("Could not reach bucket '%s': the request timed out.", bucket)
+	}
+
+	// Transport failures (DNS, connection refused) carry no HTTP status.
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() == 0 {
+		return fmt.Sprintf("Could not reach bucket '%s': %s", bucket, errors.UnwrapAll(err).Error())
+	}
+	switch respErr.HTTPStatusCode() {
+	case http.StatusNotFound:
+		return fmt.Sprintf("Bucket '%s' not found.", bucket)
+	case http.StatusForbidden:
+		return fmt.Sprintf("Access denied to bucket '%s'. The AWS keys need s3:ListBucket and s3:PutObject on it.", bucket)
+	case http.StatusMovedPermanently:
+		return fmt.Sprintf("Bucket '%s' isn't in region '%s'.", bucket, region)
+	default:
+		return fmt.Sprintf("Could not reach bucket '%s' (HTTP %d).", bucket, respErr.HTTPStatusCode())
+	}
 }
 
 func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {

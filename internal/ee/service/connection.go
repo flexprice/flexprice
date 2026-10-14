@@ -814,6 +814,12 @@ func (s *connectionService) validateStorageReachable(ctx context.Context, conn *
 		return nil
 	}
 
+	// Customer-owned S3 carries only keys; each export is probed against its own bucket.
+	isManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
+	if conn.ProviderType == types.SecretProviderS3 && !isManaged {
+		return s.IntegrationFactory.ValidateS3Credentials(conn)
+	}
+
 	var bucket string
 	if conn.SyncConfig != nil && conn.SyncConfig.Storage != nil {
 		bucket = conn.SyncConfig.Storage.Bucket
