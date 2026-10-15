@@ -312,34 +312,27 @@ func (s *MeterUsageTrackingSuite) TestExtractQuantity_SumWithMultiplier_NilMulti
 	assert.True(s.T(), decimal.Zero.Equal(qty))
 }
 
-func (s *MeterUsageTrackingSuite) TestExtractQuantity_NetSum_Negative() {
-	event := &events.Event{
-		Properties: map[string]interface{}{"gb": "-4.5"},
-	}
-	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationNetSum, Field: "gb"}}
-
-	qty, err := s.svc.extractQuantity(event, m)
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), decimal.RequireFromString("-4.5").Equal(qty))
-}
-
-func (s *MeterUsageTrackingSuite) TestStoredQuantity() {
+func (s *MeterUsageTrackingSuite) TestExtractQuantity_Sign() {
 	tests := []struct {
 		name     string
-		qty      decimal.Decimal
+		value    interface{}
 		aggType  types.AggregationType
 		expected decimal.Decimal
 	}{
-		{"net_sum_keeps_negative", decimal.NewFromInt(-4), types.AggregationNetSum, decimal.NewFromInt(-4)},
-		{"net_sum_keeps_positive", decimal.NewFromInt(10), types.AggregationNetSum, decimal.NewFromInt(10)},
-		{"sum_zeroes_negative", decimal.NewFromInt(-4), types.AggregationSum, decimal.Zero},
-		{"sum_keeps_positive", decimal.NewFromInt(10), types.AggregationSum, decimal.NewFromInt(10)},
-		{"max_zeroes_negative", decimal.NewFromInt(-4), types.AggregationMax, decimal.Zero},
+		{"signed_sum_keeps_negative", "-4.5", types.AggregationSignedSum, decimal.RequireFromString("-4.5")},
+		{"signed_sum_keeps_positive", float64(10), types.AggregationSignedSum, decimal.NewFromInt(10)},
+		{"sum_zeroes_negative", float64(-4), types.AggregationSum, decimal.Zero},
+		{"sum_keeps_positive", float64(10), types.AggregationSum, decimal.NewFromInt(10)},
+		{"max_zeroes_negative", float64(-4), types.AggregationMax, decimal.Zero},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			got := storedQuantity(tt.qty, tt.aggType)
+			event := &events.Event{Properties: map[string]interface{}{"gb": tt.value}}
+			m := &meter.Meter{Aggregation: meter.Aggregation{Type: tt.aggType, Field: "gb"}}
+
+			got, err := s.svc.extractQuantity(event, m)
+			assert.NoError(s.T(), err)
 			assert.True(s.T(), tt.expected.Equal(got), "expected %s, got %s", tt.expected, got)
 		})
 	}

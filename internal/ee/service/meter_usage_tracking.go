@@ -325,7 +325,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				)
 				continue
 			}
-			qty = storedQuantity(qty, m.Aggregation.Type)
 			records = append(records, &events.MeterUsage{
 				Event:      *evt,
 				MeterID:    m.ID,
@@ -488,14 +487,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			continue
 		}
 
-		if stored := storedQuantity(qty, m.Aggregation.Type); !stored.Equal(qty) {
-			s.Logger.Info(ctx, "negative quantity, setting to zero",
-				"event_id", event.ID,
-				"meter_id", m.ID,
-			)
-			qty = stored
-		}
-
 		uniqueHash := s.generateUniqueHash(event, m)
 
 		records = append(records, &events.MeterUsage{
@@ -643,9 +634,19 @@ func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *m
 	return hex.EncodeToString(hash[:])
 }
 
-// extractQuantity extracts the quantity from event properties based on the meter's aggregation config.
-// Simplified version: no subscription or period needed.
+// extractQuantity is what an event adds to a meter. A negative quantity becomes 0
+// unless the meter's aggregation keeps negatives.
 func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *meter.Meter) (decimal.Decimal, error) {
+	qty, err := s.eventQuantity(event, m)
+	if err != nil || !qty.IsNegative() || m.Aggregation.Type.KeepsNegatives() {
+		return qty, err
+	}
+	return decimal.Zero, nil
+}
+
+// eventQuantity extracts the quantity from event properties based on the meter's aggregation config.
+// Simplified version: no subscription or period needed.
+func (s *meterUsageTrackingService) eventQuantity(event *events.Event, m *meter.Meter) (decimal.Decimal, error) {
 	// CEL expression evaluation
 	if m.Aggregation.Expression != "" {
 		if m.Aggregation.Type == types.AggregationCountUnique {
@@ -666,7 +667,7 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 	case types.AggregationCount:
 		return decimal.NewFromInt(1), nil
 
-	case types.AggregationSum, types.AggregationNetSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
+	case types.AggregationSum, types.AggregationSignedSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if m.Aggregation.Field == "" {
 			return decimal.Zero, nil
 		}
@@ -712,15 +713,6 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 		)
 		return decimal.Zero, nil
 	}
-}
-
-// storedQuantity is what an event adds to a meter: a negative quantity becomes 0
-// unless the meter's aggregation keeps negatives.
-func storedQuantity(qty decimal.Decimal, aggType types.AggregationType) decimal.Decimal {
-	if qty.IsNegative() && !aggType.KeepsNegatives() {
-		return decimal.Zero
-	}
-	return qty
 }
 
 // convertToDecimal converts a property value to decimal

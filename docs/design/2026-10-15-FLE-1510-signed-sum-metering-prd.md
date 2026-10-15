@@ -1,4 +1,4 @@
-# PRD: Storage-Style Metering with `NET_SUM`
+# PRD: Storage-Style Metering with `SIGNED_SUM`
 
 | | |
 |---|---|
@@ -7,11 +7,11 @@
 | Author | Ojas |
 | Updated | 2026-10-15 |
 | Replaces | The earlier storage-billing-with-`LATEST` and signed-delta drafts (not merged) |
-| Build plan | [Implementation plan](./2026-10-15-FLE-1510-net-sum-implementation.md) |
+| Build plan | [Implementation plan](./2026-10-15-FLE-1510-signed-sum-implementation.md) |
 
 ## 1. Summary
 
-Some customers can only tell us what changed: "+10 GB uploaded", "−4 GB deleted". A new meter type, **`NET_SUM`**, keeps those changes with their sign. With `reset_usage = NEVER` it maintains a running total for each customer: we bill the total held at period end and let the customer's application check that total against a limit before it allows more usage. With `BILLING_PERIOD` it is a sum that nets out negatives within each period.
+Some customers can only tell us what changed: "+10 GB uploaded", "−4 GB deleted". A new meter type, **`SIGNED_SUM`**, keeps those changes with their sign. With `reset_usage = NEVER` it maintains a running total for each customer: we bill the total held at period end and let the customer's application check that total against a limit before it allows more usage. With `BILLING_PERIOD` it is a sum that nets out negatives within each period.
 
 Optimality needs this now. They will meter storage in Flexprice and use the entitlement as a hard limit on how many GB a customer may hold.
 
@@ -24,7 +24,7 @@ Optimality needs this now. They will meter storage in Flexprice and use the enti
 
 ## 3. The meter
 
-`NET_SUM` is like `SUM`, but negative values are kept. `SUM` is unchanged: it keeps setting negatives to 0, so no existing bill moves.
+`SIGNED_SUM` is like `SUM`, but negative values are kept. `SUM` is unchanged: it keeps setting negatives to 0, so no existing bill moves.
 
 The meter's `reset_usage` picks one of two modes:
 
@@ -94,7 +94,7 @@ The entitlement sets how much the customer may hold.
 | `is_soft_limit` | `false`: hard limit, the customer's app should block. `true`: report only. |
 | `aggregation_mode` | `additive`: plan and overrides add up |
 
-- No grant rows are opened for `NET_SUM` features. The ceiling is read from the entitlement config whenever it is needed.
+- No grant rows are opened for `SIGNED_SUM` features. The ceiling is read from the entitlement config whenever it is needed.
 - `/customer/usage` returns the current exact total (`NEVER`) or this period's net (`BILLING_PERIOD`), the ceiling, and what remains. Remaining **goes back up** after deletes or refunds.
 - A subscription that starts mid-period gets the full ceiling straight away.
 - Flexprice reports. The customer's application does the blocking.
@@ -110,7 +110,7 @@ The entitlement sets how much the customer may hold.
 
 ## 8. How others do it
 
-| | Metronome | Orb | Lago | Flexprice `NET_SUM` |
+| | Metronome | Orb | Lago | Flexprice `SIGNED_SUM` |
 |---|---|---|---|---|
 | Negatives in a sum | Yes; a total of −30 billed as −$30 | Accepted by ingestion | Yes | Yes, billed total floored at 0 |
 | Total carried across periods | No; storage is sent as totals (`LATEST`) | No | Yes (`recurring`) | Yes |
@@ -121,4 +121,3 @@ We tested Metronome in its sandbox: +100, −50, −80 gave a usage of −30 and
 ## 9. Open points
 
 1. **Optimality's history.** Their negative changes were not found in raw `events` in the region checked. Find where they are stored before the rebuild.
-2. **Name.** `NET_SUM` (recommended). Lago models this as `sum` with a `recurring` flag, but our `SUM` must stay unchanged, so a separate type is safer.

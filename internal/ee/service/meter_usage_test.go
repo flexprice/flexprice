@@ -5167,11 +5167,11 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NilMeter() {
 	s.True(totalCost.Equal(decimal.NewFromFloat(0.10)), "expected 10 * $0.01, got %s", totalCost)
 }
 
-// A NET_SUM meter's net can be negative; the charge bills it as 0.
-func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NetSumNegativeBillsZero() {
+// A SIGNED_SUM meter's net can be negative; the charge bills it as 0.
+func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_SignedSumNegativeBillsZero() {
 	ctx := s.GetContext()
 
-	netSum := &meter.Meter{ID: "meter_net_sum", Aggregation: meter.Aggregation{Type: types.AggregationNetSum, Field: "gb"}}
+	signedSum := &meter.Meter{ID: "meter_signed_sum", Aggregation: meter.Aggregation{Type: types.AggregationSignedSum, Field: "gb"}}
 	tests := []struct {
 		name         string
 		usage        decimal.Decimal
@@ -5188,9 +5188,9 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NetSumNegativeBills
 				Subscription: s.sub,
 				LineItemUsages: []*LineItemMeterUsage{
 					{
-						LineItem: &subscription.SubscriptionLineItem{ID: "li_net_sum"},
-						MeterID:  netSum.ID,
-						Meter:    netSum,
+						LineItem: &subscription.SubscriptionLineItem{ID: "li_signed_sum"},
+						MeterID:  signedSum.ID,
+						Meter:    signedSum,
 						Price:    s.priceAPI,
 						Usage:    tt.usage,
 					},

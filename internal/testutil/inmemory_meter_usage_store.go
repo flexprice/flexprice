@@ -984,7 +984,7 @@ func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.Aggr
 		aggSet[t] = true
 	}
 	switch {
-	case aggSet[types.AggregationSum], aggSet[types.AggregationNetSum]:
+	case aggSet[types.AggregationSum], aggSet[types.AggregationSignedSum]:
 		return aggregateScalar(records, types.AggregationSum)
 	case aggSet[types.AggregationCount]:
 		return decimal.NewFromInt(int64(eventCount)) // #nosec G115 -- test store, bounded
