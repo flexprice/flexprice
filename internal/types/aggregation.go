@@ -13,6 +13,9 @@ const (
 	AggregationSumWithMultiplier AggregationType = "SUM_WITH_MULTIPLIER" // Sum with a multiplier - [sum(value) * multiplier]
 	AggregationMax               AggregationType = "MAX"
 	AggregationWeightedSum       AggregationType = "WEIGHTED_SUM"
+	// AggregationNetSum sums a property like SUM but keeps negative values, so
+	// deletions and refunds reduce the total.
+	AggregationNetSum AggregationType = "NET_SUM"
 )
 
 func (t AggregationType) Validate() bool {
@@ -24,7 +27,8 @@ func (t AggregationType) Validate() bool {
 		AggregationLatest,
 		AggregationSumWithMultiplier,
 		AggregationMax,
-		AggregationWeightedSum:
+		AggregationWeightedSum,
+		AggregationNetSum:
 		return true
 	default:
 		return false
@@ -56,4 +60,10 @@ func (t AggregationType) SupportsExpression() bool {
 	default:
 		return false
 	}
+}
+
+// KeepsNegatives reports whether negative per-event quantities are stored as is.
+// Every other type stores a negative quantity as 0.
+func (t AggregationType) KeepsNegatives() bool {
+	return t == AggregationNetSum
 }

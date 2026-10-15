@@ -5166,3 +5166,42 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NilMeter() {
 	s.Equal("meter_missing", charges[0].MeterID)
 	s.True(totalCost.Equal(decimal.NewFromFloat(0.10)), "expected 10 * $0.01, got %s", totalCost)
 }
+
+// A NET_SUM meter's net can be negative; the charge bills it as 0.
+func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NetSumNegativeBillsZero() {
+	ctx := s.GetContext()
+
+	netSum := &meter.Meter{ID: "meter_net_sum", Aggregation: meter.Aggregation{Type: types.AggregationNetSum, Field: "gb"}}
+	tests := []struct {
+		name         string
+		usage        decimal.Decimal
+		wantQuantity decimal.Decimal
+		wantCost     decimal.Decimal
+	}{
+		{"negative_net_bills_zero", decimal.NewFromInt(-30), decimal.Zero, decimal.Zero},
+		{"positive_net_bills_as_is", decimal.NewFromInt(40), decimal.NewFromInt(40), decimal.NewFromFloat(0.40)},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			usage := &SubscriptionMeterUsage{
+				Subscription: s.sub,
+				LineItemUsages: []*LineItemMeterUsage{
+					{
+						LineItem: &subscription.SubscriptionLineItem{ID: "li_net_sum"},
+						MeterID:  netSum.ID,
+						Meter:    netSum,
+						Price:    s.priceAPI,
+						Usage:    tt.usage,
+					},
+				},
+			}
+
+			charges, totalCost, err := s.svc.ConvertToBillingCharges(ctx, usage)
+			s.Require().NoError(err)
+			s.Require().Len(charges, 1)
+			s.True(charges[0].QuantityDecimal().Equal(tt.wantQuantity), "quantity: want %s, got %s", tt.wantQuantity, charges[0].QuantityDecimal())
+			s.True(totalCost.Equal(tt.wantCost), "cost: want %s, got %s", tt.wantCost, totalCost)
+		})
+	}
+}

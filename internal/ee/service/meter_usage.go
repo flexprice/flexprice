@@ -2222,6 +2222,10 @@ func (s *meterUsageService) ConvertToBillingCharges(
 		} else {
 			// Standard meter: use CalculateCost
 			quantity = lu.Usage
+			// A bill cannot hand money back, so a negative net is billed as 0; stored usage stays signed.
+			if lu.Meter != nil && lu.Meter.Aggregation.Type.KeepsNegatives() {
+				quantity = decimal.Max(quantity, decimal.Zero)
+			}
 			cost = priceService.CalculateCost(ctx, lu.Price, quantity)
 		}
 		totalCost = totalCost.Add(cost)

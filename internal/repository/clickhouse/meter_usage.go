@@ -936,7 +936,7 @@ func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []strin
 
 	var primaryExpr string
 	switch {
-	case aggSet[types.AggregationSum]:
+	case aggSet[types.AggregationSum], aggSet[types.AggregationNetSum]:
 		primaryExpr = "SUM(qty_total)"
 	case aggSet[types.AggregationCount]:
 		primaryExpr = "COUNT(DISTINCT id)"

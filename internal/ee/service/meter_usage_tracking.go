@@ -325,9 +325,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				)
 				continue
 			}
-			if qty.IsNegative() {
-				qty = decimal.Zero
-			}
+			qty = storedQuantity(qty, m.Aggregation.Type)
 			records = append(records, &events.MeterUsage{
 				Event:      *evt,
 				MeterID:    m.ID,
@@ -490,12 +488,12 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			continue
 		}
 
-		if qty.IsNegative() {
+		if stored := storedQuantity(qty, m.Aggregation.Type); !stored.Equal(qty) {
 			s.Logger.Info(ctx, "negative quantity, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
 			)
-			qty = decimal.Zero
+			qty = stored
 		}
 
 		uniqueHash := s.generateUniqueHash(event, m)
@@ -668,7 +666,7 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 	case types.AggregationCount:
 		return decimal.NewFromInt(1), nil
 
-	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
+	case types.AggregationSum, types.AggregationNetSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if m.Aggregation.Field == "" {
 			return decimal.Zero, nil
 		}
@@ -714,6 +712,15 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 		)
 		return decimal.Zero, nil
 	}
+}
+
+// storedQuantity is what an event adds to a meter: a negative quantity becomes 0
+// unless the meter's aggregation keeps negatives.
+func storedQuantity(qty decimal.Decimal, aggType types.AggregationType) decimal.Decimal {
+	if qty.IsNegative() && !aggType.KeepsNegatives() {
+		return decimal.Zero
+	}
+	return qty
 }
 
 // convertToDecimal converts a property value to decimal
