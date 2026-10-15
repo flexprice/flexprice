@@ -102,8 +102,26 @@ Check the `reason_poisoned` histogram in the dry-run:
 - **Schema / code** (`pq: column … does not exist`) → only replay after the fix
   is deployed, or every message will immediately re-poison.
 
-## Deployment
+## Running it
 
-Runs as a Kubernetes Job in-cluster under the consumer's Kafka auth (Workload
-Identity / OAUTHBEARER on GMK) — no bastion, no short-lived tokens. Job manifest
-lives in the infrastructure repo.
+**From a laptop** (brokers reachable, e.g. India MSK): the CLI above, with the
+`FLEXPRICE_KAFKA_*` env of the target cluster.
+
+**In-cluster** (e.g. GCP GMK, not reachable from a laptop): start the
+`ReplayDLQWorkflow` from the Temporal UI or CLI. It runs on the `events` task
+queue inside the worker, under the worker's own Kafka auth.
+
+- Workflow ID: `dlq-replay-<source_topic>`. Temporal rejects a second start with
+  the same ID while one is running, so two replays never read the same
+  uncommitted offsets.
+- Input: `{"source_topic": "production_event_processing_dlq", "dry_run": true}`.
+  Other keys: `since_ms`, `from_start`, `max`, `max_replays`, `target_override`.
+
+```bash
+temporal workflow start --task-queue events --type ReplayDLQWorkflow \
+  --workflow-id dlq-replay-production_event_processing_dlq \
+  --input '{"source_topic":"production_event_processing_dlq","dry_run":true}'
+```
+
+There is deliberately no HTTP endpoint: replay is cross-tenant, and Temporal
+already gives operator access control and a run history.
