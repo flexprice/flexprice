@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -59,6 +60,14 @@ type MeterUsageService interface {
 	// GetUsageTotal returns a meter's aggregated usage total (FINAL consistency;
 	// supports a single range or multiple disjoint TimeRanges in one query).
 	GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error)
+
+	// SignedSumTotal returns a SIGNED_SUM meter's exact running total for a customer at
+	// `at`: the latest checkpoint at or before `at` plus the changes since it.
+	SignedSumTotal(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, at time.Time) (decimal.Decimal, error)
+
+	// SaveSignedSumCheckpoint records the SIGNED_SUM total as of asOf. Saving the same
+	// asOf again recomputes and replaces it.
+	SaveSignedSumCheckpoint(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, asOf time.Time, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
 
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.
