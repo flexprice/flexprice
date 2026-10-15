@@ -5,7 +5,8 @@
   "scripts": {
     "test": "npx ts-node test_sdk.ts",
     "test:published": "npm install --no-save @flexprice/sdk@2.1.1 && npx ts-node test_sdk.ts",
-    "test:local": "npm install --no-save file:../../typescript && npx ts-node test_sdk.ts"
+    "test:local": "npm install --no-save file:../../typescript && npx ts-node test_sdk.ts",
+    "test:auth:local": "npm install --no-save file:../../typescript && npx ts-node test_auth_headers.ts"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
