@@ -5,9 +5,12 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -96,4 +99,88 @@ func (s *meterUsageService) checkpointedUsage(ctx context.Context, req Checkpoin
 		return decimal.Zero, err
 	}
 	return total.Add(changes), nil
+}
+
+// keepsRunningAggregate reports whether a meter's usage is read as a running aggregate
+// across billing periods, backed by checkpoints. Only SIGNED_SUM meters that never
+// reset today; another type that SupportsCheckpoint can be added once billing reads it.
+func keepsRunningAggregate(m *meter.Meter) bool {
+	return m != nil &&
+		m.ResetUsage == types.ResetUsageNever &&
+		m.Aggregation.Type == types.AggregationSignedSum
+}
+
+func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	until time.Time,
+	invoiceID *string,
+) error {
+	if sub == nil || s.MeterRepo == nil {
+		return nil
+	}
+
+	meterIDs := make([]string, 0, len(sub.LineItems))
+	for _, item := range sub.LineItems {
+		if item != nil && item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
+			meterIDs = append(meterIDs, item.MeterID)
+		}
+	}
+	if len(meterIDs) == 0 {
+		return nil
+	}
+
+	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Uniq(meterIDs))
+	if err != nil {
+		return err
+	}
+	meters = lo.Filter(meters, func(m *meter.Meter, _ int) bool { return keepsRunningAggregate(m) })
+	if len(meters) == 0 {
+		return nil
+	}
+
+	externalCustomerIDs, err := s.resolveExternalCustomerIDs(ctx, sub, true)
+	if err != nil {
+		return err
+	}
+	for _, m := range meters {
+		req := CheckpointedUsageRequest{
+			CustomerID:          sub.CustomerID,
+			ExternalCustomerIDs: externalCustomerIDs,
+			MeterID:             m.ID,
+			AggregationType:     m.Aggregation.Type,
+			Until:               until,
+		}
+		if _, err := s.SaveUsageCheckpoint(ctx, req, invoiceID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyRunningAggregates replaces the window's usage with the running aggregate at the
+// window end for meters that keep one. Analytics entries keep their per-window values.
+func (s *meterUsageService) applyRunningAggregates(
+	ctx context.Context,
+	customerID string,
+	externalCustomerIDs []string,
+	usages []*LineItemMeterUsage,
+) error {
+	for _, lu := range usages {
+		if lu == nil || lu.AnalyticsResult != nil || !keepsRunningAggregate(lu.Meter) {
+			continue
+		}
+		usage, err := s.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+			CustomerID:          customerID,
+			ExternalCustomerIDs: externalCustomerIDs,
+			MeterID:             lu.MeterID,
+			AggregationType:     lu.Meter.Aggregation.Type,
+			Until:               lu.PeriodEnd,
+		})
+		if err != nil {
+			return err
+		}
+		lu.Usage = usage
+	}
+	return nil
 }

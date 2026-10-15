@@ -69,6 +69,10 @@ type MeterUsageService interface {
 	// instant again recomputes and replaces it.
 	SaveUsageCheckpoint(ctx context.Context, req CheckpointedUsageRequest, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
 
+	// SaveUsageCheckpointsForSubscription records, up to until, the running aggregate of every
+	// meter on the subscription's usage line items that keeps one (keepsRunningAggregate).
+	SaveUsageCheckpointsForSubscription(ctx context.Context, sub *subscription.Subscription, until time.Time, invoiceID *string) error
+
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.
 	GetMeterWindowCost(ctx context.Context, sub *subscription.Subscription, meterID string, from, to time.Time) (decimal.Decimal, error)
@@ -549,14 +553,21 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	// 10. Query standard meters WITH per-line-item date ranges.
 	//     Group by (effectiveStart, effectiveEnd, aggType) so line items that
 	//     share the same period are batched into one ClickHouse call.
+	//     A SIGNED_SUM line item replaced earlier in the window is skipped here, so step 12
+	//     gives it zero usage; its successor reads the whole window instead.
+	handoff := newPeriodEndHandoff(lineItems, func(item *subscription.SubscriptionLineItem) bool {
+		m := result.MeterMap[item.MeterID]
+		return m != nil && m.Aggregation.Type == types.AggregationSignedSum
+	}, usageStartTime, usageEndTime)
+
 	standardGroups := make(map[dateRangeGroup][]*lineItemWithMeter)
 	for meterID, items := range meterToLineItems {
 		m := result.MeterMap[meterID]
 		for _, item := range items {
-			if isBucketedItem(item, m) {
+			if isBucketedItem(item, m) || handoff.IsSuperseded(item.ID) {
 				continue
 			}
-			start := item.GetPeriodStart(usageStartTime)
+			start := handoff.UsageStart(item, usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
 			key := dateRangeGroup{
 				Start:   start,
@@ -662,6 +673,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				result.LineItemUsages = append(result.LineItemUsages, usage)
 			}
 		}
+	}
+
+	// 10b. A meter that keeps a running aggregate bills that, not the window's usage.
+	//      Scalar billing entries only: analytics points stay per window.
+	if err := s.applyRunningAggregates(ctx, sub.CustomerID, externalCustomerIDs, result.LineItemUsages); err != nil {
+		return nil, err
 	}
 
 	// 11. Query bucketed meters per line item (already uses GetPeriodStart/End)

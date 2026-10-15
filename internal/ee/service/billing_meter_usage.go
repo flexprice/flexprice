@@ -267,7 +267,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			entitlement := entitlementsByMeterID[item.MeterID]
 
 			grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
-			if !matchingCharge.IsOverage {
+			isSignedSum := m.Aggregation.Type == types.AggregationSignedSum
+			if !matchingCharge.IsOverage && !isSignedSum {
 				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
 					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs)
 					if err != nil {
@@ -277,6 +278,17 @@ func (s *billingService) CalculateMeterUsageCharges(
 			}
 
 			switch {
+			case !matchingCharge.IsOverage && isSignedSum:
+				quantityForCalculation = signedSumBillable(quantityForCalculation, entitlement)
+				if entitlement != nil {
+					adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+				}
+				matchingCharge.SetQuantityDecimal(quantityForCalculation)
+				if matchingCharge.Price != nil {
+					cost := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+					matchingCharge.SetAmountWithCurrencyPrecision(cost, matchingCharge.Price.Currency)
+				}
 			case grantsApplied:
 				// Grants replaced the legacy entitlement — adjustMeterUsageGrants
 				// already updated matchingCharge (Amount/Quantity). For the
@@ -455,6 +467,22 @@ func (s *billingService) CalculateMeterUsageCharges(
 	}
 
 	return usageCharges, totalUsageCost, nil
+}
+
+// signedSumBillable is a SIGNED_SUM line item's billable quantity: usage less the ceiling
+// from the entitlement's grant config, never below 0. usage_limit is not used.
+func signedSumBillable(usage decimal.Decimal, ent *dto.AggregatedEntitlement) decimal.Decimal {
+	usage = decimal.Max(usage, decimal.Zero)
+	if ent == nil || !ent.IsEnabled {
+		return usage
+	}
+	if ent.GrantUnlimited {
+		return decimal.Zero
+	}
+	if ent.GrantQuota == nil {
+		return usage
+	}
+	return decimal.Max(usage.Sub(*ent.GrantQuota), decimal.Zero)
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed
