@@ -129,9 +129,9 @@ func (_c *MeterUsageCheckpointCreate) SetTotal(v decimal.Decimal) *MeterUsageChe
 	return _c
 }
 
-// SetAsOf sets the "as_of" field.
-func (_c *MeterUsageCheckpointCreate) SetAsOf(v time.Time) *MeterUsageCheckpointCreate {
-	_c.mutation.SetAsOf(v)
+// SetAggregatedUntil sets the "aggregated_until" field.
+func (_c *MeterUsageCheckpointCreate) SetAggregatedUntil(v time.Time) *MeterUsageCheckpointCreate {
+	_c.mutation.SetAggregatedUntil(v)
 	return _c
 }
 
@@ -246,8 +246,8 @@ func (_c *MeterUsageCheckpointCreate) check() error {
 	if _, ok := _c.mutation.Total(); !ok {
 		return &ValidationError{Name: "total", err: errors.New(`ent: missing required field "MeterUsageCheckpoint.total"`)}
 	}
-	if _, ok := _c.mutation.AsOf(); !ok {
-		return &ValidationError{Name: "as_of", err: errors.New(`ent: missing required field "MeterUsageCheckpoint.as_of"`)}
+	if _, ok := _c.mutation.AggregatedUntil(); !ok {
+		return &ValidationError{Name: "aggregated_until", err: errors.New(`ent: missing required field "MeterUsageCheckpoint.aggregated_until"`)}
 	}
 	return nil
 }
@@ -324,9 +324,9 @@ func (_c *MeterUsageCheckpointCreate) createSpec() (*MeterUsageCheckpoint, *sqlg
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)
 		_node.Total = value
 	}
-	if value, ok := _c.mutation.AsOf(); ok {
-		_spec.SetField(meterusagecheckpoint.FieldAsOf, field.TypeTime, value)
-		_node.AsOf = value
+	if value, ok := _c.mutation.AggregatedUntil(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregatedUntil, field.TypeTime, value)
+		_node.AggregatedUntil = value
 	}
 	if value, ok := _c.mutation.InvoiceID(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldInvoiceID, field.TypeString, value)

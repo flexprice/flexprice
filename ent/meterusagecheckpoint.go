@@ -38,8 +38,8 @@ type MeterUsageCheckpoint struct {
 	MeterID string `json:"meter_id,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
-	// AsOf holds the value of the "as_of" field.
-	AsOf time.Time `json:"as_of,omitempty"`
+	// AggregatedUntil holds the value of the "aggregated_until" field.
+	AggregatedUntil time.Time `json:"aggregated_until,omitempty"`
 	// InvoiceID holds the value of the "invoice_id" field.
 	InvoiceID    *string `json:"invoice_id,omitempty"`
 	selectValues sql.SelectValues
@@ -54,7 +54,7 @@ func (*MeterUsageCheckpoint) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case meterusagecheckpoint.FieldID, meterusagecheckpoint.FieldTenantID, meterusagecheckpoint.FieldStatus, meterusagecheckpoint.FieldCreatedBy, meterusagecheckpoint.FieldUpdatedBy, meterusagecheckpoint.FieldEnvironmentID, meterusagecheckpoint.FieldCustomerID, meterusagecheckpoint.FieldMeterID, meterusagecheckpoint.FieldInvoiceID:
 			values[i] = new(sql.NullString)
-		case meterusagecheckpoint.FieldCreatedAt, meterusagecheckpoint.FieldUpdatedAt, meterusagecheckpoint.FieldAsOf:
+		case meterusagecheckpoint.FieldCreatedAt, meterusagecheckpoint.FieldUpdatedAt, meterusagecheckpoint.FieldAggregatedUntil:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -137,11 +137,11 @@ func (_m *MeterUsageCheckpoint) assignValues(columns []string, values []any) err
 			} else if value != nil {
 				_m.Total = *value
 			}
-		case meterusagecheckpoint.FieldAsOf:
+		case meterusagecheckpoint.FieldAggregatedUntil:
 			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field as_of", values[i])
+				return fmt.Errorf("unexpected type %T for field aggregated_until", values[i])
 			} else if value.Valid {
-				_m.AsOf = value.Time
+				_m.AggregatedUntil = value.Time
 			}
 		case meterusagecheckpoint.FieldInvoiceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -216,8 +216,8 @@ func (_m *MeterUsageCheckpoint) String() string {
 	builder.WriteString("total=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Total))
 	builder.WriteString(", ")
-	builder.WriteString("as_of=")
-	builder.WriteString(_m.AsOf.Format(time.ANSIC))
+	builder.WriteString("aggregated_until=")
+	builder.WriteString(_m.AggregatedUntil.Format(time.ANSIC))
 	builder.WriteString(", ")
 	if v := _m.InvoiceID; v != nil {
 		builder.WriteString("invoice_id=")

@@ -50,7 +50,7 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 				"postgres": "numeric(34,15)",
 			}),
 
-		field.Time("as_of").
+		field.Time("aggregated_until").
 			Immutable(),
 
 		// The invoice whose period end this checkpoint records, when it came from one.
@@ -66,9 +66,9 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 func (MeterUsageCheckpoint) Indexes() []ent.Index {
 	return []ent.Index{
 		// One checkpoint per instant, and the latest-at-or-before lookup is a
-		// backward scan on as_of with no sort.
-		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "as_of").
+		// backward scan on aggregated_until with no sort.
+		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "aggregated_until").
 			Unique().
-			StorageKey("meterusagecheckpoint_customer_meter_as_of"),
+			StorageKey("meterusagecheckpoint_customer_meter_aggregated_until"),
 	}
 }

@@ -39,10 +39,10 @@ func (r *meterUsageCheckpointRepository) GetLatestAtOrBefore(
 			meterusagecheckpoint.EnvironmentID(types.GetEnvironmentID(ctx)),
 			meterusagecheckpoint.CustomerID(customerID),
 			meterusagecheckpoint.MeterID(meterID),
-			meterusagecheckpoint.AsOfLTE(at),
+			meterusagecheckpoint.AggregatedUntilLTE(at),
 			meterusagecheckpoint.Status(string(types.StatusPublished)),
 		).
-		Order(ent.Desc(meterusagecheckpoint.FieldAsOf)).
+		Order(ent.Desc(meterusagecheckpoint.FieldAggregatedUntil)).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -61,9 +61,9 @@ func (r *meterUsageCheckpointRepository) Upsert(
 	c *domainCheckpoint.MeterUsageCheckpoint,
 ) (*domainCheckpoint.MeterUsageCheckpoint, error) {
 	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "upsert", map[string]interface{}{
-		"customer_id": c.CustomerID,
-		"meter_id":    c.MeterID,
-		"as_of":       c.AsOf,
+		"customer_id":      c.CustomerID,
+		"meter_id":         c.MeterID,
+		"aggregated_until": c.AggregatedUntil,
 	})
 	defer FinishSpan(span)
 
@@ -85,7 +85,7 @@ func (r *meterUsageCheckpointRepository) Upsert(
 		SetCustomerID(c.CustomerID).
 		SetMeterID(c.MeterID).
 		SetTotal(c.Total).
-		SetAsOf(c.AsOf).
+		SetAggregatedUntil(c.AggregatedUntil).
 		SetNillableInvoiceID(c.InvoiceID).
 		SetTenantID(c.TenantID).
 		SetEnvironmentID(c.EnvironmentID).
@@ -128,7 +128,7 @@ func (r *meterUsageCheckpointRepository) updateExisting(
 			meterusagecheckpoint.EnvironmentID(c.EnvironmentID),
 			meterusagecheckpoint.CustomerID(c.CustomerID),
 			meterusagecheckpoint.MeterID(c.MeterID),
-			meterusagecheckpoint.AsOf(c.AsOf),
+			meterusagecheckpoint.AggregatedUntil(c.AggregatedUntil),
 		).
 		Only(ctx)
 	if err != nil {

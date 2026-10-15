@@ -31,10 +31,10 @@ func (s *InMemoryMeterUsageCheckpointStore) GetLatestAtOrBefore(
 
 	var latest *meterusagecheckpoint.MeterUsageCheckpoint
 	for _, c := range rows {
-		if c.AsOf.After(at) {
+		if c.AggregatedUntil.After(at) {
 			continue
 		}
-		if latest == nil || c.AsOf.After(latest.AsOf) {
+		if latest == nil || c.AggregatedUntil.After(latest.AggregatedUntil) {
 			latest = c
 		}
 	}
@@ -54,7 +54,7 @@ func (s *InMemoryMeterUsageCheckpointStore) Upsert(
 		return nil, err
 	}
 	for _, existing := range rows {
-		if !existing.AsOf.Equal(c.AsOf) {
+		if !existing.AggregatedUntil.Equal(c.AggregatedUntil) {
 			continue
 		}
 		updated := *existing

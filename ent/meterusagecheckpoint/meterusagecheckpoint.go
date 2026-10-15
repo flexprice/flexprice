@@ -33,8 +33,8 @@ const (
 	FieldMeterID = "meter_id"
 	// FieldTotal holds the string denoting the total field in the database.
 	FieldTotal = "total"
-	// FieldAsOf holds the string denoting the as_of field in the database.
-	FieldAsOf = "as_of"
+	// FieldAggregatedUntil holds the string denoting the aggregated_until field in the database.
+	FieldAggregatedUntil = "aggregated_until"
 	// FieldInvoiceID holds the string denoting the invoice_id field in the database.
 	FieldInvoiceID = "invoice_id"
 	// Table holds the table name of the meterusagecheckpoint in the database.
@@ -54,7 +54,7 @@ var Columns = []string{
 	FieldCustomerID,
 	FieldMeterID,
 	FieldTotal,
-	FieldAsOf,
+	FieldAggregatedUntil,
 	FieldInvoiceID,
 }
 
@@ -145,9 +145,9 @@ func ByTotal(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotal, opts...).ToFunc()
 }
 
-// ByAsOf orders the results by the as_of field.
-func ByAsOf(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAsOf, opts...).ToFunc()
+// ByAggregatedUntil orders the results by the aggregated_until field.
+func ByAggregatedUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAggregatedUntil, opts...).ToFunc()
 }
 
 // ByInvoiceID orders the results by the invoice_id field.

@@ -16,14 +16,14 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 	oct1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	nov1 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	checkpoint := func(id string, asOf time.Time, total int64) *meterusagecheckpoint.MeterUsageCheckpoint {
+	checkpoint := func(id string, aggregatedUntil time.Time, total int64) *meterusagecheckpoint.MeterUsageCheckpoint {
 		return &meterusagecheckpoint.MeterUsageCheckpoint{
-			ID:         id,
-			CustomerID: "cust_1",
-			MeterID:    "meter_1",
-			Total:      decimal.NewFromInt(total),
-			AsOf:       asOf,
-			BaseModel:  types.BaseModel{TenantID: "tenant_1"},
+			ID:              id,
+			CustomerID:      "cust_1",
+			MeterID:         "meter_1",
+			Total:           decimal.NewFromInt(total),
+			AggregatedUntil: aggregatedUntil,
+			BaseModel:       types.BaseModel{TenantID: "tenant_1"},
 		}
 	}
 
@@ -52,7 +52,7 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 		assert.True(t, decimal.NewFromInt(-5).Equal(got.Total), "negative totals are kept")
 	})
 
-	t.Run("upsert on the same as_of replaces the total", func(t *testing.T) {
+	t.Run("upsert on the same aggregated_until replaces the total", func(t *testing.T) {
 		store := NewInMemoryMeterUsageCheckpointStore()
 		_, err := store.Upsert(ctx, checkpoint("ck_first", nov1, 40))
 		require.NoError(t, err)

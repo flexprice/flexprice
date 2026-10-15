@@ -43495,25 +43495,25 @@ func (m *MeterMutation) ResetEdge(name string) error {
 // MeterUsageCheckpointMutation represents an operation that mutates the MeterUsageCheckpoint nodes in the graph.
 type MeterUsageCheckpointMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	customer_id    *string
-	meter_id       *string
-	total          *decimal.Decimal
-	as_of          *time.Time
-	invoice_id     *string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*MeterUsageCheckpoint, error)
-	predicates     []predicate.MeterUsageCheckpoint
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	customer_id      *string
+	meter_id         *string
+	total            *decimal.Decimal
+	aggregated_until *time.Time
+	invoice_id       *string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*MeterUsageCheckpoint, error)
+	predicates       []predicate.MeterUsageCheckpoint
 }
 
 var _ ent.Mutation = (*MeterUsageCheckpointMutation)(nil)
@@ -44019,40 +44019,40 @@ func (m *MeterUsageCheckpointMutation) ResetTotal() {
 	m.total = nil
 }
 
-// SetAsOf sets the "as_of" field.
-func (m *MeterUsageCheckpointMutation) SetAsOf(t time.Time) {
-	m.as_of = &t
+// SetAggregatedUntil sets the "aggregated_until" field.
+func (m *MeterUsageCheckpointMutation) SetAggregatedUntil(t time.Time) {
+	m.aggregated_until = &t
 }
 
-// AsOf returns the value of the "as_of" field in the mutation.
-func (m *MeterUsageCheckpointMutation) AsOf() (r time.Time, exists bool) {
-	v := m.as_of
+// AggregatedUntil returns the value of the "aggregated_until" field in the mutation.
+func (m *MeterUsageCheckpointMutation) AggregatedUntil() (r time.Time, exists bool) {
+	v := m.aggregated_until
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAsOf returns the old "as_of" field's value of the MeterUsageCheckpoint entity.
+// OldAggregatedUntil returns the old "aggregated_until" field's value of the MeterUsageCheckpoint entity.
 // If the MeterUsageCheckpoint object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MeterUsageCheckpointMutation) OldAsOf(ctx context.Context) (v time.Time, err error) {
+func (m *MeterUsageCheckpointMutation) OldAggregatedUntil(ctx context.Context) (v time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAsOf is only allowed on UpdateOne operations")
+		return v, errors.New("OldAggregatedUntil is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAsOf requires an ID field in the mutation")
+		return v, errors.New("OldAggregatedUntil requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAsOf: %w", err)
+		return v, fmt.Errorf("querying old value for OldAggregatedUntil: %w", err)
 	}
-	return oldValue.AsOf, nil
+	return oldValue.AggregatedUntil, nil
 }
 
-// ResetAsOf resets all changes to the "as_of" field.
-func (m *MeterUsageCheckpointMutation) ResetAsOf() {
-	m.as_of = nil
+// ResetAggregatedUntil resets all changes to the "aggregated_until" field.
+func (m *MeterUsageCheckpointMutation) ResetAggregatedUntil() {
+	m.aggregated_until = nil
 }
 
 // SetInvoiceID sets the "invoice_id" field.
@@ -44169,8 +44169,8 @@ func (m *MeterUsageCheckpointMutation) Fields() []string {
 	if m.total != nil {
 		fields = append(fields, meterusagecheckpoint.FieldTotal)
 	}
-	if m.as_of != nil {
-		fields = append(fields, meterusagecheckpoint.FieldAsOf)
+	if m.aggregated_until != nil {
+		fields = append(fields, meterusagecheckpoint.FieldAggregatedUntil)
 	}
 	if m.invoice_id != nil {
 		fields = append(fields, meterusagecheckpoint.FieldInvoiceID)
@@ -44203,8 +44203,8 @@ func (m *MeterUsageCheckpointMutation) Field(name string) (ent.Value, bool) {
 		return m.MeterID()
 	case meterusagecheckpoint.FieldTotal:
 		return m.Total()
-	case meterusagecheckpoint.FieldAsOf:
-		return m.AsOf()
+	case meterusagecheckpoint.FieldAggregatedUntil:
+		return m.AggregatedUntil()
 	case meterusagecheckpoint.FieldInvoiceID:
 		return m.InvoiceID()
 	}
@@ -44236,8 +44236,8 @@ func (m *MeterUsageCheckpointMutation) OldField(ctx context.Context, name string
 		return m.OldMeterID(ctx)
 	case meterusagecheckpoint.FieldTotal:
 		return m.OldTotal(ctx)
-	case meterusagecheckpoint.FieldAsOf:
-		return m.OldAsOf(ctx)
+	case meterusagecheckpoint.FieldAggregatedUntil:
+		return m.OldAggregatedUntil(ctx)
 	case meterusagecheckpoint.FieldInvoiceID:
 		return m.OldInvoiceID(ctx)
 	}
@@ -44319,12 +44319,12 @@ func (m *MeterUsageCheckpointMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetTotal(v)
 		return nil
-	case meterusagecheckpoint.FieldAsOf:
+	case meterusagecheckpoint.FieldAggregatedUntil:
 		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAsOf(v)
+		m.SetAggregatedUntil(v)
 		return nil
 	case meterusagecheckpoint.FieldInvoiceID:
 		v, ok := value.(string)
@@ -44439,8 +44439,8 @@ func (m *MeterUsageCheckpointMutation) ResetField(name string) error {
 	case meterusagecheckpoint.FieldTotal:
 		m.ResetTotal()
 		return nil
-	case meterusagecheckpoint.FieldAsOf:
-		m.ResetAsOf()
+	case meterusagecheckpoint.FieldAggregatedUntil:
+		m.ResetAggregatedUntil()
 		return nil
 	case meterusagecheckpoint.FieldInvoiceID:
 		m.ResetInvoiceID()

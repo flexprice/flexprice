@@ -115,9 +115,9 @@ func Total(v decimal.Decimal) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldTotal, v))
 }
 
-// AsOf applies equality check predicate on the "as_of" field. It's identical to AsOfEQ.
-func AsOf(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAsOf, v))
+// AggregatedUntil applies equality check predicate on the "aggregated_until" field. It's identical to AggregatedUntilEQ.
+func AggregatedUntil(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAggregatedUntil, v))
 }
 
 // InvoiceID applies equality check predicate on the "invoice_id" field. It's identical to InvoiceIDEQ.
@@ -730,44 +730,44 @@ func TotalLTE(v decimal.Decimal) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldTotal, v))
 }
 
-// AsOfEQ applies the EQ predicate on the "as_of" field.
-func AsOfEQ(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAsOf, v))
+// AggregatedUntilEQ applies the EQ predicate on the "aggregated_until" field.
+func AggregatedUntilEQ(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAggregatedUntil, v))
 }
 
-// AsOfNEQ applies the NEQ predicate on the "as_of" field.
-func AsOfNEQ(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldNEQ(FieldAsOf, v))
+// AggregatedUntilNEQ applies the NEQ predicate on the "aggregated_until" field.
+func AggregatedUntilNEQ(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldNEQ(FieldAggregatedUntil, v))
 }
 
-// AsOfIn applies the In predicate on the "as_of" field.
-func AsOfIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldIn(FieldAsOf, vs...))
+// AggregatedUntilIn applies the In predicate on the "aggregated_until" field.
+func AggregatedUntilIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldIn(FieldAggregatedUntil, vs...))
 }
 
-// AsOfNotIn applies the NotIn predicate on the "as_of" field.
-func AsOfNotIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldNotIn(FieldAsOf, vs...))
+// AggregatedUntilNotIn applies the NotIn predicate on the "aggregated_until" field.
+func AggregatedUntilNotIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldNotIn(FieldAggregatedUntil, vs...))
 }
 
-// AsOfGT applies the GT predicate on the "as_of" field.
-func AsOfGT(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldGT(FieldAsOf, v))
+// AggregatedUntilGT applies the GT predicate on the "aggregated_until" field.
+func AggregatedUntilGT(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldGT(FieldAggregatedUntil, v))
 }
 
-// AsOfGTE applies the GTE predicate on the "as_of" field.
-func AsOfGTE(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldGTE(FieldAsOf, v))
+// AggregatedUntilGTE applies the GTE predicate on the "aggregated_until" field.
+func AggregatedUntilGTE(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldGTE(FieldAggregatedUntil, v))
 }
 
-// AsOfLT applies the LT predicate on the "as_of" field.
-func AsOfLT(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldLT(FieldAsOf, v))
+// AggregatedUntilLT applies the LT predicate on the "aggregated_until" field.
+func AggregatedUntilLT(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldLT(FieldAggregatedUntil, v))
 }
 
-// AsOfLTE applies the LTE predicate on the "as_of" field.
-func AsOfLTE(v time.Time) predicate.MeterUsageCheckpoint {
-	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldAsOf, v))
+// AggregatedUntilLTE applies the LTE predicate on the "aggregated_until" field.
+func AggregatedUntilLTE(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldAggregatedUntil, v))
 }
 
 // InvoiceIDEQ applies the EQ predicate on the "invoice_id" field.
