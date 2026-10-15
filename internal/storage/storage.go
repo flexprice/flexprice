@@ -29,6 +29,9 @@ const (
 // (already includes any prefix) — backends do not compute prefixes.
 type UploadRequest = storagetypes.UploadRequest
 
+// StreamUploadRequest is an UploadRequest whose body is read from Body instead of held in memory.
+type StreamUploadRequest = storagetypes.StreamUploadRequest
+
 type UploadResponse = storagetypes.UploadResponse
 
 // Storage is the cloud-agnostic interface every caller in the codebase uses

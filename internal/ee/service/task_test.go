@@ -495,6 +495,9 @@ func (f *fakeImportStorage) put(key string, data []byte) { f.objects[key] = data
 func (f *fakeImportStorage) Upload(context.Context, *storagetypes.UploadRequest) (*storagetypes.UploadResponse, error) {
 	return nil, nil
 }
+func (f *fakeImportStorage) UploadStream(context.Context, *storagetypes.StreamUploadRequest) (*storagetypes.UploadResponse, error) {
+	return nil, nil
+}
 func (f *fakeImportStorage) Download(_ context.Context, key string) ([]byte, error) {
 	b, ok := f.objects[key]
 	if !ok {
