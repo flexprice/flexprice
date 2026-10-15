@@ -53,7 +53,7 @@ Stored values stay exact from here on: ingestion, checkpoints and reads never fl
 | Change | Where |
 |---|---|
 | New Ent schema `meter_usage_checkpoint`: `tenant_id`, `environment_id`, `customer_id`, `meter_id`, `aggregation_type`, `total` (numeric), `aggregated_until`, `invoice_id`. Unique on (tenant, environment, customer, meter, `aggregated_until`). | `ent/schema/meter_usage_checkpoint.go`, then `make generate-ent` and `make generate-migration` |
-| Domain model and repository interface: `GetLatestAtOrBefore(Key{customer, meter, aggregation type}, t)`, which reads back only checkpoints of the same type, and an idempotent `Upsert` keyed on `aggregated_until` | `internal/domain/meterusagecheckpoint/` |
+| Domain model and repository interface: `GetLatestBefore(GetLatestBeforeParams{customer, meter, aggregation type, before})`, the newest checkpoint strictly before `before` and of the same type, and an idempotent `Upsert` keyed on `aggregated_until` | `internal/domain/meterusagecheckpoint/` |
 | Ent repository and an in-memory test store | `internal/repository/ent/`, `internal/testutil/` |
 
 Every query filters on tenant and environment.
@@ -64,12 +64,12 @@ Every query filters on tenant and environment.
 
 | Change | Where |
 |---|---|
-| `GetCheckpointedUsage(CheckpointedUsageRequest{customer, meter, aggregation type, until})` = latest checkpoint of that type combined with the usage over [`aggregated_until`, `until`). `SaveUsageCheckpoint` records it. | `internal/ee/service/meter_usage_checkpoint.go` |
-| Combine rules: added for `SUM`, `SIGNED_SUM`, `SUM_WITH_MULTIPLIER`, `COUNT`; the larger for `MAX`; the later reading for `LATEST`. `COUNT_UNIQUE`, `AVG` and `WEIGHTED_SUM` are rejected (`AggregationType.SupportsCheckpoint`). | Same |
+| `GetCheckpointedUsage(CheckpointedUsageRequest{customer, meter, aggregation type, until})` = latest checkpoint of that type strictly before `until`, plus the usage over [`aggregated_until`, `until`). `SaveUsageCheckpoint` records it. | `internal/ee/service/meter_usage_checkpoint.go` |
+| Only `SIGNED_SUM` can be checkpointed for now (`AggregationType.SupportsCheckpoint`); other types are rejected. Reads and saves use the same strict lookup, so a save rebuilds its checkpoint from the one before. | Same |
 | No checkpoint yet: sum from the start of history (the one-time bootstrap) | Same |
 | Resolve customer external ids the same way the existing meter-usage reads do | Same |
 
-Tests: for every supported type, a checkpoint plus later usage equals the whole-history aggregate; no checkpoint; a late event behind a checkpoint is ignored; a checkpoint of another type is not read; the total can go below zero.
+Tests: no checkpoint; a checkpoint plus later changes; a late event behind a checkpoint is ignored; unsupported types are rejected; recomputing replaces the checkpoint; the total can go below zero.
 
 ## PR 4: Billing
 
