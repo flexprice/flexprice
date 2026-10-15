@@ -3129,6 +3129,11 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	}
 	subscriptionIDs = lo.Uniq(subscriptionIDs)
 
+	signedSumMeters, err := s.signedSumMetersByID(ctx, lo.Values(featureMeterMap))
+	if err != nil {
+		return nil, err
+	}
+
 	// Fetch all subscriptions at once
 	for _, subscriptionID := range subscriptionIDs {
 		sub, err := s.SubRepo.Get(ctx, subscriptionID)
@@ -3161,6 +3166,11 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			return nil, err
 		}
 
+		if err := s.setSignedSumSummaryUsage(ctx, sub, extCustomerIDsForMeter, signedSumMeters,
+			featureMeterMap, featureSubscriptionMap, usageByFeature); err != nil {
+			return nil, err
+		}
+
 		usageReq := &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: subscriptionID,
 			Source:         string(types.UsageSourceAnalytics),
@@ -3174,6 +3184,9 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		// Process usage data for features that have charges
 		for _, charge := range usage.Charges {
+			if _, ok := signedSumMeters[charge.MeterID]; ok {
+				continue
+			}
 			if featureID, ok := meterFeatureMap[charge.MeterID]; ok {
 				resetPeriod := featureUsageResetPeriodMap[featureID]
 				if resetPeriod.String() == sub.BillingPeriod.String() {
