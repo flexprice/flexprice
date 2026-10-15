@@ -11,10 +11,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// checkpointResolution is the smallest instant Postgres stores, so "strictly before
-// aggregated_until" is "at or before aggregated_until minus one microsecond".
-const checkpointResolution = time.Microsecond
-
 // CheckpointedUsageRequest names one customer's running aggregate of a meter: every
 // change before Until, aggregated by AggregationType.
 type CheckpointedUsageRequest struct {
@@ -26,7 +22,7 @@ type CheckpointedUsageRequest struct {
 }
 
 func (s *meterUsageService) GetCheckpointedUsage(ctx context.Context, req CheckpointedUsageRequest) (decimal.Decimal, error) {
-	return s.checkpointedUsage(ctx, req, req.Until)
+	return s.checkpointedUsage(ctx, req)
 }
 
 func (s *meterUsageService) SaveUsageCheckpoint(
@@ -34,13 +30,7 @@ func (s *meterUsageService) SaveUsageCheckpoint(
 	req CheckpointedUsageRequest,
 	invoiceID *string,
 ) (*meterusagecheckpoint.MeterUsageCheckpoint, error) {
-	if s.MeterUsageCheckpointRepo == nil {
-		return nil, ierr.NewError("meter usage checkpoint repository is not configured").Mark(ierr.ErrSystem)
-	}
-
-	// Build from the checkpoint before this one, so recomputing a period replaces its
-	// checkpoint rather than reading it back.
-	total, err := s.checkpointedUsage(ctx, req, req.Until.Add(-checkpointResolution))
+	total, err := s.checkpointedUsage(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -59,13 +49,9 @@ func (s *meterUsageService) SaveUsageCheckpoint(
 }
 
 // checkpointedUsage adds the usage in [checkpoint.aggregated_until, req.Until) to the
-// latest checkpoint at or before checkpointAt. With no checkpoint, the usage is summed
-// from the start.
-func (s *meterUsageService) checkpointedUsage(
-	ctx context.Context,
-	req CheckpointedUsageRequest,
-	checkpointAt time.Time,
-) (decimal.Decimal, error) {
+// latest checkpoint strictly before req.Until, so saving the same instant again rebuilds
+// it from the one before. With no checkpoint, the usage is summed from the start.
+func (s *meterUsageService) checkpointedUsage(ctx context.Context, req CheckpointedUsageRequest) (decimal.Decimal, error) {
 	if !req.AggregationType.SupportsCheckpoint() {
 		return decimal.Zero, ierr.NewError("aggregation type does not support checkpoints").
 			WithHint("Only SIGNED_SUM meters can be checkpointed.").
@@ -79,11 +65,12 @@ func (s *meterUsageService) checkpointedUsage(
 		return decimal.Zero, ierr.NewError("meter usage checkpoint repository is not configured").Mark(ierr.ErrSystem)
 	}
 
-	checkpoint, err := s.MeterUsageCheckpointRepo.GetLatestAtOrBefore(ctx, meterusagecheckpoint.Key{
+	checkpoint, err := s.MeterUsageCheckpointRepo.GetLatestBefore(ctx, meterusagecheckpoint.GetLatestBeforeParams{
 		CustomerID:      req.CustomerID,
 		MeterID:         req.MeterID,
 		AggregationType: req.AggregationType,
-	}, checkpointAt)
+		Before:          req.Until,
+	})
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -92,7 +79,7 @@ func (s *meterUsageService) checkpointedUsage(
 	if checkpoint != nil {
 		total, from = checkpoint.Total, checkpoint.AggregatedUntil
 	}
-	if !req.Until.After(from) || len(req.ExternalCustomerIDs) == 0 {
+	if len(req.ExternalCustomerIDs) == 0 {
 		return total, nil
 	}
 
