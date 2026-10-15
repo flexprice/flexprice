@@ -6,7 +6,28 @@
 | PRD | [Storage-style metering with `SIGNED_SUM`](./2026-10-15-FLE-1510-signed-sum-metering-prd.md) |
 | Updated | 2026-10-15 |
 
-Seven stacked PRs, each targeting the one before it, and the first targeting `develop`. Each PR is safe to merge on its own: the type cannot be billed until PR 4, and the frontend does not expose it until PR 6.
+Seven stacked PRs, each targeting the one before it, and the first targeting `develop`. Each PR is safe to merge on its own: PR 1 already floors the billed quantity at 0, and the frontend does not expose the type until PR 6.
+
+## Status
+
+| PR | Branch | State |
+|---|---|---|
+| 1 Meter type | `ojasaggarwal/fle-1510-signed-sum-meter-type` | Built |
+| 2 Checkpoint storage | `ojasaggarwal/fle-1510-signed-sum-checkpoint` | Built |
+| 3 Total reader | `ojasaggarwal/fle-1510-signed-sum-total-reader` | Built |
+| 4 Billing | `ojasaggarwal/fle-1510-signed-sum-billing` | Built |
+| 5 Limits | `ojasaggarwal/fle-1510-signed-sum-limits` | Built |
+| 6 Frontend | `flexprice-front` | Not started |
+| 7 Docs | `flexprice-docs` | Not started |
+
+Differences from the plan below, as built:
+
+- The billing floor landed in PR 1 (`ConvertToBillingCharges`), not PR 4.
+- The period-end handoff is `periodEndHandoff` in PR 4, a copy of the unmerged `LATEST` handoff under a neutral name. It applies only to `SIGNED_SUM` meters.
+- With `NEVER`, analytics queries (windows, filters, group-by) still show the window's net. Only scalar billing reads take the running total.
+- Saving checkpoints at invoice time never blocks the invoice: a failure is logged, and reads start from the previous checkpoint.
+- The subscription entitlements API is unchanged: `grant_state` is empty for `SIGNED_SUM` features. The frontend should show the ceiling against `/customer/usage`.
+- Swagger and SDK enums are not regenerated yet.
 
 ## PR 1: The meter type
 
