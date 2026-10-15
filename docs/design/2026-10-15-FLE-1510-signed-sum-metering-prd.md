@@ -46,7 +46,7 @@ Optimality uses `NEVER`.
 total now = last checkpoint + changes since that checkpoint
 ```
 
-- A **checkpoint** is the total for one customer and meter, as of a point in time.
+- A **checkpoint** is the total for one customer and meter: the sum of every change before its `aggregated_until`.
 - It is written when the period's invoice is created at rollover: previous checkpoint plus that period's changes.
 - So a read never adds up more than about one billing period of changes, however old the customer is.
 - The first checkpoint for a customer is built once from their full history.

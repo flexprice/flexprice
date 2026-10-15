@@ -52,8 +52,8 @@ Stored values stay exact from here on: ingestion, checkpoints and reads never fl
 
 | Change | Where |
 |---|---|
-| New Ent schema `meter_usage_checkpoint`: `tenant_id`, `environment_id`, `customer_id`, `meter_id`, `total` (numeric), `as_of`, `invoice_id`. Unique on (tenant, environment, customer, meter, `as_of`). | `ent/schema/meter_usage_checkpoint.go`, then `make generate-ent` and `make generate-migration` |
-| Domain model and repository interface: `GetLatestAtOrBefore(customer, meter, t)` and an idempotent `Upsert` keyed on `as_of` | `internal/domain/meterusagecheckpoint/` |
+| New Ent schema `meter_usage_checkpoint`: `tenant_id`, `environment_id`, `customer_id`, `meter_id`, `total` (numeric), `aggregated_until`, `invoice_id`. Unique on (tenant, environment, customer, meter, `aggregated_until`). | `ent/schema/meter_usage_checkpoint.go`, then `make generate-ent` and `make generate-migration` |
+| Domain model and repository interface: `GetLatestAtOrBefore(customer, meter, t)` and an idempotent `Upsert` keyed on `aggregated_until` | `internal/domain/meterusagecheckpoint/` |
 | Ent repository and an in-memory test store | `internal/repository/ent/`, `internal/testutil/` |
 
 Every query filters on tenant and environment.
@@ -64,7 +64,7 @@ Every query filters on tenant and environment.
 
 | Change | Where |
 |---|---|
-| `SignedSumTotal(ctx, customer, meter, at)` = latest checkpoint at or before `at` + `SUM(qty_total)` over (`as_of`, `at`] | `internal/ee/service/meter_usage.go` |
+| `SignedSumTotal(ctx, customer, meter, at)` = latest checkpoint at or before `at` + `SUM(qty_total)` over [`aggregated_until`, `at`) | `internal/ee/service/meter_usage.go` |
 | No checkpoint yet: sum from the start of history (the one-time bootstrap) | Same |
 | Resolve customer external ids the same way the existing meter-usage reads do | Same |
 
@@ -78,7 +78,7 @@ Tests: no checkpoint; a checkpoint plus later changes; a late event behind a che
 | Both modes: only the line item active at period end bills that usage; the ones it replaced bill 0. Reuse or generalise the `LATEST` handoff. | `latest_meter_handoff.go` (stashed in `921c9309`; it must land first or move into this PR) |
 | Allowance = sum of `grant_quota` across the feature's entitlements active at period end. Skip `adjustMeterUsageEntitlement` and the grant fold for `SIGNED_SUM`. | `billing_meter_usage.go` (~:286-310) |
 | **Floor on the bill only**: billed quantity = max(0, quantity − allowance), applied as the last step before pricing. Nothing upstream is floored. | Same |
-| `NEVER`: write the checkpoint when the rollover invoice is created, idempotent on `as_of = period end` so a recompute does not add twice | The invoice creation flow (`internal/ee/service/invoice.go`, near the draft-first step ~:2384) |
+| `NEVER`: write the checkpoint when the rollover invoice is created, idempotent on `aggregated_until = period end` so a recompute does not add twice | The invoice creation flow (`internal/ee/service/invoice.go`, near the draft-first step ~:2384) |
 
 The live wallet balance (`wallet.go:3488`) calls `CalculateMeterUsageCharges`, so it follows automatically.
 
