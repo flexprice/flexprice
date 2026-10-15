@@ -66,6 +66,6 @@ func (s *MeterUsageServiceSuite) TestSaveSignedSumCheckpoint_RecomputeReplaces()
 	second, err := s.svc.SaveSignedSumCheckpoint(ctx, s.customer.ID, ext, s.meterAPI.ID, nov1, nil)
 	s.Require().NoError(err)
 
-	s.Equal(first.ID, second.ID, "the same as_of keeps one checkpoint")
+	s.Equal(first.ID, second.ID, "the same aggregated_until keeps one checkpoint")
 	s.True(decimal.NewFromInt(36).Equal(second.Total), "recompute adds the period once, got %s", second.Total)
 }

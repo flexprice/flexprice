@@ -65,9 +65,9 @@ type MeterUsageService interface {
 	// `at`: the latest checkpoint at or before `at` plus the changes since it.
 	SignedSumTotal(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, at time.Time) (decimal.Decimal, error)
 
-	// SaveSignedSumCheckpoint records the SIGNED_SUM total as of asOf. Saving the same
-	// asOf again recomputes and replaces it.
-	SaveSignedSumCheckpoint(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, asOf time.Time, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
+	// SaveSignedSumCheckpoint records the SIGNED_SUM total of every change before
+	// aggregatedUntil. Saving the same instant again recomputes and replaces it.
+	SaveSignedSumCheckpoint(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, aggregatedUntil time.Time, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
 
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.

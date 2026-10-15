@@ -12,7 +12,7 @@ import (
 )
 
 // checkpointResolution is the smallest instant Postgres stores, so "strictly before
-// as_of" is "at or before as_of minus one microsecond".
+// aggregated_until" is "at or before aggregated_until minus one microsecond".
 const checkpointResolution = time.Microsecond
 
 func (s *meterUsageService) SignedSumTotal(
@@ -30,7 +30,7 @@ func (s *meterUsageService) SaveSignedSumCheckpoint(
 	customerID string,
 	externalCustomerIDs []string,
 	meterID string,
-	asOf time.Time,
+	aggregatedUntil time.Time,
 	invoiceID *string,
 ) (*meterusagecheckpoint.MeterUsageCheckpoint, error) {
 	if s.MeterUsageCheckpointRepo == nil {
@@ -39,24 +39,24 @@ func (s *meterUsageService) SaveSignedSumCheckpoint(
 
 	// Build from the checkpoint before this one, so recomputing a period replaces
 	// its checkpoint rather than reading it back.
-	total, err := s.signedSumTotalFrom(ctx, customerID, externalCustomerIDs, meterID, asOf.Add(-checkpointResolution), asOf)
+	total, err := s.signedSumTotalFrom(ctx, customerID, externalCustomerIDs, meterID, aggregatedUntil.Add(-checkpointResolution), aggregatedUntil)
 	if err != nil {
 		return nil, err
 	}
 
 	return s.MeterUsageCheckpointRepo.Upsert(ctx, &meterusagecheckpoint.MeterUsageCheckpoint{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT),
-		CustomerID:    customerID,
-		MeterID:       meterID,
-		Total:         total,
-		AsOf:          asOf,
-		InvoiceID:     invoiceID,
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT),
+		CustomerID:      customerID,
+		MeterID:         meterID,
+		Total:           total,
+		AggregatedUntil: aggregatedUntil,
+		InvoiceID:       invoiceID,
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
 	})
 }
 
-// signedSumTotalFrom adds the changes in [checkpoint.as_of, at) to the latest checkpoint
+// signedSumTotalFrom adds the changes in [checkpoint.aggregated_until, at) to the latest checkpoint
 // at or before checkpointAt. With no checkpoint, the changes are summed from the start.
 func (s *meterUsageService) signedSumTotalFrom(
 	ctx context.Context,
@@ -76,7 +76,7 @@ func (s *meterUsageService) signedSumTotalFrom(
 
 	total, from := decimal.Zero, time.Time{}
 	if checkpoint != nil {
-		total, from = checkpoint.Total, checkpoint.AsOf
+		total, from = checkpoint.Total, checkpoint.AggregatedUntil
 	}
 	if !at.After(from) || len(externalCustomerIDs) == 0 {
 		return total, nil
