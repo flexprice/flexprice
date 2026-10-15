@@ -23,7 +23,7 @@ Seven stacked PRs, each targeting the one before it, and the first targeting `de
 Differences from the plan below, as built:
 
 - The billing floor landed in PR 1 (`ConvertToBillingCharges`), not PR 4.
-- The period-end handoff is `periodEndHandoff` in PR 4, a copy of the unmerged `LATEST` handoff under a neutral name. It applies only to `SIGNED_SUM` meters.
+- Each line item bills its own dates at its own price (PR 4). An earlier version billed the whole period on the line item active at period end; that handoff was removed in review.
 - With `NEVER`, analytics queries (windows, filters, group-by) still show the window's net. Only scalar billing reads take the running total.
 - Saving checkpoints at invoice time never blocks the invoice: a failure is logged, and reads start from the previous checkpoint.
 - The subscription entitlements API is unchanged: `grant_state` is empty for `SIGNED_SUM` features. The frontend should show the ceiling against `/customer/usage`.
@@ -75,8 +75,8 @@ Tests: no checkpoint; a checkpoint plus later changes; a late event behind a che
 
 | Change | Where |
 |---|---|
-| Usage for the period: the checkpointed aggregate at period end for meters that keep one (`keepsRunningAggregate`: `SIGNED_SUM` with `NEVER` today), the net over the whole period otherwise | `internal/ee/service/billing_meter_usage.go` |
-| Both modes: only the line item active at period end bills that usage; the ones it replaced bill 0. Reuse or generalise the `LATEST` handoff. | `latest_meter_handoff.go` (stashed in `921c9309`; it must land first or move into this PR) |
+| Each line item's usage: the checkpointed total at its end for meters that keep one (`keepsRunningAggregate`: `SIGNED_SUM` with `NEVER` today), its own window's net otherwise | `internal/ee/service/meter_usage.go`, `meter_usage_checkpoint.go` |
+| Billable per line item: `NEVER` max(0, total − ceiling) × share; `BILLING_PERIOD` max(0, net − ceiling × share). Share = the line item's part of the period. | `billing_meter_usage.go` (`signedSumBillable`, `periodShare`) |
 | Allowance = sum of `grant_quota` across the feature's entitlements active at period end. Skip `adjustMeterUsageEntitlement` and the grant fold for `SIGNED_SUM`. | `billing_meter_usage.go` (~:286-310) |
 | **Floor on the bill only**: billed quantity = max(0, quantity − allowance), applied as the last step before pricing. Nothing upstream is floored. | Same |
 | `NEVER`: write the checkpoint when the rollover invoice is created, idempotent on `aggregated_until = period end` so a recompute does not add twice | The invoice creation flow (`internal/ee/service/invoice.go`, near the draft-first step ~:2384) |
@@ -85,7 +85,7 @@ The live wallet balance (`wallet.go:3488`) calls `CalculateMeterUsageCharges`, s
 
 To verify: which usage path the invoice takes. `billing.go:2268` calls `GetUsageBySubscription`; make sure `SIGNED_SUM` uses only the `meter_usage` path.
 
-Tests: the PRD's bill examples for both modes; a price change and a plan change bill once in both modes; a negative billed quantity becomes 0 while the checkpoint keeps the negative value; recomputing an invoice does not move the checkpoint twice.
+Tests: the PRD's bill examples for both modes; a price change bills each line item for its own half at its own price ($36.20 and $95); a negative billed quantity becomes 0 while the checkpoint keeps the negative value; recomputing an invoice does not move the checkpoint twice.
 
 ## PR 5: Limits
 
@@ -103,7 +103,7 @@ Tests: the PRD's bill examples for both modes; a price change and a plan change 
 
 ## PR 7: Docs
 
-- A metering guide page for `SIGNED_SUM`: signed events, stable ids, limits, billing at period end.
+- A metering guide page for `SIGNED_SUM`: signed events, stable ids, limits, billing per line item.
 
 ## Cutover for Optimality (operations, after PR 5)
 

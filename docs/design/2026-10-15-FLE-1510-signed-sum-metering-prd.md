@@ -11,7 +11,7 @@
 
 ## 1. Summary
 
-Some customers can only tell us what changed: "+10 GB uploaded", "−4 GB deleted". A new meter type, **`SIGNED_SUM`**, keeps those changes with their sign. With `reset_usage = NEVER` it maintains a running total for each customer: we bill the total held at period end and let the customer's application check that total against a limit before it allows more usage. With `BILLING_PERIOD` it is a sum that nets out negatives within each period.
+Some customers can only tell us what changed: "+10 GB uploaded", "−4 GB deleted". A new meter type, **`SIGNED_SUM`**, keeps those changes with their sign. With `reset_usage = NEVER` it maintains a running total for each customer: we bill the total held, and let the customer's application check that total against a limit before it allows more usage. With `BILLING_PERIOD` it is a sum that nets out negatives within each period.
 
 Optimality needs this now. They will meter storage in Flexprice and use the entitlement as a hard limit on how many GB a customer may hold.
 
@@ -34,7 +34,7 @@ The meter's `reset_usage` picks one of two modes:
 | Kept per | Customer and meter, across subscriptions | Billing period |
 | Checkpoint | Yes (section 4) | Not needed |
 
-Billing is the same in both modes: the period's usage is billed once, by the line item active at period end, at its price. The mode only changes what "the period's usage" is, and whether a checkpoint is kept.
+Billing works the same way in both modes: each line item bills its own dates at its own price (section 5). The mode only changes what a line item's usage is, and whether a checkpoint is kept.
 
 Optimality uses `NEVER`.
 
@@ -54,35 +54,36 @@ total now = last checkpoint + changes since that checkpoint
 
 ## 5. The bill
 
+Each line item bills only its own dates, at its own price. A price or plan change mid-period splits the period into line items; without one there is a single line item with a share of 1.
+
 ```
-usage    = total at period end          (NEVER)
-         = net of the whole period      (BILLING_PERIOD)
-billable = max(0, usage − allowance at period end)
-bill     = billable × price active at period end
+share    = the line item's days ÷ days in the period
+
+NEVER:          billable = max(0, total at the line item's end − allowance) × share
+BILLING_PERIOD: billable = max(0, net inside the line item − allowance × share)
+
+bill     = billable × the line item's price
 ```
 
-The line item active at period end bills; the line items it replaced bill 0.
-
-`NEVER` examples: $1 per GB, held 46 GB at period end.
+`NEVER` examples: $1 per GB, 10 GB included, 30-day month.
 
 | Situation | Calculation | Bill |
 |---|---|---|
+| Held 46 GB, no change | (46 − 10) × 1 × $1 | **$36** |
 | No allowance | 46 × $1 | **$46** |
-| 10 GB included | (46 − 10) × $1 | **$36** |
-| Price changed to $0.9 mid-month | 46 × $0.9 | **$41.40** |
-| Plan changed mid-month to one with 20 GB included | (46 − 20) × $1 | **$26** |
+| Price changed to $0.9 on day 15; 50 GB held then, 46 GB at month end | (50 − 10) × ½ × $1 + (46 − 10) × ½ × $0.9 | **$36.20** |
 
-- **Latest wins.** The price and allowance active at period end apply to the whole month, and the total is billed once, not once per line item.
 - **Each month bills again** for what is still held, like rent.
+- This follows Lago's prorated recurring charges. It uses the total at each line item's end rather than a day-by-day average.
 
-`BILLING_PERIOD` example: $1 per call, changed to $0.9 on day 15, +100 before the change and −30 after it.
+`BILLING_PERIOD` example: $1 per call, changed to $0.9 on day 15, 10 included, +100 before the change and −30 after it.
 
-| Line item | Billed |
-|---|---|
-| Old (days 1–15) | $0 (replaced) |
-| New (days 15–30) | (100 − 30) × $0.9 = **$63** |
+| Line item | Calculation | Bill |
+|---|---|---|
+| Old (days 1–15) | (100 − 5) × $1 | **$95** |
+| New (days 15–30) | max(0, −30 − 5) × $0.9 | **$0** |
 
-- **The bill is never negative.** A negative billable quantity becomes 0. Stored values stay exact.
+- **The bill is never negative.** A negative billable quantity becomes 0, per line item. Stored values stay exact.
 
 ## 6. Limits (entitlements)
 
