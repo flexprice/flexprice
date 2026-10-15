@@ -19,19 +19,18 @@ func NewInMemoryMeterUsageCheckpointStore() *InMemoryMeterUsageCheckpointStore {
 	}
 }
 
-func (s *InMemoryMeterUsageCheckpointStore) GetLatestAtOrBefore(
+func (s *InMemoryMeterUsageCheckpointStore) GetLatestBefore(
 	ctx context.Context,
-	key meterusagecheckpoint.Key,
-	at time.Time,
+	params meterusagecheckpoint.GetLatestBeforeParams,
 ) (*meterusagecheckpoint.MeterUsageCheckpoint, error) {
-	rows, err := s.matching(ctx, key.CustomerID, key.MeterID)
+	rows, err := s.matching(ctx, params.CustomerID, params.MeterID)
 	if err != nil {
 		return nil, err
 	}
 
 	var latest *meterusagecheckpoint.MeterUsageCheckpoint
 	for _, c := range rows {
-		if c.AggregationType != key.AggregationType || c.AggregatedUntil.After(at) {
+		if c.AggregationType != params.AggregationType || !c.AggregatedUntil.Before(params.Before) {
 			continue
 		}
 		if latest == nil || c.AggregatedUntil.After(latest.AggregatedUntil) {

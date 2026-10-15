@@ -15,14 +15,21 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 	ctx := testCtx("tenant_1")
 	oct1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	nov1 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	key := meterusagecheckpoint.Key{CustomerID: "cust_1", MeterID: "meter_1", AggregationType: types.AggregationSignedSum}
+	before := func(at time.Time) meterusagecheckpoint.GetLatestBeforeParams {
+		return meterusagecheckpoint.GetLatestBeforeParams{
+			CustomerID:      "cust_1",
+			MeterID:         "meter_1",
+			AggregationType: types.AggregationSignedSum,
+			Before:          at,
+		}
+	}
 
 	checkpoint := func(id string, aggregatedUntil time.Time, total int64) *meterusagecheckpoint.MeterUsageCheckpoint {
 		return &meterusagecheckpoint.MeterUsageCheckpoint{
 			ID:              id,
-			CustomerID:      key.CustomerID,
-			MeterID:         key.MeterID,
-			AggregationType: key.AggregationType,
+			CustomerID:      "cust_1",
+			MeterID:         "meter_1",
+			AggregationType: types.AggregationSignedSum,
 			Total:           decimal.NewFromInt(total),
 			AggregatedUntil: aggregatedUntil,
 			BaseModel:       types.BaseModel{TenantID: "tenant_1"},
@@ -31,24 +38,24 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 
 	t.Run("no checkpoint returns nil", func(t *testing.T) {
 		store := NewInMemoryMeterUsageCheckpointStore()
-		got, err := store.GetLatestAtOrBefore(ctx, key, nov1)
+		got, err := store.GetLatestBefore(ctx, before(nov1))
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
 
-	t.Run("latest at or before wins", func(t *testing.T) {
+	t.Run("latest strictly before wins", func(t *testing.T) {
 		store := NewInMemoryMeterUsageCheckpointStore()
 		_, err := store.Upsert(ctx, checkpoint("ck_oct", oct1, 40))
 		require.NoError(t, err)
 		_, err = store.Upsert(ctx, checkpoint("ck_nov", nov1, -5))
 		require.NoError(t, err)
 
-		got, err := store.GetLatestAtOrBefore(ctx, key, nov1.Add(-time.Second))
+		got, err := store.GetLatestBefore(ctx, before(nov1))
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		assert.Equal(t, "ck_oct", got.ID)
+		assert.Equal(t, "ck_oct", got.ID, "a checkpoint at the instant itself is excluded")
 
-		got, err = store.GetLatestAtOrBefore(ctx, key, nov1)
+		got, err = store.GetLatestBefore(ctx, before(nov1.Add(time.Second)))
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		assert.True(t, decimal.NewFromInt(-5).Equal(got.Total), "negative totals are kept")
@@ -62,7 +69,7 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "ck_first", saved.ID)
-		got, err := store.GetLatestAtOrBefore(ctx, key, nov1)
+		got, err := store.GetLatestBefore(ctx, before(nov1.Add(time.Second)))
 		require.NoError(t, err)
 		assert.True(t, decimal.NewFromInt(46).Equal(got.Total))
 	})
@@ -72,9 +79,9 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 		_, err := store.Upsert(ctx, checkpoint("ck_1", oct1, 40))
 		require.NoError(t, err)
 
-		maxKey := key
-		maxKey.AggregationType = types.AggregationMax
-		got, err := store.GetLatestAtOrBefore(ctx, maxKey, nov1)
+		params := before(nov1)
+		params.AggregationType = types.AggregationMax
+		got, err := store.GetLatestBefore(ctx, params)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})
@@ -84,13 +91,13 @@ func TestInMemoryMeterUsageCheckpointStore(t *testing.T) {
 		_, err := store.Upsert(ctx, checkpoint("ck_1", oct1, 40))
 		require.NoError(t, err)
 
-		got, err := store.GetLatestAtOrBefore(testCtx("tenant_2"), key, nov1)
+		got, err := store.GetLatestBefore(testCtx("tenant_2"), before(nov1))
 		require.NoError(t, err)
 		assert.Nil(t, got)
 
-		otherMeter := key
-		otherMeter.MeterID = "meter_2"
-		got, err = store.GetLatestAtOrBefore(ctx, otherMeter, nov1)
+		params := before(nov1)
+		params.MeterID = "meter_2"
+		got, err = store.GetLatestBefore(ctx, params)
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	})

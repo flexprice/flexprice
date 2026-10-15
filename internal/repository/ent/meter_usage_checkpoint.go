@@ -22,15 +22,14 @@ func NewMeterUsageCheckpointRepository(client postgres.IClient, log *logger.Logg
 	return &meterUsageCheckpointRepository{client: client, log: log}
 }
 
-func (r *meterUsageCheckpointRepository) GetLatestAtOrBefore(
+func (r *meterUsageCheckpointRepository) GetLatestBefore(
 	ctx context.Context,
-	key domainCheckpoint.Key,
-	at time.Time,
+	params domainCheckpoint.GetLatestBeforeParams,
 ) (*domainCheckpoint.MeterUsageCheckpoint, error) {
-	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "get_latest", map[string]interface{}{
-		"customer_id":      key.CustomerID,
-		"meter_id":         key.MeterID,
-		"aggregation_type": key.AggregationType,
+	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "get_latest_before", map[string]interface{}{
+		"customer_id":      params.CustomerID,
+		"meter_id":         params.MeterID,
+		"aggregation_type": params.AggregationType,
 	})
 	defer FinishSpan(span)
 
@@ -38,10 +37,10 @@ func (r *meterUsageCheckpointRepository) GetLatestAtOrBefore(
 		Where(
 			meterusagecheckpoint.TenantID(types.GetTenantID(ctx)),
 			meterusagecheckpoint.EnvironmentID(types.GetEnvironmentID(ctx)),
-			meterusagecheckpoint.CustomerID(key.CustomerID),
-			meterusagecheckpoint.MeterID(key.MeterID),
-			meterusagecheckpoint.AggregationType(key.AggregationType),
-			meterusagecheckpoint.AggregatedUntilLTE(at),
+			meterusagecheckpoint.CustomerID(params.CustomerID),
+			meterusagecheckpoint.MeterID(params.MeterID),
+			meterusagecheckpoint.AggregationType(params.AggregationType),
+			meterusagecheckpoint.AggregatedUntilLT(params.Before),
 			meterusagecheckpoint.Status(string(types.StatusPublished)),
 		).
 		Order(ent.Desc(meterusagecheckpoint.FieldAggregatedUntil)).
