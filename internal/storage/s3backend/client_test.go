@@ -273,6 +273,43 @@ func TestClient_ValidateConnection_ReachableBucket(t *testing.T) {
 	require.NoError(t, s.ValidateConnection(context.Background()))
 }
 
+func TestClient_ValidateWrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		wantHint string
+	}{
+		{name: "writable bucket", status: http.StatusOK},
+		{name: "no write permission", status: http.StatusForbidden, wantHint: "The AWS keys don't have write permission on bucket 'test-bucket'. Grant them s3:PutObject on it."},
+		{name: "wrong region", status: http.StatusMovedPermanently, wantHint: "Bucket 'test-bucket' isn't in region 'us-east-1'."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotMethod, gotPath string
+			cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+				gotMethod, gotPath = r.Method, r.URL.Path
+				w.WriteHeader(tt.status)
+			})
+			defer closeSrv()
+
+			s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+			require.NoError(t, err)
+
+			err = s.ValidateWrite(context.Background(), "exports/invoice/flexprice-write-check.txt")
+			assert.Equal(t, http.MethodPut, gotMethod)
+			assert.Equal(t, "/test-bucket/exports/invoice/flexprice-write-check.txt", gotPath)
+			if tt.wantHint == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.True(t, ierr.IsValidation(err))
+			assert.Equal(t, []string{tt.wantHint}, errors.GetAllHints(err))
+		})
+	}
+}
+
 func TestClient_Exists_ReturnsFalseForMissingKey(t *testing.T) {
 	cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

@@ -50,6 +50,8 @@ func (f *fakeStorage) PresignGet(ctx context.Context, key string, d time.Duratio
 
 func (f *fakeStorage) ValidateConnection(ctx context.Context) error { return nil }
 
+func (f *fakeStorage) ValidateWrite(ctx context.Context, key string) error { return nil }
+
 func (f *fakeStorage) FileURL(key string) string { return "s3://fake-bucket/" + key }
 
 func (f *fakeStorage) Provider() storage.Provider { return f.provider }

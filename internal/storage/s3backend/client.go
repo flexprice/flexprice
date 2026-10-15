@@ -223,19 +223,8 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		// compressed data instead of the original payload.
 		input.ContentEncoding = aws.String("gzip")
 	}
-	switch c.cfg.ServerSideEncrypt {
-	case "": // no server-side encryption requested
-	case "AES256":
-		input.ServerSideEncryption = types.ServerSideEncryptionAes256
-	case "aws:kms":
-		input.ServerSideEncryption = types.ServerSideEncryptionAwsKms
-	case "aws:kms:dsse":
-		input.ServerSideEncryption = types.ServerSideEncryptionAwsKmsDsse
-	default:
-		return nil, ierr.NewError("unsupported server-side encryption").
-			WithHint("server_side_encrypt must be empty, AES256, aws:kms, or aws:kms:dsse").
-			WithMessagef("value:%s", c.cfg.ServerSideEncrypt).
-			Mark(ierr.ErrValidation)
+	if err := c.setServerSideEncryption(input); err != nil {
+		return nil, err
 	}
 
 	if _, err := c.s3.PutObject(ctx, input); err != nil {
@@ -312,6 +301,53 @@ func (c *client) ValidateConnection(ctx context.Context) error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+func (c *client) ValidateWrite(ctx context.Context, key string) error {
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(c.cfg.Bucket),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(nil),
+		ContentType: aws.String("text/plain"),
+	}
+	// Same encryption as real uploads, so SSE-KMS key permissions are checked too.
+	if err := c.setServerSideEncryption(input); err != nil {
+		return err
+	}
+	if _, err := c.s3.PutObject(ctx, input); err != nil {
+		return ierr.WithError(err).
+			WithHint(putObjectHint(err, c.cfg.Bucket, c.cfg.Region)).
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (c *client) setServerSideEncryption(input *s3.PutObjectInput) error {
+	switch c.cfg.ServerSideEncrypt {
+	case "": // no server-side encryption requested
+	case "AES256":
+		input.ServerSideEncryption = types.ServerSideEncryptionAes256
+	case "aws:kms":
+		input.ServerSideEncryption = types.ServerSideEncryptionAwsKms
+	case "aws:kms:dsse":
+		input.ServerSideEncryption = types.ServerSideEncryptionAwsKmsDsse
+	default:
+		return ierr.NewError("unsupported server-side encryption").
+			WithHint("server_side_encrypt must be empty, AES256, aws:kms, or aws:kms:dsse").
+			WithMessagef("value:%s", c.cfg.ServerSideEncrypt).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// putObjectHint turns a write-probe failure into a message the user can act on.
+func putObjectHint(err error, bucket, region string) string {
+	var respErr *awshttp.ResponseError
+	if errors.As(err, &respErr) && respErr.HTTPStatusCode() == http.StatusForbidden {
+		return fmt.Sprintf("The AWS keys don't have write permission on bucket '%s'. Grant them s3:PutObject on it.", bucket)
+	}
+	return headBucketHint(err, bucket, region)
 }
 
 // headBucketHint turns a HeadBucket failure into a message the user can act on.

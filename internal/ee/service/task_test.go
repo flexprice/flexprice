@@ -509,9 +509,10 @@ func (f *fakeImportStorage) Exists(_ context.Context, key string) (bool, error) 
 func (f *fakeImportStorage) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://fake/" + key, nil
 }
-func (f *fakeImportStorage) ValidateConnection(context.Context) error { return nil }
-func (f *fakeImportStorage) FileURL(key string) string                { return "s3://fake/" + key }
-func (f *fakeImportStorage) Provider() storagetypes.Provider          { return storagetypes.ProviderS3 }
+func (f *fakeImportStorage) ValidateConnection(context.Context) error    { return nil }
+func (f *fakeImportStorage) ValidateWrite(context.Context, string) error { return nil }
+func (f *fakeImportStorage) FileURL(key string) string                   { return "s3://fake/" + key }
+func (f *fakeImportStorage) Provider() storagetypes.Provider             { return storagetypes.ProviderS3 }
 
 type fakeImportResolver struct {
 	bucket string
