@@ -809,31 +809,6 @@ func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tena
 	return results[start:end], nil
 }
 
-// CountCreditTopupsForExport returns how many credit topup rows match the export filters.
-func (s *InMemoryWalletStore) CountCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
-	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
-	if err != nil {
-		return 0, ierr.WithError(err).
-			WithHint("Failed to retrieve transactions for export").
-			Mark(ierr.ErrDatabase)
-	}
-
-	count := 0
-	for _, tx := range allTransactions {
-		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.Type != types.TransactionTypeCredit {
-			continue
-		}
-		if tx.CreatedAt.Before(startTime) || !tx.CreatedAt.Before(endTime) {
-			continue
-		}
-		if _, err := s.wallets.Get(ctx, tx.WalletID); err != nil {
-			continue
-		}
-		count++
-	}
-	return count, nil
-}
-
 // GetWalletDebitsForExport mirrors the Postgres export: one row per consumed batch, no paid amounts.
 func (s *InMemoryWalletStore) GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after wallet.WalletDebitsExportCursor, endTime time.Time, limit int) ([]*wallet.WalletDebitsExportData, error) {
 	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
@@ -893,28 +868,6 @@ func (s *InMemoryWalletStore) GetWalletDebitsForExport(ctx context.Context, tena
 		}
 	}
 	return results, nil
-}
-
-// CountWalletDebitsForExport returns how many debit transactions match the export window.
-func (s *InMemoryWalletStore) CountWalletDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
-	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
-	if err != nil {
-		return 0, ierr.WithError(err).
-			WithHint("Failed to retrieve transactions for export").
-			Mark(ierr.ErrDatabase)
-	}
-
-	count := 0
-	for _, tx := range allTransactions {
-		if tx.TenantID != tenantID || tx.EnvironmentID != envID || tx.Type != types.TransactionTypeDebit {
-			continue
-		}
-		if tx.CreatedAt.Before(startTime) || !tx.CreatedAt.Before(endTime) {
-			continue
-		}
-		count++
-	}
-	return count, nil
 }
 
 // GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type

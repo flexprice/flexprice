@@ -41,13 +41,8 @@ type Repository interface {
 
 	// Export operations
 	GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*CreditTopupsExportData, error)
-	// CountCreditTopupsForExport returns how many credit topup rows match the export filters.
-	CountCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error)
 	// GetWalletDebitsForExport returns the next limit debits after the cursor, one row per credit batch each drew from.
 	GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after WalletDebitsExportCursor, endTime time.Time, limit int) ([]*WalletDebitsExportData, error)
-	// CountWalletDebitsForExport returns how many debit transactions match the export window
-	// (not expanded consumption rows). Used as a cheap volume gate before paging.
-	CountWalletDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error)
 
 	// Credit breakdown operations
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)

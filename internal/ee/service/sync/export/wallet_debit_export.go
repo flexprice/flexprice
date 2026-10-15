@@ -52,20 +52,6 @@ func NewWalletDebitExporter(walletRepo wallet.Repository, logger *logger.Logger)
 func (e *WalletDebitExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
 	const batchSize = 500
 
-	rowCount, err := e.walletRepo.CountWalletDebitsForExport(
-		ctx,
-		request.TenantID,
-		request.EnvID,
-		request.StartTime,
-		request.EndTime,
-	)
-	if err != nil {
-		return nil, 0, err
-	}
-	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
-		return nil, 0, err
-	}
-
 	var csvRecords []*WalletDebitCSV
 	cursor := wallet.WalletDebitsExportCursor{CreatedAt: request.StartTime}
 	for {

@@ -70,14 +70,6 @@ func (e *RevenueFactsExporter) PrepareData(ctx context.Context, request *dto.Exp
 		"start_time", request.StartTime,
 		"end_time", request.EndTime)
 
-	rowCount, err := e.revenueFactRepo.CountForExport(ctx, request.StartTime, request.EndTime)
-	if err != nil {
-		return nil, 0, err
-	}
-	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
-		return nil, 0, err
-	}
-
 	var csvRows []*RevenueFactCSV
 	since, afterID := request.StartTime, ""
 	for {

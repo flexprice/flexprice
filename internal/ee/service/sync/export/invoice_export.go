@@ -89,20 +89,6 @@ func (e *InvoiceExporter) PrepareData(ctx context.Context, request *dto.ExportRe
 		"end_time", request.EndTime,
 		"batch_size", batchSize)
 
-	rowCount, err := e.invoiceRepo.CountInvoicesForExport(
-		ctx,
-		request.TenantID,
-		request.EnvID,
-		request.StartTime,
-		request.EndTime,
-	)
-	if err != nil {
-		return nil, 0, err
-	}
-	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
-		return nil, 0, err
-	}
-
 	// Collect all CSV records
 	var csvRecords []*InvoiceCSV
 	totalRecords := 0

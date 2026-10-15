@@ -1333,40 +1333,6 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 	return result, nil
 }
 
-// CountInvoicesForExport returns how many invoices match the export filters.
-func (r *invoiceRepository) CountInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
-	span := StartRepositorySpan(ctx, "invoice", "count_invoices_for_export", map[string]interface{}{
-		"tenant_id":  tenantID,
-		"env_id":     envID,
-		"start_time": startTime,
-		"end_time":   endTime,
-	})
-	defer FinishSpan(span)
-
-	count, err := r.client.Reader(ctx).Invoice.Query().
-		Where(
-			invoice.TenantID(tenantID),
-			invoice.EnvironmentID(envID),
-			invoice.StatusEQ(string(types.StatusPublished)),
-			invoice.CreatedAtGTE(startTime),
-			invoice.CreatedAtLTE(endTime),
-		).
-		Count(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return 0, ierr.WithError(err).
-			WithHint("Failed to count invoices for export").
-			WithReportableDetails(map[string]interface{}{
-				"tenant_id": tenantID,
-				"env_id":    envID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return count, nil
-}
-
 // ListPendingInvoicesByProvider returns finalized+unpaid invoices for tenant/env pairs
 // that have an active connection for the given provider.
 func (r *invoiceRepository) ListPendingInvoicesByProvider(ctx context.Context, provider types.SecretProvider) ([]domainInvoice.PendingProviderInvoice, error) {

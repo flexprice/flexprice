@@ -9,9 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/types"       // pragma: allowlist secret
 )
 
-// maxExportRows caps in-memory CSV exports. Workers buffer the full result set;
-// ~2M rows have OOM-killed the Temporal worker (FLE-1659). 500k leaves headroom
-// under the default 1Gi worker limit while still covering dense hourly jobs (~70k).
+// maxExportRows caps events exports. Workers buffer the full CSV in memory;
+// ~2M meter_usage rows OOM-killed the Temporal worker (FLE-1659). 500k leaves
+// headroom under the default 1Gi worker limit while covering dense hourly jobs (~70k).
 const maxExportRows = 500_000
 
 func enforceExportVolume(

@@ -497,47 +497,6 @@ func (r *revenueFactRepository) ListForExport(ctx context.Context, computedAfter
 	return revenuefact.FromEntList(rows), nil
 }
 
-// CountForExport returns how many facts fall in (computedAfter, computedBefore]
-// for the current tenant/environment.
-func (r *revenueFactRepository) CountForExport(ctx context.Context, computedAfter, computedBefore time.Time) (int, error) {
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	span := StartRepositorySpan(ctx, "revenue_fact", "count_for_export", map[string]interface{}{
-		"tenant_id":      tenantID,
-		"environment_id": environmentID,
-	})
-	defer FinishSpan(span)
-
-	q := r.client.Reader(ctx).RevenueFact.Query().
-		Where(
-			entrevenuefact.TenantID(tenantID),
-			entrevenuefact.EnvironmentID(environmentID),
-		)
-	if !computedAfter.IsZero() {
-		q = q.Where(entrevenuefact.ComputedAtGT(computedAfter))
-	}
-	if !computedBefore.IsZero() {
-		q = q.Where(entrevenuefact.ComputedAtLTE(computedBefore))
-	}
-
-	count, err := q.Count(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		r.log.Error(ctx, "count revenue facts for export failed",
-			"error", err,
-			"tenant_id", tenantID,
-			"environment_id", environmentID,
-		)
-		return 0, ierr.WithError(err).
-			WithHint("Failed to count revenue facts for export").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return count, nil
-}
-
 // ListFacts pages facts matching the filter, ordered by (day, id) — the
 // analytics read path.
 func (r *revenueFactRepository) ListFacts(ctx context.Context, filter revenuefact.FactsFilter) ([]*revenuefact.RevenueFact, error) {

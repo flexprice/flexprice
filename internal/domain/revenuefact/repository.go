@@ -34,10 +34,6 @@ type Repository interface {
 	// (computed_at, id) so callers can resume from the last row they saw.
 	ListForExport(ctx context.Context, computedAfter time.Time, afterID string, limit int) ([]*RevenueFact, error)
 
-	// CountForExport returns how many facts fall in (computedAfter, computedBefore]
-	// for the current tenant/environment. Used as a volume gate before paging.
-	CountForExport(ctx context.Context, computedAfter, computedBefore time.Time) (int, error)
-
 	// ListFacts pages facts matching the filter, ordered by (day, id) — the
 	// analytics read path.
 	ListFacts(ctx context.Context, filter FactsFilter) ([]*RevenueFact, error)
