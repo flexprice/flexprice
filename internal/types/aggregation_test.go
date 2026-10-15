@@ -58,3 +58,30 @@ func TestAggregationType_SignedSum(t *testing.T) {
 		})
 	}
 }
+
+func TestAggregationType_SupportsCheckpoint(t *testing.T) {
+	cases := []struct {
+		typ  AggregationType
+		want bool
+	}{
+		{AggregationSum, true},
+		{AggregationSignedSum, true},
+		{AggregationSumWithMultiplier, true},
+		{AggregationCount, true},
+		{AggregationMax, true},
+		{AggregationLatest, true},
+
+		// Need a set, a count or time weighting, not one number.
+		{AggregationCountUnique, false},
+		{AggregationAvg, false},
+		{AggregationWeightedSum, false},
+		{AggregationType("BOGUS"), false},
+	}
+	for _, c := range cases {
+		t.Run(string(c.typ), func(t *testing.T) {
+			if got := c.typ.SupportsCheckpoint(); got != c.want {
+				t.Fatalf("SupportsCheckpoint for %s = %v, want %v", c.typ, got, c.want)
+			}
+		})
+	}
+}

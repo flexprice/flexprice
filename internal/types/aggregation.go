@@ -60,6 +60,22 @@ func (t AggregationType) SupportsExpression() bool {
 	}
 }
 
+// SupportsCheckpoint reports whether a running aggregate of this type can be split at a
+// point in time and rebuilt from the earlier part plus the later one.
+func (t AggregationType) SupportsCheckpoint() bool {
+	switch t {
+	case AggregationSum,
+		AggregationSignedSum,
+		AggregationSumWithMultiplier,
+		AggregationCount,
+		AggregationMax,
+		AggregationLatest:
+		return true
+	default:
+		return false
+	}
+}
+
 // KeepsNegatives reports whether negative per-event quantities are stored as is.
 // Every other type stores a negative quantity as 0.
 func (t AggregationType) KeepsNegatives() bool {

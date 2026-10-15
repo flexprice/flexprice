@@ -61,13 +61,13 @@ type MeterUsageService interface {
 	// supports a single range or multiple disjoint TimeRanges in one query).
 	GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error)
 
-	// SignedSumTotal returns a SIGNED_SUM meter's exact running total for a customer at
-	// `at`: the latest checkpoint at or before `at` plus the changes since it.
-	SignedSumTotal(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, at time.Time) (decimal.Decimal, error)
+	// GetCheckpointedUsage returns a customer's running aggregate of a meter before
+	// req.Until: the latest checkpoint of that aggregation type combined with the usage since.
+	GetCheckpointedUsage(ctx context.Context, req CheckpointedUsageRequest) (decimal.Decimal, error)
 
-	// SaveSignedSumCheckpoint records the SIGNED_SUM total of every change before
-	// aggregatedUntil. Saving the same instant again recomputes and replaces it.
-	SaveSignedSumCheckpoint(ctx context.Context, customerID string, externalCustomerIDs []string, meterID string, aggregatedUntil time.Time, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
+	// SaveUsageCheckpoint records the running aggregate before req.Until. Saving the same
+	// instant again recomputes and replaces it.
+	SaveUsageCheckpoint(ctx context.Context, req CheckpointedUsageRequest, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
 
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.
