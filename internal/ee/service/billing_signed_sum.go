@@ -32,7 +32,7 @@ func (s *billingService) signedSumMetersByID(ctx context.Context, meterIDs []str
 }
 
 // setSignedSumSummaryUsage sets the exact usage of each SIGNED_SUM feature served by sub: the
-// running total now for meters that never reset, this period's net otherwise.
+// running aggregate now for meters that keep one, this period's net otherwise.
 func (s *billingService) setSignedSumSummaryUsage(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -59,15 +59,21 @@ func (s *billingService) setSignedSumSummaryUsage(
 			usage decimal.Decimal
 			err   error
 		)
-		if isRunningSignedSum(m) {
-			usage, err = meterUsageSvc.SignedSumTotal(ctx, sub.CustomerID, externalCustomerIDs, meterID, now)
+		if keepsRunningAggregate(m) {
+			usage, err = meterUsageSvc.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+				CustomerID:          sub.CustomerID,
+				ExternalCustomerIDs: externalCustomerIDs,
+				MeterID:             meterID,
+				AggregationType:     m.Aggregation.Type,
+				Until:               now,
+			})
 		} else {
 			usage, err = meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
 				ExternalCustomerIDs: externalCustomerIDs,
 				MeterID:             meterID,
-				AggregationType:     types.AggregationSignedSum,
+				AggregationType:     m.Aggregation.Type,
 				StartTime:           sub.CurrentPeriodStart,
 				EndTime:             now,
 			})

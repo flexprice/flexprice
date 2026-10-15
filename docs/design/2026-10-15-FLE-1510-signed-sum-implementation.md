@@ -48,33 +48,34 @@ Tests: `extractQuantity` keeps the sign for `SIGNED_SUM` and zeroes it for `SUM`
 
 Stored values stay exact from here on: ingestion, checkpoints and reads never floor. Only the billed quantity does.
 
-## PR 2: Checkpoint storage (`NEVER` only)
+## PR 2: Checkpoint storage
 
 | Change | Where |
 |---|---|
-| New Ent schema `meter_usage_checkpoint`: `tenant_id`, `environment_id`, `customer_id`, `meter_id`, `total` (numeric), `aggregated_until`, `invoice_id`. Unique on (tenant, environment, customer, meter, `aggregated_until`). | `ent/schema/meter_usage_checkpoint.go`, then `make generate-ent` and `make generate-migration` |
-| Domain model and repository interface: `GetLatestAtOrBefore(customer, meter, t)` and an idempotent `Upsert` keyed on `aggregated_until` | `internal/domain/meterusagecheckpoint/` |
+| New Ent schema `meter_usage_checkpoint`: `tenant_id`, `environment_id`, `customer_id`, `meter_id`, `aggregation_type`, `total` (numeric), `aggregated_until`, `invoice_id`. Unique on (tenant, environment, customer, meter, `aggregated_until`). | `ent/schema/meter_usage_checkpoint.go`, then `make generate-ent` and `make generate-migration` |
+| Domain model and repository interface: `GetLatestAtOrBefore(Key{customer, meter, aggregation type}, t)`, which reads back only checkpoints of the same type, and an idempotent `Upsert` keyed on `aggregated_until` | `internal/domain/meterusagecheckpoint/` |
 | Ent repository and an in-memory test store | `internal/repository/ent/`, `internal/testutil/` |
 
 Every query filters on tenant and environment.
 
-## PR 3: Reading the total (`NEVER` only)
+## PR 3: Reading the total (generic checkpoints)
 
 `BILLING_PERIOD` reads need no new code: the existing period sum over `meter_usage` already returns the signed net once PR 1 stops the clamp.
 
 | Change | Where |
 |---|---|
-| `SignedSumTotal(ctx, customer, meter, at)` = latest checkpoint at or before `at` + `SUM(qty_total)` over [`aggregated_until`, `at`) | `internal/ee/service/meter_usage.go` |
+| `GetCheckpointedUsage(CheckpointedUsageRequest{customer, meter, aggregation type, until})` = latest checkpoint of that type combined with the usage over [`aggregated_until`, `until`). `SaveUsageCheckpoint` records it. | `internal/ee/service/meter_usage_checkpoint.go` |
+| Combine rules: added for `SUM`, `SIGNED_SUM`, `SUM_WITH_MULTIPLIER`, `COUNT`; the larger for `MAX`; the later reading for `LATEST`. `COUNT_UNIQUE`, `AVG` and `WEIGHTED_SUM` are rejected (`AggregationType.SupportsCheckpoint`). | Same |
 | No checkpoint yet: sum from the start of history (the one-time bootstrap) | Same |
 | Resolve customer external ids the same way the existing meter-usage reads do | Same |
 
-Tests: no checkpoint; a checkpoint plus later changes; a late event behind a checkpoint is ignored; the total can go below zero.
+Tests: for every supported type, a checkpoint plus later usage equals the whole-history aggregate; no checkpoint; a late event behind a checkpoint is ignored; a checkpoint of another type is not read; the total can go below zero.
 
 ## PR 4: Billing
 
 | Change | Where |
 |---|---|
-| Usage for the period: `SignedSumTotal` at period end (`NEVER`) or the net over the whole period (`BILLING_PERIOD`) | `internal/ee/service/billing_meter_usage.go` |
+| Usage for the period: the checkpointed aggregate at period end for meters that keep one (`keepsRunningAggregate`: `SIGNED_SUM` with `NEVER` today), the net over the whole period otherwise | `internal/ee/service/billing_meter_usage.go` |
 | Both modes: only the line item active at period end bills that usage; the ones it replaced bill 0. Reuse or generalise the `LATEST` handoff. | `latest_meter_handoff.go` (stashed in `921c9309`; it must land first or move into this PR) |
 | Allowance = sum of `grant_quota` across the feature's entitlements active at period end. Skip `adjustMeterUsageEntitlement` and the grant fold for `SIGNED_SUM`. | `billing_meter_usage.go` (~:286-310) |
 | **Floor on the bill only**: billed quantity = max(0, quantity − allowance), applied as the last step before pricing. Nothing upstream is floored. | Same |
