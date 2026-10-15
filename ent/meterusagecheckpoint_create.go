@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -120,6 +121,12 @@ func (_c *MeterUsageCheckpointCreate) SetCustomerID(v string) *MeterUsageCheckpo
 // SetMeterID sets the "meter_id" field.
 func (_c *MeterUsageCheckpointCreate) SetMeterID(v string) *MeterUsageCheckpointCreate {
 	_c.mutation.SetMeterID(v)
+	return _c
+}
+
+// SetAggregationType sets the "aggregation_type" field.
+func (_c *MeterUsageCheckpointCreate) SetAggregationType(v types.AggregationType) *MeterUsageCheckpointCreate {
+	_c.mutation.SetAggregationType(v)
 	return _c
 }
 
@@ -243,6 +250,14 @@ func (_c *MeterUsageCheckpointCreate) check() error {
 			return &ValidationError{Name: "meter_id", err: fmt.Errorf(`ent: validator failed for field "MeterUsageCheckpoint.meter_id": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.AggregationType(); !ok {
+		return &ValidationError{Name: "aggregation_type", err: errors.New(`ent: missing required field "MeterUsageCheckpoint.aggregation_type"`)}
+	}
+	if v, ok := _c.mutation.AggregationType(); ok {
+		if err := meterusagecheckpoint.AggregationTypeValidator(string(v)); err != nil {
+			return &ValidationError{Name: "aggregation_type", err: fmt.Errorf(`ent: validator failed for field "MeterUsageCheckpoint.aggregation_type": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Total(); !ok {
 		return &ValidationError{Name: "total", err: errors.New(`ent: missing required field "MeterUsageCheckpoint.total"`)}
 	}
@@ -319,6 +334,10 @@ func (_c *MeterUsageCheckpointCreate) createSpec() (*MeterUsageCheckpoint, *sqlg
 	if value, ok := _c.mutation.MeterID(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldMeterID, field.TypeString, value)
 		_node.MeterID = value
+	}
+	if value, ok := _c.mutation.AggregationType(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregationType, field.TypeString, value)
+		_node.AggregationType = value
 	}
 	if value, ok := _c.mutation.Total(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)

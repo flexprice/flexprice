@@ -1490,6 +1490,10 @@ func init() {
 	meterusagecheckpointDescMeterID := meterusagecheckpointFields[2].Descriptor()
 	// meterusagecheckpoint.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
 	meterusagecheckpoint.MeterIDValidator = meterusagecheckpointDescMeterID.Validators[0].(func(string) error)
+	// meterusagecheckpointDescAggregationType is the schema descriptor for aggregation_type field.
+	meterusagecheckpointDescAggregationType := meterusagecheckpointFields[3].Descriptor()
+	// meterusagecheckpoint.AggregationTypeValidator is a validator for the "aggregation_type" field. It is called by the builders before save.
+	meterusagecheckpoint.AggregationTypeValidator = meterusagecheckpointDescAggregationType.Validators[0].(func(string) error)
 	paymentMixin := schema.Payment{}.Mixin()
 	paymentMixinFields0 := paymentMixin[0].Fields()
 	_ = paymentMixinFields0

@@ -5,11 +5,12 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
-// MeterUsageCheckpoint is a SIGNED_SUM meter's running total for one customer as of a
-// point in time. Reads add the changes since the latest checkpoint.
+// MeterUsageCheckpoint is a meter's running aggregate for one customer up to a point in
+// time. Reads combine the latest checkpoint with the changes since.
 type MeterUsageCheckpoint struct {
 	ent.Schema
 }
@@ -43,6 +44,14 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 			}).
 			NotEmpty().
 			Immutable(),
+
+		// How the total was aggregated. A checkpoint is only read back for the same type.
+		field.String("aggregation_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			NotEmpty().
+			GoType(types.AggregationType("")),
 
 		// Signed: a SIGNED_SUM total can be negative when the customer sends bad data.
 		field.Other("total", decimal.Decimal{}).

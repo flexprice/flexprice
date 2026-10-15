@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -66,6 +67,20 @@ func (_u *MeterUsageCheckpointUpdate) SetNillableUpdatedBy(v *string) *MeterUsag
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (_u *MeterUsageCheckpointUpdate) ClearUpdatedBy() *MeterUsageCheckpointUpdate {
 	_u.mutation.ClearUpdatedBy()
+	return _u
+}
+
+// SetAggregationType sets the "aggregation_type" field.
+func (_u *MeterUsageCheckpointUpdate) SetAggregationType(v types.AggregationType) *MeterUsageCheckpointUpdate {
+	_u.mutation.SetAggregationType(v)
+	return _u
+}
+
+// SetNillableAggregationType sets the "aggregation_type" field if the given value is not nil.
+func (_u *MeterUsageCheckpointUpdate) SetNillableAggregationType(v *types.AggregationType) *MeterUsageCheckpointUpdate {
+	if v != nil {
+		_u.SetAggregationType(*v)
+	}
 	return _u
 }
 
@@ -144,7 +159,20 @@ func (_u *MeterUsageCheckpointUpdate) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MeterUsageCheckpointUpdate) check() error {
+	if v, ok := _u.mutation.AggregationType(); ok {
+		if err := meterusagecheckpoint.AggregationTypeValidator(string(v)); err != nil {
+			return &ValidationError{Name: "aggregation_type", err: fmt.Errorf(`ent: validator failed for field "MeterUsageCheckpoint.aggregation_type": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *MeterUsageCheckpointUpdate) sqlSave(ctx context.Context) (_node int, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(meterusagecheckpoint.Table, meterusagecheckpoint.Columns, sqlgraph.NewFieldSpec(meterusagecheckpoint.FieldID, field.TypeString))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -170,6 +198,9 @@ func (_u *MeterUsageCheckpointUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(meterusagecheckpoint.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AggregationType(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregationType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Total(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)
@@ -237,6 +268,20 @@ func (_u *MeterUsageCheckpointUpdateOne) SetNillableUpdatedBy(v *string) *MeterU
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (_u *MeterUsageCheckpointUpdateOne) ClearUpdatedBy() *MeterUsageCheckpointUpdateOne {
 	_u.mutation.ClearUpdatedBy()
+	return _u
+}
+
+// SetAggregationType sets the "aggregation_type" field.
+func (_u *MeterUsageCheckpointUpdateOne) SetAggregationType(v types.AggregationType) *MeterUsageCheckpointUpdateOne {
+	_u.mutation.SetAggregationType(v)
+	return _u
+}
+
+// SetNillableAggregationType sets the "aggregation_type" field if the given value is not nil.
+func (_u *MeterUsageCheckpointUpdateOne) SetNillableAggregationType(v *types.AggregationType) *MeterUsageCheckpointUpdateOne {
+	if v != nil {
+		_u.SetAggregationType(*v)
+	}
 	return _u
 }
 
@@ -328,7 +373,20 @@ func (_u *MeterUsageCheckpointUpdateOne) defaults() {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MeterUsageCheckpointUpdateOne) check() error {
+	if v, ok := _u.mutation.AggregationType(); ok {
+		if err := meterusagecheckpoint.AggregationTypeValidator(string(v)); err != nil {
+			return &ValidationError{Name: "aggregation_type", err: fmt.Errorf(`ent: validator failed for field "MeterUsageCheckpoint.aggregation_type": %w`, err)}
+		}
+	}
+	return nil
+}
+
 func (_u *MeterUsageCheckpointUpdateOne) sqlSave(ctx context.Context) (_node *MeterUsageCheckpoint, err error) {
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
 	_spec := sqlgraph.NewUpdateSpec(meterusagecheckpoint.Table, meterusagecheckpoint.Columns, sqlgraph.NewFieldSpec(meterusagecheckpoint.FieldID, field.TypeString))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -371,6 +429,9 @@ func (_u *MeterUsageCheckpointUpdateOne) sqlSave(ctx context.Context) (_node *Me
 	}
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(meterusagecheckpoint.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AggregationType(); ok {
+		_spec.SetField(meterusagecheckpoint.FieldAggregationType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Total(); ok {
 		_spec.SetField(meterusagecheckpoint.FieldTotal, field.TypeOther, value)

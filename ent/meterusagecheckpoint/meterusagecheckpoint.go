@@ -31,6 +31,8 @@ const (
 	FieldCustomerID = "customer_id"
 	// FieldMeterID holds the string denoting the meter_id field in the database.
 	FieldMeterID = "meter_id"
+	// FieldAggregationType holds the string denoting the aggregation_type field in the database.
+	FieldAggregationType = "aggregation_type"
 	// FieldTotal holds the string denoting the total field in the database.
 	FieldTotal = "total"
 	// FieldAggregatedUntil holds the string denoting the aggregated_until field in the database.
@@ -53,6 +55,7 @@ var Columns = []string{
 	FieldEnvironmentID,
 	FieldCustomerID,
 	FieldMeterID,
+	FieldAggregationType,
 	FieldTotal,
 	FieldAggregatedUntil,
 	FieldInvoiceID,
@@ -85,6 +88,8 @@ var (
 	CustomerIDValidator func(string) error
 	// MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
 	MeterIDValidator func(string) error
+	// AggregationTypeValidator is a validator for the "aggregation_type" field. It is called by the builders before save.
+	AggregationTypeValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the MeterUsageCheckpoint queries.
@@ -138,6 +143,11 @@ func ByCustomerID(opts ...sql.OrderTermOption) OrderOption {
 // ByMeterID orders the results by the meter_id field.
 func ByMeterID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMeterID, opts...).ToFunc()
+}
+
+// ByAggregationType orders the results by the aggregation_type field.
+func ByAggregationType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAggregationType, opts...).ToFunc()
 }
 
 // ByTotal orders the results by the total field.

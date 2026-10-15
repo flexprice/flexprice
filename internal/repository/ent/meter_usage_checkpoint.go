@@ -24,12 +24,13 @@ func NewMeterUsageCheckpointRepository(client postgres.IClient, log *logger.Logg
 
 func (r *meterUsageCheckpointRepository) GetLatestAtOrBefore(
 	ctx context.Context,
-	customerID, meterID string,
+	key domainCheckpoint.Key,
 	at time.Time,
 ) (*domainCheckpoint.MeterUsageCheckpoint, error) {
 	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "get_latest", map[string]interface{}{
-		"customer_id": customerID,
-		"meter_id":    meterID,
+		"customer_id":      key.CustomerID,
+		"meter_id":         key.MeterID,
+		"aggregation_type": key.AggregationType,
 	})
 	defer FinishSpan(span)
 
@@ -37,8 +38,9 @@ func (r *meterUsageCheckpointRepository) GetLatestAtOrBefore(
 		Where(
 			meterusagecheckpoint.TenantID(types.GetTenantID(ctx)),
 			meterusagecheckpoint.EnvironmentID(types.GetEnvironmentID(ctx)),
-			meterusagecheckpoint.CustomerID(customerID),
-			meterusagecheckpoint.MeterID(meterID),
+			meterusagecheckpoint.CustomerID(key.CustomerID),
+			meterusagecheckpoint.MeterID(key.MeterID),
+			meterusagecheckpoint.AggregationType(key.AggregationType),
 			meterusagecheckpoint.AggregatedUntilLTE(at),
 			meterusagecheckpoint.Status(string(types.StatusPublished)),
 		).
@@ -84,6 +86,7 @@ func (r *meterUsageCheckpointRepository) Upsert(
 		SetID(c.ID).
 		SetCustomerID(c.CustomerID).
 		SetMeterID(c.MeterID).
+		SetAggregationType(c.AggregationType).
 		SetTotal(c.Total).
 		SetAggregatedUntil(c.AggregatedUntil).
 		SetNillableInvoiceID(c.InvoiceID).
@@ -141,6 +144,7 @@ func (r *meterUsageCheckpointRepository) updateExisting(
 	}
 
 	updated, err := client.MeterUsageCheckpoint.UpdateOneID(existing.ID).
+		SetAggregationType(c.AggregationType).
 		SetTotal(c.Total).
 		SetNillableInvoiceID(c.InvoiceID).
 		SetStatus(string(types.StatusPublished)).

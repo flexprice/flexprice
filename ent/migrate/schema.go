@@ -1535,6 +1535,7 @@ var (
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "aggregation_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "total", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
 		{Name: "aggregated_until", Type: field.TypeTime},
 		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1548,7 +1549,7 @@ var (
 			{
 				Name:    "meterusagecheckpoint_customer_meter_aggregated_until",
 				Unique:  true,
-				Columns: []*schema.Column{MeterUsageCheckpointsColumns[1], MeterUsageCheckpointsColumns[7], MeterUsageCheckpointsColumns[8], MeterUsageCheckpointsColumns[9], MeterUsageCheckpointsColumns[11]},
+				Columns: []*schema.Column{MeterUsageCheckpointsColumns[1], MeterUsageCheckpointsColumns[7], MeterUsageCheckpointsColumns[8], MeterUsageCheckpointsColumns[9], MeterUsageCheckpointsColumns[12]},
 			},
 		},
 	}

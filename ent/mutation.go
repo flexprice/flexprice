@@ -43507,6 +43507,7 @@ type MeterUsageCheckpointMutation struct {
 	environment_id   *string
 	customer_id      *string
 	meter_id         *string
+	aggregation_type *types.AggregationType
 	total            *decimal.Decimal
 	aggregated_until *time.Time
 	invoice_id       *string
@@ -43983,6 +43984,42 @@ func (m *MeterUsageCheckpointMutation) ResetMeterID() {
 	m.meter_id = nil
 }
 
+// SetAggregationType sets the "aggregation_type" field.
+func (m *MeterUsageCheckpointMutation) SetAggregationType(tt types.AggregationType) {
+	m.aggregation_type = &tt
+}
+
+// AggregationType returns the value of the "aggregation_type" field in the mutation.
+func (m *MeterUsageCheckpointMutation) AggregationType() (r types.AggregationType, exists bool) {
+	v := m.aggregation_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregationType returns the old "aggregation_type" field's value of the MeterUsageCheckpoint entity.
+// If the MeterUsageCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsageCheckpointMutation) OldAggregationType(ctx context.Context) (v types.AggregationType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregationType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregationType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregationType: %w", err)
+	}
+	return oldValue.AggregationType, nil
+}
+
+// ResetAggregationType resets all changes to the "aggregation_type" field.
+func (m *MeterUsageCheckpointMutation) ResetAggregationType() {
+	m.aggregation_type = nil
+}
+
 // SetTotal sets the "total" field.
 func (m *MeterUsageCheckpointMutation) SetTotal(d decimal.Decimal) {
 	m.total = &d
@@ -44138,7 +44175,7 @@ func (m *MeterUsageCheckpointMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MeterUsageCheckpointMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, meterusagecheckpoint.FieldTenantID)
 	}
@@ -44165,6 +44202,9 @@ func (m *MeterUsageCheckpointMutation) Fields() []string {
 	}
 	if m.meter_id != nil {
 		fields = append(fields, meterusagecheckpoint.FieldMeterID)
+	}
+	if m.aggregation_type != nil {
+		fields = append(fields, meterusagecheckpoint.FieldAggregationType)
 	}
 	if m.total != nil {
 		fields = append(fields, meterusagecheckpoint.FieldTotal)
@@ -44201,6 +44241,8 @@ func (m *MeterUsageCheckpointMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomerID()
 	case meterusagecheckpoint.FieldMeterID:
 		return m.MeterID()
+	case meterusagecheckpoint.FieldAggregationType:
+		return m.AggregationType()
 	case meterusagecheckpoint.FieldTotal:
 		return m.Total()
 	case meterusagecheckpoint.FieldAggregatedUntil:
@@ -44234,6 +44276,8 @@ func (m *MeterUsageCheckpointMutation) OldField(ctx context.Context, name string
 		return m.OldCustomerID(ctx)
 	case meterusagecheckpoint.FieldMeterID:
 		return m.OldMeterID(ctx)
+	case meterusagecheckpoint.FieldAggregationType:
+		return m.OldAggregationType(ctx)
 	case meterusagecheckpoint.FieldTotal:
 		return m.OldTotal(ctx)
 	case meterusagecheckpoint.FieldAggregatedUntil:
@@ -44311,6 +44355,13 @@ func (m *MeterUsageCheckpointMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMeterID(v)
+		return nil
+	case meterusagecheckpoint.FieldAggregationType:
+		v, ok := value.(types.AggregationType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregationType(v)
 		return nil
 	case meterusagecheckpoint.FieldTotal:
 		v, ok := value.(decimal.Decimal)
@@ -44435,6 +44486,9 @@ func (m *MeterUsageCheckpointMutation) ResetField(name string) error {
 		return nil
 	case meterusagecheckpoint.FieldMeterID:
 		m.ResetMeterID()
+		return nil
+	case meterusagecheckpoint.FieldAggregationType:
+		m.ResetAggregationType()
 		return nil
 	case meterusagecheckpoint.FieldTotal:
 		m.ResetTotal()

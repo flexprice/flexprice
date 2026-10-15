@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -108,6 +109,12 @@ func CustomerID(v string) predicate.MeterUsageCheckpoint {
 // MeterID applies equality check predicate on the "meter_id" field. It's identical to MeterIDEQ.
 func MeterID(v string) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldMeterID, v))
+}
+
+// AggregationType applies equality check predicate on the "aggregation_type" field. It's identical to AggregationTypeEQ.
+func AggregationType(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAggregationType, vc))
 }
 
 // Total applies equality check predicate on the "total" field. It's identical to TotalEQ.
@@ -688,6 +695,90 @@ func MeterIDEqualFold(v string) predicate.MeterUsageCheckpoint {
 // MeterIDContainsFold applies the ContainsFold predicate on the "meter_id" field.
 func MeterIDContainsFold(v string) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldContainsFold(FieldMeterID, v))
+}
+
+// AggregationTypeEQ applies the EQ predicate on the "aggregation_type" field.
+func AggregationTypeEQ(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAggregationType, vc))
+}
+
+// AggregationTypeNEQ applies the NEQ predicate on the "aggregation_type" field.
+func AggregationTypeNEQ(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldNEQ(FieldAggregationType, vc))
+}
+
+// AggregationTypeIn applies the In predicate on the "aggregation_type" field.
+func AggregationTypeIn(vs ...types.AggregationType) predicate.MeterUsageCheckpoint {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.MeterUsageCheckpoint(sql.FieldIn(FieldAggregationType, v...))
+}
+
+// AggregationTypeNotIn applies the NotIn predicate on the "aggregation_type" field.
+func AggregationTypeNotIn(vs ...types.AggregationType) predicate.MeterUsageCheckpoint {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.MeterUsageCheckpoint(sql.FieldNotIn(FieldAggregationType, v...))
+}
+
+// AggregationTypeGT applies the GT predicate on the "aggregation_type" field.
+func AggregationTypeGT(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldGT(FieldAggregationType, vc))
+}
+
+// AggregationTypeGTE applies the GTE predicate on the "aggregation_type" field.
+func AggregationTypeGTE(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldGTE(FieldAggregationType, vc))
+}
+
+// AggregationTypeLT applies the LT predicate on the "aggregation_type" field.
+func AggregationTypeLT(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldLT(FieldAggregationType, vc))
+}
+
+// AggregationTypeLTE applies the LTE predicate on the "aggregation_type" field.
+func AggregationTypeLTE(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldAggregationType, vc))
+}
+
+// AggregationTypeContains applies the Contains predicate on the "aggregation_type" field.
+func AggregationTypeContains(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldContains(FieldAggregationType, vc))
+}
+
+// AggregationTypeHasPrefix applies the HasPrefix predicate on the "aggregation_type" field.
+func AggregationTypeHasPrefix(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldHasPrefix(FieldAggregationType, vc))
+}
+
+// AggregationTypeHasSuffix applies the HasSuffix predicate on the "aggregation_type" field.
+func AggregationTypeHasSuffix(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldHasSuffix(FieldAggregationType, vc))
+}
+
+// AggregationTypeEqualFold applies the EqualFold predicate on the "aggregation_type" field.
+func AggregationTypeEqualFold(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldEqualFold(FieldAggregationType, vc))
+}
+
+// AggregationTypeContainsFold applies the ContainsFold predicate on the "aggregation_type" field.
+func AggregationTypeContainsFold(v types.AggregationType) predicate.MeterUsageCheckpoint {
+	vc := string(v)
+	return predicate.MeterUsageCheckpoint(sql.FieldContainsFold(FieldAggregationType, vc))
 }
 
 // TotalEQ applies the EQ predicate on the "total" field.

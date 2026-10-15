@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -36,6 +37,8 @@ type MeterUsageCheckpoint struct {
 	CustomerID string `json:"customer_id,omitempty"`
 	// MeterID holds the value of the "meter_id" field.
 	MeterID string `json:"meter_id,omitempty"`
+	// AggregationType holds the value of the "aggregation_type" field.
+	AggregationType types.AggregationType `json:"aggregation_type,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
 	// AggregatedUntil holds the value of the "aggregated_until" field.
@@ -52,7 +55,7 @@ func (*MeterUsageCheckpoint) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case meterusagecheckpoint.FieldTotal:
 			values[i] = new(decimal.Decimal)
-		case meterusagecheckpoint.FieldID, meterusagecheckpoint.FieldTenantID, meterusagecheckpoint.FieldStatus, meterusagecheckpoint.FieldCreatedBy, meterusagecheckpoint.FieldUpdatedBy, meterusagecheckpoint.FieldEnvironmentID, meterusagecheckpoint.FieldCustomerID, meterusagecheckpoint.FieldMeterID, meterusagecheckpoint.FieldInvoiceID:
+		case meterusagecheckpoint.FieldID, meterusagecheckpoint.FieldTenantID, meterusagecheckpoint.FieldStatus, meterusagecheckpoint.FieldCreatedBy, meterusagecheckpoint.FieldUpdatedBy, meterusagecheckpoint.FieldEnvironmentID, meterusagecheckpoint.FieldCustomerID, meterusagecheckpoint.FieldMeterID, meterusagecheckpoint.FieldAggregationType, meterusagecheckpoint.FieldInvoiceID:
 			values[i] = new(sql.NullString)
 		case meterusagecheckpoint.FieldCreatedAt, meterusagecheckpoint.FieldUpdatedAt, meterusagecheckpoint.FieldAggregatedUntil:
 			values[i] = new(sql.NullTime)
@@ -130,6 +133,12 @@ func (_m *MeterUsageCheckpoint) assignValues(columns []string, values []any) err
 				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
 			} else if value.Valid {
 				_m.MeterID = value.String
+			}
+		case meterusagecheckpoint.FieldAggregationType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field aggregation_type", values[i])
+			} else if value.Valid {
+				_m.AggregationType = types.AggregationType(value.String)
 			}
 		case meterusagecheckpoint.FieldTotal:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
@@ -212,6 +221,9 @@ func (_m *MeterUsageCheckpoint) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("meter_id=")
 	builder.WriteString(_m.MeterID)
+	builder.WriteString(", ")
+	builder.WriteString("aggregation_type=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AggregationType))
 	builder.WriteString(", ")
 	builder.WriteString("total=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Total))

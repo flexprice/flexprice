@@ -21,17 +21,17 @@ func NewInMemoryMeterUsageCheckpointStore() *InMemoryMeterUsageCheckpointStore {
 
 func (s *InMemoryMeterUsageCheckpointStore) GetLatestAtOrBefore(
 	ctx context.Context,
-	customerID, meterID string,
+	key meterusagecheckpoint.Key,
 	at time.Time,
 ) (*meterusagecheckpoint.MeterUsageCheckpoint, error) {
-	rows, err := s.matching(ctx, customerID, meterID)
+	rows, err := s.matching(ctx, key.CustomerID, key.MeterID)
 	if err != nil {
 		return nil, err
 	}
 
 	var latest *meterusagecheckpoint.MeterUsageCheckpoint
 	for _, c := range rows {
-		if c.AggregatedUntil.After(at) {
+		if c.AggregationType != key.AggregationType || c.AggregatedUntil.After(at) {
 			continue
 		}
 		if latest == nil || c.AggregatedUntil.After(latest.AggregatedUntil) {
@@ -58,6 +58,7 @@ func (s *InMemoryMeterUsageCheckpointStore) Upsert(
 			continue
 		}
 		updated := *existing
+		updated.AggregationType = c.AggregationType
 		updated.Total = c.Total
 		updated.InvoiceID = c.InvoiceID
 		updated.UpdatedAt = time.Now().UTC()
