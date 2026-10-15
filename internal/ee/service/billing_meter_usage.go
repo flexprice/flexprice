@@ -279,7 +279,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 			switch {
 			case !matchingCharge.IsOverage && isSignedSum:
-				quantityForCalculation = signedSumBillable(quantityForCalculation, entitlement)
+				quantityForCalculation = signedSumBillable(quantityForCalculation, entitlement,
+					keepsRunningAggregate(m), periodShare(item, periodStart, periodEnd))
 				if entitlement != nil {
 					adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
 					entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
@@ -469,20 +470,40 @@ func (s *billingService) CalculateMeterUsageCharges(
 	return usageCharges, totalUsageCost, nil
 }
 
-// signedSumBillable is a SIGNED_SUM line item's billable quantity: usage less the ceiling
-// from the entitlement's grant config, never below 0. usage_limit is not used.
-func signedSumBillable(usage decimal.Decimal, ent *dto.AggregatedEntitlement) decimal.Decimal {
-	usage = decimal.Max(usage, decimal.Zero)
-	if ent == nil || !ent.IsEnabled {
-		return usage
+// signedSumBillable is a SIGNED_SUM line item's billable quantity, never below 0. A meter
+// that keeps a running total bills (total − ceiling) for the line item's share of the
+// period; otherwise the line item's own net usage less its share of the ceiling. The
+// ceiling is the entitlement's grant_quota; usage_limit is not used.
+func signedSumBillable(usage decimal.Decimal, ent *dto.AggregatedEntitlement, running bool, share decimal.Decimal) decimal.Decimal {
+	ceiling := decimal.Zero
+	if ent != nil && ent.IsEnabled {
+		if ent.GrantUnlimited {
+			return decimal.Zero
+		}
+		if ent.GrantQuota != nil {
+			ceiling = *ent.GrantQuota
+		}
 	}
-	if ent.GrantUnlimited {
+	if running {
+		return decimal.Max(usage.Sub(ceiling), decimal.Zero).Mul(share)
+	}
+	return decimal.Max(usage.Sub(ceiling.Mul(share)), decimal.Zero)
+}
+
+// periodShare is the fraction of [periodStart, periodEnd) that the line item covers.
+func periodShare(item *subscription.SubscriptionLineItem, periodStart, periodEnd time.Time) decimal.Decimal {
+	period := periodEnd.Sub(periodStart)
+	if period <= 0 {
+		return decimal.NewFromInt(1)
+	}
+	covered := item.GetPeriodEnd(periodEnd).Sub(item.GetPeriodStart(periodStart))
+	if covered <= 0 {
 		return decimal.Zero
 	}
-	if ent.GrantQuota == nil {
-		return usage
+	if covered >= period {
+		return decimal.NewFromInt(1)
 	}
-	return decimal.Max(usage.Sub(*ent.GrantQuota), decimal.Zero)
+	return decimal.NewFromInt(int64(covered)).Div(decimal.NewFromInt(int64(period)))
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed

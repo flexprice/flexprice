@@ -33,16 +33,17 @@ func (s *MeterUsageServiceSuite) signedSumLineItem(ctx context.Context, id, mete
 	s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
 }
 
-// A price change splits the period into two line items. The line item active at
-// period end bills the whole period once; the one it replaced bills nothing.
-func (s *MeterUsageServiceSuite) TestSignedSum_PeriodEndLineItemBillsThePeriod() {
+// A price change splits the period into two line items, and each reads its own window:
+// the net inside it, or for a running total, the total held at its end.
+func (s *MeterUsageServiceSuite) TestSignedSum_LineItemsReadTheirOwnWindow() {
 	tests := []struct {
 		name    string
 		reset   types.ResetUsage
+		wantOld decimal.Decimal
 		wantNew decimal.Decimal
 	}{
-		{"billing_period_bills_the_period_net", types.ResetUsageBillingPeriod, decimal.NewFromInt(70)},
-		{"never_bills_the_total_held", types.ResetUsageNever, decimal.NewFromInt(570)},
+		{"billing_period_reads_each_window_net", types.ResetUsageBillingPeriod, decimal.NewFromInt(100), decimal.NewFromInt(-30)},
+		{"never_reads_the_total_at_each_end", types.ResetUsageNever, decimal.NewFromInt(600), decimal.NewFromInt(570)},
 	}
 
 	for _, tt := range tests {
@@ -73,8 +74,8 @@ func (s *MeterUsageServiceSuite) TestSignedSum_PeriodEndLineItemBillsThePeriod()
 				}
 			}
 			s.Require().Len(usageByItem, 2)
-			s.True(usageByItem["li_old"].IsZero(), "replaced line item bills nothing, got %s", usageByItem["li_old"])
-			s.True(tt.wantNew.Equal(usageByItem["li_new"]), "want %s, got %s", tt.wantNew, usageByItem["li_new"])
+			s.True(tt.wantOld.Equal(usageByItem["li_old"]), "old: want %s, got %s", tt.wantOld, usageByItem["li_old"])
+			s.True(tt.wantNew.Equal(usageByItem["li_new"]), "new: want %s, got %s", tt.wantNew, usageByItem["li_new"])
 		})
 	}
 }
@@ -127,22 +128,27 @@ func TestKeepsRunningAggregate(t *testing.T) {
 func TestSignedSumBillable(t *testing.T) {
 	quota := decimal.NewFromInt(10)
 	withQuota := &dto.AggregatedEntitlement{IsEnabled: true, GrantConfig: dto.GrantConfig{GrantQuota: &quota}}
+	full, half := decimal.NewFromInt(1), decimal.NewFromFloat(0.5)
 	tests := []struct {
-		name  string
-		usage decimal.Decimal
-		ent   *dto.AggregatedEntitlement
-		want  decimal.Decimal
+		name    string
+		usage   decimal.Decimal
+		ent     *dto.AggregatedEntitlement
+		running bool
+		share   decimal.Decimal
+		want    decimal.Decimal
 	}{
-		{"no entitlement bills all", decimal.NewFromInt(46), nil, decimal.NewFromInt(46)},
-		{"ceiling is taken off", decimal.NewFromInt(46), withQuota, decimal.NewFromInt(36)},
-		{"under the ceiling bills 0", decimal.NewFromInt(4), withQuota, decimal.Zero},
-		{"unlimited bills 0", decimal.NewFromInt(46), &dto.AggregatedEntitlement{IsEnabled: true, GrantConfig: dto.GrantConfig{GrantUnlimited: true}}, decimal.Zero},
-		{"usage_limit alone is ignored", decimal.NewFromInt(46), &dto.AggregatedEntitlement{IsEnabled: true, UsageLimit: lo.ToPtr(int64(10))}, decimal.NewFromInt(46)},
-		{"negative usage bills 0", decimal.NewFromInt(-5), nil, decimal.Zero},
+		{"no entitlement bills all", decimal.NewFromInt(46), nil, true, full, decimal.NewFromInt(46)},
+		{"ceiling is taken off", decimal.NewFromInt(46), withQuota, true, full, decimal.NewFromInt(36)},
+		{"running total: total less ceiling, for the share", decimal.NewFromInt(50), withQuota, true, half, decimal.NewFromInt(20)},
+		{"period net: ceiling shared out", decimal.NewFromInt(100), withQuota, false, half, decimal.NewFromInt(95)},
+		{"under the ceiling bills 0", decimal.NewFromInt(4), withQuota, true, full, decimal.Zero},
+		{"unlimited bills 0", decimal.NewFromInt(46), &dto.AggregatedEntitlement{IsEnabled: true, GrantConfig: dto.GrantConfig{GrantUnlimited: true}}, true, full, decimal.Zero},
+		{"usage_limit alone is ignored", decimal.NewFromInt(46), &dto.AggregatedEntitlement{IsEnabled: true, UsageLimit: lo.ToPtr(int64(10))}, true, full, decimal.NewFromInt(46)},
+		{"negative net bills 0", decimal.NewFromInt(-30), withQuota, false, half, decimal.Zero},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := signedSumBillable(tt.usage, tt.ent)
+			got := signedSumBillable(tt.usage, tt.ent, tt.running, tt.share)
 			if !tt.want.Equal(got) {
 				t.Fatalf("want %s, got %s", tt.want, got)
 			}

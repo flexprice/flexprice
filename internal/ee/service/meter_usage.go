@@ -553,21 +553,14 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	// 10. Query standard meters WITH per-line-item date ranges.
 	//     Group by (effectiveStart, effectiveEnd, aggType) so line items that
 	//     share the same period are batched into one ClickHouse call.
-	//     A SIGNED_SUM line item replaced earlier in the window is skipped here, so step 12
-	//     gives it zero usage; its successor reads the whole window instead.
-	handoff := newPeriodEndHandoff(lineItems, func(item *subscription.SubscriptionLineItem) bool {
-		m := result.MeterMap[item.MeterID]
-		return m != nil && m.Aggregation.Type == types.AggregationSignedSum
-	}, usageStartTime, usageEndTime)
-
 	standardGroups := make(map[dateRangeGroup][]*lineItemWithMeter)
 	for meterID, items := range meterToLineItems {
 		m := result.MeterMap[meterID]
 		for _, item := range items {
-			if isBucketedItem(item, m) || handoff.IsSuperseded(item.ID) {
+			if isBucketedItem(item, m) {
 				continue
 			}
-			start := handoff.UsageStart(item, usageStartTime)
+			start := item.GetPeriodStart(usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
 			key := dateRangeGroup{
 				Start:   start,
