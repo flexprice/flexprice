@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
@@ -254,16 +255,36 @@ type AsyncEventClient interface {
 	Close() error
 }
 
+// userAgent marks probe requests so alerts and dashboards can exclude them.
+const userAgent = "flexprice-e2eprobe"
+
 func NewSDKClient(apiHost, apiKey string) Client {
+	httpClient := &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: &userAgentTransport{base: http.DefaultTransport},
+	}
 	sdk := flexprice.New(
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
+		flexprice.WithClient(httpClient),
 	)
-	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
+	return &sdkClient{sdk: sdk, httpClient: httpClient, apiHost: apiHost, apiKey: apiKey}
+}
+
+// userAgentTransport overrides the User-Agent the SDK sets on every request.
+type userAgentTransport struct {
+	base http.RoundTripper
+}
+
+func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("User-Agent", userAgent)
+	return t.base.RoundTrip(req)
 }
 
 type sdkClient struct {
-	sdk *flexprice.Flexprice
+	sdk        *flexprice.Flexprice
+	httpClient *http.Client
 	// apiHost + apiKey are captured here so raw-HTTP methods
 	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
 	// can bypass the SDK's
@@ -415,7 +436,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -576,7 +597,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -605,7 +626,7 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
@@ -848,7 +869,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 		httpReq.Header.Set("x-api-key", c.apiKey)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("do request: %w", err)
 	}
