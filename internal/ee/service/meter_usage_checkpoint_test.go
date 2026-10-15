@@ -17,58 +17,13 @@ func (s *MeterUsageServiceSuite) checkpointRequest(aggType types.AggregationType
 	}
 }
 
-// For every type that supports checkpoints, a checkpoint plus the usage after it must
-// equal the aggregate over the whole history.
-func (s *MeterUsageServiceSuite) TestGetCheckpointedUsage_MatchesFullHistory() {
-	oct1 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	nov1 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		aggType      types.AggregationType
-		windowEvents bool
-		want         decimal.Decimal
-	}{
-		{types.AggregationSum, true, decimal.NewFromInt(85)},
-		{types.AggregationSignedSum, true, decimal.NewFromInt(85)},
-		{types.AggregationCount, true, decimal.NewFromInt(4)},
-		{types.AggregationMax, true, decimal.NewFromInt(40)},
-		{types.AggregationLatest, true, decimal.NewFromInt(30)},
-		{types.AggregationLatest, false, decimal.NewFromInt(10)},
-		{types.AggregationMax, false, decimal.NewFromInt(40)},
-	}
-
-	for _, tt := range tests {
-		name := string(tt.aggType)
-		if !tt.windowEvents {
-			name += "_no_usage_after_checkpoint"
-		}
-		s.Run(name, func() {
-			s.SetupTest()
-			ctx := s.GetContext()
-			s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, oct1.Add(-48*time.Hour), 40)
-			s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, oct1.Add(-24*time.Hour), 10)
-			if tt.windowEvents {
-				s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, oct1.Add(24*time.Hour), 5)
-				s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, oct1.Add(48*time.Hour), 30)
-			}
-
-			_, err := s.svc.SaveUsageCheckpoint(ctx, s.checkpointRequest(tt.aggType, oct1), nil)
-			s.Require().NoError(err)
-
-			got, err := s.svc.GetCheckpointedUsage(ctx, s.checkpointRequest(tt.aggType, nov1))
-			s.Require().NoError(err)
-			s.True(tt.want.Equal(got), "want %s, got %s", tt.want, got)
-		})
-	}
-}
-
 func (s *MeterUsageServiceSuite) TestGetCheckpointedUsage_RejectsUnsupportedType() {
 	ctx := s.GetContext()
 	nov1 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	_, err := s.svc.GetCheckpointedUsage(ctx, s.checkpointRequest(types.AggregationCountUnique, nov1))
+	_, err := s.svc.GetCheckpointedUsage(ctx, s.checkpointRequest(types.AggregationSum, nov1))
 	s.Error(err)
-	_, err = s.svc.SaveUsageCheckpoint(ctx, s.checkpointRequest(types.AggregationAvg, nov1), nil)
+	_, err = s.svc.SaveUsageCheckpoint(ctx, s.checkpointRequest(types.AggregationLatest, nov1), nil)
 	s.Error(err)
 }
 
@@ -97,11 +52,6 @@ func (s *MeterUsageServiceSuite) TestGetCheckpointedUsage_SignedSum() {
 	total, err = s.svc.GetCheckpointedUsage(ctx, s.checkpointRequest(types.AggregationSignedSum, nov1))
 	s.Require().NoError(err)
 	s.True(decimal.NewFromInt(46).Equal(total), "late event behind the checkpoint is ignored, got %s", total)
-
-	// A checkpoint of another type is not read back: COUNT starts from the whole history.
-	count, err := s.svc.GetCheckpointedUsage(ctx, s.checkpointRequest(types.AggregationCount, nov1))
-	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(4).Equal(count), "got %s", count)
 }
 
 func (s *MeterUsageServiceSuite) TestGetCheckpointedUsage_SignedSumGoesBelowZero() {

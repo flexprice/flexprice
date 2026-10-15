@@ -64,14 +64,13 @@ func TestAggregationType_SupportsCheckpoint(t *testing.T) {
 		typ  AggregationType
 		want bool
 	}{
-		{AggregationSum, true},
 		{AggregationSignedSum, true},
-		{AggregationSumWithMultiplier, true},
-		{AggregationCount, true},
-		{AggregationMax, true},
-		{AggregationLatest, true},
 
-		// Need a set, a count or time weighting, not one number.
+		{AggregationSum, false},
+		{AggregationSumWithMultiplier, false},
+		{AggregationCount, false},
+		{AggregationMax, false},
+		{AggregationLatest, false},
 		{AggregationCountUnique, false},
 		{AggregationAvg, false},
 		{AggregationWeightedSum, false},
