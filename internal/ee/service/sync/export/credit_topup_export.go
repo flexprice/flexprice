@@ -63,6 +63,20 @@ func (e *CreditTopupExporter) PrepareData(ctx context.Context, request *dto.Expo
 		"end_time", request.EndTime,
 		"batch_size", batchSize)
 
+	rowCount, err := e.walletRepo.CountCreditTopupsForExport(
+		ctx,
+		request.TenantID,
+		request.EnvID,
+		request.StartTime,
+		request.EndTime,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
+		return nil, 0, err
+	}
+
 	// Collect all CSV records
 	var csvRecords []*CreditTopupCSV
 	totalRecords := 0

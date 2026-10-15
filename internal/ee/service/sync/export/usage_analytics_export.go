@@ -212,6 +212,11 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				record.FeatureGroupName = item.Group.Name
 			}
 
+			if recordCount >= maxExportRows {
+				if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, recordCount+1); err != nil {
+					return nil, 0, err
+				}
+			}
 			if err := csvWriter.Write(e.buildRow(record, metadataFields)); err != nil {
 				return nil, 0, ierr.WithError(err).
 					WithHint("Failed to write CSV row").

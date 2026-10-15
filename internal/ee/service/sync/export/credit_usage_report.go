@@ -99,6 +99,10 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID)
 
+	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, len(customers)); err != nil {
+		return nil, 0, err
+	}
+
 	metadataFields := request.JobConfig.GetExportMetadataFields()
 
 	var buf bytes.Buffer

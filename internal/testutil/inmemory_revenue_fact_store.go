@@ -301,6 +301,27 @@ func (s *InMemoryRevenueFactStore) ListForExport(ctx context.Context, computedAf
 	return result, nil
 }
 
+// CountForExport returns how many facts fall in (computedAfter, computedBefore].
+func (s *InMemoryRevenueFactStore) CountForExport(ctx context.Context, computedAfter, computedBefore time.Time) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	count := 0
+	for _, f := range s.facts {
+		if !CheckTenantFilter(ctx, f.TenantID) || !CheckEnvironmentFilter(ctx, f.EnvironmentID) {
+			continue
+		}
+		if !computedAfter.IsZero() && !f.ComputedAt.After(computedAfter) {
+			continue
+		}
+		if !computedBefore.IsZero() && f.ComputedAt.After(computedBefore) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 // ListFacts pages facts matching the filter, ordered by (day, id).
 func (s *InMemoryRevenueFactStore) ListFacts(ctx context.Context, filter revenuefact.FactsFilter) ([]*revenuefact.RevenueFact, error) {
 	s.mu.RLock()

@@ -1264,6 +1264,72 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 	return result, nil
 }
 
+// CountCreditTopupsForExport returns how many credit topup rows match the export filters.
+func (r *walletRepository) CountCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
+	span := StartRepositorySpan(ctx, "wallet", "count_credit_topups_for_export", map[string]interface{}{
+		"tenant_id": tenantID,
+		"env_id":    envID,
+		"start":     startTime,
+		"end":       endTime,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	query := `
+		SELECT COUNT(*)
+		FROM wallet_transactions wt
+		WHERE
+			wt.tenant_id = $1
+			AND wt.environment_id = $2
+			AND wt.type = $3
+			AND wt.transaction_status = $4
+			AND wt.status = $5
+			AND wt.created_at >= $6
+			AND wt.created_at < $7
+	`
+
+	rows, err := client.QueryContext(ctx, query,
+		tenantID,
+		envID,
+		string(types.TransactionTypeCredit),
+		string(types.TransactionStatusCompleted),
+		string(types.StatusPublished),
+		startTime,
+		endTime,
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count credit topups for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+				"env_id":    envID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var count int
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			SetSpanError(span, err)
+			return 0, ierr.WithError(err).
+				WithHint("Failed to count credit topups for export").
+				Mark(ierr.ErrDatabase)
+		}
+		return 0, nil
+	}
+	if err := rows.Scan(&count); err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to read credit topup count").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return count, nil
+}
+
 // amountPaidSQL is what a credit batch was bought for: the invoice after discount and before tax
 // for an invoiced purchase, zero for free and bonus grants, and NULL for any other credit.
 func amountPaidSQL(tx, inv string) string {
@@ -1478,6 +1544,73 @@ func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantI
 	}
 
 	return result, nil
+}
+
+// CountWalletDebitsForExport returns how many debit transactions match the export window.
+// Expanded consumption rows may exceed this; the debit count is still a cheap volume gate.
+func (r *walletRepository) CountWalletDebitsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
+	span := StartRepositorySpan(ctx, "wallet", "count_wallet_debits_for_export", map[string]interface{}{
+		"tenant_id": tenantID,
+		"env_id":    envID,
+		"start":     startTime,
+		"end":       endTime,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	query := `
+		SELECT COUNT(*)
+		FROM wallet_transactions debit
+		WHERE
+			debit.tenant_id = $1
+			AND debit.environment_id = $2
+			AND debit.type = $3
+			AND debit.transaction_status = $4
+			AND debit.status = $5
+			AND debit.created_at >= $6
+			AND debit.created_at < $7
+	`
+
+	rows, err := client.QueryContext(ctx, query,
+		tenantID,
+		envID,
+		string(types.TransactionTypeDebit),
+		string(types.TransactionStatusCompleted),
+		string(types.StatusPublished),
+		startTime,
+		endTime,
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count wallet debits for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+				"env_id":    envID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var count int
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			SetSpanError(span, err)
+			return 0, ierr.WithError(err).
+				WithHint("Failed to count wallet debits for export").
+				Mark(ierr.ErrDatabase)
+		}
+		return 0, nil
+	}
+	if err := rows.Scan(&count); err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to read wallet debit count").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return count, nil
 }
 
 func (o WalletTransactionQueryOptions) GetFieldResolver(st string) (string, error) {

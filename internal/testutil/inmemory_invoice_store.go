@@ -470,20 +470,9 @@ func (s *InMemoryInvoiceStore) GetNextBillingSequence(ctx context.Context, subsc
 }
 
 func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*invoice.Invoice, error) {
-	filter := types.NewNoLimitInvoiceFilter()
-	invoices, err := s.List(ctx, filter)
+	result, err := s.invoicesForExportWindow(ctx, tenantID, envID, startTime, endTime)
 	if err != nil {
 		return nil, err
-	}
-
-	// Filter by criteria
-	var result []*invoice.Invoice
-	for _, inv := range invoices {
-		if inv.TenantID == tenantID && inv.EnvironmentID == envID &&
-			inv.Status == types.StatusPublished &&
-			!inv.CreatedAt.Before(startTime) && !inv.CreatedAt.After(endTime) {
-			result = append(result, copyInvoice(inv))
-		}
 	}
 
 	// Apply pagination
@@ -495,6 +484,32 @@ func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantI
 		end = len(result)
 	}
 	return result[offset:end], nil
+}
+
+func (s *InMemoryInvoiceStore) CountInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) (int, error) {
+	result, err := s.invoicesForExportWindow(ctx, tenantID, envID, startTime, endTime)
+	if err != nil {
+		return 0, err
+	}
+	return len(result), nil
+}
+
+func (s *InMemoryInvoiceStore) invoicesForExportWindow(ctx context.Context, tenantID, envID string, startTime, endTime time.Time) ([]*invoice.Invoice, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*invoice.Invoice
+	for _, inv := range invoices {
+		if inv.TenantID == tenantID && inv.EnvironmentID == envID &&
+			inv.Status == types.StatusPublished &&
+			!inv.CreatedAt.Before(startTime) && !inv.CreatedAt.After(endTime) {
+			result = append(result, copyInvoice(inv))
+		}
+	}
+	return result, nil
 }
 
 // invoiceFilterFn implements filtering logic for invoices

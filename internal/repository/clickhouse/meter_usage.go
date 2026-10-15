@@ -1085,6 +1085,43 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 	return results, nil
 }
 
+// CountMeterUsageForExport returns an approximate row count for the export window.
+// Uses count() without FINAL so the gate stays cheap; duplicates may inflate the
+// count slightly, which is acceptable for a fail-fast volume check.
+func (r *MeterUsageRepository) CountMeterUsageForExport(ctx context.Context, startTime, endTime time.Time) (int, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "meter_usage", "count_meter_usage_for_export", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"start_time":     startTime,
+		"end_time":       endTime,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT count()
+		FROM meter_usage
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		SETTINGS max_memory_usage = 96636764160
+	`
+
+	var count uint64
+	if err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, startTime, endTime).Scan(&count); err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count meter_usage rows for export").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return int(count), nil
+}
+
 // GetDailyUsageByMeter returns per-day SUM(qty_total) over
 // [StartTime, EndTime) for every meter in MeterIDs, keyed by meter id. The
 // running total is deliberately left to the caller: accumulating here would
