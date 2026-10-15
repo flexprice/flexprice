@@ -44,6 +44,7 @@ jobs:
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
+      api_targets: ${{ steps.config.outputs.api_targets }}
     steps:
       - name: Validate image + resolve targets
         id: config
@@ -56,10 +57,24 @@ jobs:
             echo "::error::image must match ^ghcr.io/flexprice/flexprice@sha256:[0-9a-f]{64}\$"
             exit 1
           fi
+          # Mirrors deploy.yml: the API matrix fans out over api_service plus
+          # extra_api_services, so a revert covers every service a deploy touched.
+          API_TARGETS_JSON=$(echo "$PROD_TARGETS" | python3 -c "
+          import json, sys
+          targets = json.load(sys.stdin)
+          print(json.dumps([
+              {'region': t['region'], 'cluster': t['cluster'], 'api_service': svc}
+              for t in targets
+              for svc in [t['api_service'], *t.get('extra_api_services', [])]
+          ]))
+          ")
           {
             echo "targets<<TARGETS_EOF"
             echo "$PROD_TARGETS"
             echo "TARGETS_EOF"
+            echo "api_targets<<API_TARGETS_EOF"
+            echo "$API_TARGETS_JSON"
+            echo "API_TARGETS_EOF"
           } >> "$GITHUB_OUTPUT"
 
   # Single manual approval gate before any prod ECS rollout. Dry runs bypass it
@@ -87,7 +102,7 @@ jobs:
       contents: read
     strategy:
       matrix:
-        target: ${{ fromJson(needs.validate.outputs.targets) }}
+        target: ${{ fromJson(needs.validate.outputs.api_targets) }}
       fail-fast: false
       max-parallel: 3
     steps:
