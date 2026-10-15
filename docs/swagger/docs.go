@@ -17705,10 +17705,16 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage_limit": {
+                    "description": "Deprecated: use grant_quota (or grant_unlimited). A usage_limit on a metered\nfeature is converted into grant_quota.",
                     "type": "integer"
                 },
                 "usage_reset_period": {
-                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
+                    "description": "Deprecated: use grant_duration_unit and grant_duration_value.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
+                        }
+                    ]
                 }
             }
         },
@@ -29221,7 +29227,8 @@ const docTemplate = `{
                 "LATEST",
                 "SUM_WITH_MULTIPLIER",
                 "MAX",
-                "WEIGHTED_SUM"
+                "WEIGHTED_SUM",
+                "SIGNED_SUM"
             ],
             "x-enum-comments": {
                 "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
@@ -29234,7 +29241,8 @@ const docTemplate = `{
                 "AggregationLatest",
                 "AggregationSumWithMultiplier",
                 "AggregationMax",
-                "AggregationWeightedSum"
+                "AggregationWeightedSum",
+                "AggregationSignedSum"
             ]
         },
         "types.AlertCondition": {

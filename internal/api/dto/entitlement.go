@@ -15,11 +15,14 @@ import (
 
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
-	PlanID              string                            `json:"plan_id,omitempty"`
-	FeatureID           string                            `json:"feature_id" binding:"required"`
-	FeatureType         types.FeatureType                 `json:"feature_type" binding:"required"`
-	IsEnabled           bool                              `json:"is_enabled"`
-	UsageLimit          *int64                            `json:"usage_limit"`
+	PlanID      string            `json:"plan_id,omitempty"`
+	FeatureID   string            `json:"feature_id" binding:"required"`
+	FeatureType types.FeatureType `json:"feature_type" binding:"required"`
+	IsEnabled   bool              `json:"is_enabled"`
+	// Deprecated: use grant_quota (or grant_unlimited). A usage_limit on a metered
+	// feature is converted into grant_quota.
+	UsageLimit *int64 `json:"usage_limit"`
+	// Deprecated: use grant_duration_unit and grant_duration_value.
 	UsageResetPeriod    types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
 	IsSoftLimit         bool                              `json:"is_soft_limit"`
 	StaticValue         string                            `json:"static_value"`

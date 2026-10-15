@@ -20051,7 +20051,8 @@
             "type": "string"
           },
           "usage_limit": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Deprecated: use grant_quota (or grant_unlimited). A usage_limit on a metered\nfeature is converted into grant_quota."
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -31006,7 +31007,8 @@
           "LATEST",
           "SUM_WITH_MULTIPLIER",
           "MAX",
-          "WEIGHTED_SUM"
+          "WEIGHTED_SUM",
+          "SIGNED_SUM"
         ],
         "x-enum-comments": {
           "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
@@ -31019,7 +31021,8 @@
           "AggregationLatest",
           "AggregationSumWithMultiplier",
           "AggregationMax",
-          "AggregationWeightedSum"
+          "AggregationWeightedSum",
+          "AggregationSignedSum"
         ],
         "x-speakeasy-name-override": "AggregationType"
       },

@@ -27,7 +27,7 @@ Differences from the plan below, as built:
 - With `NEVER`, analytics queries (windows, filters, group-by) still show the window's net. Only scalar billing reads take the running total.
 - Saving checkpoints at invoice time never blocks the invoice: a failure is logged, and reads start from the previous checkpoint.
 - The subscription entitlements API is unchanged: `grant_state` is empty for `SIGNED_SUM` features. The frontend should show the ceiling against `/customer/usage`.
-- Swagger and SDK enums are not regenerated yet.
+- Swagger is regenerated in PR 5, with the `SIGNED_SUM` enum and the deprecation notes on `usage_limit` and `usage_reset_period`. SDKs regenerate from it on release.
 
 ## PR 1: The meter type
 
