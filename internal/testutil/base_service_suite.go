@@ -32,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -88,6 +89,7 @@ type Stores struct {
 	EnvironmentRepo              environment.Repository
 	EntitlementRepo              entitlement.Repository
 	EntitlementGrantRepo         entitlementgrant.Repository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	FeatureRepo                  feature.Repository
 	TaskRepo                     task.Repository
 	SecretRepo                   secret.Repository
@@ -252,6 +254,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		EnvironmentRepo:              NewInMemoryEnvironmentStore(),
 		EntitlementRepo:              NewInMemoryEntitlementStore(),
 		EntitlementGrantRepo:         NewInMemoryEntitlementGrantStore(),
+		MeterUsageCheckpointRepo:     NewInMemoryMeterUsageCheckpointStore(),
 		FeatureRepo:                  NewInMemoryFeatureStore(),
 		TaskRepo:                     NewInMemoryTaskStore(),
 		SecretRepo:                   NewInMemorySecretStore(),
@@ -316,6 +319,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()
 	s.stores.EntitlementGrantRepo.(*InMemoryEntitlementGrantStore).Clear()
+	s.stores.MeterUsageCheckpointRepo.(*InMemoryMeterUsageCheckpointStore).Clear()
 	s.stores.FeatureRepo.(*InMemoryFeatureStore).Clear()
 	s.stores.TaskRepo.(*InMemoryTaskStore).Clear()
 	s.stores.SecretRepo.(*InMemorySecretStore).Clear()
