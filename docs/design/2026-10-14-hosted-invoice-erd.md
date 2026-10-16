@@ -381,16 +381,23 @@ sequenceDiagram
 |---|---|---|
 | `hosted_invoice_url` | string, omitted when empty | The Flexprice link, or Stripe's hosted URL for Stripe-synced invoices (FR-1 to FR-5) |
 
-**Public endpoints.** The hosted page calls these on its own region's API. They take no API key or session: the token in the path is the only credential. They sit in their own route group and check the tenant's status themselves (NFR-4). The request path carries the full token, but observability records only `link_id`; the signature is redacted as specified in §10.
+**Public endpoints.** The hosted page calls these on its own region's API. Each request sends the existing `<link_id>.<signature>` token in `X-Session-Token`; no API key or customer-portal session is needed. The customer-facing URL still contains the token, but API paths do not.
+
+```http
+GET /v1/hosted-invoice
+X-Session-Token: <link_id>.<signature>
+```
+
+The view, PDF and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. Observability records only `link_id`; the token header and signatures in customer-facing URLs are redacted as specified in §10. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
 
 Errors shared by all three:
 
 | Case | HTTP | `code` | `message` (shown on the page as is) |
 |---|---|---|---|
-| Malformed token or signature mismatch | 404 | `not_found` | "This link is not valid." |
+| Missing token header, malformed token or signature mismatch | 404 | `not_found` | "This link is not valid." |
 | Link revoked or expired, or tenant suspended | 404 | `not_found` | "This link is no longer valid, contact Acme Ltd." |
 
-**`GET /v1/hosted-invoice/{token}`.** Everything the page shows.
+**`GET /v1/hosted-invoice`.** Everything the page shows.
 
 ```json
 {
@@ -424,7 +431,7 @@ Errors shared by all three:
 - `payments` lists the invoice's payments with only the fields above; gateway payloads and internal ids are left out.
 - `pay.enabled` follows FR-10. `pay.gateways` lists the tenant's usable gateways (connected and able to create payment links) in alphabetical order. The Pay button sends the first one, matching the customer portal.
 
-**`GET /v1/hosted-invoice/{token}/pdf`.** Same as the customer portal's PDF endpoint.
+**`GET /v1/hosted-invoice/pdf`.** Same as the customer portal's PDF endpoint.
 
 ```json
 { "presigned_url": "https://<storage>/…/INV-0042.pdf?X-Amz-Expires=3600&…" }
@@ -432,7 +439,7 @@ Errors shared by all three:
 
 The download URL is created on each call and lasts an hour; the page opens it.
 
-**`POST /v1/hosted-invoice/{token}/pay`.** Same request and response as customer portal pay.
+**`POST /v1/hosted-invoice/pay`.** Same request and response as customer portal pay.
 
 ```json
 {
@@ -489,13 +496,14 @@ sequenceDiagram
   participant G as Payment gateway
 
   Cu->>P: Open the link
-  P->>B: Get the hosted invoice
+  P->>B: GET /v1/hosted-invoice with X-Session-Token
   B->>B: Check signature, read the link record
   B->>B: Check revoked, expiry and tenant status
   B->>B: Read invoice, payments and usable gateways (scoped)
   B-->>P: Invoice, tenant, payments, Pay info
   Cu->>P: Pay
-  P->>B: Pay with the first gateway and the page's URL
+  P->>B: POST /v1/hosted-invoice/pay with X-Session-Token, gateway and return URLs
+  B->>B: Validate hosted link again through shared middleware
   B->>B: Check the invoice is payable and the gateway usable
   B->>G: Create a payment link for the amount remaining (or reuse an open one)
   B-->>P: Gateway checkout URL
@@ -503,7 +511,7 @@ sequenceDiagram
   Cu->>G: Pay
   G->>B: Payment webhook updates the payment and invoice
   G-->>P: Return to the hosted link
-  P->>B: Get the hosted invoice again
+  P->>B: GET /v1/hosted-invoice with X-Session-Token again
   B-->>P: Paid, or processing if the webhook has not arrived yet
 ```
 
@@ -523,7 +531,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 
 ### 9.5 Frontend
 
-**Entry point.** A separate invoice-only entry point of the frontend app at `/invoice/:token`. It loads no dashboard shell and no login. It uses relative asset paths so it works behind the edge router's `/<region>/` prefix, and calls the region's API that the deployment is built with. The page sets `referrer: no-referrer` and `robots: noindex`.
+**Entry point.** A separate invoice-only entry point of the frontend app at `/invoice/:token`. It loads no dashboard shell and no login. It uses relative asset paths so it works behind the edge router's `/<region>/` prefix, and calls the region's API that the deployment is built with. The page extracts the signed token from its URL and sends it in `X-Session-Token` on every view, PDF and pay request. The page sets `referrer: no-referrer` and `robots: noindex`.
 
 **States.**
 
@@ -550,7 +558,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 | Expired, revoked or replaced links | Link record checked on every call; no cache, so a revoke works at once | NFR-2, NFR-3 |
 | Suspended tenant | Hosted routes check the tenant's status themselves and answer with the "no longer valid" message | NFR-4 |
 | Link leaking from the page | `no-referrer` and `noindex` on the page | NFR-1 |
-| Token in logs | Log only `link_id` for correlation. Redact the signature wherever the hosted URL or token appears in application logs, request/access logs (including the edge router), and traces; never record the full bearer token. | NFR-1 |
+| Token in logs | Log only `link_id` for correlation. Redact the signature wherever the hosted URL or token appears, including the `X-Session-Token` header, in application logs, request/access logs (including the edge router), and traces; never record the full bearer token. | NFR-1 |
 | Multi-tenancy | The link-by-id read is the only lookup without a tenant filter; every read after it is scoped to the link's tenant and environment | — |
 | Data on a forwarded link | Whoever holds the link sees what the portal shows the customer, including invoice metadata; expiry and revoke bound it | NFR-2 |
 | Paying twice | Switching to a Stripe URL revokes the Flexprice hosted link; pay reuses an open payment link and takes an idempotency key | — |
