@@ -432,6 +432,12 @@ bento:
 
 # Temporal Worker deployment configuration
 worker:
+  # Opt-in: derive Go's soft memory budget from this worker's hard memory limit.
+  # Supported limit units: bytes, Ki/Mi/Gi/Ti/Pi/Ei, or k/M/G/T/P/E.
+  gc:
+    enabled: false
+    memoryLimitRatio: 0.8
+    gogc: 100
   enabled: true
   replicaCount: 1
   # Extra labels for this component's Kubernetes objects (Deployment, Service,

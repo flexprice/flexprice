@@ -51,6 +51,9 @@ spec:
               protocol: TCP
           env:
             {{- include "flexprice.env" . | nindent 12 }}
+            {{- with (include "flexprice.workerGCEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: FLEXPRICE_DEPLOYMENT_MODE
               value: "temporal_worker"
             - name: TMPDIR
