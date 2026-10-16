@@ -20,7 +20,7 @@ import (
 func main() {
 	root := &cobra.Command{
 		Use:   "dlq",
-		Short: "FlexPrice dead-letter queue operations",
+		Short: "Flexprice dead-letter queue operations",
 	}
 
 	root.AddCommand(newReplayCmd())
