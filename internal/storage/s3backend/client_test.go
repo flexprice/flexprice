@@ -1,9 +1,15 @@
 package s3backend_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,6 +200,49 @@ func TestClient_Upload_SetsContentTypeAndKey(t *testing.T) {
 			assert.Equal(t, tt.wantContentType, gotContentType)
 			assert.Equal(t, tt.req.Key, resp.Key)
 			assert.Equal(t, "test-bucket", resp.Bucket)
+		})
+	}
+}
+
+func TestClient_UploadStream(t *testing.T) {
+	payload := []byte(strings.Repeat("id,qty\n1,2\n", 1000))
+
+	for _, gzipOn := range []bool{false, true} {
+		t.Run(fmt.Sprintf("gzip=%v", gzipOn), func(t *testing.T) {
+			var gotBody []byte
+			var gotEncoding, gotLength string
+			cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+				gotEncoding = r.Header.Get("Content-Encoding")
+				gotLength = r.Header.Get("Content-Length")
+				gotBody, _ = io.ReadAll(r.Body)
+				w.WriteHeader(http.StatusOK)
+			})
+			defer closeSrv()
+			cfg.CompressionGzip = gzipOn
+
+			s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+			require.NoError(t, err)
+
+			resp, err := s.UploadStream(context.Background(), &storage.StreamUploadRequest{
+				Key:      "exports/events.csv",
+				Body:     bytes.NewReader(payload),
+				Format:   storage.UploadFormatCSV,
+				Compress: true,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, int64(len(payload)), resp.FileSizeBytes)
+			assert.Equal(t, strconv.Itoa(len(gotBody)), gotLength)
+
+			uploaded := gotBody
+			if gzipOn {
+				assert.Equal(t, "gzip", gotEncoding)
+				assert.Equal(t, int64(len(gotBody)), resp.CompressedSize)
+				zr, err := gzip.NewReader(bytes.NewReader(gotBody))
+				require.NoError(t, err)
+				uploaded, err = io.ReadAll(zr)
+				require.NoError(t, err)
+			}
+			assert.Equal(t, payload, uploaded)
 		})
 	}
 }

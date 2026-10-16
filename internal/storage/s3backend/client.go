@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -207,31 +208,9 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		compressedSize = int64(len(data))
 	}
 
-	contentType := req.ContentType
-	if contentType == "" {
-		contentType = contentTypeFor(req.Format, req.Compress && c.cfg.CompressionGzip)
-	}
-
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(c.cfg.Bucket),
-		Key:         aws.String(req.Key),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
-	}
-	if req.Compress && c.cfg.CompressionGzip {
-		// Without this, S3 serves the gzipped bytes as-is and clients receive
-		// compressed data instead of the original payload.
-		input.ContentEncoding = aws.String("gzip")
-	}
-	if err := c.setServerSideEncryption(input); err != nil {
+	gzipped := req.Compress && c.cfg.CompressionGzip
+	if err := c.putObject(ctx, req.Key, bytes.NewReader(data), compressedSize, req.ContentType, req.Format, gzipped); err != nil {
 		return nil, err
-	}
-
-	if _, err := c.s3.PutObject(ctx, input); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("failed to upload object to S3").
-			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
-			Mark(ierr.ErrHTTPClient)
 	}
 
 	return &storagetypes.UploadResponse{
@@ -242,6 +221,106 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		CompressedSize: compressedSize,
 		UploadedAt:     time.Now(),
 	}, nil
+}
+
+// UploadStream uploads a seekable body; gzip uses a temporary file to preserve Content-Length.
+func (c *client) UploadStream(ctx context.Context, req *storagetypes.StreamUploadRequest) (*storagetypes.UploadResponse, error) {
+	originalSize, err := req.Body.Seek(0, io.SeekEnd)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to read upload size").Mark(ierr.ErrSystem)
+	}
+	if _, err := req.Body.Seek(0, io.SeekStart); err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to rewind upload body").Mark(ierr.ErrSystem)
+	}
+
+	body := req.Body
+	compressedSize := originalSize
+	gzipped := req.Compress && c.cfg.CompressionGzip
+	if gzipped {
+		gzFile, size, err := gzipToTempFile(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			_ = gzFile.Close()
+			_ = os.Remove(gzFile.Name())
+		}()
+		body = gzFile
+		compressedSize = size
+	}
+
+	if err := c.putObject(ctx, req.Key, body, compressedSize, req.ContentType, req.Format, gzipped); err != nil {
+		return nil, err
+	}
+
+	return &storagetypes.UploadResponse{
+		FileURL:        c.FileURL(req.Key),
+		Bucket:         c.cfg.Bucket,
+		Key:            req.Key,
+		FileSizeBytes:  originalSize,
+		CompressedSize: compressedSize,
+		UploadedAt:     time.Now(),
+	}, nil
+}
+
+func (c *client) putObject(ctx context.Context, key string, body io.ReadSeeker, size int64, contentType string, format storagetypes.UploadFormat, gzipped bool) error {
+	if contentType == "" {
+		contentType = contentTypeFor(format, gzipped)
+	}
+
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String(c.cfg.Bucket),
+		Key:           aws.String(key),
+		Body:          body,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+	}
+	if gzipped {
+		// Without this, S3 serves the gzipped bytes as-is and clients receive
+		// compressed data instead of the original payload.
+		input.ContentEncoding = aws.String("gzip")
+	}
+	if err := c.setServerSideEncryption(input); err != nil {
+		return err
+	}
+
+	if _, err := c.s3.PutObject(ctx, input); err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to upload object to S3").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+			Mark(ierr.ErrHTTPClient)
+	}
+	return nil
+}
+
+// gzipToTempFile compresses src into a temp file and returns it rewound, with its size.
+// The caller closes and removes the file.
+func gzipToTempFile(src io.Reader) (*os.File, int64, error) {
+	f, err := os.CreateTemp("", "flexprice-upload-*.gz")
+	if err != nil {
+		return nil, 0, ierr.WithError(err).WithHint("failed to create temp file for compression").Mark(ierr.ErrSystem)
+	}
+	fail := func(err error, hint string) (*os.File, int64, error) {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return nil, 0, ierr.WithError(err).WithHint(hint).Mark(ierr.ErrSystem)
+	}
+
+	gz := gzip.NewWriter(f)
+	if _, err := io.Copy(gz, src); err != nil {
+		return fail(err, "failed to compress data")
+	}
+	if err := gz.Close(); err != nil {
+		return fail(err, "failed to close gzip writer")
+	}
+	size, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return fail(err, "failed to read compressed size")
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return fail(err, "failed to rewind compressed file")
+	}
+	return f, size, nil
 }
 
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {

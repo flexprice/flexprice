@@ -131,6 +131,72 @@ func (c *client) Upload(ctx context.Context, req *fpstorage.UploadRequest) (*fps
 	}, nil
 }
 
+// UploadStream uploads req.Body without reading it into memory.
+func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRequest) (*fpstorage.UploadResponse, error) {
+	originalSize, err := req.Body.Seek(0, io.SeekEnd)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to read upload size").Mark(ierr.ErrSystem)
+	}
+	if _, err := req.Body.Seek(0, io.SeekStart); err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to rewind upload body").Mark(ierr.ErrSystem)
+	}
+
+	gzipped := req.Compress && c.cfg.CompressionGzip
+	writeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	w := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key).NewWriter(writeCtx)
+	if req.ContentType != "" {
+		w.ContentType = req.ContentType
+	} else {
+		w.ContentType = contentTypeFor(req.Format, gzipped)
+	}
+
+	counter := &countingWriter{w: w}
+	if gzipped {
+		gz := gzip.NewWriter(counter)
+		_, err = io.Copy(gz, req.Body)
+		if err == nil {
+			err = gz.Close()
+		}
+	} else {
+		_, err = io.Copy(counter, req.Body)
+	}
+	if err != nil {
+		cancel()
+		return nil, ierr.WithError(err).
+			WithHint("failed to upload object to GCS").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
+			Mark(ierr.ErrHTTPClient)
+	}
+	if err := w.Close(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("failed to finalize GCS upload").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return &fpstorage.UploadResponse{
+		FileURL:        c.FileURL(req.Key),
+		Bucket:         c.cfg.Bucket,
+		Key:            req.Key,
+		FileSizeBytes:  originalSize,
+		CompressedSize: counter.n,
+		UploadedAt:     time.Now(),
+	}, nil
+}
+
+// countingWriter counts the bytes written through it.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
+}
+
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {
 	r, err := c.gcs.Bucket(c.cfg.Bucket).Object(key).NewReader(ctx)
 	if err != nil {
