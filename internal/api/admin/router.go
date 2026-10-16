@@ -19,6 +19,7 @@ type Handlers struct {
 	Tenant      *v1.TenantHandler
 	User        *v1.UserHandler
 	Settings    *v1.SettingsHandler
+	DLQ         *v1.DLQHandler
 }
 
 // Server is the Gin engine for deployment mode "admin".
@@ -46,6 +47,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	group.Use(requireSecret(secret))
 	{
 		group.GET("/me", handlers.Me.Me)
+		group.POST("/dlq/replay", handlers.DLQ.Replay)
 
 		environment := group.Group("/environments")
 		{

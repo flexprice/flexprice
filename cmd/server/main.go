@@ -267,6 +267,7 @@ func main() {
 			adminsvc.NewTenantService,
 			adminsvc.NewUserService,
 			adminsvc.NewSettingsService,
+			adminsvc.NewDLQService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -494,6 +495,7 @@ func provideAdminHandlers(
 	tenants adminsvc.TenantService,
 	users adminsvc.UserService,
 	settings adminsvc.SettingsService,
+	dlq adminsvc.DLQService,
 ) adminapi.Handlers {
 	return adminapi.Handlers{
 		Health:      adminv1.NewHealthHandler(),
@@ -502,6 +504,7 @@ func provideAdminHandlers(
 		Tenant:      adminv1.NewTenantHandler(tenants),
 		User:        adminv1.NewUserHandler(users),
 		Settings:    adminv1.NewSettingsHandler(settings),
+		DLQ:         adminv1.NewDLQHandler(dlq),
 	}
 }
 
