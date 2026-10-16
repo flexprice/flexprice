@@ -82,11 +82,13 @@ func (webhookTestMappingStore) Delete(_ context.Context, _ *entityintegrationmap
 type webhookTestPaymentService struct {
 	interfaces.PaymentService
 	payment     *dto.PaymentResponse
+	getCalls    int
 	updateCalls []dto.UpdatePaymentRequest
 	attempts    []dto.RecordAttemptRequest
 }
 
 func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+	s.getCalls++
 	return s.payment, nil
 }
 
@@ -450,6 +452,20 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SessionLookupError_D
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"an unreadable session must not be treated as 'no session' and settled")
 	s.Empty(s.client.refundCalls)
+	s.Equal(1, s.paymentSvc.getCalls)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SyncedPaymentStillCompletesCheckout() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusSucceeded
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_checkout"
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	s.Require().NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+	s.Len(s.checkoutSvc.completeCalls, 1)
+	s.Equal(1, s.paymentSvc.getCalls)
+	s.Empty(s.paymentSvc.updateCalls, "checkout handles settlement even when the payment is already succeeded")
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_ThenCaptured_Succeeds() {

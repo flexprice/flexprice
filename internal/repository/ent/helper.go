@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // tracingSvc is wired once at startup via SetTracingService (see
@@ -47,4 +48,11 @@ func SetSpanError(span *tracing.Span, err error) {
 // SetSpanSuccess marks a span as successful.
 func SetSpanSuccess(span *tracing.Span) {
 	span.SetStatusOK()
+}
+
+// afterCommit runs fn once the surrounding transaction commits, or now when there is none.
+func afterCommit(ctx context.Context, fn func()) {
+	if !types.RegisterPostCommit(ctx, fn) {
+		fn()
+	}
 }

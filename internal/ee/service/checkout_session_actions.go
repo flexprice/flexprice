@@ -332,7 +332,8 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 	invoiceID := *session.CheckoutInvoiceID
 	paymentID := *session.CheckoutPaymentID
 
-	modSvc := &subscriptionModificationService{serviceParams: s.ServiceParams}
+	modSvc := NewSubscriptionModificationService(s.ServiceParams).(*subscriptionModificationService)
+	// TODO: pay-first flows don't handle a sub cancelled mid-checkout or finalize failing until expiry; handle generically.
 	if err := modSvc.applyModifySubscriptionParams(ctx, params); err != nil {
 		return err
 	}

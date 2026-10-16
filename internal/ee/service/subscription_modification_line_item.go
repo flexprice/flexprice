@@ -599,6 +599,10 @@ func (s *subscriptionModificationService) applyModifySubscriptionParams(
 	ctx context.Context,
 	params *types.ModifySubscriptionParams,
 ) error {
+	if params != nil && params.ModifyType == types.ModifySubscriptionTypeTrialEnd {
+		return s.applyTrialEndConversion(ctx, params.SubscriptionID, lo.FromPtr(params.TrialEndAt).UTC())
+	}
+
 	if params != nil && params.ModifyType == types.ModifySubscriptionTypeLineItemChange {
 		request, err := s.requestFromLineItemChangeParams(ctx, params)
 		if err != nil {

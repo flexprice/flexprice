@@ -643,7 +643,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	if req.Checkout != nil && result.Sub.SubscriptionStatus == types.SubscriptionStatusDraft {
-		invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, response)
+		invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, dto.CreateSubscriptionDraftInvoiceRequest{
+			SubscriptionID: response.ID,
+			PeriodStart:    response.CurrentPeriodStart,
+			PeriodEnd:      response.CurrentPeriodEnd,
+		})
 		if err != nil {
 			if archErr := s.archiveDraftCheckoutSubscription(ctx, response.ID); archErr != nil {
 				s.Logger.Error(ctx, "failed to archive draft checkout subscription", "error", archErr, "subscription_id", response.ID)
@@ -5684,31 +5688,40 @@ func (s *subscriptionService) voidOverdueInvoices(ctx context.Context, invoiceSe
 	}
 }
 
-// completeTrialConversionToActive activates a subscription after its trial-end invoice is paid or
-// skipped (zero-amount). By the time this is called, processSubscriptionTrialEnd has already
-// advanced CurrentPeriodStart/End to the first real billing window, so only the status changes.
+// completeTrialConversionToActive activates an incomplete subscription after trial conversion
+// and payment, or when its zero-amount invoice is skipped.
 func (s *subscriptionService) completeTrialConversionToActive(ctx context.Context, sub *subscription.Subscription) error {
-	if sub.SubscriptionStatus == types.SubscriptionStatusActive || sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
-		return nil
-	}
-	sub.SubscriptionStatus = types.SubscriptionStatusActive
+	activated := false
 	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		txCtx = activity.WithAction(txCtx, sub.ID, activity.SubscriptionActivated)
-		if err := s.SubRepo.Update(txCtx, sub); err != nil {
+		// Locked, uncached read: the caller's copy may be a stale cache hit.
+		lockedSub, err := s.SubRepo.GetForUpdate(txCtx, sub.ID)
+		if err != nil {
 			return err
 		}
-		if err := s.cascadeTrialActivationToInherited(txCtx, sub); err != nil {
+		// Only the post-conversion incomplete state activates; a still-trialing sub waits for its conversion.
+		if lockedSub.SubscriptionStatus != types.SubscriptionStatusIncomplete {
+			return nil
+		}
+		lockedSub.SubscriptionStatus = types.SubscriptionStatusActive
+		txCtx = activity.WithAction(txCtx, lockedSub.ID, activity.SubscriptionActivated)
+		if err := s.SubRepo.Update(txCtx, lockedSub); err != nil {
 			return err
 		}
-		if err := s.processPendingCreditGrantsForSubscription(txCtx, sub); err != nil {
+		if err := s.cascadeTrialActivationToInherited(txCtx, lockedSub); err != nil {
 			return err
 		}
+		if err := s.processPendingCreditGrantsForSubscription(txCtx, lockedSub); err != nil {
+			return err
+		}
+		activated = true
 		return nil
 	}); err != nil {
 		return err
 	}
 
-	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+	if activated {
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+	}
 	return nil
 }
 

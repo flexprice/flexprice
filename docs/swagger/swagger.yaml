@@ -6052,6 +6052,15 @@ definitions:
       price_id:
         type: string
     type: object
+  PortalSessionResponse:
+    properties:
+      expires_at:
+        type: string
+      token:
+        type: string
+      url:
+        type: string
+    type: object
   PriceFeatureResponse:
     properties:
       reporting_unit:
@@ -12399,15 +12408,21 @@ definitions:
         $ref: '#/definitions/types.ModifySubscriptionType'
       subscription_id:
         type: string
+      trial_end_at:
+        description: TrialEndAt is where a trial_end checkout starts the first paid
+          period.
+        type: string
     type: object
   types.ModifySubscriptionType:
     enum:
     - quantity_change
     - line_item_change
+    - trial_end
     type: string
     x-enum-varnames:
     - ModifySubscriptionTypeQuantityChange
     - ModifySubscriptionTypeLineItemChange
+    - ModifySubscriptionTypeTrialEnd
   types.OnExistingEntityPolicy:
     enum:
     - reject
@@ -17320,6 +17335,43 @@ paths:
       tags:
       - Customers
       x-scope: read
+  /customers/portal/{external_id}:
+    get:
+      description: Use when sending a customer to their self-serve billing portal
+        (invoices, usage, payment methods). Returns a short-lived URL and token scoped
+        to that customer.
+      operationId: createCustomerPortalSession
+      parameters:
+      - description: Customer external ID
+        in: path
+        name: external_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PortalSessionResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create customer portal session
+      tags:
+      - Customers
+      x-scope: write
   /customers/search:
     post:
       consumes:

@@ -479,6 +479,9 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	case types.ReferencePointCancel:
 		billingReason = types.InvoiceBillingReasonProration
 	}
+	if req.BillingReason != "" {
+		billingReason = req.BillingReason
+	}
 	draftReq := dto.CreateDraftInvoiceRequest{
 		CustomerID:     invoicingCustomerID,
 		SubscriptionID: lo.ToPtr(sub.ID),
@@ -4933,6 +4936,11 @@ func (s *invoiceService) TriggerWebhook(ctx context.Context, invoiceID string, e
 func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error {
 	// Only process subscription invoices that are fully paid
 	if invoice.SubscriptionID == nil || !invoice.AmountRemaining.IsZero() {
+		return nil
+	}
+
+	// Checkout applies the subscription change before finalizing its paid draft.
+	if invoice.SourceType == types.InvoiceSourceTypeCheckout && invoice.InvoiceStatus == types.InvoiceStatusDraft {
 		return nil
 	}
 

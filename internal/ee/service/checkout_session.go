@@ -721,7 +721,11 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 		return nil, nil, err
 	}
 
-	invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, subResp)
+	invResp, skipped, err := buildCheckoutDraftInvoice(ctx, s.ServiceParams, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subResp.ID,
+		PeriodStart:    subResp.CurrentPeriodStart,
+		PeriodEnd:      subResp.CurrentPeriodEnd,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -733,19 +737,16 @@ func (s *checkoutSessionService) createDraftSubscription(ctx context.Context, se
 	return subResp, invResp, nil
 }
 
+// buildCheckoutDraftInvoice creates, computes and taxes an in-advance checkout draft for req's period.
 func buildCheckoutDraftInvoice(
 	ctx context.Context,
 	params ServiceParams,
-	subResp *dto.SubscriptionResponse,
+	req dto.CreateSubscriptionDraftInvoiceRequest,
 ) (*dto.InvoiceResponse, bool, error) {
 	invSvc := NewInvoiceService(params)
-	invResp, err := invSvc.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: subResp.ID,
-		PeriodStart:    subResp.CurrentPeriodStart,
-		PeriodEnd:      subResp.CurrentPeriodEnd,
-		ReferencePoint: types.ReferencePointPeriodStart,
-		SourceType:     types.InvoiceSourceTypeCheckout,
-	})
+	req.ReferencePoint = types.ReferencePointPeriodStart
+	req.SourceType = types.InvoiceSourceTypeCheckout
+	invResp, err := invSvc.CreateDraftInvoiceForSubscription(ctx, req)
 	if err != nil {
 		return nil, false, err
 	}

@@ -1293,12 +1293,12 @@ func (s *revenueService) subscriptionLocation(ctx context.Context, cache map[str
 		return loc
 	}
 	loc := time.UTC
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	timezone, err := s.SubRepo.GetTimezone(ctx, subscriptionID)
 	if err != nil {
 		s.Logger.Info(ctx, "revenue facts falling back to UTC day bounds",
 			"subscription_id", subscriptionID, "error", err.Error())
 	} else {
-		loc = locationOf(sub.Timezone)
+		loc = locationOf(timezone)
 	}
 	cache[subscriptionID] = loc
 	return loc

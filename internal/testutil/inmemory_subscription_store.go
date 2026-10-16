@@ -215,6 +215,15 @@ func copySubscription(sub *subscription.Subscription) *subscription.Subscription
 	return &out
 }
 
+// GetTimezone returns the timezone of the scoped subscription.
+func (s *InMemorySubscriptionStore) GetTimezone(ctx context.Context, id string) (string, error) {
+	sub, err := s.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return sub.Timezone, nil
+}
+
 // GetForUpdate matches Get; in-memory store has no row locks.
 func (s *InMemorySubscriptionStore) GetForUpdate(ctx context.Context, id string) (*subscription.Subscription, error) {
 	return s.Get(ctx, id)

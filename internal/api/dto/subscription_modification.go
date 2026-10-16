@@ -39,6 +39,7 @@ var checkoutAllowedModifyTypes = []SubscriptionModifyType{
 	SubscriptionModifyTypeLineItemChange,
 	SubscriptionModifyTypeAddon,
 	SubscriptionModifyTypeGroupedInvoicing,
+	SubscriptionModifyTypeTrialEnd,
 }
 
 func (r *SubModifyInheritanceRequest) Validate() error {
@@ -652,6 +653,12 @@ func (r *ExecuteSubscriptionModifyRequest) validateCheckout() error {
 		(r.GroupedInvoicingParams == nil || r.GroupedInvoicingParams.Action != GroupedInvoicingActionModify) {
 		return ierr.NewError("checkout is only supported for grouped invoicing action 'modify'").
 			WithHint("Remove checkout, or use action 'modify'").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Type == SubscriptionModifyTypeTrialEnd && (r.TrialEndParams == nil || r.TrialEndParams.Action != TrialEndActionImmediate) {
+		return ierr.NewError("checkout is only supported when ending the trial immediately").
+			WithHint("Use action 'immediate' with checkout").
 			Mark(ierr.ErrValidation)
 	}
 

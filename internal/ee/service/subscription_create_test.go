@@ -381,7 +381,11 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckout(
 	subResp, err := subService.CreateSubscription(ctx, req)
 	s.Require().NoError(err)
 
-	draft, skipped, err := buildCheckoutDraftInvoice(ctx, subService.ServiceParams, subResp)
+	draft, skipped, err := buildCheckoutDraftInvoice(ctx, subService.ServiceParams, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subResp.ID,
+		PeriodStart:    subResp.CurrentPeriodStart,
+		PeriodEnd:      subResp.CurrentPeriodEnd,
+	})
 	s.Require().NoError(err)
 	s.Require().False(skipped, "the seeded plan must produce a real charge")
 	s.Require().True(draft.AmountDue.GreaterThan(decimal.Zero))
@@ -883,7 +887,11 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckoutWithGrants(
 	subResp, err := subService.CreateSubscription(ctx, req)
 	s.Require().NoError(err)
 
-	draft, skipped, err := buildCheckoutDraftInvoice(ctx, subService.ServiceParams, subResp)
+	draft, skipped, err := buildCheckoutDraftInvoice(ctx, subService.ServiceParams, dto.CreateSubscriptionDraftInvoiceRequest{
+		SubscriptionID: subResp.ID,
+		PeriodStart:    subResp.CurrentPeriodStart,
+		PeriodEnd:      subResp.CurrentPeriodEnd,
+	})
 	s.Require().NoError(err)
 	s.Require().False(skipped)
 

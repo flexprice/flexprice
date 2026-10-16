@@ -167,45 +167,25 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, nil
 	}
 
-	// Billing starts at trial end. Calendar subs keep calendar boundaries (short first paid period);
-	// anniversary subs re-anchor at trial end so the first paid period is full.
-	// e.g. trial Jan 15 → Jan 29: calendar bills [Jan 29, Feb 1) for 3/31; anniversary bills [Jan 29, Feb 28) in full.
-	firstPeriodStart := lo.FromPtr(sub.TrialEnd)
-	if sub.BillingCycle == types.BillingCycleCalendar {
-		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(firstPeriodStart, sub.BillingPeriod, sub.Timezone)
-	} else {
-		sub.BillingAnchor = firstPeriodStart
-	}
-	firstPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
-		CurrentPeriodStart:  firstPeriodStart,
-		BillingAnchor:       sub.BillingAnchor,
-		Unit:                sub.BillingPeriodCount,
-		Period:              sub.BillingPeriod,
-		SubscriptionEndDate: sub.EndDate,
-		Timezone:            sub.Timezone,
-	})
-	if err != nil {
+	// A pending checkout (of any kind) defers trial end to a later cron run; sessions expire within hours.
+	// TODO: narrow to trial_end checkouts if this delays conversions in practice.
+	pending, err := pendingCheckoutSessions(ctx, s.ServiceParams, sub.ID)
+	if err != nil || len(pending) > 0 {
 		return nil, err
 	}
 
-	// Out of trialing, first real period on the books. If this job double-fires, we bail earlier because
-	// we aren't "trialing" anymore.
-	sub.SubscriptionStatus = types.SubscriptionStatusIncomplete
-	sub.CurrentPeriodStart = firstPeriodStart
-	sub.CurrentPeriodEnd = firstPeriodEnd
-
+	firstPeriodStart := lo.FromPtr(sub.TrialEnd)
 	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 	paymentParams = paymentParams.NormalizePaymentParameters()
 
 	var trialEndInvoice *dto.InvoiceResponse
+	var firstPeriodEnd time.Time
 
-	// Subscription update, cascade, and trial-end invoice creation commit together. A sub is only picked
+	// Subscription update, cascade, and trial-end invoice creation commit together.
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.SubRepo.Update(txCtx, sub); err != nil {
-			return err
-		}
-		if err := s.cascadeTrialEndToInherited(txCtx, sub); err != nil {
-			return err
+		var errConv error
+		if firstPeriodEnd, errConv = s.convertTrialToFirstPaidPeriod(txCtx, sub, firstPeriodStart); errConv != nil {
+			return errConv
 		}
 
 		var errInv error
@@ -236,6 +216,25 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 			"subscription_id", sub.ID)
 	}
 	return trialEndInvoice, nil
+}
+
+// convertTrialToFirstPaidPeriod moves sub out of trial into incomplete with its first paid period starting at start.
+// Calendar subs bill a short first period; anniversary subs re-anchor at start for a full one.
+func (s *subscriptionService) convertTrialToFirstPaidPeriod(ctx context.Context, sub *subscription.Subscription, start time.Time) (time.Time, error) {
+	anchor, end, err := trialConversionPeriod(sub, start)
+	if err != nil {
+		return time.Time{}, err
+	}
+	sub.BillingAnchor = anchor
+	sub.TrialEnd = lo.ToPtr(start)
+	// The trial has ended, but activation waits for invoice settlement or the zero-amount completion hook.
+	sub.SubscriptionStatus = types.SubscriptionStatusIncomplete
+	sub.CurrentPeriodStart = start
+	sub.CurrentPeriodEnd = end
+	if err := s.SubRepo.Update(ctx, sub); err != nil {
+		return time.Time{}, err
+	}
+	return end, s.cascadeTrialEndToInherited(ctx, sub)
 }
 
 // cascadeTrialEndToInherited propagates the trial-end state (incomplete + advanced period) to all
@@ -278,4 +277,21 @@ func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Cont
 		}
 	}
 	return nil
+}
+
+// trialConversionPeriod returns the billing anchor and first paid period end for a trial that ends at start.
+func trialConversionPeriod(sub *subscription.Subscription, start time.Time) (time.Time, time.Time, error) {
+	anchor := start
+	if sub.BillingCycle == types.BillingCycleCalendar {
+		anchor = types.CalculateCalendarBillingAnchor(start, sub.BillingPeriod, sub.Timezone)
+	}
+	end, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart:  start,
+		BillingAnchor:       anchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.Timezone,
+	})
+	return anchor, end, err
 }

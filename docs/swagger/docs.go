@@ -3015,6 +3015,60 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/customers/portal/{external_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when sending a customer to their self-serve billing portal (invoices, usage, payment methods). Returns a short-lived URL and token scoped to that customer.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Create customer portal session",
+                "operationId": "createCustomerPortalSession",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer external ID",
+                        "name": "external_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PortalSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/customers/search": {
             "post": {
                 "security": [
@@ -22732,6 +22786,20 @@ const docTemplate = `{
                 }
             }
         },
+        "PortalSessionResponse": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "PriceFeatureResponse": {
             "type": "object",
             "properties": {
@@ -31408,6 +31476,10 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "type": "string"
+                },
+                "trial_end_at": {
+                    "description": "TrialEndAt is where a trial_end checkout starts the first paid period.",
+                    "type": "string"
                 }
             }
         },
@@ -31415,11 +31487,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "quantity_change",
-                "line_item_change"
+                "line_item_change",
+                "trial_end"
             ],
             "x-enum-varnames": [
                 "ModifySubscriptionTypeQuantityChange",
-                "ModifySubscriptionTypeLineItemChange"
+                "ModifySubscriptionTypeLineItemChange",
+                "ModifySubscriptionTypeTrialEnd"
             ]
         },
         "types.OnExistingEntityPolicy": {
