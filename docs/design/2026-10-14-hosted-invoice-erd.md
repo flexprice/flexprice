@@ -128,8 +128,8 @@ These apply to Flexprice links; Stripe links follow Stripe's own rules.
 | ID | Category | Requirement (measurable) | How we verify |
 |---|---|---|---|
 | NFR-1 | Security | The link carries the link record's id and an HMAC-SHA256 signature made with the deployment's auth secret, the key that already signs customer-portal and checkout tokens. Without the secret no valid link can be produced, and the signing secret is not stored in the database. The invoice stores the complete bearer URL. | Review: changing any character of a link makes it invalid; the link table holds no token. |
-| NFR-2 | Security | A link expires 30 days after the invoice's due date, or 30 days after finalization if it has no due date. An expired link shows "This link is no longer valid, contact <tenant name>" and no invoice data. | e2e: move the due date 31 days into the past → the link shows the expired page. |
-| NFR-3 | Security | A refreshed link expires 30 days after the refresh or at the normal expiry (NFR-2), whichever is later. | e2e: refresh a link on an invoice 40 days past due → it works for 30 days from the refresh. |
+| NFR-2 | Security | A link expires at the earlier of 30 days after the invoice's due date (or finalization if there is no due date) and 120 days after the link record's creation. The cap is per link, not measured from invoice creation. An expired link shows "This link is no longer valid, contact <tenant name>" and no invoice data. | e2e: move the due date 31 days into the past → expired page; set a far-future due date → expiry stays at link creation + 120 days, and access is rejected at that boundary. |
+| NFR-3 | Security | A refreshed link expires at the later of refresh + 30 days and the invoice's due date + 30 days (or finalization + 30 days when there is no due date), capped at the new link record's creation + 120 days. Refresh creates a new link with its own creation timestamp and cap. | e2e: refresh a link on an invoice 40 days past due → it works for 30 days from the refresh. |
 | NFR-4 | Security | While a tenant is suspended, its links show the "no longer valid" page; they work again when the tenant is reactivated. | e2e: suspend the tenant → page blocked; reactivate → page loads. |
 
 ## 6. Constraints
@@ -282,7 +282,7 @@ erDiagram
 | `id` | string | no | Row id with its own prefix |
 | `tenant_id`, `environment_id` | string | no | Standard scoping, copied from the invoice |
 | `invoice_id` | string | no | The invoice the link opens |
-| `expires_at` | timestamp | no | 30 days after the due date, or after finalization when there is none; on refresh, 30 days from the refresh or the normal expiry, whichever is later |
+| `expires_at` | timestamp | no | Normal: min(due date + 30 days, created_at + 120 days), using finalization when no due date exists. Refreshed: min(max(due date + 30 days, refresh + 30 days), created_at + 120 days), again using finalization when no due date exists |
 | `revoked_at` | timestamp | yes | Set when the tenant revokes or refreshes the link |
 | `status`, `created_at`, `updated_at`, `created_by`, `updated_by` | standard | | Standard fields of every table |
 
@@ -292,7 +292,7 @@ Indexes:
 **Lifecycle**
 - **Issue:** when an invoice is finalized without an integration hosted URL, a link row is inserted and its signed URL is stored in `invoice.hosted_invoice_url` in the same transaction as finalization.
 - **Backfill:** existing finalized invoices receive hosted links under FR-21. Flexprice links retain the normal expiry in NFR-2, calculated from the original due date or finalization; backfilling does not extend it, so an older invoice may receive an already-expired link. Stripe links follow the provider’s existing rules.
-- **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update; a refreshed link keeps its 30 days from the refresh as a floor.
+- **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update; a refreshed link keeps its 30 days from the refresh as a floor. Neither a due-date change nor recalculation can extend expiry beyond that link record's original `created_at` + 120 days.
 - **Refresh:** the live row gets `revoked_at`, a new row is inserted, and the invoice's `hosted_invoice_url` is replaced with the new signed URL in the same transaction.
 - **Revoke:** the live row gets `revoked_at` and the invoice's `hosted_invoice_url` is cleared in the same transaction; the invoice has no link until refreshed.
 - **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url`, set the invoice's `hosted_invoice_url` to it, and revoke any unrevoked Flexprice link in the same transaction. Repeated delivery must be idempotent. Refresh and revoke must serialize with this switch so they cannot replace a Stripe-owned URL.
@@ -569,7 +569,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 | Rotating the auth secret invalidates every live link | Low / High | Tenants refresh links after a rotation; no rotation planned |
 | Razorpay and Nomod payment links ignore the return URLs (existing bug), so the customer may not come back to the page after paying | Medium / Low | Existing bug, fixed separately |
 | A failed Razorpay autopay is treated as already synced (existing bug), so Pay may get no payment link for that invoice | Low / Medium | Existing bug, fixed separately |
-| Stripe's hosted URL expires (at most 120 days after the due date) and is never refreshed | Medium / Low | Accepted (FR-4) |
+| Stripe's hosted URL expires (maximum 120-day expiry window) and is never refreshed | Medium / Low | Accepted (FR-4) |
 
 | Open question | Owner | Blocks |
 |---|---|---|
