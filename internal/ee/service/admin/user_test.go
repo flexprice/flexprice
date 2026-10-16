@@ -40,6 +40,10 @@ func (failingArchiveStore) Delete(context.Context, string) error {
 	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
 }
 
+func (failingArchiveStore) ArchiveByID(context.Context, string) error {
+	return ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
 func TestAddUser(t *testing.T) {
 	ctx := context.Background()
 	const tenantID = "tenant_acme"

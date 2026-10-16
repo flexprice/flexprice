@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
+	domainMembership "github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -270,7 +271,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 // AuthenticateMiddleware is a middleware that authenticates requests based on either:
 // 1. JWT token in the Authorization header as a Bearer token
 // 2. API key in the x-api-key header (or configured header name)
-func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, userRepo domainUser.Repository, logger *logger.Logger) gin.HandlerFunc {
+func AuthenticateMiddleware(cfg *config.Configuration, secretService service.SecretService, environmentRepo domainEnvironment.Repository, userRepo domainUser.Repository, membershipRepo domainMembership.Repository, logger *logger.Logger) gin.HandlerFunc {
 	authProvider := auth.NewProvider(cfg)
 
 	// SSO tokens are validated separately from password-login tokens because the
@@ -339,11 +340,10 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 			return
 		}
 
-		// A JWT carries no roles claim, so the user record is the only source
-		// of the session's permissions. The lookup is scoped to the tenant the
-		// token names, since the repository takes it from the context.
-		tenantCtx := types.SetTenantID(c.Request.Context(), claims.TenantID)
-		user, err := userRepo.GetByID(tenantCtx, claims.UserID)
+		// A JWT carries no roles claim. Prefer tenant_memberships for human
+		// users (multi-tenant); fall back to the user row for service accounts
+		// and legacy rows without a membership.
+		roles, userStatus, err := resolveJWTRoles(c.Request.Context(), userRepo, membershipRepo, claims.UserID, claims.TenantID)
 		if err != nil {
 			if ierr.IsNotFound(err) {
 				logger.Info(c.Request.Context(), "rejecting token for a user that no longer exists",
@@ -364,11 +364,11 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		// must be refused here rather than on the strength of the token alone.
 		// The response does not distinguish this from a missing user: telling an
 		// unauthenticated caller which accounts exist is an enumeration oracle.
-		if user.Status != types.StatusPublished {
+		if userStatus != types.StatusPublished {
 			logger.Info(c.Request.Context(), "rejecting token for an inactive user",
 				"user_id", claims.UserID,
 				"tenant_id", claims.TenantID,
-				"status", user.Status,
+				"status", userStatus,
 			)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			c.Abort()
@@ -376,7 +376,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		jwtActor := types.Actor{Type: types.ActorTypeUser, ID: claims.UserID}
-		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", user.Roles, jwtActor, types.SourceDashboard); err != nil {
+		if err := setContextValues(c, environmentRepo, claims.TenantID, claims.UserID, claims.EnvironmentID, "", roles, jwtActor, types.SourceDashboard); err != nil {
 			abortEnvironmentResolution(c, logger, err, claims.TenantID, claims.UserID)
 			return
 		}
@@ -415,4 +415,27 @@ func SessionTokenAuthMiddleware(cfg *config.Configuration, logger *logger.Logger
 
 		c.Next()
 	}
+}
+
+func resolveJWTRoles(ctx context.Context, userRepo domainUser.Repository, membershipRepo domainMembership.Repository, userID, tenantID string) ([]string, types.Status, error) {
+	if membershipRepo != nil {
+		membership, err := membershipRepo.GetByUserAndTenant(ctx, userID, tenantID)
+		if err == nil {
+			user, err := userRepo.GetByIDGlobal(ctx, userID)
+			if err != nil {
+				return nil, "", err
+			}
+			return membership.Roles, user.Status, nil
+		}
+		if !ierr.IsNotFound(err) {
+			return nil, "", err
+		}
+	}
+
+	tenantCtx := types.SetTenantID(ctx, tenantID)
+	user, err := userRepo.GetByID(tenantCtx, userID)
+	if err != nil {
+		return nil, "", err
+	}
+	return user.Roles, user.Status, nil
 }

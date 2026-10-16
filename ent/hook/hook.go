@@ -633,6 +633,18 @@ func (f TenantFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TenantMutation", m)
 }
 
+// The TenantMembershipFunc type is an adapter to allow the use of ordinary
+// function as TenantMembership mutator.
+type TenantMembershipFunc func(context.Context, *ent.TenantMembershipMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TenantMembershipFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TenantMembershipMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TenantMembershipMutation", m)
+}
+
 // The UsageRecordFunc type is an adapter to allow the use of ordinary
 // function as UsageRecord mutator.
 type UsageRecordFunc func(context.Context, *ent.UsageRecordMutation) (ent.Value, error)

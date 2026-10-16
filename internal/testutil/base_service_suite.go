@@ -50,6 +50,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -84,6 +85,7 @@ type Stores struct {
 	RefundRepo                   refund.Repository
 	AuthRepo                     auth.Repository
 	UserRepo                     user.Repository
+	TenantMembershipRepo         tenantmembership.Repository
 	TenantRepo                   tenant.Repository
 	EnvironmentRepo              environment.Repository
 	EntitlementRepo              entitlement.Repository
@@ -248,6 +250,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		RefundRepo:                   NewInMemoryRefundStore(),
 		AuthRepo:                     NewInMemoryAuthRepository(),
 		UserRepo:                     NewInMemoryUserStore(),
+		TenantMembershipRepo:         NewInMemoryTenantMembershipStore(),
 		TenantRepo:                   NewInMemoryTenantStore(),
 		EnvironmentRepo:              NewInMemoryEnvironmentStore(),
 		EntitlementRepo:              NewInMemoryEntitlementStore(),
@@ -312,6 +315,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.RefundRepo.(*InMemoryRefundStore).Clear()
 	s.stores.AuthRepo.(*InMemoryAuthRepository).Clear()
 	s.stores.UserRepo.(*InMemoryUserStore).Clear()
+	s.stores.TenantMembershipRepo.(*InMemoryTenantMembershipStore).Clear()
 	s.stores.TenantRepo.(*InMemoryTenantStore).Clear()
 	s.stores.EnvironmentRepo.(*InMemoryEnvironmentStore).Clear()
 	s.stores.EntitlementRepo.(*InMemoryEntitlementStore).Clear()

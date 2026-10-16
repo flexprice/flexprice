@@ -53,9 +53,12 @@ func (r *InMemoryUserStore) Update(ctx context.Context, updatedUser *user.User) 
 	defer r.mu.Unlock()
 
 	for key, u := range r.users {
-		if u.ID == updatedUser.ID && u.TenantID == updatedUser.TenantID {
+		if u.ID == updatedUser.ID {
 			if updatedUser.Metadata != nil {
 				u.Metadata = updatedUser.Metadata
+			}
+			if updatedUser.Name != "" {
+				u.Name = updatedUser.Name
 			}
 			u.UpdatedBy = updatedUser.UpdatedBy
 			u.UpdatedAt = updatedUser.UpdatedAt
@@ -112,6 +115,35 @@ func (r *InMemoryUserStore) GetByID(ctx context.Context, userID string) (*user.U
 		}
 	}
 	return nil, ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+}
+
+// GetByIDGlobal retrieves a user by ID without tenant filtering.
+func (r *InMemoryUserStore) GetByIDGlobal(_ context.Context, userID string) (*user.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, u := range r.users {
+		if u.ID == userID {
+			return u, nil
+		}
+	}
+	return nil, ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+}
+
+// ArchiveByID archives a user by ID without requiring tenant match.
+func (r *InMemoryUserStore) ArchiveByID(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key, u := range r.users {
+		if u.ID == id {
+			if u.Status == types.StatusArchived {
+				return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+			}
+			u.Status = types.StatusArchived
+			r.users[key] = u
+			return nil
+		}
+	}
+	return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
 }
 
 // ListByFilter is a minimal implementation for testing

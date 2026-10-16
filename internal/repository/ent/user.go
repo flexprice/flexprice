@@ -99,12 +99,11 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 	})
 	defer FinishSpan(span)
 
+	// Profile fields live on the identity row; membership (not users.tenant_id)
+	// is what authorises access to a tenant. Filter by id only.
 	client := r.client.Writer(ctx)
 	updateQuery := client.User.Update().
-		Where(
-			entUser.ID(user.ID),
-			entUser.TenantID(tenantID),
-		).
+		Where(entUser.ID(user.ID)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC())
 
@@ -118,18 +117,9 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 		updateQuery = updateQuery.SetStatus(string(user.Status))
 	}
 
-	if _, err := updateQuery.Save(ctx); err != nil {
+	affected, err := updateQuery.Save(ctx)
+	if err != nil {
 		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("User not found").
-				WithReportableDetails(map[string]interface{}{
-					"user_id":   user.ID,
-					"tenant_id": tenantID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-
 		return ierr.WithError(err).
 			WithHint("Failed to update user").
 			WithReportableDetails(map[string]interface{}{
@@ -137,6 +127,15 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 				"tenant_id": tenantID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+	if affected == 0 {
+		return ierr.NewError("user not found").
+			WithHint("User not found").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   user.ID,
+				"tenant_id": tenantID,
+			}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	SetSpanSuccess(span)
@@ -303,6 +302,68 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*domainUser.Us
 	result := domainUser.FromEnt(user)
 	r.SetCache(ctx, result)
 	return result, nil
+}
+
+// GetByIDGlobal retrieves a user by ID without filtering on users.tenant_id.
+func (r *userRepository) GetByIDGlobal(ctx context.Context, id string) (*domainUser.User, error) {
+	span := StartRepositorySpan(ctx, "user", "get_by_id_global", map[string]interface{}{
+		"user_id": id,
+	})
+	defer FinishSpan(span)
+
+	user, err := r.client.Reader(ctx).User.
+		Query().
+		Where(entUser.ID(id)).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("User not found").
+				WithReportableDetails(map[string]interface{}{"user_id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve user").
+			WithReportableDetails(map[string]interface{}{"user_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return domainUser.FromEnt(user), nil
+}
+
+// ArchiveByID archives a user by ID without requiring users.tenant_id to match context.
+func (r *userRepository) ArchiveByID(ctx context.Context, id string) error {
+	span := StartRepositorySpan(ctx, "user", "archive_by_id", map[string]interface{}{
+		"user_id": id,
+	})
+	defer FinishSpan(span)
+
+	affected, err := r.client.Writer(ctx).User.Update().
+		Where(
+			entUser.ID(id),
+			entUser.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(time.Now().UTC()).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to archive user").
+			WithReportableDetails(map[string]interface{}{"user_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	if affected == 0 {
+		return ierr.NewError("user not found").
+			WithHint("User not found or already archived").
+			WithReportableDetails(map[string]interface{}{"user_id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
+	return nil
 }
 
 // GetByEmail retrieves a user by email

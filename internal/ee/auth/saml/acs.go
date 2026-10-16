@@ -9,6 +9,7 @@ import (
 
 	"github.com/crewjam/saml"
 
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -138,12 +139,9 @@ func normaliseEmail(email string) string {
 // resolveUser finds the user an assertion authenticates, provisioning one if the
 // tenant has never seen them.
 //
-// The cross-tenant check is the important branch. Email is globally unique
-// (a partial unique index on users.email that is not scoped by tenant), so a
-// user belongs to exactly one tenant for the lifetime of the account. An
-// assertion validated for tenant A must never authenticate a user who belongs to
-// tenant B, and the failure has to be explicit rather than a silent login into
-// the wrong tenant.
+// Email is globally unique on the identity row. An assertion for tenant A may
+// add a membership when the email already belongs to another organisation, so
+// the same login can serve multiple tenants.
 func (p *samlProvider) resolveUser(ctx context.Context, params service.ServiceParams, tenantID, email string, cfg Config) (string, error) {
 	// Look the user up without a tenant in context. GetByEmail filters by tenant
 	// when one is set, which would hide a user belonging to another
@@ -153,9 +151,30 @@ func (p *samlProvider) resolveUser(ctx context.Context, params service.ServicePa
 	existing, err := params.UserRepo.GetByEmail(types.SetTenantID(ctx, ""), email)
 	if err == nil && existing != nil {
 		if existing.TenantID != tenantID {
-			return "", ierr.NewError("user belongs to a different organisation").
-				WithHint("This email already has a Flexprice account under another organisation").
-				Mark(ierr.ErrPermissionDenied)
+			// Same identity may join this tenant via SAML when the IdP asserts
+			// them here; create a membership rather than refusing.
+			if params.TenantMembershipRepo == nil {
+				return "", ierr.NewError("user belongs to a different organisation").
+					WithHint("This email already has a Flexprice account under another organisation").
+					Mark(ierr.ErrPermissionDenied)
+			}
+			if _, memErr := params.TenantMembershipRepo.GetByUserAndTenant(ctx, existing.ID, tenantID); ierr.IsNotFound(memErr) {
+				role := cfg.DefaultRole
+				if role == "" {
+					role = string(types.RoleAllReader)
+				}
+				if err := validateDefaultRole(role); err != nil {
+					return "", ierr.WithError(err).
+						WithHint("The tenant's SAML default_role is not assignable").
+						Mark(ierr.ErrValidation)
+				}
+				m := tenantmembership.New(existing.ID, tenantID, []string{role})
+				if err := params.TenantMembershipRepo.Create(ctx, m); err != nil {
+					return "", err
+				}
+			} else if memErr != nil {
+				return "", memErr
+			}
 		}
 		return existing.ID, nil
 	}
@@ -186,6 +205,12 @@ func (p *samlProvider) provisionUser(ctx context.Context, params service.Service
 
 	if err := params.UserRepo.Create(ctx, newUser); err != nil {
 		return "", fmt.Errorf("provision saml user: %w", err)
+	}
+	if params.TenantMembershipRepo != nil {
+		m := tenantmembership.New(newUser.ID, tenantID, newUser.Roles)
+		if err := params.TenantMembershipRepo.Create(ctx, m); err != nil {
+			return "", fmt.Errorf("provision saml membership: %w", err)
+		}
 	}
 	return newUser.ID, nil
 }

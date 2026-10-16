@@ -118,6 +118,8 @@ type Tx struct {
 	TaxRate *TaxRateClient
 	// Tenant is the client for interacting with the Tenant builders.
 	Tenant *TenantClient
+	// TenantMembership is the client for interacting with the TenantMembership builders.
+	TenantMembership *TenantMembershipClient
 	// UsageRecord is the client for interacting with the UsageRecord builders.
 	UsageRecord *UsageRecordClient
 	// User is the client for interacting with the User builders.
@@ -311,6 +313,7 @@ func (tx *Tx) init() {
 	tx.TaxAssociation = NewTaxAssociationClient(tx.config)
 	tx.TaxRate = NewTaxRateClient(tx.config)
 	tx.Tenant = NewTenantClient(tx.config)
+	tx.TenantMembership = NewTenantMembershipClient(tx.config)
 	tx.UsageRecord = NewUsageRecordClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)

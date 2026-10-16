@@ -53,6 +53,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -150,6 +151,7 @@ func main() {
 			repository.NewActivityRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
+			repository.NewTenantMembershipRepository,
 			repository.NewAuthRepository,
 			repository.NewPriceRepository,
 			repository.NewCustomerRepository,
@@ -522,6 +524,7 @@ func provideRouter(
 	webhookRequestRepo incomingwebhookevent.Repository,
 	environmentRepo environment.Repository,
 	userRepo user.Repository,
+	membershipRepo tenantmembership.Repository,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -534,6 +537,7 @@ func provideRouter(
 		webhookRequestRepo,
 		environmentRepo,
 		userRepo,
+		membershipRepo,
 	)
 }
 

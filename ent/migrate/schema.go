@@ -2681,6 +2681,44 @@ var (
 			},
 		},
 	}
+	// TenantMembershipsColumns holds the columns for the "tenant_memberships" table.
+	TenantMembershipsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "user_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "roles", Type: field.TypeJSON, Nullable: true},
+	}
+	// TenantMembershipsTable holds the schema information for the "tenant_memberships" table.
+	TenantMembershipsTable = &schema.Table{
+		Name:       "tenant_memberships",
+		Columns:    TenantMembershipsColumns,
+		PrimaryKey: []*schema.Column{TenantMembershipsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_tenant_membership_user_tenant",
+				Unique:  true,
+				Columns: []*schema.Column{TenantMembershipsColumns[7], TenantMembershipsColumns[1]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+			{
+				Name:    "idx_tenant_membership_tenant_status",
+				Unique:  false,
+				Columns: []*schema.Column{TenantMembershipsColumns[1], TenantMembershipsColumns[2]},
+			},
+			{
+				Name:    "idx_tenant_membership_user_status",
+				Unique:  false,
+				Columns: []*schema.Column{TenantMembershipsColumns[7], TenantMembershipsColumns[2]},
+			},
+		},
+	}
 	// UsageRecordsColumns holds the columns for the "usage_records" table.
 	UsageRecordsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3037,6 +3075,7 @@ var (
 		TaxAssociationsTable,
 		TaxRatesTable,
 		TenantsTable,
+		TenantMembershipsTable,
 		UsageRecordsTable,
 		UsersTable,
 		WalletsTable,

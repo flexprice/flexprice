@@ -87,6 +87,7 @@ const (
 	UUID_PREFIX_ENVIRONMENT                = "env"
 	UUID_PREFIX_USER                       = "user"
 	UUID_PREFIX_TENANT                     = "tenant"
+	UUID_PREFIX_TENANT_MEMBERSHIP          = "tm"
 	UUID_PREFIX_ENTITLEMENT                = "ent"
 	UUID_PREFIX_ENTITLEMENT_GRANT          = "eg"
 	UUID_PREFIX_PAYMENT                    = "pay"
