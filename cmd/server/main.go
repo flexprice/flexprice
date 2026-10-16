@@ -422,6 +422,7 @@ func provideHandlers(
 	webhookService *webhook.WebhookService,
 	analyticsService service.AnalyticsService,
 	revenueService interfaces.RevenueService,
+	selfBillingService selfbilling.Service,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
@@ -475,6 +476,7 @@ func provideHandlers(
 		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
+		SelfBilling:              v1.NewSelfBillingHandler(selfBillingService),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),

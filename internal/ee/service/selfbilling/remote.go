@@ -2,6 +2,7 @@ package selfbilling
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -252,21 +253,47 @@ func (c *remoteClient) IngestBulk(ctx context.Context, events []usageEvent) erro
 }
 
 // isNotFound reports whether an SDK call failed with HTTP 404, whichever error type the SDK used for it.
-func isNotFound(err error) bool {
+func isNotFound(err error) bool { return httpStatus(err) == http.StatusNotFound }
+
+// isConflict reports whether an SDK call failed with HTTP 409.
+func isConflict(err error) bool { return httpStatus(err) == http.StatusConflict }
+
+// httpStatus returns the HTTP status of a failed SDK call, or 0 when err did not come from an HTTP response.
+func httpStatus(err error) int {
 	if err == nil {
-		return false
+		return 0
 	}
 	var apiErr *sdkerrors.APIError
 	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == http.StatusNotFound
+		return apiErr.StatusCode
 	}
 	var errResp *sdkerrors.ErrorResponse
 	if errors.As(err, &errResp) {
-		return errResp.HTTPMeta.Response != nil && errResp.HTTPMeta.Response.StatusCode == http.StatusNotFound
+		if errResp.HTTPMeta.Response == nil {
+			return 0
+		}
+		return errResp.HTTPMeta.Response.StatusCode
 	}
 	var validationErr *sdkerrors.ResponseValidationError
 	if errors.As(err, &validationErr) {
-		return validationErr.StatusCode == http.StatusNotFound
+		return validationErr.StatusCode
 	}
-	return false
+	return 0
+}
+
+// conflictCheckoutID returns the open checkout session id Mumbai names in a 409 body, if any.
+func conflictCheckoutID(err error) string {
+	var apiErr *sdkerrors.APIError
+	if !errors.As(err, &apiErr) {
+		return ""
+	}
+	var body struct {
+		Details struct {
+			CheckoutSessionID string `json:"checkout_session_id"`
+		} `json:"details"`
+	}
+	if json.Unmarshal([]byte(apiErr.Body), &body) != nil {
+		return ""
+	}
+	return body.Details.CheckoutSessionID
 }

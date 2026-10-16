@@ -17,6 +17,10 @@ type fakeClient struct {
 	trialsStarted  int
 	trialCheckouts int
 	err            error
+	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect.
+	freeFirstPeriod  bool
+	trialCheckoutErr error
+	portalExtIDs     []string
 }
 
 func newFakeClient() *fakeClient {
@@ -53,6 +57,12 @@ func (f *fakeClient) StartTrialEndCheckout(_ context.Context, in checkoutInput) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.trialCheckouts++
+	if f.trialCheckoutErr != nil {
+		return nil, f.trialCheckoutErr
+	}
+	if f.freeFirstPeriod {
+		return &remoteCheckout{status: "completed", terminal: true, extID: in.extID}, f.err
+	}
 	co := &remoteCheckout{id: "cs_" + in.subscriptionID, status: "pending", url: "https://checkout.stripe.test/" + in.subscriptionID, extID: in.extID}
 	f.checkouts[co.id] = co
 	return co, f.err
@@ -77,7 +87,10 @@ func (f *fakeClient) CancelCheckout(_ context.Context, id string) error {
 	return f.err
 }
 
-func (f *fakeClient) PortalSession(context.Context, string) (*portalSession, error) {
+func (f *fakeClient) PortalSession(_ context.Context, ext string) (*portalSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.portalExtIDs = append(f.portalExtIDs, ext)
 	return &portalSession{url: "https://portal.test"}, f.err
 }
 
