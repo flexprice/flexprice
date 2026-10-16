@@ -94,6 +94,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		TenantID: tenantID,
 	}
 
+	var newTenant *dto.TenantResponse
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create auth record
 		if s.authProvider.GetProvider() == types.AuthProviderFlexprice {
@@ -108,7 +109,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 
 		onboardingService := NewOnboardingService(s.ServiceParams)
 
-		err = onboardingService.OnboardNewUserWithTenant(ctx, dto.OnboardNewUserWithTenantRequest{
+		newTenant, err = onboardingService.OnboardNewUserWithTenant(ctx, dto.OnboardNewUserWithTenantRequest{
 			UserID:     authResponse.ID,
 			Email:      req.Email,
 			TenantName: req.TenantName,
@@ -132,6 +133,11 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Only after the commit: provisioning calls the billing tenant, and a rollback could not recall it.
+	if s.SelfBilling != nil {
+		s.SelfBilling.OnTenantCreated(ctx, newTenant.ID, newTenant.Name, req.Email)
 	}
 
 	return response, nil
