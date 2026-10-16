@@ -95,7 +95,6 @@ const (
 	TemporalRazorpayInvoiceSyncWorkflow                    TemporalWorkflowType = "RazorpayInvoiceSyncWorkflow"
 	TemporalRecalculateInvoiceWorkflow                     TemporalWorkflowType = "RecalculateInvoiceWorkflow"
 	TemporalReprocessRawEventsWorkflow                     TemporalWorkflowType = "ReprocessRawEventsWorkflow"
-	TemporalReplayDLQWorkflow                              TemporalWorkflowType = "ReplayDLQWorkflow"
 	TemporalScheduleDraftFinalizationWorkflow              TemporalWorkflowType = "ScheduleDraftFinalizationWorkflow"
 	TemporalScheduleSubscriptionBillingWorkflow            TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
 	TemporalStripeCustomerSyncWorkflow                     TemporalWorkflowType = "StripeCustomerSyncWorkflow"
@@ -196,7 +195,6 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalRazorpayInvoiceSyncWorkflow,
 		TemporalRecalculateInvoiceWorkflow,
 		TemporalReprocessRawEventsWorkflow,
-		TemporalReplayDLQWorkflow,
 		TemporalScheduleDraftFinalizationWorkflow,
 		TemporalScheduleSubscriptionBillingWorkflow,
 		TemporalStripeCustomerSyncWorkflow,
@@ -245,7 +243,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueInvoice
 	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow, TemporalUsageAlertWorkflow:
 		return TemporalTaskQueueWorkflows
-	case TemporalReprocessRawEventsWorkflow, TemporalReplayDLQWorkflow:
+	case TemporalReprocessRawEventsWorkflow:
 		return TemporalTaskQueueReprocessEvents
 	default:
 		return TemporalTaskQueueTask // Default fallback
@@ -331,7 +329,6 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
 			TemporalReprocessRawEventsWorkflow,
-			TemporalReplayDLQWorkflow,
 		}
 	case TemporalTaskQueueCron:
 		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))

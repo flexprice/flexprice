@@ -8,11 +8,11 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
+	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
-	dlqActivities "github.com/flexprice/flexprice/internal/temporal/activities/dlq"
 	environmentActivities "github.com/flexprice/flexprice/internal/temporal/activities/environment"
 	eventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/events"
 	exportActivities "github.com/flexprice/flexprice/internal/temporal/activities/export"
@@ -22,7 +22,6 @@ import (
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
 	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
-	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	prepareProcessedEventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/prepareprocessedevents"
 	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
@@ -37,7 +36,6 @@ import (
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	cronWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/cron"
-	dlqWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/dlq"
 	eventsWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/events"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
 	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
@@ -285,10 +283,6 @@ func RegisterWorkflowsAndActivities(
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
 	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService, params.Logger)
 
-	// DLQ replay activities
-	dlqReplayService := service.NewDLQReplayService(params)
-	replayDLQActivities := dlqActivities.NewReplayDLQActivities(dlqReplayService)
-
 	// Cron workflow activities (reuses subscriptionService and walletService from above)
 	creditGrantService := service.NewCreditGrantService(params)
 	tenantService := service.NewTenantService(params)
@@ -328,7 +322,7 @@ func RegisterWorkflowsAndActivities(
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, replayDLQActivities, envActivities, cronBundle, alertActs, marketplaceFlushActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, addonActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, tabsInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessRawEventsActivities, envActivities, cronBundle, alertActs, marketplaceFlushActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -374,7 +368,6 @@ func buildWorkerConfig(
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
-	replayDLQActivities *dlqActivities.ReplayDLQActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
 	cron *cronActivityBundle,
 	alertActs *alertActivities.AlertActivities,
@@ -545,11 +538,9 @@ func buildWorkerConfig(
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,
 			eventsWorkflows.ReprocessRawEventsWorkflow,
-			dlqWorkflows.ReplayDLQWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			reprocessRawEventsActivities.ReprocessRawEvents,
-			replayDLQActivities.ReplayDLQ,
 		)
 
 	case types.TemporalTaskQueueCron:
