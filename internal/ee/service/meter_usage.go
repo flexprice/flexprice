@@ -513,14 +513,19 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		activeMeterIDs[id] = true
 	}
 
-	// 8. Build meter_id → line items map (only meters with data)
+	isAnalyticsQuery := req.WindowSize != "" ||
+		len(req.PropertyFilters) > 0 ||
+		len(req.Sources) > 0 ||
+		len(req.GroupBy) > 0
+
+	// 8. Include meters with window data or a running balance to read.
 	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
 	meterAggType := make(map[string]types.AggregationType)
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
-		if !activeMeterIDs[item.MeterID] {
+		if !activeMeterIDs[item.MeterID] && (isAnalyticsQuery || !keepsRunningAggregate(result.MeterMap[item.MeterID])) {
 			continue
 		}
 		meterToLineItems[item.MeterID] = append(meterToLineItems[item.MeterID], item)
@@ -581,11 +586,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		// Use GetDetailedAnalytics when a window size, property/source filters, or extra
 		// group-by dimensions are requested (analytics path). Fall back to the faster
 		// GetUsageMultiMeter only for plain scalar billing queries.
-		isAnalyticsQuery := req.WindowSize != "" ||
-			len(req.PropertyFilters) > 0 ||
-			len(req.Sources) > 0 ||
-			len(req.GroupBy) > 0
-
 		if isAnalyticsQuery {
 			// Decide whether user-supplied group_by adds dimensions beyond meter_id.
 			// If yes, split the batch: commitment line items query with meter_id only
@@ -625,23 +625,48 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				return nil, err
 			}
 		} else {
-			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
-			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
-			// set by billing callers, so nothing is lost here.
+			var windowMeterIDs, checkpointMeterIDs []string
+			for _, id := range meterIDs {
+				if keepsRunningAggregate(result.MeterMap[id]) {
+					checkpointMeterIDs = append(checkpointMeterIDs, id)
+				} else {
+					windowMeterIDs = append(windowMeterIDs, id)
+				}
+			}
 			queryParams := &events.MeterUsageQueryParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
 				ExternalCustomerIDs: externalCustomerIDs,
-				MeterIDs:            meterIDs,
+				MeterIDs:            windowMeterIDs,
 				StartTime:           group.Start,
 				EndTime:             group.End,
 				AggregationType:     group.AggType,
 				UseFinal:            req.UseFinal,
 			}
 
-			results, err := s.repo.GetUsageMultiMeter(ctx, queryParams)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", group.AggType, err)
+			var results []*events.MeterUsageAggregationResult
+			if len(windowMeterIDs) > 0 {
+				results, err = s.repo.GetUsageMultiMeter(ctx, queryParams)
+				if err != nil {
+					return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", group.AggType, err)
+				}
+			}
+
+			for _, meterID := range checkpointMeterIDs {
+				total, err := s.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+					CustomerID:          sub.CustomerID,
+					ExternalCustomerIDs: externalCustomerIDs,
+					MeterID:             meterID,
+					AggregationType:     group.AggType,
+					Until:               group.End,
+				})
+				if err != nil {
+					return nil, err
+				}
+				results = append(results, &events.MeterUsageAggregationResult{
+					MeterID:    meterID,
+					TotalValue: total,
+				})
 			}
 
 			resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
@@ -666,12 +691,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				result.LineItemUsages = append(result.LineItemUsages, usage)
 			}
 		}
-	}
-
-	// 10b. A meter that keeps a running aggregate bills that, not the window's usage.
-	//      Scalar billing entries only: analytics points stay per window.
-	if err := s.applyRunningAggregates(ctx, sub.CustomerID, externalCustomerIDs, result.LineItemUsages); err != nil {
-		return nil, err
 	}
 
 	// 11. Query bucketed meters per line item (already uses GetPeriodStart/End)

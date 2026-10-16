@@ -157,30 +157,3 @@ func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
 	}
 	return nil
 }
-
-// applyRunningAggregates replaces the window's usage with the running aggregate at the
-// window end for meters that keep one. Analytics entries keep their per-window values.
-func (s *meterUsageService) applyRunningAggregates(
-	ctx context.Context,
-	customerID string,
-	externalCustomerIDs []string,
-	usages []*LineItemMeterUsage,
-) error {
-	for _, lu := range usages {
-		if lu == nil || lu.AnalyticsResult != nil || !keepsRunningAggregate(lu.Meter) {
-			continue
-		}
-		usage, err := s.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
-			CustomerID:          customerID,
-			ExternalCustomerIDs: externalCustomerIDs,
-			MeterID:             lu.MeterID,
-			AggregationType:     lu.Meter.Aggregation.Type,
-			Until:               lu.PeriodEnd,
-		})
-		if err != nil {
-			return err
-		}
-		lu.Usage = usage
-	}
-	return nil
-}

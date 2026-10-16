@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/types"
@@ -13,6 +14,16 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+type recordingWindowUsageStore struct {
+	events.MeterUsageRepository
+	meterIDs []string
+}
+
+func (r *recordingWindowUsageStore) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+	r.meterIDs = append(r.meterIDs, params.MeterIDs...)
+	return r.MeterUsageRepository.GetUsageMultiMeter(ctx, params)
+}
 
 func (s *MeterUsageServiceSuite) signedSumMeter(ctx context.Context, id string, reset types.ResetUsage) *meter.Meter {
 	m := &meter.Meter{
@@ -60,12 +71,19 @@ func (s *MeterUsageServiceSuite) TestSignedSum_LineItemsReadTheirOwnWindow() {
 			s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), 100)
 			s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), -30)
 
+			recorded := &recordingWindowUsageStore{MeterUsageRepository: s.GetStores().MeterUsageRepo}
+			s.svc.(*meterUsageService).repo = recorded
 			result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
 				SubscriptionID: s.sub.ID,
 				StartTime:      s.periodStart,
 				EndTime:        s.periodEnd,
 			})
 			s.Require().NoError(err)
+			if tt.reset == types.ResetUsageNever {
+				s.NotContains(recorded.meterIDs, m.ID, "checkpointed meters must not also query window usage")
+			} else {
+				s.Contains(recorded.meterIDs, m.ID)
+			}
 
 			usageByItem := map[string]decimal.Decimal{}
 			for _, lu := range result.LineItemUsages {
@@ -151,6 +169,58 @@ func TestSignedSumBillable(t *testing.T) {
 			got := signedSumBillable(tt.usage, tt.ent, tt.running, tt.share)
 			if !tt.want.Equal(got) {
 				t.Fatalf("want %s, got %s", tt.want, got)
+			}
+		})
+	}
+}
+
+func (s *MeterUsageServiceSuite) TestSignedSum_QuietPeriod() {
+	tests := []struct {
+		name       string
+		reset      types.ResetUsage
+		checkpoint bool
+		window     types.WindowSize
+		want       string
+	}{
+		{name: "running total from history", reset: types.ResetUsageNever, want: "46"},
+		{name: "running total from checkpoint", reset: types.ResetUsageNever, checkpoint: true, want: "46"},
+		{name: "period net excludes history", reset: types.ResetUsageBillingPeriod, want: "0"},
+		{name: "analytics keeps quiet window at zero", reset: types.ResetUsageNever, checkpoint: true, window: types.WindowSizeDay, want: "0"},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			m := s.signedSumMeter(ctx, "meter_quiet_storage", tt.reset)
+			p := s.createPriceForMeter(ctx, "price_quiet_storage", m.ID, decimal.NewFromInt(1))
+			s.signedSumLineItem(ctx, "li_quiet_storage", m.ID, p.ID, s.periodStart, s.periodEnd)
+			s.insertMeterUsage(ctx, m.ID, s.customer.ExternalID, s.periodStart.Add(-24*time.Hour), 46)
+			if tt.checkpoint {
+				_, err := s.svc.SaveUsageCheckpoint(ctx, CheckpointedUsageRequest{
+					CustomerID:          s.customer.ID,
+					ExternalCustomerIDs: []string{s.customer.ExternalID},
+					MeterID:             m.ID,
+					AggregationType:     types.AggregationSignedSum,
+					Until:               s.periodStart,
+				}, nil)
+				s.Require().NoError(err)
+			}
+			result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+				SubscriptionID: s.sub.ID,
+				StartTime:      s.periodStart,
+				EndTime:        s.periodEnd,
+				MeterIDs:       []string{m.ID},
+				WindowSize:     tt.window,
+			})
+			s.Require().NoError(err)
+			s.Require().Len(result.LineItemUsages, 1)
+			s.Equal(tt.want, result.LineItemUsages[0].Usage.String())
+			if tt.window == "" {
+				charges, total, err := s.svc.ConvertToBillingCharges(ctx, result)
+				s.Require().NoError(err)
+				s.Require().Len(charges, 1)
+				s.Equal(tt.want, charges[0].QuantityDecimal().String())
+				s.Equal(tt.want, total.String())
 			}
 		})
 	}
