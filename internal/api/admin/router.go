@@ -34,6 +34,8 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	if log != nil {
 		engine.Use(middleware.LoggingMiddleware(log))
 	}
+	// The dashboard is a different tailnet host from this API, so the browser preflight must succeed.
+	engine.Use(middleware.CORSMiddleware)
 
 	engine.GET("/health", handlers.Health.Health)
 	engine.POST("/health", handlers.Health.Health)
