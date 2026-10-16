@@ -177,6 +177,8 @@ reports:
   # Empty database or username disables reports.
   # Login must allow setting changes.
   database: ""
+  # Empty falls back to database.
+  usage_database: ""
   username: ""
   password: ""
   max_execution_seconds: 30

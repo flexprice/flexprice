@@ -21,6 +21,20 @@ type reportQuery struct {
 	TopN bool
 }
 
+// buildInput is handed to custom builders.
+type buildInput struct {
+	RV *analytics.ResolvedView
+	DB string
+	// Database holding meter_usage.
+	UsageDB string
+	Params  map[string]string
+	// Standard row invariants for alias.
+	Scope func(alias string) string
+	// Half-open window predicate on col.
+	TimeCond func(col string) string
+	MaxRows  int
+}
+
 const (
 	chEpoch      = "toDateTime64(0, 6)"
 	chTimeLayout = "2006-01-02 15:04:05.000000"
@@ -45,11 +59,22 @@ func lookupBillingMetric(m types.Metric) (*analytics.BillingMetric, *billingSQL,
 }
 
 func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID string, maxRows int) (*reportQuery, error) {
+	return buildBillingQueryWithUsage(rv, db, db, tenantID, environmentID, maxRows)
+}
+
+// buildBillingQueryWithUsage reads meter_usage from usageDB.
+func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantID, environmentID string, maxRows int) (*reportQuery, error) {
 	if tenantID == "" || environmentID == "" {
 		return nil, ierr.NewError("tenant and environment are required").Mark(ierr.ErrPermissionDenied)
 	}
 	if !chIdentifier.MatchString(db) {
 		return nil, ierr.NewErrorf("invalid reports database %q", db).Mark(ierr.ErrSystem)
+	}
+	if usageDB == "" {
+		usageDB = db
+	}
+	if !chIdentifier.MatchString(usageDB) {
+		return nil, ierr.NewErrorf("invalid usage database %q", usageDB).Mark(ierr.ErrSystem)
 	}
 	if rv == nil || len(rv.Metrics) != 1 {
 		return nil, ierr.NewError("billing views take exactly one metric").Mark(ierr.ErrValidation)
@@ -73,6 +98,32 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		"environment_id": environmentID,
 		"from":           rv.Time.From.UTC().Format(chTimeLayout),
 		"to":             rv.Time.To.UTC().Format(chTimeLayout),
+	}
+	if sq.Build != nil {
+		return sq.Build(buildInput{
+			RV:      rv,
+			DB:      db,
+			UsageDB: usageDB,
+			Params:  params,
+			Scope: func(alias string) string {
+				return fmt.Sprintf("%[1]s.tenant_id = {tenant_id:String} AND %[1]s.environment_id = {environment_id:String} AND %[1]s._peerdb_is_deleted = 0 AND %[1]s.status = '%[2]s'", alias, types.StatusPublished)
+			},
+			TimeCond: func(col string) string {
+				e := fmt.Sprintf("nullIf(%s, %s)", col, chEpoch)
+				return fmt.Sprintf("%s >= toDateTime64({from:String}, 6, 'UTC') AND %s < toDateTime64({to:String}, 6, 'UTC')", e, e)
+			},
+			MaxRows: maxRows,
+		})
+	}
+	if bm.Snapshot && (rv.Compare != "" || rv.Shape == types.ShapeTimeseries) {
+		return nil, ierr.NewErrorf("metric %q is a snapshot", bm.Metric).
+			WithHint("snapshot metrics support neither compare nor timeseries").
+			Mark(ierr.ErrValidation)
+	}
+	if rv.Compare != "" && sq.Agg == "" {
+		return nil, ierr.NewErrorf("metric %q does not support compare", bm.Metric).
+			WithHint("remove compare for this metric").
+			Mark(ierr.ErrValidation)
 	}
 	timeExpr := fmt.Sprintf("nullIf(%s, %s)", sq.TimeCol, chEpoch)
 	curCond := fmt.Sprintf("%s >= toDateTime64({from:String}, 6, 'UTC') AND %s < toDateTime64({to:String}, 6, 'UTC')", timeExpr, timeExpr)
@@ -109,7 +160,7 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 	var selects, groups []string
 	var cols []analytics.ReportColumn
 	if rv.Shape == types.ShapeTimeseries {
-		selects = append(selects, fmt.Sprintf("ifNull(formatDateTime(toDateTime(%s(%s, 'UTC'), 'UTC'), '%%Y-%%m-%%dT%%H:%%i:%%SZ'), '') AS bucket", grainFn, bucketExpr))
+		selects = append(selects, fmt.Sprintf("ifNull(formatDateTime(toDateTime(%s(%s, 'UTC'), 'UTC'), %s), '') AS bucket", grainFn, bucketExpr, bucketFormat))
 		groups = append(groups, "bucket")
 		cols = append(cols, analytics.ReportColumn{Name: "bucket", Type: types.ColumnTypeDatetime, Role: types.ColumnRoleDimension})
 	}
@@ -135,7 +186,9 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		"status = '" + string(types.StatusPublished) + "'",
 	}
 	where = append(where, sq.Where...)
-	where = append(where, timeWhere...)
+	if !bm.Snapshot {
+		where = append(where, timeWhere...)
+	}
 	for i, f := range rv.Filters {
 		if f == nil {
 			continue

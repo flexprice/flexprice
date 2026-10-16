@@ -392,6 +392,9 @@ func (s *analyticsService) ListReports(_ context.Context) (*dto.ReportCatalogRes
 			HigherIsBetter:  e.HigherIsBetter,
 			DefaultShape:    string(e.DefaultShape),
 			SupportsCompare: e.SupportsCompare,
+			VariantOf:       string(e.VariantOf),
+			VariantLabel:    e.VariantLabel,
+			MaxRangeDays:    e.MaxRangeDays,
 			Shapes:          []string{},
 			Dimensions:      []dto.ReportDimension{},
 			Grains:          []string{},
@@ -521,6 +524,13 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 		return nil, err
 	}
 
+	if req.Shape == string(types.ShapeTimeseries) && req.Grain == "" && len(entry.Grains) > 0 {
+		req.Grain = string(entry.Grains[0])
+	}
+	if entry.Key == types.MetricEventsVolume && req.Shape == string(types.ShapeBreakdown) && len(req.Dimensions) == 0 {
+		req.Dimensions = []string{"meter_id"}
+	}
+
 	def := analytics.ViewDefinition{
 		Family:     types.FamilyBilling,
 		Shape:      types.Shape(req.Shape),
@@ -542,6 +552,11 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 	rv, err := analytics.ResolveVariables(&def, nil)
 	if err != nil {
 		return nil, err
+	}
+	if d := entry.MaxRangeDays; d > 0 && rv.Time.To.Sub(rv.Time.From) > time.Duration(d)*24*time.Hour {
+		return nil, ierr.NewErrorf("range exceeds %d days for this report", d).
+			WithHint(fmt.Sprintf("Choose a range of %d days or less", d)).
+			Mark(ierr.ErrValidation)
 	}
 	rv.Compare = req.Compare
 	res, err := s.executeBilling(ctx, rv)

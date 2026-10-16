@@ -158,6 +158,9 @@ func (v ViewDefinition) validateBilling() error {
 	if !slices.Contains(bm.Shapes, v.Shape) {
 		return ierr.NewErrorf("shape %q not supported by metric %q", v.Shape, bm.Metric).Mark(ierr.ErrValidation)
 	}
+	if bm.Snapshot && v.Shape == types.ShapeTimeseries {
+		return ierr.NewErrorf("snapshot metric %q has no timeseries", bm.Metric).Mark(ierr.ErrValidation)
+	}
 	for i, d := range v.Dimensions {
 		if !slices.Contains(bm.Dimensions, d) {
 			return ierr.NewErrorf("illegal dimension %q for metric %q", d, bm.Metric).Mark(ierr.ErrValidation)

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -25,6 +26,30 @@ func TestListReports(t *testing.T) {
 	require.NotEmpty(t, res.Items)
 	assert.Equal(t, "invoice_total", res.Items[0].Key)
 	assert.Equal(t, "Total billing", res.Items[0].Name)
+}
+
+func TestListReports_VariantFieldsOnlyWhereSet(t *testing.T) {
+	res, err := reportsSvc(&testutil.InMemoryReportsRepo{On: true}).ListReports(billingCtx())
+	require.NoError(t, err)
+	raw := map[string]map[string]any{}
+	for _, it := range res.Items {
+		b, err := json.Marshal(it)
+		require.NoError(t, err)
+		m := map[string]any{}
+		require.NoError(t, json.Unmarshal(b, &m))
+		raw[it.Key] = m
+	}
+	assert.Equal(t, "Billed", raw["arpu"]["variant_label"])
+	assert.NotContains(t, raw["arpu"], "variant_of")
+	assert.Equal(t, "Paid", raw["arpu_paid"]["variant_label"])
+	assert.Equal(t, "arpu", raw["arpu_paid"]["variant_of"])
+	assert.Equal(t, "ARPU (paid)", raw["arpu_paid"]["name"])
+	assert.Equal(t, "Billing period", raw["invoice_total"]["variant_label"])
+	assert.NotContains(t, raw["invoice_total"], "variant_of")
+	assert.Equal(t, "Invoice date", raw["invoice_total_issued"]["variant_label"])
+	assert.Equal(t, "invoice_total", raw["invoice_total_issued"]["variant_of"])
+	assert.Equal(t, "Billing period", raw["net_billing"]["variant_label"])
+	assert.Equal(t, "net_billing", raw["net_billing_issued"]["variant_of"])
 }
 
 func TestListReports_DisabledIs403(t *testing.T) {
@@ -81,6 +106,26 @@ func TestRunReport_CurrencyBecomesFilter(t *testing.T) {
 	require.Len(t, repo.Last.Filters, 1)
 	assert.Equal(t, "currency", repo.Last.Filters[0].Field)
 	assert.Equal(t, []string{"usd"}, repo.Last.Filters[0].Value)
+}
+
+func TestRunReport_OmittedGrainUsesFirstCatalogGrain(t *testing.T) {
+	for key, want := range map[string]types.Grain{"arpu": types.GrainMonth, "days_to_pay": types.GrainWeek} {
+		repo := &testutil.InMemoryReportsRepo{On: true}
+		_, err := reportsSvc(repo).RunReport(billingCtx(), key, &dto.ReportQueryRequest{Shape: "timeseries", Range: "2026-09-01..2026-10-01"})
+		require.NoError(t, err, key)
+		assert.Equal(t, want, repo.Last.Time.Grain, key)
+	}
+}
+
+func TestRunReport_CurrencyFilterOnCustomReports(t *testing.T) {
+	for _, key := range []string{"net_billing", "active_customers"} {
+		repo := &testutil.InMemoryReportsRepo{On: true}
+		_, err := reportsSvc(repo).RunReport(billingCtx(), key, &dto.ReportQueryRequest{Shape: "scalar", Range: "2026-09-01..2026-10-01", Currency: "usd"})
+		require.NoError(t, err, key)
+		require.Len(t, repo.Last.Filters, 1, key)
+		assert.Equal(t, "currency", repo.Last.Filters[0].Field, key)
+		assert.Equal(t, []string{"usd"}, repo.Last.Filters[0].Value, key)
+	}
 }
 
 func TestRunReport_NoCompareNoMetaPrev(t *testing.T) {
@@ -143,4 +188,62 @@ func TestValidateReportRequest_UnsupportedCompareAndNoCurrency(t *testing.T) {
 	err = validateReportRequest(e, &dto.ReportQueryRequest{Shape: "scalar", Currency: "usd"}, 0)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
+}
+
+func runEventsVolume(t *testing.T, repo *testutil.InMemoryReportsRepo, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
+	req.Range = "2026-09-01..2026-09-08"
+	return reportsSvc(repo).RunReport(billingCtx(), "events_volume", req)
+}
+
+func TestRunReport_EventsVolumeResolvedView(t *testing.T) {
+	cases := []struct {
+		req  *dto.ReportQueryRequest
+		dims []string
+		cols []string
+		row  []string
+	}{
+		{&dto.ReportQueryRequest{Shape: "timeseries", Grain: "day"}, nil, []string{"bucket", "events_volume"}, []string{"2026-09-01T00:00:00Z", "7"}},
+		{&dto.ReportQueryRequest{Shape: "timeseries", Grain: "day", Dimensions: []string{"meter_id"}}, []string{"meter_id"}, []string{"bucket", "meter_id", "events_volume"}, []string{"2026-09-01T00:00:00Z", "m1", "7"}},
+		{&dto.ReportQueryRequest{Shape: "breakdown", Dimensions: []string{"meter_id"}}, []string{"meter_id"}, []string{"meter_id", "events_volume"}, []string{"m1", "7"}},
+		{&dto.ReportQueryRequest{Shape: "breakdown"}, []string{"meter_id"}, []string{"meter_id", "events_volume"}, []string{"m1", "7"}},
+	}
+	for _, c := range cases {
+		repo := &testutil.InMemoryReportsRepo{On: true, Columns: reportCols(c.cols...), Rows: [][]string{c.row}}
+		res, err := runEventsVolume(t, repo, c.req)
+		require.NoError(t, err, c.req.Shape)
+		names := []string{}
+		for _, col := range res.Columns {
+			names = append(names, col.Name)
+		}
+		assert.Equal(t, c.cols, names, c.req.Shape)
+		assert.Equal(t, [][]string{c.row}, res.Rows)
+		assert.Equal(t, []types.Metric{types.MetricEventsVolume}, repo.Last.Metrics)
+		assert.Equal(t, types.Shape(c.req.Shape), repo.Last.Shape)
+		assert.Equal(t, c.dims, repo.Last.Dimensions, c.req.Shape)
+	}
+}
+
+func TestRunReport_EventsVolumeRejectsCompareAndCurrency(t *testing.T) {
+	for _, req := range []*dto.ReportQueryRequest{
+		{Shape: "timeseries", Grain: "day", Compare: "previous_period"},
+		{Shape: "timeseries", Grain: "day", Currency: "usd"},
+		{Shape: "timeseries", Grain: "day", Filters: []dto.ReportFilter{{Field: "currency", Op: "eq", Value: []string{"usd"}}}},
+		{Shape: "scalar"},
+	} {
+		_, err := runEventsVolume(t, &testutil.InMemoryReportsRepo{On: true}, req)
+		require.Error(t, err)
+		assert.True(t, ierr.IsValidation(err), "%+v", req)
+	}
+}
+
+func TestRunReport_EventsVolumeMeterFilterIsParams(t *testing.T) {
+	repo := &testutil.InMemoryReportsRepo{On: true}
+	_, err := runEventsVolume(t, repo, &dto.ReportQueryRequest{
+		Shape: "timeseries", Grain: "day",
+		Filters: []dto.ReportFilter{{Field: "meter_id", Op: "in", Value: []string{"m1", "m2' OR 1=1"}}},
+	})
+	require.NoError(t, err)
+	require.Len(t, repo.Last.Filters, 1)
+	assert.Equal(t, "meter_id", repo.Last.Filters[0].Field)
+	assert.Equal(t, []string{"m1", "m2' OR 1=1"}, repo.Last.Filters[0].Value)
 }

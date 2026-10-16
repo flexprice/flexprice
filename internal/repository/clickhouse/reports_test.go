@@ -12,6 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func withSQL(t *testing.T, m types.Metric, sq *billingSQL) {
+	t.Helper()
+	prev := billingSQLs[m]
+	billingSQLs[m] = sq
+	t.Cleanup(func() { billingSQLs[m] = prev })
+}
+
 func TestBillingSQL_InvoiceTotalUsesConstants(t *testing.T) {
 	_, sq, ok := lookupBillingMetric(types.MetricInvoiceTotal)
 	require.True(t, ok)
@@ -37,7 +44,11 @@ func TestReportCatalog_AgreesWithRegistry(t *testing.T) {
 	for _, e := range entries {
 		bm, sq, ok := lookupBillingMetric(e.Key)
 		require.True(t, ok, "catalog key %q has no billing metric", e.Key)
-		assert.Equal(t, sq.Agg+"("+sq.Arg+")", sq.Measure, "measure of %q", e.Key)
+		if sq.Agg != "" {
+			assert.Equal(t, sq.Agg+"("+sq.Arg+")", sq.Measure, "measure of %q", e.Key)
+		} else {
+			assert.False(t, e.SupportsCompare, "compare of %q", e.Key)
+		}
 		for _, s := range e.Shapes {
 			assert.Contains(t, bm.Shapes, s, "shape %q of %q", s, e.Key)
 		}
