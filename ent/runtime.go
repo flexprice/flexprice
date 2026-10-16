@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -1452,6 +1453,47 @@ func init() {
 	meterDescResetUsage := meterFields[5].Descriptor()
 	// meter.DefaultResetUsage holds the default value on creation for the reset_usage field.
 	meter.DefaultResetUsage = meterDescResetUsage.Default.(string)
+	meterusagecheckpointMixin := schema.MeterUsageCheckpoint{}.Mixin()
+	meterusagecheckpointMixinFields0 := meterusagecheckpointMixin[0].Fields()
+	_ = meterusagecheckpointMixinFields0
+	meterusagecheckpointMixinFields1 := meterusagecheckpointMixin[1].Fields()
+	_ = meterusagecheckpointMixinFields1
+	meterusagecheckpointFields := schema.MeterUsageCheckpoint{}.Fields()
+	_ = meterusagecheckpointFields
+	// meterusagecheckpointDescTenantID is the schema descriptor for tenant_id field.
+	meterusagecheckpointDescTenantID := meterusagecheckpointMixinFields0[0].Descriptor()
+	// meterusagecheckpoint.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	meterusagecheckpoint.TenantIDValidator = meterusagecheckpointDescTenantID.Validators[0].(func(string) error)
+	// meterusagecheckpointDescStatus is the schema descriptor for status field.
+	meterusagecheckpointDescStatus := meterusagecheckpointMixinFields0[1].Descriptor()
+	// meterusagecheckpoint.DefaultStatus holds the default value on creation for the status field.
+	meterusagecheckpoint.DefaultStatus = meterusagecheckpointDescStatus.Default.(string)
+	// meterusagecheckpointDescCreatedAt is the schema descriptor for created_at field.
+	meterusagecheckpointDescCreatedAt := meterusagecheckpointMixinFields0[2].Descriptor()
+	// meterusagecheckpoint.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meterusagecheckpoint.DefaultCreatedAt = meterusagecheckpointDescCreatedAt.Default.(func() time.Time)
+	// meterusagecheckpointDescUpdatedAt is the schema descriptor for updated_at field.
+	meterusagecheckpointDescUpdatedAt := meterusagecheckpointMixinFields0[3].Descriptor()
+	// meterusagecheckpoint.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meterusagecheckpoint.DefaultUpdatedAt = meterusagecheckpointDescUpdatedAt.Default.(func() time.Time)
+	// meterusagecheckpoint.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meterusagecheckpoint.UpdateDefaultUpdatedAt = meterusagecheckpointDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// meterusagecheckpointDescEnvironmentID is the schema descriptor for environment_id field.
+	meterusagecheckpointDescEnvironmentID := meterusagecheckpointMixinFields1[0].Descriptor()
+	// meterusagecheckpoint.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	meterusagecheckpoint.DefaultEnvironmentID = meterusagecheckpointDescEnvironmentID.Default.(string)
+	// meterusagecheckpointDescCustomerID is the schema descriptor for customer_id field.
+	meterusagecheckpointDescCustomerID := meterusagecheckpointFields[1].Descriptor()
+	// meterusagecheckpoint.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	meterusagecheckpoint.CustomerIDValidator = meterusagecheckpointDescCustomerID.Validators[0].(func(string) error)
+	// meterusagecheckpointDescMeterID is the schema descriptor for meter_id field.
+	meterusagecheckpointDescMeterID := meterusagecheckpointFields[2].Descriptor()
+	// meterusagecheckpoint.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
+	meterusagecheckpoint.MeterIDValidator = meterusagecheckpointDescMeterID.Validators[0].(func(string) error)
+	// meterusagecheckpointDescAggregationType is the schema descriptor for aggregation_type field.
+	meterusagecheckpointDescAggregationType := meterusagecheckpointFields[3].Descriptor()
+	// meterusagecheckpoint.AggregationTypeValidator is a validator for the "aggregation_type" field. It is called by the builders before save.
+	meterusagecheckpoint.AggregationTypeValidator = meterusagecheckpointDescAggregationType.Validators[0].(func(string) error)
 	paymentMixin := schema.Payment{}.Mixin()
 	paymentMixinFields0 := paymentMixin[0].Fields()
 	_ = paymentMixinFields0

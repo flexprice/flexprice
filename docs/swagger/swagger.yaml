@@ -2337,9 +2337,14 @@ definitions:
       static_value:
         type: string
       usage_limit:
+        description: |-
+          Deprecated: use grant_quota (or grant_unlimited). A usage_limit on a metered
+          feature is converted into grant_quota.
         type: integer
       usage_reset_period:
-        $ref: '#/definitions/types.EntitlementUsageResetPeriod'
+        allOf:
+        - $ref: '#/definitions/types.EntitlementUsageResetPeriod'
+        description: 'Deprecated: use grant_duration_unit and grant_duration_value.'
     required:
     - feature_id
     - feature_type
@@ -10760,6 +10765,7 @@ definitions:
     - SUM_WITH_MULTIPLIER
     - MAX
     - WEIGHTED_SUM
+    - SIGNED_SUM
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
@@ -10772,6 +10778,7 @@ definitions:
     - AggregationSumWithMultiplier
     - AggregationMax
     - AggregationWeightedSum
+    - AggregationSignedSum
   types.AlertCondition:
     enum:
     - above

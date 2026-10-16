@@ -45,6 +45,7 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -141,6 +142,8 @@ type Client struct {
 	InvoiceSequence *InvoiceSequenceClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// MeterUsageCheckpoint is the client for interacting with the MeterUsageCheckpoint builders.
+	MeterUsageCheckpoint *MeterUsageCheckpointClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
@@ -236,6 +239,7 @@ func (c *Client) init() {
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
 	c.Meter = NewMeterClient(c.config)
+	c.MeterUsageCheckpoint = NewMeterUsageCheckpointClient(c.config)
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
 	c.PaymentMethod = NewPaymentMethodClient(c.config)
@@ -385,6 +389,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
 		Meter:                    NewMeterClient(cfg),
+		MeterUsageCheckpoint:     NewMeterUsageCheckpointClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
 		PaymentMethod:            NewPaymentMethodClient(cfg),
@@ -461,6 +466,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
 		Meter:                    NewMeterClient(cfg),
+		MeterUsageCheckpoint:     NewMeterUsageCheckpointClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
 		PaymentMethod:            NewPaymentMethodClient(cfg),
@@ -523,12 +529,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
-		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
-		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterUsageCheckpoint,
+		c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit,
+		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
+		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
+		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -544,12 +551,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.IncomingWebhookEvent, c.Invoice,
-		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt,
-		c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Refund, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.MeterUsageCheckpoint,
+		c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit,
+		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
+		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
+		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
+		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
+		c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -618,6 +626,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InvoiceSequence.mutate(ctx, m)
 	case *MeterMutation:
 		return c.Meter.mutate(ctx, m)
+	case *MeterUsageCheckpointMutation:
+		return c.MeterUsageCheckpoint.mutate(ctx, m)
 	case *PaymentMutation:
 		return c.Payment.mutate(ctx, m)
 	case *PaymentAttemptMutation:
@@ -5019,6 +5029,139 @@ func (c *MeterClient) mutate(ctx context.Context, m *MeterMutation) (Value, erro
 	}
 }
 
+// MeterUsageCheckpointClient is a client for the MeterUsageCheckpoint schema.
+type MeterUsageCheckpointClient struct {
+	config
+}
+
+// NewMeterUsageCheckpointClient returns a client for the MeterUsageCheckpoint from the given config.
+func NewMeterUsageCheckpointClient(c config) *MeterUsageCheckpointClient {
+	return &MeterUsageCheckpointClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `meterusagecheckpoint.Hooks(f(g(h())))`.
+func (c *MeterUsageCheckpointClient) Use(hooks ...Hook) {
+	c.hooks.MeterUsageCheckpoint = append(c.hooks.MeterUsageCheckpoint, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `meterusagecheckpoint.Intercept(f(g(h())))`.
+func (c *MeterUsageCheckpointClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MeterUsageCheckpoint = append(c.inters.MeterUsageCheckpoint, interceptors...)
+}
+
+// Create returns a builder for creating a MeterUsageCheckpoint entity.
+func (c *MeterUsageCheckpointClient) Create() *MeterUsageCheckpointCreate {
+	mutation := newMeterUsageCheckpointMutation(c.config, OpCreate)
+	return &MeterUsageCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MeterUsageCheckpoint entities.
+func (c *MeterUsageCheckpointClient) CreateBulk(builders ...*MeterUsageCheckpointCreate) *MeterUsageCheckpointCreateBulk {
+	return &MeterUsageCheckpointCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MeterUsageCheckpointClient) MapCreateBulk(slice any, setFunc func(*MeterUsageCheckpointCreate, int)) *MeterUsageCheckpointCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MeterUsageCheckpointCreateBulk{err: fmt.Errorf("calling to MeterUsageCheckpointClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MeterUsageCheckpointCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MeterUsageCheckpointCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MeterUsageCheckpoint.
+func (c *MeterUsageCheckpointClient) Update() *MeterUsageCheckpointUpdate {
+	mutation := newMeterUsageCheckpointMutation(c.config, OpUpdate)
+	return &MeterUsageCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MeterUsageCheckpointClient) UpdateOne(_m *MeterUsageCheckpoint) *MeterUsageCheckpointUpdateOne {
+	mutation := newMeterUsageCheckpointMutation(c.config, OpUpdateOne, withMeterUsageCheckpoint(_m))
+	return &MeterUsageCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MeterUsageCheckpointClient) UpdateOneID(id string) *MeterUsageCheckpointUpdateOne {
+	mutation := newMeterUsageCheckpointMutation(c.config, OpUpdateOne, withMeterUsageCheckpointID(id))
+	return &MeterUsageCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MeterUsageCheckpoint.
+func (c *MeterUsageCheckpointClient) Delete() *MeterUsageCheckpointDelete {
+	mutation := newMeterUsageCheckpointMutation(c.config, OpDelete)
+	return &MeterUsageCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MeterUsageCheckpointClient) DeleteOne(_m *MeterUsageCheckpoint) *MeterUsageCheckpointDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MeterUsageCheckpointClient) DeleteOneID(id string) *MeterUsageCheckpointDeleteOne {
+	builder := c.Delete().Where(meterusagecheckpoint.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MeterUsageCheckpointDeleteOne{builder}
+}
+
+// Query returns a query builder for MeterUsageCheckpoint.
+func (c *MeterUsageCheckpointClient) Query() *MeterUsageCheckpointQuery {
+	return &MeterUsageCheckpointQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMeterUsageCheckpoint},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MeterUsageCheckpoint entity by its id.
+func (c *MeterUsageCheckpointClient) Get(ctx context.Context, id string) (*MeterUsageCheckpoint, error) {
+	return c.Query().Where(meterusagecheckpoint.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MeterUsageCheckpointClient) GetX(ctx context.Context, id string) *MeterUsageCheckpoint {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MeterUsageCheckpointClient) Hooks() []Hook {
+	return c.hooks.MeterUsageCheckpoint
+}
+
+// Interceptors returns the client interceptors.
+func (c *MeterUsageCheckpointClient) Interceptors() []Interceptor {
+	return c.inters.MeterUsageCheckpoint
+}
+
+func (c *MeterUsageCheckpointClient) mutate(ctx context.Context, m *MeterUsageCheckpointMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MeterUsageCheckpointCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MeterUsageCheckpointUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MeterUsageCheckpointUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MeterUsageCheckpointDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MeterUsageCheckpoint mutation op: %q", m.Op())
+	}
+}
+
 // PaymentClient is a client for the Payment schema.
 type PaymentClient struct {
 	config
@@ -8923,8 +9066,8 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
 		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, Refund,
-		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		MeterUsageCheckpoint, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
+		PriceUnit, Refund, RevenueFact, ScheduledTask, Secret, Settings, Subscription,
 		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, UsageRecord, User, Wallet, WalletTransaction,
@@ -8937,8 +9080,8 @@ type (
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
 		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, Meter,
-		Payment, PaymentAttempt, PaymentMethod, Plan, Price, PriceUnit, Refund,
-		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		MeterUsageCheckpoint, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
+		PriceUnit, Refund, RevenueFact, ScheduledTask, Secret, Settings, Subscription,
 		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
 		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
 		Tenant, UsageRecord, User, Wallet, WalletTransaction,
