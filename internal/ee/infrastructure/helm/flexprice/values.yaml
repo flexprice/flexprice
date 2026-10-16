@@ -934,6 +934,13 @@ clickhouse:
     # >1 requires keeper.hosts (enforced: rendering fails without it) and
     # Replicated*MergeTree tables.
     replicasCount: 1
+    # Explicit layout overrides replicasCount; supply placement/security in its pod templates.
+    replicas: []
+    # Additional operator pod templates referenced by replicas[].templates.podTemplate.
+    additionalPodTemplates: []
+    schemaPolicy: {}
+    bootstrapServiceTemplates: []
+    bootstrapServiceTemplateName: ""
     # Empty renders no zookeeper block. Keeper is not deployed by this chart:
     # it needs its own storage class (N2 pools take PD, C4 pools take Hyperdisk)
     # and must be running before the CHI references it.
