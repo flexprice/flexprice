@@ -156,6 +156,82 @@ func (h *AnalyticsHandler) QueryView(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// ListReports returns the financial reports catalog.
+// @Summary List financial reports
+// @Description Returns the catalog of reports with their allowed shapes, dimensions and grains.
+// @ID listAnalyticsReports
+// @Tags Analytics
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.ReportCatalogResponse
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/reports [get]
+func (h *AnalyticsHandler) ListReports(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	res, err := h.svc.ListReports(ctx)
+	if err != nil {
+		h.log.Error(ctx, "failed to list analytics reports", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// RunReport runs one report by key.
+// @Summary Run a financial report
+// @Description Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.
+// @ID runAnalyticsReport
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param key path string true "Report key"
+// @Param request body dto.ReportQueryRequest true "Report query request"
+// @Success 200 {object} dto.AnalyticsQueryResult
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Report not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/reports/{key}/query [post]
+func (h *AnalyticsHandler) RunReport(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	key := c.Param("key")
+	if key == "" {
+		c.Error(ierr.NewError("report key is required").
+			WithHint("Provide a valid report key").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ReportQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	res, err := h.svc.RunReport(ctx, key, &req)
+	if err != nil {
+		h.log.Error(ctx, "failed to run analytics report", "error", err, "report_key", key)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
 // GetRevenueAnalytics aggregates revenue facts into grouped, time-bucketed rows.
 // @Summary Query revenue analytics
 // @Description Aggregates revenue_facts by the requested dimensions at day/period/total granularity. allocation_policy places whole-period charges on their booked day (billed) or spreads them across the period (amortized); include_adjustments breaks out true-up/overage/revert amounts as labeled rows. Requires the tenant's revenue analytics setting.

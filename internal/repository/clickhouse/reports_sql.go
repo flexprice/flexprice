@@ -75,11 +75,41 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		"to":             rv.Time.To.UTC().Format(chTimeLayout),
 	}
 	timeExpr := fmt.Sprintf("nullIf(%s, %s)", sq.TimeCol, chEpoch)
+	curCond := fmt.Sprintf("%s >= toDateTime64({from:String}, 6, 'UTC') AND %s < toDateTime64({to:String}, 6, 'UTC')", timeExpr, timeExpr)
+	bucketExpr := timeExpr
+	measure := sq.Measure
+	prevMeasure := ""
+	timeWhere := []string{
+		timeExpr + " >= toDateTime64({from:String}, 6, 'UTC')",
+		timeExpr + " < toDateTime64({to:String}, 6, 'UTC')",
+	}
+	if rv.Compare != "" {
+		pf, pt, shiftMonths, err := analytics.PreviousWindow(rv.Time.From, rv.Time.To, rv.Compare)
+		if err != nil {
+			return nil, err
+		}
+		params["prev_from"] = pf.UTC().Format(chTimeLayout)
+		params["prev_to"] = pt.UTC().Format(chTimeLayout)
+		prevCond := fmt.Sprintf("%s >= toDateTime64({prev_from:String}, 6, 'UTC') AND %s < toDateTime64({prev_to:String}, 6, 'UTC')", timeExpr, timeExpr)
+		shifted := fmt.Sprintf("addYears(%s, 1)", timeExpr)
+		switch {
+		case rv.Compare == "previous_period" && shiftMonths > 0:
+			params["shift_m"] = strconv.Itoa(shiftMonths)
+			shifted = fmt.Sprintf("addMonths(%s, {shift_m:Int32})", timeExpr)
+		case rv.Compare == "previous_period":
+			params["shift_s"] = strconv.FormatInt(int64(rv.Time.To.Sub(rv.Time.From).Seconds()), 10)
+			shifted = fmt.Sprintf("addSeconds(%s, {shift_s:Int64})", timeExpr)
+		}
+		bucketExpr = fmt.Sprintf("if(%s, %s, %s)", curCond, timeExpr, shifted)
+		measure = fmt.Sprintf("%sIf(%s, %s)", sq.Agg, sq.Arg, curCond)
+		prevMeasure = fmt.Sprintf("%sIf(%s, %s)", sq.Agg, sq.Arg, prevCond)
+		timeWhere = []string{fmt.Sprintf("((%s) OR (%s))", curCond, prevCond)}
+	}
 
 	var selects, groups []string
 	var cols []analytics.ReportColumn
 	if rv.Shape == types.ShapeTimeseries {
-		selects = append(selects, fmt.Sprintf("ifNull(formatDateTime(toDateTime(%s(%s, 'UTC'), 'UTC'), '%%Y-%%m-%%dT%%H:%%i:%%SZ'), '') AS bucket", grainFn, timeExpr))
+		selects = append(selects, fmt.Sprintf("ifNull(formatDateTime(toDateTime(%s(%s, 'UTC'), 'UTC'), '%%Y-%%m-%%dT%%H:%%i:%%SZ'), '') AS bucket", grainFn, bucketExpr))
 		groups = append(groups, "bucket")
 		cols = append(cols, analytics.ReportColumn{Name: "bucket", Type: types.ColumnTypeDatetime, Role: types.ColumnRoleDimension})
 	}
@@ -91,8 +121,12 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		groups = append(groups, "d_"+d)
 		cols = append(cols, analytics.ReportColumn{Name: d, Type: types.ColumnTypeString, Role: types.ColumnRoleDimension})
 	}
-	selects = append(selects, fmt.Sprintf("ifNull(toString(%s), '') AS m_value", sq.Measure))
+	selects = append(selects, fmt.Sprintf("ifNull(toString(%s), '') AS m_value", measure))
 	cols = append(cols, analytics.ReportColumn{Name: string(bm.Metric), Type: types.ColumnTypeDecimal, Role: types.ColumnRoleMetric})
+	if prevMeasure != "" {
+		selects = append(selects, fmt.Sprintf("ifNull(toString(%s), '') AS m_prev", prevMeasure))
+		cols = append(cols, analytics.ReportColumn{Name: string(bm.Metric) + "_prev", Type: types.ColumnTypeDecimal, Role: types.ColumnRoleMetric})
+	}
 
 	where := []string{
 		"tenant_id = {tenant_id:String}",
@@ -101,10 +135,7 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		"status = '" + string(types.StatusPublished) + "'",
 	}
 	where = append(where, sq.Where...)
-	where = append(where,
-		timeExpr+" >= toDateTime64({from:String}, 6, 'UTC')",
-		timeExpr+" < toDateTime64({to:String}, 6, 'UTC')",
-	)
+	where = append(where, timeWhere...)
 	for i, f := range rv.Filters {
 		if f == nil {
 			continue
@@ -133,7 +164,7 @@ func buildBillingQuery(rv *analytics.ResolvedView, db, tenantID, environmentID s
 		b.WriteString(" GROUP BY " + strings.Join(groups, ", "))
 	}
 	if rv.Shape == types.ShapeBreakdown {
-		b.WriteString(" ORDER BY " + sq.Measure + " DESC")
+		b.WriteString(" ORDER BY " + measure + " DESC")
 	} else if len(groups) > 0 {
 		b.WriteString(" ORDER BY " + strings.Join(groups, ", "))
 	}

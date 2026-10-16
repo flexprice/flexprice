@@ -9,7 +9,10 @@ type billingSQL struct {
 	Table   string
 	TimeCol string
 	Measure string
-	Where   []string
+	// Aggregate name and argument.
+	Agg   string
+	Arg   string
+	Where []string
 	// Dimension expressions differing from name.
 	DimExprs map[string]string
 }
@@ -19,6 +22,8 @@ var billingSQLs = map[types.Metric]*billingSQL{
 		Table:   "invoices",
 		TimeCol: "finalized_at",
 		Measure: "sum(total)",
+		Agg:     "sum",
+		Arg:     "total",
 		Where:   []string{"invoice_status = '" + string(types.InvoiceStatusFinalized) + "'"},
 	},
 }

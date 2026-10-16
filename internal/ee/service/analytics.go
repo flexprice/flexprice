@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
@@ -18,6 +20,8 @@ type AnalyticsService interface {
 	ExecuteView(ctx context.Context, def *analytics.ViewDefinition, vars map[string][]string) (*dto.AnalyticsQueryResult, error)
 	CreateView(ctx context.Context, v *analytics.View) error
 	QueryView(ctx context.Context, id string, vars map[string][]string) (*dto.AnalyticsQueryResult, error)
+	ListReports(ctx context.Context) (*dto.ReportCatalogResponse, error)
+	RunReport(ctx context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error)
 }
 
 type analyticsService struct {
@@ -68,10 +72,8 @@ func (s *analyticsService) executeUsage(ctx context.Context, rv *analytics.Resol
 }
 
 func (s *analyticsService) executeBilling(ctx context.Context, rv *analytics.ResolvedView) (*dto.AnalyticsQueryResult, error) {
-	if s.ReportsRepo == nil || !s.ReportsRepo.Enabled() {
-		return nil, ierr.NewError("financial reports are not enabled").
-			WithHint("Financial reports are not configured for this deployment").
-			Mark(ierr.ErrPermissionDenied)
+	if err := s.requireReports(); err != nil {
+		return nil, err
 	}
 	out, err := s.ReportsRepo.RunReport(ctx, rv, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 	if err != nil {
@@ -86,6 +88,16 @@ func (s *analyticsService) executeBilling(ctx context.Context, rv *analytics.Res
 	}
 
 	res := dto.AnalyticsQueryResult{Rows: rows, Meta: dto.AnalyticsQueryMeta{QuerySource: "billing"}}
+	res.Meta.From = rv.Time.From.UTC().Format(time.RFC3339)
+	res.Meta.To = rv.Time.To.UTC().Format(time.RFC3339)
+	if rv.Compare != "" {
+		pf, pt, _, err := analytics.PreviousWindow(rv.Time.From, rv.Time.To, rv.Compare)
+		if err != nil {
+			return nil, err
+		}
+		res.Meta.PrevFrom = pf.UTC().Format(time.RFC3339)
+		res.Meta.PrevTo = pt.UTC().Format(time.RFC3339)
+	}
 	for _, c := range out.Columns {
 		res.Columns = append(res.Columns, dto.NewAnalyticsColumn(c.Name, c.Type, c.Role, ""))
 	}
@@ -353,4 +365,216 @@ func translateTimeseries(ctx context.Context, rv *analytics.ResolvedView) (*even
 		return nil, err
 	}
 	return p, nil
+}
+
+func (s *analyticsService) requireReports() error {
+	if s.ReportsRepo == nil || !s.ReportsRepo.Enabled() {
+		return ierr.NewError("financial reports are not enabled").
+			WithHint("Financial reports are not configured for this deployment").
+			Mark(ierr.ErrPermissionDenied)
+	}
+	return nil
+}
+
+func (s *analyticsService) ListReports(_ context.Context) (*dto.ReportCatalogResponse, error) {
+	if err := s.requireReports(); err != nil {
+		return nil, err
+	}
+	out := &dto.ReportCatalogResponse{Items: []*dto.ReportCatalogEntry{}}
+	for _, e := range analytics.ReportCatalog() {
+		item := &dto.ReportCatalogEntry{
+			Key:             string(e.Key),
+			Name:            e.Name,
+			Description:     e.Description,
+			Category:        e.Category,
+			Kind:            e.Kind,
+			ValueType:       e.ValueType,
+			HigherIsBetter:  e.HigherIsBetter,
+			DefaultShape:    string(e.DefaultShape),
+			SupportsCompare: e.SupportsCompare,
+			Shapes:          []string{},
+			Dimensions:      []dto.ReportDimension{},
+			Grains:          []string{},
+		}
+		for _, sh := range e.Shapes {
+			item.Shapes = append(item.Shapes, string(sh))
+		}
+		for _, d := range e.Dimensions {
+			item.Dimensions = append(item.Dimensions, dto.ReportDimension{Key: d.Key, Label: d.Label})
+		}
+		for _, g := range e.Grains {
+			item.Grains = append(item.Grains, string(g))
+		}
+		out.Items = append(out.Items, item)
+	}
+	return out, nil
+}
+
+func validateReportRequest(e *analytics.ReportCatalogEntry, req *dto.ReportQueryRequest, maxRows int) error {
+	shapes := make([]string, len(e.Shapes))
+	for i, sh := range e.Shapes {
+		shapes[i] = string(sh)
+	}
+	if !slices.Contains(shapes, req.Shape) {
+		return ierr.NewErrorf("shape %q not allowed", req.Shape).
+			WithHint("shape must be one of: " + strings.Join(shapes, ", ")).
+			Mark(ierr.ErrValidation)
+	}
+	dims := make([]string, len(e.Dimensions))
+	for i, d := range e.Dimensions {
+		dims[i] = d.Key
+	}
+	for _, d := range req.Dimensions {
+		if !slices.Contains(dims, d) {
+			return ierr.NewErrorf("dimension %q not allowed", d).
+				WithHint("dimensions must be one of: " + strings.Join(dims, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if req.Grain != "" && req.Shape != string(types.ShapeTimeseries) {
+		return ierr.NewError("grain only applies to timeseries").
+			WithHint("omit grain unless shape is timeseries").
+			Mark(ierr.ErrValidation)
+	}
+	if req.Limit < 0 || (maxRows > 0 && req.Limit > maxRows) {
+		return ierr.NewErrorf("limit %d not allowed", req.Limit).
+			WithHint(fmt.Sprintf("limit must be between 0 and %d (0 = no limit)", maxRows)).
+			Mark(ierr.ErrValidation)
+	}
+	if req.Limit > 0 && req.Shape != string(types.ShapeBreakdown) {
+		return ierr.NewError("limit only applies to breakdown").
+			WithHint("omit limit unless shape is breakdown").
+			Mark(ierr.ErrValidation)
+	}
+	bm, _ := analytics.LookupBillingMetric(e.Key)
+	hasCurrency := bm != nil && bm.Currency
+	if req.Currency != "" && !hasCurrency {
+		return ierr.NewError("report has no currency").
+			WithHint("omit currency for this report").
+			Mark(ierr.ErrValidation)
+	}
+	if len(req.Sort) > 0 {
+		if req.Shape != string(types.ShapeBreakdown) {
+			return ierr.NewError("sort only applies to breakdown").
+				WithHint("omit sort unless shape is breakdown").
+				Mark(ierr.ErrValidation)
+		}
+		fields := append(slices.Clone(dims), string(e.Key))
+		if req.Compare != "" {
+			fields = append(fields, string(e.Key)+"_prev")
+		}
+		for _, so := range req.Sort {
+			if so.Dir != "asc" && so.Dir != "desc" {
+				return ierr.NewErrorf("sort dir %q not allowed", so.Dir).
+					WithHint("dir must be asc or desc").
+					Mark(ierr.ErrValidation)
+			}
+			if !slices.Contains(fields, so.Field) {
+				return ierr.NewErrorf("sort field %q not allowed", so.Field).
+					WithHint("sort field must be one of: " + strings.Join(fields, ", ")).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+	if req.Shape == string(types.ShapeTimeseries) && req.Grain != "" {
+		grains := make([]string, len(e.Grains))
+		for i, g := range e.Grains {
+			grains[i] = string(g)
+		}
+		if !slices.Contains(grains, req.Grain) {
+			return ierr.NewErrorf("grain %q not allowed", req.Grain).
+				WithHint("grain must be one of: " + strings.Join(grains, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if req.Compare != "" {
+		if !e.SupportsCompare || (req.Compare != "previous_period" && req.Compare != "previous_year") {
+			return ierr.NewErrorf("compare %q not allowed", req.Compare).
+				WithHint("compare must be previous_period or previous_year").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	for _, f := range req.Filters {
+		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) {
+			return ierr.NewErrorf("filter field %q not allowed", f.Field).
+				WithHint("filter fields must be one of: currency, " + strings.Join(dims, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+		if (f.Op != "eq" && f.Op != "in") || len(f.Value) == 0 || (f.Op == "eq" && len(f.Value) != 1) {
+			return ierr.NewErrorf("filter on %q invalid", f.Field).
+				WithHint("op must be eq (1 value) or in (1+ values)").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
+	if err := s.requireReports(); err != nil {
+		return nil, err
+	}
+	entry, ok := analytics.LookupReport(key)
+	if !ok {
+		return nil, ierr.NewErrorf("report %q not found", key).Mark(ierr.ErrNotFound)
+	}
+	if err := validateReportRequest(entry, req, s.ReportsRepo.MaxRows()); err != nil {
+		return nil, err
+	}
+
+	def := analytics.ViewDefinition{
+		Family:     types.FamilyBilling,
+		Shape:      types.Shape(req.Shape),
+		Metrics:    []types.Metric{entry.Key},
+		Dimensions: req.Dimensions,
+		Time:       analytics.TimeSpecRaw{Range: req.Range, Grain: types.Grain(req.Grain)},
+		Limit:      req.Limit,
+	}
+	for _, f := range req.Filters {
+		def.Filters = append(def.Filters, &analytics.Filter{Field: f.Field, Op: types.FilterOperatorType(f.Op), Value: f.Value})
+	}
+	if req.Currency != "" {
+		def.Filters = append(def.Filters, &analytics.Filter{Field: "currency", Op: types.EQUAL, Value: []string{req.Currency}})
+	}
+	for _, so := range req.Sort {
+		def.Sort = append(def.Sort, &analytics.SortSpec{Field: so.Field, Dir: types.SortDirection(so.Dir)})
+	}
+
+	rv, err := analytics.ResolveVariables(&def, nil)
+	if err != nil {
+		return nil, err
+	}
+	rv.Compare = req.Compare
+	res, err := s.executeBilling(ctx, rv)
+	if err != nil {
+		return nil, err
+	}
+	if req.Compare != "" {
+		addChangePct(res, string(entry.Key))
+	}
+	return res, nil
+}
+
+func addChangePct(res *dto.AnalyticsQueryResult, key string) {
+	cur, prev := -1, -1
+	for i, c := range res.Columns {
+		switch c.Name {
+		case key:
+			cur = i
+		case key + "_prev":
+			prev = i
+		}
+	}
+	if cur < 0 || prev < 0 {
+		return
+	}
+	res.Columns = append(res.Columns, dto.NewAnalyticsColumn(key+"_change_pct", types.ColumnTypeDecimal, types.ColumnRoleMetric, ""))
+	for i, row := range res.Rows {
+		pct := ""
+		c, cerr := decimal.NewFromString(row[cur])
+		p, perr := decimal.NewFromString(row[prev])
+		if cerr == nil && perr == nil && !p.IsZero() {
+			pct = c.Sub(p).Div(p).Mul(decimal.NewFromInt(100)).Round(1).String()
+		}
+		res.Rows[i] = append(row, pct)
+	}
 }

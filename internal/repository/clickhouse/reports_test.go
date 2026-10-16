@@ -31,6 +31,34 @@ func TestBillingSQL_MatchesDomainRegistry(t *testing.T) {
 	}
 }
 
+func TestReportCatalog_AgreesWithRegistry(t *testing.T) {
+	entries := analytics.ReportCatalog()
+	require.NotEmpty(t, entries)
+	for _, e := range entries {
+		bm, sq, ok := lookupBillingMetric(e.Key)
+		require.True(t, ok, "catalog key %q has no billing metric", e.Key)
+		assert.Equal(t, sq.Agg+"("+sq.Arg+")", sq.Measure, "measure of %q", e.Key)
+		for _, s := range e.Shapes {
+			assert.Contains(t, bm.Shapes, s, "shape %q of %q", s, e.Key)
+		}
+		assert.Contains(t, e.Shapes, e.DefaultShape)
+		for _, d := range e.Dimensions {
+			assert.True(t, slices.Contains(bm.Dimensions, d.Key), "dimension %q of %q", d.Key, e.Key)
+			assert.NotEmpty(t, d.Label)
+		}
+		for _, g := range e.Grains {
+			assert.Contains(t, []types.Grain{types.GrainDay, types.GrainWeek, types.GrainMonth}, g)
+		}
+		assert.Contains(t, []string{"billing", "receivables", "customers", "credits", "usage"}, e.Category)
+		assert.Contains(t, []string{"flow", "ratio", "snapshot"}, e.Kind)
+		assert.Contains(t, []string{"money", "count", "days"}, e.ValueType)
+		if e.Kind == "snapshot" {
+			assert.False(t, e.SupportsCompare)
+			assert.Empty(t, e.Grains)
+		}
+	}
+}
+
 func TestReportResult_OverflowIsValidationError(t *testing.T) {
 	q, err := buildBillingQuery(billingRV(types.ShapeScalar), "reports_db", "t", "e", 2)
 	require.NoError(t, err)

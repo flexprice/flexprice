@@ -239,6 +239,8 @@ func NewRouter(
 			analytics.POST("/revenue", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.GetRevenueAnalytics)
 			analytics.POST("/views", write(types.EntityAnalytics, types.ActionWrite), handlers.Analytics.CreateView)
 			analytics.POST("/views/:id/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryView)
+			analytics.GET("/reports", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListReports)
+			analytics.POST("/reports/:key/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.RunReport)
 		}
 
 		meters := v1Private.Group("/meters")
