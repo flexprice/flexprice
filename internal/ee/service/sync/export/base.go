@@ -33,7 +33,7 @@ type Exporter interface {
 	GetFilenamePrefix() string
 }
 
-// StreamingExporter writes its CSV to w as it reads rows, so the export is never held in memory.
+// StreamingExporter optionally supports writing CSV incrementally to a writer.
 type StreamingExporter interface {
 	Exporter
 	WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error)
@@ -198,7 +198,7 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 	return s.uploadToStorage(ctx, request, exporter, store, csvBytes, recordCount)
 }
 
-// streamToStorage writes the CSV to a temp file and uploads it from disk, so memory stays at one batch.
+// streamToStorage stages CSV on disk for upload and removes the temporary file.
 func (s *ExportService) streamToStorage(ctx context.Context, request *dto.ExportRequest, exporter StreamingExporter, store storage.Storage) (*dto.ExportResponse, error) {
 	tmp, err := os.CreateTemp("", "flexprice-export-*.csv")
 	if err != nil {

@@ -77,12 +77,8 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 	return buf.Bytes(), totalRecords, nil
 }
 
-// WriteData fetches rows from the meter_usage table and writes them to w as CSV one
-// batch at a time, so only one batch is held in memory. Each row maps into the existing
-// FeatureUsageCSV schema. Columns that meter_usage does not carry (subscription_id,
-// sub_line_item_id, price_id, customer_id, feature_id, period_id,
-// provisional_usage_charges) are left as empty strings — the schema stays stable so
-// downstream consumers don't see a header-row change.
+// WriteData writes meter usage as CSV in batches, preserving the FeatureUsageCSV schema.
+// Fields unavailable in meter_usage remain empty.
 func (e *EventExporter) WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error) {
 	const batchSize = 500
 

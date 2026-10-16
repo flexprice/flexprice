@@ -33,7 +33,7 @@ type UploadRequest struct {
 	Compress    bool
 }
 
-// StreamUploadRequest is an UploadRequest whose body is read from Body instead of held in memory.
+// StreamUploadRequest describes an upload backed by a seekable body.
 type StreamUploadRequest struct {
 	Key         string
 	Body        io.ReadSeeker

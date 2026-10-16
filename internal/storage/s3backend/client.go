@@ -223,8 +223,7 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 	}, nil
 }
 
-// UploadStream uploads req.Body without reading it into memory. When gzip is on, the body is
-// compressed into a temp file first so the upload still has a known length.
+// UploadStream uploads a seekable body; gzip uses a temporary file to preserve Content-Length.
 func (c *client) UploadStream(ctx context.Context, req *storagetypes.StreamUploadRequest) (*storagetypes.UploadResponse, error) {
 	originalSize, err := req.Body.Seek(0, io.SeekEnd)
 	if err != nil {
