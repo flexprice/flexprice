@@ -112,13 +112,24 @@
 #line(length: 100%, stroke: 0.5pt + label-color)
 #v(6pt)
 
-// Subtotal
+#let subtotal = invoice-data.at("subtotal", default: 0)
+#let discount = invoice-data.at("total_discount", default: 0)
+
 #grid(
   columns: (1fr, auto),
   align: (right, right),
   column-gutter: 24pt,
+  row-gutter: 8pt,
   text(weight: "bold")[Subtotal],
-  text(weight: "bold")[#currency#format-currency(invoice-data.at("subtotal", default: 0), precision: precision)],
+  text(weight: "bold")[#currency#format-currency(subtotal, precision: precision)],
+  ..if discount > 0 {
+    (
+      [Discount],
+      [−#currency#format-currency(discount, precision: precision)],
+      text(weight: "bold")[Total before tax],
+      text(weight: "bold")[#currency#format-currency(subtotal - discount, precision: precision)],
+    )
+  } else { () },
 )
 
 #v(24pt)
