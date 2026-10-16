@@ -142,7 +142,9 @@ func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRe
 	}
 
 	gzipped := req.Compress && c.cfg.CompressionGzip
-	w := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key).NewWriter(ctx)
+	writeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	w := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key).NewWriter(writeCtx)
 	if req.ContentType != "" {
 		w.ContentType = req.ContentType
 	} else {
@@ -160,7 +162,7 @@ func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRe
 		_, err = io.Copy(counter, req.Body)
 	}
 	if err != nil {
-		_ = w.Close()
+		cancel()
 		return nil, ierr.WithError(err).
 			WithHint("failed to upload object to GCS").
 			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
