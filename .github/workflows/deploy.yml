@@ -391,19 +391,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: vars.ECS_DEPLOY_VIA == 'codepipeline'
         with:
           persist-credentials: false
 
-      - name: Configure AWS credentials (OIDC)
-        if: vars.ECS_DEPLOY_VIA != 'codepipeline'
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
-          aws-region: ${{ matrix.target.region }}
-
       - name: Deploy ECS Preprod service (CodePipeline)
-        if: vars.ECS_DEPLOY_VIA == 'codepipeline'
         uses: ./.github/actions/deploy-codepipeline
         with:
           role_arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ fromJson(vars.ECS_CODEPIPELINE).role }}
@@ -412,19 +403,6 @@ jobs:
           pipeline: ${{ fromJson(vars.ECS_CODEPIPELINE).preprod_pipeline }}
           container: main
           image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
-          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
-
-      - name: Deploy ECS Preprod service
-        if: vars.ECS_DEPLOY_VIA != 'codepipeline'
-        uses: ./.github/actions/deploy-ecs-service
-        with:
-          cluster: ${{ matrix.target.cluster }}
-          region: ${{ matrix.target.region }}
-          service_name: ${{ matrix.target.preprod_service }}
-          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
-          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
-          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
   # ──────────────────────────────────────────────────────────────────────────
@@ -512,142 +490,12 @@ jobs:
             --tag "${GHCR_IMAGE}:main" \
             "${GHCR_IMAGE}:${GITHUB_SHA}"
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Jobs 5a–5c: Deploy API, Consumer, Worker — one job per service type,
-  # each with matrix over targets (regions). Runs in parallel for faster deploys
-  # and smaller, trackable steps. max-parallel limits concurrent load on runners.
-  #
-  # Each target matrix entry: region, cluster, api_service, consumer_service, worker_service.
-  # Task definition family is derived at runtime from the ECS service.
-  # DRY RUN: composite action prints plan only, no register/update-service.
-  # ──────────────────────────────────────────────────────────────────────────
-  deploy-api:
-    name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config, migrate, approval-gate]
-    # production: requires the approval-gate to have been approved
-    # dry-run: bypasses the gate; composite action prints plan only
-    if: >-
-      ${{ always() &&
-          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
-          needs.build.result == 'success' &&
-          needs.resolve-config.result == 'success' &&
-          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-          (needs.resolve-config.outputs.environment != 'production' ||
-           needs.resolve-config.outputs.dry_run == 'true' ||
-           needs.approval-gate.result == 'success') }}
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        target: ${{ fromJson(needs.resolve-config.outputs.api_targets) }}
-      fail-fast: false
-      max-parallel: 3
-
-    steps:
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
-          aws-region: ${{ matrix.target.region }}
-
-      - name: Deploy ECS API service
-        uses: ./.github/actions/deploy-ecs-service
-        with:
-          cluster: ${{ matrix.target.cluster }}
-          region: ${{ matrix.target.region }}
-          service_name: ${{ matrix.target.api_service }}
-          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
-          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
-          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
-          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
-
-  deploy-consumer:
-    name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config, migrate, approval-gate]
-    # production: requires the approval-gate to have been approved
-    # dry-run: bypasses the gate; composite action prints plan only
-    if: >-
-      ${{ always() &&
-          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
-          needs.build.result == 'success' &&
-          needs.resolve-config.result == 'success' &&
-          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-          (needs.resolve-config.outputs.environment != 'production' ||
-           needs.resolve-config.outputs.dry_run == 'true' ||
-           needs.approval-gate.result == 'success') }}
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
-      fail-fast: false
-      max-parallel: 3
-
-    steps:
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
-          aws-region: ${{ matrix.target.region }}
-
-      - name: Deploy ECS Consumer service
-        uses: ./.github/actions/deploy-ecs-service
-        with:
-          cluster: ${{ matrix.target.cluster }}
-          region: ${{ matrix.target.region }}
-          service_name: ${{ matrix.target.consumer_service }}
-          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
-          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
-          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
-          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
-
-  deploy-worker:
-    name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config, migrate, approval-gate]
-    # production: requires the approval-gate to have been approved
-    # dry-run: bypasses the gate; composite action prints plan only
-    if: >-
-      ${{ always() &&
-          vars.ECS_DEPLOY_VIA != 'codepipeline' &&
-          needs.build.result == 'success' &&
-          needs.resolve-config.result == 'success' &&
-          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-          (needs.resolve-config.outputs.environment != 'production' ||
-           needs.resolve-config.outputs.dry_run == 'true' ||
-           needs.approval-gate.result == 'success') }}
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
-      fail-fast: false
-      max-parallel: 3
-
-    steps:
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
-          aws-region: ${{ matrix.target.region }}
-
-      - name: Deploy ECS Worker service
-        uses: ./.github/actions/deploy-ecs-service
-        with:
-          cluster: ${{ matrix.target.cluster }}
-          region: ${{ matrix.target.region }}
-          service_name: ${{ matrix.target.worker_service }}
-          image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
-          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
-          ghcr_repo_prefix: ${{ env.GHCR_IMAGE }}
-          ghcr_credentials_arn: ${{ vars.ECS_GHCR_PULL_CREDENTIALS_ARN }}
-          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
-
   # api, consumer, worker in one CodePipeline run.
   deploy-backend-codepipeline:
     name: Deploy API, Consumer, Worker (CodePipeline)
     needs: [build, resolve-config, migrate, approval-gate]
     if: >-
       ${{ always() &&
-          vars.ECS_DEPLOY_VIA == 'codepipeline' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.targets != '[]' &&
