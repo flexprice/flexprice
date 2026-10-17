@@ -23,6 +23,13 @@ type UpdateMeterRequest struct {
 	Filters []meter.Filter `json:"filters"`
 }
 
+// Sanitize trims leading/trailing whitespace from the filter keys and values
+// so downstream matching against event properties is not broken by
+// accidental whitespace in the request payload.
+func (r *UpdateMeterRequest) Sanitize() {
+	r.Filters = sanitizeFilters(r.Filters)
+}
+
 // MeterResponse represents the meter response structure
 type MeterResponse struct {
 	ID          string            `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
@@ -78,7 +85,7 @@ func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
 	m.Aggregation.Field = strings.TrimSpace(m.Aggregation.Field)
 	m.Aggregation.Expression = strings.TrimSpace(m.Aggregation.Expression)
 	m.Aggregation.GroupBy = strings.TrimSpace(m.Aggregation.GroupBy)
-	m.Filters = r.Filters
+	m.Filters = sanitizeFilters(r.Filters)
 	m.ResetUsage = r.ResetUsage
 	m.Status = types.StatusPublished
 	return m
@@ -96,6 +103,28 @@ func (r *CreateMeterRequest) Validate() error {
 	}
 
 	return nil
+}
+
+// sanitizeFilters trims leading/trailing whitespace from filter keys and
+// values so filters are not accidentally broken by stray whitespace in the
+// request payload.
+func sanitizeFilters(filters []meter.Filter) []meter.Filter {
+	if filters == nil {
+		return nil
+	}
+
+	sanitized := make([]meter.Filter, len(filters))
+	for i, f := range filters {
+		values := make([]string, len(f.Values))
+		for j, v := range f.Values {
+			values[j] = strings.TrimSpace(v)
+		}
+		sanitized[i] = meter.Filter{
+			Key:    strings.TrimSpace(f.Key),
+			Values: values,
+		}
+	}
+	return sanitized
 }
 
 // ListMetersResponse represents a paginated list of meters
