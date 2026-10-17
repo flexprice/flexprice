@@ -1,0 +1,59 @@
+# Prepaid credits: create a wallet for a customer, top it up, and verify the
+# balance reflects the top-up. Mirrors how customers operate prepaid billing.
+journey: wallet-lifecycle
+description: Create wallet, top up 500 credits, verify balance, terminate
+tags: [sanity, wallets]
+
+vars:
+  topup_credits: "500"
+
+steps:
+  - id: customer
+    name: Create Customer
+    call: Customers.CreateCustomer
+    with:
+      external_id: "it-wallet-cust-{{ .run.id }}"
+      name: "Wallet Test Customer {{ .run.id }}"
+      metadata: { source: integration_journeys }
+    capture:
+      customer_id: id
+
+  - id: wallet
+    name: Create Wallet
+    call: Wallets.CreateWallet
+    with:
+      customer_id: "{{ .steps.customer.customer_id }}"
+      currency: USD
+      description: Integration test prepaid wallet
+      metadata: { source: integration_journeys }
+    capture:
+      wallet_id: id
+    expect:
+      - { path: customer_id, equals: "{{ .steps.customer.customer_id }}" }
+
+  - id: topup
+    name: Top Up Wallet (500 credits)
+    call: Wallets.TopUpWallet
+    args:
+      - "{{ .steps.wallet.wallet_id }}"
+      - credits_to_add: "{{ .vars.topup_credits }}"
+        transaction_reason: PURCHASED_CREDIT_DIRECT
+        description: Integration test top-up
+
+  - id: balance
+    name: Verify Wallet Balance
+    call: Wallets.GetWalletBalance
+    # GetWalletBalance(id, currency?) — currency conversion not needed here.
+    args: ["{{ .steps.wallet.wallet_id }}", null]
+    capture:
+      credit_balance: credit_balance
+    expect:
+      - { path: credit_balance, equals: "{{ .vars.topup_credits }}" }
+
+teardown:
+  - name: Terminate Wallet
+    call: Wallets.TerminateWallet
+    with: "{{ .steps.wallet.wallet_id }}"
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: "{{ .steps.customer.customer_id }}"
