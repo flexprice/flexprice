@@ -402,6 +402,13 @@ secrets:
 billing:
   tenant_id: ""
   environment_id: ""
+  enabled: false
+  region: ""
+  api_host: ""
+  api_key: ""
+  plan_id: ""
+  dashboard_url: ""
+  usage_lookback_hours: 6
 
 s3:
   enabled: false

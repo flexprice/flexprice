@@ -168,6 +168,9 @@ type ServiceParams struct {
 	// in main — a plain constructor here would import that package back into
 	// this one. Nil skips the hooks (facts not wired in this deployment).
 	RevenueFacts interfaces.RevenueService
+
+	// SelfBilling provisions new tenants on the billing tenant. Injected in main to avoid an import cycle; nil is off.
+	SelfBilling interfaces.SelfBillingHook
 }
 
 // Common service params
