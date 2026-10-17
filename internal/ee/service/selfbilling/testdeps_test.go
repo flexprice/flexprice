@@ -17,23 +17,26 @@ type testDeps struct {
 	tenants  *testutil.InMemoryTenantStore
 	envs     *testutil.InMemoryEnvironmentStore
 	settings *testutil.InMemorySettingsStore
+	store    *testutil.InMemorySelfBillingStore
 }
 
 func newTestService(t *testing.T, fc *fakeClient) (*selfBillingService, *testDeps) {
 	t.Helper()
-	d := &testDeps{tenants: testutil.NewInMemoryTenantStore(), envs: testutil.NewInMemoryEnvironmentStore(), settings: testutil.NewInMemorySettingsStore()}
+	d := &testDeps{tenants: testutil.NewInMemoryTenantStore(), envs: testutil.NewInMemoryEnvironmentStore(), settings: testutil.NewInMemorySettingsStore(), store: testutil.NewInMemorySelfBillingStore()}
 	cfg := &config.Configuration{Billing: config.BillingConfig{
 		Enabled: true, Region: "us", APIHost: "https://mumbai.test/v1", APIKey: "sk", PlanID: "plan_1", DashboardURL: "https://us.app.test",
 	}}
 	params := service.ServiceParams{Logger: logger.NewNoopLogger(), Config: cfg, TenantRepo: d.tenants, EnvironmentRepo: d.envs, SettingsRepo: d.settings}
 	settings := service.NewSettingsService(params)
 	envs := service.NewEnvironmentService(d.envs, service.NewEnvAccessService(cfg), settings, params)
-	return &selfBillingService{ServiceParams: params, client: fc, envs: envs, settings: settings}, d
+	svc := &selfBillingService{ServiceParams: params, client: fc, envs: envs, settings: settings, events: d.store, invoices: d.store}
+	svc.spawn = func(run func()) { run() } // provisioning runs inline so tests stay deterministic
+	return svc, d
 }
 
 func seedTenant(t *testing.T, d *testDeps, id string, status types.TenantInternalStatus) {
 	t.Helper()
-	require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{ID: id, Name: id, InternalStatus: status}))
+	require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{ID: id, Name: id, Status: types.StatusPublished, InternalStatus: status}))
 }
 
 func tenantCtx(id string) context.Context { return types.SetTenantID(context.Background(), id) }

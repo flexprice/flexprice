@@ -866,9 +866,13 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 }
 
 // provideSelfBillingService builds self-billing from the base params; a no-op unless billing is fully configured.
-// The store handles are for its cross-tenant repositories, which are not wired yet.
-func provideSelfBillingService(base service.ServiceParams, _ *logger.Logger, _ postgres.IClient, _ *clickhouse.ClickHouseStore) selfbilling.Service {
+// The store handles back its cross-tenant event count and invoice value repositories.
+func provideSelfBillingService(base service.ServiceParams, log *logger.Logger, entClient postgres.IClient, chStore *clickhouse.ClickHouseStore) selfbilling.Service {
 	settings := service.NewSettingsService(base)
 	envs := service.NewEnvironmentService(base.EnvironmentRepo, service.NewEnvAccessService(base.Config), settings, base)
-	return selfbilling.NewService(base, envs, settings, nil, nil)
+	repoParams := repository.RepositoryParams{Logger: log, EntClient: entClient, ClickHouseDB: chStore}
+	return selfbilling.NewService(base, envs, settings,
+		repository.NewSelfBillingEventCountRepository(repoParams),
+		repository.NewSelfBillingInvoiceValueRepository(repoParams),
+	)
 }

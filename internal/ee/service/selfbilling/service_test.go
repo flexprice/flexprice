@@ -66,3 +66,48 @@ func TestFakeClient_GetCheckoutUnknownIsNotFound(t *testing.T) {
 	assert.True(t, ierr.IsNotFound(err))
 	assert.NotErrorIs(t, err, errDisabled)
 }
+
+// recordingClient records the context state provisioning ran with and can panic on the first Mumbai call.
+type recordingClient struct {
+	*fakeClient
+	ctxErr      error
+	hasDeadline bool
+	panic       bool
+}
+
+func (r *recordingClient) EnsureCustomer(ctx context.Context, in customerInput) error {
+	r.ctxErr = ctx.Err()
+	_, r.hasDeadline = ctx.Deadline()
+	if r.panic {
+		panic("mumbai client blew up")
+	}
+	return r.fakeClient.EnsureCustomer(ctx, in)
+}
+
+func TestOnTenantCreated_RunsDetached(t *testing.T) {
+	rc := &recordingClient{fakeClient: newFakeClient()}
+	s, _ := newTestService(t, rc.fakeClient)
+	s.client = rc
+	var pending func()
+	s.spawn = func(run func()) { pending = run }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.OnTenantCreated(ctx, "t1", "Acme", "a@acme.io")
+	require.NotNil(t, pending, "provisioning is handed off, not run inline")
+	assert.False(t, rc.customers["us:t1"], "the caller is not blocked on Mumbai")
+
+	cancel() // the request finishing must not abort provisioning
+	pending()
+	assert.True(t, rc.customers["us:t1"])
+	assert.Equal(t, 1, rc.trialsStarted)
+	require.NoError(t, rc.ctxErr)
+	assert.True(t, rc.hasDeadline, "provisioning runs under its own timeout")
+}
+
+func TestOnTenantCreated_PanicIsRecovered(t *testing.T) {
+	rc := &recordingClient{fakeClient: newFakeClient(), panic: true}
+	s, _ := newTestService(t, rc.fakeClient)
+	s.client = rc
+	assert.NotPanics(t, func() { s.OnTenantCreated(context.Background(), "t1", "Acme", "a@acme.io") })
+	assert.Equal(t, 0, rc.trialsStarted)
+}

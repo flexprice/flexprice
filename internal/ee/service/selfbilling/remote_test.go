@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	cockroach "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/config"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/samber/lo"
@@ -25,7 +27,14 @@ const (
 	pathSubscriptionsSuffix  = "/subscriptions"       // as GetSubscriptionsForCustomer appends it
 	pathInvoiceSearch        = "/invoices/search"     // as QueryInvoice builds it
 	pathCustomerUsage        = "/customers/usage"     // as GetCustomerUsageSummary builds it
+	pathCheckoutSessions     = "/checkout/sessions/"  // as GetCheckoutSession builds it
+	pathPlan                 = "/plans/plan_1"        // as GetPlan builds it for the configured plan
 )
+
+type cannedResponse struct {
+	status int
+	body   string
+}
 
 // notFoundBody is the JSON error envelope the Flexprice API returns for a 404.
 const notFoundBody = `{"code":"not_found","message":"customer not found","http_status_code":404}`
@@ -40,6 +49,7 @@ type fakeMumbai struct {
 	created   []string
 	rekeyedTo []string
 	updates   []map[string]any
+	checkouts map[string]cannedResponse // checkout session id -> response
 }
 
 func (f *fakeMumbai) handler(t *testing.T) http.Handler {
@@ -91,6 +101,17 @@ func (f *fakeMumbai) handler(t *testing.T) http.Handler {
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "external_id": lo.Ternary(renamed, newExt, old)})
 		case r.Method == http.MethodPost && r.URL.Path == pathInvoiceSearch:
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": f.invoices})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, pathCheckoutSessions):
+			resp, ok := f.checkouts[strings.TrimPrefix(r.URL.Path, pathCheckoutSessions)]
+			if !ok {
+				t.Errorf("unexpected checkout lookup %s", r.URL.Path)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(resp.status)
+			_, _ = w.Write([]byte(resp.body))
+		case r.Method == http.MethodGet && r.URL.Path == pathPlan:
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "plan_1", "prices": []map[string]any{{"id": "price_1", "type": "FIXED", "currency": "usd", "billing_period": "MONTHLY"}}})
 		case r.Method == http.MethodGet && r.URL.Path == pathCustomerUsage:
 			_ = json.NewEncoder(w).Encode(map[string]any{})
 		default:
@@ -101,7 +122,7 @@ func (f *fakeMumbai) handler(t *testing.T) http.Handler {
 }
 
 func newFakeMumbai(existing map[string]string) *fakeMumbai {
-	return &fakeMumbai{byExtID: existing, metadata: map[string]map[string]string{}, subs: map[string][]map[string]any{}}
+	return &fakeMumbai{byExtID: existing, metadata: map[string]map[string]string{}, subs: map[string][]map[string]any{}, checkouts: map[string]cannedResponse{}}
 }
 
 func newTestRemoteClient(t *testing.T, f *fakeMumbai) *remoteClient {
@@ -274,4 +295,65 @@ func TestSummary_InvoiceTotal(t *testing.T) {
 			assert.Equal(t, tt.wantTotal, got.invoices[0].total.String())
 		})
 	}
+}
+
+func TestGetCheckout_MapsMumbaiErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		resp     cannedResponse
+		wantKind func(error) bool
+		wantHint string
+	}{
+		{"json_400_is_validation", cannedResponse{http.StatusBadRequest, `{"code":"validation_error","message":"checkout session id is malformed","http_status_code":400}`}, ierr.IsValidation, "checkout session id is malformed"},
+		{"json_404_is_not_found", cannedResponse{http.StatusNotFound, `{"code":"not_found","message":"checkout session not found","http_status_code":404}`}, ierr.IsNotFound, ""},
+		{"json_500_is_http_client", cannedResponse{http.StatusInternalServerError, `{"code":"internal_error","message":"boom","http_status_code":500}`}, ierr.IsHTTPClient, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeMumbai(map[string]string{})
+			f.checkouts["cs_1"] = tt.resp
+			c := newTestRemoteClient(t, f)
+
+			_, err := c.GetCheckout(context.Background(), "cs_1")
+			require.Error(t, err)
+			assert.True(t, tt.wantKind(err), "got %v", err)
+			assert.True(t, isRemoteFailure(err))
+			if tt.wantHint != "" {
+				assert.Contains(t, cockroach.FlattenHints(err), tt.wantHint)
+			}
+		})
+	}
+}
+
+func TestMumbaiErr(t *testing.T) {
+	conflict := sdkerrors.NewAPIError("x", http.StatusConflict, `{"message":"checkout open","details":{"checkout_session_id":"cs_open"}}`, nil)
+	tests := []struct {
+		name     string
+		err      error
+		wantKind func(error) bool
+	}{
+		{"conflict_is_already_exists", conflict, ierr.IsAlreadyExists},
+		{"unauthorized_is_validation", sdkerrors.NewAPIError("x", http.StatusUnauthorized, `{"message":"bad key"}`, nil), ierr.IsValidation},
+		{"server_error_is_http_client", sdkerrors.NewAPIError("x", http.StatusBadGateway, "", nil), ierr.IsHTTPClient},
+		{"transport_error_is_http_client", errors.New("dial tcp: connection refused"), ierr.IsHTTPClient},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mumbaiErr(tt.err)
+			assert.True(t, tt.wantKind(got), "got %v", got)
+			assert.True(t, isRemoteFailure(got))
+			assert.Equal(t, httpStatus(tt.err), httpStatus(got), "the SDK status stays reachable")
+		})
+	}
+	assert.NoError(t, mumbaiErr(nil))
+	assert.Equal(t, "cs_open", conflictCheckoutID(mumbaiErr(conflict)))
+}
+
+func TestStartTrial_SubscriptionCreatedMeanwhileIsNotDuplicated(t *testing.T) {
+	f := newFakeMumbai(map[string]string{"in:t1": "cust_1"})
+	f.subs["in:t1"] = []map[string]any{{"id": "s1", "plan_id": "plan_1", "subscription_status": "trialing"}}
+	c := newTestRemoteClient(t, f)
+
+	// The fake fails the test on any POST /subscriptions.
+	require.NoError(t, c.StartTrial(context.Background(), "in:t1"))
 }

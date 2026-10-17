@@ -2,6 +2,8 @@ package selfbilling
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
@@ -9,6 +11,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 )
+
+// provisionTimeout bounds the detached provisioning of a new tenant on the billing tenant.
+const provisionTimeout = 2 * time.Minute
 
 var errDisabled = ierr.NewError("self-billing is not enabled").Mark(ierr.ErrNotFound)
 
@@ -32,6 +37,7 @@ type selfBillingService struct {
 	settings service.SettingsService
 	events   domainsb.EventCountRepository
 	invoices domainsb.InvoiceValueRepository
+	spawn    func(run func()) // runs detached work; nil means a goroutine
 }
 
 // NewService builds the self-billing service; it is a no-op unless billing config enables self-billing.
@@ -64,12 +70,38 @@ func (s *selfBillingService) Status(ctx context.Context, tenantID string) (*dto.
 	return &dto.SelfBillingStatusResponse{Enabled: true, Status: t.InternalStatus}, nil
 }
 
+// OnTenantCreated provisions the tenant in the background so signup never waits on the billing tenant; the hourly sync repairs failures.
 func (s *selfBillingService) OnTenantCreated(ctx context.Context, tenantID, name, email string) {
 	if !s.Enabled() || s.Config.Billing.IsBillingTenant(tenantID) {
 		return
 	}
-	if err := s.provision(ctx, tenantID, name, email); err != nil {
-		s.Logger.Error(ctx, "self-billing provisioning failed", "error", err, "tenant_id", tenantID)
+	detached := context.WithoutCancel(ctx)
+	s.detach(func() {
+		ctx, cancel := context.WithTimeout(detached, provisionTimeout)
+		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				s.Logger.Error(ctx, "self-billing provisioning panicked", "error", fmt.Errorf("panic: %v", r), "tenant_id", tenantID)
+			}
+		}()
+		if err := s.provision(ctx, tenantID, name, email); err != nil {
+			s.Logger.Error(ctx, "self-billing provisioning failed", "error", err, "tenant_id", tenantID)
+		}
+	})
+}
+
+func (s *selfBillingService) detach(run func()) {
+	if s.spawn != nil {
+		s.spawn(run)
+		return
+	}
+	go run()
+}
+
+// logRemoteFailure logs a billing tenant failure once, at the handler-facing method that returns it.
+func (s *selfBillingService) logRemoteFailure(ctx context.Context, op, tenantID string, err error) {
+	if isRemoteFailure(err) {
+		s.Logger.Error(ctx, "self-billing call to the billing tenant failed", "error", err, "operation", op, "tenant_id", tenantID)
 	}
 }
 
@@ -88,5 +120,3 @@ func (s *selfBillingService) provision(ctx context.Context, tenantID, name, emai
 	}
 	return s.client.StartTrial(ctx, in.extID)
 }
-
-func (s *selfBillingService) RunHourly(context.Context) error { return nil }

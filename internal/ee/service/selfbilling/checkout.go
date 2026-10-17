@@ -13,7 +13,8 @@ import (
 // statusPayInPortal means the trial already ended unpaid; the open invoice is paid in the customer portal.
 const statusPayInPortal = "pay_in_portal"
 
-func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string, req dto.SelfBillingCheckoutRequest) (*dto.SelfBillingCheckoutResponse, error) {
+func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string, req dto.SelfBillingCheckoutRequest) (_ *dto.SelfBillingCheckoutResponse, err error) {
+	defer func() { s.logRemoteFailure(ctx, "start_checkout", tenantID, err) }()
 	if !s.Enabled() {
 		return nil, errDisabled
 	}
@@ -69,8 +70,14 @@ func (s *selfBillingService) StartCheckout(ctx context.Context, tenantID string,
 		return nil, err
 	}
 	if co.status == string(types.CheckoutStatusCompleted) {
-		// $0 first period: Mumbai already ended the trial, so there is nothing to pay.
-		return s.completedCheckout(ctx, tenantID, co.id)
+		// $0 first period: Mumbai ended the trial with nothing to pay; activate once it reports the subscription active.
+		active, err := s.subscriptionActive(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		if active {
+			return s.completedCheckout(ctx, tenantID, co.id)
+		}
 	}
 	s.Logger.Info(ctx, "self-billing checkout started", "tenant_id", tenantID, "checkout_id", co.id, "subscription_id", sub.id)
 	return &dto.SelfBillingCheckoutResponse{CheckoutID: co.id, URL: co.url, Status: co.status, Terminal: co.terminal, Tenant: t.InternalStatus}, nil
@@ -90,14 +97,16 @@ func (s *selfBillingService) checkoutInProgress(ctx context.Context, t *tenant.T
 			return &dto.SelfBillingCheckoutResponse{CheckoutID: co.id, URL: co.url, Status: co.status, Terminal: co.terminal, Tenant: t.InternalStatus}, nil
 		}
 	}
-	return nil, ierr.WithError(cause).
-		WithMessage("billing checkout already in progress").
+	// A fresh error, so Mumbai's own 409 hint does not replace ours and the expected conflict is not logged as a failure.
+	return nil, ierr.NewErrorf("billing checkout already in progress: %v", cause).
 		WithHint("a checkout is already in progress; finish or cancel it").
 		WithReportableDetails(map[string]any{"subscription_id": subscriptionID}).
 		Mark(ierr.ErrAlreadyExists)
 }
 
-func (s *selfBillingService) PollCheckout(ctx context.Context, tenantID, checkoutID string) (*dto.SelfBillingCheckoutResponse, error) {
+// PollCheckout reports a checkout; a completed one activates the tenant only while its Mumbai subscription is active.
+func (s *selfBillingService) PollCheckout(ctx context.Context, tenantID, checkoutID string) (_ *dto.SelfBillingCheckoutResponse, err error) {
+	defer func() { s.logRemoteFailure(ctx, "poll_checkout", tenantID, err) }()
 	if !s.Enabled() {
 		return nil, errDisabled
 	}
@@ -106,8 +115,14 @@ func (s *selfBillingService) PollCheckout(ctx context.Context, tenantID, checkou
 		return nil, err
 	}
 	if co.status == string(types.CheckoutStatusCompleted) {
-		if err := s.activate(ctx, tenantID); err != nil {
+		active, err := s.subscriptionActive(ctx, tenantID)
+		if err != nil {
 			return nil, err
+		}
+		if active {
+			if err := s.activate(ctx, tenantID); err != nil {
+				return nil, err
+			}
 		}
 	}
 	t, err := s.TenantRepo.GetByID(ctx, tenantID)
@@ -117,7 +132,8 @@ func (s *selfBillingService) PollCheckout(ctx context.Context, tenantID, checkou
 	return &dto.SelfBillingCheckoutResponse{CheckoutID: co.id, Status: co.status, Terminal: co.terminal, Tenant: t.InternalStatus}, nil
 }
 
-func (s *selfBillingService) CancelCheckout(ctx context.Context, tenantID, checkoutID string) error {
+func (s *selfBillingService) CancelCheckout(ctx context.Context, tenantID, checkoutID string) (err error) {
+	defer func() { s.logRemoteFailure(ctx, "cancel_checkout", tenantID, err) }()
 	if !s.Enabled() {
 		return errDisabled
 	}
@@ -139,6 +155,15 @@ func (s *selfBillingService) ownedCheckout(ctx context.Context, tenantID, checko
 			Mark(ierr.ErrNotFound)
 	}
 	return co, nil
+}
+
+// subscriptionActive reports whether the tenant's Mumbai subscription is active; Mumbai is the source of truth for payment.
+func (s *selfBillingService) subscriptionActive(ctx context.Context, tenantID string) (bool, error) {
+	sub, err := s.client.LatestSubscription(ctx, externalID(s.region(), tenantID))
+	if err != nil {
+		return false, err
+	}
+	return sub != nil && sub.status == "active", nil
 }
 
 // activate marks the tenant active, allows one production environment and creates it. Safe to repeat.

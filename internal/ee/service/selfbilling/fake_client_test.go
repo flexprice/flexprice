@@ -17,10 +17,12 @@ type fakeClient struct {
 	trialsStarted  int
 	trialCheckouts int
 	err            error
-	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect.
-	freeFirstPeriod  bool
-	trialCheckoutErr error
-	portalExtIDs     []string
+	// freeFirstPeriod makes StartTrialEndCheckout end the trial with nothing to collect; the subscription turns active.
+	freeFirstPeriod bool
+	// staleAfterTrialEnd leaves the subscription's status unchanged after a free trial end, as a lagging read would.
+	staleAfterTrialEnd bool
+	trialCheckoutErr   error
+	portalExtIDs       []string
 }
 
 func newFakeClient() *fakeClient {
@@ -61,6 +63,9 @@ func (f *fakeClient) StartTrialEndCheckout(_ context.Context, in checkoutInput) 
 		return nil, f.trialCheckoutErr
 	}
 	if f.freeFirstPeriod {
+		if sub, ok := f.subs[in.extID]; ok && !f.staleAfterTrialEnd {
+			sub.status = "active"
+		}
 		return &remoteCheckout{status: "completed", terminal: true, extID: in.extID}, f.err
 	}
 	co := &remoteCheckout{id: "cs_" + in.subscriptionID, status: "pending", url: "https://checkout.stripe.test/" + in.subscriptionID, extID: in.extID}
