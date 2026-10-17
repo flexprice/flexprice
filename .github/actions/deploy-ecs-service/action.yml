@@ -1,5 +1,5 @@
 # Composite action: deploy a single ECS service (update task definition image + force new deployment).
-# Used by deploy-api, deploy-consumer, deploy-worker jobs in deploy.yml.
+# Used by revert-ecs.yml.
 name: 'Deploy ECS service'
 description: 'Deploy one ECS service by registering a new task definition revision and forcing deployment'
 
