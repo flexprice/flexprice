@@ -95,6 +95,25 @@ type AnalyticsQueryMeta struct {
 	To          string `json:"to,omitempty"`
 	PrevFrom    string `json:"prev_from,omitempty"`
 	PrevTo      string `json:"prev_to,omitempty"`
+
+	MeasureLabels map[string]string `json:"measure_labels,omitempty"`
+}
+
+type DatasetCatalogEntry struct {
+	Key          string                   `json:"key"`
+	Label        string                   `json:"label"`
+	Description  string                   `json:"description"`
+	MaxRangeDays int                      `json:"max_range_days,omitempty"`
+	Fields       []analytics.DatasetField `json:"fields"`
+}
+
+type DatasetCatalogResponse struct {
+	Items []*DatasetCatalogEntry `json:"items"`
+}
+
+// DatasetQueryRequest is the dataset query body.
+type DatasetQueryRequest struct {
+	Definition *analytics.ViewDefinition `json:"definition" binding:"required"`
 }
 
 // AnalyticsQueryResult is the visualization-agnostic shape every analytics

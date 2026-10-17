@@ -36,7 +36,14 @@ const agingBucketExpr = "multiIf(nullIf(due_date, toDateTime64(0, 6)) IS NULL, '
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 60, '31-60', " +
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 90, '61-90', '90+')"
 
-func invoiceFinalizedTime(prefix string) string { return prefix + "finalized_at" }
+// invoiceBillingTime: billed period; one-offs use issue date.
+func invoiceBillingTime(prefix string) string {
+	return "coalesce(nullIf(" + prefix + "period_start, " + chEpoch + "), " + prefix + "issue_date)"
+}
+
+func invoiceIssueTime(prefix string) string {
+	return prefix + "issue_date"
+}
 
 func invoiceTotalSQL(timeCol string) *billingSQL {
 	return &billingSQL{
@@ -126,7 +133,7 @@ var billingSQLs = map[types.Metric]*billingSQL{
 	},
 	types.MetricARPU: {
 		Table:   "invoices",
-		TimeCol: "finalized_at",
+		TimeCol: invoiceBillingTime(""),
 		Measure: "sum(total) / uniqExact(customer_id)",
 		CompareMeasure: func(c string) string {
 			return ratioIf("total", c)
@@ -134,7 +141,16 @@ var billingSQLs = map[types.Metric]*billingSQL{
 		Where: []string{"invoice_status = '" + string(types.InvoiceStatusFinalized) + "'"},
 	},
 	types.MetricCreditConsumption: {
-		Build: buildCreditConsumption,
+		Table:   "wallet_transactions",
+		TimeCol: "created_at",
+		Measure: "sum(amount)",
+		Agg:     "sum",
+		Arg:     "amount",
+		Where: []string{
+			"type = '" + string(types.TransactionTypeDebit) + "'",
+			"transaction_status = '" + string(types.TransactionStatusCompleted) + "'",
+			"transaction_reason = '" + string(types.TransactionReasonInvoicePayment) + "'",
+		},
 	},
 	types.MetricCreditTopups: {
 		Table:   "wallet_transactions",
@@ -148,10 +164,10 @@ var billingSQLs = map[types.Metric]*billingSQL{
 			"transaction_reason IN (" + quotedList(creditTopupReasons) + ")",
 		},
 	},
-	types.MetricInvoiceTotal:       invoiceTotalSQL("finalized_at"),
-	types.MetricInvoiceTotalIssued: invoiceTotalSQL("finalized_at"),
-	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceFinalizedTime),
-	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceFinalizedTime),
+	types.MetricInvoiceTotal:       invoiceTotalSQL(invoiceBillingTime("")),
+	types.MetricInvoiceTotalIssued: invoiceTotalSQL("issue_date"),
+	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceBillingTime),
+	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceIssueTime),
 	types.MetricActiveCustomers:    {Build: buildActiveCustomers},
 	types.MetricEventsVolume:       {Build: buildEventsVolume},
 }

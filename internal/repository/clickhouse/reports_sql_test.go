@@ -356,7 +356,7 @@ func TestBuildBillingQuery_ARPUBilled(t *testing.T) {
 	assert.Contains(t, q.SQL, "invoice_status = 'FINALIZED'")
 	assert.Contains(t, q.SQL, "status = 'published'")
 	assert.Contains(t, q.SQL, "_peerdb_is_deleted = 0")
-	assert.Contains(t, q.SQL, "finalized_at >=")
+	assert.Contains(t, q.SQL, invoiceBillingTime(""))
 	assert.NotContains(t, q.SQL, "paid_at")
 	assert.NotContains(t, q.SQL, "amount_paid")
 }

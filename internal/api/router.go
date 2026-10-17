@@ -244,6 +244,8 @@ func NewRouter(
 			analytics.POST("/views/:id/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryView)
 			analytics.GET("/reports", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListReports)
 			analytics.POST("/reports/:key/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.RunReport)
+			analytics.GET("/datasets", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.ListDatasets)
+			analytics.POST("/datasets/query", read(types.EntityAnalytics, types.ActionRead), handlers.Analytics.QueryDataset)
 		}
 
 		meters := v1Private.Group("/meters")
