@@ -144,6 +144,8 @@ securityContext:
 api:
   enabled: true
   replicaCount: 1
+  # API-only env, rendered after the shared env. Accepts valueFrom entries.
+  extraEnv: []
   # Extra labels for this component's Kubernetes objects (Deployment, Service,
   # HPA, PDB, Ingress, ServiceAccount). Merged on top of the global `labels`.
   # Not applied to spec.selector.matchLabels — selectors are immutable.
