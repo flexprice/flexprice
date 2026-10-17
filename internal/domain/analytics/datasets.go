@@ -30,7 +30,9 @@ const (
 	maxDatasetFilters    = 10
 )
 
-var measureAggs = []string{"count", "count_distinct", "sum", "avg", "min", "max"}
+const daysToPayExpr = "if(i.payment_status IN ('SUCCEEDED','OVERPAID') AND i.paid_at > toDateTime64(0, 6) AND i.issue_date > toDateTime64(0, 6), dateDiff('day', i.issue_date, i.paid_at, 'UTC'), NULL)"
+
+var measureAggs = []string{"count", "count_distinct", "sum", "avg", "median", "min", "max"}
 
 type DatasetField struct {
 	Key       string    `json:"key"`
@@ -145,6 +147,12 @@ var datasets = []Dataset{
 			customerField("i.customer_id"),
 			dimField("customer_country", "Customer country", "c.address_country"),
 			dimField("subscription_billing_period", "Subscription billing period", "s.billing_period"),
+			numberField("days_to_pay", "Days to pay", daysToPayExpr),
+			numberField("days_overdue", "Days overdue",
+				"if(i.invoice_status = 'FINALIZED' AND i.amount_remaining > 0 AND i.due_date > toDateTime64(0, 6) AND i.due_date < now64(6, 'UTC'), dateDiff('day', i.due_date, now64(6, 'UTC'), 'UTC'), NULL)"),
+			dimField("payment_speed", "Payment speed",
+				"multiIf("+daysToPayExpr+" IS NULL, NULL, "+daysToPayExpr+" <= 7, '0-7', "+daysToPayExpr+" <= 30, '8-30', '30+')",
+				"0-7", "8-30", "30+"),
 			countOnlyField("invoice_id", "Invoice", "i.id"),
 		},
 	},
@@ -363,7 +371,7 @@ func validateMeasures(ds *Dataset, measures []*Measure) error {
 			return invalid("remove empty measures", "empty measure")
 		}
 		if !slices.Contains(measureAggs, m.Agg) {
-			return invalid("agg must be count, count_distinct, sum, avg, min or max", "unknown aggregation %q", m.Agg)
+			return invalid("agg must be count, count_distinct, sum, avg, median, min or max", "unknown aggregation %q", m.Agg)
 		}
 		if m.Agg == "count" {
 			if m.Field != "" {
@@ -382,7 +390,7 @@ func validateMeasures(ds *Dataset, measures []*Measure) error {
 			continue
 		}
 		if !f.Measure || f.Kind != FieldKindNumber {
-			return invalid("sum, avg, min and max need a numeric field", "%s not allowed on field %q", m.Agg, m.Field)
+			return invalid("sum, avg, median, min and max need a numeric field", "%s not allowed on field %q", m.Agg, m.Field)
 		}
 	}
 	return nil

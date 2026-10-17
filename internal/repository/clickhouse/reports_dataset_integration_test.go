@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +95,22 @@ func TestReportsRepository_Datasets(t *testing.T) {
 		row("i7", "t1", pub, 0, 1, q("c2"), q("usd"), q("FINALIZED"), "40", aug(10)),
 		row("i8", "t1", pub, 0, 1, q("c2"), q("usd"), q("DRAFT"), "1000", aug(12)))
 
+	// Tenant t3: payment-timing invoices.
+	pay := func(id, status, payStatus, issue, paid, due, remaining string) string {
+		return row(id, "t3", pub, 0, 1, q("c1"), q("usd"), q(status), q(payStatus), issue, paid, due, remaining, "1")
+	}
+	day := func(d int) string { return q(fmt.Sprintf("2020-01-%02d 00:00:00", d)) }
+	none := q("1970-01-01 00:00:00")
+	seed(db, "invoices", sc+"customer_id, currency, invoice_status, payment_status, issue_date, paid_at, due_date, amount_remaining, total",
+		pay("p1", "FINALIZED", "SUCCEEDED", day(1), day(4), none, "0"),
+		pay("p2", "FINALIZED", "SUCCEEDED", day(1), day(11), none, "0"),
+		pay("p3", "FINALIZED", "OVERPAID", day(1), day(21), none, "0"),
+		pay("p4", "FINALIZED", "SUCCEEDED", day(1), q("2020-02-10 00:00:00"), none, "0"),
+		pay("p8", "FINALIZED", "SUCCEEDED", day(1), day(6), none, "0"),
+		pay("p5", "FINALIZED", "PENDING", day(1), none, day(10), "5"),
+		pay("p6", "FINALIZED", "PENDING", day(1), none, day(20), "5"),
+		pay("p7", "FINALIZED", "PENDING", day(1), none, q("2999-01-01 00:00:00"), "5"))
+
 	seed(db, "meters", sc+"name",
 		row("mt1", "t1", pub, 0, 1, q("Meter One")),
 		row("mt2", "t1", pub, 0, 1, q("Meter Two")))
@@ -135,12 +152,13 @@ func TestReportsRepository_Datasets(t *testing.T) {
 		usage("u2", "t1", "x1", "mt1", sep(3), 4),
 		usage("u3", "t1", "x2", "mt2", sep(4), 5),
 		usage("u4", "t2", "x1", "mt1", sep(4), 100))
+	mergeTables(t, admin, db, "invoices", "customers", "subscriptions", "invoice_line_items", "meters", "wallets", "wallet_transactions", "credit_notes")
 
 	cfg := &config.Configuration{
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
 		Reports:    config.ReportsConfig{Database: db, UsageDatabase: usageDB, Username: username, Password: password, MaxResultRows: 100},
 	}
-	repo, err := NewReportsRepository(cfg, nil)
+	repo, err := NewReportsRepository(cfg, nil, nil)
 	require.NoError(t, err)
 
 	from := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
@@ -237,10 +255,49 @@ func TestReportsRepository_Datasets(t *testing.T) {
 		assert.Equal(t, [][]string{{"inr", "5", "0"}, {"usd", "30", "40"}}, got)
 	})
 
+	t.Run("payment_fields", func(t *testing.T) {
+		wide := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+		runT3 := func(def *analytics.ViewDefinition) [][]string {
+			res, err := repo.RunDataset(ctx, &analytics.DatasetQuery{Def: def, From: wide, To: wide.AddDate(0, 0, 40)}, "t3", "e1")
+			require.NoError(t, err)
+			return res.Rows
+		}
+		issue := analytics.TimeSpecRaw{Field: "issue_date"}
+		stat := func(agg, field string) string {
+			rows := runT3(&analytics.ViewDefinition{Dataset: "invoices", Measures: []*analytics.Measure{{Agg: agg, Field: field}}, Time: issue})
+			require.Len(t, rows, 1)
+			return rows[0][len(rows[0])-1]
+		}
+		assert.Equal(t, "10", stat("median", "days_to_pay"))
+		assert.Equal(t, "15.6", stat("avg", "days_to_pay"))
+		assert.Equal(t, "40", stat("max", "days_to_pay"))
+
+		// Overdue days depend on now.
+		var wantMax string
+		require.NoError(t, admin.GetConn().QueryRow(ctx,
+			"SELECT toString(dateDiff('day', toDateTime64('2020-01-10 00:00:00', 6, 'UTC'), now64(6, 'UTC')))").Scan(&wantMax))
+		got := stat("max", "days_overdue")
+		assert.InDelta(t, mustAtoi(t, wantMax), mustAtoi(t, got), 1)
+		assert.Equal(t, "2", (runT3(&analytics.ViewDefinition{Dataset: "invoices",
+			Measures: []*analytics.Measure{{Agg: "count_distinct", Field: "invoice_id"}}, Time: issue,
+			Filters: []*analytics.Filter{{Field: "days_overdue", Op: types.GREATER_THAN, Value: []string{"0"}}}})[0][0]))
+
+		speed := runT3(&analytics.ViewDefinition{Dataset: "invoices", Measures: []*analytics.Measure{count},
+			Dimensions: []string{"payment_speed"}, Time: issue})
+		assert.ElementsMatch(t, [][]string{{"", "3"}, {"0-7", "2"}, {"8-30", "2"}, {"30+", "1"}}, speed)
+	})
+
 	t.Run("injection_filter", func(t *testing.T) {
 		got := run(&analytics.ViewDefinition{Dataset: "invoices", Measures: []*analytics.Measure{count},
 			Filters: []*analytics.Filter{{Field: "currency", Op: types.EQUAL, Value: []string{"' OR 1=1 --"}}},
 			Time:    analytics.TimeSpecRaw{Field: "billing_period"}}, from, to, "")
 		assert.Equal(t, [][]string{{"0"}}, got)
 	})
+}
+
+func mustAtoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	require.NoError(t, err)
+	return n
 }

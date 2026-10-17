@@ -117,15 +117,20 @@ func buildBillingQueryWithUsage(rv *analytics.ResolvedView, db, usageDB, tenantI
 			WithHint("remove compare for this metric").
 			Mark(ierr.ErrValidation)
 	}
-	win, err := buildTimeWindow(fmt.Sprintf("nullIf(%s, %s)", sq.TimeCol, chEpoch), rv.Time.From, rv.Time.To, rv.Compare, params)
+	win, err := buildTimeWindow(sq.TimeCol, fmt.Sprintf("nullIf(%s, %s)", sq.TimeCol, chEpoch), rv.Time.From, rv.Time.To, rv.Compare, params)
 	if err != nil {
 		return nil, err
 	}
 	measure := sq.Measure
 	prevMeasure := ""
 	if rv.Compare != "" {
-		measure = aggIf(sq.Agg, sq.Arg, win.Cur)
-		prevMeasure = aggIf(sq.Agg, sq.Arg, win.Prev)
+		if sq.Agg == "" {
+			measure = sq.CompareMeasure(win.Cur)
+			prevMeasure = sq.CompareMeasure(win.Prev)
+		} else {
+			measure = aggIf(sq.Agg, sq.Arg, win.Cur)
+			prevMeasure = aggIf(sq.Agg, sq.Arg, win.Prev)
+		}
 	}
 
 	var selects, groups []string
@@ -257,8 +262,9 @@ type timeWindow struct {
 }
 
 // buildTimeWindow expects from/to params already set.
-func buildTimeWindow(timeExpr string, from, to time.Time, compare string, params map[string]string) (timeWindow, error) {
-	cur := fmt.Sprintf("%s >= toDateTime64({from:String}, 6, 'UTC') AND %s < toDateTime64({to:String}, 6, 'UTC')", timeExpr, timeExpr)
+// Predicates use the raw column so skip indexes apply.
+func buildTimeWindow(col, timeExpr string, from, to time.Time, compare string, params map[string]string) (timeWindow, error) {
+	cur := fmt.Sprintf("%s >= toDateTime64({from:String}, 6, 'UTC') AND %s < toDateTime64({to:String}, 6, 'UTC')", col, col)
 	w := timeWindow{Cur: cur, Bucket: timeExpr, Where: cur}
 	if compare == "" {
 		return w, nil
@@ -269,7 +275,7 @@ func buildTimeWindow(timeExpr string, from, to time.Time, compare string, params
 	}
 	params["prev_from"] = pf.UTC().Format(chTimeLayout)
 	params["prev_to"] = pt.UTC().Format(chTimeLayout)
-	w.Prev = fmt.Sprintf("%s >= toDateTime64({prev_from:String}, 6, 'UTC') AND %s < toDateTime64({prev_to:String}, 6, 'UTC')", timeExpr, timeExpr)
+	w.Prev = fmt.Sprintf("%s >= toDateTime64({prev_from:String}, 6, 'UTC') AND %s < toDateTime64({prev_to:String}, 6, 'UTC')", col, col)
 	shifted := fmt.Sprintf("addYears(%s, 1)", timeExpr)
 	switch {
 	case compare == "previous_period" && shiftMonths > 0:

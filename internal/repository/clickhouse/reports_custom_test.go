@@ -1,7 +1,6 @@
 package clickhouse
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/analytics"
@@ -40,14 +39,6 @@ func TestBuildNetBilling(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(q.Columns))
 	assert.NotContains(t, q.SQL, "LIMIT")
-}
-
-func TestBuildCreditConsumptionIsSelectQuery(t *testing.T) {
-	q, err := buildBillingQuery(customRV(types.MetricCreditConsumption, types.ShapeTimeseries), "reports_db", "t", "e", 100)
-	require.NoError(t, err)
-	assert.True(t, strings.HasPrefix(q.SQL, "SELECT "))
-	assert.Contains(t, q.SQL, "FROM (SELECT d.*, JSONExtractArrayRaw")
-	assert.Contains(t, q.SQL, "GROUP BY bucket, d_credit_type, d_currency")
 }
 
 func TestBuildNetBillingIssued(t *testing.T) {

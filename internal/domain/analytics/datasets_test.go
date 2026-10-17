@@ -33,6 +33,11 @@ func TestValidateDatasetAccepts(t *testing.T) {
 			d.Compare = "previous_period"
 			d.Display = "chart"
 		}),
+		"invoice payment fields": datasetDef("invoices", func(d *ViewDefinition) {
+			d.Measures = []*Measure{{Agg: "median", Field: "days_to_pay"}, {Agg: "max", Field: "days_overdue"}}
+			d.Dimensions = []string{"payment_speed"}
+			d.Filters = []*Filter{{Field: "payment_speed", Op: types.IN, Value: []string{"0-7", "30+"}}}
+		}),
 		"invoice_lines": datasetDef("invoice_lines", func(d *ViewDefinition) {
 			d.Measures = append(d.Measures, &Measure{Agg: "sum", Field: "amount"})
 			d.Dimensions = []string{"meter"}
@@ -84,20 +89,21 @@ func TestValidateDatasetRejects(t *testing.T) {
 		return func(d *ViewDefinition) { d.Filters = []*Filter{f} }
 	}
 	cases := map[string]ViewDefinition{
-		"unknown dataset":      datasetDef("nope"),
-		"no measures":          inv(func(d *ViewDefinition) { d.Measures = nil }),
-		"six measures":         inv(func(d *ViewDefinition) { d.Measures = slices.Repeat([]*Measure{{Agg: "count"}}, 6) }),
-		"unknown agg":          inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "median", Field: "total"}} }),
-		"count with field":     inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "count", Field: "total"}} }),
-		"sum without field":    inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum"}} }),
-		"sum on string field":  inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum", Field: "currency"}} }),
-		"sum on count-only id": inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum", Field: "invoice_id"}} }),
-		"unknown measure":      inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "avg", Field: "bogus"}} }),
-		"count_distinct time":  inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "count_distinct", Field: "issue_date"}} }),
-		"unknown dimension":    inv(func(d *ViewDefinition) { d.Dimensions = []string{"bogus"} }),
-		"non-group dimension":  inv(func(d *ViewDefinition) { d.Dimensions = []string{"total"} }),
-		"duplicate dimension":  inv(func(d *ViewDefinition) { d.Dimensions = []string{"currency", "currency"} }),
-		"three dimensions":     inv(func(d *ViewDefinition) { d.Dimensions = []string{"currency", "invoice_type", "customer"} }),
+		"unknown dataset":        datasetDef("nope"),
+		"no measures":            inv(func(d *ViewDefinition) { d.Measures = nil }),
+		"six measures":           inv(func(d *ViewDefinition) { d.Measures = slices.Repeat([]*Measure{{Agg: "count"}}, 6) }),
+		"unknown agg":            inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "mode", Field: "total"}} }),
+		"median on string field": inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "median", Field: "currency"}} }),
+		"count with field":       inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "count", Field: "total"}} }),
+		"sum without field":      inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum"}} }),
+		"sum on string field":    inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum", Field: "currency"}} }),
+		"sum on count-only id":   inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "sum", Field: "invoice_id"}} }),
+		"unknown measure":        inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "avg", Field: "bogus"}} }),
+		"count_distinct time":    inv(func(d *ViewDefinition) { d.Measures = []*Measure{{Agg: "count_distinct", Field: "issue_date"}} }),
+		"unknown dimension":      inv(func(d *ViewDefinition) { d.Dimensions = []string{"bogus"} }),
+		"non-group dimension":    inv(func(d *ViewDefinition) { d.Dimensions = []string{"total"} }),
+		"duplicate dimension":    inv(func(d *ViewDefinition) { d.Dimensions = []string{"currency", "currency"} }),
+		"three dimensions":       inv(func(d *ViewDefinition) { d.Dimensions = []string{"currency", "invoice_type", "customer"} }),
 		"two dims with grain": inv(func(d *ViewDefinition) {
 			d.Dimensions = []string{"currency", "invoice_type"}
 			d.Time.Grain = types.GrainMonth

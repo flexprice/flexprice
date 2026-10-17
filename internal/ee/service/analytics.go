@@ -761,6 +761,7 @@ func measureLabel(ds *analytics.Dataset, m *analytics.Measure) string {
 		"count_distinct": "Count of ",
 		"sum":            "Sum of ",
 		"avg":            "Average of ",
+		"median":         "Median of ",
 		"min":            "Min of ",
 		"max":            "Max of ",
 	}[m.Agg]

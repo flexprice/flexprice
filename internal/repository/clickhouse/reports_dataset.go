@@ -16,6 +16,7 @@ var datasetAggFn = map[string]string{
 	"count_distinct": "uniqExact",
 	"sum":            "sum",
 	"avg":            "avg",
+	"median":         "quantileExact",
 	"min":            "min",
 	"max":            "max",
 }
@@ -84,7 +85,7 @@ func buildDatasetQuery(q *analytics.DatasetQuery, db, usageDB, tenantID, environ
 	if !ds.Usage {
 		timeExpr = fmt.Sprintf("nullIf(%s, %s)", tf.Expr, chEpoch)
 	}
-	win, err := buildTimeWindow(timeExpr, q.From, q.To, q.Compare, params)
+	win, err := buildTimeWindow(tf.Expr, timeExpr, q.From, q.To, q.Compare, params)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +123,11 @@ func buildDatasetQuery(q *analytics.DatasetQuery, db, usageDB, tenantID, environ
 			money = money || (f.Money && m.Agg != "count_distinct")
 		}
 		if q.Compare != "" {
-			curMeasures = append(curMeasures, aggIf(fn, arg, win.Cur))
-			prevMeasures = append(prevMeasures, aggIf(fn, arg, win.Prev))
+			curMeasures = append(curMeasures, datasetAgg(m.Agg, fn, arg, win.Cur))
+			prevMeasures = append(prevMeasures, datasetAgg(m.Agg, fn, arg, win.Prev))
 			continue
 		}
-		curMeasures = append(curMeasures, fmt.Sprintf("%s(%s)", fn, arg))
+		curMeasures = append(curMeasures, datasetAgg(m.Agg, fn, arg, ""))
 	}
 	if money && !slices.Contains(dims, "currency") {
 		dims = append(dims, "currency")
@@ -189,7 +190,7 @@ func buildDatasetQuery(q *analytics.DatasetQuery, db, usageDB, tenantID, environ
 	if ds.Usage {
 		b.WriteString(" FROM " + usageDB + "." + ds.Table + " AS " + ds.Alias)
 	} else {
-		b.WriteString(" FROM " + db + "." + ds.Table + " AS " + ds.Alias + " FINAL")
+		b.WriteString(" FROM " + db + "." + ds.Table + " AS " + ds.Alias)
 	}
 	for _, j := range ds.Joins {
 		if !slices.ContainsFunc(used, regexp.MustCompile(`\b`+j.Alias+`\.`).MatchString) {
@@ -237,7 +238,7 @@ func joinSubquery(db string, j analytics.DatasetJoin) string {
 	lhs, _, _ := strings.Cut(j.On, " = ")
 	key := strings.TrimPrefix(lhs, j.Alias+".")
 	if key == "id" {
-		return fmt.Sprintf("SELECT %s FROM %s.%s FINAL WHERE %s", strings.Join(j.Cols, ", "), db, j.Table, scope)
+		return fmt.Sprintf("SELECT %s FROM %s.%s WHERE %s", strings.Join(j.Cols, ", "), db, j.Table, scope)
 	}
 	sel := []string{key}
 	for _, c := range j.Cols {
@@ -245,5 +246,19 @@ func joinSubquery(db string, j analytics.DatasetJoin) string {
 			sel = append(sel, fmt.Sprintf("any(%s) AS %s", c, c))
 		}
 	}
-	return fmt.Sprintf("SELECT %s FROM %s.%s FINAL WHERE %s GROUP BY %s", strings.Join(sel, ", "), db, j.Table, scope, key)
+	return fmt.Sprintf("SELECT %s FROM %s.%s WHERE %s GROUP BY %s", strings.Join(sel, ", "), db, j.Table, scope, key)
+}
+
+func datasetAgg(agg, fn, arg, cond string) string {
+	params := ""
+	if agg == "median" {
+		params = "(0.5)"
+	}
+	if cond == "" {
+		return fmt.Sprintf("%s%s(%s)", fn, params, arg)
+	}
+	if arg == "" {
+		return fmt.Sprintf("%sIf%s(%s)", fn, params, cond)
+	}
+	return fmt.Sprintf("%sIf%s(%s, %s)", fn, params, arg, cond)
 }

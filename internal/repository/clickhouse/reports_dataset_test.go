@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const joinScope = "FINAL WHERE tenant_id = {tenant_id:String} AND environment_id = {environment_id:String} AND _peerdb_is_deleted = 0 AND status = 'published'"
+const joinScope = "WHERE tenant_id = {tenant_id:String} AND environment_id = {environment_id:String} AND _peerdb_is_deleted = 0 AND status = 'published'"
 
 func dsTimeField(ds *analytics.Dataset) string {
 	for _, f := range ds.Fields {
@@ -70,7 +70,7 @@ func assertDatasetScoped(t *testing.T, ds *analytics.Dataset, sql string) {
 		assert.NotContains(t, sql, "meter_usage AS u FINAL")
 		return
 	}
-	assert.Contains(t, sql, " FROM reports_db."+ds.Table+" AS "+ds.Alias+" FINAL")
+	assert.Contains(t, sql, " FROM reports_db."+ds.Table+" AS "+ds.Alias)
 	assert.Contains(t, sql, a+"_peerdb_is_deleted = 0 AND "+a+"status = 'published'")
 }
 
@@ -87,7 +87,7 @@ func TestBuildDatasetQuery_EveryDataset(t *testing.T) {
 				}
 				if f.Measure && f.Kind == analytics.FieldKindNumber && num == "" {
 					num = f.Key
-					for _, agg := range []string{"sum", "avg", "min", "max"} {
+					for _, agg := range []string{"sum", "avg", "median", "min", "max"} {
 						measures = append(measures, &analytics.Measure{Agg: agg, Field: f.Key})
 					}
 				}
@@ -100,7 +100,7 @@ func TestBuildDatasetQuery_EveryDataset(t *testing.T) {
 			assert.Contains(t, rq.SQL, "toString(count()), '') AS m0")
 			assert.Contains(t, rq.SQL, "uniqExact(")
 			if num != "" {
-				for _, fn := range []string{"sum(", "avg(", "min(", "max("} {
+				for _, fn := range []string{"sum(", "avg(", "quantileExact(0.5)(", "min(", "max("} {
 					assert.Contains(t, rq.SQL, fn)
 				}
 			}
@@ -125,7 +125,7 @@ func TestBuildDatasetQuery_EveryCatalogField(t *testing.T) {
 			if f.Measure {
 				aggs := []string{"count_distinct"}
 				if f.Kind == analytics.FieldKindNumber {
-					aggs = append(aggs, "sum", "avg", "min", "max")
+					aggs = append(aggs, "sum", "avg", "median", "min", "max")
 				}
 				for _, agg := range aggs {
 					qs = append(qs, dsQuery(ds.Key, []*analytics.Measure{{Agg: agg, Field: f.Key}}, nil, nil, types.GrainDay, ""))
@@ -226,11 +226,12 @@ func TestBuildDatasetQuery_Compare(t *testing.T) {
 	q := dsQuery("invoices", []*analytics.Measure{{Agg: "count"}, {Agg: "sum", Field: "total"}}, nil, nil, types.GrainDay, "previous_period")
 	q.From, q.To = q.From.AddDate(0, 0, 1), q.To.AddDate(0, 0, 1)
 	rq := buildDS(t, q)
-	cur := "nullIf(coalesce(nullIf(i.period_start, toDateTime64(0, 6)), i.issue_date), toDateTime64(0, 6))"
-	assert.Contains(t, rq.SQL, "ifNull(toString(countIf("+cur+" >= toDateTime64({from:String}, 6, 'UTC')")
+	col := "coalesce(nullIf(i.period_start, toDateTime64(0, 6)), i.issue_date)"
+	bucket := "nullIf(" + col + ", toDateTime64(0, 6))"
+	assert.Contains(t, rq.SQL, "ifNull(toString(countIf("+col+" >= toDateTime64({from:String}, 6, 'UTC')")
 	assert.Contains(t, rq.SQL, "AS m1_prev")
-	assert.Contains(t, rq.SQL, "sumIf(i.total, "+cur+" >= toDateTime64({prev_from:String}, 6, 'UTC')")
-	assert.Contains(t, rq.SQL, "addSeconds("+cur+", {shift_s:Int64})")
+	assert.Contains(t, rq.SQL, "sumIf(i.total, "+col+" >= toDateTime64({prev_from:String}, 6, 'UTC')")
+	assert.Contains(t, rq.SQL, "addSeconds("+bucket+", {shift_s:Int64})")
 	assert.Equal(t, "2026-08-26 00:00:00.000000", rq.Params["prev_from"])
 	assert.Equal(t, "2026-09-02 00:00:00.000000", rq.Params["prev_to"])
 	assert.Equal(t, "604800", rq.Params["shift_s"])
@@ -270,4 +271,27 @@ func TestBuildDatasetQuery_Errors(t *testing.T) {
 	bad := dsQuery("invoices", []*analytics.Measure{{Agg: "sum", Field: "invoice_status"}}, nil, nil, "", "")
 	_, err = buildDatasetQuery(bad, "reports_db", "", "tenant_1", "env_1", 10)
 	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestBuildDatasetQuery_MedianAndPaymentFields(t *testing.T) {
+	days, _ := analytics.LookupDataset("invoices")
+	expr := func(k string) string { f, _ := days.Field(k); return f.Expr }
+	rq := buildDS(t, dsQuery("invoices", []*analytics.Measure{
+		{Agg: "median", Field: "days_to_pay"}, {Agg: "max", Field: "days_overdue"},
+	}, []string{"payment_speed"}, nil, "", ""))
+	assert.Contains(t, rq.SQL, "quantileExact(0.5)("+expr("days_to_pay")+")")
+	assert.Contains(t, rq.SQL, "max("+expr("days_overdue")+")")
+	assert.Contains(t, rq.SQL, "multiIf("+expr("days_to_pay")+" IS NULL, NULL, ")
+	assert.Contains(t, rq.SQL, "'0-7'")
+	assert.Contains(t, rq.SQL, "'8-30'")
+	assert.Contains(t, rq.SQL, "'30+'")
+
+	q := dsQuery("invoices", []*analytics.Measure{{Agg: "median", Field: "days_to_pay"}}, nil, nil, types.GrainDay, "previous_period")
+	rq = buildDS(t, q)
+	assert.Contains(t, rq.SQL, "quantileExactIf(0.5)("+expr("days_to_pay")+", ")
+	assert.Contains(t, rq.SQL, "AS m0_prev")
+
+	_, err := buildDatasetQuery(dsQuery("invoices", []*analytics.Measure{{Agg: "median", Field: "currency"}}, nil, nil, "", ""),
+		"reports_db", "usage_db", "t", "e", 1000)
+	require.Error(t, err)
 }
