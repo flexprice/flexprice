@@ -89,41 +89,4 @@ func (s *selfBillingService) provision(ctx context.Context, tenantID, name, emai
 	return s.client.StartTrial(ctx, in.extID)
 }
 
-var errNotImplemented = ierr.NewError("not implemented").Mark(ierr.ErrInternal)
-
-func (s *selfBillingService) StartCheckout(context.Context, string, dto.SelfBillingCheckoutRequest) (*dto.SelfBillingCheckoutResponse, error) {
-	if !s.Enabled() {
-		return nil, errDisabled
-	}
-	return nil, errNotImplemented
-}
-
-func (s *selfBillingService) PollCheckout(context.Context, string, string) (*dto.SelfBillingCheckoutResponse, error) {
-	if !s.Enabled() {
-		return nil, errDisabled
-	}
-	return nil, errNotImplemented
-}
-
-func (s *selfBillingService) CancelCheckout(context.Context, string, string) error {
-	if !s.Enabled() {
-		return errDisabled
-	}
-	return errNotImplemented
-}
-
-func (s *selfBillingService) Summary(context.Context, string) (*dto.SelfBillingSummaryResponse, error) {
-	if !s.Enabled() {
-		return nil, errDisabled
-	}
-	return nil, errNotImplemented
-}
-
-func (s *selfBillingService) PortalSession(context.Context, string) (*dto.SelfBillingPortalResponse, error) {
-	if !s.Enabled() {
-		return nil, errDisabled
-	}
-	return nil, errNotImplemented
-}
-
 func (s *selfBillingService) RunHourly(context.Context) error { return nil }

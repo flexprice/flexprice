@@ -78,6 +78,7 @@ type Handlers struct {
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
+	SelfBilling    *v1.SelfBillingHandler
 }
 
 func NewRouter(
@@ -431,6 +432,7 @@ func NewRouter(
 		tenantRoutes := v1Private.Group("/tenants")
 		{
 			tenantRoutes.PUT("/update", write(types.EntityTenant, types.ActionWrite), handlers.Tenant.UpdateTenant)
+			tenantRoutes.GET("/billing", handlers.SelfBilling.TenantBilling) // legacy path, now the self-billing summary
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
 		}
 
@@ -692,6 +694,16 @@ func NewRouter(
 			{
 				onboarding.POST("/events", write(types.EntityPortal, types.ActionWrite), handlers.Onboarding.GenerateEvents)
 				onboarding.POST("/setup", write(types.EntityPortal, types.ActionWrite), handlers.Onboarding.SetupDemo)
+			}
+
+			billing := portalRoutes.Group("/billing")
+			{
+				billing.GET("/status", handlers.SelfBilling.Status)
+				billing.POST("/checkout", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.StartCheckout)
+				billing.GET("/checkout/:id", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.PollCheckout)
+				billing.POST("/checkout/:id/cancel", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.CancelCheckout)
+				billing.GET("/summary", handlers.SelfBilling.Summary)
+				billing.POST("/portal-session", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.PortalSession)
 			}
 		}
 
