@@ -23,6 +23,12 @@ import (
 	"github.com/samber/lo"
 )
 
+// Lifetimes of the one-time links that let a user set their password.
+const (
+	inviteLinkTTL = 7 * 24 * time.Hour
+	resetLinkTTL  = 24 * time.Hour
+)
+
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
@@ -31,6 +37,8 @@ type UserService interface {
 	UpdateUserRoles(ctx context.Context, id string, req *dto.UpdateUserRolesRequest) (*dto.UpdateUserRolesResponse, error)
 	DeleteUser(ctx context.Context, id string) error
 	RemoveUser(ctx context.Context, id string) error
+	CreatePasswordLink(ctx context.Context, id string) (*dto.PasswordLinkResponse, error)
+	ChangePassword(ctx context.Context, req *dto.ChangePasswordRequest) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 	CreateSupportChatToken(ctx context.Context) (*dto.SupportChatTokenResponse, error)
 }
@@ -128,6 +136,7 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 
 	var newUser *user.User
 	var password *string
+	var inviteLink *dto.PasswordLinkResponse
 
 	switch req.Type {
 	case types.UserTypeUser:
@@ -135,6 +144,13 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		newUser, password, err = s.InviteUser(ctx, req, currentUserID)
 		if err != nil {
 			return nil, err
+		}
+		// Self-hosted invitees get a one-time link to set their own password.
+		if authProvider.NewProvider(s.cfg).GetProvider() == types.AuthProviderFlexprice {
+			inviteLink, err = s.signPasswordLink(newUser, authProvider.PasswordLinkPurposeInvite, "")
+			if err != nil {
+				return nil, err
+			}
 		}
 
 	case types.UserTypeServiceAccount:
@@ -174,10 +190,15 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	if password != nil {
 		passwordValue = *password
 	}
-	return &dto.CreateUserResponse{
+	resp := &dto.CreateUserResponse{
 		UserResponse: dto.NewUserResponse(newUser, tenant),
 		Password:     passwordValue,
-	}, nil
+	}
+	if inviteLink != nil {
+		resp.InviteToken = inviteLink.Token
+		resp.InviteExpiresAt = &inviteLink.ExpiresAt
+	}
+	return resp, nil
 }
 
 func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error) {
@@ -578,6 +599,169 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, nil, err
 	}
 	return newUser, &password, nil
+}
+
+// CreatePasswordLink makes a one-time link that lets a team member set their
+// password: an invite link if they never set one, otherwise a reset link.
+func (s *userService) CreatePasswordLink(ctx context.Context, id string) (*dto.PasswordLinkResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("user ID is required").
+			WithHint("Provide a valid user ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
+		return nil, ierr.NewError("only super_admin can create password links").
+			WithHint("Ask a tenant super_admin to create this link").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	if s.cfg == nil || authProvider.NewProvider(s.cfg).GetProvider() != types.AuthProviderFlexprice {
+		return nil, ierr.NewError("password links need flexprice auth").
+			WithHint("Password links are only available when Flexprice stores passwords").
+			Mark(ierr.ErrValidation)
+	}
+
+	target, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if target.TenantID != types.GetTenantID(ctx) {
+		return nil, ierr.NewError("user not found").
+			WithHint("User not found").
+			Mark(ierr.ErrNotFound)
+	}
+	if target.Type != types.UserTypeUser {
+		return nil, ierr.NewError("password links are only for human users").
+			WithHint("Password links are only for team members, not service accounts").
+			Mark(ierr.ErrValidation)
+	}
+	if target.Status != types.StatusPublished {
+		return nil, ierr.NewError("user is archived").
+			WithHint("This user has been removed").
+			Mark(ierr.ErrValidation)
+	}
+
+	purpose := authProvider.PasswordLinkPurposeReset
+	currentPasswordHash := ""
+	existingAuth, err := s.authRepo.GetAuthByUserID(ctx, id)
+	switch {
+	case err == nil:
+		currentPasswordHash = existingAuth.Token
+	case ierr.IsNotFound(err):
+		purpose = authProvider.PasswordLinkPurposeInvite
+	default:
+		return nil, err
+	}
+
+	link, err := s.signPasswordLink(target, purpose, currentPasswordHash)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Info(ctx, "password link created",
+		"actor_user_id", types.GetUserID(ctx),
+		"target_user_id", id,
+		"tenant_id", target.TenantID,
+		"purpose", purpose,
+	)
+	return link, nil
+}
+
+// ChangePassword sets a new password for the signed-in user. Being signed in to the
+// dashboard is the proof of identity: self-hosted has no email to fall back on when
+// the current password is forgotten, so it is not asked for.
+func (s *userService) ChangePassword(ctx context.Context, req *dto.ChangePasswordRequest) error {
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	// An API key must not be able to take over its owner's dashboard login.
+	_, source, ok := types.GetActor(ctx)
+	userID := types.GetUserID(ctx)
+	if !ok || source != types.SourceDashboard || userID == "" {
+		return ierr.NewError("password change outside a dashboard session").
+			WithHint("Change your password from the dashboard while signed in").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	if s.cfg == nil || authProvider.NewProvider(s.cfg).GetProvider() != types.AuthProviderFlexprice {
+		return ierr.NewError("password change needs flexprice auth").
+			WithHint("Passwords can only be changed here when Flexprice stores them").
+			Mark(ierr.ErrValidation)
+	}
+	if len(req.Password) > maxPasswordBytes {
+		return ierr.NewError("password longer than bcrypt accepts").
+			WithHint("Password must be at most 72 characters").
+			Mark(ierr.ErrValidation)
+	}
+
+	hashedPassword, err := authProvider.HashPassword(req.Password)
+	if err != nil {
+		return err
+	}
+
+	err = s.db.WithTx(ctx, func(txCtx context.Context) error {
+		// Same lock as setting a password from a link, so the two cannot interleave.
+		if err := s.db.LockWithWait(txCtx, postgres.LockRequest{Key: "password_link:" + userID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to change password").
+				Mark(ierr.ErrInternal)
+		}
+
+		existingAuth, err := s.authRepo.GetAuthByUserID(txCtx, userID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				return ierr.NewError("user has no password row").
+					WithHint("Your account doesn't use a password").
+					Mark(ierr.ErrValidation)
+			}
+			return err
+		}
+
+		existingAuth.Token = hashedPassword
+		existingAuth.UpdatedAt = time.Now().UTC()
+		return s.authRepo.UpdateAuth(txCtx, existingAuth)
+	})
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info(ctx, "password changed by its user",
+		"user_id", userID,
+		"tenant_id", types.GetTenantID(ctx),
+	)
+	return nil
+}
+
+// signPasswordLink makes a one-time link that lets target set their password.
+func (s *userService) signPasswordLink(target *user.User, purpose authProvider.PasswordLinkPurpose, currentPasswordHash string) (*dto.PasswordLinkResponse, error) {
+	signer, err := authProvider.NewPasswordLinkSigner(s.cfg.Auth.Secret)
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := resetLinkTTL
+	if purpose == authProvider.PasswordLinkPurposeInvite {
+		ttl = inviteLinkTTL
+	}
+	expiresAt := time.Now().UTC().Add(ttl).Truncate(time.Second)
+
+	token, err := signer.Sign(authProvider.PasswordLinkClaims{
+		UserID:    target.ID,
+		TenantID:  target.TenantID,
+		Purpose:   purpose,
+		ExpiresAt: expiresAt.Unix(),
+	}, currentPasswordHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PasswordLinkResponse{
+		Token:     token,
+		Purpose:   string(purpose),
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 func (s *userService) DeleteUser(ctx context.Context, id string) error {
