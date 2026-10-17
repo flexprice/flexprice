@@ -181,9 +181,11 @@ reports:
   usage_database: ""
   username: ""
   password: ""
-  max_execution_seconds: 30
+  max_execution_seconds: 10
   max_result_rows: 10000
   max_rows_to_read: 0
+  # Server query cache; 0 disables.
+  query_cache_ttl_seconds: 1800
 
 postgres:
   host: 127.0.0.1 # For local mode

@@ -14,6 +14,9 @@ import (
 
 const billTime = "nullIf(coalesce(nullIf(period_start, toDateTime64(0, 6)), issue_date), toDateTime64(0, 6))"
 
+// Range predicates use the raw expression.
+const billCol = "coalesce(nullIf(period_start, toDateTime64(0, 6)), issue_date)"
+
 func billingRV(shape types.Shape, dims ...string) *analytics.ResolvedView {
 	return &analytics.ResolvedView{
 		Family:     types.FamilyBilling,
@@ -32,16 +35,17 @@ func TestBuildBillingQuery_ScopesAndInvariants(t *testing.T) {
 	q, err := buildBillingQuery(billingRV(types.ShapeScalar), "reports_db", "tenant_1", "env_1", 1000)
 	require.NoError(t, err)
 	for _, frag := range []string{
-		"FROM reports_db.invoices FINAL",
+		"FROM reports_db.invoices WHERE",
 		"tenant_id = {tenant_id:String}",
 		"environment_id = {environment_id:String}",
 		"_peerdb_is_deleted = 0",
 		"status = 'published'",
 		"invoice_status = 'FINALIZED'",
-		billTime + " >= toDateTime64({from:String}, 6, 'UTC')",
-		billTime + " < toDateTime64({to:String}, 6, 'UTC')",
+		billCol + " >= toDateTime64({from:String}, 6, 'UTC')",
+		billCol + " < toDateTime64({to:String}, 6, 'UTC')",
 		"LIMIT 1001",
 	} {
+		assert.NotContains(t, q.SQL, " FINAL")
 		assert.Contains(t, q.SQL, frag)
 	}
 	assert.Equal(t, "tenant_1", q.Params["tenant_id"])
@@ -203,7 +207,7 @@ func TestBuildBillingQuery_CompareTimeseries(t *testing.T) {
 	assert.Contains(t, q.SQL, "sumIf(total, ")
 	assert.Contains(t, q.SQL, "addMonths("+billTime+", {shift_m:Int32})")
 	assert.Contains(t, q.SQL, "toDateTime64({prev_from:String}, 6, 'UTC')")
-	tc := billTime
+	tc := billCol
 	cur := tc + " >= toDateTime64({from:String}, 6, 'UTC') AND " + tc + " < toDateTime64({to:String}, 6, 'UTC')"
 	prev := tc + " >= toDateTime64({prev_from:String}, 6, 'UTC') AND " + tc + " < toDateTime64({prev_to:String}, 6, 'UTC')"
 	assert.Contains(t, q.SQL, " AND (("+cur+") OR ("+prev+"))")
@@ -212,6 +216,22 @@ func TestBuildBillingQuery_CompareTimeseries(t *testing.T) {
 	assert.Equal(t, "1", q.Params["shift_m"])
 	_, hasShift := q.Params["shift_s"]
 	assert.False(t, hasShift)
+}
+
+func TestBuildBillingQuery_CompareARPU(t *testing.T) {
+	for _, m := range []types.Metric{types.MetricARPU, types.MetricARPUPaid} {
+		rv := billingRV(types.ShapeScalar)
+		rv.Metrics = []types.Metric{m}
+		rv.Compare = "previous_period"
+		q, err := buildBillingQuery(rv, "reports_db", "t", "e", 0)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"currency", string(m), string(m) + "_prev"}, columnNames(q))
+		assert.Equal(t, 4, strings.Count(q.SQL, "uniqExactIf(customer_id, "))
+		assert.Contains(t, q.SQL, "sumIf(")
+		assert.Contains(t, q.SQL, "{prev_from:String}")
+		assert.Contains(t, q.SQL, "{prev_to:String}")
+		assert.Contains(t, q.Params, "prev_from")
+	}
 }
 
 func TestBuildBillingQuery_CompareRollingUsesSeconds(t *testing.T) {
@@ -303,7 +323,7 @@ func TestBuildBillingQuery_CustomBuildHook(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tenant_1", got.Params["tenant_id"])
 	assert.Contains(t, q.SQL, "i.tenant_id = {tenant_id:String} AND i.environment_id = {environment_id:String} AND i._peerdb_is_deleted = 0 AND i.status = 'published'")
-	assert.Contains(t, q.SQL, "nullIf(i.created_at, toDateTime64(0, 6)) >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "i.created_at >= toDateTime64({from:String}, 6, 'UTC')")
 
 	_, err = buildBillingQuery(rv, "reports_db", "", "env_1", 0)
 	require.Error(t, err)
@@ -311,13 +331,12 @@ func TestBuildBillingQuery_CustomBuildHook(t *testing.T) {
 }
 
 func TestBuildBillingQuery_InvoiceTotalIssued(t *testing.T) {
-	const issueTime = "nullIf(issue_date, toDateTime64(0, 6))"
 	rv := billingRV(types.ShapeTimeseries)
 	rv.Metrics = []types.Metric{types.MetricInvoiceTotalIssued}
 	rv.Compare = "previous_period"
 	q, err := buildBillingQuery(rv, "reports_db", "t", "e", 0)
 	require.NoError(t, err)
-	assert.Contains(t, q.SQL, issueTime+" >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "issue_date >= toDateTime64({from:String}, 6, 'UTC')")
 	assert.Contains(t, q.SQL, "invoice_status = 'FINALIZED'")
 	assert.NotContains(t, q.SQL, "period_start")
 	assert.Equal(t, []string{"bucket", "currency", "invoice_total_issued", "invoice_total_issued_prev"}, columnNames(q))
@@ -325,7 +344,7 @@ func TestBuildBillingQuery_InvoiceTotalIssued(t *testing.T) {
 	base, err := buildBillingQuery(billingRV(types.ShapeTimeseries), "reports_db", "t", "e", 0)
 	require.NoError(t, err)
 	assert.Contains(t, base.SQL, billTime)
-	assert.NotContains(t, base.SQL, issueTime+" >=")
+	assert.NotContains(t, base.SQL, " issue_date >=")
 }
 
 func TestBuildBillingQuery_ARPUBilled(t *testing.T) {
@@ -337,24 +356,7 @@ func TestBuildBillingQuery_ARPUBilled(t *testing.T) {
 	assert.Contains(t, q.SQL, "invoice_status = 'FINALIZED'")
 	assert.Contains(t, q.SQL, "status = 'published'")
 	assert.Contains(t, q.SQL, "_peerdb_is_deleted = 0")
-	assert.Contains(t, q.SQL, invoiceBillingTime(""))
+	assert.Contains(t, q.SQL, "finalized_at >=")
 	assert.NotContains(t, q.SQL, "paid_at")
 	assert.NotContains(t, q.SQL, "amount_paid")
-
-	rv.Compare = "previous_period"
-	_, err = buildBillingQuery(rv, "reports_db", "t", "e", 0)
-	require.Error(t, err)
-	assert.True(t, ierr.IsValidation(err))
-}
-
-func TestBuildBillingQuery_ARPURejectsCompare(t *testing.T) {
-	rv := billingRV(types.ShapeScalar)
-	rv.Metrics = []types.Metric{types.MetricARPUPaid}
-	_, err := buildBillingQuery(rv, "reports_db", "t", "e", 0)
-	require.NoError(t, err)
-
-	rv.Compare = "previous_period"
-	_, err = buildBillingQuery(rv, "reports_db", "t", "e", 0)
-	require.Error(t, err)
-	assert.True(t, ierr.IsValidation(err))
 }

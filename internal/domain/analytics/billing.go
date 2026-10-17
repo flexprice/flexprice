@@ -60,7 +60,7 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricARPU:     currencyMetric(types.MetricARPU, types.ShapeScalar, types.ShapeTimeseries),
 	types.MetricCreditConsumption: {
 		Metric:     types.MetricCreditConsumption,
-		Dimensions: []string{"customer_id", "currency"},
+		Dimensions: []string{"customer_id", "currency", "credit_type"},
 		Shapes:     allShapes,
 		Currency:   true,
 	},

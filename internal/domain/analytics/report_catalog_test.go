@@ -43,8 +43,8 @@ func TestReportCatalog_ARPUVariants(t *testing.T) {
 	assert.Equal(t, billed.Category, paid.Category)
 	assert.Equal(t, billed.Kind, paid.Kind)
 	assert.Equal(t, billed.ValueType, paid.ValueType)
-	assert.False(t, paid.SupportsCompare)
-	assert.False(t, billed.SupportsCompare)
+	assert.True(t, paid.SupportsCompare)
+	assert.True(t, billed.SupportsCompare)
 	for _, e := range ReportCatalog() {
 		if e.VariantOf != "" {
 			_, ok := LookupReport(string(e.VariantOf))

@@ -615,13 +615,14 @@ type ClickHouseConfig struct {
 
 // ReportsConfig is the reports ClickHouse login.
 type ReportsConfig struct {
-	Database            string `mapstructure:"database"`
-	UsageDatabase       string `mapstructure:"usage_database"`
-	Username            string `mapstructure:"username"`
-	Password            string `mapstructure:"password"`
-	MaxExecutionSeconds int    `mapstructure:"max_execution_seconds"`
-	MaxResultRows       int    `mapstructure:"max_result_rows"`
-	MaxRowsToRead       int64  `mapstructure:"max_rows_to_read"`
+	Database             string `mapstructure:"database"`
+	UsageDatabase        string `mapstructure:"usage_database"`
+	Username             string `mapstructure:"username"`
+	Password             string `mapstructure:"password"`
+	MaxExecutionSeconds  int    `mapstructure:"max_execution_seconds"`
+	MaxResultRows        int    `mapstructure:"max_result_rows"`
+	MaxRowsToRead        int64  `mapstructure:"max_rows_to_read"`
+	QueryCacheTTLSeconds int    `mapstructure:"query_cache_ttl_seconds"`
 }
 
 func (c ReportsConfig) Enabled() bool {

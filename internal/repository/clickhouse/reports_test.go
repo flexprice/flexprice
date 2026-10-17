@@ -46,7 +46,7 @@ func TestReportCatalog_AgreesWithRegistry(t *testing.T) {
 		require.True(t, ok, "catalog key %q has no billing metric", e.Key)
 		if sq.Agg != "" {
 			assert.Equal(t, sq.Agg+"("+sq.Arg+")", sq.Measure, "measure of %q", e.Key)
-		} else {
+		} else if sq.CompareMeasure == nil {
 			assert.False(t, e.SupportsCompare, "compare of %q", e.Key)
 		}
 		for _, s := range e.Shapes {

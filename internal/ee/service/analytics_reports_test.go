@@ -99,6 +99,14 @@ func TestRunReport_CompareAddsChangeAndMeta(t *testing.T) {
 	assert.Equal(t, "previous_period", repo.Last.Compare)
 }
 
+func TestRunReport_ARPUCompareAddsChange(t *testing.T) {
+	repo := &testutil.InMemoryReportsRepo{On: true, Columns: reportCols("currency", "arpu", "arpu_prev"), Rows: [][]string{{"usd", "55", "50"}}}
+	res, err := reportsSvc(repo).RunReport(billingCtx(), "arpu", &dto.ReportQueryRequest{Shape: "scalar", Range: "2026-09-01..2026-10-01", Compare: "previous_period"})
+	require.NoError(t, err)
+	assert.Equal(t, "arpu_change_pct", res.Columns[len(res.Columns)-1].Name)
+	assert.Equal(t, []string{"usd", "55", "50", "10"}, res.Rows[0])
+}
+
 func TestRunReport_CurrencyBecomesFilter(t *testing.T) {
 	repo := &testutil.InMemoryReportsRepo{On: true}
 	_, err := reportsSvc(repo).RunReport(billingCtx(), "invoice_total", &dto.ReportQueryRequest{Shape: "scalar", Range: "2026-09-01..2026-10-01", Currency: "usd"})

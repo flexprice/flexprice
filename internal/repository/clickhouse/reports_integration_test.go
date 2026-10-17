@@ -7,12 +7,21 @@ import (
 	"testing"
 	"time"
 
+	chstore "github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Reports skip FINAL; read merged parts.
+func mergeTables(t *testing.T, admin *chstore.ClickHouseStore, db string, tables ...string) {
+	t.Helper()
+	for _, table := range tables {
+		require.NoError(t, admin.GetConn().Exec(context.Background(), "OPTIMIZE TABLE "+db+"."+table+" FINAL"))
+	}
+}
 
 func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 	address := chEnvOrDefault("FLEXPRICE_TEST_CLICKHOUSE_ADDRESS", "localhost:9000")
@@ -51,6 +60,7 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		('i10','t1','e1','published','FINALIZED','SUBSCRIPTION','c5','usd',100,'2026-10-02 00:00:00','2026-09-15 00:00:00','2026-09-15 00:00:00',0,1),
 		('i11','t1','e1','published','FINALIZED','ONE_OFF','c6','usd',7,'2026-10-03 00:00:00','1970-01-01 00:00:00','2026-08-25 00:00:00',0,1),
 		('i12','t1','e1','published','FINALIZED','SUBSCRIPTION','c7','usd',50,'2026-09-10 00:00:00','2026-07-01 00:00:00','2026-07-01 00:00:00',0,1)`))
+	mergeTables(t, admin, db, "invoices")
 
 	cfg := &config.Configuration{
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
@@ -79,20 +89,19 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		return res.Rows
 	}
 
-	// Dedup, status, tenant, epoch filters; period_start attribution.
-	assert.Equal(t, [][]string{{"inr", "5"}, {"usd", "123"}}, run(types.ShapeScalar, ""))
+	// Dedup, status, tenant, and epoch filters; finalized_at attribution.
+	assert.Equal(t, [][]string{{"inr", "5"}, {"usd", "66"}}, run(types.ShapeScalar, ""))
 
-	// i10 follows period_start, i11 falls back to issue_date.
+	// Finalized invoices outside the selected window are excluded.
 	assert.Equal(t, [][]string{
-		{"2026-08-01T00:00:00Z", "usd", "13"},
+		{"2026-08-01T00:00:00Z", "usd", "6"},
 		{"2026-09-01T00:00:00Z", "inr", "5"},
-		{"2026-09-01T00:00:00Z", "usd", "110"},
+		{"2026-09-01T00:00:00Z", "usd", "60"},
 	}, run(types.ShapeTimeseries, types.GrainMonth))
 
 	assert.Equal(t, [][]string{
-		{"c5", "usd", "100"},
+		{"c7", "usd", "50"},
 		{"c1", "usd", "12"},
-		{"c6", "usd", "7"},
 		{"c2", "inr", "5"},
 		{"c4", "usd", "4"},
 	}, run(types.ShapeBreakdown, "", "customer_id"))
@@ -130,6 +139,24 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 	byCustomer := runCmp(types.ShapeBreakdown, "", "previous_period", "customer_id")
 	assert.Contains(t, byCustomer, []string{"c1", "usd", "10", "2"})
 	assert.Contains(t, byCustomer, []string{"c4", "usd", "0", "4"})
+
+	arpuCmp := func(shape types.Shape) [][]string {
+		rv := &analytics.ResolvedView{
+			Family: types.FamilyBilling, Shape: shape, Metrics: []types.Metric{types.MetricARPU},
+			Time:    analytics.TimeSpec{From: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Grain: types.GrainMonth},
+			Compare: "previous_period",
+		}
+		res, err := repo.RunReport(ctx, rv, "t1", "e1")
+		require.NoError(t, err)
+		return res.Rows
+	}
+	// Sep 50/1, Aug 6/3; inr no prior.
+	rows := arpuCmp(types.ShapeScalar)
+	require.Len(t, rows, 2)
+	assert.Equal(t, []string{"inr", "5", ""}, rows[0])
+	assert.Equal(t, "usd", rows[1][0])
+	assert.Equal(t, "50", rows[1][1])
+	assert.Equal(t, "3", rows[1][2])
 }
 
 func TestReportsRepository_GenericReports(t *testing.T) {
@@ -153,7 +180,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 	require.NoError(t, admin.GetConn().Exec(ctx, `CREATE TABLE `+db+`.wallet_transactions (
 		id String, tenant_id String, environment_id String, status String,
 		type String, transaction_status String, transaction_reason String,
-		customer_id String, currency String, amount Decimal(20, 9), created_at DateTime64(6),
+		customer_id String, currency String, amount Decimal(20, 9), credit_amount Decimal(20, 9), conversion_rate Nullable(Decimal(10, 5)), created_at DateTime64(6), consumption_breakdown Nullable(String),
 		_peerdb_is_deleted UInt8, _peerdb_version Int64
 	) ENGINE = ReplacingMergeTree(_peerdb_version) ORDER BY id`))
 
@@ -186,16 +213,17 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 	}, ",")))
 
 	tx := func(id, typ, st, reason string, amount int) string {
-		return fmt.Sprintf("('%s','t1','e1','published','%s','%s','%s','c1','usd',%d,'2026-09-10 00:00:00',0,1)", id, typ, st, reason, amount)
+		return fmt.Sprintf("('%s','t1','e1','published','%s','%s','%s','c1','usd',%d,%d,1,'2026-09-10 00:00:00','[]',0,1)", id, typ, st, reason, amount, amount)
 	}
 	require.NoError(t, admin.GetConn().Exec(ctx, `INSERT INTO `+db+`.wallet_transactions VALUES `+strings.Join([]string{
 		tx("w1", "credit", "completed", "PURCHASED_CREDIT_DIRECT", 50),
 		tx("w2", "credit", "completed", "FREE_CREDIT_GRANT", 10),
 		tx("w3", "credit", "failed", "PURCHASED_CREDIT_INVOICED", 99),
 		tx("w4", "credit", "completed", "CREDIT_NOTE", 7),
-		tx("w5", "debit", "completed", "INVOICE_PAYMENT", 12),
 		tx("w6", "debit", "completed", "CREDIT_EXPIRED", 5),
+		`('w5','t1','e1','published','debit','completed','INVOICE_PAYMENT','c1','usd',12,12,1,'2026-09-10 00:00:00','[{"credit_transaction_id":"w1","credits":8},{"credit_transaction_id":"w2","credits":4}]',0,1)`,
 	}, ",")))
+	mergeTables(t, admin, db, "invoices", "wallet_transactions")
 
 	cfg := &config.Configuration{
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
@@ -233,7 +261,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		{"PURCHASED_CREDIT_DIRECT", "usd", "50"},
 	}, run(types.MetricCreditTopups, types.ShapeBreakdown, "transaction_reason"))
 
-	assert.Equal(t, [][]string{{"usd", "12"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
+	assert.ElementsMatch(t, [][]string{{"free", "usd", "4"}, {"paid", "usd", "8"}}, run(types.MetricCreditConsumption, types.ShapeScalar))
 
 	assert.Equal(t, [][]string{{"usd", "90"}}, run(types.MetricARPUPaid, types.ShapeScalar))
 
@@ -288,8 +316,8 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 		('i4','t1','e1','published','FINALIZED','usd',8,'2026-09-02 00:00:00','1970-01-01 00:00:00','2026-10-08 00:00:00',0,1),
 		('i5','t1','e1','published','FINALIZED','usd',40,'2026-10-05 00:00:00','2026-09-25 00:00:00','2026-10-05 00:00:00',0,1)`))
 	require.NoError(t, admin.GetConn().Exec(ctx, `INSERT INTO `+db+`.credit_notes VALUES
-		('n1','t1','e1','published','FINALIZED','usd',20,'2026-09-12 00:00:00','1970-01-01 00:00:00',0,1),
-		('n2','t1','e1','published','FINALIZED','usd',15,'2026-10-03 00:00:00','1970-01-01 00:00:00',0,1),
+		('n1','t1','e1','published','FINALIZED','usd',20,'2026-09-12 00:00:00','2026-09-12 00:00:00',0,1),
+		('n2','t1','e1','published','FINALIZED','usd',15,'2026-10-03 00:00:00','2026-10-03 00:00:00',0,1),
 		('n3','t1','e1','published','DRAFT','usd',99,'2026-09-12 00:00:00','1970-01-01 00:00:00',0,1)`))
 
 	epoch := "1970-01-01 00:00:00"
@@ -306,6 +334,7 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 		sub("s7", "c6", "cancelled", "2026-01-01 00:00:00", epoch, epoch),
 		sub("s8", "c7", "cancelled", "2026-01-01 00:00:00", epoch, "2026-07-15 00:00:00"),
 	}, ",")))
+	mergeTables(t, admin, db, "invoices", "credit_notes", "subscriptions")
 
 	cfg := &config.Configuration{
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
@@ -330,24 +359,24 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "150"},
-		{"2026-10-01T00:00:00Z", "usd", "-7"},
+		{"2026-09-01T00:00:00Z", "usd", "88"},
+		{"2026-10-01T00:00:00Z", "usd", "55"},
 	}, run(types.MetricNetBilling, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
 
 	// i5: period in Sep, issued in Oct.
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "110"},
-		{"2026-10-01T00:00:00Z", "usd", "33"},
+		{"2026-09-01T00:00:00Z", "usd", "88"},
+		{"2026-10-01T00:00:00Z", "usd", "55"},
 	}, run(types.MetricNetBillingIssued, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "170"},
-		{"2026-10-01T00:00:00Z", "usd", "8"},
+		{"2026-09-01T00:00:00Z", "usd", "108"},
+		{"2026-10-01T00:00:00Z", "usd", "70"},
 	}, run(types.MetricInvoiceTotal, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "130"},
-		{"2026-10-01T00:00:00Z", "usd", "48"},
+		{"2026-09-01T00:00:00Z", "usd", "108"},
+		{"2026-10-01T00:00:00Z", "usd", "70"},
 	}, run(types.MetricInvoiceTotalIssued, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
-	assert.Equal(t, [][]string{{"usd", "48", "130"}},
+	assert.Equal(t, [][]string{{"usd", "70", "108"}},
 		run(types.MetricInvoiceTotalIssued, types.ShapeScalar, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), "previous_period"))
 
 	nov := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)

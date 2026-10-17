@@ -12,9 +12,11 @@ type billingSQL struct {
 	TimeCol string
 	Measure string
 	// Aggregate name and argument.
-	Agg   string
-	Arg   string
-	Where []string
+	Agg string
+	Arg string
+	// Conditional Measure for ratio metrics.
+	CompareMeasure func(cond string) string
+	Where          []string
 	// Dimension expressions differing from name.
 	DimExprs map[string]string
 	// Replaces the generic builder.
@@ -34,14 +36,7 @@ const agingBucketExpr = "multiIf(nullIf(due_date, toDateTime64(0, 6)) IS NULL, '
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 60, '31-60', " +
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 90, '61-90', '90+')"
 
-// invoiceBillingTime: billed period; one-offs use issue date.
-func invoiceBillingTime(prefix string) string {
-	return "coalesce(nullIf(" + prefix + "period_start, " + chEpoch + "), " + prefix + "issue_date)"
-}
-
-func invoiceIssueTime(prefix string) string {
-	return prefix + "issue_date"
-}
+func invoiceFinalizedTime(prefix string) string { return prefix + "finalized_at" }
 
 func invoiceTotalSQL(timeCol string) *billingSQL {
 	return &billingSQL{
@@ -77,6 +72,10 @@ var (
 		types.TransactionReasonSubscriptionCredit,
 	}
 )
+
+func ratioIf(col, cond string) string {
+	return "if(uniqExactIf(customer_id, " + cond + ") = 0, NULL, sumIf(" + col + ", " + cond + ") / uniqExactIf(customer_id, " + cond + "))"
+}
 
 func quotedList[T ~string](vs []T) string {
 	q := make([]string, len(vs))
@@ -120,25 +119,22 @@ var billingSQLs = map[types.Metric]*billingSQL{
 		Table:   "invoices",
 		TimeCol: "paid_at",
 		Measure: "sum(amount_paid) / uniqExact(customer_id)",
-		Where:   []string{paidIn, "paid_at > " + chEpoch},
+		CompareMeasure: func(c string) string {
+			return ratioIf("amount_paid", c)
+		},
+		Where: []string{paidIn, "paid_at > " + chEpoch},
 	},
 	types.MetricARPU: {
 		Table:   "invoices",
-		TimeCol: invoiceBillingTime(""),
+		TimeCol: "finalized_at",
 		Measure: "sum(total) / uniqExact(customer_id)",
-		Where:   []string{"invoice_status = '" + string(types.InvoiceStatusFinalized) + "'"},
+		CompareMeasure: func(c string) string {
+			return ratioIf("total", c)
+		},
+		Where: []string{"invoice_status = '" + string(types.InvoiceStatusFinalized) + "'"},
 	},
 	types.MetricCreditConsumption: {
-		Table:   "wallet_transactions",
-		TimeCol: "created_at",
-		Measure: "sum(amount)",
-		Agg:     "sum",
-		Arg:     "amount",
-		Where: []string{
-			"type = '" + string(types.TransactionTypeDebit) + "'",
-			"transaction_status = '" + string(types.TransactionStatusCompleted) + "'",
-			"transaction_reason = '" + string(types.TransactionReasonInvoicePayment) + "'",
-		},
+		Build: buildCreditConsumption,
 	},
 	types.MetricCreditTopups: {
 		Table:   "wallet_transactions",
@@ -152,10 +148,10 @@ var billingSQLs = map[types.Metric]*billingSQL{
 			"transaction_reason IN (" + quotedList(creditTopupReasons) + ")",
 		},
 	},
-	types.MetricInvoiceTotal:       invoiceTotalSQL(invoiceBillingTime("")),
-	types.MetricInvoiceTotalIssued: invoiceTotalSQL("issue_date"),
-	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceBillingTime),
-	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceIssueTime),
+	types.MetricInvoiceTotal:       invoiceTotalSQL("finalized_at"),
+	types.MetricInvoiceTotalIssued: invoiceTotalSQL("finalized_at"),
+	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceFinalizedTime),
+	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceFinalizedTime),
 	types.MetricActiveCustomers:    {Build: buildActiveCustomers},
 	types.MetricEventsVolume:       {Build: buildEventsVolume},
 }
