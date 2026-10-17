@@ -322,3 +322,8 @@ type ServiceDependencies struct {
 	RefundService                   RefundService
 	DB                              postgres.IClient
 }
+
+// SelfBillingHook provisions a newly created tenant on the billing tenant without importing self-billing.
+type SelfBillingHook interface {
+	OnTenantCreated(ctx context.Context, tenantID, name, email string)
+}

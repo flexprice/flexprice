@@ -44,7 +44,7 @@ type Configuration struct {
 	Temporal               TemporalConfig               `validate:"required"`
 	Webhook                Webhook                      `validate:"omitempty"`
 	Secrets                SecretsConfig                `validate:"required"`
-	Billing                BillingConfig                `validate:"omitempty"`
+	Billing                BillingConfig                `mapstructure:"billing" validate:"omitempty"`
 	S3                     S3Config                     `validate:"required"`
 	Storage                StorageConfig                `mapstructure:"storage" validate:"omitempty"`
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
@@ -886,9 +886,39 @@ type SecretsConfig struct {
 	EncryptionKey string `mapstructure:"encryption_key" validate:"required"`
 }
 
+// BillingConfig points this region at the Flexprice billing tenant in Mumbai.
+// TenantID/EnvironmentID are set only where that tenant is local; the remote fields are set wherever self-billing runs.
 type BillingConfig struct {
 	TenantID      string `mapstructure:"tenant_id" validate:"omitempty"`
 	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Region        string `mapstructure:"region"`
+	APIHost       string `mapstructure:"api_host"`
+	APIKey        string `mapstructure:"api_key"`
+	PlanID        string `mapstructure:"plan_id"`
+	DashboardURL  string `mapstructure:"dashboard_url"`
+	// UsageLookbackHours is how many closed hours each usage run re-sends; it recovers missed runs.
+	UsageLookbackHours int `mapstructure:"usage_lookback_hours" default:"6"`
+}
+
+const defaultUsageLookback = 6 * time.Hour
+
+// UsageLookback is the usage window length; non-positive values fall back to 6 hours.
+func (c BillingConfig) UsageLookback() time.Duration {
+	if c.UsageLookbackHours <= 0 {
+		return defaultUsageLookback
+	}
+	return time.Duration(c.UsageLookbackHours) * time.Hour
+}
+
+// IsSelfBillingEnabled reports whether this deployment bills its tenants through Mumbai.
+func (c BillingConfig) IsSelfBillingEnabled() bool {
+	return c.Enabled && c.Region != "" && c.APIHost != "" && c.APIKey != "" && c.PlanID != "" && c.DashboardURL != ""
+}
+
+// IsBillingTenant reports whether tenantID is the local billing tenant, which never bills itself.
+func (c BillingConfig) IsBillingTenant(tenantID string) bool {
+	return c.TenantID != "" && c.TenantID == tenantID
 }
 
 type EventProcessingConfig struct {
