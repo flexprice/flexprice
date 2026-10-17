@@ -316,8 +316,8 @@ func NewAnalyticsViewRepository(p RepositoryParams) domainAnalytics.Repository {
 	return entRepo.NewAnalyticsViewRepository(p.EntClient, p.Logger)
 }
 
-func NewReportsRepository(cfg *config.Configuration, log *logger.Logger) (domainAnalytics.ReportsRepository, error) {
-	return clickhouseRepo.NewReportsRepository(cfg, log)
+func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cache.RedisCache) (domainAnalytics.ReportsRepository, error) {
+	return clickhouseRepo.NewReportsRepository(cfg, log, rc)
 }
 
 func NewRevenueFactRepository(p RepositoryParams) revenuefact.Repository {

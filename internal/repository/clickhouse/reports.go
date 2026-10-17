@@ -2,11 +2,18 @@ package clickhouse
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
+	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/proto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -16,6 +23,7 @@ import (
 const (
 	defaultReportsMaxExecutionSeconds = 10
 	defaultReportsMaxResultRows       = 10000
+	maxCachedReportBytes              = 1 << 20
 )
 
 var _ analytics.ReportsRepository = (*ReportsRepository)(nil)
@@ -24,10 +32,11 @@ type ReportsRepository struct {
 	conn   driver.Conn
 	cfg    config.ReportsConfig
 	logger *logger.Logger
+	cache  cache.RedisCache
 }
 
-func NewReportsRepository(cfg *config.Configuration, log *logger.Logger) (*ReportsRepository, error) {
-	r := &ReportsRepository{cfg: cfg.Reports, logger: log}
+func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cache.RedisCache) (*ReportsRepository, error) {
+	r := &ReportsRepository{cfg: cfg.Reports, logger: log, cache: rc}
 	if r.cfg.MaxExecutionSeconds <= 0 {
 		r.cfg.MaxExecutionSeconds = defaultReportsMaxExecutionSeconds
 	}
@@ -95,6 +104,40 @@ func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.Repo
 }
 
 func (r *ReportsRepository) run(ctx context.Context, q *reportQuery) ([][]string, error) {
+	return r.cached(ctx, q, func() ([][]string, error) { return r.query(ctx, q) })
+}
+
+func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch func() ([][]string, error)) ([][]string, error) {
+	if r.cache == nil || !r.cache.IsEnabled() || r.cfg.QueryCacheTTLSeconds <= 0 {
+		return fetch()
+	}
+	key := reportCacheKey(ctx, q)
+	if v, ok := r.cache.Get(ctx, key); ok {
+		if rows, ok := cache.UnmarshalCacheValue[[][]string](v); ok {
+			return *rows, nil
+		}
+	}
+	rows, err := fetch()
+	if err != nil {
+		return nil, err
+	}
+	if b, err := json.Marshal(rows); err == nil && len(b) <= maxCachedReportBytes {
+		r.cache.Set(ctx, key, string(b), time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second)
+	}
+	return rows, nil
+}
+
+// Params carry tenant and environment.
+func reportCacheKey(ctx context.Context, q *reportQuery) string {
+	h := sha256.New()
+	h.Write([]byte(q.SQL))
+	for _, k := range slices.Sorted(maps.Keys(q.Params)) {
+		h.Write([]byte("\x00" + k + "\x00" + q.Params[k]))
+	}
+	return cache.GenerateKey(ctx, cache.PrefixReportResult, hex.EncodeToString(h.Sum(nil)))
+}
+
+func (r *ReportsRepository) query(ctx context.Context, q *reportQuery) ([][]string, error) {
 	settings := clickhouse_go.Settings{
 		"max_execution_time":   r.cfg.MaxExecutionSeconds,
 		"max_result_rows":      r.cfg.MaxResultRows + 1,

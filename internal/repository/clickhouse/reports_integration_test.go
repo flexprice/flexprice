@@ -66,7 +66,7 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
 		Reports:    config.ReportsConfig{Database: db, Username: username, Password: password, MaxResultRows: 100},
 	}
-	repo, err := NewReportsRepository(cfg, nil)
+	repo, err := NewReportsRepository(cfg, nil, nil)
 	require.NoError(t, err)
 	require.True(t, repo.Enabled())
 
@@ -229,7 +229,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
 		Reports:    config.ReportsConfig{Database: db, Username: username, Password: password, MaxResultRows: 100},
 	}
-	repo, err := NewReportsRepository(cfg, nil)
+	repo, err := NewReportsRepository(cfg, nil, nil)
 	require.NoError(t, err)
 
 	run := func(metric types.Metric, shape types.Shape, dims ...string) [][]string {
@@ -340,7 +340,7 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
 		Reports:    config.ReportsConfig{Database: db, Username: username, Password: password, MaxResultRows: 100},
 	}
-	repo, err := NewReportsRepository(cfg, nil)
+	repo, err := NewReportsRepository(cfg, nil, nil)
 	require.NoError(t, err)
 
 	run := func(metric types.Metric, shape types.Shape, from, to time.Time, compare ...string) [][]string {
@@ -427,7 +427,7 @@ func TestReportsRepository_EventsVolume(t *testing.T) {
 		ClickHouse: config.ClickHouseConfig{Address: address, Username: username, Password: password, Database: "default", MaxMemoryUsage: 1},
 		Reports:    config.ReportsConfig{Database: db, Username: username, Password: password, MaxResultRows: 100},
 	}
-	repo, err := NewReportsRepository(cfg, nil)
+	repo, err := NewReportsRepository(cfg, nil, nil)
 	require.NoError(t, err)
 
 	run := func(tenant string, shape types.Shape, grain types.Grain, limit int, filters []*analytics.Filter, dims ...string) [][]string {
