@@ -137,7 +137,11 @@ func (s *hostedInvoiceTokenService) RecalculateExpiry(ctx context.Context, inv *
 	if expiresAt.Equal(token.ExpiresAt) {
 		return nil
 	}
+	// Not found here means the token was revoked after the read (Stripe switch), so there is nothing to update.
 	if err := s.HostedInvoiceTokenRepo.UpdateExpiresAt(ctx, inv.ID, expiresAt); err != nil {
+		if ierr.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 	s.Logger.Info(ctx, "recalculated hosted invoice token expiry", "token_id", token.ID, "invoice_id", inv.ID)
