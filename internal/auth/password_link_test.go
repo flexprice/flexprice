@@ -155,3 +155,35 @@ func TestHashPassword(t *testing.T) {
 	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(hash), []byte("password123")))
 	assert.Error(t, bcrypt.CompareHashAndPassword([]byte(hash), []byte("wrong-pass")))
 }
+
+// A link signed with the right key is still refused when its claims cannot be read.
+func TestPasswordLink_RefusesUnreadableClaims(t *testing.T) {
+	signer := newTestSigner(t, testLinkSecret)
+	encode := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+
+	tests := []struct {
+		name string
+		data string
+	}{
+		{name: "claims are not base64", data: "not*base64"},
+		{name: "claims are not JSON", data: encode("not json")},
+		{name: "claims name no user", data: encode(`{"t":"tenant_1","p":"reset","e":4102444800}`)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			token := tc.data + "." + base64.RawURLEncoding.EncodeToString(signer.signature(tc.data, ""))
+
+			claims, err := signer.Verify(token, "", time.Now())
+
+			assert.Nil(t, claims)
+			assert.True(t, ierr.IsNotFound(err), "expected the bad-link error, got %v", err)
+		})
+	}
+}
+
+// bcrypt reads at most 72 bytes, so a longer password must fail instead of being cut short.
+func TestHashPassword_RefusesMoreThan72Bytes(t *testing.T) {
+	_, err := HashPassword(strings.Repeat("a", 73))
+
+	assert.True(t, ierr.IsSystem(err), "got %v", err)
+}

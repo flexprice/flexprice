@@ -717,6 +717,94 @@ func (s *UserServiceSuite) TestChangePassword() {
 	}
 }
 
+// otherTenantUserRepo returns another tenant's copy of a user, as a repository that
+// skipped its tenant filter would.
+type otherTenantUserRepo struct{ user.Repository }
+
+func (r otherTenantUserRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
+	found, err := r.Repository.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	other := *found
+	other.TenantID = "tenant_other"
+	return &other, nil
+}
+
+func (s *UserServiceSuite) TestCreatePasswordLink_Failures() {
+	const secret = "test-secret-key-32-bytes-minimum!"
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+	tests := []struct {
+		name    string
+		secret  string
+		inject  func(svc *userService)
+		wantErr func(error) bool
+	}{
+		{name: "password lookup fails", secret: secret, inject: func(svc *userService) { svc.authRepo = failingAuthRepo{svc.authRepo} }, wantErr: ierr.IsDatabase},
+		{name: "auth secret is not set", secret: "", inject: func(*userService) {}, wantErr: ierr.IsSystem},
+		{name: "repository returns another tenant's user", secret: secret, inject: func(svc *userService) { svc.userRepo = otherTenantUserRepo{svc.userRepo} }, wantErr: ierr.IsNotFound},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			userRepo := testutil.NewInMemoryUserStore()
+			member := &user.User{ID: "user_member", Email: "user_member@example.com", Type: types.UserTypeUser, BaseModel: types.GetDefaultBaseModel(ctx)}
+			member.Status = types.StatusPublished
+			s.Require().NoError(userRepo.Create(ctx, member))
+			svc := &userService{
+				userRepo: userRepo,
+				authRepo: testutil.NewInMemoryAuthRepository(),
+				cfg:      &config.Configuration{Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: tc.secret}},
+				logger:   testLogger(s.T()),
+			}
+			tc.inject(svc)
+
+			link, err := svc.CreatePasswordLink(ctx, "user_member")
+
+			s.Nil(link)
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+		})
+	}
+}
+
+func (s *UserServiceSuite) TestChangePassword_Failures() {
+	const storedHash = "stored-bcrypt-hash"
+	ctx := types.SetActor(context.WithValue(testutil.SetupContext(), types.CtxUserID, "user_member"),
+		types.Actor{Type: types.ActorTypeUser, ID: "user_member"}, types.SourceDashboard)
+
+	tests := []struct {
+		name    string
+		inject  func(svc *userService)
+		wantErr func(error) bool
+	}{
+		{name: "password lookup fails", inject: func(svc *userService) { svc.authRepo = failingAuthRepo{svc.authRepo} }, wantErr: ierr.IsDatabase},
+		{name: "lock cannot be taken", inject: func(svc *userService) { svc.db = failingLockDB{svc.db} }, wantErr: ierr.IsInternal},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			authRepo := testutil.NewInMemoryAuthRepository()
+			s.Require().NoError(authRepo.CreateAuth(ctx, domainAuth.NewAuth("user_member", types.AuthProviderFlexprice, storedHash)))
+			svc := &userService{
+				authRepo: authRepo,
+				db:       testutil.NewMockPostgresClient(nil),
+				cfg:      &config.Configuration{Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: "test-secret-key-32-bytes-minimum!"}},
+				logger:   testLogger(s.T()),
+			}
+			tc.inject(svc)
+
+			err := svc.ChangePassword(ctx, &dto.ChangePasswordRequest{Password: "new-password-2"})
+
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+			stored, getErr := authRepo.GetAuthByUserID(ctx, "user_member")
+			s.Require().NoError(getErr)
+			s.Equal(storedHash, stored.Token, "a failed change must leave the password as it was")
+		})
+	}
+}
+
 func (s *UserServiceSuite) TestUpdateUser_MetadataMerge() {
 	ctx := testutil.SetupContext()
 	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)

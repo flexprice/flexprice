@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
@@ -511,4 +512,101 @@ func (s *AuthServiceSuite) TestSetPassword_PasswordOver72Bytes() {
 	s.False(ierr.IsSystem(err), "it must not answer 500")
 	s.NoError(s.authService.SetPassword(context.Background(), &dto.SetPasswordRequest{Token: token, Password: "long-enough-1"}),
 		"a refused password must not use up the link")
+}
+
+// failingAuthRepo fails every password lookup, as a database outage would.
+type failingAuthRepo struct{ auth.Repository }
+
+func (failingAuthRepo) GetAuthByUserID(context.Context, string) (*auth.Auth, error) {
+	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+// failingUserRepo fails every user lookup, as a database outage would.
+type failingUserRepo struct{ user.Repository }
+
+func (failingUserRepo) GetByID(context.Context, string) (*user.User, error) {
+	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
+}
+
+// failingLockDB refuses every advisory lock, as a lock timeout would.
+type failingLockDB struct{ postgres.IClient }
+
+func (failingLockDB) LockWithWait(context.Context, postgres.LockRequest) error {
+	return errors.New("lock wait timed out")
+}
+
+// racingAuthRepo reads the store once, then returns the password row another
+// request saved after using the same link.
+type racingAuthRepo struct {
+	auth.Repository
+	lookups int
+}
+
+func (r *racingAuthRepo) GetAuthByUserID(ctx context.Context, userID string) (*auth.Auth, error) {
+	r.lookups++
+	if r.lookups == 1 {
+		return r.Repository.GetAuthByUserID(ctx, userID)
+	}
+	return auth.NewAuth(userID, types.AuthProviderFlexprice, "hash-saved-by-another-request"), nil
+}
+
+// A failed lookup or a missing secret must come back as itself, not as an expired link
+// that would send the member to ask for a new one. Supabase deployments have no links.
+func (s *AuthServiceSuite) TestCheckPasswordLink_Failures() {
+	s.useLinkSecret()
+	member := s.seedMember("user_member", types.StatusPublished, "")
+	token := s.signLink(member, types.DefaultTenantID, testLinkAuthSecret, time.Now().Add(time.Hour))
+
+	tests := []struct {
+		name    string
+		inject  func(svc *authService)
+		wantErr func(error) bool
+	}{
+		{name: "user lookup fails", inject: func(svc *authService) { svc.UserRepo = failingUserRepo{svc.UserRepo} }, wantErr: ierr.IsDatabase},
+		{name: "password lookup fails", inject: func(svc *authService) { svc.AuthRepo = failingAuthRepo{svc.AuthRepo} }, wantErr: ierr.IsDatabase},
+		{name: "auth secret is not set", inject: func(svc *authService) { svc.Config.Auth.Secret = "" }, wantErr: ierr.IsSystem},
+		{name: "Supabase deployment", inject: func(svc *authService) { svc.authProvider = &fakeSupabaseProvider{} }, wantErr: ierr.IsNotFound},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.useLinkSecret()
+			svc := s.authService.(*authService)
+			tc.inject(svc)
+
+			details, err := svc.CheckPasswordLink(context.Background(), &dto.CheckPasswordLinkRequest{Token: token})
+
+			s.Nil(details)
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+		})
+	}
+}
+
+// Two requests racing with one link: the one that waited for the lock finds the
+// password already saved and is refused instead of overwriting it.
+func (s *AuthServiceSuite) TestSetPassword_LinkUsedWhileWaitingForLock() {
+	s.useLinkSecret()
+	invitee := s.seedMember("user_invitee", types.StatusPublished, "")
+	token := s.signLink(invitee, types.DefaultTenantID, testLinkAuthSecret, time.Now().Add(time.Hour))
+	svc := s.authService.(*authService)
+	svc.AuthRepo = &racingAuthRepo{Repository: svc.AuthRepo}
+
+	err := svc.SetPassword(context.Background(), &dto.SetPasswordRequest{Token: token, Password: "long-enough-1"})
+
+	s.True(ierr.IsNotFound(err), "expected the bad-link error, got %v", err)
+	_, err = s.GetStores().AuthRepo.GetAuthByUserID(testutil.SetupContext(), invitee.ID)
+	s.True(ierr.IsNotFound(err), "the refused request must not save a password")
+}
+
+func (s *AuthServiceSuite) TestSetPassword_LockFails() {
+	s.useLinkSecret()
+	invitee := s.seedMember("user_invitee", types.StatusPublished, "")
+	token := s.signLink(invitee, types.DefaultTenantID, testLinkAuthSecret, time.Now().Add(time.Hour))
+	svc := s.authService.(*authService)
+	svc.DB = failingLockDB{svc.DB}
+
+	err := svc.SetPassword(context.Background(), &dto.SetPasswordRequest{Token: token, Password: "long-enough-1"})
+
+	s.True(ierr.IsInternal(err), "got %v", err)
+	_, err = s.GetStores().AuthRepo.GetAuthByUserID(testutil.SetupContext(), invitee.ID)
+	s.True(ierr.IsNotFound(err), "no password may be saved without the lock")
 }
