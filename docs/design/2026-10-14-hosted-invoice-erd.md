@@ -93,8 +93,8 @@ A **hosted invoice page** here means a page that shows the invoice amount with a
 
 | ID | Requirement | UC | Acceptance criteria |
 |---|---|---|---|
-| FR-1 | When an invoice is finalized without an integration hosted URL, the invoice gets a Flexprice hosted link. | UC1 | Finalize an invoice with no Stripe sync → the invoice API response and the `invoice.update.finalized` webhook carry a Flexprice link. |
-| FR-2 | When Stripe supplies a hosted invoice URL, it becomes the invoice's active hosted URL and any existing Flexprice link is revoked in the same transaction. Enabling sync alone does not switch the link. | UC1, UC6 | Sync an invoice with an existing Flexprice link → the invoice API and `invoice.sync.success` carry Stripe's URL; opening the old Flexprice link shows the revoked page. |
+| FR-1 | When an invoice is finalized and the tenant does not sync invoices to Stripe, the invoice gets a Flexprice hosted link. | UC1 | Finalize an invoice with no Stripe sync → the invoice API response and the `invoice.update.finalized` webhook carry a Flexprice link. |
+| FR-2 | When Stripe supplies a hosted invoice URL, it becomes the invoice's active hosted URL and any existing Flexprice link is revoked when the sync completes. Enabling sync alone does not switch the link. | UC1, UC6 | Sync an invoice with an existing Flexprice link → the invoice API and `invoice.sync.success` carry Stripe's URL; opening the old Flexprice link shows the revoked page. |
 | FR-3 | If Stripe sync fails or supplies no hosted URL, the active hosted link is unchanged. | UC6 | Force a failed sync → `invoice.sync.failed`, existing Flexprice link remains; retry with a Stripe URL → switch to Stripe and revoke the Flexprice link. |
 | FR-4 | The Stripe URL is kept in invoice metadata (`metadata.stripe_hosted_invoice_url`); no hosted URL or token is stored on the invoice or in the link table. The API's `hosted_invoice_url` is computed at read time: Stripe's URL if present, else the signed Flexprice link if the invoice has a live link, else empty. Flexprice does not refresh provider URLs. | UC6 | Read the invoice twice, days apart → same Stripe URL, with no Stripe API call on read. |
 | FR-5 | The invoice's link is readable from the invoice API (get and list) and from invoice webhooks. | UC1 | `GET /invoices/:id`, the invoice list and the invoice webhooks all return the same link. |
@@ -288,8 +288,8 @@ Indexes:
 - **Issue:** when an invoice is finalized, a link row is inserted in the same transaction as finalization, unless the tenant syncs invoices to Stripe (invoice outbound sync on the Stripe connection); nothing is written to the invoice.
 - **Backfill:** existing finalized invoices receive hosted links under FR-21. Flexprice links retain the normal expiry in NFR-2, calculated from the original due date or finalization; backfilling does not extend it, so an older invoice may receive an already-expired link. Stripe links follow the provider’s existing rules.
 - **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update, within the link's `created_at` + 120 days cap; this is how a tenant extends an expired link while refresh is deferred.
-- **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url` and revoke any unrevoked Flexprice link in the same transaction. Repeated delivery is idempotent. No URL is written.
-- **Open:** the signature is checked first; a link with a bad signature is rejected without touching the database. The link record is then read by its id without a tenant filter, the only lookup that may do so. The row gives the tenant, environment and invoice; everything after it is scoped as usual. A row that is revoked or past `expires_at` shows the "no longer valid" page.
+- **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url`; when the sync completes, revoke any unrevoked Flexprice link. Repeated delivery is idempotent. No URL is written.
+- **Open:** the signature is checked first; a link with a bad signature is rejected without touching the database. The link record is then read by its id without a tenant filter, the only lookup that may do so. The row gives the tenant, environment and invoice; everything after it is scoped as usual. A row that is revoked or past `expires_at`, or whose invoice carries a Stripe hosted URL, shows the "no longer valid" page.
 
 **Example.** Acme Ltd, a Canada tenant, finalizes invoice INV-0042 due on 14 Nov 2026. Flexprice creates this link record:
 
@@ -320,7 +320,7 @@ The link is built from the record when the API returns it; nothing is stored:
 
 Opening the link reverses the steps: split the token at the dot, sign the record id again, and compare with the signature in the link (in constant time). Only a match reads the record; any edited character fails the comparison.
 
-**Storage and reading.** No URL or token is stored on the invoice or in the link table. Invoice get/list responses and webhooks compute `hosted_invoice_url` at read time: Stripe's URL from `metadata.stripe_hosted_invoice_url` if present; else, if the invoice has a live (unrevoked, unexpired) Flexprice link, `hosted_invoice.base_url` + "/" + the token signed at read time; else empty. Invoice list looks up live links for the page's invoices in one batch query. Link records remain the authority for expiry and revocation when a public endpoint is called. These checks are not cached. Issuing and revoking links are not recorded in the activity log.
+**Storage and reading.** No URL or token is stored on the invoice or in the link table. Invoice get/list responses and webhooks compute `hosted_invoice_url` at read time: Stripe's URL from `metadata.stripe_hosted_invoice_url` if present; else, if `hosted_invoice.base_url` is set and the invoice has a live (unrevoked, unexpired) Flexprice link, `hosted_invoice.base_url` + "/" + the token signed at read time; else empty. Invoice list looks up live links for the page's invoices in one batch query. Link records remain the authority for expiry and revocation when a public endpoint is called. These checks are not cached. Issuing and revoking links are not recorded in the activity log.
 
 Revoke acts on the link record, never on the signature: the signature only proves Flexprice issued the link, and the record says whether it still works. Revoke is internal only (the switch to Stripe).
 
@@ -469,12 +469,12 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 
 | Webhook | When | `hosted_invoice_url` |
 |---|---|---|
-| `invoice.update.finalized` | Invoice finalized | Computed at read time; Flexprice link until an integration hosted URL is received |
+| `invoice.update.finalized` | Invoice finalized | Computed at read time; Flexprice link unless the tenant syncs invoices to Stripe |
 | `invoice.sync.success` | Stripe sync completes | Stripe's hosted URL (from metadata) |
 
 | Config | Value |
 |---|---|
-| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. On-prem: the client's frontend host plus `/invoice`. The API layer reads it when returning links; links are this value, a slash and the token. |
+| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. On-prem: the client's frontend host plus `/invoice`. The API layer reads it when returning links; links are this value, a slash and the token. Empty (the default) returns no Flexprice link. |
 
 ### 9.5 Frontend
 
