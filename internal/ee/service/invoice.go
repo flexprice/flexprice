@@ -81,6 +81,8 @@ type InvoiceService interface {
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRealtimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error)
 	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
+	// WithHostedInvoiceURLs sets hosted_invoice_url on responses returned to tenants, customers and webhooks.
+	WithHostedInvoiceURLs(ctx context.Context, invoices ...*dto.InvoiceResponse) error
 	TriggerCommunication(ctx context.Context, id string) error
 	TriggerWebhook(ctx context.Context, invoiceID string, eventName types.WebhookEventName) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
@@ -921,12 +923,6 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response := dto.NewInvoiceResponse(inv)
 
-	hostedURLs, err := NewHostedInvoiceTokenService(s.ServiceParams).HostedInvoiceURLs(ctx, []*invoice.Invoice{inv})
-	if err != nil {
-		return nil, err
-	}
-	response.WithHostedInvoiceURL(hostedURLs[inv.ID])
-
 	if inv.InvoiceType == types.InvoiceTypeSubscription {
 		subscription, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
 		if err != nil {
@@ -1224,14 +1220,6 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 	for i, inv := range invoices {
 		items[i] = dto.NewInvoiceResponse(inv)
 		customerMap[inv.CustomerID] = nil
-	}
-
-	hostedURLs, err := NewHostedInvoiceTokenService(s.ServiceParams).HostedInvoiceURLs(ctx, invoices)
-	if err != nil {
-		return nil, err
-	}
-	for i, inv := range invoices {
-		items[i].WithHostedInvoiceURL(hostedURLs[inv.ID])
 	}
 
 	// Fetch customers for expansion. Drop empty IDs and skip when none remain —
@@ -4904,6 +4892,21 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 
 	s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, updatedInv.ID)
 	return dto.NewInvoiceResponse(updatedInv), nil
+}
+
+func (s *invoiceService) WithHostedInvoiceURLs(ctx context.Context, invoices ...*dto.InvoiceResponse) error {
+	if len(invoices) == 0 {
+		return nil
+	}
+	domainInvoices := lo.Map(invoices, func(r *dto.InvoiceResponse, _ int) *invoice.Invoice { return &r.Invoice })
+	urls, err := NewHostedInvoiceTokenService(s.ServiceParams).HostedInvoiceURLs(ctx, domainInvoices)
+	if err != nil {
+		return err
+	}
+	for _, r := range invoices {
+		r.WithHostedInvoiceURL(urls[r.ID])
+	}
+	return nil
 }
 
 func (s *invoiceService) TriggerCommunication(ctx context.Context, id string) error {

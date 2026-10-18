@@ -238,7 +238,14 @@ func (s *customerPortalService) GetInvoices(ctx context.Context, req dto.PortalP
 		QueryFilter: queryFilter,
 	}
 
-	return invoiceService.ListInvoices(ctx, filter)
+	resp, err := invoiceService.ListInvoices(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if err := invoiceService.WithHostedInvoiceURLs(ctx, resp.Items...); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // GetInvoice returns a specific invoice
@@ -266,6 +273,9 @@ func (s *customerPortalService) GetInvoice(ctx context.Context, invoiceID string
 			Mark(ierr.ErrNotFound)
 	}
 
+	if err := invoiceService.WithHostedInvoiceURLs(ctx, invoice); err != nil {
+		return nil, err
+	}
 	return invoice, nil
 }
 
