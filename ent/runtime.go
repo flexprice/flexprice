@@ -30,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -1180,6 +1181,39 @@ func init() {
 	groupDescEntityType := groupFields[2].Descriptor()
 	// group.DefaultEntityType holds the default value on creation for the entity_type field.
 	group.DefaultEntityType = groupDescEntityType.Default.(string)
+	hostedinvoicetokenMixin := schema.HostedInvoiceToken{}.Mixin()
+	hostedinvoicetokenMixinFields0 := hostedinvoicetokenMixin[0].Fields()
+	_ = hostedinvoicetokenMixinFields0
+	hostedinvoicetokenMixinFields1 := hostedinvoicetokenMixin[1].Fields()
+	_ = hostedinvoicetokenMixinFields1
+	hostedinvoicetokenFields := schema.HostedInvoiceToken{}.Fields()
+	_ = hostedinvoicetokenFields
+	// hostedinvoicetokenDescTenantID is the schema descriptor for tenant_id field.
+	hostedinvoicetokenDescTenantID := hostedinvoicetokenMixinFields0[0].Descriptor()
+	// hostedinvoicetoken.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	hostedinvoicetoken.TenantIDValidator = hostedinvoicetokenDescTenantID.Validators[0].(func(string) error)
+	// hostedinvoicetokenDescStatus is the schema descriptor for status field.
+	hostedinvoicetokenDescStatus := hostedinvoicetokenMixinFields0[1].Descriptor()
+	// hostedinvoicetoken.DefaultStatus holds the default value on creation for the status field.
+	hostedinvoicetoken.DefaultStatus = hostedinvoicetokenDescStatus.Default.(string)
+	// hostedinvoicetokenDescCreatedAt is the schema descriptor for created_at field.
+	hostedinvoicetokenDescCreatedAt := hostedinvoicetokenMixinFields0[2].Descriptor()
+	// hostedinvoicetoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	hostedinvoicetoken.DefaultCreatedAt = hostedinvoicetokenDescCreatedAt.Default.(func() time.Time)
+	// hostedinvoicetokenDescUpdatedAt is the schema descriptor for updated_at field.
+	hostedinvoicetokenDescUpdatedAt := hostedinvoicetokenMixinFields0[3].Descriptor()
+	// hostedinvoicetoken.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	hostedinvoicetoken.DefaultUpdatedAt = hostedinvoicetokenDescUpdatedAt.Default.(func() time.Time)
+	// hostedinvoicetoken.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	hostedinvoicetoken.UpdateDefaultUpdatedAt = hostedinvoicetokenDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// hostedinvoicetokenDescEnvironmentID is the schema descriptor for environment_id field.
+	hostedinvoicetokenDescEnvironmentID := hostedinvoicetokenMixinFields1[0].Descriptor()
+	// hostedinvoicetoken.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	hostedinvoicetoken.DefaultEnvironmentID = hostedinvoicetokenDescEnvironmentID.Default.(string)
+	// hostedinvoicetokenDescInvoiceID is the schema descriptor for invoice_id field.
+	hostedinvoicetokenDescInvoiceID := hostedinvoicetokenFields[1].Descriptor()
+	// hostedinvoicetoken.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	hostedinvoicetoken.InvoiceIDValidator = hostedinvoicetokenDescInvoiceID.Validators[0].(func(string) error)
 	incomingwebhookeventMixin := schema.IncomingWebhookEvent{}.Mixin()
 	incomingwebhookeventMixinFields0 := incomingwebhookeventMixin[0].Fields()
 	_ = incomingwebhookeventMixinFields0

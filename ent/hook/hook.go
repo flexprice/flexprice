@@ -309,6 +309,18 @@ func (f GroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMutation", m)
 }
 
+// The HostedInvoiceTokenFunc type is an adapter to allow the use of ordinary
+// function as HostedInvoiceToken mutator.
+type HostedInvoiceTokenFunc func(context.Context, *ent.HostedInvoiceTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f HostedInvoiceTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.HostedInvoiceTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HostedInvoiceTokenMutation", m)
+}
+
 // The IncomingWebhookEventFunc type is an adapter to allow the use of ordinary
 // function as IncomingWebhookEvent mutator.
 type IncomingWebhookEventFunc func(context.Context, *ent.IncomingWebhookEventMutation) (ent.Value, error)

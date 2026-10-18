@@ -36,6 +36,7 @@ import (
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -109,6 +110,7 @@ const (
 	TypeFXRate                   = "FXRate"
 	TypeFeature                  = "Feature"
 	TypeGroup                    = "Group"
+	TypeHostedInvoiceToken       = "HostedInvoiceToken"
 	TypeIncomingWebhookEvent     = "IncomingWebhookEvent"
 	TypeInvoice                  = "Invoice"
 	TypeInvoiceLineItem          = "InvoiceLineItem"
@@ -34166,6 +34168,903 @@ func (m *GroupMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *GroupMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Group edge %s", name)
+}
+
+// HostedInvoiceTokenMutation represents an operation that mutates the HostedInvoiceToken nodes in the graph.
+type HostedInvoiceTokenMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	tenant_id      *string
+	status         *string
+	created_at     *time.Time
+	updated_at     *time.Time
+	created_by     *string
+	updated_by     *string
+	environment_id *string
+	invoice_id     *string
+	expires_at     *time.Time
+	revoked_at     *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*HostedInvoiceToken, error)
+	predicates     []predicate.HostedInvoiceToken
+}
+
+var _ ent.Mutation = (*HostedInvoiceTokenMutation)(nil)
+
+// hostedinvoicetokenOption allows management of the mutation configuration using functional options.
+type hostedinvoicetokenOption func(*HostedInvoiceTokenMutation)
+
+// newHostedInvoiceTokenMutation creates new mutation for the HostedInvoiceToken entity.
+func newHostedInvoiceTokenMutation(c config, op Op, opts ...hostedinvoicetokenOption) *HostedInvoiceTokenMutation {
+	m := &HostedInvoiceTokenMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeHostedInvoiceToken,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withHostedInvoiceTokenID sets the ID field of the mutation.
+func withHostedInvoiceTokenID(id string) hostedinvoicetokenOption {
+	return func(m *HostedInvoiceTokenMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *HostedInvoiceToken
+		)
+		m.oldValue = func(ctx context.Context) (*HostedInvoiceToken, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().HostedInvoiceToken.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withHostedInvoiceToken sets the old HostedInvoiceToken of the mutation.
+func withHostedInvoiceToken(node *HostedInvoiceToken) hostedinvoicetokenOption {
+	return func(m *HostedInvoiceTokenMutation) {
+		m.oldValue = func(context.Context) (*HostedInvoiceToken, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m HostedInvoiceTokenMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m HostedInvoiceTokenMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of HostedInvoiceToken entities.
+func (m *HostedInvoiceTokenMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *HostedInvoiceTokenMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *HostedInvoiceTokenMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().HostedInvoiceToken.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *HostedInvoiceTokenMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *HostedInvoiceTokenMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *HostedInvoiceTokenMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *HostedInvoiceTokenMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *HostedInvoiceTokenMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *HostedInvoiceTokenMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *HostedInvoiceTokenMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *HostedInvoiceTokenMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *HostedInvoiceTokenMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *HostedInvoiceTokenMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *HostedInvoiceTokenMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *HostedInvoiceTokenMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *HostedInvoiceTokenMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *HostedInvoiceTokenMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *HostedInvoiceTokenMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[hostedinvoicetoken.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[hostedinvoicetoken.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *HostedInvoiceTokenMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, hostedinvoicetoken.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *HostedInvoiceTokenMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *HostedInvoiceTokenMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *HostedInvoiceTokenMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[hostedinvoicetoken.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[hostedinvoicetoken.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *HostedInvoiceTokenMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, hostedinvoicetoken.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *HostedInvoiceTokenMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *HostedInvoiceTokenMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *HostedInvoiceTokenMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[hostedinvoicetoken.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[hostedinvoicetoken.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *HostedInvoiceTokenMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, hostedinvoicetoken.FieldEnvironmentID)
+}
+
+// SetInvoiceID sets the "invoice_id" field.
+func (m *HostedInvoiceTokenMutation) SetInvoiceID(s string) {
+	m.invoice_id = &s
+}
+
+// InvoiceID returns the value of the "invoice_id" field in the mutation.
+func (m *HostedInvoiceTokenMutation) InvoiceID() (r string, exists bool) {
+	v := m.invoice_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceID returns the old "invoice_id" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldInvoiceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceID: %w", err)
+	}
+	return oldValue.InvoiceID, nil
+}
+
+// ResetInvoiceID resets all changes to the "invoice_id" field.
+func (m *HostedInvoiceTokenMutation) ResetInvoiceID() {
+	m.invoice_id = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *HostedInvoiceTokenMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *HostedInvoiceTokenMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *HostedInvoiceTokenMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetRevokedAt sets the "revoked_at" field.
+func (m *HostedInvoiceTokenMutation) SetRevokedAt(t time.Time) {
+	m.revoked_at = &t
+}
+
+// RevokedAt returns the value of the "revoked_at" field in the mutation.
+func (m *HostedInvoiceTokenMutation) RevokedAt() (r time.Time, exists bool) {
+	v := m.revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedAt returns the old "revoked_at" field's value of the HostedInvoiceToken entity.
+// If the HostedInvoiceToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *HostedInvoiceTokenMutation) OldRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedAt: %w", err)
+	}
+	return oldValue.RevokedAt, nil
+}
+
+// ClearRevokedAt clears the value of the "revoked_at" field.
+func (m *HostedInvoiceTokenMutation) ClearRevokedAt() {
+	m.revoked_at = nil
+	m.clearedFields[hostedinvoicetoken.FieldRevokedAt] = struct{}{}
+}
+
+// RevokedAtCleared returns if the "revoked_at" field was cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) RevokedAtCleared() bool {
+	_, ok := m.clearedFields[hostedinvoicetoken.FieldRevokedAt]
+	return ok
+}
+
+// ResetRevokedAt resets all changes to the "revoked_at" field.
+func (m *HostedInvoiceTokenMutation) ResetRevokedAt() {
+	m.revoked_at = nil
+	delete(m.clearedFields, hostedinvoicetoken.FieldRevokedAt)
+}
+
+// Where appends a list predicates to the HostedInvoiceTokenMutation builder.
+func (m *HostedInvoiceTokenMutation) Where(ps ...predicate.HostedInvoiceToken) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the HostedInvoiceTokenMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *HostedInvoiceTokenMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.HostedInvoiceToken, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *HostedInvoiceTokenMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *HostedInvoiceTokenMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (HostedInvoiceToken).
+func (m *HostedInvoiceTokenMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *HostedInvoiceTokenMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.tenant_id != nil {
+		fields = append(fields, hostedinvoicetoken.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, hostedinvoicetoken.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, hostedinvoicetoken.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, hostedinvoicetoken.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, hostedinvoicetoken.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, hostedinvoicetoken.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, hostedinvoicetoken.FieldEnvironmentID)
+	}
+	if m.invoice_id != nil {
+		fields = append(fields, hostedinvoicetoken.FieldInvoiceID)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, hostedinvoicetoken.FieldExpiresAt)
+	}
+	if m.revoked_at != nil {
+		fields = append(fields, hostedinvoicetoken.FieldRevokedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *HostedInvoiceTokenMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case hostedinvoicetoken.FieldTenantID:
+		return m.TenantID()
+	case hostedinvoicetoken.FieldStatus:
+		return m.Status()
+	case hostedinvoicetoken.FieldCreatedAt:
+		return m.CreatedAt()
+	case hostedinvoicetoken.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case hostedinvoicetoken.FieldCreatedBy:
+		return m.CreatedBy()
+	case hostedinvoicetoken.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case hostedinvoicetoken.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case hostedinvoicetoken.FieldInvoiceID:
+		return m.InvoiceID()
+	case hostedinvoicetoken.FieldExpiresAt:
+		return m.ExpiresAt()
+	case hostedinvoicetoken.FieldRevokedAt:
+		return m.RevokedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *HostedInvoiceTokenMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case hostedinvoicetoken.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case hostedinvoicetoken.FieldStatus:
+		return m.OldStatus(ctx)
+	case hostedinvoicetoken.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case hostedinvoicetoken.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case hostedinvoicetoken.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case hostedinvoicetoken.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case hostedinvoicetoken.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case hostedinvoicetoken.FieldInvoiceID:
+		return m.OldInvoiceID(ctx)
+	case hostedinvoicetoken.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case hostedinvoicetoken.FieldRevokedAt:
+		return m.OldRevokedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown HostedInvoiceToken field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HostedInvoiceTokenMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case hostedinvoicetoken.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case hostedinvoicetoken.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case hostedinvoicetoken.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case hostedinvoicetoken.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case hostedinvoicetoken.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case hostedinvoicetoken.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case hostedinvoicetoken.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case hostedinvoicetoken.FieldInvoiceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceID(v)
+		return nil
+	case hostedinvoicetoken.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case hostedinvoicetoken.FieldRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown HostedInvoiceToken field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *HostedInvoiceTokenMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *HostedInvoiceTokenMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *HostedInvoiceTokenMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown HostedInvoiceToken numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *HostedInvoiceTokenMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(hostedinvoicetoken.FieldCreatedBy) {
+		fields = append(fields, hostedinvoicetoken.FieldCreatedBy)
+	}
+	if m.FieldCleared(hostedinvoicetoken.FieldUpdatedBy) {
+		fields = append(fields, hostedinvoicetoken.FieldUpdatedBy)
+	}
+	if m.FieldCleared(hostedinvoicetoken.FieldEnvironmentID) {
+		fields = append(fields, hostedinvoicetoken.FieldEnvironmentID)
+	}
+	if m.FieldCleared(hostedinvoicetoken.FieldRevokedAt) {
+		fields = append(fields, hostedinvoicetoken.FieldRevokedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *HostedInvoiceTokenMutation) ClearField(name string) error {
+	switch name {
+	case hostedinvoicetoken.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case hostedinvoicetoken.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case hostedinvoicetoken.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case hostedinvoicetoken.FieldRevokedAt:
+		m.ClearRevokedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown HostedInvoiceToken nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *HostedInvoiceTokenMutation) ResetField(name string) error {
+	switch name {
+	case hostedinvoicetoken.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case hostedinvoicetoken.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case hostedinvoicetoken.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case hostedinvoicetoken.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case hostedinvoicetoken.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case hostedinvoicetoken.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case hostedinvoicetoken.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case hostedinvoicetoken.FieldInvoiceID:
+		m.ResetInvoiceID()
+		return nil
+	case hostedinvoicetoken.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case hostedinvoicetoken.FieldRevokedAt:
+		m.ResetRevokedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown HostedInvoiceToken field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *HostedInvoiceTokenMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *HostedInvoiceTokenMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *HostedInvoiceTokenMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *HostedInvoiceTokenMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *HostedInvoiceTokenMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *HostedInvoiceTokenMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown HostedInvoiceToken unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *HostedInvoiceTokenMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown HostedInvoiceToken edge %s", name)
 }
 
 // IncomingWebhookEventMutation represents an operation that mutates the IncomingWebhookEvent nodes in the graph.

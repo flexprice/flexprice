@@ -64,6 +64,8 @@ type Tx struct {
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// HostedInvoiceToken is the client for interacting with the HostedInvoiceToken builders.
+	HostedInvoiceToken *HostedInvoiceTokenClient
 	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
 	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
@@ -284,6 +286,7 @@ func (tx *Tx) init() {
 	tx.FXRate = NewFXRateClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.HostedInvoiceToken = NewHostedInvoiceTokenClient(tx.config)
 	tx.IncomingWebhookEvent = NewIncomingWebhookEventClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)

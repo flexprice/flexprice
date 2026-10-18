@@ -81,6 +81,9 @@ type Feature func(*sql.Selector)
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
+// HostedInvoiceToken is the predicate function for hostedinvoicetoken builders.
+type HostedInvoiceToken func(*sql.Selector)
+
 // IncomingWebhookEvent is the predicate function for incomingwebhookevent builders.
 type IncomingWebhookEvent func(*sql.Selector)
 
