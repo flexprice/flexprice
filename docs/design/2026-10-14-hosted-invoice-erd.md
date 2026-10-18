@@ -256,9 +256,9 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
-  INVOICES ||--o{ HOSTED_INVOICE_LINKS : "has"
-  HOSTED_INVOICE_LINKS {
-    string id PK "hil_..."
+  INVOICES ||--o{ HOSTED_INVOICE_TOKENS : "has"
+  HOSTED_INVOICE_TOKENS {
+    string id PK "hit_..."
     string tenant_id
     string environment_id
     string invoice_id FK
@@ -295,7 +295,7 @@ Indexes:
 
 | Column | Value |
 |---|---|
-| `id` | `hil_01JAB3K7Q9X2M4N8P6R5T1V0WZ` |
+| `id` | `hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ` |
 | `tenant_id` | `tenant_01J9ZK2W8Q4R6T` |
 | `environment_id` | `env_01J9ZK3A1B2C3D` |
 | `invoice_id` | `inv_01JAB3K5M2N4P6Q8` |
@@ -306,14 +306,14 @@ Indexes:
 
 The link is built from the record when the API returns it; nothing is stored:
 
-1. Input: the bare link id, `hil_01JAB3K7Q9X2M4N8P6R5T1V0WZ`.
+1. Input: the bare link id, `hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ`.
 2. Signature: HMAC-SHA256 of the input with the first configured key, base64url without padding (43 characters): `<signature>`.
 3. Token: record id, a dot, the signature.
 4. Link: the deployment's base URL, a slash, the token.
 
 | Deployment | Base URL | Link |
 |---|---|---|
-| Cloud, Canada | `https://invoice.flexprice.io/ca` | `https://invoice.flexprice.io/ca/hil_01JAB3K7Q9X2M4N8P6R5T1V0WZ.<signature>` |
+| Cloud, Canada | `https://invoice.flexprice.io/ca` | `https://invoice.flexprice.io/ca/hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ.<signature>` |
 | Cloud, US | `https://invoice.flexprice.io/us` | `https://invoice.flexprice.io/us/<token>` |
 | Cloud, India | `https://invoice.flexprice.io/in` | `https://invoice.flexprice.io/in/<token>` |
 | On-prem | the client's frontend host, e.g. `https://billing.example.com/invoice` | `https://billing.example.com/invoice/<token>` |
