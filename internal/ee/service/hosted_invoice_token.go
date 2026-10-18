@@ -19,6 +19,12 @@ type HostedInvoiceTokenService interface {
 
 	// Revoke revokes the invoice's current token if it has one.
 	Revoke(ctx context.Context, invoiceID string) error
+
+	// IssueOnFinalize issues a token for a just-finalized invoice unless an integration hosts it.
+	IssueOnFinalize(ctx context.Context, inv *invoice.Invoice) error
+
+	// RecalculateExpiry resets the current token's expiry from the invoice's due date; no current token is a no-op.
+	RecalculateExpiry(ctx context.Context, inv *invoice.Invoice) error
 }
 
 type hostedInvoiceTokenService struct {
@@ -86,6 +92,51 @@ func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoic
 		return nil, err
 	}
 	return token, nil
+}
+
+// shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
+func (s *hostedInvoiceTokenService) shouldIssue(ctx context.Context, _ *invoice.Invoice) (bool, error) {
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !conn.IsInvoiceOutboundEnabled(), nil
+}
+
+func (s *hostedInvoiceTokenService) IssueOnFinalize(ctx context.Context, inv *invoice.Invoice) error {
+	issue, err := s.shouldIssue(ctx, inv)
+	if err != nil {
+		return err
+	}
+	if !issue {
+		s.Logger.Info(ctx, "skipped hosted invoice token, invoice syncs to an integration", "invoice_id", inv.ID)
+		return nil
+	}
+	_, err = s.Issue(ctx, inv)
+	return err
+}
+
+func (s *hostedInvoiceTokenService) RecalculateExpiry(ctx context.Context, inv *invoice.Invoice) error {
+	token, err := s.HostedInvoiceTokenRepo.GetCurrentByInvoiceID(ctx, inv.ID)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	expiresAt := hostedinvoicetoken.CalculateExpiry(inv.DueDate, lo.FromPtrOr(inv.FinalizedAt, token.CreatedAt), token.CreatedAt)
+	if expiresAt.Equal(token.ExpiresAt) {
+		return nil
+	}
+	if err := s.HostedInvoiceTokenRepo.UpdateExpiresAt(ctx, inv.ID, expiresAt); err != nil {
+		return err
+	}
+	s.Logger.Info(ctx, "recalculated hosted invoice token expiry", "token_id", token.ID, "invoice_id", inv.ID)
+	return nil
 }
 
 // shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
