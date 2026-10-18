@@ -810,6 +810,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 		return err
 	}
 	if finalizedNow {
+		if err := NewHostedInvoiceTokenService(p.ServiceParams).IssueOnFinalize(ctx, invoice); err != nil {
+			return err
+		}
 		recordInvoiceTransition(ctx, invoice)
 	}
 

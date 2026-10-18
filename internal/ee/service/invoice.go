@@ -1498,6 +1498,9 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
 		}
+		if err := NewHostedInvoiceTokenService(s.ServiceParams).IssueOnFinalize(txCtx, lockedInv); err != nil {
+			return err
+		}
 
 		// Update the caller's reference so downstream code sees the finalized state
 		*inv = *lockedInv
@@ -4863,6 +4866,11 @@ func (s *invoiceService) UpdateInvoice(ctx context.Context, id string, req dto.U
 
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 			return err
+		}
+		if req.DueDate != nil && inv.InvoiceStatus == types.InvoiceStatusFinalized {
+			if err := NewHostedInvoiceTokenService(s.ServiceParams).RecalculateExpiry(txCtx, inv); err != nil {
+				return err
+			}
 		}
 		updatedInv = inv
 		return nil
