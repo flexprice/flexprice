@@ -570,8 +570,7 @@ func (s *billingService) adjustMeterUsageEntitlement(
 		if err != nil {
 			return decimal.Zero, err
 		}
-		periodUsage := totalResult.TotalValue.Sub(prevResult.TotalValue)
-		adjusted = decimal.Max(periodUsage.Sub(allowed), decimal.Zero)
+		adjusted = cumulativeOverage(totalResult.TotalValue, prevResult.TotalValue, allowed)
 
 	default:
 		adjusted = decimal.Max(quantity.Sub(allowed), decimal.Zero)
@@ -888,4 +887,15 @@ func (s *billingService) calculateAllMeterUsageCharges(
 		TotalAmount:  fixedResult.TotalAmount.Add(usageTotal),
 		Currency:     sub.Currency,
 	}, nil
+}
+
+// cumulativeOverage bills a NEVER allowance once over the subscription rather than
+// once per period. total and prev are usage measured from the subscription start to
+// the end and the start of this period; the difference between what each owes is what
+// this period adds. A customer who has used 3 of a 2 GB allowance is billed 1 now and
+// the whole of the next period's usage, instead of 2 GB free every period.
+func cumulativeOverage(total, prev, allowed decimal.Decimal) decimal.Decimal {
+	billedToDate := decimal.Max(total.Sub(allowed), decimal.Zero)
+	billedBefore := decimal.Max(prev.Sub(allowed), decimal.Zero)
+	return decimal.Max(billedToDate.Sub(billedBefore), decimal.Zero)
 }
