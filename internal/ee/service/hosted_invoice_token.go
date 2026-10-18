@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -91,9 +92,7 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 		pending = append(pending, inv.ID)
 	}
 
-	// An empty base URL means this deployment does not serve the hosted invoice page.
-	baseURL := strings.TrimRight(s.Config.HostedInvoice.BaseURL, "/")
-	if baseURL == "" || len(pending) == 0 {
+	if s.Config.HostedInvoice.BaseURL == "" || len(pending) == 0 {
 		return urls, nil
 	}
 
@@ -101,14 +100,22 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 	if err != nil {
 		return nil, err
 	}
-	signer := auth.NewHostedInvoiceSigner(s.Config)
 	now := time.Now().UTC()
 	for _, token := range tokens {
 		if token.IsActive(now) {
-			urls[token.InvoiceID] = baseURL + "/" + signer.Sign(token.ID)
+			urls[token.InvoiceID] = hostedInvoiceURL(s.Config, token.ID)
 		}
 	}
 	return urls, nil
+}
+
+// hostedInvoiceURL builds the hosted invoice link for a token; empty when the deployment does not serve the page.
+func hostedInvoiceURL(cfg *config.Configuration, tokenID string) string {
+	baseURL := strings.TrimRight(cfg.HostedInvoice.BaseURL, "/")
+	if baseURL == "" {
+		return ""
+	}
+	return baseURL + "/" + auth.NewHostedInvoiceSigner(cfg).Sign(tokenID)
 }
 
 func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error) {

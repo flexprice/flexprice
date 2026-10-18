@@ -41,6 +41,8 @@ type InvoiceService interface {
 	interfaces.InvoiceService
 
 	// Additional methods specific to this service
+	// CheckInvoicePayable returns an invalid-operation error when the customer cannot pay the invoice now.
+	CheckInvoicePayable(ctx context.Context, inv *dto.InvoiceResponse) error
 	CreateOneOffInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateEmptyDraftInvoice(ctx context.Context, req dto.CreateDraftInvoiceRequest) (*dto.InvoiceResponse, error)
 	CreateComputedDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, bool, error)
@@ -5934,4 +5936,80 @@ func mergeJSONArrayMetadata(existing string, newEntriesJSON string) (string, err
 		return "", ierr.WithError(err).WithHint("Failed to marshal merged discount metadata").Mark(ierr.ErrValidation)
 	}
 	return string(merged), nil
+}
+
+func (s *invoiceService) CheckInvoicePayable(ctx context.Context, inv *dto.InvoiceResponse) error {
+	if err := validateInvoiceIsPayable(inv); err != nil {
+		return err
+	}
+	return s.shouldAllowToPayInvoice(ctx, inv)
+}
+
+func validateInvoiceIsPayable(inv *dto.InvoiceResponse) error {
+	if inv.InvoiceStatus == types.InvoiceStatusDraft {
+		return ierr.NewError("invoice is not finalized").
+			WithHint("This invoice cannot be paid yet").
+			Mark(ierr.ErrInvalidOperation)
+	}
+	if inv.InvoiceStatus == types.InvoiceStatusVoided {
+		return ierr.NewError("invoice is voided").
+			WithHint("This invoice cannot be paid").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	switch inv.PaymentStatus {
+	case types.PaymentStatusPending, types.PaymentStatusFailed:
+	default:
+		return ierr.NewError("invoice is not awaiting payment").
+			WithHintf("This invoice is %s", inv.PaymentStatus).
+			WithReportableDetails(map[string]any{"payment_status": inv.PaymentStatus}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("invoice has nothing left to pay").
+			WithHint("This invoice is already settled").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return nil
+}
+
+// shouldAllowToPayInvoice blocks only the case that actually breaks: an
+// invoice whose payment is supposed to activate a subscription still sitting
+// unactivated. The link path settles the invoice but skips
+// HandleIncompleteSubscriptionPayment, so the money would be taken and the
+// subscription left behind.
+//
+// Deliberately narrow. An already-active subscription makes that hook a no-op
+// (activateIncompleteSubscription returns early unless the status is incomplete),
+// so those invoices stay payable, as do renewals and one-off invoices.
+//
+// TODO: delete once ReconcileInvoicePayment delegates to ReconcilePaymentStatus.
+func (s *invoiceService) shouldAllowToPayInvoice(ctx context.Context, inv *dto.InvoiceResponse) error {
+	reason := types.InvoiceBillingReason(inv.BillingReason)
+	if inv.SubscriptionID == nil || !reason.IsFirstSubscriptionOpenInvoiceReason() {
+		return nil
+	}
+
+	sub, err := s.SubRepo.Get(ctx, lo.FromPtr(inv.SubscriptionID))
+	if err != nil {
+		return err
+	}
+
+	activationPending := sub.SubscriptionStatus == types.SubscriptionStatusIncomplete
+	if reason == types.InvoiceBillingReasonSubscriptionTrialEnd {
+		activationPending = sub.SubscriptionStatus != types.SubscriptionStatusActive
+	}
+	if !activationPending {
+		return nil
+	}
+
+	return ierr.NewError("this invoice cannot be paid from the portal yet").
+		WithHint("Contact support to activate this subscription").
+		WithReportableDetails(map[string]any{
+			"subscription_id":     lo.FromPtr(inv.SubscriptionID),
+			"subscription_status": sub.SubscriptionStatus,
+		}).
+		Mark(ierr.ErrInvalidOperation)
 }

@@ -79,6 +79,7 @@ type Handlers struct {
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
 	SelfBilling    *v1.SelfBillingHandler
+	HostedInvoice  *v1.HostedInvoiceHandler
 }
 
 func NewRouter(
@@ -92,6 +93,7 @@ func NewRouter(
 	webhookRequestRepo domainIncomingWebhookEvent.Repository,
 	environmentRepo domainEnvironment.Repository,
 	userRepo domainUser.Repository,
+	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -713,6 +715,15 @@ func NewRouter(
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
 			webhookGroup.POST("/retry", write(types.EntityWebhook, types.ActionWrite), handlers.Webhook.RetryOutboundWebhook)
 		}
+	}
+
+	// Hosted invoice page: the token is the only credential, and the middleware scopes every request to its invoice.
+	hostedInvoiceAPI := router.Group("/public/v1")
+	hostedInvoiceAPI.Use(middleware.ErrorHandler(), middleware.HostedInvoiceTokenMiddleware(hostedInvoiceService))
+	{
+		hostedInvoiceAPI.GET("/invoices", handlers.HostedInvoice.GetInvoice)
+		hostedInvoiceAPI.GET("/invoices/download", handlers.HostedInvoice.GetInvoicePDF)
+		hostedInvoiceAPI.POST("/invoices/pay", handlers.HostedInvoice.PayInvoice)
 	}
 
 	// Customer Dashboard - Customer-facing APIs (requires dashboard token)
