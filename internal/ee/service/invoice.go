@@ -2007,6 +2007,15 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		"stripe_invoice_id", syncResponse.StripeInvoiceID,
 		"status", syncResponse.Status)
 
+	// Stripe now hosts the invoice, so the Flexprice link stops working.
+	if syncResponse.InvoiceURL != "" {
+		if err := NewHostedInvoiceTokenService(s.ServiceParams).Revoke(ctx, inv.ID); err != nil {
+			s.Logger.Error(ctx, "failed to revoke hosted invoice token after Stripe sync",
+				"error", err,
+				"invoice_id", inv.ID)
+		}
+	}
+
 	return nil
 }
 
