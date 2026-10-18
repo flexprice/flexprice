@@ -1,6 +1,6 @@
 # Hosted Invoice — Design ERD
 
-Status: In review · Owner: aghijap · Last updated: 2026-10-16
+Status: In review · Owner: aghijap · Last updated: 2026-10-18
 Links: <ticket> · <related ERDs / PRs>
 
 ## 1. Requirement
@@ -383,12 +383,14 @@ sequenceDiagram
 
 **Public endpoints.** The hosted page calls these on its own region's API. Each request sends the existing `<link_id>.<signature>` token in `X-Session-Token`; no API key or customer-portal session is needed. The customer-facing URL still contains the token, but API paths do not.
 
+All three live under `/public/v1`, a prefix used only for endpoints reached without an API key, so the edge and ingress can apply their own rate limits to it with one path rule.
+
 ```http
-GET /v1/hosted-invoice
+GET /public/v1/invoices
 X-Session-Token: <link_id>.<signature>
 ```
 
-The view, PDF and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. Observability records only `link_id`; the token header and signatures in customer-facing URLs are redacted as specified in §10. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
+The view, download and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. Observability records only `link_id`; the token header and signatures in customer-facing URLs are redacted as specified in §10. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
 
 Errors shared by all three:
 
@@ -397,7 +399,7 @@ Errors shared by all three:
 | Missing token header, malformed token or signature mismatch | 404 | `not_found` | "This link is not valid." |
 | Link revoked or expired, or tenant suspended | 404 | `not_found` | "This link is no longer valid, contact Acme Ltd." |
 
-**`GET /v1/hosted-invoice`.** Everything the page shows.
+**`GET /public/v1/invoices`.** Everything the page shows.
 
 ```json
 {
@@ -431,7 +433,7 @@ Errors shared by all three:
 - `payments` lists the invoice's payments with only the fields above; gateway payloads and internal ids are left out.
 - `pay.enabled` follows FR-10. `pay.gateways` lists the tenant's usable gateways (connected and able to create payment links) in alphabetical order. The Pay button sends the first one, matching the customer portal.
 
-**`GET /v1/hosted-invoice/pdf`.** Same as the customer portal's PDF endpoint.
+**`GET /public/v1/invoices/download`.** Same as the customer portal's PDF endpoint.
 
 ```json
 { "presigned_url": "https://<storage>/…/INV-0042.pdf?X-Amz-Expires=3600&…" }
@@ -439,7 +441,7 @@ Errors shared by all three:
 
 The download URL is created on each call and lasts an hour; the page opens it.
 
-**`POST /v1/hosted-invoice/pay`.** Same request and response as customer portal pay.
+**`POST /public/v1/invoices/pay`.** Same request and response as customer portal pay.
 
 ```json
 {
@@ -496,13 +498,13 @@ sequenceDiagram
   participant G as Payment gateway
 
   Cu->>P: Open the link
-  P->>B: GET /v1/hosted-invoice with X-Session-Token
+  P->>B: GET /public/v1/invoices with X-Session-Token
   B->>B: Check signature, read the link record
   B->>B: Check revoked, expiry and tenant status
   B->>B: Read invoice, payments and usable gateways (scoped)
   B-->>P: Invoice, tenant, payments, Pay info
   Cu->>P: Pay
-  P->>B: POST /v1/hosted-invoice/pay with X-Session-Token, gateway and return URLs
+  P->>B: POST /public/v1/invoices/pay with X-Session-Token, gateway and return URLs
   B->>B: Validate hosted link again through shared middleware
   B->>B: Check the invoice is payable and the gateway usable
   B->>G: Create a payment link for the amount remaining (or reuse an open one)
@@ -511,7 +513,7 @@ sequenceDiagram
   Cu->>G: Pay
   G->>B: Payment webhook updates the payment and invoice
   G-->>P: Return to the hosted link
-  P->>B: GET /v1/hosted-invoice with X-Session-Token again
+  P->>B: GET /public/v1/invoices with X-Session-Token again
   B-->>P: Paid, or processing if the webhook has not arrived yet
 ```
 
@@ -531,7 +533,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 
 ### 9.5 Frontend
 
-**Entry point.** A separate invoice-only entry point of the frontend app at `/invoice/:token`. It loads no dashboard shell and no login. It uses relative asset paths so it works behind the edge router's `/<region>/` prefix, and calls the region's API that the deployment is built with. The page extracts the signed token from its URL and sends it in `X-Session-Token` on every view, PDF and pay request. The page sets `referrer: no-referrer` and `robots: noindex`.
+**Entry point.** A separate invoice-only entry point of the frontend app at `/invoice/:token`. It loads no dashboard shell and no login. It uses relative asset paths so it works behind the edge router's `/<region>/` prefix, and calls the region's API that the deployment is built with. The page extracts the signed token from its URL and sends it in `X-Session-Token` on every view, download and pay request. The page sets `referrer: no-referrer` and `robots: noindex`.
 
 **States.**
 
@@ -547,7 +549,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 
 **Actions.**
 - Pay: calls pay with `pay.gateways[0]` and the current URL, then redirects to `payment_action.url`. Returning from the gateway reloads the invoice.
-- Download: calls the PDF endpoint and opens `presigned_url`.
+- Download: calls the download endpoint and opens `presigned_url`.
 
 ## 10. Cross-cutting concerns
 <!-- erd:locked -->
