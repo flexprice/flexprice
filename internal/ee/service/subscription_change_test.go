@@ -66,6 +66,7 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
 		TenantRepo:                   s.GetStores().TenantRepo,
 		InvoiceRepo:                  s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo:       s.GetStores().HostedInvoiceTokenRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EntitlementGrantRepo:         s.GetStores().EntitlementGrantRepo,

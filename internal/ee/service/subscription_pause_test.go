@@ -73,6 +73,7 @@ func (s *SubscriptionPauseSuite) SetupTest() {
 		MeterUsageRepo:               stores.MeterUsageRepo,
 		CustomerRepo:                 stores.CustomerRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
+		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
 		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
