@@ -285,7 +285,7 @@ Indexes:
 - `invoice_id` unique where `revoked_at` is empty: at most one live link per invoice, enforced by the database.
 
 **Lifecycle**
-- **Issue:** when an invoice is finalized without an integration hosted URL, a link row is inserted in the same transaction as finalization; nothing is written to the invoice.
+- **Issue:** when an invoice is finalized, a link row is inserted in the same transaction as finalization, unless the tenant syncs invoices to Stripe (invoice outbound sync on the Stripe connection); nothing is written to the invoice.
 - **Backfill:** existing finalized invoices receive hosted links under FR-21. Flexprice links retain the normal expiry in NFR-2, calculated from the original due date or finalization; backfilling does not extend it, so an older invoice may receive an already-expired link. Stripe links follow the provider’s existing rules.
 - **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update, within the link's `created_at` + 120 days cap; this is how a tenant extends an expired link while refresh is deferred.
 - **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url` and revoke any unrevoked Flexprice link in the same transaction. Repeated delivery is idempotent. No URL is written.
