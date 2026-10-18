@@ -69,6 +69,7 @@ type Configuration struct {
 	Activity               ActivityConfig               `mapstructure:"activity" validate:"omitempty"`
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
+	HostedInvoice          HostedInvoiceConfig          `mapstructure:"hosted_invoice" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
@@ -1156,6 +1157,11 @@ type EmailConfig struct {
 
 type CheckoutConfig struct {
 	BaseURL string `mapstructure:"base_url" validate:"required,url"`
+}
+
+// HostedInvoiceConfig holds the hosted invoice page base; empty returns no Flexprice hosted links.
+type HostedInvoiceConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"omitempty,url"`
 }
 
 type CustomerPortalConfig struct {

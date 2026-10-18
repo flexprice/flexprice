@@ -921,6 +921,12 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response := dto.NewInvoiceResponse(inv)
 
+	hostedURLs, err := NewHostedInvoiceTokenService(s.ServiceParams).HostedInvoiceURLs(ctx, []*invoice.Invoice{inv})
+	if err != nil {
+		return nil, err
+	}
+	response.WithHostedInvoiceURL(hostedURLs[inv.ID])
+
 	if inv.InvoiceType == types.InvoiceTypeSubscription {
 		subscription, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
 		if err != nil {
@@ -1218,6 +1224,14 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 	for i, inv := range invoices {
 		items[i] = dto.NewInvoiceResponse(inv)
 		customerMap[inv.CustomerID] = nil
+	}
+
+	hostedURLs, err := NewHostedInvoiceTokenService(s.ServiceParams).HostedInvoiceURLs(ctx, invoices)
+	if err != nil {
+		return nil, err
+	}
+	for i, inv := range invoices {
+		items[i].WithHostedInvoiceURL(hostedURLs[inv.ID])
 	}
 
 	// Fetch customers for expansion. Drop empty IDs and skip when none remain —

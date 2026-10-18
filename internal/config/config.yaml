@@ -663,6 +663,10 @@ onboarding_events:
 checkout:
   base_url: ""
 
+# Hosted invoice page base; links are this value, a slash and the token. Empty returns no Flexprice link.
+hosted_invoice:
+  base_url: ""
+
 onboarding:
   default_tenant_name: "Flexprice"
 
