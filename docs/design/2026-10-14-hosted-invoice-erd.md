@@ -250,7 +250,7 @@ sequenceDiagram
 - The page shows the customer's details, the tenant's line items and prices, payment history, and can start a payment.
 - So the token must be impossible to guess, must not leak, and must stop working once expired or revoked.
 
-**Token.** The token is `<link id>.<signature>`, where the signature is the base64url HMAC-SHA256 of the bare link id. The signer takes a list of keys: it signs with the first and verifies against each. Today the list holds the deployment's auth secret, the key that already signs customer-portal and checkout tokens; a dedicated hosted-invoice key or a rotation grace period is a config change. The token is signed when the API returns the link. No URL or token is stored in the database, so database readers cannot use it. Rotating the auth secret changes every link's signature: the API returns new working links immediately, and links already sent stop working.
+**Token.** The token is `<link id>.<signature>`, where the signature is the base64url HMAC-SHA256 of the bare link id. It is signed with the deployment's auth secret, the key that already signs customer-portal and checkout tokens. The token is signed when the API returns the link. No URL or token is stored in the database, so database readers cannot use it.
 
 **Storage.** Hosted links live in their own table, one row per link ever issued. A replaced or revoked link keeps its row, so opening an old link still identifies the tenant and can show "This link is no longer valid, contact <tenant name>".
 
@@ -307,7 +307,7 @@ Indexes:
 The link is built from the record when the API returns it; nothing is stored:
 
 1. Input: the bare link id, `hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ`.
-2. Signature: HMAC-SHA256 of the input with the first configured key, base64url without padding (43 characters): `<signature>`.
+2. Signature: HMAC-SHA256 of the input with the deployment's auth secret, base64url without padding (43 characters): `<signature>`.
 3. Token: record id, a dot, the signature.
 4. Link: the deployment's base URL, a slash, the token.
 
@@ -318,7 +318,7 @@ The link is built from the record when the API returns it; nothing is stored:
 | Cloud, India | `https://invoice.flexprice.io/in` | `https://invoice.flexprice.io/in/<token>` |
 | On-prem | the client's frontend host, e.g. `https://billing.example.com/invoice` | `https://billing.example.com/invoice/<token>` |
 
-Opening the link reverses the steps: split the token at the dot, sign the record id again with each configured key, and compare with the signature in the link (in constant time). Only a match reads the record; any edited character fails the comparison.
+Opening the link reverses the steps: split the token at the dot, sign the record id again, and compare with the signature in the link (in constant time). Only a match reads the record; any edited character fails the comparison.
 
 **Storage and reading.** No URL or token is stored on the invoice or in the link table. Invoice get/list responses and webhooks compute `hosted_invoice_url` at read time: Stripe's URL from `metadata.stripe_hosted_invoice_url` if present; else, if the invoice has a live (unrevoked, unexpired) Flexprice link, `hosted_invoice.base_url` + "/" + the token signed at read time; else empty. Invoice list looks up live links for the page's invoices in one batch query. Link records remain the authority for expiry and revocation when a public endpoint is called. These checks are not cached. Issuing and revoking links are not recorded in the activity log.
 
@@ -520,7 +520,6 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|
 | No rate limiting on the public endpoints, so Pay could be used for card testing | Low / Medium | Gateways' own card-testing defences; rate limiting is future scope |
-| Rotating the auth secret changes every link's signature: the API returns new working links immediately, but links already sent stop working | Low / High | The key list allows a grace period or a dedicated key later; no rotation planned |
 | Razorpay and Nomod payment links ignore the return URLs (existing bug), so the customer may not come back to the page after paying | Medium / Low | Existing bug, fixed separately |
 | A failed Razorpay autopay is treated as already synced (existing bug), so Pay may get no payment link for that invoice | Low / Medium | Existing bug, fixed separately |
 | Stripe's hosted URL expires (maximum 120-day expiry window) and is never refreshed | Medium / Low | Accepted (FR-4) |
