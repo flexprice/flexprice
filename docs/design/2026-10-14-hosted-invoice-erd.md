@@ -382,13 +382,13 @@ Errors shared by all three:
   "payments": [
     { "id": "pay_01JAB…", "amount": "200.00", "currency": "cad", "payment_status": "SUCCEEDED", "payment_gateway": "stripe", "payment_method_type": "CARD", "created_at": "2026-10-16T08:00:00Z", "succeeded_at": "2026-10-16T08:01:00Z", "failed_at": null }
   ],
-  "pay": { "enabled": true, "gateways": ["razorpay", "stripe"] }
+  "pay": { "enabled": true }
 }
 ```
 
 - `invoice` has the customer portal's invoice response shape, so the page reuses the dashboard's invoice components. It holds what the portal already shows the customer, including the invoice's metadata.
 - `payments` lists the invoice's payments with only the fields above; gateway payloads and internal ids are left out.
-- `pay.enabled` follows FR-10. `pay.gateways` lists the tenant's usable gateways (connected and able to create payment links) in alphabetical order. The Pay button sends the first one, matching the customer portal.
+- `pay.enabled` follows FR-10.
 
 **`GET /public/v1/invoices/download`.** Same as the customer portal's PDF endpoint.
 
@@ -398,16 +398,10 @@ Errors shared by all three:
 
 The download URL is created on each call and lasts an hour; the page opens it.
 
-**`POST /public/v1/invoices/pay`.** Same request and response as customer portal pay.
+**`POST /public/v1/invoices/pay`.** Same response as customer portal pay.
 
 ```json
-{
-  "payment_provider": "razorpay",
-  "success_url": "https://invoice.flexprice.io/ca/<token>",
-  "failure_url": "https://invoice.flexprice.io/ca/<token>",
-  "cancel_url": "https://invoice.flexprice.io/ca/<token>",
-  "idempotency_key": "<uuid made by the page per click>"
-}
+{ "idempotency_key": "<uuid made by the page per click>" }
 ```
 
 ```json
@@ -417,17 +411,17 @@ The download URL is created on each call and lasts an hour; the page opens it.
   "status": "PENDING",
   "amount": "1000.00",
   "currency": "cad",
-  "payment_action": { "type": "redirect", "url": "https://<gateway checkout>" }
+  "payment_action": { "type": "payment_link", "url": "https://<gateway checkout>" }
 }
 ```
 
-- `payment_provider` is required; the page sends the URL it is on as all three return URLs.
+- `idempotency_key` is required. The backend picks the gateway (the first, alphabetically, of the tenant's gateways that can create payment links) and sets the return URLs to the hosted link.
 - The amount is always the amount remaining (FR-11). An unexpired payment link already open for the invoice is returned again instead of a new one.
 
 | Error | HTTP | `code` | `message` |
 |---|---|---|---|
 | Invoice not payable (FR-10) | 400 | `invalid_operation` | "This invoice can't be paid right now." |
-| `payment_provider` missing or not a usable gateway | 400 | `validation_error` | "Razorpay is not available for this invoice." |
+| `idempotency_key` missing | 400 | `validation_error` | "Something went wrong, please try again." |
 
 **Tenant endpoints.** Deferred (not in v1): `POST /v1/invoices/{id}/hosted-link/refresh` and `POST /v1/invoices/{id}/hosted-link/revoke` (FR-15 to FR-17, FR-19) are not built.
 
@@ -447,12 +441,12 @@ sequenceDiagram
   P->>B: GET /public/v1/invoices with X-Session-Token
   B->>B: Check signature, read the link record
   B->>B: Check revoked, expiry and tenant status
-  B->>B: Read invoice, payments and usable gateways (scoped)
+  B->>B: Read invoice, payments and Pay availability (scoped)
   B-->>P: Invoice, tenant, payments, Pay info
   Cu->>P: Pay
-  P->>B: POST /public/v1/invoices/pay with X-Session-Token, gateway and return URLs
+  P->>B: POST /public/v1/invoices/pay with X-Session-Token and an idempotency key
   B->>B: Validate hosted link again through shared middleware
-  B->>B: Check the invoice is payable and the gateway usable
+  B->>B: Check the invoice is payable, pick the gateway and return URLs
   B->>G: Create a payment link for the amount remaining (or reuse an open one)
   B-->>P: Gateway checkout URL
   P->>G: Redirect the customer
@@ -493,7 +487,7 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 **Details drawer** (FR-8): summary (to: the customer; from: the tenant; invoice number; memo), line items, totals, amount paid, amount remaining, payment history, and "Questions? Contact <tenant>" with the tenant's help email.
 
 **Actions.**
-- Pay: calls pay with `pay.gateways[0]` and the current URL, then redirects to `payment_action.url`. Returning from the gateway reloads the invoice.
+- Pay: calls pay with a new idempotency key, then redirects to `payment_action.url`. Returning from the gateway reloads the invoice.
 - Download: calls the download endpoint and opens `presigned_url`.
 
 ## 10. Cross-cutting concerns
