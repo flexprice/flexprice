@@ -58,6 +58,20 @@ func AcquireLockWithRetry(
 	return lock, nil
 }
 
+// ReleaseLockKey deletes a lock key written by AcquireLock. AcquireLock uses the raw
+// Redis client, so the key carries no cache key prefix; a cross-process release (for
+// example a Temporal activity freeing a lock the API handler took) must delete that
+// same unprefixed key rather than go through RedisCache.Delete, which prefixes it.
+// It is a blind delete: the caller is the owner releasing after its work, with the
+// lock TTL as the backstop.
+func ReleaseLockKey(ctx context.Context, key string) error {
+	impl, ok := GetRedisCache().(*redisCacheImpl)
+	if !ok || impl == nil || impl.client == nil {
+		return nil
+	}
+	return impl.client.Del(ctx, key).Err()
+}
+
 type redisLocker struct {
 	client redis.UniversalClient
 }

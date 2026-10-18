@@ -355,7 +355,7 @@ func (h *AddonHandler) SyncAddonPrices(c *gin.Context) {
 		return
 	}
 
-	// Acquire addon-level lock (Redis SetNX, 2h TTL)
+	// Acquire addon-level lock (Redis SetNX, ExpiryPriceSyncLock TTL)
 	if h.locker == nil {
 		c.Error(ierr.NewError("addon price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
@@ -375,7 +375,7 @@ func (h *AddonHandler) SyncAddonPrices(c *gin.Context) {
 	if !lock.AcquiredSuccessfully() {
 		h.log.Info(c.Request.Context(), "addon_price_sync_lock_rejected", "addon_id", id, "lock_key", lockKey, "reason", "already_held")
 		c.Error(ierr.NewError("price sync already in progress for this addon").
-			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			WithHint("Try again later or wait up to 6 hours for the current sync to complete.").
 			Mark(ierr.ErrAlreadyExists))
 		return
 	}

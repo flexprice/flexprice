@@ -56,14 +56,15 @@ func (a *AddonActivities) SyncAddonPrices(ctx context.Context, input SyncAddonPr
 
 	lockKey := cache.PrefixAddonPriceSyncLock + input.AddonID
 	defer func() {
-		redisCache := cache.GetRedisCache()
-		if redisCache == nil {
-			a.logger.Info(context.Background(), "addon_price_sync_lock_release_skipped", "addon_id", input.AddonID, "lock_key", lockKey, "reason", "redis_cache_nil")
-			return
-		}
 		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		redisCache.Delete(releaseCtx, lockKey)
+		// The API handler took this lock via the raw-client locker (unprefixed key), so
+		// release the same key. RedisCache.Delete would prefix it and miss, leaving the
+		// lock held until its TTL and blocking every later sync.
+		if err := cache.ReleaseLockKey(releaseCtx, lockKey); err != nil {
+			a.logger.Error(context.Background(), "addon_price_sync_lock_release_failed", "error", err, "addon_id", input.AddonID, "lock_key", lockKey)
+			return
+		}
 		a.logger.Info(ctx, "addon_price_sync_lock_released", "addon_id", input.AddonID, "lock_key", lockKey)
 	}()
 
