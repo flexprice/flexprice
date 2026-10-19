@@ -569,6 +569,7 @@ activity:
   topic_dlq: activity_logs_dlq
   consumer_group: "activity_log"
   rate_limit: 50
+  excluded_tenants: [] # "tenant_id:environment_id" or "tenant_id"; empty = log all.
   publisher:
     buffer_size: 10000
     workers: 4

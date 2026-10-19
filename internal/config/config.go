@@ -1018,6 +1018,8 @@ type ActivityConfig struct {
 	ConsumerGroup string                  `mapstructure:"consumer_group" default:"activity_log"`
 	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
 	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
+	// ExcludedTenants lists "tenant_id" or "tenant_id:environment_id" entries whose writes are not logged. Empty = log all.
+	ExcludedTenants []string `mapstructure:"excluded_tenants"`
 }
 
 type ActivityPublisherConfig struct {
