@@ -1,7 +1,6 @@
 package export
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -211,15 +210,9 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 		_ = os.Remove(tmp.Name())
 	}()
 
-	buffered := bufio.NewWriter(tmp)
-	recordCount, err := exporter.WriteData(ctx, request, buffered)
+	recordCount, err := exporter.WriteData(ctx, request, tmp)
 	if err != nil {
 		return nil, err
-	}
-	if err := buffered.Flush(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to write export temp file").
-			Mark(ierr.ErrSystem)
 	}
 
 	key := exportObjectKey(request, exporter)
