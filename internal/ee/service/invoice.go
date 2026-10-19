@@ -2645,6 +2645,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// A period that has ended fixes running aggregates, so later reads start from here.
+	// Written even for a zero-dollar invoice; a period still open is not fixed.
+	// Never blocks invoicing: without it, reads start from the previous checkpoint.
+	if s.MeterUsageCheckpointRepo != nil && !req.PeriodEnd.After(time.Now().UTC()) {
+		if err := NewMeterUsageService(s.ServiceParams).SaveUsageCheckpointsForSubscription(ctx, subscription, req.PeriodEnd, lo.ToPtr(draft.ID)); err != nil {
+			s.Logger.Error(ctx, "saving usage checkpoints failed; reads use the previous checkpoint",
+				"subscription_id", subscription.ID, "invoice_id", draft.ID, "error", err)
+		}
+	}
+
 	if skipped {
 		return nil, subscription, nil
 	}

@@ -230,6 +230,20 @@ func (s *entitlementGrantService) ReissueEntitlementGrants(
 	return opened, nil
 }
 
+// isSignedSumFeature reports whether the feature meters SIGNED_SUM. A failed lookup reports
+// false, which keeps the existing behaviour of opening the grant.
+func (s *entitlementGrantService) isSignedSumFeature(ctx context.Context, featureID string) bool {
+	if s.FeatureRepo == nil || s.MeterRepo == nil || featureID == "" {
+		return false
+	}
+	f, err := s.FeatureRepo.Get(ctx, featureID)
+	if err != nil || f == nil || f.MeterID == "" {
+		return false
+	}
+	m, err := s.MeterRepo.GetMeter(ctx, f.MeterID)
+	return err == nil && m != nil && m.Aggregation.Type == types.AggregationSignedSum
+}
+
 func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
 	ctx context.Context,
 	reqs []OpenFeatureBasedEntitlementGrantsRequest,
@@ -238,6 +252,9 @@ func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
 
 	for _, req := range reqs {
 		featureECs := append(append([]*entitlement.Entitlement{}, req.ExistingECs...), req.IncomingECs...)
+		if s.isSignedSumFeature(ctx, req.FeatureID) {
+			continue
+		}
 		if req.New == nil || len(featureECs) == 0 || hasParallelECs(featureECs) {
 			s.Logger.Info(ctx, "skipping entitlement grant open",
 				"feature_id", req.FeatureID)
@@ -357,6 +374,20 @@ type grantEvalMeta struct {
 	// so customers with no grant work pay nothing.
 	extIDsBySub     map[string][]string
 	subscriptionSvc SubscriptionService
+}
+
+// isSignedSumFeature reports whether the feature meters SIGNED_SUM. Its entitlement is a
+// ceiling read from config, so no grant window is opened for it.
+func (m *grantEvalMeta) isSignedSumFeature(featureID string) bool {
+	if m == nil {
+		return false
+	}
+	f := m.featureByID[featureID]
+	if f == nil {
+		return false
+	}
+	mt := m.meterByID[f.MeterID]
+	return mt != nil && mt.Aggregation.Type == types.AggregationSignedSum
 }
 
 func (m *grantEvalMeta) externalIDs(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
@@ -574,7 +605,10 @@ func (s *entitlementGrantService) openMissingGrants(
 ) ([]*entitlementgrant.EntitlementGrant, error) {
 	opened := make([]*entitlementgrant.EntitlementGrant, 0)
 	for _, sub := range subs {
-		for _, featureECs := range s.eligibleGrantConfigsByFeature(ctx, sub, ecsBySub[sub.ID]) {
+		for featureID, featureECs := range s.eligibleGrantConfigsByFeature(ctx, sub, ecsBySub[sub.ID]) {
+			if meta.isSignedSumFeature(featureID) {
+				continue
+			}
 			for _, candidate := range grantCandidatesForFeature(featureECs) {
 				slotOpened, err := s.openIfSlotFree(ctx, sub, candidate, latestEndBySlot, meta, at)
 				if err != nil {
@@ -919,11 +953,36 @@ func (s *entitlementService) validateEntitlementGrantShape(
 		return err
 	}
 
+	if m.Aggregation.Type == types.AggregationSignedSum {
+		if err := validateSignedSumGrantShape(e, m); err != nil {
+			return err
+		}
+	}
+
 	if err := s.validateGrantSiblingCoherence(ctx, e); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// validateSignedSumGrantShape admits a SIGNED_SUM entitlement only as a ceiling: a quantity,
+// pooled additively, per subscription period. Grants are never opened for it.
+func validateSignedSumGrantShape(e *entitlement.Entitlement, m *meter.Meter) error {
+	if e.GrantMeasure == types.EntitlementGrantMeasureQuantity &&
+		defaultedMode(e.AggregationMode) == types.EntitlementAggregationModeAdditive &&
+		e.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
+		return nil
+	}
+	return ierr.NewError("SIGNED_SUM entitlements must be a quantity ceiling per subscription period").
+		WithHint("A SIGNED_SUM entitlement caps how much the customer may hold. Use grant_measure quantity, aggregation_mode additive and grant_duration_unit subscription_period.").
+		WithReportableDetails(map[string]interface{}{
+			"meter_id":            m.ID,
+			"grant_measure":       e.GrantMeasure,
+			"aggregation_mode":    e.AggregationMode,
+			"grant_duration_unit": e.GrantDurationUnit,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // grantMeterEligibility reports why this meter cannot carry a grant. measure only

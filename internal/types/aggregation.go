@@ -13,6 +13,7 @@ const (
 	AggregationSumWithMultiplier AggregationType = "SUM_WITH_MULTIPLIER" // Sum with a multiplier - [sum(value) * multiplier]
 	AggregationMax               AggregationType = "MAX"
 	AggregationWeightedSum       AggregationType = "WEIGHTED_SUM"
+	AggregationSignedSum         AggregationType = "SIGNED_SUM"
 )
 
 func (t AggregationType) Validate() bool {
@@ -24,7 +25,8 @@ func (t AggregationType) Validate() bool {
 		AggregationLatest,
 		AggregationSumWithMultiplier,
 		AggregationMax,
-		AggregationWeightedSum:
+		AggregationWeightedSum,
+		AggregationSignedSum:
 		return true
 	default:
 		return false
@@ -56,4 +58,16 @@ func (t AggregationType) SupportsExpression() bool {
 	default:
 		return false
 	}
+}
+
+// SupportsCheckpoint reports whether usage of this type can be read as a checkpoint plus
+// the changes since it.
+func (t AggregationType) SupportsCheckpoint() bool {
+	return t == AggregationSignedSum
+}
+
+// KeepsNegatives reports whether negative per-event quantities are stored as is.
+// Every other type stores a negative quantity as 0.
+func (t AggregationType) KeepsNegatives() bool {
+	return t == AggregationSignedSum
 }

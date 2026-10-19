@@ -31,7 +31,7 @@ type MeterUsageAggregator interface {
 // GetMeterUsageAggregator returns the appropriate aggregator for the given type
 func GetMeterUsageAggregator(aggType types.AggregationType) MeterUsageAggregator {
 	switch aggType {
-	case types.AggregationSum, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
+	case types.AggregationSum, types.AggregationSignedSum, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 		return &MeterUsageSumAggregator{}
 	case types.AggregationCount:
 		return &MeterUsageCountAggregator{}

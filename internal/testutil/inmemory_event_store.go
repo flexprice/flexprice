@@ -205,7 +205,7 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 			switch params.AggregationType {
 			case types.AggregationCount:
 				dayValue = decimal.NewFromInt(int64(len(dayEvents)))
-			case types.AggregationSum:
+			case types.AggregationSum, types.AggregationSignedSum:
 				for _, event := range dayEvents {
 					if val, ok := event.Properties[params.PropertyName]; ok {
 						switch v := val.(type) {
@@ -262,7 +262,7 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 			switch params.AggregationType {
 			case types.AggregationCount:
 				monthValue = decimal.NewFromInt(int64(len(monthEvents)))
-			case types.AggregationSum:
+			case types.AggregationSum, types.AggregationSignedSum:
 				for _, event := range monthEvents {
 					if val, ok := event.Properties[params.PropertyName]; ok {
 						switch v := val.(type) {
@@ -356,7 +356,7 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 	switch params.AggregationType {
 	case types.AggregationCount:
 		result.Value = decimal.NewFromInt(int64(len(filteredEvents)))
-	case types.AggregationSum:
+	case types.AggregationSum, types.AggregationSignedSum:
 		var sum decimal.Decimal
 		for _, event := range filteredEvents {
 			if val, ok := event.Properties[params.PropertyName]; ok {
@@ -593,7 +593,7 @@ func (s *InMemoryEventStore) GetUsageWithFilters(ctx context.Context, params *ev
 		switch params.AggregationType {
 		case types.AggregationCount:
 			value = decimal.NewFromInt(int64(len(filteredEvents)))
-		case types.AggregationSum, types.AggregationAvg:
+		case types.AggregationSum, types.AggregationSignedSum, types.AggregationAvg:
 			var sum decimal.Decimal
 			count := 0
 			for _, event := range filteredEvents {

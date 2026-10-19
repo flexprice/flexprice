@@ -69,7 +69,9 @@ func GetAggregator(aggregationType types.AggregationType) events.Aggregator {
 	switch aggregationType {
 	case types.AggregationCount:
 		return &CountAggregator{}
-	case types.AggregationSum:
+	// The events path reads SIGNED_SUM as the window's net, raised to 0 when negative;
+	// exact signed totals come from meter_usage.
+	case types.AggregationSum, types.AggregationSignedSum:
 		return &SumAggregator{}
 	case types.AggregationAvg:
 		return &AvgAggregator{}

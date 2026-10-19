@@ -369,6 +369,18 @@ func (f MeterFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterMutation", m)
 }
 
+// The MeterUsageCheckpointFunc type is an adapter to allow the use of ordinary
+// function as MeterUsageCheckpoint mutator.
+type MeterUsageCheckpointFunc func(context.Context, *ent.MeterUsageCheckpointMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeterUsageCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeterUsageCheckpointMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterUsageCheckpointMutation", m)
+}
+
 // The PaymentFunc type is an adapter to allow the use of ordinary
 // function as Payment mutator.
 type PaymentFunc func(context.Context, *ent.PaymentMutation) (ent.Value, error)

@@ -267,7 +267,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			entitlement := entitlementsByMeterID[item.MeterID]
 
 			grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
-			if !matchingCharge.IsOverage {
+			isSignedSum := m.Aggregation.Type == types.AggregationSignedSum
+			if !matchingCharge.IsOverage && !isSignedSum {
 				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
 					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs)
 					if err != nil {
@@ -277,6 +278,18 @@ func (s *billingService) CalculateMeterUsageCharges(
 			}
 
 			switch {
+			case !matchingCharge.IsOverage && isSignedSum:
+				quantityForCalculation = signedSumBillable(quantityForCalculation, entitlement,
+					keepsRunningAggregate(m), periodShare(item, periodStart, periodEnd))
+				if entitlement != nil {
+					adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+				}
+				matchingCharge.SetQuantityDecimal(quantityForCalculation)
+				if matchingCharge.Price != nil {
+					cost := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
+					matchingCharge.SetAmountWithCurrencyPrecision(cost, matchingCharge.Price.Currency)
+				}
 			case grantsApplied:
 				// Grants replaced the legacy entitlement — adjustMeterUsageGrants
 				// already updated matchingCharge (Amount/Quantity). For the
@@ -455,6 +468,42 @@ func (s *billingService) CalculateMeterUsageCharges(
 	}
 
 	return usageCharges, totalUsageCost, nil
+}
+
+// signedSumBillable is a SIGNED_SUM line item's billable quantity, never below 0. A meter
+// that keeps a running total bills (total − ceiling) for the line item's share of the
+// period; otherwise the line item's own net usage less its share of the ceiling. The
+// ceiling is the entitlement's grant_quota; usage_limit is not used.
+func signedSumBillable(usage decimal.Decimal, ent *dto.AggregatedEntitlement, running bool, share decimal.Decimal) decimal.Decimal {
+	ceiling := decimal.Zero
+	if ent != nil && ent.IsEnabled {
+		if ent.GrantUnlimited {
+			return decimal.Zero
+		}
+		if ent.GrantQuota != nil {
+			ceiling = *ent.GrantQuota
+		}
+	}
+	if running {
+		return decimal.Max(usage.Sub(ceiling), decimal.Zero).Mul(share)
+	}
+	return decimal.Max(usage.Sub(ceiling.Mul(share)), decimal.Zero)
+}
+
+// periodShare is the fraction of [periodStart, periodEnd) that the line item covers.
+func periodShare(item *subscription.SubscriptionLineItem, periodStart, periodEnd time.Time) decimal.Decimal {
+	period := periodEnd.Sub(periodStart)
+	if period <= 0 {
+		return decimal.NewFromInt(1)
+	}
+	covered := item.GetPeriodEnd(periodEnd).Sub(item.GetPeriodStart(periodStart))
+	if covered <= 0 {
+		return decimal.Zero
+	}
+	if covered >= period {
+		return decimal.NewFromInt(1)
+	}
+	return decimal.NewFromInt(int64(covered)).Div(decimal.NewFromInt(int64(period)))
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed

@@ -305,7 +305,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromUint64(countValue)
-			case types.AggregationMax, types.AggregationSum:
+			case types.AggregationMax, types.AggregationSum, types.AggregationSignedSum:
 				if params.BucketSize != "" {
 					groupByProperty := events.FirstGroupByProperty(params.GroupBy)
 					hasGroupBy := params.AggregationType == types.AggregationMax &&
@@ -387,7 +387,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				result.Value = decimal.NewFromUint64(value)
-			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax, types.AggregationWeightedSum:
+			case types.AggregationSum, types.AggregationSignedSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax, types.AggregationWeightedSum:
 				var value float64
 				if err := rows.Scan(&value); err != nil {
 					SetSpanError(span, err)
@@ -493,7 +493,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 					Mark(ierr.ErrDatabase)
 			}
 			result.Value = decimal.NewFromUint64(value)
-		case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax:
+		case types.AggregationSum, types.AggregationSignedSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax:
 			var value float64
 			if err := rows.Scan(&filterGroupID, &value); err != nil {
 				SetSpanError(span, err)
