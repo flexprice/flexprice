@@ -62,10 +62,7 @@ func newReplayCmd() *cobra.Command {
 				return fmt.Errorf("--from-start and --since are mutually exclusive")
 			}
 
-			// A hard wall-clock ceiling so no broker stall can wedge a run
-			// forever (the drain honors ctx cancellation). 0 disables it —
-			// rely on the K8s Job's activeDeadlineSeconds in that case.
-			ctx := context.Background()
+			ctx := cmd.Context()
 			if timeout > 0 {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -95,7 +92,7 @@ func newReplayCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&fromStart, "from-start", false, "ignore resume point; re-drain each partition from its oldest retained offset")
 	cmd.Flags().IntVar(&maxMsgs, "max", 0, "cap number of messages replayed (0 = no cap)")
 	cmd.Flags().IntVar(&maxReplays, "max-replays", 3, "quarantine a message once it has been replayed this many times (loop guard)")
-	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "hard wall-clock ceiling for the run (0 = no ceiling; rely on the Job deadline)")
+	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "replay timeout (0 = no timeout)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show routing + reason breakdown without producing anything (does not commit offsets)")
 	_ = cmd.MarkFlagRequired("source")
 

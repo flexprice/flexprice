@@ -77,11 +77,11 @@ point. To deliberately replay a window again, use `--from-start` or `--since`.
 
 ## Safety model
 
-- **Bounded:** each partition is drained only up to its end offset at start, so a
-  run always terminates and never tails messages produced mid-run.
+- **Bounded:** each partition captures its end offset when processing that partition
+  begins and drains only up to that boundary.
 - **Resumable, commit-after-publish:** offsets advance only past messages that
-  were actually republished (or deliberately skipped/quarantined), so a re-run
-  never double-sends what already succeeded and never skips what didn't.
+  were actually republished (or deliberately skipped/quarantined), so a retry resumes from saved progress. A crash before an offset commit
+  can replay messages that were already published.
 - **Loop guard:** every replay stamps/increments a `replay_count` header; once a
   message reaches `--max-replays` it is quarantined (offset advances past it, but
   it is not re-sent). This stops a re-poison loop during an ongoing outage.
