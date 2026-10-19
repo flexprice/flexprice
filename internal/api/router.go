@@ -154,6 +154,10 @@ func NewRouter(
 		v1Public.POST("/auth/signup", handlers.Auth.SignUp)
 		v1Public.POST("/auth/login", handlers.Auth.Login)
 
+		// One-time password links for self-hosted invites and resets.
+		v1Public.POST("/auth/password/check", handlers.Auth.CheckPasswordLink)
+		v1Public.POST("/auth/password", handlers.Auth.SetPassword)
+
 		// SAML single sign-on. Public because these run before a session exists:
 		// the login redirect starts the flow, and the ACS callback is posted by
 		// the identity provider, which carries no credentials.
@@ -183,10 +187,13 @@ func NewRouter(
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write(types.EntityUser, types.ActionWrite), handlers.User.CreateUser)
 			user.PUT("/me", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateUser)
+			// Any signed-in user may change their own password, readers included.
+			user.PUT("/me/password", handlers.User.ChangePassword)
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)
 			user.PUT("/:id/roles", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.UpdateUserRoles)
 			user.DELETE("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.DeleteUser)
 			user.POST("/:id/remove", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.RemoveUser)
+			user.POST("/:id/password-link", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.CreatePasswordLink)
 			user.POST("/search", read(types.EntityUser, types.ActionRead), handlers.User.QueryUsers)
 			user.POST("/chat/verify", handlers.User.CreateSupportChatToken)
 		}

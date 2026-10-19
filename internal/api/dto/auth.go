@@ -31,3 +31,24 @@ func (r *SignUpRequest) Validate() error {
 func (r *LoginRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
+
+// CheckPasswordLinkRequest asks what a one-time password link is for.
+type CheckPasswordLinkRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// PasswordLinkDetailsResponse tells the set-password page what to show.
+type PasswordLinkDetailsResponse struct {
+	Purpose string `json:"purpose"`
+	Email   string `json:"email"`
+}
+
+// SetPasswordRequest sets a password through a one-time link.
+type SetPasswordRequest struct {
+	Token    string `json:"token" binding:"required" validate:"required"`
+	Password string `json:"password" binding:"required,min=8" validate:"required,min=8"`
+}
+
+func (r *SetPasswordRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
