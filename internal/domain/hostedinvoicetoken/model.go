@@ -8,6 +8,11 @@ import (
 	"github.com/samber/lo"
 )
 
+const (
+	validityAfterDue = 30 * 24 * time.Hour
+	maxLifetime      = 120 * 24 * time.Hour
+)
+
 // HostedInvoiceToken records a public hosted invoice token for one invoice. The token
 // string is signed from the id at read time; neither the token nor the URL is stored.
 type HostedInvoiceToken struct {
@@ -55,11 +60,6 @@ func FromEntList(list []*ent.HostedInvoiceToken) []*HostedInvoiceToken {
 		return FromEnt(item)
 	})
 }
-
-const (
-	validityAfterDue = 30 * 24 * time.Hour
-	maxLifetime      = 120 * 24 * time.Hour
-)
 
 // CalculateExpiry returns min((due date, else finalization) + 30 days, createdAt + 120 days).
 func CalculateExpiry(dueDate *time.Time, finalizedAt, createdAt time.Time) time.Time {

@@ -14,7 +14,7 @@ import (
 
 // HostedInvoiceTokenService issues and revokes public hosted invoice tokens.
 type HostedInvoiceTokenService interface {
-	// Issue returns the invoice's current token, creating one if none exists. Runs in the caller's transaction.
+	// Issue returns the invoice's current token, creating one if none exists.
 	Issue(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error)
 
 	// Revoke revokes the invoice's current token if it has one.

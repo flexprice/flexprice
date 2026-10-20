@@ -13,28 +13,24 @@ import (
 // hostedInvoiceSignatureEncoding is strict so each signature has exactly one valid spelling.
 var hostedInvoiceSignatureEncoding = base64.RawURLEncoding.Strict()
 
-// HostedInvoiceTokenSigner signs and verifies hosted invoice tokens of the form
+// HostedInvoiceSigner signs and verifies hosted invoice tokens of the form
 // "<token id>.<base64url HMAC-SHA256 of the token id>".
-type HostedInvoiceTokenSigner struct {
+type HostedInvoiceSigner struct {
 	key []byte
 }
 
-// NewHostedInvoiceTokenSigner signs with the deployment's auth secret.
-func NewHostedInvoiceTokenSigner(cfg *config.Configuration) *HostedInvoiceTokenSigner {
-	return newHostedInvoiceTokenSigner(cfg.Auth.Secret)
-}
-
-func newHostedInvoiceTokenSigner(key string) *HostedInvoiceTokenSigner {
-	return &HostedInvoiceTokenSigner{key: []byte(key)}
+// NewHostedInvoiceSigner signs with the deployment's auth secret.
+func NewHostedInvoiceSigner(cfg *config.Configuration) *HostedInvoiceSigner {
+	return &HostedInvoiceSigner{key: []byte(cfg.Auth.Secret)}
 }
 
 // Sign returns the token for a token id.
-func (s *HostedInvoiceTokenSigner) Sign(tokenID string) string {
+func (s *HostedInvoiceSigner) Sign(tokenID string) string {
 	return tokenID + "." + hostedInvoiceSignatureEncoding.EncodeToString(hostedInvoiceMAC(s.key, tokenID))
 }
 
 // Verify returns the token id of a token signed with the signer's key.
-func (s *HostedInvoiceTokenSigner) Verify(token string) (string, error) {
+func (s *HostedInvoiceSigner) Verify(token string) (string, error) {
 	tokenID, encoded, ok := strings.Cut(token, ".")
 	if !ok || tokenID == "" || encoded == "" {
 		return "", errInvalidHostedInvoiceToken()
