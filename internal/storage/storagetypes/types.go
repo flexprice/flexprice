@@ -33,13 +33,15 @@ type UploadRequest struct {
 	Compress    bool
 }
 
-// StreamUploadRequest describes an upload backed by a seekable body.
+// StreamUploadRequest describes an upload backed by a seekable body, uploaded as-is.
 type StreamUploadRequest struct {
 	Key         string
 	Body        io.ReadSeeker
 	Format      UploadFormat
 	ContentType string // optional, inferred from Format if empty
-	Compress    bool
+	// Gzipped marks Body as already gzip-compressed; UncompressedSize is then its size before compression.
+	Gzipped          bool
+	UncompressedSize int64
 }
 
 type UploadResponse struct {

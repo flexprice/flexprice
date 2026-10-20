@@ -490,31 +490,26 @@ func (b *failingUploadBody) Seek(offset int64, whence int) (int64, error) {
 }
 
 func TestClient_UploadStream_SourceFailureDoesNotFinalize(t *testing.T) {
-	for _, compressed := range []bool{false, true} {
-		t.Run(fmt.Sprintf("gzip=%v", compressed), func(t *testing.T) {
-			var finalized atomic.Int32
-			cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
-				if _, err := extractUploadedObjectBytes(r); err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				finalized.Add(1)
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"name":"exports/report.csv","bucket":"test-bucket"}`))
-			})
-			defer srv.Close()
-			cfg.CompressionGzip = compressed
-			s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
-			require.NoError(t, err)
-			sourceErr := errors.New("export source read failed")
-			body := &failingUploadBody{reader: bytes.NewReader([]byte("id,qty\n1,2\n")), err: sourceErr}
-			resp, err := s.UploadStream(context.Background(), &storage.StreamUploadRequest{
-				Key: "exports/report.csv", Body: body, Format: storage.UploadFormatCSV, Compress: compressed,
-			})
-			require.ErrorIs(t, err, sourceErr)
-			require.Nil(t, resp)
-			srv.Close()
-			assert.Zero(t, finalized.Load(), "a source failure must not commit a partial object")
-		})
-	}
+	var finalized atomic.Int32
+	cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if _, err := extractUploadedObjectBytes(r); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		finalized.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"exports/report.csv","bucket":"test-bucket"}`))
+	})
+	defer srv.Close()
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+	sourceErr := errors.New("export source read failed")
+	body := &failingUploadBody{reader: bytes.NewReader([]byte("id,qty\n1,2\n")), err: sourceErr}
+	resp, err := s.UploadStream(context.Background(), &storage.StreamUploadRequest{
+		Key: "exports/report.csv", Body: body, Format: storage.UploadFormatCSV,
+	})
+	require.ErrorIs(t, err, sourceErr)
+	require.Nil(t, resp)
+	srv.Close()
+	assert.Zero(t, finalized.Load(), "a source failure must not commit a partial object")
 }

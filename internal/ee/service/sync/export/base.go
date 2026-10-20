@@ -1,6 +1,7 @@
 package export
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -210,7 +211,8 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 		_ = os.Remove(tmp.Name())
 	}()
 
-	recordCount, err := exporter.WriteData(ctx, request, tmp)
+	gzipped := request.JobConfig.Compression == types.S3CompressionTypeGzip
+	recordCount, csvSize, err := writeExportCSV(ctx, request, exporter, tmp, gzipped)
 	if err != nil {
 		return nil, err
 	}
@@ -222,10 +224,11 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 		"destination", store.FileURL(key))
 
 	uploadResponse, err := store.UploadStream(ctx, &storage.StreamUploadRequest{
-		Key:      key,
-		Body:     tmp,
-		Format:   storage.UploadFormatCSV,
-		Compress: request.JobConfig.Compression == types.S3CompressionTypeGzip,
+		Key:              key,
+		Body:             tmp,
+		Format:           storage.UploadFormatCSV,
+		Gzipped:          gzipped,
+		UncompressedSize: csvSize,
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -234,6 +237,40 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 	}
 
 	return s.exportResponse(ctx, request, recordCount, uploadResponse), nil
+}
+
+// writeExportCSV writes the export to w, gzipped when asked, and returns the record count and CSV size.
+func writeExportCSV(ctx context.Context, request *dto.ExportRequest, exporter StreamingExporter, w io.Writer, gzipped bool) (int, int64, error) {
+	if !gzipped {
+		csv := &countingWriter{w: w}
+		recordCount, err := exporter.WriteData(ctx, request, csv)
+		return recordCount, csv.n, err
+	}
+
+	gz := gzip.NewWriter(w)
+	csv := &countingWriter{w: gz}
+	recordCount, err := exporter.WriteData(ctx, request, csv)
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := gz.Close(); err != nil {
+		return 0, 0, ierr.WithError(err).
+			WithHint("Failed to compress export").
+			Mark(ierr.ErrSystem)
+	}
+	return recordCount, csv.n, nil
+}
+
+// countingWriter counts the bytes written through it.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
 }
 
 // exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>.csv[.gz].

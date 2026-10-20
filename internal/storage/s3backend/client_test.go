@@ -206,6 +206,11 @@ func TestClient_Upload_SetsContentTypeAndKey(t *testing.T) {
 
 func TestClient_UploadStream(t *testing.T) {
 	payload := []byte(strings.Repeat("id,qty\n1,2\n", 1000))
+	var gzipped bytes.Buffer
+	zw := gzip.NewWriter(&gzipped)
+	_, err := zw.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
 
 	for _, gzipOn := range []bool{false, true} {
 		t.Run(fmt.Sprintf("gzip=%v", gzipOn), func(t *testing.T) {
@@ -218,31 +223,31 @@ func TestClient_UploadStream(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 			defer closeSrv()
-			cfg.CompressionGzip = gzipOn
 
 			s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
 			require.NoError(t, err)
 
+			body := payload
+			if gzipOn {
+				body = gzipped.Bytes()
+			}
 			resp, err := s.UploadStream(context.Background(), &storage.StreamUploadRequest{
-				Key:      "exports/events.csv",
-				Body:     bytes.NewReader(payload),
-				Format:   storage.UploadFormatCSV,
-				Compress: true,
+				Key:              "exports/events.csv",
+				Body:             bytes.NewReader(body),
+				Format:           storage.UploadFormatCSV,
+				Gzipped:          gzipOn,
+				UncompressedSize: int64(len(payload)),
 			})
 			require.NoError(t, err)
+			assert.Equal(t, body, gotBody, "the body is uploaded as-is")
+			assert.Equal(t, strconv.Itoa(len(body)), gotLength)
 			assert.Equal(t, int64(len(payload)), resp.FileSizeBytes)
-			assert.Equal(t, strconv.Itoa(len(gotBody)), gotLength)
-
-			uploaded := gotBody
+			assert.Equal(t, int64(len(body)), resp.CompressedSize)
 			if gzipOn {
 				assert.Equal(t, "gzip", gotEncoding)
-				assert.Equal(t, int64(len(gotBody)), resp.CompressedSize)
-				zr, err := gzip.NewReader(bytes.NewReader(gotBody))
-				require.NoError(t, err)
-				uploaded, err = io.ReadAll(zr)
-				require.NoError(t, err)
+			} else {
+				assert.Empty(t, gotEncoding)
 			}
-			assert.Equal(t, payload, uploaded)
 		})
 	}
 }

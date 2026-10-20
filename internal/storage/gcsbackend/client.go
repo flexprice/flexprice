@@ -131,9 +131,9 @@ func (c *client) Upload(ctx context.Context, req *fpstorage.UploadRequest) (*fps
 	}, nil
 }
 
-// UploadStream uploads req.Body without reading it into memory.
+// UploadStream uploads req.Body as-is without reading it into memory.
 func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRequest) (*fpstorage.UploadResponse, error) {
-	originalSize, err := req.Body.Seek(0, io.SeekEnd)
+	size, err := req.Body.Seek(0, io.SeekEnd)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to read upload size").Mark(ierr.ErrSystem)
 	}
@@ -141,27 +141,16 @@ func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRe
 		return nil, ierr.WithError(err).WithHint("failed to rewind upload body").Mark(ierr.ErrSystem)
 	}
 
-	gzipped := req.Compress && c.cfg.CompressionGzip
 	writeCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	w := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key).NewWriter(writeCtx)
 	if req.ContentType != "" {
 		w.ContentType = req.ContentType
 	} else {
-		w.ContentType = contentTypeFor(req.Format, gzipped)
+		w.ContentType = contentTypeFor(req.Format, req.Gzipped)
 	}
 
-	counter := &countingWriter{w: w}
-	if gzipped {
-		gz := gzip.NewWriter(counter)
-		_, err = io.Copy(gz, req.Body)
-		if err == nil {
-			err = gz.Close()
-		}
-	} else {
-		_, err = io.Copy(counter, req.Body)
-	}
-	if err != nil {
+	if _, err := io.Copy(w, req.Body); err != nil {
 		cancel()
 		return nil, ierr.WithError(err).
 			WithHint("failed to upload object to GCS").
@@ -175,26 +164,18 @@ func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRe
 			Mark(ierr.ErrHTTPClient)
 	}
 
+	originalSize := size
+	if req.Gzipped {
+		originalSize = req.UncompressedSize
+	}
 	return &fpstorage.UploadResponse{
 		FileURL:        c.FileURL(req.Key),
 		Bucket:         c.cfg.Bucket,
 		Key:            req.Key,
 		FileSizeBytes:  originalSize,
-		CompressedSize: counter.n,
+		CompressedSize: size,
 		UploadedAt:     time.Now(),
 	}, nil
-}
-
-// countingWriter counts the bytes written through it.
-type countingWriter struct {
-	w io.Writer
-	n int64
-}
-
-func (cw *countingWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.n += int64(n)
-	return n, err
 }
 
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {
