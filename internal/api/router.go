@@ -722,7 +722,7 @@ func NewRouter(
 	hostedInvoiceAPI.Use(middleware.ErrorHandler(), middleware.HostedInvoiceTokenMiddleware(hostedInvoiceService))
 	{
 		hostedInvoiceAPI.GET("/invoices", handlers.HostedInvoice.GetInvoice)
-		hostedInvoiceAPI.GET("/invoices/download", handlers.HostedInvoice.GetInvoicePDF)
+		hostedInvoiceAPI.GET("/invoices/pdf", handlers.HostedInvoice.GetInvoicePDF)
 		hostedInvoiceAPI.POST("/invoices/pay", handlers.HostedInvoice.PayInvoice)
 	}
 
