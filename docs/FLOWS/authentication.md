@@ -52,6 +52,20 @@
 
 Authentication itself is **stateless** per request aside from **`context.Context`** enrichment (`types.CtxTenantID`, user id, roles, optional environment).
 
+## Multi-tenant membership (FLE-1662)
+
+Human users may belong to multiple tenants via **`tenant_memberships`** (roles are per-tenant). The JWT still carries a single active `tenant_id`; middleware loads roles from the membership for that tenant (falling back to `users.roles` for service accounts / legacy rows).
+
+| API | Purpose |
+|---|---|
+| `POST /users` (invite) | If the email already has an identity, adds a membership instead of creating a second login |
+| `GET /users/me/tenants` | List memberships for the current user |
+| `POST /users/me/switch-tenant` | Mint a token for another membership |
+| `POST /users/me/leave` | Archive the current membership; delete the auth identity only when none remain |
+| `POST /users/{id}/remove` | Admin eject of a membership (same teardown rules) |
+
+Login accepts optional `tenant_id` to activate a non-home membership.
+
 ## Related flows
 
 - [api-request-lifecycle.md](api-request-lifecycle.md)

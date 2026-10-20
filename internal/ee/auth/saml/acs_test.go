@@ -214,9 +214,13 @@ func (r *tenantScopedUserRepo) Create(ctx context.Context, u *user.User) error {
 func (r *tenantScopedUserRepo) GetByID(context.Context, string) (*user.User, error) {
 	return nil, ierr.NewError("not implemented").Mark(ierr.ErrNotFound)
 }
+func (r *tenantScopedUserRepo) GetByIDGlobal(context.Context, string) (*user.User, error) {
+	return nil, ierr.NewError("not implemented").Mark(ierr.ErrNotFound)
+}
 func (r *tenantScopedUserRepo) Update(context.Context, *user.User) error            { return nil }
 func (r *tenantScopedUserRepo) UpdateRoles(context.Context, string, []string) error { return nil }
 func (r *tenantScopedUserRepo) Delete(context.Context, string) error                { return nil }
+func (r *tenantScopedUserRepo) ArchiveByID(context.Context, string) error           { return nil }
 func (r *tenantScopedUserRepo) ListByFilter(context.Context, *types.UserFilter) ([]*user.User, int64, error) {
 	return nil, 0, nil
 }

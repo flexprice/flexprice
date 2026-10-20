@@ -52,6 +52,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -104,6 +105,10 @@ func NewMeterRepository(p RepositoryParams) meter.Repository {
 
 func NewUserRepository(p RepositoryParams) user.Repository {
 	return entRepo.NewUserRepository(p.EntClient, p.Logger, p.RedisCache)
+}
+
+func NewTenantMembershipRepository(p RepositoryParams) tenantmembership.Repository {
+	return entRepo.NewTenantMembershipRepository(p.EntClient, p.Logger)
 }
 
 func NewAuthRepository(p RepositoryParams) auth.Repository {

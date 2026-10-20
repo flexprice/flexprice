@@ -5,6 +5,7 @@ import (
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -69,6 +70,15 @@ func (s *userService) AddUser(ctx context.Context, req admindto.AddUserRequest) 
 		removeLogin(ctx, s.Config, s.Logger, userID)
 		return nil, err
 	}
+	if s.TenantMembershipRepo != nil {
+		m := tenantmembership.New(userID, req.TenantID, u.Roles)
+		m.CreatedBy = userID
+		m.UpdatedBy = userID
+		if err := s.TenantMembershipRepo.Create(ctx, m); err != nil {
+			removeLogin(ctx, s.Config, s.Logger, userID)
+			return nil, err
+		}
+	}
 
 	s.Logger.Info(ctx, "added user to tenant", "tenant_id", req.TenantID, "user_id", userID)
 	return admindto.NewUserResponse(u), nil
@@ -81,37 +91,68 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 		return nil, err
 	}
 	if s.Config == nil || s.Config.Auth.Provider != types.AuthProviderSupabase {
-		return nil, ierr.NewError("supabase auth is not configured").
+		return nil, ierr.NewError("auth provider is not configured").
 			WithHint("Removing a user's login needs auth.provider supabase").
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	target, err := s.UserRepo.GetByEmail(ctx, req.Email)
+	target, err := s.UserRepo.GetByEmail(types.SetTenantID(ctx, ""), req.Email)
 	if err != nil {
 		return nil, err
-	}
-	if target.TenantID != req.TenantID {
-		return nil, ierr.NewError("user not found in this tenant").
-			WithHint("This email belongs to a user in a different tenant").
-			WithReportableDetails(map[string]interface{}{"email": req.Email, "tenant_id": req.TenantID}).
-			Mark(ierr.ErrNotFound)
 	}
 	if target.Type != types.UserTypeUser {
 		return nil, ierr.NewError("only human users can be removed").
 			WithHint("Use the service account delete API to remove a service account").
 			Mark(ierr.ErrValidation)
 	}
+	if s.TenantMembershipRepo != nil {
+		if _, err := s.TenantMembershipRepo.GetByUserAndTenant(ctx, target.ID, req.TenantID); err != nil {
+			return nil, ierr.NewError("user not found in this tenant").
+				WithHint("This email is not a member of this tenant").
+				WithReportableDetails(map[string]interface{}{"email": req.Email, "tenant_id": req.TenantID}).
+				Mark(ierr.ErrNotFound)
+		}
+	} else if target.TenantID != req.TenantID {
+		return nil, ierr.NewError("user not found in this tenant").
+			WithHint("This email belongs to a user in a different tenant").
+			WithReportableDetails(map[string]interface{}{"email": req.Email, "tenant_id": req.TenantID}).
+			Mark(ierr.ErrNotFound)
+	}
 
 	ctx = types.SetTenantID(ctx, req.TenantID)
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Same lock as the dashboard's remove, so two removals cannot both pass the last-user check.
 		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + req.TenantID}); err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to acquire tenant lock for user removal").
 				Mark(ierr.ErrInternal)
 		}
 
-		// Limit 1 still returns the full count, since the total is counted before the limit applies.
+		if s.TenantMembershipRepo != nil {
+			count, err := s.TenantMembershipRepo.CountByTenant(ctx, req.TenantID)
+			if err != nil {
+				return err
+			}
+			if count <= 1 {
+				return ierr.NewError("cannot remove the last user in the tenant").
+					WithHint("At least one user must remain in the tenant").
+					Mark(ierr.ErrValidation)
+			}
+			if err := s.TenantMembershipRepo.Delete(ctx, target.ID, req.TenantID); err != nil {
+				return err
+			}
+			remaining, err := s.TenantMembershipRepo.CountByUser(ctx, target.ID)
+			if err != nil {
+				return err
+			}
+			if remaining > 0 {
+				return nil
+			}
+			if err := s.UserRepo.ArchiveByID(ctx, target.ID); err != nil {
+				return err
+			}
+			return auth.NewSupabaseAuth(s.Config).RemoveUser(ctx, target.ID)
+		}
+
 		_, humans, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{
 			QueryFilter: &types.QueryFilter{
 				Limit:  lo.ToPtr(1),
@@ -128,11 +169,9 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 				WithHint("At least one user must remain in the tenant").
 				Mark(ierr.ErrValidation)
 		}
-
 		if err := s.UserRepo.Delete(ctx, target.ID); err != nil {
 			return err
 		}
-		// Supabase last: a deleted login cannot be undone, but if this call fails the archive rolls back.
 		return auth.NewSupabaseAuth(s.Config).RemoveUser(ctx, target.ID)
 	})
 	if err != nil {
@@ -149,10 +188,42 @@ func (s *userService) ListUsersForTenant(ctx context.Context, tenantID string) (
 	}
 
 	ctx = types.SetTenantID(ctx, tenantID)
-	// No limit, so every user is listed. QueryFilter must be set: the repository reads the limit through it.
-	users, _, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{QueryFilter: types.NewNoLimitQueryFilter()})
-	if err != nil {
-		return nil, err
+	var users []*user.User
+	if s.TenantMembershipRepo != nil {
+		memberships, err := s.TenantMembershipRepo.ListByTenant(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range memberships {
+			u, err := s.UserRepo.GetByIDGlobal(ctx, m.UserID)
+			if err != nil {
+				if ierr.IsNotFound(err) {
+					continue
+				}
+				return nil, err
+			}
+			if u.Status != types.StatusPublished {
+				continue
+			}
+			cp := *u
+			cp.Roles = m.Roles
+			cp.TenantID = tenantID
+			users = append(users, &cp)
+		}
+		serviceAccounts, _, err := s.UserRepo.ListByFilter(ctx, &types.UserFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			Type:        lo.ToPtr(types.UserTypeServiceAccount),
+		})
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, serviceAccounts...)
+	} else {
+		var err error
+		users, _, err = s.UserRepo.ListByFilter(ctx, &types.UserFilter{QueryFilter: types.NewNoLimitQueryFilter()})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return admindto.NewListUsersResponse(users), nil
 }

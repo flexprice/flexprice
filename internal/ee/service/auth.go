@@ -298,9 +298,25 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 		}
 	}
 
+	tenantID := user.TenantID
+	if req.TenantID != "" {
+		if s.TenantMembershipRepo == nil {
+			return nil, ierr.NewError("tenant membership repository not configured").
+				WithHint("Selecting a tenant at login requires membership support").
+				Mark(ierr.ErrValidation)
+		}
+		if _, err := s.TenantMembershipRepo.GetByUserAndTenant(ctx, user.ID, req.TenantID); err != nil {
+			// Same generic credentials error so tenant membership is not enumerable.
+			return nil, ierr.WithError(err).
+				WithHint("Invalid email or password").
+				Mark(ierr.ErrPermissionDenied)
+		}
+		tenantID = req.TenantID
+	}
+
 	authResponse, err := s.authProvider.Login(ctx, authProvider.AuthRequest{
 		UserID:   user.ID,
-		TenantID: user.TenantID,
+		TenantID: tenantID,
 		Email:    user.Email,
 		Password: req.Password,
 	}, auth)
@@ -319,10 +335,23 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 			Mark(ierr.ErrPermissionDenied)
 	}
 
+	if tenantID != user.TenantID {
+		if err := s.authProvider.AssignUserToTenant(ctx, user.ID, tenantID); err != nil {
+			return nil, err
+		}
+		// Provider login tokens may still carry the home tenant; mint one for the
+		// selected membership so the session matches the login request.
+		token, _, err := s.authProvider.GenerateDevToken(tenantID, "", user.ID, user.Email, 30*24)
+		if err != nil {
+			return nil, err
+		}
+		authResponse.AuthToken = token
+	}
+
 	response := &dto.AuthResponse{
 		Token:    authResponse.AuthToken,
 		UserID:   authResponse.ID,
-		TenantID: user.TenantID,
+		TenantID: tenantID,
 	}
 
 	return response, nil

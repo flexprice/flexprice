@@ -49,6 +49,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/tenantmembership"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -83,6 +84,7 @@ type ServiceParams struct {
 	// Repositories
 	AuthRepo                     auth.Repository
 	UserRepo                     user.Repository
+	TenantMembershipRepo         tenantmembership.Repository
 	EventRepo                    events.Repository
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
@@ -188,6 +190,7 @@ func NewServiceParams(
 	locker cache.Locker,
 	authRepo auth.Repository,
 	userRepo user.Repository,
+	tenantMembershipRepo tenantmembership.Repository,
 	eventRepo events.Repository,
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
@@ -266,6 +269,7 @@ func NewServiceParams(
 		Locker:                       locker,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
+		TenantMembershipRepo:         tenantMembershipRepo,
 		EventRepo:                    eventRepo,
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,

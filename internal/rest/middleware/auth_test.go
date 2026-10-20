@@ -175,7 +175,7 @@ func newAuthTestRouter(t *testing.T) *gin.Engine {
 	log := newTestLogger(t)
 
 	r := gin.New()
-	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), log))
+	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), nil, log))
 	r.GET("/test", func(c *gin.Context) {
 		ctx := c.Request.Context()
 		c.JSON(http.StatusOK, gin.H{
@@ -293,7 +293,7 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 				Secret:   testSecret,
 				APIKey:   config.APIKeyConfig{Header: "x-api-key"},
 			},
-		}, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
+		}, nil, newTestEnvironmentRepo(), newTestUserRepo(), nil, newTestLogger(t)))
 		r.GET("/capture", func(c *gin.Context) {
 			capturedCtx = c.Request.Context()
 			c.Status(http.StatusOK)
@@ -440,7 +440,7 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 
 	newRouter := func() *gin.Engine {
 		r := gin.New()
-		r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
+		r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), nil, newTestLogger(t)))
 		handler := func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"environment_id": types.GetEnvironmentID(c.Request.Context()),
@@ -547,7 +547,7 @@ func TestAuthenticateMiddleware_EnvironmentLookupFailureIsNotForbidden(t *testin
 	r := gin.New()
 	r.Use(AuthenticateMiddleware(cfg, nil, &fakeEnvironmentRepo{
 		getErr: ierr.NewError("connection refused").Mark(ierr.ErrDatabase),
-	}, newTestUserRepo(), newTestLogger(t)))
+	}, newTestUserRepo(), nil, newTestLogger(t)))
 	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	w := httptest.NewRecorder()
@@ -640,7 +640,7 @@ func TestAuthenticateMiddleware_JWTRolesComeFromUserRecord(t *testing.T) {
 			var capturedRoles []string
 
 			r := gin.New()
-			r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), tc.userRepo, newTestLogger(t)))
+			r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), tc.userRepo, nil, newTestLogger(t)))
 			r.GET("/test", func(c *gin.Context) {
 				capturedRoles = types.GetRoles(c.Request.Context())
 				c.Status(http.StatusOK)
@@ -689,7 +689,7 @@ func TestAuthenticateMiddleware_ConfigAPIKeyIsSuperAdmin(t *testing.T) {
 
 	var capturedRoles []string
 	r := gin.New()
-	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), newTestLogger(t)))
+	r.Use(AuthenticateMiddleware(cfg, nil, newTestEnvironmentRepo(), newTestUserRepo(), nil, newTestLogger(t)))
 	r.GET("/test", func(c *gin.Context) {
 		capturedRoles = types.GetRoles(c.Request.Context())
 		c.Status(http.StatusOK)

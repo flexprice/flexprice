@@ -271,3 +271,73 @@ func (h *UserHandler) RemoveUser(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// @Summary List my tenants
+// @ID listMyTenants
+// @Description List tenants the current user belongs to.
+// @Tags Users
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.ListMyTenantsResponse
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/me/tenants [get]
+// @x-scope "read"
+func (h *UserHandler) ListMyTenants(c *gin.Context) {
+	resp, err := h.userService.ListMyTenants(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Leave current tenant
+// @ID leaveTenant
+// @Description Leave the tenant in the current session. Archives membership only; the login is removed when no memberships remain.
+// @Tags Users
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 204 "No content"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/me/leave [post]
+// @x-scope "delete"
+func (h *UserHandler) LeaveTenant(c *gin.Context) {
+	if err := h.userService.LeaveTenant(c.Request.Context()); err != nil {
+		h.logger.Error(c.Request.Context(), "failed to leave tenant", "error", err)
+		c.Error(err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// @Summary Switch active tenant
+// @ID switchTenant
+// @Description Switch the active tenant for the current user and return a new auth token.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.SwitchTenantRequest true "Tenant to switch to"
+// @Success 200 {object} dto.AuthResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/me/switch-tenant [post]
+// @x-scope "write"
+func (h *UserHandler) SwitchTenant(c *gin.Context) {
+	var req dto.SwitchTenantRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.userService.SwitchTenant(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.Error(c.Request.Context(), "failed to switch tenant", "error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
