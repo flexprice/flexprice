@@ -811,7 +811,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	}
 	if finalizedNow {
 		// Best effort: the invoice is already paid and finalized, so its follow-ups must still run.
-		if err := NewHostedInvoiceTokenService(p.ServiceParams).IssueOnFinalize(ctx, invoice); err != nil {
+		if err := NewHostedInvoiceTokenService(p.ServiceParams).Issue(ctx, invoice); err != nil {
 			p.Logger.Error(ctx, "failed to issue hosted invoice token at finalization",
 				"error", err,
 				"invoice_id", invoice.ID)

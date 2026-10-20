@@ -1500,7 +1500,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
 		}
-		if err := NewHostedInvoiceTokenService(s.ServiceParams).IssueOnFinalize(txCtx, lockedInv); err != nil {
+		if err := NewHostedInvoiceTokenService(s.ServiceParams).Issue(txCtx, lockedInv); err != nil {
 			return err
 		}
 

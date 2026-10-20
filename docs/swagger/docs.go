@@ -21969,7 +21969,7 @@ const docTemplate = `{
                     ]
                 },
                 "hosted_invoice_url": {
-                    "description": "hosted_invoice_url is the page where the customer views, downloads and pays this invoice",
+                    "description": "hosted_invoice_url is the page where the customer can view, download and pay this invoice",
                     "type": "string"
                 },
                 "id": {

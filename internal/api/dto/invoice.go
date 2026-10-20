@@ -1249,7 +1249,7 @@ type InvoiceResponse struct {
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
-	// hosted_invoice_url is the page where the customer views, downloads and pays this invoice
+	// hosted_invoice_url is the page where the customer can view, download and pay this invoice
 	HostedInvoiceURL string `json:"hosted_invoice_url,omitempty"`
 
 	// tax_applied_records contains the tax applied records associated with this invoice

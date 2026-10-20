@@ -22,13 +22,12 @@ type HostedInvoiceTokenService interface {
 	// Revoke revokes the invoice's current token if it has one.
 	Revoke(ctx context.Context, invoiceID string) error
 
-	// IssueOnFinalize issues a token for a just-finalized invoice unless an integration hosts it.
-	IssueOnFinalize(ctx context.Context, inv *invoice.Invoice) error
-
 	// RecalculateExpiry resets the current token's expiry from the invoice's due date; no current token is a no-op.
 	RecalculateExpiry(ctx context.Context, inv *invoice.Invoice) error
 
-	// HostedInvoiceURLs maps invoice id to its hosted invoice link; invoices without a link are absent.
+	// HostedInvoiceURLs returns each invoice's customer-facing link, keyed by invoice id: the Stripe
+	// hosted URL if the invoice synced to Stripe, else the Flexprice page link for its active token
+	// when hosted_invoice.base_url is set. Invoices with neither are absent.
 	HostedInvoiceURLs(ctx context.Context, invoices []*invoice.Invoice) (map[string]string, error)
 }
 
@@ -55,73 +54,6 @@ func (s *hostedInvoiceTokenService) Issue(ctx context.Context, inv *invoice.Invo
 
 func (s *hostedInvoiceTokenService) Revoke(ctx context.Context, invoiceID string) error {
 	return s.HostedInvoiceTokenRepo.RevokeByInvoiceID(ctx, invoiceID)
-}
-
-func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error) {
-	var token *hostedinvoicetoken.HostedInvoiceToken
-
-	// The read-then-insert runs under an advisory lock keyed on the invoice, so a
-	// concurrent issuer waits and then returns the committed token instead of hitting
-	// the one-current-token index (which would abort the caller's transaction).
-	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
-		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: hostedInvoiceTokenLockKey(ctx, inv.ID)}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to acquire hosted invoice token lock").
-				Mark(ierr.ErrInternal)
-		}
-
-		existing, err := s.HostedInvoiceTokenRepo.GetCurrentByInvoiceID(ctx, inv.ID)
-		if err == nil {
-			token = existing
-			return nil
-		}
-		if !ierr.IsNotFound(err) {
-			return err
-		}
-
-		now := time.Now().UTC()
-		token = &hostedinvoicetoken.HostedInvoiceToken{
-			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_HOSTED_INVOICE_TOKEN),
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			InvoiceID:     inv.ID,
-			ExpiresAt:     hostedinvoicetoken.CalculateExpiry(inv.DueDate, lo.FromPtrOr(inv.FinalizedAt, now), now),
-			BaseModel:     types.GetDefaultBaseModel(ctx),
-		}
-		if err := s.HostedInvoiceTokenRepo.Create(ctx, token); err != nil {
-			return err
-		}
-		s.Logger.Info(ctx, "issued hosted invoice token", "token_id", token.ID, "invoice_id", inv.ID)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
-}
-
-// shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
-func (s *hostedInvoiceTokenService) shouldIssue(ctx context.Context, _ *invoice.Invoice) (bool, error) {
-	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
-	if ierr.IsNotFound(err) {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return !conn.IsInvoiceOutboundEnabled(), nil
-}
-
-func (s *hostedInvoiceTokenService) IssueOnFinalize(ctx context.Context, inv *invoice.Invoice) error {
-	issue, err := s.shouldIssue(ctx, inv)
-	if err != nil {
-		return err
-	}
-	if !issue {
-		s.Logger.Info(ctx, "skipped hosted invoice token, invoice syncs to an integration", "invoice_id", inv.ID)
-		return nil
-	}
-	_, err = s.Issue(ctx, inv)
-	return err
 }
 
 func (s *hostedInvoiceTokenService) RecalculateExpiry(ctx context.Context, inv *invoice.Invoice) error {
@@ -177,6 +109,48 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 		}
 	}
 	return urls, nil
+}
+
+func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error) {
+	var token *hostedinvoicetoken.HostedInvoiceToken
+
+	// The read-then-insert runs under an advisory lock keyed on the invoice, so a
+	// concurrent issuer waits and then returns the committed token instead of hitting
+	// the one-current-token index (which would abort the caller's transaction).
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: hostedInvoiceTokenLockKey(ctx, inv.ID)}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire hosted invoice token lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		existing, err := s.HostedInvoiceTokenRepo.GetCurrentByInvoiceID(ctx, inv.ID)
+		if err == nil {
+			token = existing
+			return nil
+		}
+		if !ierr.IsNotFound(err) {
+			return err
+		}
+
+		now := time.Now().UTC()
+		token = &hostedinvoicetoken.HostedInvoiceToken{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_HOSTED_INVOICE_TOKEN),
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			InvoiceID:     inv.ID,
+			ExpiresAt:     hostedinvoicetoken.CalculateExpiry(inv.DueDate, lo.FromPtrOr(inv.FinalizedAt, now), now),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.HostedInvoiceTokenRepo.Create(ctx, token); err != nil {
+			return err
+		}
+		s.Logger.Info(ctx, "issued hosted invoice token", "token_id", token.ID, "invoice_id", inv.ID)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
 }
 
 // shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
