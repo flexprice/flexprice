@@ -32,7 +32,7 @@ type PaymentService interface {
 	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
 	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
 	// GetOrCreateInvoicePaymentLink returns the invoice's open payment link on the gateway, or creates one.
-	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.InvoicePaymentLinkRequest) (*dto.PaymentResponse, error)
+	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error)
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)

@@ -1169,27 +1169,16 @@ func hasLiveMandate(m interfaces.ProviderPaymentMethod, gw types.PaymentGatewayT
 	return m.Recurring.Status == types.RecurringPaymentStatusActive
 }
 
-func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.InvoicePaymentLinkRequest) (*dto.PaymentResponse, error) {
+func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
 	// A live link for this invoice is reusable: without this a second tap creates a
 	// second full-amount link, and two links can both be paid.
-	if existing, err := s.livePaymentLink(ctx, req.InvoiceID, req.PaymentGateway); err != nil {
+	if existing, err := s.livePaymentLink(ctx, req.DestinationID, lo.FromPtr(req.PaymentGateway)); err != nil {
 		return nil, err
 	} else if existing != nil {
 		return existing, nil
 	}
 
-	return s.CreatePayment(ctx, &dto.CreatePaymentRequest{
-		IdempotencyKey:    req.IdempotencyKey,
-		DestinationType:   types.PaymentDestinationTypeInvoice,
-		DestinationID:     req.InvoiceID,
-		PaymentMethodType: types.PaymentMethodTypePaymentLink,
-		PaymentGateway:    lo.ToPtr(req.PaymentGateway),
-		Amount:            req.Amount,
-		Currency:          req.Currency,
-		SuccessURL:        req.SuccessURL,
-		CancelURL:         req.CancelURL,
-		ProcessPayment:    true,
-	})
+	return s.CreatePayment(ctx, req)
 }
 
 // livePaymentLink returns the payment for an unexpired link already issued for this

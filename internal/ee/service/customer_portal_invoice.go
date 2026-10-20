@@ -38,15 +38,20 @@ func (s *customerPortalService) PayInvoice(ctx context.Context, invoiceID string
 		return nil, err
 	}
 
-	payResp, err := s.paymentService.GetOrCreateInvoicePaymentLink(ctx, &dto.InvoicePaymentLinkRequest{
-		InvoiceID:      inv.ID,
-		Amount:         inv.AmountRemaining,
-		Currency:       inv.Currency,
-		PaymentGateway: gateway,
-		SuccessURL:     lo.FromPtr(req.SuccessURL),
-		CancelURL:      lo.FromPtr(req.CancelURL),
-		IdempotencyKey: lo.FromPtr(req.IdempotencyKey),
-	})
+	payReq := &dto.CreatePaymentRequest{
+		IdempotencyKey:    lo.FromPtr(req.IdempotencyKey),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     inv.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(gateway),
+		Amount:            inv.AmountRemaining,
+		Currency:          inv.Currency,
+		SuccessURL:        lo.FromPtr(req.SuccessURL),
+		CancelURL:         lo.FromPtr(req.CancelURL),
+		ProcessPayment:    true,
+	}
+
+	payResp, err := s.paymentService.GetOrCreateInvoicePaymentLink(ctx, payReq)
 	if err != nil {
 		return nil, err
 	}

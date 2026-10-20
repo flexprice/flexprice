@@ -415,14 +415,3 @@ type SetDefaultPaymentMethodRequest struct {
 type GetDefaultPaymentMethodRequest struct {
 	CustomerID string `json:"customer_id" binding:"required"`
 }
-
-// InvoicePaymentLinkRequest asks for a payment link that collects an invoice's amount on one gateway.
-type InvoicePaymentLinkRequest struct {
-	InvoiceID      string
-	Amount         decimal.Decimal
-	Currency       string
-	PaymentGateway types.PaymentGatewayType
-	SuccessURL     string
-	CancelURL      string
-	IdempotencyKey string
-}

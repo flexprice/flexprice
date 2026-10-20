@@ -155,14 +155,17 @@ func (s *hostedInvoiceService) PayInvoice(ctx context.Context, req *dto.HostedIn
 		"invoice_id":             inv.ID,
 		"hosted_idempotency_key": req.IdempotencyKey,
 	})
-	payResp, err := NewPaymentService(s.ServiceParams).GetOrCreateInvoicePaymentLink(ctx, &dto.InvoicePaymentLinkRequest{
-		InvoiceID:      inv.ID,
-		Amount:         inv.AmountRemaining,
-		Currency:       inv.Currency,
-		PaymentGateway: gateway,
-		SuccessURL:     returnURL,
-		CancelURL:      returnURL,
-		IdempotencyKey: idempotencyKey,
+	payResp, err := NewPaymentService(s.ServiceParams).GetOrCreateInvoicePaymentLink(ctx, &dto.CreatePaymentRequest{
+		IdempotencyKey:    idempotencyKey,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     inv.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    lo.ToPtr(gateway),
+		Amount:            inv.AmountRemaining,
+		Currency:          inv.Currency,
+		SuccessURL:        returnURL,
+		CancelURL:         returnURL,
+		ProcessPayment:    true,
 	})
 	if err != nil {
 		return nil, err
