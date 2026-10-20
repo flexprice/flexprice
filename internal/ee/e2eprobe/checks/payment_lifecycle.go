@@ -122,7 +122,7 @@ func (p *PaymentAutoChargeProbe) addonAutoCharge(ctx context.Context, f *payment
 	}
 	assoc := resp.AddAddonToSubscriptionResponse
 	ids["association_id"] = derefStr(assoc.ID)
-	// A synchronous charge (Chargebee cards) can settle via webhook before the attach returns.
+	// A synchronous charge (Chargebee cards) can settle before the attach returns.
 	if assoc.AddonStatus == nil || (*assoc.AddonStatus != types.AddonStatusPending && *assoc.AddonStatus != types.AddonStatusActive) {
 		return f.fail("addon_autocharge_assert_pending", ids, "addon is %v before payment, want pending or active", derefAddonStatus(assoc.AddonStatus))
 	}
