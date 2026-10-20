@@ -169,7 +169,7 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 	if err != nil {
 		return nil, err
 	}
-	signer := auth.NewHostedInvoiceTokenSigner(s.Config)
+	signer := auth.NewHostedInvoiceSigner(s.Config)
 	now := time.Now().UTC()
 	for _, token := range tokens {
 		if token.IsActive(now) {
