@@ -293,6 +293,13 @@ func TestStartTrial(t *testing.T) {
 				for k, v := range want {
 					assert.Equal(t, v, f.subscriptions[i][k], k)
 				}
+
+				// The trial starts on the current UTC hour, so the hour-stamped usage of its first hour is covered.
+				start, err := time.Parse(time.RFC3339, f.subscriptions[i]["start_date"].(string))
+				require.NoError(t, err)
+				assert.Equal(t, start, start.Truncate(time.Hour), "start_date is on the hour")
+				assert.False(t, start.After(time.Now()), "start_date is not in the future")
+				assert.Less(t, time.Since(start), time.Hour, "start_date is the current hour")
 			}
 		})
 	}

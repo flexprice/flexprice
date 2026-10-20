@@ -92,11 +92,13 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) error {
 		return err
 	}
 
+	// Starts at the UTC hour: hourly usage is stamped at its hour's start, which must fall inside the subscription.
 	_, err = c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(extID),
 		PlanID:             c.planID,
 		Currency:           trialCurrency,
 		BillingPeriod:      trialBillingPeriod,
+		StartDate:          lo.ToPtr(time.Now().UTC().Truncate(time.Hour)),
 	})
 	return cloudErr(err)
 }
