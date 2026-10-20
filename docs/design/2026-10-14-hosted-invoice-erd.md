@@ -390,7 +390,7 @@ Errors shared by all three:
 - `payments` lists the invoice's payments with only the fields above; gateway payloads and internal ids are left out.
 - `pay.enabled` follows FR-10.
 
-**`GET /public/v1/invoices/download`.** Same as the customer portal's PDF endpoint.
+**`GET /public/v1/invoices/pdf`.** Same as the customer portal's PDF endpoint.
 
 ```json
 { "presigned_url": "https://<storage>/…/INV-0042.pdf?X-Amz-Expires=3600&…" }
