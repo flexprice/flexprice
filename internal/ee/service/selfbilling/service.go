@@ -135,10 +135,6 @@ func (s *selfBillingService) RunHourly(ctx context.Context) error {
 	}
 
 	pushErr := s.pushUsage(ctx, time.Now())
-	if pushErr != nil {
-		s.Logger.Error(ctx, "self-billing usage push failed", "error", pushErr)
-	}
-
 	syncErr := s.syncStatuses(ctx)
 	return errors.Join(pushErr, syncErr)
 }
