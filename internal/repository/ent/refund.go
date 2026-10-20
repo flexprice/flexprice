@@ -733,7 +733,7 @@ func (o RefundQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 
 // GetLinkedCustomerID returns the customer of the refunded invoice.
 func (r *refundRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
-	return linkedCustomerID(ctx, "refund", id, func() (string, error) {
+	return linkedCustomerID(ctx, "refund", id, func(ctx context.Context) (string, error) {
 		client := r.client.Reader(ctx)
 		invoiceID, err := client.Refund.Query().
 			Where(refund.ID(id), refund.TenantID(types.GetTenantID(ctx)), refund.EnvironmentID(types.GetEnvironmentID(ctx))).
