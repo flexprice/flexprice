@@ -98,10 +98,11 @@ func TestSelfBillingRepository_SumInvoicesByTenantHour(t *testing.T) {
 		wantCount    uint64
 		wantTotal    int64
 		wantDiscount int64
+		wantLastAt   time.Time
 	}{
-		{"same_hour_and_currency_summed", tenantA + ":usd", 2, 150, 10},
-		{"currencies_kept_apart", tenantA + ":eur", 1, 7, 0},
-		{"tenants_kept_apart", tenantB + ":usd", 1, 3, 0},
+		{"same_hour_and_currency_summed", tenantA + ":usd", 2, 150, 10, hour.Add(50 * time.Minute)},
+		{"currencies_kept_apart", tenantA + ":eur", 1, 7, 0, hour.Add(time.Minute)},
+		{"tenants_kept_apart", tenantB + ":usd", 1, 3, 0, hour.Add(30 * time.Minute)},
 	}
 	require.Len(t, got, len(tests))
 	for _, tt := range tests {
@@ -109,6 +110,7 @@ func TestSelfBillingRepository_SumInvoicesByTenantHour(t *testing.T) {
 			row, ok := byKey[tt.key]
 			require.True(t, ok)
 			assert.Equal(t, hour, row.Hour)
+			assert.True(t, tt.wantLastAt.Equal(row.LastAt), "last_at %s", row.LastAt)
 			assert.Equal(t, tt.wantCount, row.InvoiceCount)
 			assert.True(t, decimal.NewFromInt(tt.wantTotal).Equal(row.Total), "total %s", row.Total)
 			assert.True(t, decimal.NewFromInt(tt.wantDiscount).Equal(row.TotalDiscount), "discount %s", row.TotalDiscount)

@@ -59,6 +59,10 @@ func TestPushUsage_Window(t *testing.T) {
 func TestPushUsage_Events(t *testing.T) {
 	hour := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
+	// A subscription that started at 09:41 has no line item at 09:00, so events carry the bucket's last moment.
+	lastEvent := hour.Add(52 * time.Minute)
+	lastFinalized := hour.Add(47 * time.Minute)
+
 	fc := newFakeClient()
 	s, d := newTestService(fc)
 	s.Config.Billing.TenantID = "t_billing"
@@ -68,6 +72,7 @@ func TestPushUsage_Events(t *testing.T) {
 		EnvironmentID: "env_1",
 		Hour:          hour,
 		Count:         42,
+		LastAt:        lastEvent,
 	})
 	d.usage.AddEvents(&domainsb.TenantHourEvents{
 		TenantID:      "t_billing",
@@ -88,6 +93,7 @@ func TestPushUsage_Events(t *testing.T) {
 		Total:                      decimal.RequireFromString("114.5"),
 		AmountDue:                  decimal.RequireFromString("114.5"),
 		AmountPaid:                 decimal.RequireFromString("100"),
+		LastAt:                     lastFinalized,
 	})
 	d.usage.AddInvoices(&domainsb.TenantHourInvoices{
 		TenantID:      "t_billing",
@@ -105,7 +111,7 @@ func TestPushUsage_Events(t *testing.T) {
 			id:        "evt:us:t1:env_1:2026100109",
 			name:      eventNameEventsIngested,
 			extID:     "us:t1",
-			timestamp: hour,
+			timestamp: lastEvent,
 			properties: map[string]string{
 				"count":          "42",
 				"environment_id": "env_1",
@@ -116,7 +122,7 @@ func TestPushUsage_Events(t *testing.T) {
 			id:        "inv:us:t1:env_1:USD:2026100109",
 			name:      eventNameInvoiceValue,
 			extID:     "us:t1",
-			timestamp: hour,
+			timestamp: lastFinalized,
 			properties: map[string]string{
 				"amount":                        "114.5",
 				"total":                         "114.5",

@@ -49,7 +49,7 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 			id:        strings.Join([]string{"evt", region, c.TenantID, c.EnvironmentID, hour.Format(eventHourFormat)}, ":"),
 			name:      eventNameEventsIngested,
 			extID:     s.extID(c.TenantID),
-			timestamp: hour,
+			timestamp: c.LastAt.UTC(),
 			properties: map[string]string{
 				"count":          strconv.FormatUint(c.Count, 10),
 				"environment_id": c.EnvironmentID,
@@ -70,7 +70,7 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 			id:        strings.Join([]string{"inv", region, inv.TenantID, inv.EnvironmentID, currency, hour.Format(eventHourFormat)}, ":"),
 			name:      eventNameInvoiceValue,
 			extID:     s.extID(inv.TenantID),
-			timestamp: hour,
+			timestamp: inv.LastAt.UTC(),
 			properties: map[string]string{
 				"amount":                        inv.Total.String(),
 				"total":                         inv.Total.String(),

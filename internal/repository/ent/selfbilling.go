@@ -25,7 +25,8 @@ const selfBillingInvoiceSumQuery = `
 		COALESCE(SUM(total_tax), 0),
 		COALESCE(SUM(total), 0),
 		COALESCE(SUM(amount_due), 0),
-		COALESCE(SUM(amount_paid), 0)
+		COALESCE(SUM(amount_paid), 0),
+		MAX(finalized_at) AS last_at
 	FROM invoices
 	WHERE status = $1
 		AND invoice_status = $2
@@ -83,6 +84,7 @@ func (r *selfBillingRepository) SumInvoicesByTenantHour(ctx context.Context, fro
 			&row.Total,
 			&row.AmountDue,
 			&row.AmountPaid,
+			&row.LastAt,
 		); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
@@ -91,6 +93,7 @@ func (r *selfBillingRepository) SumInvoicesByTenantHour(ctx context.Context, fro
 		}
 
 		row.Hour = row.Hour.UTC()
+		row.LastAt = row.LastAt.UTC()
 		out = append(out, row)
 	}
 

@@ -17,7 +17,8 @@ SELECT
 	tenant_id,
 	environment_id,
 	toStartOfHour(ingested_at, 'UTC') AS hour,
-	uniqExact(id) AS cnt
+	uniqExact(id) AS cnt,
+	max(ingested_at) AS last_at
 FROM events
 WHERE ingested_at >= ? AND ingested_at < ?
 GROUP BY tenant_id, environment_id, hour
@@ -47,12 +48,13 @@ func (r *selfBillingRepository) CountEventsByTenantHour(ctx context.Context, fro
 	var out []*domainsb.TenantHourEvents
 	for rows.Next() {
 		row := &domainsb.TenantHourEvents{}
-		if err := rows.Scan(&row.TenantID, &row.EnvironmentID, &row.Hour, &row.Count); err != nil {
+		if err := rows.Scan(&row.TenantID, &row.EnvironmentID, &row.Hour, &row.Count, &row.LastAt); err != nil {
 			return nil, ierr.WithError(err).
 				WithHint("Failed to read self-billing event counts").
 				Mark(ierr.ErrDatabase)
 		}
 		row.Hour = row.Hour.UTC()
+		row.LastAt = row.LastAt.UTC()
 		out = append(out, row)
 	}
 

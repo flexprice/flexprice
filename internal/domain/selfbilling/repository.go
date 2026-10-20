@@ -13,6 +13,9 @@ type TenantHourEvents struct {
 	EnvironmentID string
 	Hour          time.Time
 	Count         uint64
+
+	// LastAt is the latest ingested_at in the hour; the pushed event carries it so it falls inside the subscription.
+	LastAt time.Time
 }
 
 // TenantHourInvoices sums the invoices one tenant environment finalized in one currency in one UTC hour.
@@ -29,6 +32,9 @@ type TenantHourInvoices struct {
 	Total                      decimal.Decimal
 	AmountDue                  decimal.Decimal
 	AmountPaid                 decimal.Decimal
+
+	// LastAt is the latest finalized_at in the hour; the pushed event carries it so it falls inside the subscription.
+	LastAt time.Time
 }
 
 // ClickHouseRepository holds self-billing's cross-tenant analytics reads. Only internal/ee/service/selfbilling may call it.
