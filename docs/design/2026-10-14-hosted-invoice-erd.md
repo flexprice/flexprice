@@ -110,7 +110,7 @@ A **hosted invoice page** here means a page that shows the invoice amount with a
 | FR-17 | Deferred (not in v1): `invoice.update` webhook on revoke or refresh. | UC7 | — |
 | FR-18 | Opening a revoked link (revoked on the switch to Stripe) shows "This link is no longer valid, contact <tenant name>" and no invoice data. | UC6 | Open a revoked link → that message, with no amount, number or line items. |
 | FR-19 | Deferred (not in v1): tenant revoke and refresh endpoints, and their rejection for Stripe-owned links. | UC7 | — |
-| FR-20 | In Flexprice cloud, Flexprice links are served from the dedicated invoice domain `invoice.flexprice.io`, separate from the dashboard and customer portal domains. A BYOC deployment serves them from its own invoice host, set as the deployment's base URL. | UC1 | In cloud, every Flexprice link starts with `https://invoice.flexprice.io/<region>/`; in BYOC, every link starts with the configured base URL. |
+| FR-20 | In Flexprice cloud, Flexprice links are served from the dedicated invoice domain `invoice.flexprice.io`, separate from the dashboard and customer portal domains. A BYOC deployment serves them under `/invoice` on its own domain. | UC1 | In cloud, every Flexprice link starts with `https://invoice.flexprice.io/<region>/`; in BYOC, every link starts with `https://<deployment domain>/invoice/`. |
 
 ## 5. Non-functional requirements
 <!-- erd:locked -->
@@ -152,7 +152,7 @@ These apply to Flexprice links; Stripe links follow Stripe's own rules.
 ## 8. Solution overview
 <!-- erd:locked -->
 
-The hosted invoice page is a standalone frontend app, owned by the frontend team and built from the same UI components as the dashboard. One deployment on `invoice.flexprice.io` serves every region; the regional frontends and the dashboard are not involved. The link's path names its region (`/us/…`, `/in/…`, `/ca/…`), and the page uses it to call that region's backend directly from the browser, through a small public invoice API. A BYOC deployment runs the same app on its own host (9.6).
+The hosted invoice page is a standalone frontend app, owned by the frontend team and built from the same UI components as the dashboard. One deployment on `invoice.flexprice.io` serves every region; the regional frontends and the dashboard are not involved. The link's path names its region (`/us/…`, `/in/…`, `/ca/…`), and the page uses it to call that region's backend directly from the browser, through a small public invoice API. A BYOC deployment serves the same app under `/invoice` on its own domain (9.6).
 
 ```mermaid
 flowchart LR
@@ -292,7 +292,7 @@ The link is built from the record when the API returns it; nothing is stored:
 | Cloud, Canada | `https://invoice.flexprice.io/ca` | `https://invoice.flexprice.io/ca/hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ.<signature>` |
 | Cloud, US | `https://invoice.flexprice.io/us` | `https://invoice.flexprice.io/us/<token>` |
 | Cloud, India | `https://invoice.flexprice.io/in` | `https://invoice.flexprice.io/in/<token>` |
-| BYOC | the deployment's invoice host plus one path segment, e.g. `https://invoice.client.com/us` | `https://invoice.client.com/us/<token>` |
+| BYOC | the deployment's domain plus `/invoice`, e.g. `https://billing.client.com/invoice` | `https://billing.client.com/invoice/<token>` |
 
 Opening the link reverses the steps: split the token at the dot, sign the record id again, and compare with the signature in the link (in constant time). Only a match reads the record; any edited character fails the comparison.
 
@@ -444,7 +444,7 @@ No new jobs or consumers.
 
 | Config | Value |
 |---|---|
-| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. BYOC: the deployment's invoice host plus its path segment (9.6). The API layer reads it when returning links; links are this value, a slash and the token. Empty (the default) returns no Flexprice link. |
+| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. BYOC: `https://<deployment domain>/invoice` (9.6). The API layer reads it when returning links; links are this value, a slash and the token. Empty (the default) returns no Flexprice link. |
 
 ### 9.5 Frontend
 
@@ -468,15 +468,16 @@ No new jobs or consumers.
 
 ### 9.6 Deployment: cloud and BYOC
 
-The backend and the page are the same in both. They differ only in where the page is served and what its region-to-API map holds.
+The backend is the same in both. The page is the same app, built twice: they differ in where it is served, the prefix its files load from, and its region-to-API map.
 
 | | Cloud | BYOC |
 |---|---|---|
-| Page | One deployment on `invoice.flexprice.io` for every region | The same app, built and served by the BYOC deployment as static files on its own host, e.g. `invoice.client.com` |
-| Region-to-API map (build time) | `us`, `in`, `ca`, `staging` → each region's API | One entry, e.g. `us` → the deployment's API |
-| `hosted_invoice.base_url` | `https://invoice.flexprice.io/<region>`, set per region | `https://invoice.client.com/us` |
-| Link | `https://invoice.flexprice.io/<region>/<token>` | `https://invoice.client.com/us/<token>` |
-| Page calls | Browser → the region's API named in the link | Browser → the deployment's API |
+| Page | One deployment on `invoice.flexprice.io` for every region | Served by the deployment under `/invoice` on its existing domain, next to the dashboard and API |
+| File prefix (build time) | `/` | `/invoice/`, so the page's files load from `/invoice/assets/…` and not from the dashboard's paths |
+| Region-to-API map (build time) | `us`, `in`, `ca`, `staging` → each region's API | `invoice` → the deployment's own domain |
+| `hosted_invoice.base_url` | `https://invoice.flexprice.io/<region>`, set per region | `https://<deployment domain>/invoice` |
+| Link | `https://invoice.flexprice.io/<region>/<token>` | `https://billing.client.com/invoice/<token>` |
+| Page calls | Browser → the region's API named in the link | Browser → `/public/v1` on the same domain |
 
 ```mermaid
 flowchart LR
@@ -486,15 +487,18 @@ flowchart LR
     CC -.->|/in| CIN[India API]
     CC -.->|/ca| CCA[Canada API]
   end
-  subgraph BYOC[BYOC]
-    BC([Customer browser]) -->|invoice.client.com/us/token| BP[Hosted invoice page<br/>same app, client's host]
-    BC -.->|/us| BA[Deployment's API]
+  subgraph BYOC[BYOC: one domain, path routing]
+    BC([Customer browser]) -->|billing.client.com/invoice/token| LB[Deployment load balancer]
+    LB -->|/invoice| BP[Hosted invoice page]
+    LB -->|/public/v1, /v1| BA[Flexprice API]
+    LB -->|/| BD[Dashboard]
   end
 ```
 
-BYOC rules:
-- The page needs its own host. Its assets and routes are rooted at the host, so it cannot sit under a path of another app's host (for example the dashboard's).
-- The link's first path segment must be one of the app's region names (`us`, `in`, `ca`, `staging`).
+BYOC needs, beyond cloud:
+- The page built with the `/invoice/` prefix, and accepting `invoice` as its link segment (the cloud build accepts only region names).
+- Load balancer rules: `/invoice` to the page (unknown paths under it return the page's entry file) and `/public/v1` to the API.
+- `/invoice` and `/public/v1` reachable by end customers from the internet.
 - A deployment that leaves `hosted_invoice.base_url` empty issues no Flexprice links and offers no Pay.
 
 ## 10. Cross-cutting concerns
