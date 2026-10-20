@@ -331,8 +331,8 @@ func (s *MeterUsageQuerySuite) TestAggregation_AVG_GuardsEmptySetNaN() {
 		StartTime:     time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		EndTime:       time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
 	}, s.qb)
-	assert.Contains(s.T(), query, meterUsageAvgExpr)
+	assert.Contains(s.T(), query, "ifNotFinite(AVG(qty_total), 0)")
 
 	columns := buildMeterUsageAggregationColumns([]types.AggregationType{types.AggregationAvg})
-	assert.Equal(s.T(), meterUsageAvgExpr+" AS total_usage", columns[0])
+	assert.Equal(s.T(), "ifNotFinite(AVG(qty_total), 0) AS total_usage", columns[0])
 }

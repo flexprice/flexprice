@@ -903,7 +903,7 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 	case *MeterUsageMaxAggregator:
 		aggExpr = "MAX(qty_total)"
 	case *MeterUsageAvgAggregator:
-		aggExpr = meterUsageAvgExpr
+		aggExpr = "ifNotFinite(AVG(qty_total), 0)"
 	case *MeterUsageLatestAggregator:
 		aggExpr = "argMax(qty_total, timestamp)"
 	default:
@@ -945,7 +945,7 @@ func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []strin
 	case aggSet[types.AggregationMax]:
 		primaryExpr = "MAX(qty_total)"
 	case aggSet[types.AggregationAvg]:
-		primaryExpr = meterUsageAvgExpr
+		primaryExpr = "ifNotFinite(AVG(qty_total), 0)"
 	case aggSet[types.AggregationLatest]:
 		primaryExpr = "argMax(qty_total, timestamp)"
 	default:

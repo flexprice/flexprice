@@ -99,10 +99,6 @@ func (a *MeterUsageMaxAggregator) GetQuery(ctx context.Context, params *events.M
 
 // --- AVG aggregator ---
 
-// meterUsageAvgExpr maps AVG over zero rows (NaN in ClickHouse) to 0; scanning
-// NaN into decimal.Decimal panics.
-const meterUsageAvgExpr = "ifNotFinite(AVG(qty_total), 0)"
-
 type MeterUsageAvgAggregator struct{}
 
 func (a *MeterUsageAvgAggregator) GetType() types.AggregationType {
@@ -110,7 +106,8 @@ func (a *MeterUsageAvgAggregator) GetType() types.AggregationType {
 }
 
 func (a *MeterUsageAvgAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	return qb.BuildQuery(meterUsageAvgExpr, "COUNT(DISTINCT id)", params)
+	// AVG over zero rows is NaN in ClickHouse; scanning NaN into decimal.Decimal panics.
+	return qb.BuildQuery("ifNotFinite(AVG(qty_total), 0)", "COUNT(DISTINCT id)", params)
 }
 
 // --- LATEST aggregator ---
