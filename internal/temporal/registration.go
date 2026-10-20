@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
+	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
@@ -64,6 +65,7 @@ type cronActivityBundle struct {
 	marketplaceReport            *marketplaceActivities.ReportActivities
 	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 	revenueRollup                *cronActivities.RevenueRollupActivities
+	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -318,6 +320,7 @@ func RegisterWorkflowsAndActivities(
 		marketplaceReport:            marketplaceReportActivities,
 		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
+		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -561,6 +564,7 @@ func buildWorkerConfig(
 			cronWorkflows.MarketplaceUsageReportWorkflow,
 			cronWorkflows.DailyDraftAndComputeWorkflow,
 			cronWorkflows.RevenueRollupWorkflow,
+			cronWorkflows.SelfBillingHourlyWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -581,6 +585,7 @@ func buildWorkerConfig(
 			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
 			cron.revenueRollup.RollupDirtyActivity,
 			cron.revenueRollup.ReconcileBookedInvoicesActivity,
+			cron.selfBillingHourly.SelfBillingHourlyActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:
