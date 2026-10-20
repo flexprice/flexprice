@@ -14,8 +14,8 @@ import (
 
 // HostedInvoiceTokenService issues and revokes public hosted invoice tokens.
 type HostedInvoiceTokenService interface {
-	// Issue returns the invoice's current token, creating one if none exists.
-	Issue(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error)
+	// Issue gives the invoice a token unless an integration hosts it; an invoice that already has one keeps it.
+	Issue(ctx context.Context, inv *invoice.Invoice) error
 
 	// Revoke revokes the invoice's current token if it has one.
 	Revoke(ctx context.Context, invoiceID string) error
@@ -29,7 +29,24 @@ func NewHostedInvoiceTokenService(params ServiceParams) HostedInvoiceTokenServic
 	return &hostedInvoiceTokenService{ServiceParams: params}
 }
 
-func (s *hostedInvoiceTokenService) Issue(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error) {
+func (s *hostedInvoiceTokenService) Issue(ctx context.Context, inv *invoice.Invoice) error {
+	issue, err := s.shouldIssue(ctx, inv)
+	if err != nil {
+		return err
+	}
+	if !issue {
+		s.Logger.Info(ctx, "skipped hosted invoice token, invoice syncs to an integration", "invoice_id", inv.ID)
+		return nil
+	}
+	_, err = s.getOrCreate(ctx, inv)
+	return err
+}
+
+func (s *hostedInvoiceTokenService) Revoke(ctx context.Context, invoiceID string) error {
+	return s.HostedInvoiceTokenRepo.RevokeByInvoiceID(ctx, invoiceID)
+}
+
+func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoice.Invoice) (*hostedinvoicetoken.HostedInvoiceToken, error) {
 	var token *hostedinvoicetoken.HostedInvoiceToken
 
 	// The read-then-insert runs under an advisory lock keyed on the invoice, so a
@@ -71,8 +88,16 @@ func (s *hostedInvoiceTokenService) Issue(ctx context.Context, inv *invoice.Invo
 	return token, nil
 }
 
-func (s *hostedInvoiceTokenService) Revoke(ctx context.Context, invoiceID string) error {
-	return s.HostedInvoiceTokenRepo.RevokeByInvoiceID(ctx, invoiceID)
+// shouldIssue is the single place for integration rules on whether Flexprice hosts the invoice.
+func (s *hostedInvoiceTokenService) shouldIssue(ctx context.Context, _ *invoice.Invoice) (bool, error) {
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !conn.IsInvoiceOutboundEnabled(), nil
 }
 
 func hostedInvoiceTokenLockKey(ctx context.Context, invoiceID string) string {
