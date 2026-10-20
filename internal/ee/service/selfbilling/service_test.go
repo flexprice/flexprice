@@ -488,11 +488,12 @@ func TestRunHourly(t *testing.T) {
 			seedTenant(t, d, "t1", types.TenantInternalStatusTrialing)
 			fc.subs["us:t1"] = activeSub
 
-			// One closed hour of usage, so the push reaches the client.
+			// One settled hour of usage, so the push reaches the client. Two hours back,
+			// because the last hour is still settling for the first 15 minutes of each hour.
 			d.usage.AddEvents(&domainsb.TenantHourEvents{
 				TenantID:      "t1",
 				EnvironmentID: "env_1",
-				Hour:          time.Now().UTC().Truncate(time.Hour).Add(-time.Hour),
+				Hour:          time.Now().UTC().Truncate(time.Hour).Add(-2 * time.Hour),
 				Count:         1,
 			})
 			if tt.syncErr != nil {
