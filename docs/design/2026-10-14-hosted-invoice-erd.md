@@ -1,6 +1,6 @@
 # Hosted Invoice — Design ERD
 
-Status: In review · Owner: aghijap · Last updated: 2026-10-18
+Status: In review · Owner: aghijap · Last updated: 2026-10-20
 Links: <ticket> · <related ERDs / PRs>
 
 ## 1. Requirement
@@ -28,9 +28,7 @@ Tenants read the link from the invoice the same way whichever page it points to.
 1. An invoice is finalized.
 2. The tenant reads the invoice's hosted link from the invoice API response or an invoice webhook.
 
-Variations:
-- The invoice is synced to an integration that hosts invoices; the link the tenant reads is the provider's.
-- The invoice was finalized before launch; its hosted link becomes available through the backfill.
+Variation: the invoice is synced to an integration that hosts invoices; the link the tenant reads is the provider's.
 
 **UC2 — Customer views an open invoice.**
 1. The customer opens the link; no login.
@@ -74,7 +72,7 @@ Variation: until Stripe supplies a hosted URL, the invoice retains its Flexprice
 A **hosted invoice page** here means a page that shows the invoice amount with a Pay button, lets the customer view the line items and download the invoice. A checkout or payment link is not a hosted invoice page.
 
 **In**
-- A hosted invoice link on newly finalized invoices and a backfill for existing finalized invoices, readable from the invoice API and webhooks.
+- A hosted invoice link on newly finalized invoices, readable from the invoice API and webhooks.
 - Stripe's hosted page as the link for invoices synced to Stripe.
 - A Flexprice-hosted page for all other invoices: view, details, PDF download and Pay.
 
@@ -112,8 +110,7 @@ A **hosted invoice page** here means a page that shows the invoice amount with a
 | FR-17 | Deferred (not in v1): `invoice.update` webhook on revoke or refresh. | UC7 | — |
 | FR-18 | Opening a revoked link (revoked on the switch to Stripe) shows "This link is no longer valid, contact <tenant name>" and no invoice data. | UC6 | Open a revoked link → that message, with no amount, number or line items. |
 | FR-19 | Deferred (not in v1): tenant revoke and refresh endpoints, and their rejection for Stripe-owned links. | UC7 | — |
-| FR-20 | In Flexprice cloud, Flexprice links are served from the dedicated invoice domain `invoice.flexprice.io`, separate from the dashboard and customer portal domains. On-prem, links use the deployment's configured base URL. | UC1 | In cloud, every Flexprice link starts with `https://invoice.flexprice.io/<region>/`; on-prem, every link starts with the configured base URL. |
-| FR-21 | Existing finalized invoices are backfilled with hosted links, following the provider ownership rules in FR-1 to FR-4. | UC1, UC6 | Stripe URLs already live in invoice metadata, so nothing is copied. After backfill, an invoice without a Stripe URL has a Flexprice link issued under the normal expiry rules. Switching to Stripe revokes any existing Flexprice link. |
+| FR-20 | In Flexprice cloud, Flexprice links are served from the dedicated invoice domain `invoice.flexprice.io`, separate from the dashboard and customer portal domains. A BYOC deployment serves them from its own invoice host, set as the deployment's base URL. | UC1 | In cloud, every Flexprice link starts with `https://invoice.flexprice.io/<region>/`; in BYOC, every link starts with the configured base URL. |
 
 ## 5. Non-functional requirements
 <!-- erd:locked -->
@@ -150,65 +147,48 @@ These apply to Flexprice links; Stripe links follow Stripe's own rules.
 | Tenant status check | Blocks portal access for suspended tenants | As-is (NFR-4) |
 | Stripe invoice sync | Pushes the invoice to Stripe on finalization and keeps Stripe's hosted URL in invoice metadata | Extend: the invoice's hosted link reads the metadata URL (FR-2) |
 | Invoice webhooks | `invoice.update.finalized`, `invoice.update`, `invoice.sync.success` / `invoice.sync.failed` | Extend: carry the hosted link (FR-5) |
-| Customer portal frontend | Public, token-based pages inside the dashboard app (portal, checkout), including invoice status display | Extend: base for the hosted invoice page, served on the invoice domain (FR-20) |
+| Customer portal frontend | Public, token-based pages (portal, checkout) built from the shared UI components, including invoice status display | Reuse the shared UI components in a new standalone app for the hosted invoice page, served on the invoice domain (FR-20) |
 
 ## 8. Solution overview
 <!-- erd:locked -->
 
-The hosted invoice page is a frontend page: an invoice-only entry point of the frontend app, owned by the frontend team and built from the same UI components as the dashboard. It ships with each region's existing frontend deployment and reads its data from a small public invoice API on that region's backend. In SaaS, an edge router on `invoice.flexprice.io` forwards `/{region}/…` to that region's frontend deployment, so the customer only ever sees `invoice.flexprice.io`. On-prem, the link points at the deployment's own frontend host and no router is involved.
+The hosted invoice page is a standalone frontend app, owned by the frontend team and built from the same UI components as the dashboard. One deployment on `invoice.flexprice.io` serves every region; the regional frontends and the dashboard are not involved. The link's path names its region (`/us/…`, `/in/…`, `/ca/…`), and the page uses it to call that region's backend directly from the browser, through a small public invoice API. A BYOC deployment runs the same app on its own host (9.6).
 
 ```mermaid
 flowchart LR
   C([Customer browser])
+  P[Hosted invoice page<br/>invoice.flexprice.io]
   G[Tenant's payment gateway]
   S[Stripe hosted invoice page]
 
-  subgraph SAAS[SaaS]
-    E[Edge router<br/>invoice.flexprice.io]:::new
-    subgraph US[US region]
-      USF[Frontend deployment<br/>dashboard + invoice page]
-      USB[Backend<br/>public invoice API]
-      USD[(Invoices<br/>hosted links)]
-    end
-    subgraph IN[India region]
-      INF[Frontend deployment<br/>dashboard + invoice page]
-      INB[Backend<br/>public invoice API]
-      IND[(Invoices<br/>hosted links)]
-    end
-    subgraph CA[Canada region]
-      CAF[Frontend deployment<br/>dashboard + invoice page]
-      CAB[Backend<br/>public invoice API]
-      CAD[(Invoices<br/>hosted links)]
-    end
+  subgraph US[US region]
+    USB[Backend<br/>public invoice API]
+    USD[(Invoices<br/>hosted links)]
+  end
+  subgraph IN[India region]
+    INB[Backend<br/>public invoice API]
+    IND[(Invoices<br/>hosted links)]
+  end
+  subgraph CA[Canada region]
+    CAB[Backend<br/>public invoice API]
+    CAD[(Invoices<br/>hosted links)]
   end
 
-  subgraph ONPREM[On-prem]
-    OF[Frontend on the client's host<br/>dashboard + invoice page]
-    OB[Backend<br/>public invoice API]
-    OD[(Invoices<br/>hosted links)]
-  end
-
-  C -->|invoice.flexprice.io/region/link| E
-  E -->|/us| USF
-  E -->|/in| INF
-  E -->|/ca| CAF
-  C -.->|page loads data| USB
-  C -.->|page loads data| INB
-  C -.->|page loads data| CAB
+  C -->|invoice.flexprice.io/region/link| P
+  C -.->|/us links| USB
+  C -.->|/in links| INB
+  C -.->|/ca links| CAB
   USB --- USD
   INB --- IND
   CAB --- CAD
-  C -->|client-host/invoice/link| OF
-  C -.->|page loads data| OB
-  OB --- OD
   C -->|Pay| G
   C -.->|Stripe-synced invoices| S
 
-  class USF,INF,CAF,OF,USB,INB,CAB,OB new
+  class P,USB,INB,CAB new
   classDef new stroke-width:2px,stroke-dasharray:4 2
 ```
 
-New pieces are dashed: the edge router, the invoice page in every frontend deployment, and the public invoice API with its store of hosted links in every backend. Solid arrows load the page; dotted arrows are the page's own calls to its region's backend.
+New pieces are dashed: the hosted invoice page, and the public invoice API with its store of hosted links in every backend. The solid arrow loads the page; dotted arrows are the page's own calls to the region named in the link.
 
 The main flow, for a Canada tenant whose invoice is not synced to Stripe:
 
@@ -218,17 +198,15 @@ sequenceDiagram
   participant T as Tenant
   participant CB as Canada backend
   participant Cu as Customer
-  participant E as Edge router
-  participant CF as Canada frontend
+  participant P as Hosted invoice page
   participant G as Payment gateway
 
   CB->>CB: Invoice finalized, create its hosted link
   T->>CB: Read the invoice
   CB-->>T: Invoice with its hosted link
-  Cu->>E: Open the link
-  E->>CF: Pass the request to Canada
-  CF-->>Cu: Invoice page
-  Cu->>CB: Load the invoice
+  Cu->>P: Open the link
+  P-->>Cu: Invoice page
+  Cu->>CB: Load the invoice (region from the link)
   CB->>CB: Check the link, find the invoice
   CB-->>Cu: Invoice, line items, payments, PDF download
   Cu->>CB: Pay
@@ -237,7 +215,6 @@ sequenceDiagram
   G-->>Cu: Back to the hosted link, now shown as paid
 ```
 
-- On-prem follows the same flow without the edge router: the customer opens the link on the deployment's own frontend host.
 - For an invoice synced to Stripe, the first step is replaced by the Stripe sync recording Stripe's hosted URL in metadata, and the customer views and pays on Stripe's page.
 
 ## 9. Detailed design
@@ -286,7 +263,6 @@ Indexes:
 
 **Lifecycle**
 - **Issue:** when an invoice is finalized, a link row is inserted in the same transaction as finalization, unless the tenant syncs invoices to Stripe (invoice outbound sync on the Stripe connection); nothing is written to the invoice.
-- **Backfill:** existing finalized invoices receive hosted links under FR-21. Flexprice links retain the normal expiry in NFR-2, calculated from the original due date or finalization; backfilling does not extend it, so an older invoice may receive an already-expired link. Stripe links follow the provider’s existing rules.
 - **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update, within the link's `created_at` + 120 days cap; this is how a tenant extends an expired link while refresh is deferred.
 - **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url`; when the sync completes, revoke any unrevoked Flexprice link. Repeated delivery is idempotent. No URL is written.
 - **Open:** the signature is checked first; a link with a bad signature is rejected without touching the database. The link record is then read by its id without a tenant filter, the only lookup that may do so. The row gives the tenant, environment and invoice; everything after it is scoped as usual. A row that is revoked or past `expires_at`, or whose invoice carries a Stripe hosted URL, shows the "no longer valid" page.
@@ -316,7 +292,7 @@ The link is built from the record when the API returns it; nothing is stored:
 | Cloud, Canada | `https://invoice.flexprice.io/ca` | `https://invoice.flexprice.io/ca/hit_01JAB3K7Q9X2M4N8P6R5T1V0WZ.<signature>` |
 | Cloud, US | `https://invoice.flexprice.io/us` | `https://invoice.flexprice.io/us/<token>` |
 | Cloud, India | `https://invoice.flexprice.io/in` | `https://invoice.flexprice.io/in/<token>` |
-| On-prem | the client's frontend host, e.g. `https://billing.example.com/invoice` | `https://billing.example.com/invoice/<token>` |
+| BYOC | the deployment's invoice host plus one path segment, e.g. `https://invoice.client.com/us` | `https://invoice.client.com/us/<token>` |
 
 Opening the link reverses the steps: split the token at the dot, sign the record id again, and compare with the signature in the link (in constant time). Only a match reads the record; any edited character fails the comparison.
 
@@ -347,7 +323,7 @@ GET /public/v1/invoices
 X-Session-Token: <link_id>.<signature>
 ```
 
-The view, download and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. Observability records only `link_id`; the token header and signatures in customer-facing URLs are redacted as specified in §10. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
+The view, download and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
 
 Errors shared by all three:
 
@@ -459,7 +435,7 @@ sequenceDiagram
 
 ### 9.4 Jobs and events
 
-Backfill existing finalized invoices under FR-21. Execution details and webhook behavior for the backfill remain to be defined. No new recurring jobs or consumers are specified.
+No new jobs or consumers.
 
 | Webhook | When | `hosted_invoice_url` |
 |---|---|---|
@@ -468,11 +444,11 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 
 | Config | Value |
 |---|---|
-| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. On-prem: the client's frontend host plus `/invoice`. The API layer reads it when returning links; links are this value, a slash and the token. Empty (the default) returns no Flexprice link. |
+| `hosted_invoice.base_url` | Cloud: `https://invoice.flexprice.io/<region>`. BYOC: the deployment's invoice host plus its path segment (9.6). The API layer reads it when returning links; links are this value, a slash and the token. Empty (the default) returns no Flexprice link. |
 
 ### 9.5 Frontend
 
-**Entry point.** A separate invoice-only entry point of the frontend app at `/invoice/:token`. It loads no dashboard shell and no login. It uses relative asset paths so it works behind the edge router's `/<region>/` prefix, and calls the region's API that the deployment is built with. The page extracts the signed token from its URL and sends it in `X-Session-Token` on every view, download and pay request. The page sets `referrer: no-referrer` and `robots: noindex`.
+**App.** A standalone app with one deployment on `invoice.flexprice.io`, separate from the dashboard; no dashboard shell and no login. Its route is `/<region>/<token>`. The region picks the API origin from a region-to-API map set at build time (`us`, `in`, `ca`, and `staging` for testing); any other path shows "Page not found". The page sends the signed token in `X-Session-Token` on every view, download and pay request, calling the region's API directly. The page sets `referrer: no-referrer` and `robots: noindex`.
 
 **States.**
 
@@ -490,6 +466,37 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 - Pay: calls pay with a new idempotency key, then redirects to `payment_action.url`. Returning from the gateway reloads the invoice.
 - Download: calls the download endpoint and opens `presigned_url`.
 
+### 9.6 Deployment: cloud and BYOC
+
+The backend and the page are the same in both. They differ only in where the page is served and what its region-to-API map holds.
+
+| | Cloud | BYOC |
+|---|---|---|
+| Page | One deployment on `invoice.flexprice.io` for every region | The same app, built and served by the BYOC deployment as static files on its own host, e.g. `invoice.client.com` |
+| Region-to-API map (build time) | `us`, `in`, `ca`, `staging` → each region's API | One entry, e.g. `us` → the deployment's API |
+| `hosted_invoice.base_url` | `https://invoice.flexprice.io/<region>`, set per region | `https://invoice.client.com/us` |
+| Link | `https://invoice.flexprice.io/<region>/<token>` | `https://invoice.client.com/us/<token>` |
+| Page calls | Browser → the region's API named in the link | Browser → the deployment's API |
+
+```mermaid
+flowchart LR
+  subgraph CLOUD[Cloud]
+    CC([Customer browser]) -->|invoice.flexprice.io/us/token| CP[Hosted invoice page]
+    CC -.->|/us| CUS[US API]
+    CC -.->|/in| CIN[India API]
+    CC -.->|/ca| CCA[Canada API]
+  end
+  subgraph BYOC[BYOC]
+    BC([Customer browser]) -->|invoice.client.com/us/token| BP[Hosted invoice page<br/>same app, client's host]
+    BC -.->|/us| BA[Deployment's API]
+  end
+```
+
+BYOC rules:
+- The page needs its own host. Its assets and routes are rooted at the host, so it cannot sit under a path of another app's host (for example the dashboard's).
+- The link's first path segment must be one of the app's region names (`us`, `in`, `ca`, `staging`).
+- A deployment that leaves `hosted_invoice.base_url` empty issues no Flexprice links and offers no Pay.
+
 ## 10. Cross-cutting concerns
 <!-- erd:locked -->
 
@@ -499,14 +506,13 @@ Backfill existing finalized invoices under FR-21. Execution details and webhook 
 | Expired or revoked links | Link record checked on every call; no cache, so a revoke works at once | NFR-2 |
 | Suspended tenant | Hosted routes check the tenant's status themselves and answer with the "no longer valid" message | NFR-4 |
 | Link leaking from the page | `no-referrer` and `noindex` on the page | NFR-1 |
-| Token in logs | Log only `link_id` for correlation. Redact the signature wherever the hosted URL or token appears, including the `X-Session-Token` header, in application logs, request/access logs (including the edge router), and traces; never record the full bearer token. | NFR-1 |
 | Multi-tenancy | The link-by-id read is the only lookup without a tenant filter; every read after it is scoped to the link's tenant and environment | — |
 | Data on a forwarded link | Whoever holds the link sees what the portal shows the customer, including invoice metadata; expiry and revoke bound it | NFR-2 |
 | Paying twice | Switching to a Stripe URL revokes the Flexprice hosted link; pay reuses an open payment link and takes an idempotency key | — |
 | Link creation fails at finalize | The link is created in the finalize transaction, so finalize fails and retries as it does today | — |
 | Stripe sync fails | The active hosted link is unchanged until a provider URL is received (FR-3) | — |
 | Performance | Invoice get signs the link at read time; list adds one batch query for live links per page; public endpoints validate the link record on each call; no performance target set | — |
-| Backward compatibility | `hosted_invoice_url` is a new, optional, computed field; existing finalized invoices receive links through the backfill (FR-21); the customer portal is unchanged | — |
+| Backward compatibility | `hosted_invoice_url` is a new, optional, computed field; invoices finalized before launch have no link; the customer portal is unchanged | — |
 
 ## 11. Risks & open questions
 <!-- erd:locked -->
