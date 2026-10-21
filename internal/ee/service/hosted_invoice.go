@@ -110,7 +110,7 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 
 	return &dto.HostedInvoiceResponse{
 		Tenant:  dto.HostedInvoiceTenant{Name: t.Name, BillingDetails: t.BillingDetails},
-		Invoice: inv,
+		Invoice: dto.NewHostedInvoice(inv),
 		Payments: lo.Map(payments.Items, func(p *dto.PaymentResponse, _ int) *dto.HostedInvoicePayment {
 			return &dto.HostedInvoicePayment{
 				ID:                p.ID,
