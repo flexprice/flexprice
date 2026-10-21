@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -18,7 +17,6 @@ type AddonHandler struct {
 	service            service.AddonService
 	entitlementService service.EntitlementService
 	temporalService    temporalservice.TemporalService
-	locker             cache.Locker
 	log                *logger.Logger
 }
 
@@ -26,14 +24,12 @@ func NewAddonHandler(
 	service service.AddonService,
 	entitlementService service.EntitlementService,
 	temporalService temporalservice.TemporalService,
-	locker cache.Locker,
 	log *logger.Logger,
 ) *AddonHandler {
 	return &AddonHandler{
 		service:            service,
 		entitlementService: entitlementService,
 		temporalService:    temporalService,
-		locker:             locker,
 		log:                log,
 	}
 }
@@ -322,10 +318,6 @@ func (h *AddonHandler) GetAddonCreditGrants(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func addonPriceSyncLockKey(addonID string) string {
-	return cache.PrefixAddonPriceSyncLock + addonID
-}
-
 // @Summary Synchronize addon prices
 // @ID syncAddonPrices
 // @Description Use when you have changed an addon's usage charges and need to push them to all active subscriptions holding the addon. Returns workflow ID.
@@ -355,40 +347,9 @@ func (h *AddonHandler) SyncAddonPrices(c *gin.Context) {
 		return
 	}
 
-	// Acquire addon-level lock (Redis SetNX, 2h TTL)
-	if h.locker == nil {
-		c.Error(ierr.NewError("addon price sync lock unavailable").
-			WithHint("Redis cache is not available. Try again later.").
-			Mark(ierr.ErrServiceUnavailable))
-		return
-	}
-
-	lockKey := addonPriceSyncLockKey(id)
-	lock, err := h.locker.AcquireLock(c.Request.Context(), lockKey, cache.ExpiryPriceSyncLock)
-	if err != nil {
-		h.log.Error(c.Request.Context(), "addon_price_sync_lock_acquire_failed", "addon_id", id, "lock_key", lockKey, "error", err)
-		c.Error(ierr.NewError("failed to acquire addon price sync lock").
-			WithHint("Try again later.").
-			Mark(ierr.ErrInternal))
-		return
-	}
-	if !lock.AcquiredSuccessfully() {
-		h.log.Info(c.Request.Context(), "addon_price_sync_lock_rejected", "addon_id", id, "lock_key", lockKey, "reason", "already_held")
-		c.Error(ierr.NewError("price sync already in progress for this addon").
-			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
-			Mark(ierr.ErrAlreadyExists))
-		return
-	}
-	h.log.Info(c.Request.Context(), "addon_price_sync_lock_acquired", "addon_id", id, "lock_key", lockKey)
-
-	// Start the addon price sync workflow (the activity releases the lock when done)
+	// The workflow ID is fixed per addon, so Temporal rejects a second sync while one is running.
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalAddonPriceSyncWorkflow, id)
 	if err != nil {
-		// The workflow never started, so the activity that frees the lock never runs.
-		// Release it here, or the next sync for this addon is blocked for the lock's full TTL.
-		if releaseErr := lock.Release(c.Request.Context()); releaseErr != nil {
-			h.log.Error(c.Request.Context(), "addon_price_sync_lock_release_failed", "addon_id", id, "lock_key", lockKey, "error", releaseErr)
-		}
 		c.Error(err)
 		return
 	}

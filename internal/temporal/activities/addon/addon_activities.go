@@ -2,10 +2,8 @@ package activities
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -53,19 +51,6 @@ func (a *AddonActivities) SyncAddonPrices(ctx context.Context, input SyncAddonPr
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
-
-	lockKey := cache.PrefixAddonPriceSyncLock + input.AddonID
-	defer func() {
-		redisCache := cache.GetRedisCache()
-		if redisCache == nil {
-			a.logger.Info(context.Background(), "addon_price_sync_lock_release_skipped", "addon_id", input.AddonID, "lock_key", lockKey, "reason", "redis_cache_nil")
-			return
-		}
-		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		redisCache.Delete(releaseCtx, lockKey)
-		a.logger.Info(ctx, "addon_price_sync_lock_released", "addon_id", input.AddonID, "lock_key", lockKey)
-	}()
 
 	result, err := a.addonService.SyncAddonPrices(ctx, input.AddonID)
 	if err != nil {
