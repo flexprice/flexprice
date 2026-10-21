@@ -1883,14 +1883,14 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.Info(ctx, "skipping subscription - currency mismatch",
+				s.Logger.Debug(ctx, "skipping subscription - currency mismatch",
 					"subscription_id", sub.ID,
 					"subscription_currency", sub.Currency,
 					"wallet_currency", w.Currency)
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
+				s.Logger.Debug(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
 
@@ -3456,14 +3456,14 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.Info(ctx, "skipping subscription - currency mismatch",
+				s.Logger.Debug(ctx, "skipping subscription - currency mismatch",
 					"subscription_id", sub.ID,
 					"subscription_currency", sub.Currency,
 					"wallet_currency", w.Currency)
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
+				s.Logger.Debug(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
 
