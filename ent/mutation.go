@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
+	"github.com/flexprice/flexprice/ent/eventdeletionrequest"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
@@ -106,6 +107,7 @@ const (
 	TypeEntitlementGrant         = "EntitlementGrant"
 	TypeEntityIntegrationMapping = "EntityIntegrationMapping"
 	TypeEnvironment              = "Environment"
+	TypeEventDeletionRequest     = "EventDeletionRequest"
 	TypeFXRate                   = "FXRate"
 	TypeFeature                  = "Feature"
 	TypeGroup                    = "Group"
@@ -30329,6 +30331,1319 @@ func (m *EnvironmentMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *EnvironmentMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown Environment edge %s", name)
+}
+
+// EventDeletionRequestMutation represents an operation that mutates the EventDeletionRequest nodes in the graph.
+type EventDeletionRequestMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	request_id           *string
+	external_customer_id *string
+	period_start         *time.Time
+	period_end           *time.Time
+	deletion_status      *types.EventDeletionStatus
+	started_at           *time.Time
+	completed_at         *time.Time
+	failed_at            *time.Time
+	failure_reason       *string
+	skip_payload         *bool
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*EventDeletionRequest, error)
+	predicates           []predicate.EventDeletionRequest
+}
+
+var _ ent.Mutation = (*EventDeletionRequestMutation)(nil)
+
+// eventdeletionrequestOption allows management of the mutation configuration using functional options.
+type eventdeletionrequestOption func(*EventDeletionRequestMutation)
+
+// newEventDeletionRequestMutation creates new mutation for the EventDeletionRequest entity.
+func newEventDeletionRequestMutation(c config, op Op, opts ...eventdeletionrequestOption) *EventDeletionRequestMutation {
+	m := &EventDeletionRequestMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeEventDeletionRequest,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withEventDeletionRequestID sets the ID field of the mutation.
+func withEventDeletionRequestID(id string) eventdeletionrequestOption {
+	return func(m *EventDeletionRequestMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *EventDeletionRequest
+		)
+		m.oldValue = func(ctx context.Context) (*EventDeletionRequest, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().EventDeletionRequest.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withEventDeletionRequest sets the old EventDeletionRequest of the mutation.
+func withEventDeletionRequest(node *EventDeletionRequest) eventdeletionrequestOption {
+	return func(m *EventDeletionRequestMutation) {
+		m.oldValue = func(context.Context) (*EventDeletionRequest, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m EventDeletionRequestMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m EventDeletionRequestMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of EventDeletionRequest entities.
+func (m *EventDeletionRequestMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *EventDeletionRequestMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *EventDeletionRequestMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().EventDeletionRequest.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *EventDeletionRequestMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *EventDeletionRequestMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *EventDeletionRequestMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *EventDeletionRequestMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *EventDeletionRequestMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *EventDeletionRequestMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *EventDeletionRequestMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *EventDeletionRequestMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *EventDeletionRequestMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *EventDeletionRequestMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *EventDeletionRequestMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *EventDeletionRequestMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *EventDeletionRequestMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *EventDeletionRequestMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *EventDeletionRequestMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[eventdeletionrequest.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *EventDeletionRequestMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *EventDeletionRequestMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *EventDeletionRequestMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *EventDeletionRequestMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[eventdeletionrequest.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *EventDeletionRequestMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *EventDeletionRequestMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *EventDeletionRequestMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *EventDeletionRequestMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[eventdeletionrequest.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *EventDeletionRequestMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldEnvironmentID)
+}
+
+// SetRequestID sets the "request_id" field.
+func (m *EventDeletionRequestMutation) SetRequestID(s string) {
+	m.request_id = &s
+}
+
+// RequestID returns the value of the "request_id" field in the mutation.
+func (m *EventDeletionRequestMutation) RequestID() (r string, exists bool) {
+	v := m.request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestID returns the old "request_id" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldRequestID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestID: %w", err)
+	}
+	return oldValue.RequestID, nil
+}
+
+// ResetRequestID resets all changes to the "request_id" field.
+func (m *EventDeletionRequestMutation) ResetRequestID() {
+	m.request_id = nil
+}
+
+// SetExternalCustomerID sets the "external_customer_id" field.
+func (m *EventDeletionRequestMutation) SetExternalCustomerID(s string) {
+	m.external_customer_id = &s
+}
+
+// ExternalCustomerID returns the value of the "external_customer_id" field in the mutation.
+func (m *EventDeletionRequestMutation) ExternalCustomerID() (r string, exists bool) {
+	v := m.external_customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExternalCustomerID returns the old "external_customer_id" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldExternalCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExternalCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExternalCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExternalCustomerID: %w", err)
+	}
+	return oldValue.ExternalCustomerID, nil
+}
+
+// ResetExternalCustomerID resets all changes to the "external_customer_id" field.
+func (m *EventDeletionRequestMutation) ResetExternalCustomerID() {
+	m.external_customer_id = nil
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *EventDeletionRequestMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *EventDeletionRequestMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *EventDeletionRequestMutation) ResetPeriodStart() {
+	m.period_start = nil
+}
+
+// SetPeriodEnd sets the "period_end" field.
+func (m *EventDeletionRequestMutation) SetPeriodEnd(t time.Time) {
+	m.period_end = &t
+}
+
+// PeriodEnd returns the value of the "period_end" field in the mutation.
+func (m *EventDeletionRequestMutation) PeriodEnd() (r time.Time, exists bool) {
+	v := m.period_end
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodEnd returns the old "period_end" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldPeriodEnd(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodEnd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodEnd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodEnd: %w", err)
+	}
+	return oldValue.PeriodEnd, nil
+}
+
+// ResetPeriodEnd resets all changes to the "period_end" field.
+func (m *EventDeletionRequestMutation) ResetPeriodEnd() {
+	m.period_end = nil
+}
+
+// SetDeletionStatus sets the "deletion_status" field.
+func (m *EventDeletionRequestMutation) SetDeletionStatus(tds types.EventDeletionStatus) {
+	m.deletion_status = &tds
+}
+
+// DeletionStatus returns the value of the "deletion_status" field in the mutation.
+func (m *EventDeletionRequestMutation) DeletionStatus() (r types.EventDeletionStatus, exists bool) {
+	v := m.deletion_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletionStatus returns the old "deletion_status" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldDeletionStatus(ctx context.Context) (v types.EventDeletionStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletionStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletionStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletionStatus: %w", err)
+	}
+	return oldValue.DeletionStatus, nil
+}
+
+// ResetDeletionStatus resets all changes to the "deletion_status" field.
+func (m *EventDeletionRequestMutation) ResetDeletionStatus() {
+	m.deletion_status = nil
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *EventDeletionRequestMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *EventDeletionRequestMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldStartedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *EventDeletionRequestMutation) ResetStartedAt() {
+	m.started_at = nil
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *EventDeletionRequestMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *EventDeletionRequestMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *EventDeletionRequestMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[eventdeletionrequest.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *EventDeletionRequestMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldCompletedAt)
+}
+
+// SetFailedAt sets the "failed_at" field.
+func (m *EventDeletionRequestMutation) SetFailedAt(t time.Time) {
+	m.failed_at = &t
+}
+
+// FailedAt returns the value of the "failed_at" field in the mutation.
+func (m *EventDeletionRequestMutation) FailedAt() (r time.Time, exists bool) {
+	v := m.failed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailedAt returns the old "failed_at" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldFailedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailedAt: %w", err)
+	}
+	return oldValue.FailedAt, nil
+}
+
+// ClearFailedAt clears the value of the "failed_at" field.
+func (m *EventDeletionRequestMutation) ClearFailedAt() {
+	m.failed_at = nil
+	m.clearedFields[eventdeletionrequest.FieldFailedAt] = struct{}{}
+}
+
+// FailedAtCleared returns if the "failed_at" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) FailedAtCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldFailedAt]
+	return ok
+}
+
+// ResetFailedAt resets all changes to the "failed_at" field.
+func (m *EventDeletionRequestMutation) ResetFailedAt() {
+	m.failed_at = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldFailedAt)
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (m *EventDeletionRequestMutation) SetFailureReason(s string) {
+	m.failure_reason = &s
+}
+
+// FailureReason returns the value of the "failure_reason" field in the mutation.
+func (m *EventDeletionRequestMutation) FailureReason() (r string, exists bool) {
+	v := m.failure_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailureReason returns the old "failure_reason" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldFailureReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailureReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailureReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailureReason: %w", err)
+	}
+	return oldValue.FailureReason, nil
+}
+
+// ClearFailureReason clears the value of the "failure_reason" field.
+func (m *EventDeletionRequestMutation) ClearFailureReason() {
+	m.failure_reason = nil
+	m.clearedFields[eventdeletionrequest.FieldFailureReason] = struct{}{}
+}
+
+// FailureReasonCleared returns if the "failure_reason" field was cleared in this mutation.
+func (m *EventDeletionRequestMutation) FailureReasonCleared() bool {
+	_, ok := m.clearedFields[eventdeletionrequest.FieldFailureReason]
+	return ok
+}
+
+// ResetFailureReason resets all changes to the "failure_reason" field.
+func (m *EventDeletionRequestMutation) ResetFailureReason() {
+	m.failure_reason = nil
+	delete(m.clearedFields, eventdeletionrequest.FieldFailureReason)
+}
+
+// SetSkipPayload sets the "skip_payload" field.
+func (m *EventDeletionRequestMutation) SetSkipPayload(b bool) {
+	m.skip_payload = &b
+}
+
+// SkipPayload returns the value of the "skip_payload" field in the mutation.
+func (m *EventDeletionRequestMutation) SkipPayload() (r bool, exists bool) {
+	v := m.skip_payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSkipPayload returns the old "skip_payload" field's value of the EventDeletionRequest entity.
+// If the EventDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventDeletionRequestMutation) OldSkipPayload(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSkipPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSkipPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSkipPayload: %w", err)
+	}
+	return oldValue.SkipPayload, nil
+}
+
+// ResetSkipPayload resets all changes to the "skip_payload" field.
+func (m *EventDeletionRequestMutation) ResetSkipPayload() {
+	m.skip_payload = nil
+}
+
+// Where appends a list predicates to the EventDeletionRequestMutation builder.
+func (m *EventDeletionRequestMutation) Where(ps ...predicate.EventDeletionRequest) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the EventDeletionRequestMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *EventDeletionRequestMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.EventDeletionRequest, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *EventDeletionRequestMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *EventDeletionRequestMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (EventDeletionRequest).
+func (m *EventDeletionRequestMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *EventDeletionRequestMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.tenant_id != nil {
+		fields = append(fields, eventdeletionrequest.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, eventdeletionrequest.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, eventdeletionrequest.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, eventdeletionrequest.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, eventdeletionrequest.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, eventdeletionrequest.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, eventdeletionrequest.FieldEnvironmentID)
+	}
+	if m.request_id != nil {
+		fields = append(fields, eventdeletionrequest.FieldRequestID)
+	}
+	if m.external_customer_id != nil {
+		fields = append(fields, eventdeletionrequest.FieldExternalCustomerID)
+	}
+	if m.period_start != nil {
+		fields = append(fields, eventdeletionrequest.FieldPeriodStart)
+	}
+	if m.period_end != nil {
+		fields = append(fields, eventdeletionrequest.FieldPeriodEnd)
+	}
+	if m.deletion_status != nil {
+		fields = append(fields, eventdeletionrequest.FieldDeletionStatus)
+	}
+	if m.started_at != nil {
+		fields = append(fields, eventdeletionrequest.FieldStartedAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, eventdeletionrequest.FieldCompletedAt)
+	}
+	if m.failed_at != nil {
+		fields = append(fields, eventdeletionrequest.FieldFailedAt)
+	}
+	if m.failure_reason != nil {
+		fields = append(fields, eventdeletionrequest.FieldFailureReason)
+	}
+	if m.skip_payload != nil {
+		fields = append(fields, eventdeletionrequest.FieldSkipPayload)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *EventDeletionRequestMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case eventdeletionrequest.FieldTenantID:
+		return m.TenantID()
+	case eventdeletionrequest.FieldStatus:
+		return m.Status()
+	case eventdeletionrequest.FieldCreatedAt:
+		return m.CreatedAt()
+	case eventdeletionrequest.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case eventdeletionrequest.FieldCreatedBy:
+		return m.CreatedBy()
+	case eventdeletionrequest.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case eventdeletionrequest.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case eventdeletionrequest.FieldRequestID:
+		return m.RequestID()
+	case eventdeletionrequest.FieldExternalCustomerID:
+		return m.ExternalCustomerID()
+	case eventdeletionrequest.FieldPeriodStart:
+		return m.PeriodStart()
+	case eventdeletionrequest.FieldPeriodEnd:
+		return m.PeriodEnd()
+	case eventdeletionrequest.FieldDeletionStatus:
+		return m.DeletionStatus()
+	case eventdeletionrequest.FieldStartedAt:
+		return m.StartedAt()
+	case eventdeletionrequest.FieldCompletedAt:
+		return m.CompletedAt()
+	case eventdeletionrequest.FieldFailedAt:
+		return m.FailedAt()
+	case eventdeletionrequest.FieldFailureReason:
+		return m.FailureReason()
+	case eventdeletionrequest.FieldSkipPayload:
+		return m.SkipPayload()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *EventDeletionRequestMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case eventdeletionrequest.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case eventdeletionrequest.FieldStatus:
+		return m.OldStatus(ctx)
+	case eventdeletionrequest.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case eventdeletionrequest.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case eventdeletionrequest.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case eventdeletionrequest.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case eventdeletionrequest.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case eventdeletionrequest.FieldRequestID:
+		return m.OldRequestID(ctx)
+	case eventdeletionrequest.FieldExternalCustomerID:
+		return m.OldExternalCustomerID(ctx)
+	case eventdeletionrequest.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case eventdeletionrequest.FieldPeriodEnd:
+		return m.OldPeriodEnd(ctx)
+	case eventdeletionrequest.FieldDeletionStatus:
+		return m.OldDeletionStatus(ctx)
+	case eventdeletionrequest.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case eventdeletionrequest.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	case eventdeletionrequest.FieldFailedAt:
+		return m.OldFailedAt(ctx)
+	case eventdeletionrequest.FieldFailureReason:
+		return m.OldFailureReason(ctx)
+	case eventdeletionrequest.FieldSkipPayload:
+		return m.OldSkipPayload(ctx)
+	}
+	return nil, fmt.Errorf("unknown EventDeletionRequest field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventDeletionRequestMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case eventdeletionrequest.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case eventdeletionrequest.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case eventdeletionrequest.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case eventdeletionrequest.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case eventdeletionrequest.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case eventdeletionrequest.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case eventdeletionrequest.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case eventdeletionrequest.FieldRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestID(v)
+		return nil
+	case eventdeletionrequest.FieldExternalCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExternalCustomerID(v)
+		return nil
+	case eventdeletionrequest.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case eventdeletionrequest.FieldPeriodEnd:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodEnd(v)
+		return nil
+	case eventdeletionrequest.FieldDeletionStatus:
+		v, ok := value.(types.EventDeletionStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletionStatus(v)
+		return nil
+	case eventdeletionrequest.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case eventdeletionrequest.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	case eventdeletionrequest.FieldFailedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailedAt(v)
+		return nil
+	case eventdeletionrequest.FieldFailureReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailureReason(v)
+		return nil
+	case eventdeletionrequest.FieldSkipPayload:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSkipPayload(v)
+		return nil
+	}
+	return fmt.Errorf("unknown EventDeletionRequest field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *EventDeletionRequestMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *EventDeletionRequestMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *EventDeletionRequestMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown EventDeletionRequest numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *EventDeletionRequestMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(eventdeletionrequest.FieldCreatedBy) {
+		fields = append(fields, eventdeletionrequest.FieldCreatedBy)
+	}
+	if m.FieldCleared(eventdeletionrequest.FieldUpdatedBy) {
+		fields = append(fields, eventdeletionrequest.FieldUpdatedBy)
+	}
+	if m.FieldCleared(eventdeletionrequest.FieldEnvironmentID) {
+		fields = append(fields, eventdeletionrequest.FieldEnvironmentID)
+	}
+	if m.FieldCleared(eventdeletionrequest.FieldCompletedAt) {
+		fields = append(fields, eventdeletionrequest.FieldCompletedAt)
+	}
+	if m.FieldCleared(eventdeletionrequest.FieldFailedAt) {
+		fields = append(fields, eventdeletionrequest.FieldFailedAt)
+	}
+	if m.FieldCleared(eventdeletionrequest.FieldFailureReason) {
+		fields = append(fields, eventdeletionrequest.FieldFailureReason)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *EventDeletionRequestMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *EventDeletionRequestMutation) ClearField(name string) error {
+	switch name {
+	case eventdeletionrequest.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case eventdeletionrequest.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case eventdeletionrequest.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case eventdeletionrequest.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	case eventdeletionrequest.FieldFailedAt:
+		m.ClearFailedAt()
+		return nil
+	case eventdeletionrequest.FieldFailureReason:
+		m.ClearFailureReason()
+		return nil
+	}
+	return fmt.Errorf("unknown EventDeletionRequest nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *EventDeletionRequestMutation) ResetField(name string) error {
+	switch name {
+	case eventdeletionrequest.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case eventdeletionrequest.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case eventdeletionrequest.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case eventdeletionrequest.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case eventdeletionrequest.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case eventdeletionrequest.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case eventdeletionrequest.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case eventdeletionrequest.FieldRequestID:
+		m.ResetRequestID()
+		return nil
+	case eventdeletionrequest.FieldExternalCustomerID:
+		m.ResetExternalCustomerID()
+		return nil
+	case eventdeletionrequest.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case eventdeletionrequest.FieldPeriodEnd:
+		m.ResetPeriodEnd()
+		return nil
+	case eventdeletionrequest.FieldDeletionStatus:
+		m.ResetDeletionStatus()
+		return nil
+	case eventdeletionrequest.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case eventdeletionrequest.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	case eventdeletionrequest.FieldFailedAt:
+		m.ResetFailedAt()
+		return nil
+	case eventdeletionrequest.FieldFailureReason:
+		m.ResetFailureReason()
+		return nil
+	case eventdeletionrequest.FieldSkipPayload:
+		m.ResetSkipPayload()
+		return nil
+	}
+	return fmt.Errorf("unknown EventDeletionRequest field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *EventDeletionRequestMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *EventDeletionRequestMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *EventDeletionRequestMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *EventDeletionRequestMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *EventDeletionRequestMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *EventDeletionRequestMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *EventDeletionRequestMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown EventDeletionRequest unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *EventDeletionRequestMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown EventDeletionRequest edge %s", name)
 }
 
 // FXRateMutation represents an operation that mutates the FXRate nodes in the graph.

@@ -337,3 +337,11 @@ func NewSelfBillingClickHouseRepository(p RepositoryParams) domainsb.ClickHouseR
 func NewSelfBillingPostgresRepository(p RepositoryParams) domainsb.PostgresRepository {
 	return entRepo.NewSelfBillingRepository(p.EntClient, p.Logger)
 }
+
+func NewEventDeletionRequestRepository(p RepositoryParams) events.DeletionRequestRepository {
+	return entRepo.NewEventDeletionRequestRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionLogRepository(p RepositoryParams) events.DeletedEventsLogRepository {
+	return clickhouseRepo.NewEventDeletionLogRepository(p.ClickHouseDB, p.Logger)
+}

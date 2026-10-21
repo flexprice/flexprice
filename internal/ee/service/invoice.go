@@ -1359,6 +1359,19 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			return errInvoiceCheckoutGated(inv.ID, "finalize")
 		}
 
+		// Taken after the invoice row lock and before the gate read, so a
+		// deletion guard reading the other way round cannot pass at the same time.
+		if err := s.lockInvoiceCustomersForEventDeletion(txCtx, lockedInv); err != nil {
+			return err
+		}
+		gatedDeletion, err := s.isInvoiceGatedOnEventDeletion(txCtx, lockedInv)
+		if err != nil {
+			return err
+		}
+		if gatedDeletion != nil {
+			return errInvoiceEventDeletionGated(inv.ID, gatedDeletion.RequestID)
+		}
+
 		// Re-check status after acquiring lock
 		if lockedInv.InvoiceStatus != types.InvoiceStatusDraft {
 			return ierr.NewError("invoice is not in draft status").WithHint("invoice was finalized concurrently").Mark(ierr.ErrValidation)
@@ -1555,6 +1568,21 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 		return false, err
 	}
 	if gatedSession != nil {
+		return false, nil
+	}
+
+	// A draft whose period is being deleted is not the cron's to finalize. This is
+	// the cheap pre-filter: the authoritative gate is inside
+	// performFinalizeInvoiceActions, under the invoice row lock.
+	gatedDeletion, err := s.isInvoiceGatedOnEventDeletion(ctx, inv)
+	if err != nil {
+		return false, err
+	}
+	if gatedDeletion != nil {
+		s.Logger.Info(ctx, "skipping finalization while an event deletion is in progress",
+			"invoice_id", inv.ID,
+			"request_id", gatedDeletion.RequestID,
+		)
 		return false, nil
 	}
 

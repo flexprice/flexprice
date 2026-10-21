@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
+	"github.com/flexprice/flexprice/ent/eventdeletionrequest"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
@@ -1055,6 +1056,51 @@ func init() {
 	environmentDescType := environmentFields[2].Descriptor()
 	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
+	eventdeletionrequestMixin := schema.EventDeletionRequest{}.Mixin()
+	eventdeletionrequestMixinFields0 := eventdeletionrequestMixin[0].Fields()
+	_ = eventdeletionrequestMixinFields0
+	eventdeletionrequestMixinFields1 := eventdeletionrequestMixin[1].Fields()
+	_ = eventdeletionrequestMixinFields1
+	eventdeletionrequestFields := schema.EventDeletionRequest{}.Fields()
+	_ = eventdeletionrequestFields
+	// eventdeletionrequestDescTenantID is the schema descriptor for tenant_id field.
+	eventdeletionrequestDescTenantID := eventdeletionrequestMixinFields0[0].Descriptor()
+	// eventdeletionrequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	eventdeletionrequest.TenantIDValidator = eventdeletionrequestDescTenantID.Validators[0].(func(string) error)
+	// eventdeletionrequestDescStatus is the schema descriptor for status field.
+	eventdeletionrequestDescStatus := eventdeletionrequestMixinFields0[1].Descriptor()
+	// eventdeletionrequest.DefaultStatus holds the default value on creation for the status field.
+	eventdeletionrequest.DefaultStatus = eventdeletionrequestDescStatus.Default.(string)
+	// eventdeletionrequestDescCreatedAt is the schema descriptor for created_at field.
+	eventdeletionrequestDescCreatedAt := eventdeletionrequestMixinFields0[2].Descriptor()
+	// eventdeletionrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	eventdeletionrequest.DefaultCreatedAt = eventdeletionrequestDescCreatedAt.Default.(func() time.Time)
+	// eventdeletionrequestDescUpdatedAt is the schema descriptor for updated_at field.
+	eventdeletionrequestDescUpdatedAt := eventdeletionrequestMixinFields0[3].Descriptor()
+	// eventdeletionrequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	eventdeletionrequest.DefaultUpdatedAt = eventdeletionrequestDescUpdatedAt.Default.(func() time.Time)
+	// eventdeletionrequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	eventdeletionrequest.UpdateDefaultUpdatedAt = eventdeletionrequestDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// eventdeletionrequestDescEnvironmentID is the schema descriptor for environment_id field.
+	eventdeletionrequestDescEnvironmentID := eventdeletionrequestMixinFields1[0].Descriptor()
+	// eventdeletionrequest.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	eventdeletionrequest.DefaultEnvironmentID = eventdeletionrequestDescEnvironmentID.Default.(string)
+	// eventdeletionrequestDescRequestID is the schema descriptor for request_id field.
+	eventdeletionrequestDescRequestID := eventdeletionrequestFields[1].Descriptor()
+	// eventdeletionrequest.RequestIDValidator is a validator for the "request_id" field. It is called by the builders before save.
+	eventdeletionrequest.RequestIDValidator = eventdeletionrequestDescRequestID.Validators[0].(func(string) error)
+	// eventdeletionrequestDescExternalCustomerID is the schema descriptor for external_customer_id field.
+	eventdeletionrequestDescExternalCustomerID := eventdeletionrequestFields[2].Descriptor()
+	// eventdeletionrequest.ExternalCustomerIDValidator is a validator for the "external_customer_id" field. It is called by the builders before save.
+	eventdeletionrequest.ExternalCustomerIDValidator = eventdeletionrequestDescExternalCustomerID.Validators[0].(func(string) error)
+	// eventdeletionrequestDescDeletionStatus is the schema descriptor for deletion_status field.
+	eventdeletionrequestDescDeletionStatus := eventdeletionrequestFields[5].Descriptor()
+	// eventdeletionrequest.DeletionStatusValidator is a validator for the "deletion_status" field. It is called by the builders before save.
+	eventdeletionrequest.DeletionStatusValidator = eventdeletionrequestDescDeletionStatus.Validators[0].(func(string) error)
+	// eventdeletionrequestDescSkipPayload is the schema descriptor for skip_payload field.
+	eventdeletionrequestDescSkipPayload := eventdeletionrequestFields[10].Descriptor()
+	// eventdeletionrequest.DefaultSkipPayload holds the default value on creation for the skip_payload field.
+	eventdeletionrequest.DefaultSkipPayload = eventdeletionrequestDescSkipPayload.Default.(bool)
 	fxrateMixin := schema.FXRate{}.Mixin()
 	fxrateMixinFields0 := fxrateMixin[0].Fields()
 	_ = fxrateMixinFields0

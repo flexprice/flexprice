@@ -206,7 +206,8 @@ func (r *Router) AddNoPublishHandler(
 	// PoisonQueue must be outermost so it catches failures after retries are exhausted
 	if r.dlqPublisher != nil && topicDLQ != "" {
 		pq, err := middleware.PoisonQueueWithFilter(r.dlqPublisher, topicDLQ, func(err error) bool {
-			return !errors.Is(err, errMessageLost)
+			return !errors.Is(err, errMessageLost) &&
+				!errors.Is(err, types.ErrEventDeletionInProgress)
 		})
 		if err != nil {
 			r.logger.Error(context.Background(), "failed to create poison queue middleware, DLQ disabled for handler",

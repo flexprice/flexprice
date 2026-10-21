@@ -58,6 +58,8 @@ type Tx struct {
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
+	// EventDeletionRequest is the client for interacting with the EventDeletionRequest builders.
+	EventDeletionRequest *EventDeletionRequestClient
 	// FXRate is the client for interacting with the FXRate builders.
 	FXRate *FXRateClient
 	// Feature is the client for interacting with the Feature builders.
@@ -281,6 +283,7 @@ func (tx *Tx) init() {
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
+	tx.EventDeletionRequest = NewEventDeletionRequestClient(tx.config)
 	tx.FXRate = NewFXRateClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)

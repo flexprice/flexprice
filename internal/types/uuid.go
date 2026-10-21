@@ -123,6 +123,7 @@ const (
 	UUID_PREFIX_REVENUE_FACT               = "revfact"
 	UUID_PREFIX_FX_RATE                    = "fxr"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

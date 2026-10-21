@@ -40,8 +40,10 @@ type MeterUsageQueryParams struct {
 	ExternalCustomerIDs []string
 	MeterID             string
 	MeterIDs            []string
-	StartTime           time.Time
-	EndTime             time.Time
+	// IDs restricts the query to these event ids. Empty means no id filter.
+	IDs       []string
+	StartTime time.Time
+	EndTime   time.Time
 	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
 	// OR'd half-open [Start, End) windows — one query for disjoint ranges.
 	TimeRanges      []TimeRange
