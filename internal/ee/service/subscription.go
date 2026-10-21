@@ -4477,10 +4477,8 @@ func (s *subscriptionService) ResumeSubscription(
 	var sub *subscription.Subscription
 	var pause *subscription.SubscriptionPause
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if _, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID); err != nil {
-			return err
-		}
-		lockedSub, err := s.SubRepo.Get(txCtx, subscriptionID)
+		// GetForUpdate reads the locked row; Get may serve a stale copy from the cache.
+		lockedSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return err
 		}
@@ -4585,8 +4583,19 @@ func (s *subscriptionService) ResumeSubscription(
 			return err
 		}
 
-		sub, err = s.SubRepo.Get(txCtx, subscriptionID)
-		return err
+		// The payment step saves the subscription it read from the cache, which still holds the
+		// paused state. Keep the status it decided and write the resumed fields back.
+		paidSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		lockedSub.SubscriptionStatus = paidSub.SubscriptionStatus
+		if err := s.SubRepo.Update(txCtx, lockedSub); err != nil {
+			return err
+		}
+
+		sub = lockedSub
+		return nil
 	})
 	if err != nil {
 		return nil, err
