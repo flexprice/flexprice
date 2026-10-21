@@ -19,7 +19,7 @@ Flexprice bills, but does not account for what it bills. An invoice says what a 
 
 Subscription-native recognition on top of the billing engine: each subscription becomes a contract, its line items become performance obligations with recognition schedules, and billing and earning events post balanced, immutable journal entries to an internal subledger. Reports are queries over that journal.
 
-Out of Phase 1: contract extraction, SSP allocation, ERP posting, period close, multi-entity books, FX, free-credit contra revenue, breakage, deferred waterfall, ARR reporting.
+Out of Phase 1: contract extraction, SSP allocation, ERP posting, period close, multi-entity books, FX, free-credit contra revenue, breakage, projected deferred waterfall, ARR reporting.
 
 Steps:
 
@@ -235,7 +235,6 @@ CREATE TABLE performance_obligations (
     name                varchar(255) NOT NULL,     
     recognition_method  varchar(20)  NOT NULL,     -- straight_line | as_consumed | point_in_time
     amortization_method varchar(30)  NOT NULL,     -- daily | period_even | period_even_prorated
-    product_id          varchar(50),               -- first line item's price.product_id; null = uncategorized
     service_start       timestamptz  NOT NULL,
     service_end         timestamptz,               -- set once every associated line item has ended
     pob_status          varchar(20)  NOT NULL,     -- draft | active | satisfied | cancelled
@@ -336,7 +335,7 @@ const (
 | Invoice finalized / voided (`ONE_OFF`)                                                                                              | None. Subscription-linked proration lines are already scheduled by the modification that produced them. Standalone invoices have no contract or POB, so they post billing journals only (`contract_id` null, Step 6).                                                                                              |
 
 
-Recognition method and `product_id` are derived once from the first line item's price:
+Recognition method is derived once from the first line item's price:
 
 
 | Price                           | Method          |
@@ -438,7 +437,6 @@ const (
 // value of setting key revenue_recognition_config
 type RevenueRecognitionConfig struct {
     Enabled    bool       `json:"enabled"`
-    FiscalMonth string    `json:"fiscal_month"` // "YYYY-MM";
 }
 ```
 
@@ -485,14 +483,14 @@ On Mar 10: `300 × (0.548 + 1 + 9/31) / 3.015 = $182.95`. The same segment under
 | `POST /v1/accounting_periods/search` | Filter by status, date range |
 
 
-The calendar is configured through the existing settings API.
+Revenue recognition is enabled through the existing settings API; the calendar has no other configuration.
 
 #### Invariants
 
 - One calendar per environment; monthly periods only. Periods are contiguous, non-overlapping `[start, end)` months.
 - Periods are rows because journal entries reference them and they will carry the close lifecycle (`open → closed`) once close ships; Phase 1 never closes one. Their end is always the next month start.
 - Periods are materialized on demand inside the posting transaction (insert on conflict do nothing); a missing period never fails a post.
-- `fiscal_month` is the first period finance reports on: at most next month (the default). Enabling rebuilds every contract from its own start into its real periods, so the `fiscal_month` opening balance is the sum of everything posted before it; there are no opening entries. It is immutable once any journal entry exists.
+- Enabling rebuilds every contract from its own start into its real periods; there are no opening entries. A report may start at any period: its opening balance is the sum of everything posted before it.
 - An entry posts to the period containing its business date. If that period is closed, it posts to the first open period after it.
 - Nothing is written unless the environment has revenue recognition enabled.
 
@@ -635,7 +633,7 @@ No `entry_date`: Phase 1 never closes a period, so it equals `business_date`; on
 | Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − round(earned(P_start)) − posted(P)`. Positive `δ`: Dr `deferred_revenue` up to the POB's deferred balance, the rest Dr `unbilled_receivable` / Cr `revenue`. Negative `δ` mirrors it     |
 
 
-`posted(P)` is Σ(credit − debit) on the POB's `revenue` lines in recognition entries of `P`.
+`posted(P)` is Σ(credit − debit) on the POB's `revenue` lines in recognition entries of `P`: what is already in the journal for that month, so a run posts only the gap. Recognition entries are per POB and every line carries `pob_id`; `pob_id` is null only on billing lines that belong to no POB (AR, tax, cash, customer credit, standalone one-off revenue).
 
 Example: $1,200 annual prepaid from Jan 1, `period_even`, invoiced Jan 1 (Cr `deferred_revenue` 1,200).
 
@@ -664,7 +662,7 @@ Read-only: the journal is derived from billing and schedules.
 #### Invariants
 
 - Entries are immutable. Each has at least one debit and one credit line, positive amounts, Σ debits = Σ credits, one currency (the invoice's), one period. Corrections are deltas or inverses linked by `reversal_of`.
-- Billing entries carry the idempotency key `{event_type}:{source_entity_id}`. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
+- Billing entries carry the idempotency key `{event_type}:{source_entity_id}`: one entry per event per source. A corrected invoice is a void (`invoice_voided`, same source) plus a new invoice (new source), never a re-post under the same key. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
 - Billing entries post async after the source commits (post-commit hook, like `revenue_facts`), each in its own transaction. A failure is logged and never fails the source write; `Reconcile` re-posts anything missing.
 - Recognition posts only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
 - Business dates are local dates in the subscription's timezone (the customer's without a subscription); the entry posts to that date's period (Step 4).
@@ -694,6 +692,11 @@ type JournalService interface {
 ```
 
 `Reconcile` is environment-wide, not per contract, so it also covers standalone `ONE_OFF` invoices, wallet top-ups and their payments. It finds every invoice, credit note, payment or refund finalized, voided, succeeded or reversed since `since` that has no entry under its key, and posts it. Recognition needs no repair: every run recomputes `δ`.
+
+#### Related changes
+
+- Credit notes set `finalized_at` on finalize and `voided_at` on void (`creditnote.go:794`, `:679`; both are null today). These are the business dates of their entries.
+- Payment hooks fire after the payment row is saved (`payment_processor.go:171-179`), so a payment entry never posts for an unsaved row.
 
 ### Step 7 — Rollforward & Waterfall
 
@@ -782,7 +785,7 @@ type WaterfallRequest struct {
     ContractIDs []string               `json:"contract_ids"`
     POBIDs      []string               `json:"pob_ids"`
     Extrapolate bool                   `json:"extrapolate"`                      // default false
-    Details     bool                   `json:"details"`                          // balances and product split
+    Details     bool                   `json:"details"`                          // month-end deferred and unbilled balances
     Sort        []*types.SortCondition `json:"sort"`                             // field: customer name or a period
     Limit       int                    `json:"limit"`
     Offset      int                    `json:"offset"`
@@ -802,20 +805,18 @@ type WaterfallRow struct {
 }
 
 type WaterfallCell struct {
-    Period       string             `json:"period"`
-    Revenue      decimal.Decimal    `json:"revenue"` // actual + pending + scheduled + extrapolated
-    Actual       decimal.Decimal    `json:"actual"`
-    Pending      decimal.Decimal    `json:"pending"`
-    Scheduled    decimal.Decimal    `json:"scheduled"`
-    Extrapolated decimal.Decimal    `json:"extrapolated"`
-    Deferred     *decimal.Decimal   `json:"deferred,omitempty"` // details; closing deferred_revenue, ended months only
-    Unbilled     *decimal.Decimal   `json:"unbilled,omitempty"` // details; closing unbilled_receivable, ended months only
-    Products     []*ProductRevenue  `json:"products,omitempty"` // details; revenue split by POB product
+    Period   string           `json:"period"`
+    Revenue  RevenueBreakdown `json:"revenue"`
+    Deferred *decimal.Decimal `json:"deferred,omitempty"` // details; closing deferred_revenue, ended months only
+    Unbilled *decimal.Decimal `json:"unbilled,omitempty"` // details; closing unbilled_receivable, ended months only
 }
 
-type ProductRevenue struct {
-    ProductID *string         `json:"product_id"` // null = uncategorized
-    Revenue   decimal.Decimal `json:"revenue"`
+type RevenueBreakdown struct {
+    Total        decimal.Decimal `json:"total"` // actual + pending + scheduled + extrapolated
+    Actual       decimal.Decimal `json:"actual"`
+    Pending      decimal.Decimal `json:"pending"`
+    Scheduled    decimal.Decimal `json:"scheduled"`
+    Extrapolated decimal.Decimal `json:"extrapolated"`
 }
 ```
 
@@ -823,12 +824,12 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 
 ```json
 {
-  "totals": [{"period": "2026-01", "revenue": "200", "actual": "200"},
-             {"period": "2026-03", "revenue": "200", "pending": "90.32", "scheduled": "109.68"}],
+  "totals": [{"period": "2026-01", "revenue": {"total": "200", "actual": "200"}},
+             {"period": "2026-03", "revenue": {"total": "200", "pending": "90.32", "scheduled": "109.68"}}],
   "items":  [{"customer_id": "cust_acme", "cells": [
-               {"period": "2026-01", "revenue": "100", "actual": "100", "deferred": "1100", "unbilled": "0"},
-               {"period": "2026-03", "revenue": "100", "pending": "45.16", "scheduled": "54.84"},
-               {"period": "2026-04", "revenue": "100", "scheduled": "100"}]}]
+               {"period": "2026-01", "revenue": {"total": "100", "actual": "100"}, "deferred": "1100", "unbilled": "0"},
+               {"period": "2026-03", "revenue": {"total": "100", "pending": "45.16", "scheduled": "54.84"}},
+               {"period": "2026-04", "revenue": {"total": "100", "scheduled": "100"}}]}]
 }
 ```
 
@@ -854,13 +855,12 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 
 **Waterfall cells**, per POB and month `P`, summed to the requested group:
 
-- `actual` — posted `revenue` lines of `P` (credit − debit). Standalone `ONE_OFF` invoices count here at finalize, uncategorized. Credit notes are in `contra_revenue`, not in the waterfall.
+- `actual` — posted `revenue` lines of `P` (credit − debit). Standalone `ONE_OFF` invoices count here at finalize. Credit notes are in `contra_revenue`, not in the waterfall.
 - `pending` — earned but not yet posted: `PreviewRecognition` at `now`, with the open month treated as ended at `now`. It covers the open month to date and any ended month the daily run has not posted.
 - `scheduled` — not yet earned, from persisted segments: `round(earned(P_end)) − round(earned(max(P_start, now)))` for the open and future months. Only the current billing period is persisted (Step 3), so recurring POBs with no end date schedule only to its end.
 - `extrapolated` — only with `extrapolate`, only for recurring fixed POBs with no `service_end`, after the last segment: each future billing period is valued by the billing engine as a full period, amortized with the POB's method, and stops at the subscription's end or cancellation date. Never posted.
 - Usage (`as_consumed`) is never scheduled or extrapolated; it appears as actual and pending only.
 - `deferred` / `unbilled` — the group's closing balances of those accounts for ended months, from the journal as in the rollforward.
-- `products` — `revenue` split by the POB's `product_id` (Step 3).
 
 Example: $1,200 annual prepaid and $100/month recurring (in advance, no end date), both `period_even` from Jan 1; reported on Mar 15.
 
@@ -878,7 +878,7 @@ Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
 
 - Reports are read-only and computed on read in Postgres; nothing is persisted.
 - Rollforward: `opening(P) = closing(P − 1)`; the first requested period's opening is the sum of everything posted before it (Step 4). A period's rows sum exactly to its journal lines.
-- Waterfall: Σ `actual` over all periods equals the `revenue` balance; Σ `products` equals `revenue` in every cell.
+- Waterfall: Σ `actual` over all periods equals the `revenue` balance.
 - `totals` cover every row matching the filters, not only the page.
 - Currencies are never combined.
 - `group_by` / filter by POB applies only to accounts whose lines carry `pob_id` (`deferred_revenue`, `unbilled_receivable`, `revenue`); AR is grouped by customer or contract only.
@@ -897,3 +897,10 @@ type RevenueReportService interface {
 }
 ```
 
+
+
+#### Related changes
+
+- Step 6: `journal_entries/search` gains an `account` filter; `JournalService` gains `PreviewRecognition`, the unsaved dry run of `Recognize`.
+
+Deferred: projected deferred waterfall (needs billing projections), ARR waterfall (needs ARR rules and overrides), revenue split by product (needs a product on the POB), booking-month waterfall rows, CSV export. Credit notes stay in `contra_revenue` (Step 5), so the deferred rollforward's `adjustments` is zero in Phase 1.
