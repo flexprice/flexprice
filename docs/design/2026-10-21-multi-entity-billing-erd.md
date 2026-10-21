@@ -1,4 +1,4 @@
-# Billing Entities — PRD, HLD and ERD
+# Billing Entities — ERD
 
 Status: **Proposed**
 Date: 2026-10-21
