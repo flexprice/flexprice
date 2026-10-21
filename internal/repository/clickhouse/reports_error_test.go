@@ -12,7 +12,7 @@ import (
 )
 
 func TestReportError_MapsLimitExceptionsToValidation(t *testing.T) {
-	for _, code := range []int32{159, 241} {
+	for _, code := range []int32{158, 159, 241} {
 		err := reportError(fmt.Errorf("wrapped: %w", &proto.Exception{Code: code}), "run report query")
 		assert.True(t, ierr.IsValidation(err), code)
 		assert.Equal(t, "Query too large; narrow the date range", cerrors.FlattenHints(err), code)

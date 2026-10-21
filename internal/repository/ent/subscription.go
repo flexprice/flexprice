@@ -120,7 +120,6 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
 	if cachedSub := r.GetCache(ctx, id); cachedSub != nil {
 		return cachedSub, nil
 	}
@@ -153,6 +152,30 @@ func (r *subscriptionRepository) Get(ctx context.Context, id string) (*domainSub
 	subData := domainSub.GetSubscriptionFromEnt(sub)
 	r.SetCache(ctx, subData)
 	return subData, nil
+}
+
+func (r *subscriptionRepository) GetTimezone(ctx context.Context, id string) (string, error) {
+	span := StartRepositorySpan(ctx, "subscription", "get_timezone", map[string]interface{}{"subscription_id": id})
+	defer FinishSpan(span)
+
+	sub, err := r.client.Reader(ctx).Subscription.Query().
+		Where(
+			subscription.ID(id),
+			subscription.TenantID(types.GetTenantID(ctx)),
+			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
+			subscription.Status(string(types.StatusPublished)),
+		).
+		Select(subscription.FieldTimezone).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return "", ierr.NewError("subscription not found").WithHint("Subscription not found").Mark(ierr.ErrNotFound)
+		}
+		return "", ierr.WithError(err).WithHint("Failed to get subscription timezone").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return sub.Timezone, nil
 }
 
 // GetForUpdate row-locks the subscription and bypasses cache (cache can't hold a lock).
@@ -268,6 +291,17 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Handle nullable date fields - explicitly clear if nil
+	if sub.TrialStart != nil {
+		query.SetTrialStart(*sub.TrialStart)
+	} else {
+		query.ClearTrialStart()
+	}
+	if sub.TrialEnd != nil {
+		query.SetTrialEnd(*sub.TrialEnd)
+	} else {
+		query.ClearTrialEnd()
+	}
+
 	if sub.CancelledAt != nil {
 		query.SetCancelledAt(*sub.CancelledAt)
 	} else {
@@ -309,7 +343,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, sub.ID)
+	r.invalidateCache(ctx, sub.ID)
 	return nil
 }
 
@@ -355,7 +389,7 @@ func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, plan
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, id)
+	r.invalidateCache(ctx, id)
 	return nil
 }
 
@@ -394,7 +428,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, id)
+	r.invalidateCache(ctx, id)
 	return nil
 }
 
@@ -1176,6 +1210,10 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 }
 
 func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Subscription) {
+	// Uncommitted rows must not become visible through the shared cache.
+	if r.client.TxFromContext(ctx) != nil {
+		return
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "set", map[string]interface{}{
 		"subscription_id": sub.ID,
 	})
@@ -1211,6 +1249,15 @@ func (r *subscriptionRepository) DeleteCache(ctx context.Context, subID string) 
 
 	cacheKey := cache.GenerateKey(ctx, cache.PrefixSubscription, subID)
 	r.redisCache.Delete(ctx, cacheKey)
+}
+
+// invalidateCache drops the cached rows once the surrounding transaction commits.
+func (r *subscriptionRepository) invalidateCache(ctx context.Context, ids ...string) {
+	afterCommit(ctx, func() {
+		for _, id := range ids {
+			r.DeleteCache(ctx, id)
+		}
+	})
 }
 
 // ListByCustomerID retrieves all active subscriptions for a customer and includes line items
@@ -1412,9 +1459,7 @@ func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx con
 			Mark(ierr.ErrDatabase)
 	}
 
-	for _, id := range ids {
-		r.DeleteCache(ctx, id)
-	}
+	r.invalidateCache(ctx, ids...)
 
 	SetSpanSuccess(span)
 	return ids, nil

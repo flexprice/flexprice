@@ -13,6 +13,8 @@ const (
 	ShapeScalar     Shape = "scalar"
 )
 
+var AllShapes = []Shape{ShapeScalar, ShapeTimeseries, ShapeBreakdown}
+
 // Family selects the view's compiler.
 type Family string
 

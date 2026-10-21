@@ -410,18 +410,32 @@ func (l *Logger) Ctx(ctx context.Context) *Logger {
 // ctx-first logging API (preferred)
 // ---------------------------------------------------------------------------
 
+// enabled checks core level gating.
+func (l *Logger) enabled(level zapcore.Level) bool {
+	return l.SugaredLogger.Desugar().Core().Enabled(level)
+}
+
 // Debug logs at debug level with auto-bound context fields.
 func (l *Logger) Debug(ctx context.Context, msg string, fields ...any) {
+	if !l.enabled(zapcore.DebugLevel) {
+		return
+	}
 	l.WithContext(ctx).SugaredLogger.Debugw(msg, fields...)
 }
 
 // Info logs at info level with auto-bound context fields.
 func (l *Logger) Info(ctx context.Context, msg string, fields ...any) {
+	if !l.enabled(zapcore.InfoLevel) {
+		return
+	}
 	l.WithContext(ctx).SugaredLogger.Infow(msg, fields...)
 }
 
 // Warn logs at warn level. Only use in bootstrap/startup code.
 func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
+	if !l.enabled(zapcore.WarnLevel) {
+		return
+	}
 	l.WithContext(ctx).SugaredLogger.Warnw(msg, fields...)
 }
 

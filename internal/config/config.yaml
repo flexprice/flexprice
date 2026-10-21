@@ -406,6 +406,16 @@ secrets:
 billing:
   tenant_id: ""
   environment_id: ""
+  enabled: false
+  region: ""
+  api_host: ""
+  api_key: ""
+  plan_id: ""
+  dashboard_url: ""
+  payment_provider: "stripe"
+  usage_lookback_hours: 6
+  # Zapier catch hook for self-billing Slack alerts (FLEXPRICE_BILLING_ZAPIER_WEBHOOK_URL)
+  zapier_webhook_url: ""
 
 s3:
   enabled: false
@@ -567,6 +577,7 @@ activity:
   topic_dlq: activity_logs_dlq
   consumer_group: "activity_log"
   rate_limit: 50
+  excluded_tenants: [] # "tenant_id:environment_id" or "tenant_id"; empty = log all.
   publisher:
     buffer_size: 10000
     workers: 4

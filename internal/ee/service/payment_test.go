@@ -305,6 +305,70 @@ func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_GuardConditions()
 	}
 }
 
+func (s *PaymentServiceSuite) TestGatewayPaymentStatus_ReconcilesCheckoutAndStandaloneInvoices() {
+	for _, checkout := range []bool{true, false} {
+		for _, status := range []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing} {
+			name := string(status)
+			if checkout {
+				name += "_checkout"
+			} else {
+				name += "_standalone"
+			}
+			s.Run(name, func() {
+				ctx := s.GetContext()
+				inv := *s.testData.invoice
+				inv.ID = "inv_sync_" + name
+				if checkout {
+					inv.InvoiceStatus = types.InvoiceStatusDraft
+					inv.SourceType = types.InvoiceSourceTypeCheckout
+				}
+				s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, &inv))
+				p := &payment.Payment{
+					ID:              "pay_sync_" + name,
+					DestinationType: types.PaymentDestinationTypeInvoice, DestinationID: inv.ID,
+					PaymentStatus: status, Amount: inv.AmountDue, Currency: inv.Currency,
+					PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+					GatewayTrackingID: lo.ToPtr("plink_checkout"),
+					BaseModel:         types.GetDefaultBaseModel(ctx),
+				}
+				if checkout {
+					p.GatewayMetadata = types.Metadata{paymentCheckoutMarker: "true"}
+				}
+				s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+				svc := s.service.(*paymentService)
+				result, err := svc.applyGatewayPaymentStatus(ctx, p, types.PaymentStatusSucceeded, "pay_captured")
+				s.Require().NoError(err)
+				s.Equal(types.PaymentStatusSucceeded, result.PaymentStatus)
+				s.Equal("pay_captured", lo.FromPtr(result.GatewayPaymentID))
+				s.NotNil(result.SucceededAt)
+				stored, err := s.GetStores().PaymentRepo.Get(ctx, p.ID)
+				s.Require().NoError(err)
+				s.Equal(types.PaymentStatusSucceeded, stored.PaymentStatus)
+				after, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+				s.Require().NoError(err)
+				s.Equal(inv.InvoiceStatus, after.InvoiceStatus)
+				s.Equal(types.PaymentStatusSucceeded, after.PaymentStatus)
+				s.True(after.AmountPaid.Equal(inv.AmountDue))
+				s.True(after.AmountRemaining.IsZero())
+			})
+		}
+	}
+}
+
+func (s *PaymentServiceSuite) TestSyncPaymentStatusFromGateway_CheckoutStillFetchesGateway() {
+	ctx := s.GetContext()
+	svc := s.service.(*paymentService)
+	svc.IntegrationFactory = s.GetIntegrationFactory()
+	p := &payment.Payment{
+		ID: "pay_checkout", PaymentStatus: types.PaymentStatusPending,
+		PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+		GatewayTrackingID: lo.ToPtr("plink_checkout"),
+		GatewayMetadata:   types.Metadata{paymentCheckoutMarker: "true"},
+	}
+	_, err := svc.syncPaymentStatusFromGateway(ctx, p)
+	s.Error(err, "the missing gateway connection must be consulted even for a checkout payment")
+}
+
 // TestCreatePayment_CustomerDestination_ValidatesCustomer covers the VAPT fix:
 // CUSTOMER destination must now verify the customer exists in this tenant/env,
 // so bogus/foreign customer_ids fail-fast at CreatePayment rather than producing

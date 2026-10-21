@@ -15,13 +15,11 @@ type BillingMetric struct {
 	Snapshot bool
 }
 
-var allShapes = []types.Shape{types.ShapeScalar, types.ShapeTimeseries, types.ShapeBreakdown}
-
 func invoiceTotalMetric(m types.Metric) *BillingMetric {
 	return &BillingMetric{
 		Metric:     m,
 		Dimensions: []string{"currency", "customer_id", "invoice_type"},
-		Shapes:     allShapes,
+		Shapes:     types.AllShapes,
 		Currency:   true,
 	}
 }
@@ -39,7 +37,7 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricTotalReceivables: {
 		Metric:     types.MetricTotalReceivables,
 		Dimensions: []string{"currency"},
-		Shapes:     []types.Shape{types.ShapeScalar, types.ShapeBreakdown},
+		Shapes:     []types.Shape{types.ShapeScalar},
 		Currency:   true,
 		Snapshot:   true,
 	},
@@ -53,7 +51,7 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricDaysToPay: {
 		Metric:     types.MetricDaysToPay,
 		Dimensions: []string{"customer_id", "currency"},
-		Shapes:     allShapes,
+		Shapes:     types.AllShapes,
 		Currency:   true,
 	},
 	types.MetricARPUPaid: currencyMetric(types.MetricARPUPaid, types.ShapeScalar, types.ShapeTimeseries),
@@ -61,13 +59,13 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricCreditConsumption: {
 		Metric:     types.MetricCreditConsumption,
 		Dimensions: []string{"customer_id", "currency"},
-		Shapes:     allShapes,
+		Shapes:     types.AllShapes,
 		Currency:   true,
 	},
 	types.MetricCreditTopups: {
 		Metric:     types.MetricCreditTopups,
 		Dimensions: []string{"transaction_reason", "customer_id", "currency"},
-		Shapes:     allShapes,
+		Shapes:     types.AllShapes,
 		Currency:   true,
 	},
 	types.MetricInvoiceTotal:       invoiceTotalMetric(types.MetricInvoiceTotal),

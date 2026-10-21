@@ -17,6 +17,7 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
@@ -43,6 +44,7 @@ type handler struct {
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
 	cascader        EventCascader
+	telemetry       *telemetry.Reporter
 }
 
 // NewHandler creates a new memory-based handler
@@ -56,6 +58,7 @@ func NewHandler(
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
 	cascader EventCascader,
+	telemetryReporter *telemetry.Reporter,
 ) (Handler, error) {
 	return &handler{
 		pubSub:          pubSub,
@@ -68,6 +71,7 @@ func NewHandler(
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
 		cascader:        cascader,
+		telemetry:       telemetryReporter,
 	}, nil
 }
 
@@ -253,6 +257,11 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 	if h.cascader != nil && h.config.EventCascadingEnabled {
 		h.cascader.Cascade(ctx, &event)
 	}
+
+	if h.telemetry != nil {
+		h.telemetry.ReportEvent(ctx, &event)
+	}
+
 	return nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -467,4 +469,47 @@ func syntheticServiceAccountJSON(t *testing.T) []byte {
 	out, err := json.Marshal(sa)
 	require.NoError(t, err)
 	return out
+}
+
+// failingUploadBody returns a source error after delivering a partial payload.
+type failingUploadBody struct {
+	reader *bytes.Reader
+	err    error
+}
+
+func (b *failingUploadBody) Read(p []byte) (int, error) {
+	n, err := b.reader.Read(p)
+	if err == io.EOF {
+		return n, b.err
+	}
+	return n, err
+}
+
+func (b *failingUploadBody) Seek(offset int64, whence int) (int64, error) {
+	return b.reader.Seek(offset, whence)
+}
+
+func TestClient_UploadStream_SourceFailureDoesNotFinalize(t *testing.T) {
+	var finalized atomic.Int32
+	cfg, srv := newFakeGCSServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if _, err := extractUploadedObjectBytes(r); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		finalized.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"name":"exports/report.csv","bucket":"test-bucket"}`))
+	})
+	defer srv.Close()
+	s, err := gcsbackend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+	sourceErr := errors.New("export source read failed")
+	body := &failingUploadBody{reader: bytes.NewReader([]byte("id,qty\n1,2\n")), err: sourceErr}
+	resp, err := s.UploadStream(context.Background(), &storage.StreamUploadRequest{
+		Key: "exports/report.csv", Body: body, Format: storage.UploadFormatCSV,
+	})
+	require.ErrorIs(t, err, sourceErr)
+	require.Nil(t, resp)
+	srv.Close()
+	assert.Zero(t, finalized.Load(), "a source failure must not commit a partial object")
 }

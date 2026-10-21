@@ -131,6 +131,53 @@ func (c *client) Upload(ctx context.Context, req *fpstorage.UploadRequest) (*fps
 	}, nil
 }
 
+// UploadStream uploads req.Body as-is without reading it into memory.
+func (c *client) UploadStream(ctx context.Context, req *fpstorage.StreamUploadRequest) (*fpstorage.UploadResponse, error) {
+	size, err := req.Body.Seek(0, io.SeekEnd)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to read upload size").Mark(ierr.ErrSystem)
+	}
+	if _, err := req.Body.Seek(0, io.SeekStart); err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to rewind upload body").Mark(ierr.ErrSystem)
+	}
+
+	writeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	w := c.gcs.Bucket(c.cfg.Bucket).Object(req.Key).NewWriter(writeCtx)
+	if req.ContentType != "" {
+		w.ContentType = req.ContentType
+	} else {
+		w.ContentType = contentTypeFor(req.Format, req.Gzipped)
+	}
+
+	if _, err := io.Copy(w, req.Body); err != nil {
+		cancel()
+		return nil, ierr.WithError(err).
+			WithHint("failed to upload object to GCS").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
+			Mark(ierr.ErrHTTPClient)
+	}
+	if err := w.Close(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("failed to finalize GCS upload").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	originalSize := size
+	if req.Gzipped {
+		originalSize = req.UncompressedSize
+	}
+	return &fpstorage.UploadResponse{
+		FileURL:        c.FileURL(req.Key),
+		Bucket:         c.cfg.Bucket,
+		Key:            req.Key,
+		FileSizeBytes:  originalSize,
+		CompressedSize: size,
+		UploadedAt:     time.Now(),
+	}, nil
+}
+
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {
 	r, err := c.gcs.Bucket(c.cfg.Bucket).Object(key).NewReader(ctx)
 	if err != nil {

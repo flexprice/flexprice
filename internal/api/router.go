@@ -78,6 +78,7 @@ type Handlers struct {
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
+	SelfBilling    *v1.SelfBillingHandler
 }
 
 func NewRouter(
@@ -127,9 +128,10 @@ func NewRouter(
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
-	write := permissionMW.RequirePermission       // shorthand used on every write route
-	read := permissionMW.RequirePermission        // shorthand used on read routes that opt in to an RBAC gate
-	superAdminOnly := middleware.SuperAdminOnly() // shorthand used on routes accessible only to super_admin users
+	write := permissionMW.RequirePermission           // shorthand used on every write route
+	read := permissionMW.RequirePermission            // shorthand used on read routes that opt in to an RBAC gate
+	superAdminOnly := middleware.SuperAdminOnly()     // shorthand used on routes accessible only to super_admin users
+	allowSuspended := middleware.AllowWhenSuspended() // shorthand for write routes a suspended tenant may still call
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -209,8 +211,8 @@ func NewRouter(
 			// takes none.
 			ingestBodyLimit := middleware.BodyLimitMiddleware(middleware.MaxEventIngestionBodyBytes)
 
-			events.POST("", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.IngestEvent)
-			events.POST("/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestEvent)
+			events.POST("", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.IngestEvent)
+			events.POST("/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
 			events.GET("/lookup", handlers.Events.GetEventByID)
 			events.GET("/:id", handlers.Events.GetEventByID) // legacy alias, remove once no caller uses /events/:id
@@ -219,7 +221,7 @@ func NewRouter(
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
-			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite), handlers.Events.BulkIngestRawEvent)
+			events.POST("/raw/bulk", ingestBodyLimit, write(types.EntityEvent, types.ActionWrite, allowSuspended), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessRawEvents)
 			events.POST("/raw/reprocess/pending", write(types.EntityEvent, types.ActionWrite), handlers.Events.ReprocessUnprocessedRawEvents)
 		}
@@ -438,8 +440,8 @@ func NewRouter(
 		tenantRoutes := v1Private.Group("/tenants")
 		{
 			tenantRoutes.PUT("/update", write(types.EntityTenant, types.ActionWrite), handlers.Tenant.UpdateTenant)
+			tenantRoutes.GET("/billing", handlers.SelfBilling.TenantBilling)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
-			tenantRoutes.GET("/billing", handlers.Tenant.GetTenantBillingUsage)
 		}
 
 		invoices := v1Private.Group("/invoices")
@@ -700,6 +702,16 @@ func NewRouter(
 			{
 				onboarding.POST("/events", write(types.EntityPortal, types.ActionWrite), handlers.Onboarding.GenerateEvents)
 				onboarding.POST("/setup", write(types.EntityPortal, types.ActionWrite), handlers.Onboarding.SetupDemo)
+			}
+
+			billing := portalRoutes.Group("/billing")
+			{
+				billing.GET("/status", handlers.SelfBilling.Status)
+				billing.GET("/summary", handlers.SelfBilling.Summary)
+				billing.POST("/checkout", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.StartCheckout)
+				billing.GET("/checkout/:id", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.PollCheckout)
+				billing.POST("/checkout/:id/cancel", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.CancelCheckout)
+				billing.POST("/portal-session", write(types.EntityPortal, types.ActionWrite, allowSuspended), handlers.SelfBilling.PortalSession)
 			}
 		}
 

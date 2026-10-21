@@ -265,6 +265,8 @@ type CreateSubscriptionDraftInvoiceRequest struct {
 	ReferencePoint types.InvoiceReferencePoint
 	// SourceType stamps provenance on the draft; empty for ordinary billing.
 	SourceType types.InvoiceSourceType
+	// BillingReason overrides the reason derived from ReferencePoint when set.
+	BillingReason types.InvoiceBillingReason
 }
 
 // Validate validates the draft invoice creation request.

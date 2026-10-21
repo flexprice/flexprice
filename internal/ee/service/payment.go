@@ -873,13 +873,17 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 		return p, err
 	}
 
+	return s.applyGatewayPaymentStatus(ctx, p, newStatus, backfillGatewayPaymentID)
+}
+
+func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payment.Payment, newStatus types.PaymentStatus, backfillGatewayPaymentID string) (*payment.Payment, error) {
 	if newStatus == "" || newStatus == p.PaymentStatus {
 		return p, nil
 	}
 
 	s.Logger.Info(ctx, "gateway status differs from DB, applying transition",
 		"payment_id", p.ID,
-		"gateway", gateway,
+		"gateway", lo.FromPtr(p.PaymentGateway),
 		"db_status", p.PaymentStatus,
 		"new_status", newStatus,
 	)

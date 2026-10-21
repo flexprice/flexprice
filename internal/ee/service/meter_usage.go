@@ -483,14 +483,14 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		}
 	}
 
-	// 7. Distinct meter optimization — skip meters with zero usage
+	// 7. Distinct meter optimization — skip meters with zero usage.
+	// No FINAL: duplicate rows share their meter_id, so deduping can't change the set.
 	distinctMeterIDs, err := s.repo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
 		TenantID:            types.GetTenantID(ctx),
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		ExternalCustomerIDs: externalCustomerIDs,
 		StartTime:           usageStartTime,
 		EndTime:             usageEndTime,
-		UseFinal:            req.UseFinal,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get distinct meter_ids from meter_usage: %w", err)

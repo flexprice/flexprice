@@ -1043,7 +1043,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	switch session.CheckoutStatus {
-	case types.CheckoutStatusPending:
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		providerResult := &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: stripePaymentIntentID,
 		}

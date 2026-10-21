@@ -479,6 +479,9 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	case types.ReferencePointCancel:
 		billingReason = types.InvoiceBillingReasonProration
 	}
+	if req.BillingReason != "" {
+		billingReason = req.BillingReason
+	}
 	draftReq := dto.CreateDraftInvoiceRequest{
 		CustomerID:     invoicingCustomerID,
 		SubscriptionID: lo.ToPtr(sub.ID),
@@ -3002,13 +3005,16 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.CustomerID = req.CustomerID
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusFinalized}
+	// Same newest-page limit as ListInvoices.
+	filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 
-	invoicesResp, err := s.ListInvoices(ctx, filter)
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, inv := range invoicesResp.Items {
+	for _, record := range invoices {
+		inv := dto.NewInvoiceResponse(record)
 		// For uncomputed subscription drafts, compute inline to get accurate amounts.
 		// Without this, uncomputed drafts have zero AmountRemaining and would be skipped,
 		// understating pending charges and overstating available wallet balance.
@@ -4933,6 +4939,11 @@ func (s *invoiceService) TriggerWebhook(ctx context.Context, invoiceID string, e
 func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error {
 	// Only process subscription invoices that are fully paid
 	if invoice.SubscriptionID == nil || !invoice.AmountRemaining.IsZero() {
+		return nil
+	}
+
+	// Checkout applies the subscription change before finalizing its paid draft.
+	if invoice.SourceType == types.InvoiceSourceTypeCheckout && invoice.InvoiceStatus == types.InvoiceStatusDraft {
 		return nil
 	}
 

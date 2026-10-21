@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -137,6 +138,8 @@ type ServiceParams struct {
 	ReportsRepo                  domainAnalytics.ReportsRepository
 	RevenueFactRepo              revenuefact.Repository
 	ActivityRepo                 domainActivity.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -168,6 +171,9 @@ type ServiceParams struct {
 	// in main — a plain constructor here would import that package back into
 	// this one. Nil skips the hooks (facts not wired in this deployment).
 	RevenueFacts interfaces.RevenueService
+
+	// SelfBilling provisions new tenants on Flexprice Cloud. Injected in main to avoid an import cycle; a no-op unless configured.
+	SelfBilling interfaces.SelfBillingHook
 }
 
 // Common service params
@@ -246,6 +252,8 @@ func NewServiceParams(
 	reportsRepo domainAnalytics.ReportsRepository,
 	revenueFactRepo revenuefact.Repository,
 	activityRepo domainActivity.Repository,
+	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
+	selfBillingPostgresRepo domainsb.PostgresRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -322,5 +330,7 @@ func NewServiceParams(
 		ReportsRepo:                  reportsRepo,
 		RevenueFactRepo:              revenueFactRepo,
 		ActivityRepo:                 activityRepo,
+		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
+		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 	}
 }

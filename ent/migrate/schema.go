@@ -1363,6 +1363,14 @@ var (
 				},
 			},
 			{
+				Name:    "idx_invoices_finalized_at_published",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[30]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text))",
+				},
+			},
+			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[34], InvoicesColumns[35]},

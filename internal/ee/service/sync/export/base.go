@@ -1,8 +1,11 @@
 package export
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -28,6 +31,12 @@ type Exporter interface {
 
 	// GetFilenamePrefix returns the prefix for the exported file
 	GetFilenamePrefix() string
+}
+
+// StreamingExporter optionally supports writing CSV incrementally to a writer.
+type StreamingExporter interface {
+	Exporter
+	WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error)
 }
 
 // ExportService handles export operations for different entity types
@@ -177,12 +186,114 @@ func (s *ExportService) executeExport(ctx context.Context, request *dto.ExportRe
 			Mark(ierr.ErrHTTPClient)
 	}
 
+	if streaming, ok := exporter.(StreamingExporter); ok {
+		return s.streamToStorage(ctx, request, streaming, store)
+	}
+
 	csvBytes, recordCount, err := exporter.PrepareData(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
 	return s.uploadToStorage(ctx, request, exporter, store, csvBytes, recordCount)
+}
+
+// streamToStorage stages CSV on disk for upload and removes the temporary file.
+func (s *ExportService) streamToStorage(ctx context.Context, request *dto.ExportRequest, exporter StreamingExporter, store storage.Storage) (*dto.ExportResponse, error) {
+	tmp, err := os.CreateTemp("", "flexprice-export-*.csv")
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create temp file for export").
+			Mark(ierr.ErrSystem)
+	}
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+	}()
+
+	gzipped := request.JobConfig.Compression == types.S3CompressionTypeGzip
+	recordCount, csvSize, err := writeExportCSV(ctx, request, exporter, tmp, gzipped)
+	if err != nil {
+		return nil, err
+	}
+
+	key := exportObjectKey(request, exporter)
+	s.logger.Info(ctx, "uploading export",
+		"connection_id", request.ConnectionID,
+		"provider", store.Provider(),
+		"destination", store.FileURL(key))
+
+	uploadResponse, err := store.UploadStream(ctx, &storage.StreamUploadRequest{
+		Key:              key,
+		Body:             tmp,
+		Format:           storage.UploadFormatCSV,
+		Gzipped:          gzipped,
+		UncompressedSize: csvSize,
+	})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to upload CSV export").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return s.exportResponse(ctx, request, recordCount, uploadResponse), nil
+}
+
+// writeExportCSV writes the export to w, gzipped when asked, and returns the record count and CSV size.
+func writeExportCSV(ctx context.Context, request *dto.ExportRequest, exporter StreamingExporter, w io.Writer, gzipped bool) (int, int64, error) {
+	if !gzipped {
+		csv := &countingWriter{w: w}
+		recordCount, err := exporter.WriteData(ctx, request, csv)
+		return recordCount, csv.n, err
+	}
+
+	gz := gzip.NewWriter(w)
+	csv := &countingWriter{w: gz}
+	recordCount, err := exporter.WriteData(ctx, request, csv)
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := gz.Close(); err != nil {
+		return 0, 0, ierr.WithError(err).
+			WithHint("Failed to compress export").
+			Mark(ierr.ErrSystem)
+	}
+	return recordCount, csv.n, nil
+}
+
+// countingWriter counts the bytes written through it.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
+}
+
+// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>.csv[.gz].
+func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
+	startTimeStr := request.StartTime.Format("060102150405")
+	endTimeStr := request.EndTime.Format("060102150405")
+	filenamePrefix := exporter.GetFilenamePrefix()
+	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
+	return storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
+}
+
+func (s *ExportService) exportResponse(ctx context.Context, request *dto.ExportRequest, recordCount int, uploadResponse *storage.UploadResponse) *dto.ExportResponse {
+	s.logger.Info(ctx, "successfully uploaded export",
+		"file_url", uploadResponse.FileURL,
+		"file_size_bytes", uploadResponse.FileSizeBytes)
+
+	return &dto.ExportResponse{
+		EntityType:    request.EntityType,
+		RecordCount:   recordCount,
+		FileURL:       uploadResponse.FileURL,
+		FileSizeBytes: uploadResponse.FileSizeBytes,
+		ExportedAt:    uploadResponse.UploadedAt,
+	}
 }
 
 func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.ExportRequest) (storage.Storage, error) {
@@ -196,11 +307,7 @@ func (s *ExportService) resolveExportStore(ctx context.Context, request *dto.Exp
 }
 
 func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.ExportRequest, exporter Exporter, store storage.Storage, csvBytes []byte, recordCount int) (*dto.ExportResponse, error) {
-	startTimeStr := request.StartTime.Format("060102150405")
-	endTimeStr := request.EndTime.Format("060102150405")
-	filenamePrefix := exporter.GetFilenamePrefix()
-	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
-	key := storage.ObjectKey(request.JobConfig.KeyPrefix, filenamePrefix, filename, "csv", request.JobConfig.Compression == types.S3CompressionTypeGzip)
+	key := exportObjectKey(request, exporter)
 
 	// Use resolved destination, not JobConfig.Bucket.
 	s.logger.Info(ctx, "uploading export",
@@ -220,17 +327,7 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Info(ctx, "successfully uploaded export",
-		"file_url", uploadResponse.FileURL,
-		"file_size_bytes", uploadResponse.FileSizeBytes)
-
-	return &dto.ExportResponse{
-		EntityType:    request.EntityType,
-		RecordCount:   recordCount,
-		FileURL:       uploadResponse.FileURL,
-		FileSizeBytes: uploadResponse.FileSizeBytes,
-		ExportedAt:    uploadResponse.UploadedAt,
-	}, nil
+	return s.exportResponse(ctx, request, recordCount, uploadResponse), nil
 }
 
 // getExporter returns the appropriate exporter for the given entity type

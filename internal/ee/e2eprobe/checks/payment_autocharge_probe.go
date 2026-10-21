@@ -93,7 +93,7 @@ func (p *PaymentAutoChargeProbe) Run(ctx context.Context) error {
 func (p *PaymentAutoChargeProbe) cancelSubscription(ctx context.Context, f *paymentFlow, subID string) error {
 	_, err := p.client.Subscriptions().Cancel(ctx, subID, types.CancelSubscriptionRequest{
 		CancellationType:               types.CancellationTypeImmediate,
-		CancelImmediatelyInovicePolicy: types.CancelImmediatelyInvoicePolicySkip.ToPointer(),
+		CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicySkip.ToPointer(),
 		Reason:                         strPtr("e2eprobe payment autocharge cleanup"),
 	})
 	if err != nil {

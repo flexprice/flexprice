@@ -332,6 +332,9 @@ type TopUpWalletRequest struct {
 	// expiry_date_utc is the expiry date in UTC timezone
 	// ex 2025-01-01 00:00:00 UTC
 	ExpiryDateUTC *time.Time `json:"expiry_date_utc,omitempty"`
+	// effective_date is stored as the credit transaction's created_at.
+	// Omit to use the current time. Must not be in the future.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 	// priority is the priority of the transaction
 	// lower number means higher priority
 	// default is nil which means no priority at all
@@ -413,6 +416,28 @@ func (r *TopUpWalletRequest) Validate() error {
 		if r.ExpiryDateUTC.Before(time.Now().UTC()) {
 			return ierr.NewError("expiry_date_utc cannot be in the past").
 				WithHint("Expiry date must be in the future").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if r.EffectiveDate != nil {
+		if r.EffectiveDate.After(time.Now().UTC()) {
+			return ierr.NewError("effective_date cannot be in the future").
+				WithHint("Effective date must be now or in the past").
+				Mark(ierr.ErrValidation)
+		}
+		expiry := r.ExpiryDateUTC
+		if expiry == nil {
+			expiry = types.ParseYYYYMMDDToDate(r.ExpiryDate)
+		}
+		if expiry != nil && !r.EffectiveDate.Before(*expiry) {
+			return ierr.NewError("effective_date must be before the credit expiry").
+				WithHint("Date the grant before it expires").
+				Mark(ierr.ErrValidation)
+		}
+		if r.BonusCreditsExpiryDateUTC != nil && !r.EffectiveDate.Before(*r.BonusCreditsExpiryDateUTC) {
+			return ierr.NewError("effective_date must be before the bonus credit expiry").
+				WithHint("Date the grant before the bonus credits expire").
 				Mark(ierr.ErrValidation)
 		}
 	}

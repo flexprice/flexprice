@@ -40,7 +40,8 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Every DB entity carries `tenant_id` + `environment_id`.
 - Every query filters on both. Missing filter = data leak = critical bug.
 - No cross-tenant reads. No shared mutable state between tenants.
-- The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup is the only cross-tenant read, and it stays in `internal/ee/service/admin`.
+- The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup stays in `internal/ee/service/admin`.
+- Self-billing may read hourly event counts and invoice totals across tenants, only inside `internal/ee/service/selfbilling`, through `domain/selfbilling.ClickHouseRepository` and `PostgresRepository`. No other package may call those repositories. These two and the admin email lookup are the only cross-tenant reads.
 
 ### Event processing (billing correctness)
 - All event handlers MUST be idempotent — duplicate delivery must not alter state twice.

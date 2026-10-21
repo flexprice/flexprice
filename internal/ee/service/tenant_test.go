@@ -1,13 +1,18 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -396,4 +401,23 @@ func (s *TenantServiceSuite) TestUpdateTenantRejectsInvalidCountry() {
 		},
 	})
 	s.Error(err)
+}
+
+// CreateTenant can run inside a caller's transaction, so provisioning is left to the caller after commit.
+func TestCreateTenant_DoesNotCallSelfBillingHook(t *testing.T) {
+	hook := &recordingHook{}
+	params := ServiceParams{
+		Logger:      logger.NewNoopLogger(),
+		Config:      &config.Configuration{},
+		TenantRepo:  testutil.NewInMemoryTenantStore(),
+		SelfBilling: hook,
+	}
+
+	_, err := NewTenantService(params).CreateTenant(context.Background(), dto.CreateTenantRequest{
+		ID:             "tenant_1",
+		Name:           "Acme",
+		BillingDetails: &dto.TenantBillingDetails{Email: "a@acme.io"},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, hook.calls)
 }

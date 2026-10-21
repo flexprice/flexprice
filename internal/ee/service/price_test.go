@@ -31,6 +31,7 @@ type PriceServiceSuite struct {
 	suite.Suite
 	ctx           context.Context
 	priceService  PriceService
+	serviceParams ServiceParams
 	priceRepo     *testutil.InMemoryPriceStore
 	meterRepo     *testutil.InMemoryMeterStore
 	planRepo      *testutil.InMemoryPlanStore
@@ -66,6 +67,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
+	s.serviceParams = serviceParams
 	s.priceService = NewPriceService(serviceParams)
 }
 
@@ -260,6 +262,81 @@ func (s *PriceServiceSuite) TestGetPrices_ExpandFeatures() {
 	s.Equal("minute", resp.Items[0].Feature.ReportingUnit.UnitSingular)
 	s.Equal("minutes", resp.Items[0].Feature.ReportingUnit.UnitPlural)
 	s.True(conversionRate.Equal(*resp.Items[0].Feature.ReportingUnit.ConversionRate))
+}
+
+// meterRepoSpy records how GetPrices resolves meters.
+type meterRepoSpy struct {
+	meter.Repository
+	listByIDsRequests [][]string
+	listAllCalls      int
+	countCalls        int
+}
+
+func (m *meterRepoSpy) ListByIDs(ctx context.Context, ids []string) ([]*meter.Meter, error) {
+	m.listByIDsRequests = append(m.listByIDsRequests, ids)
+	return m.Repository.ListByIDs(ctx, ids)
+}
+
+func (m *meterRepoSpy) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
+	m.listAllCalls++
+	return m.Repository.ListAll(ctx, filter)
+}
+
+func (m *meterRepoSpy) Count(ctx context.Context, filter *types.MeterFilter) (int, error) {
+	m.countCalls++
+	return m.Repository.Count(ctx, filter)
+}
+
+func (s *PriceServiceSuite) TestGetPrices_ExpandMeters_AttachesOnlyReferencedMeters() {
+	for _, id := range []string{"meter-a", "meter-b", "meter-unused"} {
+		s.Require().NoError(s.meterRepo.CreateMeter(s.ctx, &meter.Meter{
+			ID:          id,
+			Name:        id,
+			EventName:   id,
+			Aggregation: meter.Aggregation{Type: types.AggregationSum},
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}))
+	}
+
+	prices := []*price.Price{
+		{ID: "price-a", MeterID: "meter-a"},
+		{ID: "price-b", MeterID: "meter-b"},
+		{ID: "price-no-meter"},
+	}
+	for _, p := range prices {
+		p.Amount = decimal.NewFromInt(1)
+		p.Currency = "usd"
+		p.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+		p.EntityID = "plan-expand-meters"
+		p.BaseModel = types.GetDefaultBaseModel(s.ctx)
+		s.Require().NoError(s.priceRepo.Create(s.ctx, p))
+	}
+
+	priceFilter := types.NewPriceFilter()
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+
+	spy := &meterRepoSpy{Repository: s.meterRepo}
+	params := s.serviceParams
+	params.MeterRepo = spy
+	resp, err := NewPriceService(params).GetPrices(s.ctx, priceFilter)
+	s.Require().NoError(err)
+
+	s.Require().Len(spy.listByIDsRequests, 1)
+	s.ElementsMatch([]string{"meter-a", "meter-b"}, spy.listByIDsRequests[0])
+	s.Zero(spy.listAllCalls)
+	s.Zero(spy.countCalls)
+
+	meterByPrice := make(map[string]*dto.MeterResponse, len(resp.Items))
+	for _, item := range resp.Items {
+		meterByPrice[item.ID] = item.Meter
+	}
+	s.Require().Len(meterByPrice, 3)
+	s.Require().NotNil(meterByPrice["price-a"])
+	s.Equal("meter-a", meterByPrice["price-a"].ID)
+	s.Require().NotNil(meterByPrice["price-b"])
+	s.Equal("meter-b", meterByPrice["price-b"].ID)
+	s.Nil(meterByPrice["price-no-meter"])
 }
 
 // TestGetPrices_ExpandFeatures_IgnoresDeletedFeature verifies that a deleted feature

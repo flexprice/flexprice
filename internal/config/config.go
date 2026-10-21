@@ -39,12 +39,13 @@ type Configuration struct {
 	Postgres               PostgresConfig               `validate:"required"`
 	Otel                   OtelConfig                   `validate:"omitempty"`
 	Pyroscope              PyroscopeConfig              `validate:"required"`
+	Telemetry              TelemetryConfig              `mapstructure:"telemetry" validate:"omitempty"`
 	Event                  EventConfig                  `validate:"required"`
 	DynamoDB               DynamoDBConfig               `validate:"required"`
 	Temporal               TemporalConfig               `validate:"required"`
 	Webhook                Webhook                      `validate:"omitempty"`
 	Secrets                SecretsConfig                `validate:"required"`
-	Billing                BillingConfig                `validate:"omitempty"`
+	Billing                BillingConfig                `mapstructure:"billing" validate:"omitempty"`
 	S3                     S3Config                     `validate:"required"`
 	Storage                StorageConfig                `mapstructure:"storage" validate:"omitempty"`
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
@@ -846,6 +847,16 @@ type PyroscopeConfig struct {
 	DisableGCRuns   bool     `mapstructure:"disable_gc_runs" default:"false"`
 }
 
+type TelemetryConfig struct {
+	// Enabled defaults to false — telemetry is opt-in until validated.
+	// FLEXPRICE_TELEMETRY_DISABLED / DO_NOT_TRACK always win regardless.
+	Enabled      bool   `mapstructure:"enabled"`
+	Disabled     bool   `mapstructure:"disabled"`
+	Host         string `mapstructure:"host"`
+	DryRun       bool   `mapstructure:"dry_run"`
+	InstallLabel string `mapstructure:"install_label"`
+}
+
 type TemporalConfig struct {
 	Address                string               `mapstructure:"address" validate:"required"`
 	TaskQueue              string               `mapstructure:"task_queue" validate:"required"`
@@ -888,9 +899,78 @@ type SecretsConfig struct {
 	EncryptionKey string `mapstructure:"encryption_key" validate:"required"`
 }
 
+// BillingConfig points this region at the Flexprice billing tenant on Flexprice Cloud.
+// TenantID/EnvironmentID are set only where that tenant is local; the remote fields are set wherever self-billing runs.
 type BillingConfig struct {
 	TenantID      string `mapstructure:"tenant_id" validate:"omitempty"`
 	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Region        string `mapstructure:"region"`
+	APIHost       string `mapstructure:"api_host"`
+	APIKey        string `mapstructure:"api_key"`
+	PlanID        string `mapstructure:"plan_id"`
+	DashboardURL  string `mapstructure:"dashboard_url"`
+
+	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
+	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
+
+	// UsageLookbackHours is how many closed hours each usage push re-sends, so a missed run is recovered.
+	UsageLookbackHours int `mapstructure:"usage_lookback_hours" default:"6"`
+
+	// ZapierWebhookURL receives self-billing lifecycle alerts for Slack; empty disables them.
+	ZapierWebhookURL string `mapstructure:"zapier_webhook_url"`
+}
+
+const defaultUsageLookback = 6 * time.Hour
+
+// UsageLookback is the usage push window length; a non-positive setting falls back to 6 hours.
+func (c BillingConfig) UsageLookback() time.Duration {
+	if c.UsageLookbackHours <= 0 {
+		return defaultUsageLookback
+	}
+	return time.Duration(c.UsageLookbackHours) * time.Hour
+}
+
+// IsSelfBillingEnabled reports whether this deployment bills its tenants through Flexprice Cloud.
+func (c BillingConfig) IsSelfBillingEnabled() bool {
+	return c.Enabled &&
+		c.Region != "" &&
+		c.APIKey != "" &&
+		c.PlanID != "" &&
+		c.DashboardURL != "" &&
+		c.CheckoutProvider().Validate() == nil &&
+		c.hasSecureAPIHost()
+}
+
+// CheckoutProvider returns the configured checkout payment provider, defaulting to stripe.
+func (c BillingConfig) CheckoutProvider() types.CheckoutPaymentProvider {
+	if c.PaymentProvider == "" {
+		return types.CheckoutPaymentProviderStripe
+	}
+	return c.PaymentProvider
+}
+
+// hasSecureAPIHost reports whether APIHost is an https URL; plain http is allowed only for localhost.
+func (c BillingConfig) hasSecureAPIHost() bool {
+	return isSecureURL(c.APIHost)
+}
+
+// HasSecureZapierWebhookURL reports whether ZapierWebhookURL is an https URL; plain http is allowed only for localhost.
+func (c BillingConfig) HasSecureZapierWebhookURL() bool {
+	return isSecureURL(c.ZapierWebhookURL)
+}
+
+func isSecureURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && isLoopbackHost(u.Hostname()))
+}
+
+// IsBillingTenant reports whether tenantID is the local billing tenant, which never bills itself.
+func (c BillingConfig) IsBillingTenant(tenantID string) bool {
+	return c.TenantID != "" && c.TenantID == tenantID
 }
 
 type EventProcessingConfig struct {
@@ -988,6 +1068,8 @@ type ActivityConfig struct {
 	ConsumerGroup string                  `mapstructure:"consumer_group" default:"activity_log"`
 	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
 	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
+	// ExcludedTenants lists "tenant_id" or "tenant_id:environment_id" entries whose writes are not logged. Empty = log all.
+	ExcludedTenants []string `mapstructure:"excluded_tenants"`
 }
 
 type ActivityPublisherConfig struct {

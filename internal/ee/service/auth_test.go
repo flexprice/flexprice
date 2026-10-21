@@ -14,6 +14,13 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// recordingHook records each tenant handed to self-billing as "tenant|name|email".
+type recordingHook struct{ calls []string }
+
+func (h *recordingHook) OnTenantCreated(_ context.Context, tenantID, name, email string) {
+	h.calls = append(h.calls, tenantID+"|"+name+"|"+email)
+}
+
 type AuthServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	authService AuthService
@@ -37,6 +44,7 @@ func (s *AuthServiceSuite) setupService() {
 	pubSub := testutil.NewInMemoryPubSub()
 
 	s.authService = NewAuthService(ServiceParams{
+		SelfBilling:                  &recordingHook{},
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -179,6 +187,7 @@ type fakeSupabaseProvider struct {
 	err        error
 	confirmed  bool
 	confirmErr error
+	assignErr  error
 }
 
 // EmailConfirmed stands in for the Admin API lookup. The guard reads
@@ -205,7 +214,7 @@ func (f *fakeSupabaseProvider) SignUp(_ context.Context, req authProvider.AuthRe
 }
 
 func (f *fakeSupabaseProvider) AssignUserToTenant(_ context.Context, _ string, _ string) error {
-	return nil
+	return f.assignErr
 }
 
 // TestSignUpRefusesUnverifiedEmail covers the signup guard: an account must not
@@ -301,6 +310,56 @@ func (s *AuthServiceSuite) TestSignUpRefusesUnverifiedEmail() {
 			} else {
 				s.NoError(err)
 			}
+		})
+	}
+}
+
+// TestSignUpProvisionsSelfBillingAfterCommit checks signup hands the new tenant to self-billing only once
+// its transaction has committed, so a rollback never leaves a billing customer for a missing tenant.
+func (s *AuthServiceSuite) TestSignUpProvisionsSelfBillingAfterCommit() {
+	testCases := []struct {
+		name       string
+		tenantName string
+		assignErr  error
+		wantCall   bool
+		wantName   string
+	}{
+		{name: "provisions the committed tenant", tenantName: "Acme", wantCall: true, wantName: "Acme"},
+		{name: "provisions under the default tenant name", wantCall: true, wantName: s.GetConfig().Onboarding.DefaultTenantName},
+		{name: "skips provisioning when the transaction fails", tenantName: "Acme", assignErr: errors.New("assign failed")},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			svc := s.authService.(*authService)
+			original, originalHook := svc.authProvider, svc.SelfBilling
+			svc.authProvider = &fakeSupabaseProvider{
+				claims:    &auth.Claims{UserID: "user_1", Email: "owner@acme.io"},
+				confirmed: true,
+				assignErr: tc.assignErr,
+			}
+			hook := &recordingHook{}
+			svc.SelfBilling = hook
+			defer func() {
+				svc.authProvider = original
+				svc.SelfBilling = originalHook
+			}()
+
+			resp, err := svc.SignUp(s.GetContext(), &dto.SignUpRequest{
+				Email:      "owner@acme.io",
+				Password:   "password123",
+				Token:      "token",
+				TenantName: tc.tenantName,
+			})
+
+			if !tc.wantCall {
+				s.Error(err)
+				s.Empty(hook.calls)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal([]string{resp.TenantID + "|" + tc.wantName + "|owner@acme.io"}, hook.calls)
 		})
 	}
 }

@@ -10,12 +10,16 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// linkedCustomerID runs read in a repository span and marks a missing row as not found.
-func linkedCustomerID(ctx context.Context, entity, id string, read func() (string, error)) (string, error) {
+// linkedCustomerID runs read in a repository span, retries a replica miss on the primary and marks a missing row as not found.
+func linkedCustomerID(ctx context.Context, entity, id string, read func(ctx context.Context) (string, error)) (string, error) {
 	span := StartRepositorySpan(ctx, entity, "get_linked_customer_id", map[string]interface{}{"id": id})
 	defer FinishSpan(span)
 
-	customerID, err := read()
+	customerID, err := read(ctx)
+	if ent.IsNotFound(err) {
+		// A just-written row may not have reached the replica yet.
+		customerID, err = read(types.WithForceWriter(ctx))
+	}
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {

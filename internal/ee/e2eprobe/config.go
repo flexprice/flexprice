@@ -115,7 +115,6 @@ var paymentDefaultSettleTimeout = map[string]time.Duration{
 var paymentFixedCustomer = map[string]string{
 	"stripe":    "e2eprobe-cust-pay-stripe-cards",
 	"chargebee": "e2eprobe-cust-pay-chargebee-cards",
-	"razorpay":  "e2eprobe-cust-pay-razorpay-mandate",
 }
 
 // paymentDeclineCardLast4 identifies the gateway test card that saves but declines when charged.
@@ -124,12 +123,10 @@ var paymentDeclineCardLast4 = map[string]string{
 	"chargebee": "0004",
 }
 
-// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards and mandates:
-// Razorpay test card mandates refuse the 22nd debit of a day.
+// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards.
 var paymentAutoChargeInterval = map[string]time.Duration{
 	"stripe":    6 * time.Hour,
 	"chargebee": 6 * time.Hour,
-	"razorpay":  12 * time.Hour,
 }
 
 var paymentDefaultCurrency = map[string]string{

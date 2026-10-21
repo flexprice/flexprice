@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -115,6 +116,8 @@ type Stores struct {
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
 	RevenueFactRepo              revenuefact.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -230,6 +233,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	addonAssociationStore := NewInMemoryAddonAssociationStore()
 	addonPriceSyncStore := NewInMemoryAddonPriceSyncStore(priceStore, subStore, lineItemStore, addonAssociationStore)
 	couponStore := NewInMemoryCouponStore()
+	selfBillingStore := NewInMemorySelfBillingStore()
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
 		SubscriptionLineItemRepo:     lineItemStore,
@@ -281,6 +285,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
 		RevenueFactRepo:              NewInMemoryRevenueFactStore(),
+		SelfBillingClickHouseRepo:    selfBillingStore,
+		SelfBillingPostgresRepo:      selfBillingStore,
 	}
 
 	// Cache stores
@@ -347,6 +353,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()
 	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
+	s.stores.SelfBillingClickHouseRepo.(*InMemorySelfBillingStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

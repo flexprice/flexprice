@@ -292,6 +292,10 @@ func (Invoice) Indexes() []ent.Index {
 			Unique().
 			StorageKey(Idx_tenant_environment_idempotency_key_unique).
 			Annotations(entsql.IndexWhere("((idempotency_key IS NOT NULL) AND ((status)::text = 'published'::text) AND ((invoice_status)::text <> 'VOIDED'::text))")),
+		// Self-billing's hourly cross-tenant sum reads finalized invoices by finalized_at.
+		index.Fields("finalized_at").
+			StorageKey("idx_invoices_finalized_at_published").
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text))")),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
 			Annotations(entsql.IndexWhere("(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))")),

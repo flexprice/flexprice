@@ -3,7 +3,9 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -153,4 +155,94 @@ func TestReportsConfig_Enabled(t *testing.T) {
 	assert.False(t, ReportsConfig{Database: "d"}.Enabled())
 	assert.False(t, ReportsConfig{Username: "u"}.Enabled())
 	assert.True(t, ReportsConfig{Database: "d", Username: "u"}.Enabled())
+}
+
+func TestBillingConfig_IsSelfBillingEnabled(t *testing.T) {
+	full := BillingConfig{
+		Enabled:      true,
+		Region:       "us",
+		APIHost:      "https://api.flexprice.io/v1",
+		APIKey:       "sk",
+		PlanID:       "plan_1",
+		DashboardURL: "https://us.app.flexprice.io",
+	}
+	with := func(mut func(*BillingConfig)) BillingConfig {
+		c := full
+		mut(&c)
+		return c
+	}
+
+	tests := []struct {
+		name string
+		cfg  BillingConfig
+		want bool
+	}{
+		{"complete", full, true},
+		{"disabled", with(func(c *BillingConfig) { c.Enabled = false }), false},
+		{"no host", with(func(c *BillingConfig) { c.APIHost = "" }), false},
+		{"no key", with(func(c *BillingConfig) { c.APIKey = "" }), false},
+		{"no region", with(func(c *BillingConfig) { c.Region = "" }), false},
+		{"no plan", with(func(c *BillingConfig) { c.PlanID = "" }), false},
+		{"no dashboard", with(func(c *BillingConfig) { c.DashboardURL = "" }), false},
+		{"plain http host", with(func(c *BillingConfig) { c.APIHost = "http://api.flexprice.io/v1" }), false},
+		{"relative host", with(func(c *BillingConfig) { c.APIHost = "api.flexprice.io/v1" }), false},
+		{"http localhost", with(func(c *BillingConfig) { c.APIHost = "http://localhost:8080/v1" }), true},
+		{"http 127.0.0.1", with(func(c *BillingConfig) { c.APIHost = "http://127.0.0.1:8080/v1" }), true},
+		{"http ::1", with(func(c *BillingConfig) { c.APIHost = "http://[::1]:8080/v1" }), true},
+		{"explicit provider", with(func(c *BillingConfig) { c.PaymentProvider = types.CheckoutPaymentProviderRazorpay }), true},
+		{"unknown provider", with(func(c *BillingConfig) { c.PaymentProvider = "paypal" }), false},
+		{"legacy only", BillingConfig{TenantID: "t_billing", EnvironmentID: "env"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.IsSelfBillingEnabled())
+		})
+	}
+}
+
+func TestBillingConfig_CheckoutProvider(t *testing.T) {
+	assert.Equal(t, types.CheckoutPaymentProviderStripe, BillingConfig{}.CheckoutProvider())
+	assert.Equal(t, types.CheckoutPaymentProviderChargebee, BillingConfig{PaymentProvider: types.CheckoutPaymentProviderChargebee}.CheckoutProvider())
+}
+
+func TestBillingConfig_UsageLookback(t *testing.T) {
+	tests := []struct {
+		name  string
+		hours int
+		want  time.Duration
+	}{
+		{"unset_defaults_to_6h", 0, 6 * time.Hour},
+		{"configured", 12, 12 * time.Hour},
+		{"negative_defaults_to_6h", -1, 6 * time.Hour},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, BillingConfig{UsageLookbackHours: tt.hours}.UsageLookback())
+		})
+	}
+}
+
+func TestBillingConfig_IsBillingTenant(t *testing.T) {
+	assert.True(t, BillingConfig{TenantID: "t_b"}.IsBillingTenant("t_b"))
+	assert.False(t, BillingConfig{}.IsBillingTenant(""))
+	assert.False(t, BillingConfig{TenantID: "t_b"}.IsBillingTenant("t_x"))
+}
+
+func TestBillingConfig_HasSecureZapierWebhookURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://hooks.zapier.com/hooks/catch/1/abc/", true},
+		{"http://hooks.zapier.com/hooks/catch/1/abc/", false},
+		{"http://localhost:8080/hook", true},
+		{"http://127.0.0.1:8080/hook", true},
+		{"", false},
+		{"not a url", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			assert.Equal(t, tt.want, BillingConfig{ZapierWebhookURL: tt.url}.HasSecureZapierWebhookURL())
+		})
+	}
 }

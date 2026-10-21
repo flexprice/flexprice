@@ -23,7 +23,7 @@ require (
 	github.com/chargebee/chargebee-go/v3 v3.54.0
 	github.com/cockroachdb/errors v1.14.0
 	github.com/crewjam/saml v0.5.1
-	github.com/flexprice/go-sdk/v2 v2.1.33
+	github.com/flexprice/go-sdk/v2 v2.1.40
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.5

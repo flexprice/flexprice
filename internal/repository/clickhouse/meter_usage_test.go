@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func (s *MeterUsageQuerySuite) TestAggregation_MAX() {
 func (s *MeterUsageQuerySuite) TestAggregation_AVG() {
 	agg := GetMeterUsageAggregator(types.AggregationAvg)
 	aggExpr, _ := getMeterUsageAggExprs(agg)
-	assert.Equal(s.T(), "AVG(qty_total)", aggExpr)
+	assert.Equal(s.T(), "ifNotFinite(AVG(qty_total), 0)", aggExpr)
 }
 
 func (s *MeterUsageQuerySuite) TestAggregation_LATEST() {
@@ -318,4 +319,20 @@ func TestFormatWindowSizeTimezone(t *testing.T) {
 			assert.Equal(t, c.expected, got)
 		})
 	}
+}
+
+// AVG over zero rows is NaN in ClickHouse, which panics when scanned into
+// decimal.Decimal; every AVG path must carry the ifNotFinite guard.
+func (s *MeterUsageQuerySuite) TestAggregation_AVG_GuardsEmptySetNaN() {
+	query := GetMeterUsageAggregator(types.AggregationAvg).GetQuery(context.Background(), &events.MeterUsageQueryParams{
+		TenantID:      "t1",
+		EnvironmentID: "e1",
+		MeterID:       "m1",
+		StartTime:     time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	}, s.qb)
+	assert.Contains(s.T(), query, "ifNotFinite(AVG(qty_total), 0)")
+
+	columns := buildMeterUsageAggregationColumns([]types.AggregationType{types.AggregationAvg})
+	assert.Equal(s.T(), "ifNotFinite(AVG(qty_total), 0) AS total_usage", columns[0])
 }

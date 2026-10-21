@@ -560,19 +560,20 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 		return nil, err
 	}
 
-	if req.Shape == string(types.ShapeTimeseries) && req.Grain == "" && len(entry.Grains) > 0 {
-		req.Grain = string(entry.Grains[0])
+	grain, dims := req.Grain, req.Dimensions
+	if req.Shape == string(types.ShapeTimeseries) && grain == "" && len(entry.Grains) > 0 {
+		grain = string(entry.Grains[0])
 	}
-	if entry.Key == types.MetricEventsVolume && req.Shape == string(types.ShapeBreakdown) && len(req.Dimensions) == 0 {
-		req.Dimensions = []string{"meter_id"}
+	if entry.Key == types.MetricEventsVolume && req.Shape == string(types.ShapeBreakdown) && len(dims) == 0 {
+		dims = []string{"meter_id"}
 	}
 
 	def := analytics.ViewDefinition{
 		Family:     types.FamilyBilling,
 		Shape:      types.Shape(req.Shape),
 		Metrics:    []types.Metric{entry.Key},
-		Dimensions: req.Dimensions,
-		Time:       analytics.TimeSpecRaw{Range: req.Range, Grain: types.Grain(req.Grain)},
+		Dimensions: dims,
+		Time:       analytics.TimeSpecRaw{Range: req.Range, Grain: types.Grain(grain)},
 		Limit:      req.Limit,
 	}
 	for _, f := range req.Filters {

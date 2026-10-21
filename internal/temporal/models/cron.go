@@ -139,3 +139,8 @@ type CheckoutSessionExpiryWorkflowResult struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 }
+
+// ===================== Self-Billing Hourly =====================
+
+// SelfBillingHourlyWorkflowInput is the input for SelfBillingHourlyWorkflow.
+type SelfBillingHourlyWorkflowInput struct{}

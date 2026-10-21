@@ -149,6 +149,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.RevenueRollupInput{Interval: 24 * time.Hour},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			// Always declared; RunHourly is a no-op unless self-billing is enabled.
+			ID:        types.ScheduleIDSelfBillingHourly,
+			Interval:  1 * time.Hour,
+			Offset:    20 * time.Minute, // fires at :20 so the previous hour has settled (selfbilling waits 15 minutes)
+			Workflow:  cronWorkflows.SelfBillingHourlyWorkflow,
+			Input:     models.SelfBillingHourlyWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

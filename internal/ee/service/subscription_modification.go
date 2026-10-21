@@ -38,13 +38,15 @@ type SubscriptionModificationService interface {
 }
 
 type subscriptionModificationService struct {
-	serviceParams ServiceParams
+	serviceParams       ServiceParams
+	subscriptionService *subscriptionService
 }
 
 // NewSubscriptionModificationService creates a new SubscriptionModificationService.
 func NewSubscriptionModificationService(serviceParams ServiceParams) SubscriptionModificationService {
 	return &subscriptionModificationService{
-		serviceParams: serviceParams,
+		serviceParams:       serviceParams,
+		subscriptionService: NewSubscriptionService(serviceParams).(*subscriptionService),
 	}
 }
 
@@ -67,7 +69,7 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		}
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
-		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams)
+		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams, req.Checkout)
 	case dto.SubscriptionModifyTypeCoupon:
 		return s.executeCouponModification(ctx, subscriptionID, req.CouponParams)
 	case dto.SubscriptionModifyTypeTax:

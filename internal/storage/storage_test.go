@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -29,6 +30,14 @@ func (f *fakeStorage) Upload(ctx context.Context, req *storage.UploadRequest) (*
 		FileSizeBytes: int64(len(req.Data)),
 		UploadedAt:    time.Now(),
 	}, nil
+}
+
+func (f *fakeStorage) UploadStream(ctx context.Context, req *storage.StreamUploadRequest) (*storage.UploadResponse, error) {
+	data, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	return f.Upload(ctx, &storage.UploadRequest{Key: req.Key, Data: data, Format: req.Format})
 }
 
 func (f *fakeStorage) Download(ctx context.Context, key string) ([]byte, error) {

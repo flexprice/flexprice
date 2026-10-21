@@ -744,6 +744,308 @@ func (s *WalletServiceSuite) TestTopUpWallet() {
 	s.Equal(2, *foundTx.Priority, "Transaction priority mismatch")
 }
 
+func (s *WalletServiceSuite) freshWallet() {
+	s.setupWallet()
+	s.resetWalletBalance()
+}
+
+func (s *WalletServiceSuite) assertEffectiveGrant(tx *wallet.Transaction, effective time.Time) {
+	effective = effective.UTC()
+	s.True(effective.Equal(tx.CreatedAt), "created_at")
+	s.True(effective.Equal(tx.UpdatedAt), "updated_at")
+	got, err := time.Parse(time.RFC3339Nano, tx.Metadata["requested_effective_date"])
+	s.NoError(err)
+	s.True(effective.Equal(got), "requested_effective_date")
+	requestedAt, err := time.Parse(time.RFC3339Nano, tx.Metadata["requested_at"])
+	s.NoError(err)
+	s.WithinDuration(time.Now().UTC(), requestedAt, 5*time.Second)
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_OmittedUsesNow() {
+	s.freshWallet()
+	before := time.Now().UTC()
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(10),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_date_omitted"),
+		Metadata:          types.Metadata{"note": "kept"},
+	})
+	s.NoError(err)
+	tx := resp.WalletTransaction.Transaction
+	s.False(tx.CreatedAt.Before(before))
+	s.True(tx.CreatedAt.Equal(tx.UpdatedAt))
+	s.Empty(tx.Metadata["requested_effective_date"])
+	s.Empty(tx.Metadata["requested_at"])
+	s.Equal("kept", tx.Metadata["note"])
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_StampsGrantAndKeepsRequestMetadata() {
+	s.freshWallet()
+	loc := time.FixedZone("IST", 5*3600+30*60)
+	effective := time.Date(2026, 10, 1, 12, 0, 0, 0, loc)
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(20),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_date_stamp"),
+		EffectiveDate:     &effective,
+		Metadata:          types.Metadata{"note": "kept"},
+	})
+	s.NoError(err)
+	s.assertEffectiveGrant(resp.WalletTransaction.Transaction, effective)
+	s.Equal("kept", resp.WalletTransaction.Metadata["note"])
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_DebitConsumesBackdatedGrant() {
+	s.freshWallet()
+	effective := time.Date(2026, 10, 1, 6, 29, 46, 0, time.UTC)
+	backdated, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(20),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_date_backdated"),
+		EffectiveDate:     &effective,
+	})
+	s.NoError(err)
+	_, err = s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(10),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_date_later"),
+	})
+	s.NoError(err)
+
+	s.NoError(s.service.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(5),
+		TransactionReason: types.TransactionReasonManualBalanceDebit,
+		IdempotencyKey:    "effective_date_debit",
+	}))
+
+	grant, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), backdated.WalletTransaction.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(15).Equal(grant.CreditsAvailable))
+	s.True(effective.Equal(grant.CreatedAt))
+	s.True(grant.UpdatedAt.After(effective))
+	s.Equal(effective.Format(time.RFC3339Nano), grant.Metadata["requested_effective_date"])
+
+	later, err := s.GetStores().WalletRepo.GetTransactionByIdempotencyKey(s.GetContext(), "effective_date_later")
+	s.NoError(err)
+	s.True(decimal.NewFromInt(10).Equal(later.CreditsAvailable))
+
+	debit, err := s.GetStores().WalletRepo.GetTransactionByIdempotencyKey(s.GetContext(), "effective_date_debit")
+	s.NoError(err)
+	s.True(debit.CreatedAt.After(effective))
+	s.Empty(debit.Metadata["requested_effective_date"])
+	s.Empty(debit.Metadata["requested_at"])
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_RejectedWhenInTheFuture() {
+	s.freshWallet()
+	effective := time.Now().UTC().Add(24 * time.Hour)
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(20),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_date_future"),
+		EffectiveDate:     &effective,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "effective_date cannot be in the future")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_RejectedWhenNotBeforeExpiry() {
+	s.freshWallet()
+	expiryDay := time.Now().UTC().Add(-48 * time.Hour)
+	y, m, d := expiryDay.Date()
+	expiryInt := y*10000 + int(m)*100 + d
+	expiry := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	for _, effective := range []time.Time{expiry, expiry.Add(time.Hour)} {
+		_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+			CreditsToAdd:      decimal.NewFromInt(1),
+			TransactionReason: types.TransactionReasonFreeCredit,
+			IdempotencyKey:    lo.ToPtr(effective.Format(time.RFC3339Nano)),
+			EffectiveDate:     &effective,
+			ExpiryDate:        &expiryInt,
+		})
+		s.Error(err)
+		s.Contains(err.Error(), "effective_date must be before the credit expiry")
+	}
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_RejectedWhenNotBeforeBonusExpiry() {
+	s.freshWallet()
+	bonusExpiry := time.Now().UTC().Add(-48 * time.Hour)
+	effective := bonusExpiry.Add(time.Hour)
+	_, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:              decimal.NewFromInt(10),
+		BonusCreditsToAdd:         lo.ToPtr(decimal.NewFromInt(5)),
+		TransactionReason:         types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:            lo.ToPtr("effective_date_bonus_expiry"),
+		EffectiveDate:             &effective,
+		BonusCreditsExpiryDateUTC: &bonusExpiry,
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "effective_date must be before the bonus credit expiry")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_BonusGrantSharesDate() {
+	s.freshWallet()
+	effective := time.Date(2026, 10, 1, 6, 29, 46, 0, time.UTC)
+	bonusExpiry := time.Now().UTC().Add(48 * time.Hour)
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:              decimal.NewFromInt(20),
+		BonusCreditsToAdd:         lo.ToPtr(decimal.NewFromInt(5)),
+		TransactionReason:         types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:            lo.ToPtr("effective_date_bonus"),
+		EffectiveDate:             &effective,
+		BonusCreditsExpiryDateUTC: &bonusExpiry,
+		Metadata:                  types.Metadata{"note": "kept"},
+	})
+	s.NoError(err)
+	s.assertEffectiveGrant(resp.WalletTransaction.Transaction, effective)
+	s.Equal("kept", resp.WalletTransaction.Metadata["note"])
+
+	bonus := s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.Require().NotNil(bonus)
+	s.assertEffectiveGrant(bonus, effective)
+	s.True(bonusExpiry.Equal(*bonus.ExpiryDate))
+	s.Equal("kept", bonus.Metadata["note"])
+
+	s.NoError(s.service.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(5),
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "effective_date_bonus_debit",
+	}))
+	purchase, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(20).Equal(purchase.CreditsAvailable))
+	bonus = s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.True(decimal.Zero.Equal(bonus.CreditsAvailable))
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_InvoicePeriodUsesEffectiveDate() {
+	s.freshWallet()
+	periodEnd := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), &invoice.Invoice{
+		ID:            "inv_effective_period",
+		CustomerID:    s.testData.customer.ID,
+		Currency:      "usd",
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		PeriodEnd:     &periodEnd,
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	beforePeriod := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	afterPeriod := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
+	eligible, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(20),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_before_period"),
+		EffectiveDate:     &beforePeriod,
+	})
+	s.NoError(err)
+	_, err = s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(10),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    lo.ToPtr("effective_after_period"),
+		EffectiveDate:     &afterPeriod,
+	})
+	s.NoError(err)
+
+	s.NoError(s.service.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(5),
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		InvoiceID:         lo.ToPtr("inv_effective_period"),
+		IdempotencyKey:    "effective_period_debit",
+	}))
+
+	grant, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), eligible.WalletTransaction.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(15).Equal(grant.CreditsAvailable))
+	later, err := s.GetStores().WalletRepo.GetTransactionByIdempotencyKey(s.GetContext(), "effective_after_period")
+	s.NoError(err)
+	s.True(decimal.NewFromInt(10).Equal(later.CreditsAvailable))
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_InvoicedPurchaseStaysPending() {
+	s.freshWallet()
+	effective := time.Date(2026, 10, 1, 6, 29, 46, 0, time.UTC)
+	bonusExpiry := time.Now().UTC().Add(48 * time.Hour)
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:              decimal.NewFromInt(20),
+		BonusCreditsToAdd:         lo.ToPtr(decimal.NewFromInt(5)),
+		TransactionReason:         types.TransactionReasonPurchasedCreditInvoiced,
+		IdempotencyKey:            lo.ToPtr("effective_date_invoiced"),
+		EffectiveDate:             &effective,
+		BonusCreditsExpiryDateUTC: &bonusExpiry,
+	})
+	s.NoError(err)
+	s.Equal(types.TransactionStatusPending, resp.WalletTransaction.TxStatus)
+	s.assertEffectiveGrant(resp.WalletTransaction.Transaction, effective)
+	bonus := s.bonusTxByParent(resp.WalletTransaction.ID)
+	s.Require().NotNil(bonus)
+	s.Equal(types.TransactionStatusPending, bonus.TxStatus)
+	s.assertEffectiveGrant(bonus, effective)
+
+	err = s.service.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(5),
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "effective_date_pending_debit",
+	})
+	s.Error(err)
+	s.Contains(err.Error(), "insufficient balance")
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_PurchasedDirectStampsGrant() {
+	s.freshWallet()
+	effective := time.Date(2026, 10, 1, 6, 29, 46, 0, time.UTC)
+	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(20),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		IdempotencyKey:    lo.ToPtr("effective_date_purchased_direct"),
+		EffectiveDate:     &effective,
+	})
+	s.NoError(err)
+	s.Equal(types.TransactionStatusCompleted, resp.WalletTransaction.TxStatus)
+	s.assertEffectiveGrant(resp.WalletTransaction.Transaction, effective)
+
+	s.NoError(s.service.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(5),
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "effective_date_purchased_direct_debit",
+	}))
+	grant, err := s.GetStores().WalletRepo.GetTransactionByID(s.GetContext(), resp.WalletTransaction.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(15).Equal(grant.CreditsAvailable))
+	s.True(effective.Equal(grant.CreatedAt))
+}
+
+func (s *WalletServiceSuite) TestTopUpWallet_EffectiveDate_DoesNotChangeDerivedIdempotencyKey() {
+	s.freshWallet()
+	first := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	second := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	a, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		EffectiveDate:     &first,
+	})
+	s.NoError(err)
+	b, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(1),
+		TransactionReason: types.TransactionReasonFreeCredit,
+		EffectiveDate:     &second,
+	})
+	s.NoError(err)
+	s.Equal(a.WalletTransaction.IdempotencyKey, b.WalletTransaction.IdempotencyKey)
+}
+
 func (s *WalletServiceSuite) TestTopUpWallet_ForceSyncInvoice_AttemptsMoyasarSyncAfterCommit() {
 	ctx := s.GetContext()
 

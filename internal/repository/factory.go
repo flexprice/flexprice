@@ -7,6 +7,7 @@ import (
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
@@ -35,7 +36,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -43,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	domainsystemevent "github.com/flexprice/flexprice/internal/domain/systemevent"
@@ -327,4 +328,12 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cach
 
 func NewRevenueFactRepository(p RepositoryParams) revenuefact.Repository {
 	return entRepo.NewRevenueFactRepository(p.EntClient, p.Logger)
+}
+
+func NewSelfBillingClickHouseRepository(p RepositoryParams) domainsb.ClickHouseRepository {
+	return clickhouseRepo.NewSelfBillingRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewSelfBillingPostgresRepository(p RepositoryParams) domainsb.PostgresRepository {
+	return entRepo.NewSelfBillingRepository(p.EntClient, p.Logger)
 }

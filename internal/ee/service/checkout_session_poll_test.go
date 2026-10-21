@@ -42,6 +42,10 @@ type fakeCheckoutProvider struct {
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
+	// onCharge runs inside TryAutoChargingSavedMethod, standing in for a webhook that beats the response.
+	onCharge func(req interfaces.AuthorizationLinkRequest)
+	// chargeErr fails the charge call after onCharge, as a timeout after the gateway charged would.
+	chargeErr error
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(
@@ -81,9 +85,15 @@ func (f *fakeCheckoutProvider) CreateAuthorizationLink(context.Context, interfac
 		NextAction:        types.PaymentAction{Type: types.PaymentActionTypeCheckoutURL, URL: "https://rzp.io/auth"},
 	}, nil
 }
-func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(context.Context, interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, bool, error) {
+func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(_ context.Context, req interfaces.AuthorizationLinkRequest) (*interfaces.CheckoutProviderResponse, bool, error) {
 	if !f.charged {
 		return nil, false, nil
+	}
+	if f.onCharge != nil {
+		f.onCharge(req)
+	}
+	if f.chargeErr != nil {
+		return nil, false, f.chargeErr
 	}
 	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged"}, true, nil
 }
@@ -900,4 +910,81 @@ func (s *CheckoutPollSuite) TestCompletion_CountedWithActionAndChargeMode() {
 	s.Require().NoError(s.svc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_mode_001"}))
 
 	s.Equal(before+1, r.Sum("checkout.sessions", match))
+}
+
+// seedAutoChargeSession seeds an initiated charge_automatically session and returns its draft invoice.
+func (s *CheckoutPollSuite) seedAutoChargeSession() (*domainCheckout.CheckoutSession, *invoice.Invoice) {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+	session.CheckoutPaymentID = nil
+	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
+		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
+	)
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, *session.CheckoutInvoiceID)
+	s.Require().NoError(err)
+	return session, inv
+}
+
+// Chargebee charges inside the create call and can webhook before it returns. The webhook
+// must find the session by its payment, and the fulfilment must not reset what it completed.
+func (s *CheckoutPollSuite) TestFulfil_WebhookDuringProviderCall() {
+	ctx := s.GetContext()
+	s.provider.charged = true
+	session, inv := s.seedAutoChargeSession()
+
+	s.provider.onCharge = func(req interfaces.AuthorizationLinkRequest) {
+		filter := types.NewDefaultCheckoutSessionFilter()
+		filter.CheckoutPaymentIDs = []string{req.PaymentID}
+		found, err := s.GetStores().CheckoutSessionRepo.List(ctx, filter)
+		s.Require().NoError(err)
+		s.Require().Len(found, 1, "the session must be findable by its payment before the gateway is called")
+		s.Require().NoError(s.svc.CompleteCheckoutSession(ctx, found[0].ID, nil))
+	}
+
+	s.Require().NoError(s.svc.fulfillCheckoutSession(ctx, session, inv))
+
+	s.Equal(types.CheckoutStatusCompleted, session.CheckoutStatus)
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusCompleted, stored.CheckoutStatus, "a completed session must not be reset to pending")
+}
+
+// A charge can go through and be webhooked even though our call to the gateway then fails.
+// Only a session the webhook completed may turn that error into success.
+func (s *CheckoutPollSuite) TestFulfil_ProviderErrorAfterCharge() {
+	tests := []struct {
+		name           string
+		webhookArrives bool
+		wantErr        bool
+		want           types.CheckoutStatus
+	}{
+		{"webhook completed the session", true, false, types.CheckoutStatusCompleted},
+		{"no webhook keeps the error", false, true, types.CheckoutStatusInitiated},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.provider.charged = true
+			s.provider.chargeErr = ierr.NewError("gateway timeout").Mark(ierr.ErrHTTPClient)
+			s.provider.onCharge = nil
+			session, inv := s.seedAutoChargeSession()
+			if tt.webhookArrives {
+				s.provider.onCharge = func(req interfaces.AuthorizationLinkRequest) {
+					s.Require().NoError(s.svc.CompleteCheckoutSession(ctx, session.ID, nil))
+				}
+			}
+
+			err := s.svc.fulfillCheckoutSession(ctx, session, inv)
+
+			if tt.wantErr {
+				s.Require().Error(err)
+			} else {
+				s.Require().NoError(err)
+			}
+			stored, getErr := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+			s.Require().NoError(getErr)
+			s.Equal(tt.want, stored.CheckoutStatus)
+		})
+	}
 }

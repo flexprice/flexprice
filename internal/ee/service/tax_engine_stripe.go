@@ -53,18 +53,18 @@ func (e *stripeTaxEngine) Calculate(ctx context.Context, req dto.TaxCalculationR
 		return nil, err
 	}
 
+	// An invoice calculation runs inside the transaction that settles it, so the SDK's own
+	// eighty second default would hold the invoice row lock for that long on a Stripe stall.
+	// The deadline covers the customer sync and the SDK's internal retries as well.
+	ctx, cancel := context.WithTimeout(ctx, calculationTimeout)
+	defer cancel()
+
 	// Stripe reads the address, IP, exemption and tax IDs off its own Customer object, so
 	// the reference is sent rather than a snapshot and the two cannot disagree.
 	stripeCustomerID, err := e.stripeCustomerID(ctx, req.CustomerID)
 	if err != nil {
 		return nil, err
 	}
-
-	// An invoice calculation runs inside the transaction that settles it, so the SDK's own
-	// eighty second default would hold the invoice row lock for that long on a Stripe stall.
-	// The deadline covers the SDK's internal retries as well as the first attempt.
-	ctx, cancel := context.WithTimeout(ctx, calculationTimeout)
-	defer cancel()
 
 	calculation, err := stripeClient.V1TaxCalculations.Create(ctx, calculationParams(req, stripeCustomerID))
 	if err != nil {
@@ -450,25 +450,28 @@ func stripeExemptionReason(breakdown []*stripe.TaxCalculationLineItemTaxBreakdow
 	return first
 }
 
+// stripeCustomerID creates the Stripe customer on demand when customer outbound sync is on, since that
+// sync is asynchronous and may not have run when a new subscription's first invoice is taxed.
+// With sync off it only looks the customer up: previews calculate tax too, and must never write.
 func (e *stripeTaxEngine) stripeCustomerID(ctx context.Context, customerID string) (string, error) {
-	filter := types.NewNoLimitEntityIntegrationMappingFilter()
-	filter.EntityID = customerID
-	filter.EntityType = types.IntegrationEntityTypeCustomer
-	filter.ProviderTypes = []string{string(types.SecretProviderStripe)}
-
-	mappings, err := e.EntityIntegrationMappingRepo.List(ctx, filter)
+	stripeIntegration, err := e.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	for _, mapping := range mappings {
-		if mapping.ProviderEntityID != "" {
-			return mapping.ProviderEntityID, nil
-		}
+	conn, err := e.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if err != nil {
+		return "", err
 	}
 
-	return "", ierr.NewError("customer is not synced to stripe").
-		WithHint("The customer must exist in Stripe before tax can be calculated for them").
-		WithReportableDetails(map[string]any{"customer_id": customerID}).
-		Mark(ierr.ErrNotFound)
+	customers := NewCustomerService(e.ServiceParams)
+	if !conn.IsCustomerOutboundEnabled() {
+		return stripeIntegration.CustomerSvc.GetStripeCustomerID(ctx, customerID, customers)
+	}
+
+	synced, err := stripeIntegration.CustomerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customers)
+	if err != nil {
+		return "", err
+	}
+	return synced.Customer.Metadata["stripe_customer_id"], nil
 }

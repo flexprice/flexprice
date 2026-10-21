@@ -368,12 +368,14 @@ func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) 
 			temporalInterceptor.NewWorkflowTrackingInterceptor(),
 			temporalInterceptor.NewWriterPinInterceptor(),
 			temporalInterceptor.NewActorInterceptor(),
+			temporalInterceptor.NewRequestIDInterceptor(),
 		}
 	} else {
 		options.Interceptors = []interceptor.WorkerInterceptor{
 			temporalInterceptor.NewWorkflowTrackingInterceptor(),
 			temporalInterceptor.NewWriterPinInterceptor(),
 			temporalInterceptor.NewActorInterceptor(),
+			temporalInterceptor.NewRequestIDInterceptor(),
 		}
 	}
 

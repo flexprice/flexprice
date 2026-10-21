@@ -65,13 +65,14 @@ func (r *ReportsRepository) Enabled() bool { return r.conn != nil }
 func (r *ReportsRepository) MaxRows() int { return r.cfg.MaxResultRows }
 
 const (
+	chCodeTooManyRows         = 158
 	chCodeTimeoutExceeded     = 159
 	chCodeMemoryLimitExceeded = 241
 )
 
 func reportError(err error, hint string) error {
 	var ex *proto.Exception
-	if errors.As(err, &ex) && (ex.Code == chCodeTimeoutExceeded || ex.Code == chCodeMemoryLimitExceeded) {
+	if errors.As(err, &ex) && (ex.Code == chCodeTooManyRows || ex.Code == chCodeTimeoutExceeded || ex.Code == chCodeMemoryLimitExceeded) {
 		return ierr.WithError(err).
 			WithHint("Query too large; narrow the date range").
 			Mark(ierr.ErrValidation)
