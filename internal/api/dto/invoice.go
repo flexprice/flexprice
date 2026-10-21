@@ -373,6 +373,10 @@ type InvoiceComputeRequest struct {
 	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
 	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+
+	// ProrationBehavior is internal: when set, partial-period fixed charges of a subscription invoice are
+	// priced with it instead of the subscription's own proration_behavior. Nothing is persisted.
+	ProrationBehavior *types.ProrationBehavior `json:"-"`
 }
 
 func (r *InvoiceComputeRequest) SourceID() string {
@@ -1487,6 +1491,9 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+
+	// ProrationBehavior is internal: same as InvoiceComputeRequest. Not in public JSON.
+	ProrationBehavior *types.ProrationBehavior `json:"-"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request

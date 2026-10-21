@@ -13,6 +13,7 @@ type CheckoutConfiguration struct {
 	ModifySubscriptionParams *ModifySubscriptionParams `json:"modify_subscription_params,omitempty"`
 	WalletTopupParams        *WalletTopupParams        `json:"wallet_topup_params,omitempty"`
 	AddAddonParams           *AddAddonParams           `json:"add_addon_params,omitempty"`
+	AddAddonBatchParams      []*AddAddonParams         `json:"add_addon_batch_params,omitempty"`
 	PayInvoiceParams         *PayInvoiceParams         `json:"pay_invoice_params,omitempty"`
 }
 
@@ -43,6 +44,14 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 		}
 		return c.WalletTopupParams.Validate()
 	case CheckoutActionAddAddon:
+		if c.AddAddonParams != nil && len(c.AddAddonBatchParams) > 0 {
+			return ierr.NewError("add_addon_params and add_addon_batch_params are mutually exclusive").
+				WithHint("Provide either add_addon_params or add_addon_batch_params in configuration").
+				Mark(ierr.ErrValidation)
+		}
+		if len(c.AddAddonBatchParams) > 0 {
+			return validateAddAddonBatch(c.AddAddonBatchParams)
+		}
 		if c.AddAddonParams == nil {
 			return ierr.NewError("add_addon_params is required for add_addon action").
 				WithHint("Provide add_addon_params in configuration").
@@ -56,6 +65,17 @@ func (c *CheckoutConfiguration) Validate(action CheckoutAction) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.PayInvoiceParams.Validate()
+	}
+	return nil
+}
+
+// AddAddonEntries returns the batch entries, or the single entry when the session is not a batch.
+func (c *CheckoutConfiguration) AddAddonEntries() []*AddAddonParams {
+	if len(c.AddAddonBatchParams) > 0 {
+		return c.AddAddonBatchParams
+	}
+	if c.AddAddonParams != nil {
+		return []*AddAddonParams{c.AddAddonParams}
 	}
 	return nil
 }
@@ -234,7 +254,33 @@ func (p *AddAddonParams) Validate() error {
 			WithHint("add_addon_params must carry at least one addon").
 			Mark(ierr.ErrValidation)
 	}
+	return p.validateRefs()
+}
 
+// validateAddAddonBatch allows removal-only entries as long as the batch adds at least one addon.
+func validateAddAddonBatch(batch []*AddAddonParams) error {
+	hasAddon := false
+	for i, p := range batch {
+		if p == nil || p.SubscriptionID == "" {
+			return ierr.NewError("subscription_id is required").
+				WithHint("Each add_addon_batch_params entry must have a subscription_id").
+				WithReportableDetails(map[string]any{"index": i}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := p.validateRefs(); err != nil {
+			return err
+		}
+		hasAddon = hasAddon || len(p.Addons) > 0
+	}
+	if !hasAddon {
+		return ierr.NewError("at least one addon is required").
+			WithHint("add_addon_batch_params must carry at least one addon").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (p *AddAddonParams) validateRefs() error {
 	for i, ref := range p.Addons {
 		if ref.AssociationID == "" {
 			return ierr.NewError("association_id is required").

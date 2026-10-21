@@ -45,6 +45,8 @@ const (
 	FieldCancelledAt = "cancelled_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldSyncedPriceSequence holds the string denoting the synced_price_sequence field in the database.
+	FieldSyncedPriceSequence = "synced_price_sequence"
 	// Table holds the table name of the addonassociation in the database.
 	Table = "addon_associations"
 )
@@ -68,6 +70,7 @@ var Columns = []string{
 	FieldCancellationReason,
 	FieldCancelledAt,
 	FieldMetadata,
+	FieldSyncedPriceSequence,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -105,6 +108,8 @@ var (
 	DefaultAddonStatus string
 	// AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
 	AddonStatusValidator func(string) error
+	// DefaultSyncedPriceSequence holds the default value on creation for the "synced_price_sequence" field.
+	DefaultSyncedPriceSequence int64
 )
 
 // OrderOption defines the ordering options for the AddonAssociation queries.
@@ -188,4 +193,9 @@ func ByCancellationReason(opts ...sql.OrderTermOption) OrderOption {
 // ByCancelledAt orders the results by the cancelled_at field.
 func ByCancelledAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCancelledAt, opts...).ToFunc()
+}
+
+// BySyncedPriceSequence orders the results by the synced_price_sequence field.
+func BySyncedPriceSequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSyncedPriceSequence, opts...).ToFunc()
 }

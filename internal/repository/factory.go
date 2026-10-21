@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -122,6 +123,10 @@ func NewPlanRepository(p RepositoryParams) plan.Repository {
 
 func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
 	return entRepo.NewPlanPriceSyncRepository(p.EntClient, p.Logger)
+}
+
+func NewAddonPriceSyncRepository(p RepositoryParams) addonpricesync.Repository {
+	return entRepo.NewAddonPriceSyncRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {

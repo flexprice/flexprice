@@ -29,6 +29,13 @@ type AddonChangeService interface {
 	Settle(ctx context.Context, config *addonChangeConfig, mode SettleMode) (*SettleProrationResult, error)
 
 	ExecutePayFirst(ctx context.Context, req AddonChangeRequest, checkout *dto.CheckoutParams) (*ExecutePayFirstResponse, error)
+
+	// ExecuteGrouped applies changes across a grouped invoicing group and settles one document on the parent.
+	ExecuteGrouped(ctx context.Context, parentID string, reqs []AddonChangeRequest) ([]*addonChangeConfig, *SettleProrationResult, error)
+
+	PreviewGrouped(ctx context.Context, parent *subscription.Subscription, reqs []AddonChangeRequest) ([]*addonChangeConfig, *SettleProrationResult, error)
+
+	ExecutePayFirstGrouped(ctx context.Context, parentID string, reqs []AddonChangeRequest, checkout *dto.CheckoutParams) (*ExecutePayFirstResponse, error)
 }
 
 // AddonAdd is one attach in a batch. Existing is set only on a checkout-completion replay,
@@ -81,8 +88,16 @@ func (r AddonChangeRequest) Validate() error {
 // customer pays, the session collecting it, and what Settle raised — a draft holding the net.
 type ExecutePayFirstResponse struct {
 	config  *addonChangeConfig
+	configs []*addonChangeConfig
 	session *dto.CheckoutSessionResponse
 	settled *SettleProrationResult
+}
+
+func (r *ExecutePayFirstResponse) getConfigs() []*addonChangeConfig {
+	if r == nil {
+		return nil
+	}
+	return r.configs
 }
 
 func (r *ExecutePayFirstResponse) getConfig() *addonChangeConfig {
@@ -205,6 +220,14 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 	}
 
 	sub := req.Subscription
+	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+		return nil, ierr.NewError("cannot change addons on a paused subscription").
+			WithHint("Resume the subscription before changing its addons").
+			WithReportableDetails(map[string]any{
+				"subscription_id": sub.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 	config := &addonChangeConfig{sub: sub}
 
 	// One `now` for the whole change: resolving per entry would give each immediate entry a
@@ -890,4 +913,241 @@ func (s *addonChangeService) Preview(
 	}
 
 	return config, settled, nil
+}
+
+func (s *addonChangeService) ExecuteGrouped(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+) ([]*addonChangeConfig, *SettleProrationResult, error) {
+	var (
+		configs []*addonChangeConfig
+		settled *SettleProrationResult
+	)
+
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		parent, err := s.lockGroupedTargets(ctx, parentID, reqs)
+		if err != nil {
+			return err
+		}
+
+		configs = make([]*addonChangeConfig, 0, len(reqs))
+		for _, req := range reqs {
+			config, err := s.Resolve(ctx, req)
+			if err != nil {
+				return err
+			}
+			if err := s.Persist(ctx, config); err != nil {
+				return err
+			}
+			configs = append(configs, config)
+		}
+
+		// Merged only after Persist, which re-quotes a change with price overrides.
+		settled, err = s.settleGrouped(ctx, parent, configs, SettleModeIssue)
+		return err
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	attemptProrationPayments(ctx, s.ServiceParams, settled.GetChanged())
+
+	return configs, settled, nil
+}
+
+// ExecutePayFirstGrouped is ExecutePayFirst across a grouped invoicing group: one draft on the
+// parent and one checkout for the parent's invoicing customer. Returns nil when the net is not a charge.
+func (s *addonChangeService) ExecutePayFirstGrouped(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+	checkout *dto.CheckoutParams,
+) (*ExecutePayFirstResponse, error) {
+	for _, req := range reqs {
+		if err := validateAddonChangeCheckout(req, checkout); err != nil {
+			return nil, err
+		}
+	}
+
+	var (
+		configs []*addonChangeConfig
+		settled *SettleProrationResult
+		batch   []*types.AddAddonParams
+		payerID string
+	)
+
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		parent, err := s.lockGroupedTargets(txCtx, parentID, reqs)
+		if err != nil {
+			return err
+		}
+		payerID = parent.GetInvoicingCustomerID()
+
+		resolved := make([]*addonChangeConfig, 0, len(reqs))
+		net := decimal.Zero
+		for _, req := range reqs {
+			if err := validateAddonChangeCheckout(req, checkout); err != nil {
+				return err
+			}
+			if err := ensureNoPendingCheckoutSession(txCtx, s.ServiceParams, req.Subscription.ID); err != nil {
+				return err
+			}
+
+			config, err := s.Resolve(txCtx, req)
+			if err != nil {
+				return err
+			}
+			net = net.Add(config.getQuote().NetAmount())
+			resolved = append(resolved, config)
+		}
+		if !net.GreaterThan(decimal.Zero) {
+			return nil
+		}
+
+		for _, config := range resolved {
+			if err := s.PersistPending(txCtx, config); err != nil {
+				return err
+			}
+		}
+
+		drafted, err := s.settleGrouped(txCtx, parent, resolved, SettleModeDraft)
+		if err != nil {
+			return err
+		}
+
+		batch = lo.Map(resolved, func(config *addonChangeConfig, _ int) *types.AddAddonParams {
+			return addonChangeCheckoutParams(config)
+		})
+		// Parent first, matching lockGroupedTargets, so completion locks in the same order.
+		sort.SliceStable(batch, func(i, j int) bool { return batch[i].SubscriptionID == parent.ID })
+		if err := (&types.CheckoutConfiguration{AddAddonBatchParams: batch}).Validate(types.CheckoutActionAddAddon); err != nil {
+			return err
+		}
+
+		configs, settled = resolved, drafted
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if configs == nil {
+		return nil, nil
+	}
+
+	session, err := NewCheckoutSessionService(s.ServiceParams).StartPayFirstCheckoutSession(ctx, &dto.PayFirstCheckoutRequest{
+		CustomerID: payerID,
+		Action:     types.CheckoutActionAddAddon,
+		Configuration: types.CheckoutConfiguration{
+			AddAddonBatchParams: batch,
+		},
+		DraftInvoice: &settled.GetDraft().Invoice,
+		Checkout:     checkout,
+	})
+	if err != nil {
+		draft := settled.GetDraft()
+		for _, config := range configs {
+			s.archiveGatedChange(ctx, config, draft, err)
+			draft = nil
+		}
+		return nil, err
+	}
+
+	return &ExecutePayFirstResponse{configs: configs, session: session, settled: settled}, nil
+}
+
+func (s *addonChangeService) PreviewGrouped(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	reqs []AddonChangeRequest,
+) ([]*addonChangeConfig, *SettleProrationResult, error) {
+	configs := make([]*addonChangeConfig, 0, len(reqs))
+	for _, req := range reqs {
+		if err := validateGroupedChangeTarget(parent, req.Subscription); err != nil {
+			return nil, nil, err
+		}
+
+		config, err := s.Resolve(ctx, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		configs = append(configs, config)
+	}
+
+	settled, err := s.settleGrouped(ctx, parent, configs, SettleModePreview)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return configs, settled, nil
+}
+
+// lockGroupedTargets locks the parent, then the other targets in ID order so concurrent group changes cannot deadlock.
+func (s *addonChangeService) lockGroupedTargets(
+	ctx context.Context,
+	parentID string,
+	reqs []AddonChangeRequest,
+) (*subscription.Subscription, error) {
+	parent, err := s.sub.loadSubscriptionForChange(ctx, parentID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(reqs, func(i, j int) bool { return reqs[i].Subscription.ID < reqs[j].Subscription.ID })
+	for i := range reqs {
+		locked := parent
+		if reqs[i].Subscription.ID != parentID {
+			if locked, err = s.sub.loadSubscriptionForChange(ctx, reqs[i].Subscription.ID, true); err != nil {
+				return nil, err
+			}
+		}
+		if err := validateGroupedChangeTarget(parent, locked); err != nil {
+			return nil, err
+		}
+		reqs[i].Subscription = locked
+	}
+
+	return parent, nil
+}
+
+// settleGrouped nets every target's quote into one document on the parent.
+func (s *addonChangeService) settleGrouped(
+	ctx context.Context,
+	parent *subscription.Subscription,
+	configs []*addonChangeConfig,
+	mode SettleMode,
+) (*SettleProrationResult, error) {
+	merged := emptyProrationSummary(parent)
+	periodStart := parent.CurrentPeriodEnd
+	keys := make([]string, 0, len(configs))
+	reason := ""
+
+	for _, config := range configs {
+		merged.Merge(config.getQuote())
+		if config.getPeriodStart().Before(periodStart) {
+			periodStart = config.getPeriodStart()
+		}
+		keys = append(keys, config.getIdempotencyKey())
+		if reason == "" {
+			reason = config.getReason()
+		}
+	}
+	sort.Strings(keys)
+
+	idempotencyKey := ""
+	if mode != SettleModePreview {
+		idempotencyKey = prorationChargeInvoiceKey(LineItemProrationRequest{
+			Subscription:   parent,
+			EffectiveDate:  periodStart,
+			IdempotencyKey: strings.Join(keys, ","),
+		})
+	}
+
+	req := NewSettleProrationRequest(
+		parent, merged, periodStart, parent.CurrentPeriodEnd,
+		"Subscription update", idempotencyKey, mode,
+	)
+	req.Reason = reason
+
+	return NewLineItemProrationService(s.ServiceParams).Settle(ctx, req)
 }

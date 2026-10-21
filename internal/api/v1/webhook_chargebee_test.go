@@ -107,6 +107,7 @@ func setupChargebeeWebhookHandler(t *testing.T, webhookUsername, webhookPassword
 		encryptionSvc,
 		nil, // temporalSvc
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 
 	return NewWebhookHandler(

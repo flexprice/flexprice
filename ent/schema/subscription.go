@@ -165,7 +165,6 @@ func (Subscription) Fields() []ent.Field {
 			Default("UTC"),
 		field.String("proration_behavior").
 			NotEmpty().
-			Immutable().
 			Default(string(types.ProrationBehaviorNone)).
 			GoType(types.ProrationBehavior("")),
 		field.String("line_item_grouping").

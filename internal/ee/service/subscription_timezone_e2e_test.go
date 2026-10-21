@@ -99,6 +99,7 @@ func (s *SubscriptionTimezoneE2ETestSuite) setupService() {
 		ProrationCalculator:        s.GetCalculator(),
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 		// CreateSubscription touches these on cancellation branches / alerts —
 		// the anchor test doesn't exercise them but the constructor needs them
 		// non-nil to reach the plan-price-sequence stamping step.

@@ -86,6 +86,14 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 // period_id, provisional_usage_charges) are left as empty strings — the schema
 // stays stable so downstream consumers don't see a header-row change.
 func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *dto.ExportRequest, batchSize int) ([]byte, int, error) {
+	rowCount, err := e.meterUsageRepo.CountMeterUsageForExport(ctx, request.StartTime, request.EndTime)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
+		return nil, 0, err
+	}
+
 	var csvRecords []*FeatureUsageCSV
 	totalRecords := 0
 	offset := 0

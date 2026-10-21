@@ -358,12 +358,20 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 	}
 
 	cfg := session.Configuration.ToCheckoutConfiguration()
-	params := cfg.AddAddonParams
+	entries := cfg.AddAddonEntries()
 	invoiceID := *session.CheckoutInvoiceID
 	paymentID := *session.CheckoutPaymentID
 
 	subSvc := &subscriptionService{ServiceParams: s.ServiceParams}
-	if err := subSvc.applyAddAddonCheckoutParams(ctx, params); err != nil {
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		for _, params := range entries {
+			if err := subSvc.applyAddAddonCheckoutParams(ctx, params); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 
@@ -371,8 +379,10 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 		return err
 	}
 
-	subSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
-	triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
+	for _, params := range entries {
+		subSvc.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, params.SubscriptionID)
+		triggerHubSpotDealSync(ctx, s.ServiceParams, params.SubscriptionID)
+	}
 	return nil
 }
 

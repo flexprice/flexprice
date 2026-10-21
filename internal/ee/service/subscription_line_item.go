@@ -352,6 +352,20 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		return nil, err
 	}
 
+	sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+		return nil, ierr.NewError("cannot delete a line item of a paused subscription").
+			WithHint("Resume the subscription before deleting its line items").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": sub.ID,
+				"line_item_id":    lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if successor, err := s.findPublishedSuccessor(ctx, lineItem); err != nil {
 		return nil, err
 	} else if successor != nil {

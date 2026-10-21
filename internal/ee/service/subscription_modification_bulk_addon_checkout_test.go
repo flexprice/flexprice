@@ -551,3 +551,200 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_DiscountedNetCredit
 	s.Len(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID), 1)
 	s.Equal(1, couponRedemptions(ctx, s.Require(), s.GetStores(), c.ID))
 }
+
+// seedGroupedPayFirstCheckout commits what ExecutePayFirstGrouped does before its provider call:
+// a removal-only entry on the parent, a pending attach on the child, and one parent draft.
+func (s *SubscriptionServiceSuite) seedGroupedPayFirstCheckout(
+	outgoingAssociationID string,
+	addonID string,
+	at time.Time,
+) (*domainCheckout.CheckoutSession, *addonChangeConfig, *dto.InvoiceResponse) {
+	ctx := s.GetContext()
+	params := s.service.(*subscriptionService).ServiceParams
+	parent, err := s.GetStores().SubscriptionRepo.Get(ctx, s.testData.subscription.ID)
+	s.Require().NoError(err)
+	child, err := s.GetStores().SubscriptionRepo.Get(ctx, "sub_grp_child")
+	s.Require().NoError(err)
+
+	changeSvc := NewAddonChangeService(params).(*addonChangeService)
+	parentConfig, err := changeSvc.Resolve(ctx, AddonChangeRequest{
+		Subscription: parent,
+		Removes:      []*dto.RemoveAddonRequest{s.modifyRemove(outgoingAssociationID, at)},
+	})
+	s.Require().NoError(err)
+	childConfig, err := changeSvc.Resolve(ctx, AddonChangeRequest{
+		Subscription: child,
+		Adds:         []AddonAdd{{Request: s.modifyAdd(addonID, at)}},
+	})
+	s.Require().NoError(err)
+	s.Require().NoError(changeSvc.PersistPending(ctx, childConfig))
+
+	drafted, err := changeSvc.settleGrouped(ctx, parent, []*addonChangeConfig{parentConfig, childConfig}, SettleModeDraft)
+	s.Require().NoError(err)
+	draft := drafted.Draft
+	s.Require().NotNil(draft, "the group must owe money for there to be anything to gate on")
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: params}
+	payResp, err := checkoutSvc.createCheckoutPayment(ctx, &draft.Invoice, types.CheckoutPaymentProviderRazorpay)
+	s.Require().NoError(err)
+
+	session := &domainCheckout.CheckoutSession{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT_SESSION),
+		EnvironmentID:   types.GetEnvironmentID(ctx),
+		CustomerID:      parent.GetInvoicingCustomerID(),
+		Action:          types.CheckoutActionAddAddon,
+		CheckoutStatus:  types.CheckoutStatusPending,
+		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
+		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+			AddAddonBatchParams: []*types.AddAddonParams{
+				addonChangeCheckoutParams(parentConfig),
+				addonChangeCheckoutParams(childConfig),
+			},
+		}),
+		CheckoutInvoiceID: &draft.ID,
+		CheckoutPaymentID: &payResp.ID,
+		ExpiresAt:         time.Now().UTC().Add(time.Hour),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
+
+	return session, childConfig, draft
+}
+
+func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_ProviderFailure_ArchivesEveryEntry() {
+	ctx := s.GetContext()
+	parent, child := s.seedAddonGroup()
+	s.seedFixedPriceAddon("addon_grpf_parent", decimal.NewFromInt(60), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grpf_child", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	req := s.groupedModifyRequest(
+		dto.GroupedInvoicingChange{SubscriptionID: parent.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Adds: []*dto.AddAddonToSubscriptionRequest{s.modifyAdd("addon_grpf_parent", at)},
+		}},
+		dto.GroupedInvoicingChange{SubscriptionID: child.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Adds: []*dto.AddAddonToSubscriptionRequest{s.modifyAdd("addon_grpf_child", at)},
+		}},
+	)
+	req.Checkout = s.razorpayCheckoutParams()
+
+	// No payment provider is configured in this suite, so the session creation fails.
+	_, err := s.modificationService().Execute(ctx, parent.ID, req)
+	s.Require().Error(err)
+
+	for subID, addonID := range map[string]string{parent.ID: "addon_grpf_parent", child.ID: "addon_grpf_child"} {
+		filter := types.NewNoLimitAddonAssociationFilter()
+		filter.EntityIDs = []string{subID}
+		filter.AddonIDs = []string{addonID}
+		rows, err := s.GetStores().AddonAssociationRepo.List(ctx, filter)
+		s.Require().NoError(err)
+		s.Require().Len(rows, 1)
+		s.Equal(types.StatusArchived, rows[0].Status, "pending attach on %s must be archived", subID)
+		s.Empty(s.addonLineItemsFor(subID, addonID))
+	}
+	for _, inv := range s.oneOffInvoicesFor(parent.ID) {
+		s.NotEqual(types.StatusPublished, inv.Status, "the draft is archived")
+	}
+}
+
+// Completion applies every entry, including one that only removes, and finalizes the one draft.
+func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_Completion_AppliesEveryEntry() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	parent, child := s.seedAddonGroup()
+
+	s.seedFixedPriceAddon("addon_grpc_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grpc_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_grpc_out", 30)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	session, childConfig, draft := s.seedGroupedPayFirstCheckout(outgoing, "addon_grpc_in", at)
+	pendingID := childConfig.getAttaches()[0].getAssociation().ID
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	complete := func() error {
+		return checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+			ProviderPaymentIntentID: "pay_grouped_batch_001",
+		})
+	}
+	s.Require().NoError(complete())
+	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, addonChangeCheckoutParams(childConfig)),
+		"a replayed entry is a no-op")
+
+	removed, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, outgoing)
+	s.Require().NoError(err)
+	s.NotNil(removed.EndDate, "the parent's removal-only entry applies")
+
+	activated, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pendingID)
+	s.Require().NoError(err)
+	s.Equal(types.AddonStatusActive, activated.AddonStatus)
+	s.Len(s.addonLineItemsFor(child.ID, "addon_grpc_in"), 1, "replay must not attach twice")
+
+	finalized, err := NewInvoiceService(subService.ServiceParams).GetInvoice(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+	s.Len(s.oneOffInvoicesFor(parent.ID), 1)
+	s.Empty(s.oneOffInvoicesFor(child.ID))
+}
+
+// One cancelled target fails the whole completion, so no entry half-applies.
+func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_Completion_FailsAllWhenATargetIsCancelled() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	parent, child := s.seedAddonGroup()
+
+	s.seedFixedPriceAddon("addon_grpx_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grpx_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_grpx_out", 30)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	session, _, draft := s.seedGroupedPayFirstCheckout(outgoing, "addon_grpx_in", at)
+
+	child.SubscriptionStatus = types.SubscriptionStatusCancelled
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, child))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	err := checkoutSvc.completeAddAddonCheckout(ctx, session, nil)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+
+	stillDraft, err := NewInvoiceService(subService.ServiceParams).GetInvoice(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusDraft, stillDraft.InvoiceStatus)
+	s.Empty(s.addonLineItemsFor(child.ID, "addon_grpx_in"))
+}
+
+// Guards and cleanup see a batch session through any of its entries.
+func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_GuardsAndCleanupSeeTheBatch() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	parent, child := s.seedAddonGroup()
+
+	s.seedFixedPriceAddon("addon_grpg_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grpg_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_grpg_out", 30)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	session, childConfig, _ := s.seedGroupedPayFirstCheckout(outgoing, "addon_grpg_in", at)
+	pendingID := childConfig.getAttaches()[0].getAssociation().ID
+
+	s.Error(ensureNoPendingCheckoutSession(ctx, subService.ServiceParams, child.ID),
+		"a second checkout on the child is blocked")
+	gated, err := subService.pendingCheckoutSessionForAssociation(ctx, parent, outgoing)
+	s.Require().NoError(err)
+	s.True(gated, "the parent's gated removal is found inside the batch")
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+
+	archived, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, pendingID)
+	if err == nil {
+		s.Equal(types.StatusArchived, archived.Status, "the child's pending attach is archived")
+	}
+	kept, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, outgoing)
+	s.Require().NoError(err)
+	s.Nil(kept.EndDate, "an abandoned checkout leaves the parent's removal unapplied")
+	for _, inv := range s.oneOffInvoicesFor(parent.ID) {
+		s.NotEqual(types.StatusPublished, inv.Status, "the draft is archived")
+	}
+}

@@ -151,6 +151,10 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 			return nil, fmt.Errorf("CreateDraftInvoiceForSubscription returned nil for subscription %s period %s-%s",
 				input.SubscriptionID, period.Start, period.End)
 		}
+		// A paused period's invoice is final as SKIPPED and has nothing left to process.
+		if types.InvoiceBillingReason(draft.BillingReason) == types.InvoiceBillingReasonSubscriptionPaused {
+			continue
+		}
 		invoices = append(invoices, draft.ID)
 	}
 
@@ -361,6 +365,13 @@ func (s *BillingActivities) CheckCancellationActivity(
 
 	// Perform cancellation if required
 	if shouldCancel {
+		// A subscription that reaches its end date while paused ends its pause with it.
+		var endedPauseID *string
+		if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+			endedPauseID = sub.ActivePauseID
+			sub.PauseStatus = types.PauseStatusNone
+			sub.ActivePauseID = nil
+		}
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
 		subscriptionService := service.NewSubscriptionService(s.serviceParams)
@@ -369,6 +380,17 @@ func (s *BillingActivities) CheckCancellationActivity(
 			// Update subscription
 			if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
 				return err
+			}
+
+			if endedPauseID != nil {
+				pause, err := s.serviceParams.SubRepo.GetPause(ctx, *endedPauseID)
+				if err != nil {
+					return err
+				}
+				pause.PauseStatus = types.PauseStatusCompleted
+				if err := s.serviceParams.SubRepo.UpdatePause(ctx, pause); err != nil {
+					return err
+				}
 			}
 
 			// Terminate line items, addon associations, and credit grants now that the

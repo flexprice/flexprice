@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -1123,6 +1124,162 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 	}
 	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
 	s.Equal(draftSubscriptionInvoice.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFinalization() {
+	ctx := s.GetContext()
+	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+
+	tests := []struct {
+		name            string
+		explicitIssue   bool
+		manuallyEdited  bool
+		wantIssuedEarly bool
+		wantDueRedated  bool
+	}{
+		{name: "draft created early is issued at finalization", wantDueRedated: true},
+		{name: "caller-set issue date is kept and due counts from it", explicitIssue: true, wantIssuedEarly: true, wantDueRedated: true},
+		{name: "manually edited copy keeps its dates", manuallyEdited: true, wantIssuedEarly: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			baseModel := types.GetDefaultBaseModel(ctx)
+			if !tt.explicitIssue {
+				baseModel.CreatedAt = early
+			}
+			draft := &invoice.Invoice{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+				CustomerID:       s.testData.customer.ID,
+				SubscriptionID:   &s.testData.subscription.ID,
+				InvoiceType:      types.InvoiceTypeSubscription,
+				InvoiceStatus:    types.InvoiceStatusDraft,
+				PaymentStatus:    types.PaymentStatusPending,
+				Currency:         "usd",
+				AmountDue:        decimal.NewFromFloat(15),
+				Total:            decimal.NewFromFloat(15),
+				Subtotal:         decimal.NewFromFloat(15),
+				AmountPaid:       decimal.Zero,
+				AmountRemaining:  decimal.NewFromFloat(15),
+				IssueDate:        lo.ToPtr(early),
+				DueDate:          lo.ToPtr(early.AddDate(0, 0, 3)),
+				IsManuallyEdited: tt.manuallyEdited,
+				BaseModel:        baseModel,
+			}
+			s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+
+			finalizeStart := time.Now().UTC()
+			s.Require().NoError(s.service.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+			got, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+
+			if tt.wantIssuedEarly {
+				s.WithinDuration(early, *got.IssueDate, time.Second)
+			} else {
+				s.False(got.IssueDate.Before(finalizeStart))
+			}
+			if tt.wantDueRedated {
+				s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
+			} else {
+				s.WithinDuration(early.AddDate(0, 0, 3), *got.DueDate, time.Second)
+			}
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
+	ctx := s.GetContext()
+	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.CreatedAt = early
+
+	draft := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		Total:           decimal.NewFromFloat(15),
+		Subtotal:        decimal.NewFromFloat(15),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(15),
+		IssueDate:       lo.ToPtr(early),
+		DueDate:         lo.ToPtr(early.AddDate(0, 0, 3)),
+		BaseModel:       baseModel,
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+
+	paid := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     draft.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            decimal.NewFromFloat(15),
+		Currency:          "usd",
+		PaymentStatus:     types.PaymentStatusSucceeded,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
+
+	finalizeStart := time.Now().UTC()
+	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
+
+	got, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+	s.False(got.IssueDate.Before(finalizeStart))
+	s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
+}
+
+func (s *InvoiceServiceSuite) TestPaidDraftFinalizesWhenDatingFails() {
+	ctx := s.GetContext()
+	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.CreatedAt = early
+
+	draft := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr("subs_missing"),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		Total:           decimal.NewFromFloat(15),
+		Subtotal:        decimal.NewFromFloat(15),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(15),
+		IssueDate:       lo.ToPtr(early),
+		DueDate:         lo.ToPtr(early.AddDate(0, 0, 3)),
+		BaseModel:       baseModel,
+	}
+	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
+
+	paid := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     draft.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            decimal.NewFromFloat(15),
+		Currency:          "usd",
+		PaymentStatus:     types.PaymentStatusSucceeded,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
+
+	processor := &paymentProcessor{ServiceParams: s.service.(*invoiceService).ServiceParams}
+	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
+
+	got, err := s.invoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
+	s.Equal(types.PaymentStatusSucceeded, got.PaymentStatus)
+	s.WithinDuration(early, *got.IssueDate, time.Second)
+	s.WithinDuration(early.AddDate(0, 0, 3), *got.DueDate, time.Second)
 }
 
 func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {

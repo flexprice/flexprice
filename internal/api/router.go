@@ -31,6 +31,7 @@ type Handlers struct {
 	UsageRecord              *v1.UsageRecordHandler
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
+	SubscriptionPause        *v1.SubscriptionPauseHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
 	SubscriptionModification *v1.SubscriptionModificationHandler
 	InvoiceModification      *v1.InvoiceModificationHandler
@@ -347,6 +348,7 @@ func NewRouter(
 			addon.PUT("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.UpdateAddon)
 			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
 			addon.GET("/:id/creditgrants", handlers.Addon.GetAddonCreditGrants)
+			addon.POST("/:id/sync/subscriptions", write(types.EntityAddon, types.ActionWrite), handlers.Addon.SyncAddonPrices)
 			addon.DELETE("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.DeleteAddon)
 		}
 
@@ -369,6 +371,8 @@ func NewRouter(
 			subscription.GET("/:id/v2", handlers.Subscription.GetSubscriptionV2)
 			subscription.POST("/:id/activate", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.ActivateDraftSubscription)
 			subscription.POST("/:id/cancel", write(types.EntitySubscription, types.ActionWrite), handlers.Subscription.CancelSubscription)
+			subscription.POST("/:id/pause", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionPause.PauseSubscription)
+			subscription.POST("/:id/resume", write(types.EntitySubscription, types.ActionWrite), handlers.SubscriptionPause.ResumeSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 
 			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)

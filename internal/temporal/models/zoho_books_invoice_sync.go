@@ -7,6 +7,8 @@ type ZohoBooksInvoiceSyncWorkflowInput struct {
 	InvoiceID     string `json:"invoice_id"`
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
+	// Resync updates an invoice already in Zoho instead of skipping it.
+	Resync bool `json:"resync"`
 }
 
 func (input *ZohoBooksInvoiceSyncWorkflowInput) Validate() error {

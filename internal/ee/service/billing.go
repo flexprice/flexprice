@@ -1643,12 +1643,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// nothing to invoice default response 0$ invoice
 	zeroAmountInvoice, err := s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
-		Subscription: sub,
-		Result:       nil,
-		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
-		Description:  "",
-		Metadata:     types.Metadata{},
+		Subscription:   sub,
+		Result:         nil,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		Description:    "",
+		Metadata:       types.Metadata{},
+		ReferencePoint: params.ReferencePoint,
 	})
 	if err != nil {
 		return nil, err
@@ -2397,6 +2398,22 @@ func (s *billingService) calculateMeterUsageCharges(
 	}, nil
 }
 
+// subscriptionInvoiceDueDate returns the due date of a subscription invoice issued at issueDate: subscription
+// payment terms, else tenant payment terms, else tenant due_date_days. Months use the subscription's timezone.
+func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig types.InvoiceConfig, issueDate time.Time) time.Time {
+	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
+		issueDate = issueDate.In(loc)
+	}
+	dueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
+	if !ok {
+		dueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
+	}
+	if !ok {
+		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))
+	}
+	return dueDate.UTC()
+}
+
 // CreateInvoiceRequestForCharges creates an invoice for the given charges
 func (s *billingService) CreateInvoiceRequestForCharges(
 	ctx context.Context,
@@ -2424,17 +2441,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Prepare invoice due date: use subscription payment terms if set, else tenant's configuration
-	var invoiceDueDate time.Time
-	if sub.PaymentTerms != nil && *sub.PaymentTerms != "" {
-		if days, ok := types.PaymentTermsToDueDateDays(*sub.PaymentTerms); ok {
-			invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(days))
-		} else {
-			invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
-		}
-	} else {
-		invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
+	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
+	// from when it is issued.
+	issueDate := time.Now().UTC()
+	if periodEnd.After(issueDate) {
+		issueDate = periodEnd
 	}
+	invoiceDueDate := subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate)
 
 	if result == nil {
 		// prepare result for zero amount invoice

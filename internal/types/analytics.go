@@ -172,3 +172,40 @@ func (t ColumnType) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 }
+
+// ReportCategory groups catalog reports in the UI.
+type ReportCategory string
+
+const (
+	ReportCategoryBilling     ReportCategory = "billing"
+	ReportCategoryReceivables ReportCategory = "receivables"
+	ReportCategoryCustomers   ReportCategory = "customers"
+	ReportCategoryCredits     ReportCategory = "credits"
+	ReportCategoryUsage       ReportCategory = "usage"
+)
+
+// ReportKind is how a report's value behaves over time.
+type ReportKind string
+
+const (
+	ReportKindFlow     ReportKind = "flow"
+	ReportKindRatio    ReportKind = "ratio"
+	ReportKindSnapshot ReportKind = "snapshot"
+)
+
+// ReportValueType is the unit of a report's value.
+type ReportValueType string
+
+const (
+	ReportValueTypeMoney ReportValueType = "money"
+	ReportValueTypeCount ReportValueType = "count"
+	ReportValueTypeDays  ReportValueType = "days"
+)
+
+// ImprovementDirection says which way a report value improves.
+type ImprovementDirection string
+
+const (
+	ImprovementHigher ImprovementDirection = "higher"
+	ImprovementLower  ImprovementDirection = "lower"
+)

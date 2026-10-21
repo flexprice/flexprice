@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
@@ -109,6 +110,7 @@ type Stores struct {
 	GroupRepo                    group.Repository
 	MeterUsageRepo               events.MeterUsageRepository
 	PlanPriceSyncRepo            planpricesync.Repository
+	AddonPriceSyncRepo           addonpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
@@ -192,6 +194,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		encryptionService,
 		nil, // TemporalService — not needed in unit tests
 		NewInMemoryRedisLocker(nil),
+		s.stores.SettingsRepo,
 	)
 }
 
@@ -224,6 +227,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 	subStore.SetInvoiceStore(invoiceStore)
 	priceStore := NewInMemoryPriceStore()
 	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
+	addonAssociationStore := NewInMemoryAddonAssociationStore()
+	addonPriceSyncStore := NewInMemoryAddonPriceSyncStore(priceStore, subStore, lineItemStore, addonAssociationStore)
 	couponStore := NewInMemoryCouponStore()
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
@@ -262,7 +267,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CouponAssociationRepo:        NewInMemoryCouponAssociationStore(couponStore),
 		CouponApplicationRepo:        NewInMemoryCouponApplicationStore(),
 		AddonRepo:                    NewInMemoryAddonStore(),
-		AddonAssociationRepo:         NewInMemoryAddonAssociationStore(),
+		AddonAssociationRepo:         addonAssociationStore,
 		ConnectionRepo:               NewInMemoryConnectionStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
@@ -271,6 +276,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		GroupRepo:                    NewInMemoryGroupStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
+		AddonPriceSyncRepo:           addonPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
@@ -336,6 +342,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
+	s.stores.AddonPriceSyncRepo.(*InMemoryAddonPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()

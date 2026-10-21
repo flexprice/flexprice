@@ -485,10 +485,13 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 
 	// Only the attaches wrote anything: a gated removal leaves its association active and
 	// billable until payment lands, so an abandoned checkout has nothing to undo for it.
-	if cfg.AddAddonParams != nil && len(cfg.AddAddonParams.Addons) > 0 {
-		ids := lo.Map(cfg.AddAddonParams.Addons, func(ref types.AddAddonRef, _ int) string {
-			return ref.AssociationID
-		})
+	var ids []string
+	for _, params := range cfg.AddAddonEntries() {
+		for _, ref := range params.Addons {
+			ids = append(ids, ref.AssociationID)
+		}
+	}
+	if len(ids) > 0 {
 
 		associations, err := s.AddonAssociationRepo.GetByIDs(ctx, ids)
 		if err != nil {

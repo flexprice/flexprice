@@ -73,7 +73,8 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 				Offset: lo.ToPtr(offset),
 				Status: lo.ToPtr(types.StatusPublished),
 			},
-			SubscriptionStatus:     []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			// Paused subscriptions keep rolling so each paused period gets its SKIPPED invoice.
+			SubscriptionStatus:     []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusPaused},
 			EffectiveDateForUpdate: &now,
 			SubscriptionTypes: []types.SubscriptionType{
 				types.SubscriptionTypeStandalone,

@@ -595,6 +595,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetTotal(inv.Total).
 		SetDescription(inv.Description).
 		SetNillableDueDate(inv.DueDate).
+		SetNillableIssueDate(inv.IssueDate).
 		SetNillablePaidAt(inv.PaidAt).
 		SetNillableVoidedAt(inv.VoidedAt).
 		SetNillableFinalizedAt(inv.FinalizedAt).

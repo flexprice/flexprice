@@ -83,6 +83,7 @@ type invoiceVendorSyncInput struct {
 	EnvironmentID string
 	UserID        string
 	InvoiceID     string
+	Resync        bool
 }
 
 type customerVendorSyncInput struct {
@@ -144,6 +145,7 @@ func DispatchInvoiceVendorSync(
 	log *logger.Logger,
 	event *types.WebhookEvent,
 	msgUUID string,
+	resync bool,
 ) error {
 	if cfg != nil && !cfg.IntegrationEvents.Enabled {
 		return nil
@@ -164,6 +166,7 @@ func DispatchInvoiceVendorSync(
 		EnvironmentID: event.EnvironmentID,
 		UserID:        event.UserID,
 		InvoiceID:     payload.InvoiceID,
+		Resync:        resync,
 	}
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()
@@ -669,7 +672,7 @@ func triggerZohoBooksIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderZohoBooks) {
+	if !in.Resync && invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderZohoBooks) {
 		log.Info(ctx, "integration_events: invoice already synced to Zoho Books, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -677,6 +680,7 @@ func triggerZohoBooksIfEnabled(
 		InvoiceID:     in.InvoiceID,
 		TenantID:      in.TenantID,
 		EnvironmentID: in.EnvironmentID,
+		Resync:        in.Resync,
 	}
 	return executeWorkflow(ctx, temporalSvc, log, types.TemporalZohoBooksInvoiceSyncWorkflow, input, types.SecretProviderZohoBooks, in.InvoiceID)
 }

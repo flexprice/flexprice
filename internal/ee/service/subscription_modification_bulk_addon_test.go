@@ -720,3 +720,130 @@ func (s *SubscriptionServiceSuite) TestBulkAddonModification_Coupon_GroupedChild
 		"discount %s should be half of subtotal %s", inv.TotalDiscount, inv.Subtotal)
 	s.True(approxEqual(inv.AmountDue, inv.Subtotal.Sub(inv.TotalDiscount)))
 }
+
+// seedAddonGroup turns the suite subscription into a parent and adds one grouped child billed on it.
+func (s *SubscriptionServiceSuite) seedAddonGroup() (*subscription.Subscription, *subscription.Subscription) {
+	ctx := s.GetContext()
+	parent := s.monthlyPeriodSubscription()
+	parent.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
+
+	childCustomer := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_cust_grp_child",
+		Name:       "Child Customer",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, childCustomer))
+
+	child := *parent
+	child.ID = "sub_grp_child"
+	child.CustomerID = childCustomer.ID
+	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+	child.ParentSubscriptionID = lo.ToPtr(parent.ID)
+	child.LineItems = nil
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &child))
+
+	return parent, &child
+}
+
+func (s *SubscriptionServiceSuite) groupedModifyRequest(changes ...dto.GroupedInvoicingChange) dto.ExecuteSubscriptionModifyRequest {
+	return dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeGroupedInvoicing,
+		GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{
+			Action:  dto.GroupedInvoicingActionModify,
+			Changes: changes,
+		},
+	}
+}
+
+// A credit on the parent nets against a charge on the child into one parent invoice, and preview quotes the same net.
+func (s *SubscriptionServiceSuite) TestGroupedModify_NetsGroupOntoOneParentInvoice() {
+	ctx := s.GetContext()
+	parent, child := s.seedAddonGroup()
+
+	s.seedFixedPriceAddon("addon_grp_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grp_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_grp_out", 30)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	req := s.groupedModifyRequest(
+		dto.GroupedInvoicingChange{SubscriptionID: parent.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Removes: []*dto.RemoveAddonRequest{s.modifyRemove(outgoing, at)},
+		}},
+		dto.GroupedInvoicingChange{SubscriptionID: child.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Adds: []*dto.AddAddonToSubscriptionRequest{s.modifyAdd("addon_grp_in", at)},
+		}},
+	)
+
+	preview, err := s.modificationService().Preview(ctx, parent.ID, req)
+	s.Require().NoError(err)
+	s.Require().Len(preview.ChangedResources.Invoices, 1)
+	s.Require().NotNil(preview.ChangedResources.Invoices[0].Invoice)
+	s.Empty(s.oneOffInvoicesFor(parent.ID), "preview writes nothing")
+
+	resp, err := s.modificationService().Execute(ctx, parent.ID, req)
+	s.Require().NoError(err)
+
+	s.Empty(s.oneOffInvoicesFor(child.ID), "nothing is invoiced on the child")
+	invoices := s.oneOffInvoicesFor(parent.ID)
+	s.Require().Len(invoices, 1, "the whole group settles as one document")
+	inv := invoices[0]
+	s.Equal(parent.CustomerID, inv.CustomerID)
+	s.True(inv.AmountDue.IsPositive())
+	s.True(approxEqual(inv.AmountDue, preview.ChangedResources.Invoices[0].Invoice.AmountDue),
+		"execute charged %s, preview quoted %s", inv.AmountDue, preview.ChangedResources.Invoices[0].Invoice.AmountDue)
+	s.Empty(s.prorationCredits(), "the parent's credit is netted, not paid out")
+
+	s.Len(s.addonLineItemsFor(child.ID, "addon_grp_in"), 1)
+	removed, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, outgoing)
+	s.Require().NoError(err)
+	s.NotNil(removed.EndDate)
+
+	created := s.changedLineItemsByAction(resp, dto.ChangedLineItemActionCreated)
+	s.Require().Len(created, 1)
+	s.Equal(child.ID, created[0].SubscriptionID)
+	ended := s.changedLineItemsByAction(resp, dto.ChangedLineItemActionEnded)
+	s.Require().Len(ended, 1)
+	s.Equal(parent.ID, ended[0].SubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestGroupedModify_InvalidTargetsRejectedWithNothingPersisted() {
+	ctx := s.GetContext()
+	parent, child := s.seedAddonGroup()
+	s.seedFixedPriceAddon("addon_grp_bad", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+
+	outsider := *child
+	outsider.ID = "sub_grp_outsider"
+	outsider.SubscriptionType = types.SubscriptionTypeStandalone
+	outsider.ParentSubscriptionID = nil
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &outsider))
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	addTo := func(subscriptionID string) dto.GroupedInvoicingChange {
+		return dto.GroupedInvoicingChange{SubscriptionID: subscriptionID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Adds: []*dto.AddAddonToSubscriptionRequest{s.modifyAdd("addon_grp_bad", at)},
+		}}
+	}
+
+	tests := []struct {
+		name   string
+		pathID string
+		req    dto.ExecuteSubscriptionModifyRequest
+	}{
+		{"target outside the group", parent.ID, s.groupedModifyRequest(addTo(child.ID), addTo(outsider.ID))},
+		{"duplicate subscription_id", parent.ID, s.groupedModifyRequest(addTo(child.ID), addTo(child.ID))},
+		{"child as the path subscription", child.ID, s.groupedModifyRequest(addTo(child.ID))},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			_, err := s.modificationService().Execute(ctx, tt.pathID, tt.req)
+			s.Require().Error(err)
+			s.True(ierr.IsValidation(err), "got %v", err)
+		})
+	}
+
+	s.Empty(s.oneOffInvoicesFor(parent.ID))
+	s.Empty(s.addonLineItemsFor(child.ID, "addon_grp_bad"))
+	s.Empty(s.addonLineItemsFor(outsider.ID, "addon_grp_bad"))
+}

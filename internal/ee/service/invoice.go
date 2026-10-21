@@ -49,6 +49,9 @@ type InvoiceService interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, req dto.CreateSubscriptionDraftInvoiceRequest) (*dto.InvoiceResponse, error)
+	// CreatePausedPeriodInvoice records a paused stretch of the subscription as a $0 SKIPPED invoice
+	// with no line items. Idempotent per subscription and period.
+	CreatePausedPeriodInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*invoice.Invoice, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	// GetOrComputeCurrentPeriodDraft gets or creates the subscription's cycle draft for its current
 	// period and computes it. skipped is true when the period is already invoiced or has no charges.
@@ -458,6 +461,15 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
+	// A paused period is recorded by CreatePausedPeriodInvoice and never billed.
+	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+		return nil, ierr.NewError("cannot create a billing draft for a paused subscription").
+			WithHint("Resume the subscription before billing its current period").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": sub.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 	billingPeriodStr := string(sub.BillingPeriod)
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	billingReason := types.InvoiceBillingReasonSubscriptionCycle
@@ -480,6 +492,30 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	}
 	draftReq.SubscriptionCustomerID = &sub.CustomerID
 	return s.CreateEmptyDraftInvoice(ctx, draftReq)
+}
+
+func (s *invoiceService) CreatePausedPeriodInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*invoice.Invoice, error) {
+	billingPeriod := string(sub.BillingPeriod)
+	draft, err := s.CreateEmptyDraftInvoice(ctx, dto.CreateDraftInvoiceRequest{
+		CustomerID:             sub.GetInvoicingCustomerID(),
+		SubscriptionID:         lo.ToPtr(sub.ID),
+		SubscriptionCustomerID: lo.ToPtr(sub.CustomerID),
+		InvoiceType:            types.InvoiceTypeSubscription,
+		Currency:               sub.Currency,
+		BillingPeriod:          &billingPeriod,
+		PeriodStart:            &periodStart,
+		PeriodEnd:              &periodEnd,
+		BillingReason:          types.InvoiceBillingReasonSubscriptionPaused,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	inv, _, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return inv, nil
 }
 
 func (s *invoiceService) GetOrComputeCurrentPeriodDraft(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {
@@ -602,6 +638,36 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return inv, false, nil
 	}
 
+	// A paused period bills nothing: its invoice is marked SKIPPED as is and never computed.
+	if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionPaused {
+		if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+			return inv, true, nil
+		}
+		markedSkipped := false
+		err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			locked, lockErr := s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
+			if lockErr != nil {
+				return lockErr
+			}
+			inv = locked
+			if inv.InvoiceStatus != types.InvoiceStatusDraft {
+				return nil
+			}
+			now := time.Now().UTC()
+			inv.LastComputedAt = &now
+			inv.InvoiceStatus = types.InvoiceStatusSkipped
+			markedSkipped = true
+			return s.InvoiceRepo.Update(txCtx, inv)
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		if markedSkipped {
+			recordInvoiceTransition(ctx, inv)
+		}
+		return inv, true, nil
+	}
+
 	// check if the sub is of type inherited and if so, skip computation
 	if inv.SubscriptionID != nil {
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
@@ -636,13 +702,17 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		case types.InvoiceBillingReasonSubscriptionCreate,
 			types.InvoiceBillingReasonSubscriptionTrialEnd,
 			types.InvoiceBillingReasonSubscriptionTrialStart,
-			types.InvoiceBillingReasonSubscriptionUpdate:
+			types.InvoiceBillingReasonSubscriptionUpdate,
+			types.InvoiceBillingReasonSubscriptionResume:
 
-			// for create, trial end, trial start, and update, we use the period start as the reference point
+			// for create, trial end, trial start, update, and resume, we use the period start as the reference point
 			refPoint = types.ReferencePointPeriodStart
 
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
+		}
+		if req != nil && req.ProrationBehavior != nil {
+			sub.ProrationBehavior = *req.ProrationBehavior
 		}
 		billingService := NewBillingService(s.ServiceParams)
 		params := &dto.PrepareSubscriptionInvoiceRequestParams{
@@ -1235,6 +1305,32 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	return nil
 }
 
+// issueSubscriptionInvoice dates a subscription invoice as it is finalized: the issue date is the finalization
+// time unless the caller set one, and the due date counts from it. Manually edited copies keep their dates.
+func issueSubscriptionInvoice(ctx context.Context, params ServiceParams, inv *invoice.Invoice, finalizedAt time.Time) error {
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil || inv.IsManuallyEdited {
+		return nil
+	}
+	// A defaulted issue date equals created_at; anything else was set by the caller.
+	issueDate := finalizedAt
+	if inv.IssueDate != nil && !inv.IssueDate.Equal(inv.CreatedAt) {
+		issueDate = *inv.IssueDate
+	}
+
+	sub, err := params.SubRepo.Get(ctx, *inv.SubscriptionID)
+	if err != nil {
+		return err
+	}
+	settingsSvc := NewSettingsService(params).(*settingsService)
+	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+	if err != nil {
+		return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
+	}
+	inv.IssueDate = &issueDate
+	inv.DueDate = lo.ToPtr(subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate))
+	return nil
+}
+
 func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv *invoice.Invoice, callerSessionID string) error {
 	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
 		// No-op: skipped invoices are not finalized
@@ -1392,6 +1488,9 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		now := time.Now().UTC()
 		lockedInv.InvoiceStatus = types.InvoiceStatusFinalized
 		lockedInv.FinalizedAt = &now
+		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
+			return err
+		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
@@ -2532,6 +2631,12 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	var computeOverride *dto.InvoiceComputeRequest
 	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
 		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
+	}
+	if req.ProrationBehavior != nil {
+		if computeOverride == nil {
+			computeOverride = &dto.InvoiceComputeRequest{}
+		}
+		computeOverride.ProrationBehavior = req.ProrationBehavior
 	}
 	_, skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
@@ -5489,7 +5594,7 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 		Payload:       payload,
 	}
 	return integrationevents.DispatchInvoiceVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "",
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", false,
 	)
 }
 

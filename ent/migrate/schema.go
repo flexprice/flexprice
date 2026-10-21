@@ -59,6 +59,7 @@ var (
 		{Name: "cancellation_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "synced_price_sequence", Type: field.TypeInt64, Default: "0"},
 	}
 	// AddonAssociationsTable holds the schema information for the "addon_associations" table.
 	AddonAssociationsTable = &schema.Table{

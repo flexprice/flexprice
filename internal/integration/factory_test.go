@@ -65,6 +65,7 @@ func buildStorageTestFactoryWithRepo(connectionRepo connection.Repository, cfg *
 		encSvc,
 		nil, // TemporalService — not needed for storage provider dispatch
 		nil, // cache.Locker — not needed for storage provider dispatch (only used by Razorpay payment integration)
+		nil,
 	)
 }
 

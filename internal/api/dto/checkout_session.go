@@ -257,12 +257,12 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 		}
 		return cfg.WalletTopupParams.Validate()
 	case types.CheckoutActionAddAddon:
-		if cfg.AddAddonParams == nil {
+		if cfg.AddAddonParams == nil && len(cfg.AddAddonBatchParams) == 0 {
 			return ierr.NewError("session has no add_addon_params").
 				WithHint("checkout session must have add_addon_params before it can be completed").
 				Mark(ierr.ErrValidation)
 		}
-		return cfg.AddAddonParams.Validate()
+		return cfg.Validate(types.CheckoutActionAddAddon)
 	case types.CheckoutActionPayInvoice:
 		if cfg.PayInvoiceParams == nil {
 			return ierr.NewError("session has no pay_invoice_params").

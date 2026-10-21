@@ -91,6 +91,7 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		ProrationCalculator:          s.GetCalculator(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:            s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           s.GetStores().AddonPriceSyncRepo,
 	}
 
 	s.subscriptionChangeService = NewSubscriptionChangeService(serviceParams).(*subscriptionChangeService)

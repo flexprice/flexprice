@@ -360,6 +360,13 @@ func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceF
 
 func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {
 	filter := types.NewNoLimitInvoiceFilter()
+	// The repository looks the key up across every status, SKIPPED included.
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusDraft,
+		types.InvoiceStatusFinalized,
+		types.InvoiceStatusVoided,
+		types.InvoiceStatusSkipped,
+	}
 	invoices, err := s.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -409,6 +416,13 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*invoice.Invoice, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
+	// The repository looks the period up across every status, SKIPPED included.
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusDraft,
+		types.InvoiceStatusFinalized,
+		types.InvoiceStatusVoided,
+		types.InvoiceStatusSkipped,
+	}
 	invoices, err := s.List(ctx, filter)
 	if err != nil {
 		return nil, err

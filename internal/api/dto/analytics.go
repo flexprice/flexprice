@@ -1,9 +1,13 @@
 package dto
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/analytics"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -131,21 +135,21 @@ type ReportDimension struct {
 }
 
 type ReportCatalogEntry struct {
-	Key             string            `json:"key"`
-	Name            string            `json:"name"`
-	Description     string            `json:"description"`
-	Category        string            `json:"category" enums:"billing,receivables,customers,credits,usage"`
-	Kind            string            `json:"kind" enums:"flow,ratio,snapshot"`
-	ValueType       string            `json:"value_type" enums:"money,count,days"`
-	HigherIsBetter  bool              `json:"higher_is_better"`
-	Shapes          []string          `json:"shapes" enums:"timeseries,breakdown,scalar"`
-	DefaultShape    string            `json:"default_shape" enums:"timeseries,breakdown,scalar"`
-	Dimensions      []ReportDimension `json:"dimensions"`
-	Grains          []string          `json:"grains" enums:"day,week,month"`
-	SupportsCompare bool              `json:"supports_compare"`
-	VariantOf       string            `json:"variant_of,omitempty"`
-	VariantLabel    string            `json:"variant_label,omitempty"`
-	MaxRangeDays    int               `json:"max_range_days,omitempty"`
+	Key             string                     `json:"key"`
+	Name            string                     `json:"name"`
+	Description     string                     `json:"description"`
+	Category        types.ReportCategory       `json:"category" enums:"billing,receivables,customers,credits,usage"`
+	Kind            types.ReportKind           `json:"kind" enums:"flow,ratio,snapshot"`
+	ValueType       types.ReportValueType      `json:"value_type" enums:"money,count,days"`
+	Improvement     types.ImprovementDirection `json:"improvement" enums:"higher,lower"`
+	Shapes          []string                   `json:"shapes" enums:"timeseries,breakdown,scalar"`
+	DefaultShape    string                     `json:"default_shape" enums:"timeseries,breakdown,scalar"`
+	Dimensions      []ReportDimension          `json:"dimensions"`
+	Grains          []string                   `json:"grains" enums:"day,week,month"`
+	SupportsCompare bool                       `json:"supports_compare"`
+	VariantOf       string                     `json:"variant_of,omitempty"`
+	VariantLabel    string                     `json:"variant_label,omitempty"`
+	MaxRangeDays    int                        `json:"max_range_days,omitempty"`
 }
 
 type ReportCatalogResponse struct {
@@ -178,4 +182,115 @@ type ReportQueryRequest struct {
 
 func (r *ReportQueryRequest) Validate() error {
 	return validator.ValidateRequest(r)
+}
+
+// ValidateForReport resolves the catalog entry for key and checks the request against it.
+func (req *ReportQueryRequest) ValidateForReport(key string, maxRows int) (*analytics.ReportCatalogEntry, error) {
+	e, ok := analytics.LookupReport(key)
+	if !ok {
+		return nil, ierr.NewErrorf("report %q not found", key).Mark(ierr.ErrNotFound)
+	}
+	if err := req.validateAgainst(e, maxRows); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+func (req *ReportQueryRequest) validateAgainst(e *analytics.ReportCatalogEntry, maxRows int) error {
+	shapes := make([]string, len(e.Shapes))
+	for i, sh := range e.Shapes {
+		shapes[i] = string(sh)
+	}
+	if !slices.Contains(shapes, req.Shape) {
+		return ierr.NewErrorf("shape %q not allowed", req.Shape).
+			WithHint("shape must be one of: " + strings.Join(shapes, ", ")).
+			Mark(ierr.ErrValidation)
+	}
+	dims := make([]string, len(e.Dimensions))
+	for i, d := range e.Dimensions {
+		dims[i] = d.Key
+	}
+	for _, d := range req.Dimensions {
+		if !slices.Contains(dims, d) {
+			return ierr.NewErrorf("dimension %q not allowed", d).
+				WithHint("dimensions must be one of: " + strings.Join(dims, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if req.Grain != "" && req.Shape != string(types.ShapeTimeseries) {
+		return ierr.NewError("grain only applies to timeseries").
+			WithHint("omit grain unless shape is timeseries").
+			Mark(ierr.ErrValidation)
+	}
+	if req.Limit < 0 || (maxRows > 0 && req.Limit > maxRows) {
+		return ierr.NewErrorf("limit %d not allowed", req.Limit).
+			WithHint(fmt.Sprintf("limit must be between 0 and %d (0 = no limit)", maxRows)).
+			Mark(ierr.ErrValidation)
+	}
+	if req.Limit > 0 && req.Shape != string(types.ShapeBreakdown) {
+		return ierr.NewError("limit only applies to breakdown").
+			WithHint("omit limit unless shape is breakdown").
+			Mark(ierr.ErrValidation)
+	}
+	bm, _ := analytics.LookupBillingMetric(e.Key)
+	hasCurrency := bm != nil && bm.Currency
+	if req.Currency != "" && !hasCurrency {
+		return ierr.NewError("report has no currency").
+			WithHint("omit currency for this report").
+			Mark(ierr.ErrValidation)
+	}
+	if len(req.Sort) > 0 {
+		if req.Shape != string(types.ShapeBreakdown) {
+			return ierr.NewError("sort only applies to breakdown").
+				WithHint("omit sort unless shape is breakdown").
+				Mark(ierr.ErrValidation)
+		}
+		fields := append(slices.Clone(dims), string(e.Key))
+		if req.Compare != "" {
+			fields = append(fields, string(e.Key)+"_prev")
+		}
+		for _, so := range req.Sort {
+			if so.Dir != "asc" && so.Dir != "desc" {
+				return ierr.NewErrorf("sort dir %q not allowed", so.Dir).
+					WithHint("dir must be asc or desc").
+					Mark(ierr.ErrValidation)
+			}
+			if !slices.Contains(fields, so.Field) {
+				return ierr.NewErrorf("sort field %q not allowed", so.Field).
+					WithHint("sort field must be one of: " + strings.Join(fields, ", ")).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+	if req.Shape == string(types.ShapeTimeseries) && req.Grain != "" {
+		grains := make([]string, len(e.Grains))
+		for i, g := range e.Grains {
+			grains[i] = string(g)
+		}
+		if !slices.Contains(grains, req.Grain) {
+			return ierr.NewErrorf("grain %q not allowed", req.Grain).
+				WithHint("grain must be one of: " + strings.Join(grains, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if req.Compare != "" {
+		if !e.SupportsCompare || (req.Compare != "previous_period" && req.Compare != "previous_year") {
+			return ierr.NewErrorf("compare %q not allowed", req.Compare).
+				WithHint("compare must be previous_period or previous_year").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	for _, f := range req.Filters {
+		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) {
+			return ierr.NewErrorf("filter field %q not allowed", f.Field).
+				WithHint("filter fields must be one of: currency, " + strings.Join(dims, ", ")).
+				Mark(ierr.ErrValidation)
+		}
+		if (f.Op != "eq" && f.Op != "in") || len(f.Value) == 0 || (f.Op == "eq" && len(f.Value) != 1) {
+			return ierr.NewErrorf("filter on %q invalid", f.Field).
+				WithHint("op must be eq (1 value) or in (1+ values)").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }

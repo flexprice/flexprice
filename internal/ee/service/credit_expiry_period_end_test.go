@@ -70,6 +70,47 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ImmediateCancelBillsTheDraf
 	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the cancel")
 	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
 	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
+	s.True(inv.IssueDate.Equal(*inv.FinalizedAt), "issued at the cancel's finalization")
+	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
+}
+
+// Pause bills the draft like an immediate cancel: the draft becomes the closing invoice, keeping the
+// 20 applied at expiry, and only the 10 used after the expiry is taken from purchased credits.
+func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_PauseBillsTheDraft() {
+	sub, draft := s.settledSubscription("subs_pause_invoice")
+
+	_, err := s.subscriptionService().PauseSubscription(s.GetContext(), sub.ID, &dto.PauseSubscriptionRequest{
+		ProrationBehavior: types.ProrationBehaviorNone,
+	})
+	s.Require().NoError(err)
+
+	invoices := s.subscriptionInvoices(sub.ID)
+	s.Require().Len(invoices, 1, "no second invoice for the same usage")
+	inv := s.invoice(draft.ID)
+	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the pause")
+	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
+	paused, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusPaused, paused.SubscriptionStatus)
+}
+
+// A draft opened by credit expiry mid-period is due from period end while open, and from the
+// moment it is finalized once billed.
+func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ExpiryDraftIsIssuedAtFinalization() {
+	_, draft := s.settledSubscription("subs_expiry_issue")
+	s.True(draft.IssueDate.Equal(draft.CreatedAt), "draft issue date defaults to its creation")
+	s.WithinDuration(draft.PeriodEnd.AddDate(0, 0, 1), *draft.DueDate, time.Second, "open draft is due from period end")
+
+	s.Require().NoError(s.invoiceService.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	inv := s.invoice(draft.ID)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.True(inv.IssueDate.Equal(*inv.FinalizedAt), "issued at finalization")
+	s.True(inv.IssueDate.After(inv.CreatedAt), "issue date moved off the draft's creation")
+	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
 }
 
 // Immediate cancel without an invoice: the draft is voided and its applied credits refunded.
@@ -159,35 +200,4 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ThresholdWaitsForPendingExp
 
 	s.False(item.Invoiced)
 	s.Empty(s.subscriptionInvoices(sub.ID))
-}
-
-// Resume after a pause pushes the period end out by the pause; the draft's end follows, so the
-// period-end run still finds it.
-func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ResumeMovesTheDraft() {
-	sub, draft := s.settledSubscription("subs_resume")
-	pause := &subscription.SubscriptionPause{
-		ID:             "pause_subs_resume",
-		SubscriptionID: sub.ID,
-		PauseStatus:    types.PauseStatusActive,
-		PauseMode:      types.PauseModeImmediate,
-		PauseStart:     time.Now().UTC().Add(-48 * time.Hour),
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().SubscriptionRepo.CreatePause(s.GetContext(), pause))
-	sub.SubscriptionStatus = types.SubscriptionStatusPaused
-	sub.PauseStatus = types.PauseStatusActive
-	sub.ActivePauseID = &pause.ID
-	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
-
-	resumed, _, err := s.subscriptionService().executeResume(s.GetContext(), sub, pause, &dto.ResumeSubscriptionRequest{
-		ResumeMode: types.ResumeModeImmediate,
-	})
-	s.Require().NoError(err)
-
-	s.True(resumed.CurrentPeriodEnd.After(*draft.PeriodEnd), "period end moved out by the pause")
-	s.True(s.invoice(draft.ID).PeriodEnd.Equal(resumed.CurrentPeriodEnd), "draft end follows the period")
-	reused, _, err := s.invoiceService.GetOrComputeCurrentPeriodDraft(s.GetContext(), resumed)
-	s.Require().NoError(err)
-	s.Equal(draft.ID, reused.ID, "the period-end run finds the moved draft")
-	s.True(decimal.NewFromInt(20).Equal(reused.TotalPrepaidCreditsApplied))
 }

@@ -99,6 +99,7 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 		TaxAppliedRepo:             st.TaxAppliedRepo,
 		AlertLogsRepo:              st.AlertLogsRepo,
 		PlanPriceSyncRepo:          st.PlanPriceSyncRepo,
+		AddonPriceSyncRepo:         st.AddonPriceSyncRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),

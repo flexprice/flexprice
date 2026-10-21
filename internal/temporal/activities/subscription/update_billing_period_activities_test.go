@@ -1,6 +1,7 @@
 package subscription
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -129,6 +130,7 @@ func (s *BillingActivitiesSuite) newServiceParams() service.ServiceParams {
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 	}
 }
 
@@ -403,4 +405,104 @@ func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_AdvancesGrouped
 	s.NoError(err)
 	s.True(updatedInherited.CurrentPeriodStart.Equal(oldStart), "inherited children are not cascaded by this activity")
 	s.True(updatedInherited.CurrentPeriodEnd.Equal(oldEnd), "inherited children are not cascaded by this activity")
+}
+
+// pausedSubscription stores a subscription paused since its current period started, with its pause row.
+func (s *BillingActivitiesSuite) pausedSubscription(ctx context.Context, id string, periodStart, periodEnd time.Time) (*subscription.Subscription, *subscription.SubscriptionPause) {
+	pause := &subscription.SubscriptionPause{
+		ID:                  "pause_" + id,
+		SubscriptionID:      id,
+		PauseStatus:         types.PauseStatusActive,
+		PauseMode:           types.PauseModeImmediate,
+		PauseStart:          periodStart,
+		OriginalPeriodStart: periodStart,
+		OriginalPeriodEnd:   periodEnd,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreatePause(ctx, pause))
+
+	sub := &subscription.Subscription{
+		ID:                 id,
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusPaused,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		PauseStatus:        types.PauseStatusActive,
+		ActivePauseID:      lo.ToPtr(pause.ID),
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		Timezone:           "UTC",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		LineItems:          []*subscription.SubscriptionLineItem{},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, sub.LineItems))
+	return sub, pause
+}
+
+// A period that passes while paused is recorded as a SKIPPED invoice and is not handed to the
+// invoice workflow, since there is nothing to finalize or collect.
+func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_RecordsPausedPeriodWithoutProcessingIt() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_create_draft_invoices_paused")
+	p1Start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	p1End := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	sub, _ := s.pausedSubscription(ctx, "sub_create_draft_invoices_paused", p1Start, p1End)
+
+	input := subscriptionModels.CreateInvoicesActivityInput{
+		SubscriptionID: sub.ID,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		UserID:         types.GetUserID(ctx),
+		Periods:        []dto.Period{{Start: p1Start, End: p1End}},
+	}
+
+	output, err := s.activities.CreateDraftInvoicesActivity(ctx, input)
+	s.Require().NoError(err)
+	s.Empty(output.InvoiceIDs, "the paused period is not sent to the invoice workflow")
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusSkipped}
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(invoices, 1)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionPaused), invoices[0].BillingReason)
+	s.True(invoices[0].PeriodStart.Equal(p1Start))
+	s.True(invoices[0].PeriodEnd.Equal(p1End))
+	s.True(invoices[0].Total.IsZero())
+}
+
+// A subscription that reaches its end date while paused is cancelled and its pause completed.
+func (s *BillingActivitiesSuite) TestCheckCancellationActivity_EndDateWhilePausedCompletesThePause() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_check_cancellation_paused")
+	periodStart := s.testData.now.Add(-20 * 24 * time.Hour)
+	periodEnd := s.testData.now.Add(-24 * time.Hour)
+	sub, pause := s.pausedSubscription(ctx, "sub_check_cancellation_paused", periodStart, periodEnd)
+	sub.EndDate = lo.ToPtr(periodEnd)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	output, err := s.activities.CheckCancellationActivity(ctx, subscriptionModels.CheckSubscriptionCancellationActivityInput{
+		SubscriptionID: sub.ID,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		UserID:         types.GetUserID(ctx),
+		Period:         dto.Period{Start: periodStart, End: periodEnd},
+	})
+	s.Require().NoError(err)
+	s.True(output.IsCancelled)
+
+	cancelled, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, cancelled.SubscriptionStatus)
+	s.Equal(types.PauseStatusNone, cancelled.PauseStatus)
+	s.Nil(cancelled.ActivePauseID)
+
+	completed, err := s.GetStores().SubscriptionRepo.GetPause(ctx, pause.ID)
+	s.Require().NoError(err)
+	s.Equal(types.PauseStatusCompleted, completed.PauseStatus)
 }

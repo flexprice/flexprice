@@ -423,6 +423,7 @@ func (s *SubscriptionTrialProrationSuite) SetupTest() {
 		ConnectionRepo: st.ConnectionRepo, SettingsRepo: st.SettingsRepo, EventPublisher: s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(), ProrationCalculator: s.GetCalculator(), MeterUsageRepo: st.MeterUsageRepo,
 		IntegrationFactory: s.GetIntegrationFactory(), PlanPriceSyncRepo: st.PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           st.AddonPriceSyncRepo,
 		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
 	}
 	s.subSvc = NewSubscriptionService(s.params)

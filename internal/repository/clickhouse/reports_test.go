@@ -60,10 +60,10 @@ func TestReportCatalog_AgreesWithRegistry(t *testing.T) {
 		for _, g := range e.Grains {
 			assert.Contains(t, []types.Grain{types.GrainDay, types.GrainWeek, types.GrainMonth}, g)
 		}
-		assert.Contains(t, []string{"billing", "receivables", "customers", "credits", "usage"}, e.Category)
-		assert.Contains(t, []string{"flow", "ratio", "snapshot"}, e.Kind)
-		assert.Contains(t, []string{"money", "count", "days"}, e.ValueType)
-		if e.Kind == "snapshot" {
+		assert.Contains(t, []types.ReportCategory{types.ReportCategoryBilling, types.ReportCategoryReceivables, types.ReportCategoryCustomers, types.ReportCategoryCredits, types.ReportCategoryUsage}, e.Category)
+		assert.Contains(t, []types.ReportKind{types.ReportKindFlow, types.ReportKindRatio, types.ReportKindSnapshot}, e.Kind)
+		assert.Contains(t, []types.ReportValueType{types.ReportValueTypeMoney, types.ReportValueTypeCount, types.ReportValueTypeDays}, e.ValueType)
+		if e.Kind == types.ReportKindSnapshot {
 			assert.False(t, e.SupportsCompare)
 			assert.Empty(t, e.Grains)
 		}

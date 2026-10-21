@@ -13,7 +13,7 @@ import (
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // maxMemoryUsageSetting mirrors the inline 90GB bound used by
-// GetEarliestUsageTimestamp/GetMeterUsageForExport/GetEventsByEventIDAndExternalCustomerID in
+// GetEarliestUsageTimestamp/GetMeterUsageForExport/CountMeterUsageForExport/GetEventsByEventIDAndExternalCustomerID in
 // meter_usage.go (AGENTS.md: every ClickHouse query bounded by 90GB).
 const maxMemoryUsageSetting = "max_memory_usage = 96636764160"
 

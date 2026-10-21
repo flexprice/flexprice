@@ -187,6 +187,18 @@ func (c *client) ValidateConnection(ctx context.Context) error {
 	return nil
 }
 
+func (c *client) ValidateWrite(ctx context.Context, key string) error {
+	w := c.gcs.Bucket(c.cfg.Bucket).Object(key).NewWriter(ctx)
+	w.ContentType = "text/plain"
+	if err := w.Close(); err != nil {
+		return ierr.WithError(err).
+			WithHintf("No write permission on GCS bucket '%s'.", c.cfg.Bucket).
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 func contentTypeFor(format fpstorage.UploadFormat, compressed bool) string {
 	if compressed {
 		return "application/gzip"

@@ -629,15 +629,16 @@ func (s *EventServiceSuite) TestGetEvents() {
 		err = s.service.CreateEvent(s.ctx, newEvent)
 		s.NoError(err)
 
-		// Wait a bit for the event to be processed through the message channel
-		time.Sleep(100 * time.Millisecond)
-
-		// Query new events using iter_first_key
-		result, err := s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
-			ExternalCustomerID: "cust-1",
-			PageSize:           2,
-			IterFirstKey:       initialResult.IterFirstKey,
-		})
+		// The event is delivered through an async channel, so poll rather than sleep a fixed time.
+		var result *dto.GetEventsResponse
+		s.Eventually(func() bool {
+			result, err = s.service.GetEvents(s.ctx, &dto.GetEventsRequest{
+				ExternalCustomerID: "cust-1",
+				PageSize:           2,
+				IterFirstKey:       initialResult.IterFirstKey,
+			})
+			return err == nil && len(result.Events) == 1
+		}, 2*time.Second, 20*time.Millisecond)
 		s.NoError(err)
 		s.NotNil(result)
 		s.Len(result.Events, 1)

@@ -1292,29 +1292,31 @@ func (m *AddonMutation) ResetEdge(name string) error {
 // AddonAssociationMutation represents an operation that mutates the AddonAssociation nodes in the graph.
 type AddonAssociationMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	entity_id           *string
-	entity_type         *string
-	addon_id            *string
-	start_date          *time.Time
-	end_date            *time.Time
-	addon_status        *string
-	cancellation_reason *string
-	cancelled_at        *time.Time
-	metadata            *map[string]interface{}
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*AddonAssociation, error)
-	predicates          []predicate.AddonAssociation
+	op                       Op
+	typ                      string
+	id                       *string
+	tenant_id                *string
+	status                   *string
+	created_at               *time.Time
+	updated_at               *time.Time
+	created_by               *string
+	updated_by               *string
+	environment_id           *string
+	entity_id                *string
+	entity_type              *string
+	addon_id                 *string
+	start_date               *time.Time
+	end_date                 *time.Time
+	addon_status             *string
+	cancellation_reason      *string
+	cancelled_at             *time.Time
+	metadata                 *map[string]interface{}
+	synced_price_sequence    *int64
+	addsynced_price_sequence *int64
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*AddonAssociation, error)
+	predicates               []predicate.AddonAssociation
 }
 
 var _ ent.Mutation = (*AddonAssociationMutation)(nil)
@@ -2101,6 +2103,62 @@ func (m *AddonAssociationMutation) ResetMetadata() {
 	delete(m.clearedFields, addonassociation.FieldMetadata)
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (m *AddonAssociationMutation) SetSyncedPriceSequence(i int64) {
+	m.synced_price_sequence = &i
+	m.addsynced_price_sequence = nil
+}
+
+// SyncedPriceSequence returns the value of the "synced_price_sequence" field in the mutation.
+func (m *AddonAssociationMutation) SyncedPriceSequence() (r int64, exists bool) {
+	v := m.synced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncedPriceSequence returns the old "synced_price_sequence" field's value of the AddonAssociation entity.
+// If the AddonAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AddonAssociationMutation) OldSyncedPriceSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedPriceSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedPriceSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedPriceSequence: %w", err)
+	}
+	return oldValue.SyncedPriceSequence, nil
+}
+
+// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
+func (m *AddonAssociationMutation) AddSyncedPriceSequence(i int64) {
+	if m.addsynced_price_sequence != nil {
+		*m.addsynced_price_sequence += i
+	} else {
+		m.addsynced_price_sequence = &i
+	}
+}
+
+// AddedSyncedPriceSequence returns the value that was added to the "synced_price_sequence" field in this mutation.
+func (m *AddonAssociationMutation) AddedSyncedPriceSequence() (r int64, exists bool) {
+	v := m.addsynced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSyncedPriceSequence resets all changes to the "synced_price_sequence" field.
+func (m *AddonAssociationMutation) ResetSyncedPriceSequence() {
+	m.synced_price_sequence = nil
+	m.addsynced_price_sequence = nil
+}
+
 // Where appends a list predicates to the AddonAssociationMutation builder.
 func (m *AddonAssociationMutation) Where(ps ...predicate.AddonAssociation) {
 	m.predicates = append(m.predicates, ps...)
@@ -2135,7 +2193,7 @@ func (m *AddonAssociationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AddonAssociationMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, addonassociation.FieldTenantID)
 	}
@@ -2184,6 +2242,9 @@ func (m *AddonAssociationMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, addonassociation.FieldMetadata)
 	}
+	if m.synced_price_sequence != nil {
+		fields = append(fields, addonassociation.FieldSyncedPriceSequence)
+	}
 	return fields
 }
 
@@ -2224,6 +2285,8 @@ func (m *AddonAssociationMutation) Field(name string) (ent.Value, bool) {
 		return m.CancelledAt()
 	case addonassociation.FieldMetadata:
 		return m.Metadata()
+	case addonassociation.FieldSyncedPriceSequence:
+		return m.SyncedPriceSequence()
 	}
 	return nil, false
 }
@@ -2265,6 +2328,8 @@ func (m *AddonAssociationMutation) OldField(ctx context.Context, name string) (e
 		return m.OldCancelledAt(ctx)
 	case addonassociation.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case addonassociation.FieldSyncedPriceSequence:
+		return m.OldSyncedPriceSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown AddonAssociation field %s", name)
 }
@@ -2386,6 +2451,13 @@ func (m *AddonAssociationMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetMetadata(v)
 		return nil
+	case addonassociation.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedPriceSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AddonAssociation field %s", name)
 }
@@ -2393,13 +2465,21 @@ func (m *AddonAssociationMutation) SetField(name string, value ent.Value) error 
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *AddonAssociationMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addsynced_price_sequence != nil {
+		fields = append(fields, addonassociation.FieldSyncedPriceSequence)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *AddonAssociationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case addonassociation.FieldSyncedPriceSequence:
+		return m.AddedSyncedPriceSequence()
+	}
 	return nil, false
 }
 
@@ -2408,6 +2488,13 @@ func (m *AddonAssociationMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *AddonAssociationMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case addonassociation.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSyncedPriceSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown AddonAssociation numeric field %s", name)
 }
@@ -2533,6 +2620,9 @@ func (m *AddonAssociationMutation) ResetField(name string) error {
 		return nil
 	case addonassociation.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case addonassociation.FieldSyncedPriceSequence:
+		m.ResetSyncedPriceSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown AddonAssociation field %s", name)

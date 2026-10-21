@@ -8,6 +8,7 @@ import (
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryCheckoutSessionStore implements domainCheckout.Repository for tests.
@@ -195,8 +196,9 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 		if cfg.SubscriptionID != "" {
 			matchesModify := sessionCfg.ModifySubscriptionParams != nil &&
 				sessionCfg.ModifySubscriptionParams.SubscriptionID == cfg.SubscriptionID
-			matchesAddAddon := sessionCfg.AddAddonParams != nil &&
-				sessionCfg.AddAddonParams.SubscriptionID == cfg.SubscriptionID
+			matchesAddAddon := lo.ContainsBy(sessionCfg.AddAddonEntries(), func(p *types.AddAddonParams) bool {
+				return p.SubscriptionID == cfg.SubscriptionID
+			})
 			if !matchesModify && !matchesAddAddon {
 				return false
 			}

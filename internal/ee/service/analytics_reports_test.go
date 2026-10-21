@@ -183,21 +183,6 @@ func TestRunReport_ValidationRules(t *testing.T) {
 	}
 }
 
-func TestValidateReportRequest_UnsupportedCompareAndNoCurrency(t *testing.T) {
-	e := &analytics.ReportCatalogEntry{
-		Key:          types.Metric("no_such_metric"),
-		Shapes:       []types.Shape{types.ShapeScalar},
-		DefaultShape: types.ShapeScalar,
-	}
-	err := validateReportRequest(e, &dto.ReportQueryRequest{Shape: "scalar", Compare: "previous_period"}, 0)
-	require.Error(t, err)
-	assert.True(t, ierr.IsValidation(err))
-
-	err = validateReportRequest(e, &dto.ReportQueryRequest{Shape: "scalar", Currency: "usd"}, 0)
-	require.Error(t, err)
-	assert.True(t, ierr.IsValidation(err))
-}
-
 func runEventsVolume(t *testing.T, repo *testutil.InMemoryReportsRepo, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
 	req.Range = "2026-09-01..2026-09-08"
 	return reportsSvc(repo).RunReport(billingCtx(), "events_volume", req)

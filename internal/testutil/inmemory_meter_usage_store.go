@@ -1020,6 +1020,28 @@ func propertiesString(p map[string]string) string {
 // GetMeterUsageForExport returns records within the time range, paginated by batchSize/offset.
 // Mirrors the ClickHouse impl's batching semantics for tests.
 func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*events.MeterUsage, error) {
+	filtered := s.meterUsageForExportWindow(ctx, startTime, endTime)
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.After(filtered[j].Timestamp)
+	})
+
+	if offset >= len(filtered) {
+		return nil, nil
+	}
+	end := offset + batchSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return filtered[offset:end], nil
+}
+
+// CountMeterUsageForExport returns how many meter_usage rows fall in [startTime, endTime).
+func (s *InMemoryMeterUsageStore) CountMeterUsageForExport(ctx context.Context, startTime, endTime time.Time) (int, error) {
+	return len(s.meterUsageForExportWindow(ctx, startTime, endTime)), nil
+}
+
+func (s *InMemoryMeterUsageStore) meterUsageForExportWindow(ctx context.Context, startTime, endTime time.Time) []*events.MeterUsage {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1036,19 +1058,7 @@ func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, st
 		}
 		filtered = append(filtered, rec)
 	}
-
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i].Timestamp.After(filtered[j].Timestamp)
-	})
-
-	if offset >= len(filtered) {
-		return nil, nil
-	}
-	end := offset + batchSize
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	return filtered[offset:end], nil
+	return filtered
 }
 
 // GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.

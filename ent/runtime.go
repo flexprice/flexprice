@@ -159,6 +159,10 @@ func init() {
 	addonassociation.DefaultAddonStatus = addonassociationDescAddonStatus.Default.(string)
 	// addonassociation.AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
 	addonassociation.AddonStatusValidator = addonassociationDescAddonStatus.Validators[0].(func(string) error)
+	// addonassociationDescSyncedPriceSequence is the schema descriptor for synced_price_sequence field.
+	addonassociationDescSyncedPriceSequence := addonassociationFields[10].Descriptor()
+	// addonassociation.DefaultSyncedPriceSequence holds the default value on creation for the synced_price_sequence field.
+	addonassociation.DefaultSyncedPriceSequence = addonassociationDescSyncedPriceSequence.Default.(int64)
 	alertlogsMixin := schema.AlertLogs{}.Mixin()
 	alertlogsMixinFields0 := alertlogsMixin[0].Fields()
 	_ = alertlogsMixinFields0

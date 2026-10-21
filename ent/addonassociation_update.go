@@ -174,6 +174,27 @@ func (_u *AddonAssociationUpdate) ClearMetadata() *AddonAssociationUpdate {
 	return _u
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (_u *AddonAssociationUpdate) SetSyncedPriceSequence(v int64) *AddonAssociationUpdate {
+	_u.mutation.ResetSyncedPriceSequence()
+	_u.mutation.SetSyncedPriceSequence(v)
+	return _u
+}
+
+// SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
+func (_u *AddonAssociationUpdate) SetNillableSyncedPriceSequence(v *int64) *AddonAssociationUpdate {
+	if v != nil {
+		_u.SetSyncedPriceSequence(*v)
+	}
+	return _u
+}
+
+// AddSyncedPriceSequence adds value to the "synced_price_sequence" field.
+func (_u *AddonAssociationUpdate) AddSyncedPriceSequence(v int64) *AddonAssociationUpdate {
+	_u.mutation.AddSyncedPriceSequence(v)
+	return _u
+}
+
 // Mutation returns the AddonAssociationMutation object of the builder.
 func (_u *AddonAssociationUpdate) Mutation() *AddonAssociationMutation {
 	return _u.mutation
@@ -287,6 +308,12 @@ func (_u *AddonAssociationUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(addonassociation.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SyncedPriceSequence(); ok {
+		_spec.SetField(addonassociation.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
+		_spec.AddField(addonassociation.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -454,6 +481,27 @@ func (_u *AddonAssociationUpdateOne) ClearMetadata() *AddonAssociationUpdateOne 
 	return _u
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (_u *AddonAssociationUpdateOne) SetSyncedPriceSequence(v int64) *AddonAssociationUpdateOne {
+	_u.mutation.ResetSyncedPriceSequence()
+	_u.mutation.SetSyncedPriceSequence(v)
+	return _u
+}
+
+// SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
+func (_u *AddonAssociationUpdateOne) SetNillableSyncedPriceSequence(v *int64) *AddonAssociationUpdateOne {
+	if v != nil {
+		_u.SetSyncedPriceSequence(*v)
+	}
+	return _u
+}
+
+// AddSyncedPriceSequence adds value to the "synced_price_sequence" field.
+func (_u *AddonAssociationUpdateOne) AddSyncedPriceSequence(v int64) *AddonAssociationUpdateOne {
+	_u.mutation.AddSyncedPriceSequence(v)
+	return _u
+}
+
 // Mutation returns the AddonAssociationMutation object of the builder.
 func (_u *AddonAssociationUpdateOne) Mutation() *AddonAssociationMutation {
 	return _u.mutation
@@ -597,6 +645,12 @@ func (_u *AddonAssociationUpdateOne) sqlSave(ctx context.Context) (_node *AddonA
 	}
 	if _u.mutation.MetadataCleared() {
 		_spec.ClearField(addonassociation.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SyncedPriceSequence(); ok {
+		_spec.SetField(addonassociation.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSyncedPriceSequence(); ok {
+		_spec.AddField(addonassociation.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
 	_node = &AddonAssociation{config: _u.config}
 	_spec.Assign = _node.assignValues

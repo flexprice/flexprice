@@ -50,6 +50,8 @@ type Storage interface {
 	Exists(ctx context.Context, key string) (bool, error)
 	PresignGet(ctx context.Context, key string, duration time.Duration) (string, error)
 	ValidateConnection(ctx context.Context) error
+	// ValidateWrite writes an empty object at key to prove the credentials can write to the bucket.
+	ValidateWrite(ctx context.Context, key string) error
 	FileURL(key string) string
 	Provider() Provider
 }

@@ -256,6 +256,10 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.SetLineItemGrouping(sub.LineItemGrouping)
 	}
 
+	if sub.ProrationBehavior != "" {
+		query.SetProrationBehavior(sub.ProrationBehavior)
+	}
+
 	// Handle nullable payment_terms - explicitly clear if nil
 	if sub.PaymentTerms != nil {
 		query.SetPaymentTerms(*sub.PaymentTerms)

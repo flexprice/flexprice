@@ -116,6 +116,7 @@ func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonA
 		SetCancellationReason(a.CancellationReason).
 		SetNillableCancelledAt(a.CancelledAt).
 		SetMetadata(a.Metadata).
+		SetSyncedPriceSequence(a.SyncedPriceSequence).
 		SetCreatedBy(types.GetUserID(ctx)).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetCreatedAt(a.CreatedAt).
@@ -406,6 +407,7 @@ func (r *addonAssociationRepository) CreateBulk(ctx context.Context, association
 			SetCancellationReason(a.CancellationReason).
 			SetNillableCancelledAt(a.CancelledAt).
 			SetMetadata(a.Metadata).
+			SetSyncedPriceSequence(a.SyncedPriceSequence).
 			SetStatus(string(a.Status)).
 			SetCreatedBy(types.GetUserID(ctx)).
 			SetUpdatedBy(types.GetUserID(ctx)).

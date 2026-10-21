@@ -44,6 +44,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 
 	_, err = zohoIntegration.InvoiceSvc.SyncInvoiceToZoho(ctx, zoho.ZohoInvoiceSyncRequest{
 		InvoiceID: input.InvoiceID,
+		Resync:    input.Resync,
 	})
 	if err != nil {
 		a.logger.Error(ctx, "Zoho Books invoice sync activity failed",
@@ -51,6 +52,9 @@ func (a *InvoiceSyncActivities) SyncInvoiceToZoho(ctx context.Context, input mod
 			"invoice_id", input.InvoiceID,
 			"tenant_id", input.TenantID,
 			"environment_id", input.EnvironmentID)
+		if zoho.IsZohoRequestRejected(err) {
+			return temporal.NewNonRetryableApplicationError("Zoho Books rejected the invoice sync", "ZohoRequestRejected", err)
+		}
 	}
 	return err
 }

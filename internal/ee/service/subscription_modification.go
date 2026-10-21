@@ -62,6 +62,9 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeLineItemChange:
 		return s.executeLineItemChange(ctx, subscriptionID, req.LineItemChangeParams, req.Checkout)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		if req.GroupedInvoicingParams.Action == dto.GroupedInvoicingActionModify {
+			return s.executeGroupedAddonChange(ctx, subscriptionID, req.GroupedInvoicingParams, req.Checkout)
+		}
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
 		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams)
@@ -96,6 +99,9 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 	case dto.SubscriptionModifyTypeLineItemChange:
 		return s.previewLineItemChange(ctx, subscriptionID, req.LineItemChangeParams)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		if req.GroupedInvoicingParams.Action == dto.GroupedInvoicingActionModify {
+			return s.previewGroupedAddonChange(ctx, subscriptionID, req.GroupedInvoicingParams)
+		}
 		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	case dto.SubscriptionModifyTypeTrialEnd:
 		return s.previewTrialEnd(ctx, subscriptionID, req.TrialEndParams)

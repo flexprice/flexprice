@@ -28,7 +28,7 @@ func Registrations() *Registry {
 		Registration{
 			EntityType: types.SystemEntityTypeSubscription, EntName: "Subscription",
 			Snapshot: snapshotOf(subscription.GetSubscriptionFromEnt),
-			Actions:  []Action{SubscriptionArchived, SubscriptionCancelled, SubscriptionPlanChanged, SubscriptionActivated},
+			Actions:  []Action{SubscriptionArchived, SubscriptionCancelled, SubscriptionPlanChanged, SubscriptionActivated, SubscriptionPaused, SubscriptionResumed},
 		},
 		Registration{
 			EntityType: types.SystemEntityTypeInvoice, EntName: "Invoice",

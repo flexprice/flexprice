@@ -33,7 +33,7 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 		if req.Method == dto.IntegrationSyncMethodPull {
 			return s.pullInvoice(ctx, req.EntityID)
 		}
-		return s.syncInvoice(ctx, req.EntityID)
+		return s.syncInvoice(ctx, req.EntityID, req.Resync)
 	case types.IntegrationEntityTypeCustomer:
 		return s.syncCustomer(ctx, req.EntityID)
 	default:
@@ -65,7 +65,7 @@ func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID stri
 	return nil
 }
 
-func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string) error {
+func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string, resync bool) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 		Payload:       payload,
 	}
 	return integrationevents.DispatchInvoiceVendorSync(
-		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "",
+		ctx, s.Config, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.Logger, event, "", resync,
 	)
 }
 

@@ -62,6 +62,7 @@ func setupPaddleWebhookHandler(t *testing.T, connRepo connection.Repository) *We
 		encryptionSvc,
 		nil,
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 
 	return NewWebhookHandler(

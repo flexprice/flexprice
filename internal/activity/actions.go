@@ -16,6 +16,8 @@ const (
 	SubscriptionCancelled   Action = "subscription.cancelled"
 	SubscriptionPlanChanged Action = "subscription.plan_changed"
 	SubscriptionActivated   Action = "subscription.activated"
+	SubscriptionPaused      Action = "subscription.paused"
+	SubscriptionResumed     Action = "subscription.resumed"
 )
 
 // Invoice

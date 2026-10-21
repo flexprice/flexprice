@@ -3051,6 +3051,7 @@ func (s *CreditGrantProrationSuite) SetupTest() {
 		MeterUsageRepo:               st.MeterUsageRepo,
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:            st.PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           st.AddonPriceSyncRepo,
 		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
 	}
 	s.subSvc = NewSubscriptionService(s.params)

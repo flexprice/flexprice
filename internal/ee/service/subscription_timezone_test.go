@@ -79,6 +79,7 @@ func (s *SubscriptionTimezoneTestSuite) SetupTest() {
 		ProrationCalculator:        s.GetCalculator(),
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 	}
 
 	s.subscriptionSvc = NewSubscriptionService(params)

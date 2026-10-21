@@ -553,6 +553,11 @@ func (o CheckoutSessionQueryOptions) applyEntityQueryOptions(_ context.Context, 
 						f.Configuration.SubscriptionID,
 						sqljson.Path("add_addon_params", "subscription_id"),
 					),
+					sqljson.ValueContains(
+						entCheckout.FieldConfiguration,
+						[]map[string]string{{"subscription_id": f.Configuration.SubscriptionID}},
+						sqljson.Path("add_addon_batch_params"),
+					),
 				))
 			}))
 		}

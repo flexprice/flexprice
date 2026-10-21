@@ -227,7 +227,6 @@ func validateCustomReport(def *analytics.ViewDefinition, maxRows int) error {
 	if err := def.Validate(); err != nil {
 		return err
 	}
-	entry, _ := analytics.LookupReport(string(def.Metrics[0]))
 	req := &dto.ReportQueryRequest{
 		Shape:      string(def.Shape),
 		Dimensions: def.Dimensions,
@@ -246,7 +245,8 @@ func validateCustomReport(def *analytics.ViewDefinition, maxRows int) error {
 			req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
 		}
 	}
-	if err := validateReportRequest(entry, req, maxRows); err != nil {
+	entry, err := req.ValidateForReport(string(def.Metrics[0]), maxRows)
+	if err != nil {
 		return err
 	}
 	days, _ := analytics.ReportRangeMaxDays(def.Time.Range)
@@ -527,7 +527,7 @@ func (s *analyticsService) ListReports(_ context.Context) (*dto.ReportCatalogRes
 			Category:        e.Category,
 			Kind:            e.Kind,
 			ValueType:       e.ValueType,
-			HigherIsBetter:  e.HigherIsBetter,
+			Improvement:     e.Improvement,
 			DefaultShape:    string(e.DefaultShape),
 			SupportsCompare: e.SupportsCompare,
 			VariantOf:       string(e.VariantOf),
@@ -551,114 +551,12 @@ func (s *analyticsService) ListReports(_ context.Context) (*dto.ReportCatalogRes
 	return out, nil
 }
 
-func validateReportRequest(e *analytics.ReportCatalogEntry, req *dto.ReportQueryRequest, maxRows int) error {
-	shapes := make([]string, len(e.Shapes))
-	for i, sh := range e.Shapes {
-		shapes[i] = string(sh)
-	}
-	if !slices.Contains(shapes, req.Shape) {
-		return ierr.NewErrorf("shape %q not allowed", req.Shape).
-			WithHint("shape must be one of: " + strings.Join(shapes, ", ")).
-			Mark(ierr.ErrValidation)
-	}
-	dims := make([]string, len(e.Dimensions))
-	for i, d := range e.Dimensions {
-		dims[i] = d.Key
-	}
-	for _, d := range req.Dimensions {
-		if !slices.Contains(dims, d) {
-			return ierr.NewErrorf("dimension %q not allowed", d).
-				WithHint("dimensions must be one of: " + strings.Join(dims, ", ")).
-				Mark(ierr.ErrValidation)
-		}
-	}
-	if req.Grain != "" && req.Shape != string(types.ShapeTimeseries) {
-		return ierr.NewError("grain only applies to timeseries").
-			WithHint("omit grain unless shape is timeseries").
-			Mark(ierr.ErrValidation)
-	}
-	if req.Limit < 0 || (maxRows > 0 && req.Limit > maxRows) {
-		return ierr.NewErrorf("limit %d not allowed", req.Limit).
-			WithHint(fmt.Sprintf("limit must be between 0 and %d (0 = no limit)", maxRows)).
-			Mark(ierr.ErrValidation)
-	}
-	if req.Limit > 0 && req.Shape != string(types.ShapeBreakdown) {
-		return ierr.NewError("limit only applies to breakdown").
-			WithHint("omit limit unless shape is breakdown").
-			Mark(ierr.ErrValidation)
-	}
-	bm, _ := analytics.LookupBillingMetric(e.Key)
-	hasCurrency := bm != nil && bm.Currency
-	if req.Currency != "" && !hasCurrency {
-		return ierr.NewError("report has no currency").
-			WithHint("omit currency for this report").
-			Mark(ierr.ErrValidation)
-	}
-	if len(req.Sort) > 0 {
-		if req.Shape != string(types.ShapeBreakdown) {
-			return ierr.NewError("sort only applies to breakdown").
-				WithHint("omit sort unless shape is breakdown").
-				Mark(ierr.ErrValidation)
-		}
-		fields := append(slices.Clone(dims), string(e.Key))
-		if req.Compare != "" {
-			fields = append(fields, string(e.Key)+"_prev")
-		}
-		for _, so := range req.Sort {
-			if so.Dir != "asc" && so.Dir != "desc" {
-				return ierr.NewErrorf("sort dir %q not allowed", so.Dir).
-					WithHint("dir must be asc or desc").
-					Mark(ierr.ErrValidation)
-			}
-			if !slices.Contains(fields, so.Field) {
-				return ierr.NewErrorf("sort field %q not allowed", so.Field).
-					WithHint("sort field must be one of: " + strings.Join(fields, ", ")).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
-	if req.Shape == string(types.ShapeTimeseries) && req.Grain != "" {
-		grains := make([]string, len(e.Grains))
-		for i, g := range e.Grains {
-			grains[i] = string(g)
-		}
-		if !slices.Contains(grains, req.Grain) {
-			return ierr.NewErrorf("grain %q not allowed", req.Grain).
-				WithHint("grain must be one of: " + strings.Join(grains, ", ")).
-				Mark(ierr.ErrValidation)
-		}
-	}
-	if req.Compare != "" {
-		if !e.SupportsCompare || (req.Compare != "previous_period" && req.Compare != "previous_year") {
-			return ierr.NewErrorf("compare %q not allowed", req.Compare).
-				WithHint("compare must be previous_period or previous_year").
-				Mark(ierr.ErrValidation)
-		}
-	}
-	for _, f := range req.Filters {
-		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) {
-			return ierr.NewErrorf("filter field %q not allowed", f.Field).
-				WithHint("filter fields must be one of: currency, " + strings.Join(dims, ", ")).
-				Mark(ierr.ErrValidation)
-		}
-		if (f.Op != "eq" && f.Op != "in") || len(f.Value) == 0 || (f.Op == "eq" && len(f.Value) != 1) {
-			return ierr.NewErrorf("filter on %q invalid", f.Field).
-				WithHint("op must be eq (1 value) or in (1+ values)").
-				Mark(ierr.ErrValidation)
-		}
-	}
-	return nil
-}
-
 func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
 	if err := s.requireReports(); err != nil {
 		return nil, err
 	}
-	entry, ok := analytics.LookupReport(key)
-	if !ok {
-		return nil, ierr.NewErrorf("report %q not found", key).Mark(ierr.ErrNotFound)
-	}
-	if err := validateReportRequest(entry, req, s.ReportsRepo.MaxRows()); err != nil {
+	entry, err := req.ValidateForReport(key, s.ReportsRepo.MaxRows())
+	if err != nil {
 		return nil, err
 	}
 

@@ -21,23 +21,27 @@ type AddonAssociation struct {
 	CancellationReason string                           `json:"cancellation_reason,omitempty"`
 	CancelledAt        *time.Time                       `json:"cancelled_at,omitempty"`
 	Metadata           map[string]interface{}           `json:"metadata,omitempty"`
+	// SyncedPriceSequence is the addon price sequence this association's line items
+	// have been reconciled up to. Written only by the addon usage-price sync.
+	SyncedPriceSequence int64 `json:"synced_price_sequence,omitempty"`
 
 	types.BaseModel
 }
 
 func FromEnt(ent *ent.AddonAssociation) *AddonAssociation {
 	return &AddonAssociation{
-		ID:                 ent.ID,
-		EnvironmentID:      ent.EnvironmentID,
-		EntityID:           ent.EntityID,
-		EntityType:         types.AddonAssociationEntityType(ent.EntityType),
-		AddonID:            ent.AddonID,
-		StartDate:          ent.StartDate,
-		EndDate:            ent.EndDate,
-		AddonStatus:        types.AddonStatus(ent.AddonStatus),
-		CancellationReason: ent.CancellationReason,
-		CancelledAt:        ent.CancelledAt,
-		Metadata:           ent.Metadata,
+		ID:                  ent.ID,
+		EnvironmentID:       ent.EnvironmentID,
+		EntityID:            ent.EntityID,
+		EntityType:          types.AddonAssociationEntityType(ent.EntityType),
+		AddonID:             ent.AddonID,
+		StartDate:           ent.StartDate,
+		EndDate:             ent.EndDate,
+		AddonStatus:         types.AddonStatus(ent.AddonStatus),
+		CancellationReason:  ent.CancellationReason,
+		CancelledAt:         ent.CancelledAt,
+		Metadata:            ent.Metadata,
+		SyncedPriceSequence: ent.SyncedPriceSequence,
 		BaseModel: types.BaseModel{
 			CreatedAt: ent.CreatedAt,
 			UpdatedAt: ent.UpdatedAt,

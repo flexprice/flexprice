@@ -694,6 +694,11 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the addon price sequence this association's line items
+          have been reconciled up to. Written only by the addon usage-price sync.
+        type: integer
       tenant_id:
         type: string
       updated_at:
@@ -755,12 +760,26 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription:
         $ref: '#/definitions/SubscriptionResponse'
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the addon price sequence this association's line items
+          have been reconciled up to. Written only by the addon usage-price sync.
+        type: integer
       tenant_id:
         type: string
       updated_at:
         type: string
       updated_by:
         type: string
+    type: object
+  AddonPriceSyncStatusResponse:
+    properties:
+      current_sequence:
+        type: integer
+      synced:
+        type: boolean
+      unsynced_association_count:
+        type: integer
     type: object
   AddonResponse:
     properties:
@@ -789,6 +808,13 @@ definitions:
         type: object
       name:
         type: string
+      price_sync_status:
+        allOf:
+        - $ref: '#/definitions/AddonPriceSyncStatusResponse'
+        description: |-
+          PriceSyncStatus reports how many associations are still behind this addon's
+          current usage-price sequence. Only populated on GetAddons when
+          `expand=price_sync_status` is requested.
       prices:
         description: Optional expanded fields
         items:
@@ -1164,7 +1190,7 @@ definitions:
           For "scheduled_date", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).
           For "immediate", accepts past/current dates only; use "scheduled_date" for future dates.
         type: string
-      cancel_immediately_inovice_policy:
+      cancel_immediately_invoice_policy:
         allOf:
         - $ref: '#/definitions/types.CancelImmediatelyInvoicePolicy'
         description: CancelImmediatelyInvoicePolicy controls whether to generate a
@@ -1229,6 +1255,8 @@ definitions:
       id:
         type: string
       start_date:
+        type: string
+      subscription_id:
         type: string
     type: object
   ChangedAddonAssociationAction:
@@ -1312,6 +1340,8 @@ definitions:
       quantity:
         type: string
       start_date:
+        type: string
+      subscription_id:
         type: string
     type: object
   ChangedLineItemAction:
@@ -1838,6 +1868,13 @@ definitions:
         type: object
       name:
         type: string
+      price_sync_status:
+        allOf:
+        - $ref: '#/definitions/AddonPriceSyncStatusResponse'
+        description: |-
+          PriceSyncStatus reports how many associations are still behind this addon's
+          current usage-price sequence. Only populated on GetAddons when
+          `expand=price_sync_status` is requested.
       prices:
         description: Optional expanded fields
         items:
@@ -4769,10 +4806,19 @@ definitions:
     enum:
     - add
     - remove
+    - modify
     type: string
     x-enum-varnames:
     - GroupedInvoicingActionAdd
     - GroupedInvoicingActionRemove
+    - GroupedInvoicingActionModify
+  GroupedInvoicingChange:
+    properties:
+      addon_bulk_params:
+        $ref: '#/definitions/SubModifyBulkAddonParams'
+      subscription_id:
+        type: string
+    type: object
   GroupedInvoicingChildRequest:
     properties:
       addons:
@@ -5773,6 +5819,39 @@ definitions:
     required:
     - price_id
     type: object
+  PauseSubscriptionRequest:
+    description: Pauses an active subscription now. Usage and arrear fixed charges
+      up to the pause are billed on a closing invoice.
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        description: |-
+          Metadata stored on the pause
+          @Example {"requested_by": "customer", "channel": "support_ticket"}
+        type: object
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: |-
+          ProrationBehavior controls proration on the closing invoice. Defaults to none.
+          @Description none bills arrear fixed charges for the full period and gives no credit. create_prorations bills arrear fixed charges for the used part of the period and credits the unused part of advance fixed charges to the wallet.
+      reason:
+        description: |-
+          Reason for pausing the subscription
+          @Description Optional reason for the pause. Maximum 255 characters
+          @Example "Customer requested temporary suspension"
+        maxLength: 255
+        type: string
+    type: object
+  PauseSubscriptionResponse:
+    description: The paused subscription and its pause
+    properties:
+      pause:
+        $ref: '#/definitions/SubscriptionPauseResponse'
+      subscription:
+        $ref: '#/definitions/SubscriptionResponse'
+    type: object
   PaymentAttemptResponse:
     properties:
       attempt_number:
@@ -6387,6 +6466,32 @@ definitions:
     required:
     - addon_association_id
     type: object
+  ResumeSubscriptionRequest:
+    description: Resumes a paused subscription now. The billing anchor is kept, so
+      the first period runs from the resume time to the next billing date.
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        description: |-
+          Metadata merged into the pause
+          @Example {"resumed_by": "admin"}
+        type: object
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: |-
+          ProrationBehavior, when sent, is saved on the subscription and prices the period that starts at the resume.
+          @Description none bills fixed charges of the first period at the full price. create_prorations bills them for the remaining part of the period. When omitted, the subscription's current proration_behavior is used.
+    type: object
+  ResumeSubscriptionResponse:
+    description: The resumed subscription and the pause it ended
+    properties:
+      pause:
+        $ref: '#/definitions/SubscriptionPauseResponse'
+      subscription:
+        $ref: '#/definitions/SubscriptionResponse'
+    type: object
   RevenueAnalyticsRequest:
     properties:
       allocation_policy:
@@ -6744,8 +6849,14 @@ definitions:
       action:
         allOf:
         - $ref: '#/definitions/GroupedInvoicingAction'
-        description: Action specifies whether to add or remove the child subscriptions
-          from grouped invoicing.
+        description: Action adds or removes child subscriptions, or modifies addons
+          across the group ('modify').
+      changes:
+        description: Changes is required for action 'modify'; the path subscription
+          is the parent.
+        items:
+          $ref: '#/definitions/GroupedInvoicingChange'
+        type: array
       child_subscription_ids:
         items:
           type: string
@@ -7290,6 +7401,59 @@ definitions:
     - SubscriptionModifyTypeTax
     - SubscriptionModifyTypeAddon
     - SubscriptionModifyTypeLineItemChange
+  SubscriptionPauseResponse:
+    description: Response object containing subscription pause information
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the pause
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription pause
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      original_period_end:
+        description: OriginalPeriodEnd is the end of the billing period when the pause
+          was created
+        type: string
+      original_period_start:
+        description: OriginalPeriodStart is the start of the billing period when the
+          pause was created
+        type: string
+      pause_end:
+        description: PauseEnd is when the pause will end (null for indefinite)
+        type: string
+      pause_mode:
+        $ref: '#/definitions/types.PauseMode'
+      pause_start:
+        description: PauseStart is when the pause actually started
+        type: string
+      pause_status:
+        $ref: '#/definitions/types.PauseStatus'
+      reason:
+        description: Reason is the reason for pausing
+        type: string
+      resume_mode:
+        $ref: '#/definitions/types.ResumeMode'
+      resumed_at:
+        description: ResumedAt is when the pause was actually ended (if manually resumed)
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        description: SubscriptionID is the identifier for the subscription
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -8054,6 +8218,11 @@ definitions:
         $ref: '#/definitions/types.TaxRateEntityType'
       environment_id:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: ExternalTaxDetails is what the engine returned about this tax.
+          Null on a native row.
       id:
         type: string
       idempotency_key:
@@ -8062,6 +8231,11 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: Provider is the engine that produced this row. Empty means the
+          native engine.
       status:
         $ref: '#/definitions/types.Status'
       tax_amount:
@@ -8073,7 +8247,18 @@ definitions:
       tax_rate:
         $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
+        description: 'Null when an external engine calculated the tax: there is no
+          Flexprice rate to point at.'
         type: string
+      tax_transaction_id:
+        description: TaxTransactionID is the provider transaction recording the filed
+          tax, stamped at commit.
+        type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: TaxTransactionType is what the provider transaction did. Empty
+          means a filing.
       taxable_amount:
         type: string
       tenant_id:
@@ -8861,6 +9046,8 @@ definitions:
       cancel_at:
         type: string
       cancel_at_period_end:
+        description: Pointer so omitting the field leaves the stored value unchanged;
+          sending it sets the flag.
         type: boolean
       parent_subscription_id:
         description: ParentSubscriptionID sets or clears the parent subscription.
@@ -10894,6 +11081,10 @@ definitions:
     - CheckoutActionPayInvoice
   types.CheckoutConfiguration:
     properties:
+      add_addon_batch_params:
+        items:
+          $ref: '#/definitions/types.AddAddonParams'
+        type: array
       add_addon_params:
         $ref: '#/definitions/types.AddAddonParams'
       create_subscription_params:
@@ -11531,6 +11722,57 @@ definitions:
     - entity_type
     - field_key
     type: object
+  types.ExternalTaxDetails:
+    properties:
+      calculation_expires_at:
+        description: CalculationExpiresAt is when the calculation can no longer be
+          filed, RFC3339.
+        type: string
+      calculation_id:
+        description: CalculationID is the provider calculation this row was written
+          from. Commit files it.
+        type: string
+      display_name:
+        description: |-
+          DisplayName is the engine's own name for the tax, such as
+          "Integrated goods and services tax (IGST)".
+        type: string
+      jurisdiction:
+        $ref: '#/definitions/types.TaxJurisdiction'
+      percentage:
+        description: |-
+          Percentage is the resolved rate, such as "18.0". This is what was charged, not the
+          rate that would apply if the tax were imposed.
+        type: string
+      reference:
+        description: |-
+          Reference is what this row's provider transaction was filed under. It is unique across
+          every transaction on the account, so it is also the only way back to a transaction whose
+          id failed to land here.
+        type: string
+      reversal:
+        allOf:
+        - $ref: '#/definitions/types.TaxReversal'
+        description: Reversal is set only on a row that records tax being un-filed.
+      sourcing:
+        description: Sourcing is whether the jurisdiction followed the seller's address
+          or the buyer's.
+        type: string
+      tax_code:
+        description: |-
+          TaxCode is the product tax category the engine priced against, such as txcd_10000000.
+          It belongs to the line rather than the rate, so today every row on an invoice carries
+          the account default. It only varies once tax is calculated per line item.
+        type: string
+      tax_type:
+        description: TaxType is the tax family, such as vat, igst or sales_tax.
+        type: string
+      taxability_reason:
+        description: |-
+          TaxabilityReason is why the engine charged what it did, such as standard_rated or
+          reverse_charge. Recorded, not yet rendered.
+        type: string
+    type: object
   types.FXRateFilter:
     properties:
       end_time:
@@ -11873,6 +12115,8 @@ definitions:
     - MANUAL
     - AUTO_INVOICE_THRESHOLD
     - WALLET_AUTO_TOPUP
+    - SUBSCRIPTION_PAUSED
+    - SUBSCRIPTION_RESUME
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -11884,6 +12128,8 @@ definitions:
     - InvoiceBillingReasonManual
     - InvoiceBillingReasonAutoInvoiceThreshold
     - InvoiceBillingReasonWalletAutoTopup
+    - InvoiceBillingReasonSubscriptionPaused
+    - InvoiceBillingReasonSubscriptionResume
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -12327,6 +12573,8 @@ definitions:
     - 60 NET
     - 75 NET
     - 90 NET
+    - END_OF_MONTH
+    - END_OF_NEXT_MONTH
     type: string
     x-enum-varnames:
     - PaymentTerms15Net
@@ -12335,6 +12583,8 @@ definitions:
     - PaymentTerms60Net
     - PaymentTerms75Net
     - PaymentTerms90Net
+    - PaymentTermsEndOfMonth
+    - PaymentTermsEndOfNextMonth
   types.PlanFilter:
     properties:
       end_time:
@@ -13245,22 +13495,51 @@ definitions:
     enum:
     - customer_exempt
     - no_tax_configured
+    - reverse_charge
+    - not_collecting
+    - not_subject_to_tax
+    - not_supported
     type: string
     x-enum-varnames:
     - TaxExemptionReasonCustomerExempt
     - TaxExemptionReasonNoTaxConfigured
+    - TaxExemptionReasonReverseCharge
+    - TaxExemptionReasonNotCollecting
+    - TaxExemptionReasonNotSubjectToTax
+    - TaxExemptionReasonNotSupported
+  types.TaxJurisdiction:
+    properties:
+      country:
+        type: string
+      display_name:
+        type: string
+      level:
+        type: string
+      state:
+        type: string
+    type: object
+  types.TaxProvider:
+    enum:
+    - flexprice
+    - stripe
+    type: string
+    x-enum-varnames:
+    - TaxProviderFlexprice
+    - TaxProviderStripe
   types.TaxRateEntityType:
     enum:
     - customer
     - subscription
     - invoice
     - tenant
+    - credit_note
     type: string
     x-enum-varnames:
     - TaxRateEntityTypeCustomer
     - TaxRateEntityTypeSubscription
     - TaxRateEntityTypeInvoice
     - TaxRateEntityTypeTenant
+    - TaxRateEntityTypeCreditNote
   types.TaxRateScope:
     enum:
     - INTERNAL
@@ -13285,6 +13564,29 @@ definitions:
     type: string
     x-enum-varnames:
     - TaxRateTypePercentage
+  types.TaxReversal:
+    properties:
+      mode:
+        $ref: '#/definitions/types.TaxReversalMode'
+      original_transaction:
+        type: string
+    type: object
+  types.TaxReversalMode:
+    enum:
+    - full
+    - partial
+    type: string
+    x-enum-varnames:
+    - TaxReversalModeFull
+    - TaxReversalModePartial
+  types.TaxTransactionType:
+    enum:
+    - filing
+    - reversal
+    type: string
+    x-enum-varnames:
+    - TaxTransactionTypeFiling
+    - TaxTransactionTypeReversal
   types.TaxTreatment:
     enum:
     - taxable
@@ -14646,12 +14948,25 @@ definitions:
         type: string
       currency:
         type: string
+      external_tax_details:
+        allOf:
+        - $ref: '#/definitions/types.ExternalTaxDetails'
+        description: |-
+          ExternalTaxDetails carries the name, code, rate and jurisdiction an external engine
+          resolved. An external row points at no Flexprice rate, so this is the only description
+          of what was charged.
       id:
         type: string
       metadata:
         additionalProperties:
           type: string
         type: object
+      provider:
+        allOf:
+        - $ref: '#/definitions/types.TaxProvider'
+        description: |-
+          Provider names the engine that produced this row. Empty means the native engine, which
+          is what tells a subscriber an empty tax_rate_id is external rather than missing data.
       tax_amount:
         type: string
       tax_behavior:
@@ -14660,6 +14975,12 @@ definitions:
         $ref: '#/definitions/webhookDto.TaxRate'
       tax_rate_id:
         type: string
+      tax_transaction_type:
+        allOf:
+        - $ref: '#/definitions/types.TaxTransactionType'
+        description: |-
+          TaxTransactionType is empty for a filing and reversal for tax being un-filed. A reversal
+          is not a tax the invoice carries, so a subscriber totalling tax must skip it.
       taxable_amount:
         type: string
     type: object
@@ -15063,6 +15384,48 @@ paths:
       summary: Get addon entitlements
       tags:
       - Entitlements
+  /addons/{id}/sync/subscriptions:
+    post:
+      consumes:
+      - application/json
+      description: Use when you have changed an addon's usage charges and need to
+        push them to all active subscriptions holding the addon. Returns workflow
+        ID.
+      operationId: syncAddonPrices
+      parameters:
+      - description: Addon ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TemporalWorkflowResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Synchronize addon prices
+      tags:
+      - Addons
   /addons/lookup/{lookup_key}:
     get:
       description: Use when resolving an addon by external id (e.g. from your product
@@ -20909,6 +21272,94 @@ paths:
       tags:
       - Subscriptions
       x-scope: read
+  /subscriptions/{id}/pause:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when a customer stops temporarily. Pauses an active subscription
+        now: usage and arrear fixed charges up to the pause are billed on a closing
+        invoice, and every paused period after it gets a $0 skipped invoice.'
+      operationId: pauseSubscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Pause subscription request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/PauseSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PauseSubscriptionResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Pause subscription
+      tags:
+      - Subscriptions
+  /subscriptions/{id}/resume:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when a paused customer comes back. Resumes a paused subscription
+        now on its existing billing anchor: the first period runs from the resume
+        to the next billing date and its advance charges are invoiced at once.'
+      operationId: resumeSubscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Resume subscription request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ResumeSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ResumeSubscriptionResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Resume subscription
+      tags:
+      - Subscriptions
   /subscriptions/{id}/schedules:
     get:
       consumes:

@@ -2,13 +2,18 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
+	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -27,6 +32,10 @@ type AddonService interface {
 	// Addon Association operations
 	ListAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
 	GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) (*dto.ListAddonAssociationsResponse, error)
+
+	// SyncAddonPrices reconciles existing subscriptions holding the addon with
+	// its current usage prices (overridden + newly added usage charges).
+	SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error)
 }
 
 type addonService struct {
@@ -271,6 +280,18 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		}
 	}
 
+	// If price sync status expansion is requested, compute it per addon.
+	syncStatusByAddonID := make(map[string]*dto.AddonPriceSyncStatusResponse)
+	if filter.GetExpand().Has(types.ExpandPriceSyncStatus) {
+		for _, addonID := range addonIDs {
+			status, err := s.addonPriceSyncStatus(ctx, addonID)
+			if err != nil {
+				return nil, err
+			}
+			syncStatusByAddonID[addonID] = status
+		}
+	}
+
 	// Attach expanded data to responses
 	for i, addon := range result {
 		if prices, ok := pricesByAddonID[addon.ID]; ok {
@@ -281,6 +302,9 @@ func (s *addonService) GetAddons(ctx context.Context, filter *types.AddonFilter)
 		}
 		if creditGrants, ok := creditGrantsByAddonID[addon.ID]; ok {
 			response.Items[i].CreditGrants = creditGrants
+		}
+		if syncStatus, ok := syncStatusByAddonID[addon.ID]; ok {
+			response.Items[i].PriceSyncStatus = syncStatus
 		}
 	}
 
@@ -571,4 +595,334 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 	}
 
 	return associations, nil
+}
+
+// SyncAddonPrices reconciles existing subscriptions that hold the addon with its
+// current usage prices. It is keyed on the addon association: the target sequence
+// is max(prices.sequence) over the addon's published usage prices, and each
+// association is stamped to it after reconciliation. Usage-only, raises no
+// invoice, idempotent via stamping. The plan price sync (SyncPlanPricesV2) is a
+// close reference for the overall shape; this differs by being per-association
+// and by matching catalog prices with the divisor-compatible addon attach rule.
+func (s *addonService) SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error) {
+	syncStart := time.Now()
+
+	if addonID == "" {
+		return nil, ierr.NewError("addon ID is required").
+			WithHint("Please provide a valid addon ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	addonModel, err := s.AddonRepo.GetByID(ctx, addonID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetSeq, err := s.AddonPriceSyncRepo.CurrentAddonSequence(ctx, addonID)
+	if err != nil {
+		return nil, err
+	}
+	if targetSeq == 0 {
+		s.Logger.Info(ctx, "no addon usage prices to sync", "addon_id", addonID)
+		return &dto.SyncAddonPricesResponse{
+			AddonID: addonID,
+			Message: "No addon usage prices to sync",
+		}, nil
+	}
+
+	activeUsagePrices, err := s.activeAddonUsagePrices(ctx, addonID)
+	if err != nil {
+		return nil, err
+	}
+
+	// targetSeq is MAX over all published usage prices, but the create pass only
+	// materializes non-expired ones. Stamping to targetSeq is still safe: a
+	// future-start price is created here (with its future start), and an expired
+	// price needs no line item (the terminate pass ends any existing one), so every
+	// price up to targetSeq is created, already present, overridden, or ended before
+	// an association is stamped past it.
+
+	addonResp := &dto.AddonResponse{Addon: addonModel}
+
+	lineItemsFound := 0
+	lineItemsCreated := 0
+	lineItemsTerminated := 0
+	associationsProcessed := 0
+
+	// Page through behind associations doing create -> terminate -> stamp. Stamping
+	// is the cursor: stamped associations fall out of the next discovery.
+	for {
+		refs, listErr := s.AddonPriceSyncRepo.ListBehindAssociations(ctx, addonpricesync.ListBehindAssociationsParams{
+			AddonID:   addonID,
+			TargetSeq: targetSeq,
+			Limit:     4000,
+		})
+		if listErr != nil {
+			return nil, listErr
+		}
+		if len(refs) == 0 {
+			break
+		}
+
+		associationIDs := lo.Map(refs, func(r addonpricesync.AddonAssociationRef, _ int) string { return r.AssociationID })
+
+		found, created, createErr := s.createAddonSyncLineItems(ctx, addonResp, activeUsagePrices, refs)
+		if createErr != nil {
+			return nil, createErr
+		}
+		lineItemsFound += found
+		lineItemsCreated += created
+
+		terminated, termErr := s.AddonPriceSyncRepo.TerminateEndedAddonLineItems(ctx, addonpricesync.TerminateEndedAddonLineItemsParams{
+			AddonID:        addonID,
+			AssociationIDs: associationIDs,
+		})
+		if termErr != nil {
+			return nil, termErr
+		}
+		lineItemsTerminated += terminated
+
+		stamped, stampErr := s.AddonPriceSyncRepo.StampAssociations(ctx, addonpricesync.StampAssociationsParams{
+			TargetSeq:      targetSeq,
+			AssociationIDs: associationIDs,
+		})
+		if stampErr != nil {
+			return nil, stampErr
+		}
+		associationsProcessed += stamped
+	}
+
+	s.Logger.Info(ctx, "completed addon usage price synchronization",
+		"addon_id", addonID,
+		"target_sequence", targetSeq,
+		"line_items_created", lineItemsCreated,
+		"line_items_terminated", lineItemsTerminated,
+		"associations_processed", associationsProcessed,
+		"total_duration_ms", time.Since(syncStart).Milliseconds())
+
+	return &dto.SyncAddonPricesResponse{
+		AddonID: addonID,
+		Message: "Addon usage prices synchronized to subscription line items successfully",
+		Summary: dto.SyncAddonPricesSummary{
+			LineItemsFoundForCreation: lineItemsFound,
+			LineItemsCreated:          lineItemsCreated,
+			LineItemsTerminated:       lineItemsTerminated,
+		},
+	}, nil
+}
+
+// addonPriceSyncStatus reports how many of the addon's active recurring
+// associations are still behind the addon's current usage-price sequence, so the
+// frontend can disable the sync trigger once every association is caught up.
+func (s *addonService) addonPriceSyncStatus(ctx context.Context, addonID string) (*dto.AddonPriceSyncStatusResponse, error) {
+	targetSeq, err := s.AddonPriceSyncRepo.CurrentAddonSequence(ctx, addonID)
+	if err != nil {
+		return nil, err
+	}
+
+	if targetSeq == 0 {
+		return &dto.AddonPriceSyncStatusResponse{Synced: true}, nil
+	}
+
+	unsyncedCount, err := s.AddonPriceSyncRepo.CountUnsyncedAssociations(ctx, addonID, targetSeq)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AddonPriceSyncStatusResponse{
+		CurrentSequence:          targetSeq,
+		UnsyncedAssociationCount: unsyncedCount,
+		Synced:                   unsyncedCount == 0,
+	}, nil
+}
+
+// activeAddonUsagePrices returns the addon's published usage prices that are not
+// yet ended — the candidates for the create pass. Future-start prices are included
+// (their line item is created with a future start); only prices whose end_date is
+// already in the past are excluded.
+func (s *addonService) activeAddonUsagePrices(ctx context.Context, addonID string) ([]*domainPrice.Price, error) {
+	filter := types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{addonID}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
+		WithStatus(types.StatusPublished).
+		WithAllowExpiredPrices(true)
+
+	prices, err := s.PriceRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	return lo.Filter(prices, func(p *domainPrice.Price, _ int) bool {
+		if p.Type != types.PRICE_TYPE_USAGE {
+			return false
+		}
+		return p.EndDate == nil || p.EndDate.After(now)
+	}), nil
+}
+
+// addonLineItemKey identifies an existing addon line item by its association and price id.
+type addonLineItemKey struct {
+	associationID string
+	priceID       string
+}
+
+// addonOverrideKey identifies a per-subscription override by subscription id and the
+// overridden charge's lineage root.
+type addonOverrideKey struct {
+	subscriptionID string
+	rootPriceID    string
+}
+
+// createAddonSyncLineItems creates missing usage line items for a page of behind
+// associations. A charge is skipped when the association already has a line item
+// for it, or when the subscription overrode the charge (subscription-scoped price
+// tracing to the charge's lineage root).
+func (s *addonService) createAddonSyncLineItems(
+	ctx context.Context,
+	addonResp *dto.AddonResponse,
+	activeUsagePrices []*domainPrice.Price,
+	refs []addonpricesync.AddonAssociationRef,
+) (found int, created int, err error) {
+	if len(activeUsagePrices) == 0 {
+		return 0, 0, nil
+	}
+
+	associationIDs := lo.Map(refs, func(r addonpricesync.AddonAssociationRef, _ int) string { return r.AssociationID })
+	subscriptionIDs := lo.Uniq(lo.Map(refs, func(r addonpricesync.AddonAssociationRef, _ int) string { return r.SubscriptionID }))
+
+	// Must mirror the discovery filter: SubRepo.List defaults to active-only when
+	// subscription_status is unset, which would drop trialing subs.
+	subFilter := types.NewNoLimitSubscriptionFilter()
+	subFilter.SubscriptionIDs = subscriptionIDs
+	subFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+	subs, err := s.SubRepo.List(ctx, subFilter)
+	if err != nil {
+		return 0, 0, err
+	}
+	subMap := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
+
+	// Existing addon line items for the page's associations -> (association, price) set.
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.AddonAssociationIDs = associationIDs
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	// Match the plan sync exists guard (status = 'published'); the no-limit filter
+	// leaves status unset, which the repo reads as "all statuses".
+	liFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	existingItems, err := s.SubscriptionLineItemRepo.List(ctx, liFilter)
+	if err != nil {
+		return 0, 0, err
+	}
+	existing := make(map[addonLineItemKey]struct{}, len(existingItems))
+	for _, li := range existingItems {
+		if li.AddonAssociationID == nil {
+			continue
+		}
+		existing[addonLineItemKey{associationID: *li.AddonAssociationID, priceID: li.PriceID}] = struct{}{}
+	}
+
+	// Subscription-scoped override prices for the page's subs -> (subscription, root) set.
+	overrideFilter := types.NewNoLimitPriceFilter().
+		WithEntityIDs(subscriptionIDs).
+		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION).
+		WithStatus(types.StatusPublished).
+		WithAllowExpiredPrices(true)
+	overridePrices, err := s.PriceRepo.List(ctx, overrideFilter)
+	if err != nil {
+		return 0, 0, err
+	}
+	overridden := make(map[addonOverrideKey]struct{}, len(overridePrices))
+	for _, op := range overridePrices {
+		if op.ParentPriceID == "" {
+			continue
+		}
+		overridden[addonOverrideKey{subscriptionID: op.EntityID, rootPriceID: op.ParentPriceID}] = struct{}{}
+	}
+
+	usageResponses := lo.Map(activeUsagePrices, func(p *domainPrice.Price, _ int) *dto.PriceResponse {
+		return &dto.PriceResponse{Price: p}
+	})
+
+	var toCreate []*subscription.SubscriptionLineItem
+	for _, ref := range refs {
+		sub, ok := subMap[ref.SubscriptionID]
+		if !ok {
+			continue
+		}
+		for _, pr := range filterAddonPricesForSubscription(usageResponses, sub) {
+			price := pr.Price
+			if _, exists := existing[addonLineItemKey{associationID: ref.AssociationID, priceID: price.ID}]; exists {
+				continue
+			}
+			if _, isOverridden := overridden[addonOverrideKey{subscriptionID: ref.SubscriptionID, rootPriceID: price.GetRootPriceID()}]; isOverridden {
+				continue
+			}
+			toCreate = append(toCreate, s.buildAddonSyncLineItem(ctx, sub, price, addonResp, ref.AssociationID, ref.EndDate))
+		}
+	}
+
+	found = len(toCreate)
+	if found == 0 {
+		return 0, 0, nil
+	}
+
+	const bulkInsertBatchSize = 1500
+	for i := 0; i < len(toCreate); i += bulkInsertBatchSize {
+		end := min(i+bulkInsertBatchSize, len(toCreate))
+		if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, toCreate[i:end]); err != nil {
+			s.Logger.Error(ctx, "failed to create addon line items in bulk batch",
+				"addon_id", addonResp.ID,
+				"batch_start", i,
+				"batch_end", end,
+				"error", err)
+			return found, created, err
+		}
+		created += end - i
+	}
+	return found, created, nil
+}
+
+// buildAddonSyncLineItem builds an addon usage line item for the association,
+// reusing the shared line-item builder and stamping the association id.
+func (s *addonService) buildAddonSyncLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	price *domainPrice.Price,
+	addonResp *dto.AddonResponse,
+	associationID string,
+	associationEndDate *time.Time,
+) *subscription.SubscriptionLineItem {
+	metadata := make(map[string]string, len(price.Metadata)+1)
+	for k, v := range price.Metadata {
+		metadata[k] = v
+	}
+	metadata["added_by"] = "addon_sync_api"
+
+	// Cap the line item at the association's end date (set when the addon is cancelled
+	// at period end) so a synced line never bills past the association.
+	endDate := price.EndDate
+	if associationEndDate != nil && (endDate == nil || associationEndDate.Before(*endDate)) {
+		endDate = associationEndDate
+	}
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:     price.ID,
+		Quantity:    decimal.Zero,
+		Metadata:    metadata,
+		DisplayName: price.DisplayName,
+		StartDate:   price.StartDate,
+		EndDate:     endDate,
+	}
+
+	lineItem := req.ToSubscriptionLineItem(ctx, dto.LineItemParams{
+		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Price:        &dto.PriceResponse{Price: price},
+		Addon:        addonResp,
+		EntityType:   types.SubscriptionLineItemEntityTypeAddon,
+	})
+	lineItem.AddonAssociationID = lo.ToPtr(associationID)
+	return lineItem
 }

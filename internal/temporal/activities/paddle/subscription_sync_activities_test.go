@@ -67,6 +67,7 @@ func buildActivityFactory(
 		encSvc,
 		nil, // TemporalService — not needed in activity unit tests
 		testutil.NewInMemoryRedisLocker(nil),
+		nil,
 	)
 }
 

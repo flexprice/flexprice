@@ -64,6 +64,7 @@ func NewHandler(deps Deps) Handler {
 				h.deps.Logger,
 				event,
 				msg.UUID,
+				false,
 			)
 		},
 		types.WebhookEventInvoiceUpdate: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {

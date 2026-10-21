@@ -249,6 +249,10 @@ type MeterUsageRepository interface {
 	// GetMeterUsageForExport retrieves meter usage data for export in batches
 	GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*MeterUsage, error)
 
+	// CountMeterUsageForExport returns an approximate row count for the export
+	// window. Implementations should avoid FINAL so the check stays cheap.
+	CountMeterUsageForExport(ctx context.Context, startTime, endTime time.Time) (int, error)
+
 	// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not yet processed.
 	GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*MeterUsage, error)
 

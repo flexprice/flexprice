@@ -312,3 +312,34 @@ func TestAddAddonParams_LegacyJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(out), "removes")
 }
+
+func TestCheckoutConfiguration_ValidateAddAddonBatch(t *testing.T) {
+	addOnly := &AddAddonParams{SubscriptionID: "subs_child", Addons: []AddAddonRef{validAddAddonRef()}}
+	removeOnly := &AddAddonParams{SubscriptionID: "subs_parent", Removes: []RemoveAddonRef{validRemoveAddonRef()}}
+
+	tests := []struct {
+		name    string
+		cfg     CheckoutConfiguration
+		wantErr bool
+	}{
+		{"single entry", CheckoutConfiguration{AddAddonParams: addOnly}, false},
+		{"batch with a removal-only entry", CheckoutConfiguration{AddAddonBatchParams: []*AddAddonParams{removeOnly, addOnly}}, false},
+		{"batch with no addon", CheckoutConfiguration{AddAddonBatchParams: []*AddAddonParams{removeOnly}}, true},
+		{"batch entry without subscription id", CheckoutConfiguration{AddAddonBatchParams: []*AddAddonParams{{Addons: []AddAddonRef{validAddAddonRef()}}}}, true},
+		{"nil batch entry", CheckoutConfiguration{AddAddonBatchParams: []*AddAddonParams{nil, addOnly}}, true},
+		{"single and batch together", CheckoutConfiguration{AddAddonParams: addOnly, AddAddonBatchParams: []*AddAddonParams{addOnly}}, true},
+		{"neither", CheckoutConfiguration{}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate(CheckoutActionAddAddon)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.True(t, ierr.IsValidation(err))
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

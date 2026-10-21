@@ -645,6 +645,84 @@
         ]
       }
     },
+    "/addons/{id}/sync/subscriptions": {
+      "post": {
+        "tags": [
+          "Addons"
+        ],
+        "summary": "Synchronize addon prices",
+        "description": "Use when you have changed an addon's usage charges and need to push them to all active subscriptions holding the addon. Returns workflow ID.",
+        "operationId": "syncAddonPrices",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Addon ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TemporalWorkflowResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/alerts/search": {
       "post": {
         "tags": [
@@ -11752,6 +11830,166 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/subscriptions/{id}/pause": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Pause subscription",
+        "description": "Use when a customer stops temporarily. Pauses an active subscription now: usage and arrear fixed charges up to the pause are billed on a closing invoice, and every paused period after it gets a $0 skipped invoice.",
+        "operationId": "pauseSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Pause subscription request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PauseSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/subscriptions/{id}/resume": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Resume subscription",
+        "description": "Use when a paused customer comes back. Resumes a paused subscription now on its existing billing anchor: the first period runs from the resume to the next billing date and its advance charges are invoiced at once.",
+        "operationId": "resumeSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Resume subscription request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/subscriptions/{id}/schedules": {
       "get": {
         "tags": [
@@ -17616,6 +17854,10 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the addon price sequence this association's line items\nhave been reconciled up to. Written only by the addon usage-price sync."
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -17714,6 +17956,10 @@
           "subscription": {
             "$ref": "#/components/schemas/SubscriptionResponse"
           },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the addon price sequence this association's line items\nhave been reconciled up to. Written only by the addon usage-price sync."
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -17723,6 +17969,20 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "AddonPriceSyncStatusResponse": {
+        "type": "object",
+        "properties": {
+          "current_sequence": {
+            "type": "integer"
+          },
+          "synced": {
+            "type": "boolean"
+          },
+          "unsynced_association_count": {
+            "type": "integer"
           }
         }
       },
@@ -17766,6 +18026,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "price_sync_status": {
+            "$ref": "#/components/schemas/AddonPriceSyncStatusResponse"
           },
           "prices": {
             "type": "array",
@@ -18309,7 +18572,7 @@
             "description": "CancelAt is the exact date/time when the subscription should be cancelled.\nRequired for cancellation_type \"scheduled_date\"; optional for \"immediate\" (past dates only \u2014 backdated cancellation).\nFor \"scheduled_date\", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).\nFor \"immediate\", accepts past/current dates only; use \"scheduled_date\" for future dates.",
             "format": "date-time"
           },
-          "cancel_immediately_inovice_policy": {
+          "cancel_immediately_invoice_policy": {
             "$ref": "#/components/schemas/types.CancelImmediatelyInvoicePolicy"
           },
           "cancellation_type": {
@@ -18388,6 +18651,9 @@
           "start_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string"
           }
         }
       },
@@ -18468,6 +18734,9 @@
           "start_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string"
           }
         }
       },
@@ -19225,6 +19494,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "price_sync_status": {
+            "$ref": "#/components/schemas/AddonPriceSyncStatusResponse"
           },
           "prices": {
             "type": "array",
@@ -22948,12 +23220,25 @@
         "type": "string",
         "enum": [
           "add",
-          "remove"
+          "remove",
+          "modify"
         ],
         "x-enum-varnames": [
           "GroupedInvoicingActionAdd",
-          "GroupedInvoicingActionRemove"
+          "GroupedInvoicingActionRemove",
+          "GroupedInvoicingActionModify"
         ]
+      },
+      "GroupedInvoicingChange": {
+        "type": "object",
+        "properties": {
+          "addon_bulk_params": {
+            "$ref": "#/components/schemas/SubModifyBulkAddonParams"
+          },
+          "subscription_id": {
+            "type": "string"
+          }
+        }
       },
       "GroupedInvoicingChildRequest": {
         "required": [
@@ -24264,6 +24549,39 @@
           }
         }
       },
+      "PauseSubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Metadata stored on the pause\n@Example {\"requested_by\": \"customer\", \"channel\": \"support_ticket\"}"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
+          "reason": {
+            "maxLength": 255,
+            "type": "string",
+            "description": "Reason for pausing the subscription\n@Description Optional reason for the pause. Maximum 255 characters\n@Example \"Customer requested temporary suspension\""
+          }
+        },
+        "description": "Pauses an active subscription now. Usage and arrear fixed charges up to the pause are billed on a closing invoice."
+      },
+      "PauseSubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "pause": {
+            "$ref": "#/components/schemas/SubscriptionPauseResponse"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionResponse"
+          }
+        },
+        "description": "The paused subscription and its pause"
+      },
       "PaymentAttemptResponse": {
         "type": "object",
         "properties": {
@@ -25129,6 +25447,34 @@
           }
         }
       },
+      "ResumeSubscriptionRequest": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Metadata merged into the pause\n@Example {\"resumed_by\": \"admin\"}"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          }
+        },
+        "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date."
+      },
+      "ResumeSubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "pause": {
+            "$ref": "#/components/schemas/SubscriptionPauseResponse"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionResponse"
+          }
+        },
+        "description": "The resumed subscription and the pause it ended"
+      },
       "RevenueAnalyticsRequest": {
         "required": [
           "start_time"
@@ -25575,6 +25921,13 @@
         "properties": {
           "action": {
             "$ref": "#/components/schemas/GroupedInvoicingAction"
+          },
+          "changes": {
+            "type": "array",
+            "description": "Changes is required for action 'modify'; the path subscription is the parent.",
+            "items": {
+              "$ref": "#/components/schemas/GroupedInvoicingChange"
+            }
           },
           "child_subscription_ids": {
             "type": "array",
@@ -26245,6 +26598,85 @@
           "SubscriptionModifyTypeAddon",
           "SubscriptionModifyTypeLineItemChange"
         ]
+      },
+      "SubscriptionPauseResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the pause"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the subscription pause"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "original_period_end": {
+            "type": "string",
+            "description": "OriginalPeriodEnd is the end of the billing period when the pause was created",
+            "format": "date-time"
+          },
+          "original_period_start": {
+            "type": "string",
+            "description": "OriginalPeriodStart is the start of the billing period when the pause was created",
+            "format": "date-time"
+          },
+          "pause_end": {
+            "type": "string",
+            "description": "PauseEnd is when the pause will end (null for indefinite)",
+            "format": "date-time"
+          },
+          "pause_mode": {
+            "$ref": "#/components/schemas/types.PauseMode"
+          },
+          "pause_start": {
+            "type": "string",
+            "description": "PauseStart is when the pause actually started",
+            "format": "date-time"
+          },
+          "pause_status": {
+            "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason is the reason for pausing"
+          },
+          "resume_mode": {
+            "$ref": "#/components/schemas/types.ResumeMode"
+          },
+          "resumed_at": {
+            "type": "string",
+            "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "SubscriptionID is the identifier for the subscription"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "description": "Response object containing subscription pause information"
       },
       "SubscriptionPhaseCreateRequest": {
         "required": [
@@ -27197,6 +27629,9 @@
           "environment_id": {
             "type": "string"
           },
+          "external_tax_details": {
+            "$ref": "#/components/schemas/types.ExternalTaxDetails"
+          },
           "id": {
             "type": "string"
           },
@@ -27208,6 +27643,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.TaxProvider"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -27225,7 +27663,15 @@
             "$ref": "#/components/schemas/TaxRateResponse"
           },
           "tax_rate_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Null when an external engine calculated the tax: there is no Flexprice rate to point at."
+          },
+          "tax_transaction_id": {
+            "type": "string",
+            "description": "TaxTransactionID is the provider transaction recording the filed tax, stamped at commit."
+          },
+          "tax_transaction_type": {
+            "$ref": "#/components/schemas/types.TaxTransactionType"
           },
           "taxable_amount": {
             "type": "string"
@@ -28265,7 +28711,8 @@
             "format": "date-time"
           },
           "cancel_at_period_end": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Pointer so omitting the field leaves the stored value unchanged; sending it sets the flag."
           },
           "parent_subscription_id": {
             "type": "string",
@@ -31019,6 +31466,12 @@
       "types.CheckoutConfiguration": {
         "type": "object",
         "properties": {
+          "add_addon_batch_params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.AddAddonParams"
+            }
+          },
           "add_addon_params": {
             "$ref": "#/components/schemas/types.AddAddonParams"
           },
@@ -31935,6 +32388,55 @@
         },
         "x-speakeasy-name-override": "ExportMetadataField"
       },
+      "types.ExternalTaxDetails": {
+        "type": "object",
+        "properties": {
+          "calculation_expires_at": {
+            "type": "string",
+            "description": "CalculationExpiresAt is when the calculation can no longer be filed, RFC3339.",
+            "format": "date-time"
+          },
+          "calculation_id": {
+            "type": "string",
+            "description": "CalculationID is the provider calculation this row was written from. Commit files it."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "DisplayName is the engine's own name for the tax, such as\n\"Integrated goods and services tax (IGST)\"."
+          },
+          "jurisdiction": {
+            "$ref": "#/components/schemas/types.TaxJurisdiction"
+          },
+          "percentage": {
+            "type": "string",
+            "description": "Percentage is the resolved rate, such as \"18.0\". This is what was charged, not the\nrate that would apply if the tax were imposed."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Reference is what this row's provider transaction was filed under. It is unique across\nevery transaction on the account, so it is also the only way back to a transaction whose\nid failed to land here."
+          },
+          "reversal": {
+            "$ref": "#/components/schemas/types.TaxReversal"
+          },
+          "sourcing": {
+            "type": "string",
+            "description": "Sourcing is whether the jurisdiction followed the seller's address or the buyer's."
+          },
+          "tax_code": {
+            "type": "string",
+            "description": "TaxCode is the product tax category the engine priced against, such as txcd_10000000.\nIt belongs to the line rather than the rate, so today every row on an invoice carries\nthe account default. It only varies once tax is calculated per line item."
+          },
+          "tax_type": {
+            "type": "string",
+            "description": "TaxType is the tax family, such as vat, igst or sales_tax."
+          },
+          "taxability_reason": {
+            "type": "string",
+            "description": "TaxabilityReason is why the engine charged what it did, such as standard_rated or\nreverse_charge. Recorded, not yet rendered."
+          }
+        },
+        "x-speakeasy-name-override": "ExternalTaxDetails"
+      },
       "types.FXRateFilter": {
         "type": "object",
         "properties": {
@@ -32416,7 +32918,9 @@
           "PRORATION",
           "MANUAL",
           "AUTO_INVOICE_THRESHOLD",
-          "WALLET_AUTO_TOPUP"
+          "WALLET_AUTO_TOPUP",
+          "SUBSCRIPTION_PAUSED",
+          "SUBSCRIPTION_RESUME"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -32427,7 +32931,9 @@
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual",
           "InvoiceBillingReasonAutoInvoiceThreshold",
-          "InvoiceBillingReasonWalletAutoTopup"
+          "InvoiceBillingReasonWalletAutoTopup",
+          "InvoiceBillingReasonSubscriptionPaused",
+          "InvoiceBillingReasonSubscriptionResume"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },
@@ -33010,7 +33516,9 @@
           "45 NET",
           "60 NET",
           "75 NET",
-          "90 NET"
+          "90 NET",
+          "END_OF_MONTH",
+          "END_OF_NEXT_MONTH"
         ],
         "x-enum-varnames": [
           "PaymentTerms15Net",
@@ -33018,7 +33526,9 @@
           "PaymentTerms45Net",
           "PaymentTerms60Net",
           "PaymentTerms75Net",
-          "PaymentTerms90Net"
+          "PaymentTerms90Net",
+          "PaymentTermsEndOfMonth",
+          "PaymentTermsEndOfNextMonth"
         ],
         "x-speakeasy-name-override": "PaymentTerms"
       },
@@ -34249,13 +34759,51 @@
         "type": "string",
         "enum": [
           "customer_exempt",
-          "no_tax_configured"
+          "no_tax_configured",
+          "reverse_charge",
+          "not_collecting",
+          "not_subject_to_tax",
+          "not_supported"
         ],
         "x-enum-varnames": [
           "TaxExemptionReasonCustomerExempt",
-          "TaxExemptionReasonNoTaxConfigured"
+          "TaxExemptionReasonNoTaxConfigured",
+          "TaxExemptionReasonReverseCharge",
+          "TaxExemptionReasonNotCollecting",
+          "TaxExemptionReasonNotSubjectToTax",
+          "TaxExemptionReasonNotSupported"
         ],
         "x-speakeasy-name-override": "TaxExemptionReasonCode"
+      },
+      "types.TaxJurisdiction": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "TaxJurisdiction"
+      },
+      "types.TaxProvider": {
+        "type": "string",
+        "enum": [
+          "flexprice",
+          "stripe"
+        ],
+        "x-enum-varnames": [
+          "TaxProviderFlexprice",
+          "TaxProviderStripe"
+        ],
+        "x-speakeasy-name-override": "TaxProvider"
       },
       "types.TaxRateEntityType": {
         "type": "string",
@@ -34263,13 +34811,15 @@
           "customer",
           "subscription",
           "invoice",
-          "tenant"
+          "tenant",
+          "credit_note"
         ],
         "x-enum-varnames": [
           "TaxRateEntityTypeCustomer",
           "TaxRateEntityTypeSubscription",
           "TaxRateEntityTypeInvoice",
-          "TaxRateEntityTypeTenant"
+          "TaxRateEntityTypeTenant",
+          "TaxRateEntityTypeCreditNote"
         ],
         "x-speakeasy-name-override": "TaxRateEntityType"
       },
@@ -34308,6 +34858,42 @@
           "TaxRateTypePercentage"
         ],
         "x-speakeasy-name-override": "TaxRateType"
+      },
+      "types.TaxReversal": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/types.TaxReversalMode"
+          },
+          "original_transaction": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "TaxReversal"
+      },
+      "types.TaxReversalMode": {
+        "type": "string",
+        "enum": [
+          "full",
+          "partial"
+        ],
+        "x-enum-varnames": [
+          "TaxReversalModeFull",
+          "TaxReversalModePartial"
+        ],
+        "x-speakeasy-name-override": "TaxReversalMode"
+      },
+      "types.TaxTransactionType": {
+        "type": "string",
+        "enum": [
+          "filing",
+          "reversal"
+        ],
+        "x-enum-varnames": [
+          "TaxTransactionTypeFiling",
+          "TaxTransactionTypeReversal"
+        ],
+        "x-speakeasy-name-override": "TaxTransactionType"
       },
       "types.TaxTreatment": {
         "type": "string",
@@ -36282,6 +36868,9 @@
           "currency": {
             "type": "string"
           },
+          "external_tax_details": {
+            "$ref": "#/components/schemas/types.ExternalTaxDetails"
+          },
           "id": {
             "type": "string"
           },
@@ -36290,6 +36879,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.TaxProvider"
           },
           "tax_amount": {
             "type": "string"
@@ -36302,6 +36894,9 @@
           },
           "tax_rate_id": {
             "type": "string"
+          },
+          "tax_transaction_type": {
+            "$ref": "#/components/schemas/types.TaxTransactionType"
           },
           "taxable_amount": {
             "type": "string"

@@ -10,6 +10,7 @@ import (
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
@@ -636,6 +637,16 @@ func (s *InvoiceConversionSuite) TestFinalizeTaxesSubscriptionInvoiceOnce() {
 
 			s.seedCustomer("cust_once", tc.billing)
 			s.seedTenantRate("usd", "inr", "83")
+			s.Require().NoError(s.GetStores().SubscriptionRepo.Create(s.ctx(), &subscription.Subscription{
+				ID:                 "sub_once",
+				CustomerID:         "cust_once",
+				Currency:           "usd",
+				SubscriptionStatus: types.SubscriptionStatusActive,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				EnvironmentID:      types.GetEnvironmentID(s.ctx()),
+				BaseModel:          types.GetDefaultBaseModel(s.ctx()),
+			}))
 			s.seedDraftInvoice("inv_once_tax", "cust_once", "usd", types.InvoiceTypeSubscription, lo.ToPtr("sub_once"),
 				[]*invoice.InvoiceLineItem{line("il_once", "100")})
 

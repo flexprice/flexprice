@@ -180,6 +180,7 @@ func (s *CheckoutPollSuite) buildParams() ServiceParams {
 		ProrationCalculator:          s.GetCalculator(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:            s.GetStores().PlanPriceSyncRepo,
+		AddonPriceSyncRepo:           s.GetStores().AddonPriceSyncRepo,
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 		Locker:                       testutil.NewInMemoryRedisLocker(nil),
 	}

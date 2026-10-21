@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
@@ -73,6 +74,7 @@ type Factory struct {
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
 	locker                       cache.Locker
+	settingsRepo                 settings.Repository
 
 	temporalSvc    temporalservice.TemporalService
 	paymentService interfaces.PaymentService
@@ -106,6 +108,7 @@ func NewFactory(
 	encryptionService security.EncryptionService,
 	temporalSvc temporalservice.TemporalService,
 	locker cache.Locker,
+	settingsRepo settings.Repository,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -125,6 +128,7 @@ func NewFactory(
 		encryptionService:            encryptionService,
 		locker:                       locker,
 		temporalSvc:                  temporalSvc,
+		settingsRepo:                 settingsRepo,
 	}
 }
 
@@ -698,6 +702,8 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.priceRepo,
 		f.entityIntegrationMappingRepo,
 		f.paymentRepo,
+		f.subscriptionRepo,
+		f.settingsRepo,
 		f.logger,
 	)
 
@@ -1487,29 +1493,9 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		return s3backend.New(ctx, s3Cfg, f.logger)
 	}
 
-	if conn.EncryptedSecretData.S3 == nil {
-		return nil, ierr.NewError("no S3 credentials found on connection").Mark(ierr.ErrValidation)
-	}
-
-	accessKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+	accessKey, secretKey, sessionToken, err := f.decryptS3Credentials(conn)
 	if err != nil {
-		return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
-	}
-	secretKey, err := f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
-	if err != nil {
-		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
-	}
-	if accessKey == "" || secretKey == "" {
-		return nil, ierr.NewError("empty S3 credentials on connection").
-			WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
-			Mark(ierr.ErrValidation)
-	}
-	var sessionToken string
-	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
-		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
-		if err != nil {
-			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
-		}
+		return nil, err
 	}
 
 	// Destination comes from the run's job_config (dst) when this is an export;
@@ -1544,6 +1530,46 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 	}
 
 	return s3backend.New(ctx, s3Cfg, f.logger)
+}
+
+// ValidateS3Credentials checks that a customer-owned S3 connection carries usable keys.
+// It needs no bucket: each export brings its own destination.
+func (f *Factory) ValidateS3Credentials(conn *connection.Connection) error {
+	if conn == nil {
+		return ierr.NewError("connection is required for storage").
+			Mark(ierr.ErrValidation)
+	}
+	_, _, _, err := f.decryptS3Credentials(conn)
+	return err
+}
+
+func (f *Factory) decryptS3Credentials(conn *connection.Connection) (accessKey, secretKey, sessionToken string, err error) {
+	if conn.EncryptedSecretData.S3 == nil {
+		return "", "", "", ierr.NewError("no S3 credentials found on connection").
+			WithHint("AWS access key and secret key are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	accessKey, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
+	if err != nil {
+		return "", "", "", ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
+	}
+	secretKey, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
+	if err != nil {
+		return "", "", "", ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
+	}
+	if accessKey == "" || secretKey == "" {
+		return "", "", "", ierr.NewError("empty S3 credentials on connection").
+			WithHint("AWS access key and secret key must be non-empty; refusing to fall back to ambient AWS credentials").
+			Mark(ierr.ErrValidation)
+	}
+	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
+		sessionToken, err = f.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
+		if err != nil {
+			return "", "", "", ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
+		}
+	}
+	return accessKey, secretKey, sessionToken, nil
 }
 
 func (f *Factory) buildGCSStorage(ctx context.Context, conn *connection.Connection, _ *exportDestination) (storage.Storage, error) {
