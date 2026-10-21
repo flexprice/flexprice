@@ -246,6 +246,12 @@ func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.Subs
 		sub = copySubscription(sub)
 		subs[i] = sub
 
+		// Like the ent repository, line items load only on request.
+		if filter == nil || !filter.WithLineItems {
+			sub.LineItems = nil
+			continue
+		}
+
 		if s.lineItemStore != nil {
 			liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 			liFilter.SubscriptionIDs = []string{sub.ID}
@@ -274,6 +280,7 @@ func (s *InMemorySubscriptionStore) ListByCustomerID(ctx context.Context, custom
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
 		},
+		WithLineItems: true,
 	}
 
 	// Use the existing List method

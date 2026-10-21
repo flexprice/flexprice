@@ -1874,7 +1874,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	if shouldIncludeUsage {
 		// Get all active subscriptions to calculate current usage
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		subscriptions, err := s.listBalanceSubscriptions(ctx, w.CustomerID)
+		subscriptions, err := subscriptionService.ListByCustomerID(ctx, w.CustomerID)
 		if err != nil {
 			return nil, err
 		}
@@ -3399,24 +3399,6 @@ func (s *walletService) buildResponseFromCachedBalance(w *wallet.Wallet, balance
 	}
 }
 
-// listBalanceSubscriptions lists active subscriptions without line items.
-func (s *walletService) listBalanceSubscriptions(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
-	if customerID == "" {
-		return nil, ierr.NewError("customer ID is required").
-			WithHint("Please provide a valid customer ID").
-			Mark(ierr.ErrValidation)
-	}
-
-	return s.SubRepo.List(ctx, &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		CustomerID:  customerID,
-		SubscriptionStatus: []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-		},
-	})
-}
-
 // currentPeriodUsage is a subscription's live usage charges for the period starting at periodStart.
 type currentPeriodUsage struct {
 	periodStart time.Time
@@ -3465,7 +3447,15 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 	if shouldIncludeUsage {
 		// Get all active subscriptions to calculate current usage
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		subscriptions, err := s.listBalanceSubscriptions(ctx, w.CustomerID)
+		// Usage lookup reloads line items, so list without them.
+		subscriptions, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			CustomerID:  w.CustomerID,
+			SubscriptionStatus: []types.SubscriptionStatus{
+				types.SubscriptionStatusActive,
+				types.SubscriptionStatusTrialing,
+			},
+		})
 		if err != nil {
 			return nil, err
 		}
