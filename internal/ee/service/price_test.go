@@ -262,6 +262,49 @@ func (s *PriceServiceSuite) TestGetPrices_ExpandFeatures() {
 	s.True(conversionRate.Equal(*resp.Items[0].Feature.ReportingUnit.ConversionRate))
 }
 
+func (s *PriceServiceSuite) TestGetPrices_ExpandMeters_AttachesOnlyReferencedMeters() {
+	for _, id := range []string{"meter-a", "meter-b", "meter-unused"} {
+		s.Require().NoError(s.meterRepo.CreateMeter(s.ctx, &meter.Meter{
+			ID:          id,
+			Name:        id,
+			EventName:   id,
+			Aggregation: meter.Aggregation{Type: types.AggregationSum},
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}))
+	}
+
+	prices := []*price.Price{
+		{ID: "price-a", MeterID: "meter-a"},
+		{ID: "price-b", MeterID: "meter-b"},
+		{ID: "price-no-meter"},
+	}
+	for _, p := range prices {
+		p.Amount = decimal.NewFromInt(1)
+		p.Currency = "usd"
+		p.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+		p.EntityID = "plan-expand-meters"
+		p.BaseModel = types.GetDefaultBaseModel(s.ctx)
+		s.Require().NoError(s.priceRepo.Create(s.ctx, p))
+	}
+
+	priceFilter := types.NewPriceFilter()
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+	resp, err := s.priceService.GetPrices(s.ctx, priceFilter)
+	s.Require().NoError(err)
+
+	meterByPrice := make(map[string]*dto.MeterResponse, len(resp.Items))
+	for _, item := range resp.Items {
+		meterByPrice[item.ID] = item.Meter
+	}
+	s.Require().Len(meterByPrice, 3)
+	s.Require().NotNil(meterByPrice["price-a"])
+	s.Equal("meter-a", meterByPrice["price-a"].ID)
+	s.Require().NotNil(meterByPrice["price-b"])
+	s.Equal("meter-b", meterByPrice["price-b"].ID)
+	s.Nil(meterByPrice["price-no-meter"])
+}
+
 // TestGetPrices_ExpandFeatures_IgnoresDeletedFeature verifies that a deleted feature
 // left pointing at a meter (meter_id has no DB uniqueness constraint) is not picked up
 // over the live published feature on the same meter.

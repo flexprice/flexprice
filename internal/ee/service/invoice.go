@@ -3005,13 +3005,16 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.CustomerID = req.CustomerID
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusFinalized}
+	// Same newest-page limit as ListInvoices.
+	filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 
-	invoicesResp, err := s.ListInvoices(ctx, filter)
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, inv := range invoicesResp.Items {
+	for _, record := range invoices {
+		inv := dto.NewInvoiceResponse(record)
 		// For uncomputed subscription drafts, compute inline to get accurate amounts.
 		// Without this, uncomputed drafts have zero AmountRemaining and would be skipped,
 		// understating pending charges and overstating available wallet balance.
