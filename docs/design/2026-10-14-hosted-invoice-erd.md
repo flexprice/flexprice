@@ -488,17 +488,18 @@ flowchart LR
     CC -.->|/ca| CCA[Canada API]
   end
   subgraph BYOC[BYOC: one domain, path routing]
-    BC([Customer browser]) -->|billing.client.com/invoice/token| LB[Deployment load balancer]
+    BC([Customer browser]) -->|billing.client.com/invoice/token| LB[Public entry]
     LB -->|/invoice| BP[Hosted invoice page]
-    LB -->|/public/v1, /v1| BA[Flexprice API]
-    LB -->|/| BD[Dashboard]
+    LB -->|/public/v1| BA[Flexprice API]
+    IL[Internal load balancer] -->|/v1| BA
+    IL -->|/| BD[Dashboard]
   end
 ```
 
 BYOC needs, beyond cloud:
 - The page built with the `/invoice/` prefix, and accepting `invoice` as its link segment (the cloud build accepts only region names).
 - Load balancer rules: `/invoice` to the page (unknown paths under it return the page's entry file) and `/public/v1` to the API.
-- `/invoice` and `/public/v1` reachable by end customers from the internet.
+- `/invoice` and `/public/v1` reachable by end customers from the internet through a public entry that forwards only those two paths. `/v1`, `/health`, `/api/v1` and the dashboard stay on the internal load balancer.
 - A deployment that leaves `hosted_invoice.base_url` empty issues no Flexprice links and offers no Pay.
 
 ## 10. Cross-cutting concerns
