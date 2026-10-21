@@ -10,6 +10,7 @@ import (
 
 const (
 	validityAfterDue = 30 * 24 * time.Hour
+	minLifetime      = 30 * 24 * time.Hour
 	maxLifetime      = 120 * 24 * time.Hour
 )
 
@@ -26,7 +27,7 @@ type HostedInvoiceToken struct {
 
 // IsActive reports whether the token can still open its invoice at now.
 func (l *HostedInvoiceToken) IsActive(now time.Time) bool {
-	return l.RevokedAt == nil && now.Before(l.ExpiresAt)
+	return l.Status == types.StatusPublished && l.RevokedAt == nil && now.Before(l.ExpiresAt)
 }
 
 // FromEnt converts an Ent HostedInvoiceToken to a domain HostedInvoiceToken.
@@ -61,9 +62,13 @@ func FromEntList(list []*ent.HostedInvoiceToken) []*HostedInvoiceToken {
 	})
 }
 
-// CalculateExpiry returns min((due date, else finalization) + 30 days, createdAt + 120 days).
+// CalculateExpiry returns (due date, else finalization) + 30 days, at least createdAt + 30 days
+// and at most createdAt + 120 days.
 func CalculateExpiry(dueDate *time.Time, finalizedAt, createdAt time.Time) time.Time {
 	expiresAt := lo.FromPtrOr(dueDate, finalizedAt).Add(validityAfterDue)
+	if floor := createdAt.Add(minLifetime); expiresAt.Before(floor) {
+		return floor
+	}
 	if limit := createdAt.Add(maxLifetime); expiresAt.After(limit) {
 		return limit
 	}

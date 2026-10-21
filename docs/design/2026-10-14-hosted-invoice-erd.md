@@ -120,7 +120,7 @@ These apply to Flexprice links; Stripe links follow Stripe's own rules.
 | ID | Category | Requirement (measurable) | How we verify |
 |---|---|---|---|
 | NFR-1 | Security | The link carries the link record's id and an HMAC-SHA256 signature made with the deployment's auth secret, the key that already signs customer-portal and checkout tokens. Without the secret no valid link can be produced, and the signing secret is not stored in the database. No URL or token is stored in the database. | Review: changing any character of a link makes it invalid; neither the link table nor the invoice holds a token. |
-| NFR-2 | Security | A link expires at the earlier of 30 days after the invoice's due date (or finalization if there is no due date) and 120 days after the link record's creation. The cap is per link, not measured from invoice creation. An expired link shows "This link is no longer valid, contact <tenant name>" and no invoice data. | e2e: move the due date 31 days into the past → expired page; set a far-future due date → expiry stays at link creation + 120 days, and access is rejected at that boundary. |
+| NFR-2 | Security | A link expires 30 days after the invoice's due date (or finalization if there is no due date), but never sooner than 30 days and never later than 120 days after the link record's creation. The floor and cap are per link, not measured from invoice creation, so a backdated invoice still gets a working link. An expired link shows "This link is no longer valid, contact <tenant name>" and no invoice data. | e2e: finalize an invoice whose due date is more than 30 days in the past → link valid for 30 days from issue; set the link's expiry in the past → expired page; set a far-future due date → expiry stays at link creation + 120 days, and access is rejected at that boundary. |
 | NFR-3 | Security | Deferred (not in v1): expiry of a refreshed link. | — |
 | NFR-4 | Security | While a tenant is suspended, its links show the "no longer valid" page; they work again when the tenant is reactivated. | e2e: suspend the tenant → page blocked; reactivate → page loads. |
 
@@ -254,7 +254,7 @@ erDiagram
 | `id` | string | no | Row id with its own prefix |
 | `tenant_id`, `environment_id` | string | no | Standard scoping, copied from the invoice |
 | `invoice_id` | string | no | The invoice the link opens |
-| `expires_at` | timestamp | no | min(due date + 30 days, created_at + 120 days), using finalization when no due date exists |
+| `expires_at` | timestamp | no | due date + 30 days (finalization when no due date exists), at least created_at + 30 days and at most created_at + 120 days |
 | `revoked_at` | timestamp | yes | Set when the link is revoked, e.g. on the switch to Stripe |
 | `status`, `created_at`, `updated_at`, `created_by`, `updated_by` | standard | | Standard fields of every table |
 
@@ -263,9 +263,9 @@ Indexes:
 
 **Lifecycle**
 - **Issue:** when an invoice is finalized, a link row is inserted in the same transaction as finalization, unless the tenant syncs invoices to Stripe (invoice outbound sync on the Stripe connection); nothing is written to the invoice.
-- **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update, within the link's `created_at` + 120 days cap; this is how a tenant extends an expired link while refresh is deferred.
+- **Due date change:** when a finalized invoice's due date changes, the live row's expiry is recalculated in the same update, within the link's `created_at` + 30 days floor and + 120 days cap; this is how a tenant extends an expired link while refresh is deferred.
 - **Switch to Stripe:** when a Stripe hosted URL is received, retain it in `metadata.stripe_hosted_invoice_url`; when the sync completes, revoke any unrevoked Flexprice link. Repeated delivery is idempotent. No URL is written.
-- **Open:** the signature is checked first; a link with a bad signature is rejected without touching the database. The link record is then read by its id without a tenant filter, the only lookup that may do so. The row gives the tenant, environment and invoice; everything after it is scoped as usual. A row that is revoked or past `expires_at`, or whose invoice carries a Stripe hosted URL, shows the "no longer valid" page.
+- **Open:** the signature is checked first; a link with a bad signature is rejected without touching the database. The link record is then read by its id without a tenant filter, the only lookup that may do so. The row gives the tenant, environment and invoice; everything after it is scoped as usual. A row that is not published, revoked or past `expires_at`, or whose invoice carries a Stripe hosted URL, shows the "no longer valid" page.
 
 **Example.** Acme Ltd, a Canada tenant, finalizes invoice INV-0042 due on 14 Nov 2026. Flexprice creates this link record:
 
@@ -323,7 +323,7 @@ GET /public/v1/invoices
 X-Session-Token: <link_id>.<signature>
 ```
 
-The view, download and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
+The view, download and pay endpoints share dedicated hosted-invoice middleware. It verifies the hosted-link signature, reads the link record, checks the link's status, revocation, expiry and tenant status, and establishes the invoice, tenant and environment scope before the handler runs. The invoice is derived from the link record, never from a caller-supplied invoice ID. This reuses the portal's header convention, not its JWT middleware: customer-portal JWTs are not accepted here, and hosted-link tokens do not grant portal access. A missing header follows the malformed-token error below. The regional API's CORS policy must allow `X-Session-Token` for hosted-page requests.
 
 Errors shared by all three:
 
@@ -416,7 +416,7 @@ sequenceDiagram
   Cu->>P: Open the link
   P->>B: GET /public/v1/invoices with X-Session-Token
   B->>B: Check signature, read the link record
-  B->>B: Check revoked, expiry and tenant status
+  B->>B: Check status, revoked, expiry and tenant status
   B->>B: Read invoice, payments and Pay availability (scoped)
   B-->>P: Invoice, tenant, payments, Pay info
   Cu->>P: Pay
