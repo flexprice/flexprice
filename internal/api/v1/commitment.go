@@ -40,7 +40,9 @@ func NewCommitmentHandler(service service.CommitmentService, logger *logger.Logg
 func (h *CommitmentHandler) PreviewCommitment(c *gin.Context) {
 	var req dto.CreateCommitmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -69,7 +71,9 @@ func (h *CommitmentHandler) PreviewCommitment(c *gin.Context) {
 func (h *CommitmentHandler) CreateCommitment(c *gin.Context) {
 	var req dto.CreateCommitmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -97,7 +101,9 @@ func (h *CommitmentHandler) CreateCommitment(c *gin.Context) {
 func (h *CommitmentHandler) GetCommitment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.Error(ierr.NewError("commitment ID is required").WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -126,13 +132,16 @@ func (h *CommitmentHandler) GetCommitment(c *gin.Context) {
 func (h *CommitmentHandler) QueryCommitments(c *gin.Context) {
 	var filter commitment.Filter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	if filter.QueryFilter == nil {
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
+
 	if filter.GetLimit() == 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
@@ -163,13 +172,17 @@ func (h *CommitmentHandler) QueryCommitments(c *gin.Context) {
 func (h *CommitmentHandler) UpdateCommitment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.Error(ierr.NewError("commitment ID is required").WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
 	var req dto.UpdateCommitmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -200,7 +213,9 @@ func (h *CommitmentHandler) UpdateCommitment(c *gin.Context) {
 func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.Error(ierr.NewError("commitment ID is required").WithHint("Invalid request format").Mark(ierr.ErrValidation))
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
 		return
 	}
 
@@ -208,7 +223,9 @@ func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 	var req dto.TerminateCommitmentRequest
 	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-			c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid request format").
+				Mark(ierr.ErrValidation))
 			return
 		}
 	}

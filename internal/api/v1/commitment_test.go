@@ -106,13 +106,16 @@ func TestCommitmentHandler(t *testing.T) {
 		{"create bad json", nil, http.MethodPost, "/v1/commitments", `{`, http.StatusBadRequest, ""},
 		{"preview ok", nil, http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusOK, ""},
 		{"preview bad json", nil, http.MethodPost, "/v1/commitments/preview", `not json`, http.StatusBadRequest, ""},
-		{"preview disabled", ierr.NewError("off").Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusBadRequest, ""},
+		{"preview disabled", ierr.NewError("off").
+			Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/preview", `{}`, http.StatusBadRequest, ""},
 		{"search ok", nil, http.MethodPost, "/v1/commitments/search", `{}`, http.StatusOK, ""},
 		{"get ok", nil, http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusOK, "cmt_1"},
 		{"update ok", nil, http.MethodPut, "/v1/commitments/cmt_2", `{"name":"Renamed"}`, http.StatusOK, "cmt_2"},
-		{"get not found", ierr.NewError("missing").Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound, ""},
+		{"get not found", ierr.NewError("missing").
+			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound, ""},
 		{"terminate empty body", nil, http.MethodPost, "/v1/commitments/cmt_1/terminate", ``, http.StatusOK, "cmt_1"},
 	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := &stubCommitmentService{err: tc.svcErr}

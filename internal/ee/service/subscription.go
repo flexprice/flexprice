@@ -122,9 +122,11 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		if enabledErr != nil {
 			return nil, enabledErr
 		}
+
 		if !enabled {
 			return nil, ierr.NewError("commitments are not enabled for this environment").
-				WithHint("Enable the commitments_v2 setting").Mark(ierr.ErrInvalidOperation)
+				WithHint("Enable the commitments_v2 setting").
+				Mark(ierr.ErrInvalidOperation)
 		}
 	}
 

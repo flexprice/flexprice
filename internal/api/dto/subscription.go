@@ -1048,6 +1048,7 @@ func (r *CreateSubscriptionRequest) validateCommitments() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
