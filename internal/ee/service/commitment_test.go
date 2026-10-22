@@ -45,63 +45,120 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	fx := commitmentFixtures{}
 
-	fx.customer = &customer.Customer{ID: "cust_cmt", ExternalID: "ext_cust_cmt", Name: "Commit Co", BaseModel: types.GetDefaultBaseModel(ctx)}
+	fx.customer = &customer.Customer{
+		ID:         "cust_cmt",
+		ExternalID: "ext_cust_cmt",
+		Name:       "Commit Co",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
 	require.NoError(t, stores.CustomerRepo.Create(ctx, fx.customer))
 
 	fx.meterAPI = &meter.Meter{
-		ID: "meter_api", Name: "GPUs", EventName: "gpu",
-		Aggregation: meter.Aggregation{Type: types.AggregationMax, Field: "gpus", BucketSize: types.WindowSizeMinute},
-		BaseModel:   types.GetDefaultBaseModel(ctx),
+		ID:        "meter_api",
+		Name:      "GPUs",
+		EventName: "gpu",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "gpus",
+			BucketSize: types.WindowSizeMinute,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
+
 	fx.meterStorage = &meter.Meter{
-		ID: "meter_storage", Name: "Storage", EventName: "storage",
+		ID:          "meter_storage",
+		Name:        "Storage",
+		EventName:   "storage",
 		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "bytes"},
 		BaseModel:   types.GetDefaultBaseModel(ctx),
 	}
+
 	require.NoError(t, stores.MeterRepo.CreateMeter(ctx, fx.meterAPI))
 	require.NoError(t, stores.MeterRepo.CreateMeter(ctx, fx.meterStorage))
 
-	fx.group = &group.Group{ID: "grp_1", Name: "Compute", EntityType: types.GroupEntityTypePrice,
-		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	fx.group = &group.Group{
+		ID:            "grp_1",
+		Name:          "Compute",
+		EntityType:    types.GroupEntityTypePrice,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
 	require.NoError(t, stores.GroupRepo.Create(ctx, fx.group))
 
 	usagePrice := func(id, meterID string, amount decimal.Decimal) *price.Price {
 		return &price.Price{
-			ID: id, Amount: amount, Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_cmt",
-			Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-			BillingModel: types.BILLING_MODEL_FLAT_FEE, BillingCadence: types.BILLING_CADENCE_RECURRING,
-			InvoiceCadence: types.InvoiceCadenceArrear, MeterID: meterID, GroupID: fx.group.ID,
-			BaseModel: types.GetDefaultBaseModel(ctx),
+			ID:                 id,
+			Amount:             amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           "plan_cmt",
+			Type:               types.PRICE_TYPE_USAGE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceArrear,
+			MeterID:            meterID,
+			GroupID:            fx.group.ID,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
 		}
 	}
+
 	fx.priceAPI = usagePrice("price_api", fx.meterAPI.ID, dec("0.06"))
 	fx.priceStorage = usagePrice("price_storage", fx.meterStorage.ID, dec("0.02"))
 	require.NoError(t, stores.PriceRepo.Create(ctx, fx.priceAPI))
 	require.NoError(t, stores.PriceRepo.Create(ctx, fx.priceStorage))
 
 	fx.sub = &subscription.Subscription{
-		ID: "subs_cmt", PlanID: "plan_cmt", CustomerID: fx.customer.ID, Currency: "usd",
-		StartDate: jan, BillingAnchor: jan, CurrentPeriodStart: jan, CurrentPeriodEnd: jan.AddDate(0, 1, 0),
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, Timezone: "UTC",
-		SubscriptionStatus: types.SubscriptionStatusActive, EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 "subs_cmt",
+		PlanID:             "plan_cmt",
+		CustomerID:         fx.customer.ID,
+		Currency:           "usd",
+		StartDate:          jan,
+		BillingAnchor:      jan,
+		CurrentPeriodStart: jan,
+		CurrentPeriodEnd:   jan.AddDate(0, 1, 0),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	line := func(id string, p *price.Price) *subscription.SubscriptionLineItem {
 		return &subscription.SubscriptionLineItem{
-			ID: id, SubscriptionID: fx.sub.ID, CustomerID: fx.customer.ID, EntityID: "plan_cmt",
-			EntityType: types.SubscriptionLineItemEntityTypePlan, PriceID: p.ID, PriceType: p.Type, MeterID: p.MeterID,
-			DisplayName: p.ID, Quantity: decimal.Zero, Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-			InvoiceCadence: types.InvoiceCadenceArrear, StartDate: jan, EnvironmentID: types.GetEnvironmentID(ctx),
-			BaseModel: types.GetDefaultBaseModel(ctx),
+			ID:             id,
+			SubscriptionID: fx.sub.ID,
+			CustomerID:     fx.customer.ID,
+			EntityID:       "plan_cmt",
+			EntityType:     types.SubscriptionLineItemEntityTypePlan,
+			PriceID:        p.ID,
+			PriceType:      p.Type,
+			MeterID:        p.MeterID,
+			DisplayName:    p.ID,
+			Quantity:       decimal.Zero,
+			Currency:       "usd",
+			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence: types.InvoiceCadenceArrear,
+			StartDate:      jan,
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+			BaseModel:      types.GetDefaultBaseModel(ctx),
 		}
 	}
+
 	fx.lineAPI = line("subs_line_api", fx.priceAPI)
 	fx.lineStorage = line("subs_line_storage", fx.priceStorage)
 	require.NoError(t, stores.SubscriptionRepo.CreateWithLineItems(ctx, fx.sub,
 		[]*subscription.SubscriptionLineItem{fx.lineAPI, fx.lineStorage}))
 
-	fx.groupAPIOnly = &group.Group{ID: "grp_api_only", Name: "API only", EntityType: types.GroupEntityTypePrice,
-		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	fx.groupAPIOnly = &group.Group{
+		ID:            "grp_api_only",
+		Name:          "API only",
+		EntityType:    types.GroupEntityTypePrice,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
 	require.NoError(t, stores.GroupRepo.Create(ctx, fx.groupAPIOnly))
 	// price_api_only moves price_api's twin into the API-only group; the other-meter price joins it unattached.
 	apiOnly := usagePrice("price_api_only", fx.meterAPI.ID, dec("0.06"))
@@ -122,11 +179,15 @@ func setCommitmentsV2(t *testing.T, ctx context.Context, stores testutil.Stores,
 	if _, err := stores.SettingsRepo.GetByKey(ctx, types.SettingKeyCommitmentsV2); err == nil {
 		require.NoError(t, stores.SettingsRepo.DeleteByKey(ctx, types.SettingKeyCommitmentsV2))
 	}
+
 	setting := &settings.Setting{
-		ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyCommitmentsV2,
-		Value: map[string]interface{}{"enabled": enabled}, EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:            types.GenerateUUIDWithPrefix("setting"),
+		Key:           types.SettingKeyCommitmentsV2,
+		Value:         map[string]interface{}{"enabled": enabled},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+
 	require.NoError(t, stores.SettingsRepo.Create(ctx, setting))
 }
 
@@ -142,11 +203,20 @@ func (s *CommitmentServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	stores := s.GetStores()
 	params := ServiceParams{
-		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
-		CommitmentRepo: stores.CommitmentRepo, SubRepo: stores.SubscriptionRepo, PriceRepo: stores.PriceRepo,
-		MeterRepo: stores.MeterRepo, GroupRepo: stores.GroupRepo, SettingsRepo: stores.SettingsRepo,
-		PlanRepo: stores.PlanRepo, AddonRepo: stores.AddonRepo, PriceUnitRepo: stores.PriceUnitRepo,
+		Logger:         s.GetLogger(),
+		Config:         s.GetConfig(),
+		DB:             s.GetDB(),
+		CommitmentRepo: stores.CommitmentRepo,
+		SubRepo:        stores.SubscriptionRepo,
+		PriceRepo:      stores.PriceRepo,
+		MeterRepo:      stores.MeterRepo,
+		GroupRepo:      stores.GroupRepo,
+		SettingsRepo:   stores.SettingsRepo,
+		PlanRepo:       stores.PlanRepo,
+		AddonRepo:      stores.AddonRepo,
+		PriceUnitRepo:  stores.PriceUnitRepo,
 	}
+
 	s.svc = NewCommitmentService(params)
 	s.fx = seedCommitmentFixtures(s.T(), s.GetContext(), stores)
 }
@@ -170,7 +240,10 @@ func (s *CommitmentServiceSuite) TestCreate_CommittedAndOveragePricesAreSubscrip
 	resp, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
-	for id, want := range map[string]decimal.Decimal{*resp.CommittedPriceID: dec("0.048"), *resp.OveragePriceID: dec("0.07")} {
+	for id, want := range map[string]decimal.Decimal{
+		*resp.CommittedPriceID: dec("0.048"),
+		*resp.OveragePriceID:   dec("0.07"),
+	} {
 		p, err := s.GetStores().PriceRepo.Get(s.GetContext(), id)
 		s.Require().NoError(err)
 		s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, p.EntityType)
@@ -453,19 +526,40 @@ func (s *CommitmentServiceSuite) TestValidation_C16_SubscriptionScopeWithLegacyC
 func (s *CommitmentServiceSuite) fullParams() ServiceParams {
 	st := s.GetStores()
 	return ServiceParams{
-		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
-		SubRepo: st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
-		SubscriptionPhaseRepo: st.SubscriptionPhaseRepo, SubScheduleRepo: st.SubscriptionScheduleRepo,
-		PlanRepo: st.PlanRepo, PriceRepo: st.PriceRepo, PriceUnitRepo: st.PriceUnitRepo, MeterRepo: st.MeterRepo,
-		CustomerRepo: st.CustomerRepo, InvoiceRepo: st.InvoiceRepo, EntitlementRepo: st.EntitlementRepo,
-		FeatureRepo: st.FeatureRepo, AddonRepo: st.AddonRepo, AddonAssociationRepo: st.AddonAssociationRepo,
-		CreditGrantRepo: st.CreditGrantRepo, CreditGrantApplicationRepo: st.CreditGrantApplicationRepo,
-		GroupRepo: st.GroupRepo, SettingsRepo: st.SettingsRepo, CommitmentRepo: st.CommitmentRepo,
-		TaxAssociationRepo: st.TaxAssociationRepo, TaxRateRepo: st.TaxRateRepo, TaxAppliedRepo: st.TaxAppliedRepo,
-		WalletRepo: st.WalletRepo, CouponAssociationRepo: st.CouponAssociationRepo, ConnectionRepo: st.ConnectionRepo,
-		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo, MeterUsageRepo: st.MeterUsageRepo,
-		EventPublisher: s.GetPublisher(), WebhookPublisher: s.GetWebhookPublisher(),
-		ProrationCalculator: s.GetCalculator(), IntegrationFactory: s.GetIntegrationFactory(),
+		Logger:                       s.GetLogger(),
+		Config:                       s.GetConfig(),
+		DB:                           s.GetDB(),
+		SubRepo:                      st.SubscriptionRepo,
+		SubscriptionLineItemRepo:     st.SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo:        st.SubscriptionPhaseRepo,
+		SubScheduleRepo:              st.SubscriptionScheduleRepo,
+		PlanRepo:                     st.PlanRepo,
+		PriceRepo:                    st.PriceRepo,
+		PriceUnitRepo:                st.PriceUnitRepo,
+		MeterRepo:                    st.MeterRepo,
+		CustomerRepo:                 st.CustomerRepo,
+		InvoiceRepo:                  st.InvoiceRepo,
+		EntitlementRepo:              st.EntitlementRepo,
+		FeatureRepo:                  st.FeatureRepo,
+		AddonRepo:                    st.AddonRepo,
+		AddonAssociationRepo:         st.AddonAssociationRepo,
+		CreditGrantRepo:              st.CreditGrantRepo,
+		CreditGrantApplicationRepo:   st.CreditGrantApplicationRepo,
+		GroupRepo:                    st.GroupRepo,
+		SettingsRepo:                 st.SettingsRepo,
+		CommitmentRepo:               st.CommitmentRepo,
+		TaxAssociationRepo:           st.TaxAssociationRepo,
+		TaxRateRepo:                  st.TaxRateRepo,
+		TaxAppliedRepo:               st.TaxAppliedRepo,
+		WalletRepo:                   st.WalletRepo,
+		CouponAssociationRepo:        st.CouponAssociationRepo,
+		ConnectionRepo:               st.ConnectionRepo,
+		EntityIntegrationMappingRepo: st.EntityIntegrationMappingRepo,
+		MeterUsageRepo:               st.MeterUsageRepo,
+		EventPublisher:               s.GetPublisher(),
+		WebhookPublisher:             s.GetWebhookPublisher(),
+		ProrationCalculator:          s.GetCalculator(),
+		IntegrationFactory:           s.GetIntegrationFactory(),
 	}
 }
 
@@ -496,7 +590,11 @@ func (s *CommitmentServiceSuite) TestAttachPrice_RejectsSecondMeterInQuantityGro
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 	subSvc := NewSubscriptionService(s.fullParams())
-	_, err = subSvc.AddSubscriptionLineItem(s.GetContext(), s.fx.sub.ID, dto.CreateSubscriptionLineItemRequest{PriceID: s.fx.priceOtherMeterInGroup.ID})
+	_, err = subSvc.AddSubscriptionLineItem(
+		s.GetContext(),
+		s.fx.sub.ID,
+		dto.CreateSubscriptionLineItemRequest{PriceID: s.fx.priceOtherMeterInGroup.ID},
+	)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "got %v", err)
 }
@@ -595,11 +693,17 @@ func (s *CommitmentServiceSuite) TestUpdate_ReadsUnderCommitmentLockInTx() {
 	var events []string
 	stores := s.GetStores()
 	params := ServiceParams{
-		Logger: s.GetLogger(), Config: s.GetConfig(), DB: &recordingDB{IClient: s.GetDB(), events: &events},
+		Logger:         s.GetLogger(),
+		Config:         s.GetConfig(),
+		DB:             &recordingDB{IClient: s.GetDB(), events: &events},
 		CommitmentRepo: &recordingCommitmentRepo{Repository: stores.CommitmentRepo, events: &events},
-		SubRepo:        stores.SubscriptionRepo, PriceRepo: stores.PriceRepo, MeterRepo: stores.MeterRepo,
-		GroupRepo: stores.GroupRepo, SettingsRepo: stores.SettingsRepo,
+		SubRepo:        stores.SubscriptionRepo,
+		PriceRepo:      stores.PriceRepo,
+		MeterRepo:      stores.MeterRepo,
+		GroupRepo:      stores.GroupRepo,
+		SettingsRepo:   stores.SettingsRepo,
 	}
+
 	_, err = NewCommitmentService(params).Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Name: lo.ToPtr("Renamed")})
 	s.Require().NoError(err)
 	s.Require().GreaterOrEqual(len(events), 3, "events %v", events)

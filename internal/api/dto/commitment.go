@@ -46,32 +46,47 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}
+
 	if r.Timezone == "" {
 		r.Timezone = subTimezone
 	}
+
 	if r.Binding == nil {
 		r.Binding = lo.ToPtr(false)
 	}
+
 	if *r.Binding && r.CollectionMethod == nil {
 		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
 	}
+
 	if *r.Binding && r.OnEarlyTermination == nil {
 		r.OnEarlyTermination = lo.ToPtr(types.CommitmentTerminationForfeit)
 	}
 }
 
-func invalid(msg string) error { return ierr.NewError(msg).WithHint(msg).Mark(ierr.ErrValidation) }
+func invalid(msg string) error {
+	return ierr.NewError(msg).
+		WithHint(msg).
+		Mark(ierr.ErrValidation)
+}
 
 // Validate checks the rules that need only the request. Call ApplyDefaults first.
 func (r *CreateCommitmentRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
-	for _, v := range []interface{ Validate() error }{r.Scope.EntityType, r.Measurement, r.ActiveWindows} {
+
+	validators := []interface{ Validate() error }{
+		r.Scope.EntityType,
+		r.Measurement,
+		r.ActiveWindows,
+	}
+	for _, v := range validators {
 		if err := v.Validate(); err != nil {
 			return err
 		}
 	}
+
 	switch {
 	case !r.Value.IsPositive():
 		return invalid("value must be greater than zero")
@@ -92,40 +107,52 @@ func (r *CreateCommitmentRequest) Validate() error {
 	case len(r.ActiveWindows) > 0 && r.Measurement != types.CommitmentMeasurementWindow:
 		return invalid("active_windows require measurement=window")
 	}
+
 	if _, err := time.LoadLocation(r.Timezone); err != nil || r.Timezone == "" {
 		return invalid("timezone must be a valid IANA name")
 	}
+
 	binding := lo.FromPtrOr(r.Binding, false)
 	if !binding && (r.CollectionMethod != nil || r.OnEarlyTermination != nil) {
 		return invalid("non-binding commitments take no collection_method or on_early_termination")
 	}
+
 	if r.CollectionMethod != nil {
 		if err := r.CollectionMethod.Validate(); err != nil {
 			return err
 		}
+
 		if *r.CollectionMethod == types.CommitmentCollectionBillingTerms {
 			return invalid("collection_method billing_terms is not yet supported")
 		}
 	}
+
 	if r.OnEarlyTermination != nil {
 		if err := r.OnEarlyTermination.Validate(); err != nil {
 			return err
 		}
+
 		if *r.OnEarlyTermination == types.CommitmentTerminationCreditNote {
 			return invalid("on_early_termination credit_note requires collection_method billing_terms")
 		}
 	}
+
 	if len(r.Name) == 0 || len(r.Name) > 255 || len(r.InvoiceLabel) > 255 {
 		return invalid("name and invoice_label must be 1-255 characters")
 	}
+
 	if r.InvoiceDescription != nil && len(*r.InvoiceDescription) > 500 {
 		return invalid("invoice_description must be at most 500 characters")
 	}
+
 	return nil
 }
 
 // ToCommitment builds the domain commitment for sub. Price IDs are set by the caller.
-func (r *CreateCommitmentRequest) ToCommitment(ctx context.Context, sub *subscription.Subscription) *commitment.Commitment {
+func (r *CreateCommitmentRequest) ToCommitment(
+	ctx context.Context,
+	sub *subscription.Subscription,
+) *commitment.Commitment {
 	return &commitment.Commitment{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT),
 		SubscriptionID:     r.SubscriptionID,

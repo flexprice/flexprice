@@ -16,10 +16,16 @@ import (
 func validReq(subID, priceID string) dto.CreateCommitmentRequest {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	return dto.CreateCommitmentRequest{
-		SubscriptionID: subID, Name: "Base", Scope: dto.CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: priceID},
-		Type: types.COMMITMENT_TYPE_QUANTITY, Value: decimal.NewFromInt(8), CommittedRate: lo.ToPtr(dec("0.048")),
-		Measurement: types.CommitmentMeasurementBillingPeriod, StartDate: jan, EndDate: jan.AddDate(1, 0, 0),
-		Binding: lo.ToPtr(true),
+		SubscriptionID: subID,
+		Name:           "Base",
+		Scope:          dto.CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: priceID},
+		Type:           types.COMMITMENT_TYPE_QUANTITY,
+		Value:          decimal.NewFromInt(8),
+		CommittedRate:  lo.ToPtr(dec("0.048")),
+		Measurement:    types.CommitmentMeasurementBillingPeriod,
+		StartDate:      jan,
+		EndDate:        jan.AddDate(1, 0, 0),
+		Binding:        lo.ToPtr(true),
 	}
 }
 
@@ -54,6 +60,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		{"C21 label too long", func(r *dto.CreateCommitmentRequest) { r.InvoiceLabel = string(make([]byte, 256)) }, false},
 		{"C2 end before start", func(r *dto.CreateCommitmentRequest) { r.EndDate = r.StartDate }, false},
 	}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			r := validReq("subs_1", "price_1")
@@ -64,6 +71,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 				require.NoError(t, err)
 				return
 			}
+
 			require.Error(t, err)
 			require.True(t, ierr.IsValidation(err), "want validation error, got %v", err)
 		})
@@ -72,7 +80,13 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 
 func TestValidateBoundary(t *testing.T) {
 	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	sub := &subscription.Subscription{StartDate: start, BillingAnchor: start, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, Timezone: "UTC"}
+	sub := &subscription.Subscription{
+		StartDate:          start,
+		BillingAnchor:      start,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Timezone:           "UTC",
+	}
 
 	require.NoError(t, validateBoundary(sub, time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC)))
 
