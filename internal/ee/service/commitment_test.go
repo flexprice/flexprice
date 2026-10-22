@@ -673,6 +673,7 @@ func (s *CommitmentServiceSuite) fullParams() ServiceParams {
 		CreditGrantApplicationRepo:   st.CreditGrantApplicationRepo,
 		GroupRepo:                    st.GroupRepo,
 		SettingsRepo:                 st.SettingsRepo,
+		AddonPriceSyncRepo:           st.AddonPriceSyncRepo,
 		CommitmentRepo:               st.CommitmentRepo,
 		TaxAssociationRepo:           st.TaxAssociationRepo,
 		TaxRateRepo:                  st.TaxRateRepo,
