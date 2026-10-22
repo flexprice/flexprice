@@ -47,6 +47,7 @@ func (c *Commitment) IsActiveAt(t time.Time) bool {
 	if c == nil || t.Before(c.StartDate) || !t.Before(c.EndDate) {
 		return false
 	}
+
 	return c.TerminatedAt == nil || t.Before(*c.TerminatedAt)
 }
 
@@ -55,10 +56,12 @@ func (c *Commitment) Location() *time.Location {
 	if c == nil {
 		return time.UTC
 	}
+
 	loc, err := time.LoadLocation(c.Timezone)
 	if err != nil {
 		return time.UTC
 	}
+
 	return loc
 }
 
@@ -66,18 +69,45 @@ func FromEnt(e *ent.Commitment) *Commitment {
 	if e == nil {
 		return nil
 	}
+
 	return &Commitment{
-		ID: e.ID, SubscriptionID: e.SubscriptionID, CustomerID: e.CustomerID, Name: e.Name,
-		InvoiceLabel: e.InvoiceLabel, InvoiceDescription: e.InvoiceDescription, Currency: e.Currency,
-		ScopeEntityType: e.ScopeEntityType, ScopeEntityID: e.ScopeEntityID, Type: e.Type, Value: e.Value,
-		CommittedPriceID: e.CommittedPriceID, OveragePriceID: e.OveragePriceID, Measurement: e.Measurement,
-		ActiveWindows: e.ActiveWindows, Timezone: e.Timezone, Priority: e.Priority, Binding: e.Binding,
-		CollectionMethod: e.CollectionMethod, TotalAmount: e.TotalAmount, InstalmentInvoicing: e.InstalmentInvoicing,
-		StartDate: e.StartDate, EndDate: e.EndDate, OnEarlyTermination: e.OnEarlyTermination,
-		CommitmentStatus: e.CommitmentStatus, TerminatedAt: e.TerminatedAt, IdempotencyKey: e.IdempotencyKey,
-		Metadata: e.Metadata, EnvironmentID: e.EnvironmentID,
-		BaseModel: types.BaseModel{TenantID: e.TenantID, Status: types.Status(e.Status), CreatedAt: e.CreatedAt,
-			UpdatedAt: e.UpdatedAt, CreatedBy: e.CreatedBy, UpdatedBy: e.UpdatedBy},
+		ID:                  e.ID,
+		SubscriptionID:      e.SubscriptionID,
+		CustomerID:          e.CustomerID,
+		Name:                e.Name,
+		InvoiceLabel:        e.InvoiceLabel,
+		InvoiceDescription:  e.InvoiceDescription,
+		Currency:            e.Currency,
+		ScopeEntityType:     e.ScopeEntityType,
+		ScopeEntityID:       e.ScopeEntityID,
+		Type:                e.Type,
+		Value:               e.Value,
+		CommittedPriceID:    e.CommittedPriceID,
+		OveragePriceID:      e.OveragePriceID,
+		Measurement:         e.Measurement,
+		ActiveWindows:       e.ActiveWindows,
+		Timezone:            e.Timezone,
+		Priority:            e.Priority,
+		Binding:             e.Binding,
+		CollectionMethod:    e.CollectionMethod,
+		TotalAmount:         e.TotalAmount,
+		InstalmentInvoicing: e.InstalmentInvoicing,
+		StartDate:           e.StartDate,
+		EndDate:             e.EndDate,
+		OnEarlyTermination:  e.OnEarlyTermination,
+		CommitmentStatus:    e.CommitmentStatus,
+		TerminatedAt:        e.TerminatedAt,
+		IdempotencyKey:      e.IdempotencyKey,
+		Metadata:            e.Metadata,
+		EnvironmentID:       e.EnvironmentID,
+		BaseModel: types.BaseModel{
+			TenantID:  e.TenantID,
+			Status:    types.Status(e.Status),
+			CreatedAt: e.CreatedAt,
+			UpdatedAt: e.UpdatedAt,
+			CreatedBy: e.CreatedBy,
+			UpdatedBy: e.UpdatedBy,
+		},
 	}
 }
 
@@ -86,5 +116,126 @@ func FromEntList(list []*ent.Commitment) []*Commitment {
 	for _, e := range list {
 		out = append(out, FromEnt(e))
 	}
+
 	return out
+}
+
+// Filter selects commitments for List and Count.
+type Filter struct {
+	*types.QueryFilter
+	*types.TimeRangeFilter
+
+	Filters         []*types.FilterCondition   `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort            []*types.SortCondition     `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	IDs             []string                   `json:"ids,omitempty" form:"ids"`
+	SubscriptionIDs []string                   `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	CustomerIDs     []string                   `json:"customer_ids,omitempty" form:"customer_ids"`
+	Statuses        []types.CommitmentStatus   `json:"statuses,omitempty" form:"statuses"`
+	ScopeType       *types.CommitmentScopeType `json:"scope_entity_type,omitempty" form:"scope_entity_type"`
+	ScopeIDs        []string                   `json:"scope_entity_ids,omitempty" form:"scope_entity_ids"`
+
+	// ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo).
+	ActiveFrom *time.Time `json:"active_from,omitempty" form:"active_from"`
+	ActiveTo   *time.Time `json:"active_to,omitempty" form:"active_to"`
+}
+
+func NewDefaultFilter() *Filter {
+	return &Filter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	}
+}
+
+func NewNoLimitFilter() *Filter {
+	return &Filter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	}
+}
+
+func (f Filter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, s := range f.Statuses {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.ScopeType != nil {
+		return f.ScopeType.Validate()
+	}
+
+	return nil
+}
+
+// GetLimit implements BaseFilter interface.
+func (f *Filter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetLimit()
+	}
+
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface.
+func (f *Filter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOffset()
+	}
+
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface.
+func (f *Filter) GetSort() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetSort()
+	}
+
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface.
+func (f *Filter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetOrder()
+	}
+
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter — row-level status, not the commitment status.
+func (f *Filter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetStatus()
+	}
+
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface.
+func (f *Filter) GetExpand() types.Expand {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().GetExpand()
+	}
+
+	return f.QueryFilter.GetExpand()
+}
+
+// IsUnlimited returns true if this is an unlimited query.
+func (f *Filter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return types.NewDefaultQueryFilter().IsUnlimited()
+	}
+
+	return f.QueryFilter.IsUnlimited()
 }

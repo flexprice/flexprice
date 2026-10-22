@@ -1274,4 +1274,6 @@ type CommitmentsV2Config struct {
 	Enabled bool `json:"enabled"`
 }
 
-func (c CommitmentsV2Config) Validate() error { return nil }
+func (c CommitmentsV2Config) Validate() error {
+	return nil
+}

@@ -3,6 +3,9 @@
 -- instantly inside this transactional migration; CONCURRENTLY is unnecessary.
 -- Base-mixin columns match ent/migrate/schema.go exactly (BaseMixin + EnvironmentMixin).
 -- Index names longer than 63 chars use Ent's truncated-plus-md5 form.
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
+
 CREATE TABLE IF NOT EXISTS "commitments" (
   "id"                   varchar(50)   NOT NULL,
   "tenant_id"            varchar(50)   NOT NULL,
@@ -28,7 +31,7 @@ CREATE TABLE IF NOT EXISTS "commitments" (
   "active_windows"       jsonb         NULL,
   "timezone"             varchar(64)   NOT NULL,
   "priority"             bigint        NOT NULL DEFAULT 0,
-  "binding"              boolean       NOT NULL DEFAULT true,
+  "binding"              boolean       NOT NULL DEFAULT false,
   "collection_method"    varchar(20)   NULL,
   "total_amount"         numeric(20,8) NULL,
   "instalment_invoicing" varchar(30)   NULL,

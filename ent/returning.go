@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -640,6 +641,68 @@ func scanReturningCheckoutSession(rows *sql.Rows) ([]*CheckoutSession, error) {
 	var out []*CheckoutSession
 	for rows.Next() {
 		node := &CheckoutSession{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*Commitment.
+func (_u *CommitmentUpdate) SaveReturning(ctx context.Context) ([]*Commitment, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CommitmentUpdate) sqlSaveReturning(ctx context.Context) ([]*Commitment, error) {
+	var out []*Commitment
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", commitment.Table, commitment.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCommitment(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*Commitment.
+func (_d *CommitmentDelete) ExecReturning(ctx context.Context) ([]*Commitment, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CommitmentDelete) sqlExecReturning(ctx context.Context) ([]*Commitment, error) {
+	var out []*Commitment
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", commitment.Table, commitment.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCommitment(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCommitment(rows *sql.Rows) ([]*Commitment, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*Commitment
+	for rows.Next() {
+		node := &Commitment{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

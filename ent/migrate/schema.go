@@ -350,7 +350,7 @@ var (
 		{Name: "active_windows", Type: field.TypeJSON, Nullable: true},
 		{Name: "timezone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(64)"}},
 		{Name: "priority", Type: field.TypeInt, Default: 0},
-		{Name: "binding", Type: field.TypeBool, Default: true},
+		{Name: "binding", Type: field.TypeBool, Default: false},
 		{Name: "collection_method", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "total_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "instalment_invoicing", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},

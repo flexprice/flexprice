@@ -8,26 +8,32 @@ import (
 )
 
 func TestActiveWindows_Validate(t *testing.T) {
+	window := func(sh, sm, eh, em int) ActiveWindow {
+		return ActiveWindow{
+			Start: Bucket{Hour: sh, Minute: sm},
+			End:   Bucket{Hour: eh, Minute: em},
+		}
+	}
+
 	tests := []struct {
 		name    string
 		windows ActiveWindows
 		wantErr bool
 	}{
 		{"empty is all day", nil, false},
-		{"single range", ActiveWindows{{Start: "09:00", End: "21:00"}}, false},
-		{"midnight wrap", ActiveWindows{{Start: "22:00", End: "06:00"}}, false},
-		{"two disjoint ranges", ActiveWindows{{Start: "09:00", End: "12:00"}, {Start: "14:00", End: "18:00"}}, false},
-		{"bad format", ActiveWindows{{Start: "9", End: "21:00"}}, true},
-		{"negative hour", ActiveWindows{{Start: "-1:00", End: "09:00"}}, true},
-		{"negative minute", ActiveWindows{{Start: "00:-1", End: "09:00"}}, true},
-		{"plus sign", ActiveWindows{{Start: "+9:30", End: "10:00"}}, true},
-		{"trailing space", ActiveWindows{{Start: "09:5 ", End: "10:00"}}, true},
-		{"hour 24", ActiveWindows{{Start: "24:00", End: "10:00"}}, true},
-		{"minute 60", ActiveWindows{{Start: "09:60", End: "10:00"}}, true},
-		{"letters", ActiveWindows{{Start: "ab:cd", End: "10:00"}}, true},
-		{"start equals end", ActiveWindows{{Start: "09:00", End: "09:00"}}, true},
-		{"overlapping ranges", ActiveWindows{{Start: "09:00", End: "12:00"}, {Start: "11:00", End: "13:00"}}, true},
-		{"wrap overlaps morning range", ActiveWindows{{Start: "22:00", End: "06:00"}, {Start: "05:00", End: "07:00"}}, true},
+		{"single range", ActiveWindows{window(9, 0, 21, 0)}, false},
+		{"midnight wrap", ActiveWindows{window(22, 0, 6, 0)}, false},
+		{"whole day via end of day", ActiveWindows{window(0, 0, 24, 0)}, false},
+		{"two disjoint ranges", ActiveWindows{window(9, 0, 12, 0), window(14, 0, 18, 0)}, false},
+		{"negative hour", ActiveWindows{window(-1, 0, 9, 0)}, true},
+		{"negative minute", ActiveWindows{window(0, -1, 9, 0)}, true},
+		{"hour 25", ActiveWindows{window(25, 0, 10, 0)}, true},
+		{"hour 24 with minutes", ActiveWindows{window(9, 0, 24, 30)}, true},
+		{"minute 60", ActiveWindows{window(9, 60, 10, 0)}, true},
+		{"start equals end", ActiveWindows{window(9, 0, 9, 0)}, true},
+		{"overlapping ranges", ActiveWindows{window(9, 0, 12, 0), window(11, 0, 13, 0)}, true},
+		{"wrap overlaps morning range", ActiveWindows{window(22, 0, 6, 0), window(5, 0, 7, 0)}, true},
+		{"whole day overlaps any range", ActiveWindows{window(0, 0, 24, 0), window(5, 0, 7, 0)}, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -36,6 +42,7 @@ func TestActiveWindows_Validate(t *testing.T) {
 				require.Error(t, err)
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}
@@ -44,19 +51,41 @@ func TestActiveWindows_Validate(t *testing.T) {
 func TestActiveWindows_Contains(t *testing.T) {
 	ist, err := time.LoadLocation("Asia/Kolkata")
 	require.NoError(t, err)
-	w := ActiveWindows{{Start: "09:00", End: "21:00"}}
-	at := func(h, m int) time.Time { return time.Date(2026, 8, 25, h, m, 0, 0, ist).UTC() }
 
+	at := func(h, m int) time.Time {
+		return time.Date(2026, 8, 25, h, m, 0, 0, ist).UTC()
+	}
+
+	w := ActiveWindows{
+		{
+			Start: Bucket{Hour: 9},
+			End:   Bucket{Hour: 21},
+		},
+	}
 	require.True(t, w.Contains(at(9, 0), ist))
 	require.True(t, w.Contains(at(20, 59), ist))
 	require.False(t, w.Contains(at(21, 0), ist))
 	require.False(t, w.Contains(at(8, 59), ist))
 	require.True(t, ActiveWindows(nil).Contains(at(3, 0), ist))
 
-	wrap := ActiveWindows{{Start: "22:00", End: "06:00"}}
+	wrap := ActiveWindows{
+		{
+			Start: Bucket{Hour: 22},
+			End:   Bucket{Hour: 6},
+		},
+	}
 	require.True(t, wrap.Contains(at(23, 30), ist))
 	require.True(t, wrap.Contains(at(5, 59), ist))
 	require.False(t, wrap.Contains(at(6, 0), ist))
+
+	evening := ActiveWindows{
+		{
+			Start: Bucket{Hour: 18},
+			End:   Bucket{Hour: 24},
+		},
+	}
+	require.True(t, evening.Contains(at(23, 59), ist))
+	require.False(t, evening.Contains(at(0, 0), ist))
 }
 
 func TestCommitmentEnums_Validate(t *testing.T) {

@@ -14,6 +14,10 @@ type Commitment struct {
 	ent.Schema
 }
 
+const (
+	CommitmentIdempotencyKeyConstraint = "commitment_tenant_id_environment_id_idempotency_key"
+)
+
 func (Commitment) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
@@ -105,14 +109,15 @@ func (Commitment) Fields() []ent.Field {
 		field.String("timezone").
 			SchemaType(varchar("64")).
 			NotEmpty().
-			Immutable(),
+			Immutable().
+			Validate(types.ValidateTimezone),
 
 		field.Int("priority").
 			Default(0).
 			Immutable(),
 
 		field.Bool("binding").
-			Default(true).
+			Default(false).
 			Immutable(),
 
 		field.String("collection_method").
@@ -174,6 +179,8 @@ func (Commitment) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_id", "commitment_status"),
 		index.Fields("tenant_id", "environment_id", "scope_entity_type", "scope_entity_id"),
 		index.Fields("tenant_id", "environment_id", "customer_id"),
-		index.Fields("tenant_id", "environment_id", "idempotency_key").Unique(),
+		index.Fields("tenant_id", "environment_id", "idempotency_key").
+			Unique().
+			StorageKey(CommitmentIdempotencyKeyConstraint),
 	}
 }

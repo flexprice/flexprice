@@ -443,7 +443,21 @@ func init() {
 	// commitmentDescTimezone is the schema descriptor for timezone field.
 	commitmentDescTimezone := commitmentFields[15].Descriptor()
 	// commitment.TimezoneValidator is a validator for the "timezone" field. It is called by the builders before save.
-	commitment.TimezoneValidator = commitmentDescTimezone.Validators[0].(func(string) error)
+	commitment.TimezoneValidator = func() func(string) error {
+		validators := commitmentDescTimezone.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(timezone string) error {
+			for _, fn := range fns {
+				if err := fn(timezone); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// commitmentDescPriority is the schema descriptor for priority field.
 	commitmentDescPriority := commitmentFields[16].Descriptor()
 	// commitment.DefaultPriority holds the default value on creation for the priority field.
