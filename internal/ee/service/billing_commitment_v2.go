@@ -25,6 +25,7 @@ type commitmentPass struct {
 	periods map[string]commitmentPeriod // each commitment's invoice period, cut at termination
 	buckets map[string]types.WindowSize
 	settle  map[string]decimal.Decimal // bill_remaining amount owed by commitments terminated in the period
+	fees    map[string]decimal.Decimal // cancellation fees of commitments terminated in the period
 	// fromEvents reads bucketed usage from raw events instead of meter_usage, for the raw-events path.
 	fromEvents bool
 }
@@ -41,6 +42,7 @@ func (s *billingService) prepareCommitmentPass(
 		periods: map[string]commitmentPeriod{},
 		buckets: map[string]types.WindowSize{},
 		settle:  map[string]decimal.Decimal{},
+		fees:    map[string]decimal.Decimal{},
 	}
 
 	svc := &commitmentService{ServiceParams: s.ServiceParams}
@@ -73,7 +75,8 @@ func (s *billingService) prepareCommitmentPass(
 	for _, c := range commitments {
 		effectiveEnd := commitmentEffectiveEnd(c)
 		settles := owesRemaining(c, sub, periodStart, periodEnd)
-		if !effectiveEnd.After(periodStart) && !settles {
+		feeDue := c.CancellationFeeAmount != nil && terminatesOnInvoice(c, sub, periodStart, periodEnd)
+		if !effectiveEnd.After(periodStart) && !settles && !feeDue {
 			continue
 		}
 
@@ -126,6 +129,10 @@ func (s *billingService) prepareCommitmentPass(
 			pass.settle[c.ID] = remainingValue(c, periods, rates, bucket, sub.BillingAnchor)
 		}
 
+		if feeDue {
+			pass.fees[c.ID] = *c.CancellationFeeAmount
+		}
+
 		var ids []string
 		if !settleOnly {
 			lines := inCall(
@@ -151,7 +158,7 @@ func (s *billingService) prepareCommitmentPass(
 }
 
 // commitmentsForInvoice returns the commitments running in [periodStart, periodEnd), plus those that have not started
-// but settle on this invoice; subscription end dates are applied as terminations.
+// but settle or charge a cancellation fee on this invoice; subscription end dates are applied as terminations.
 func (s *billingService) commitmentsForInvoice(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -170,7 +177,8 @@ func (s *billingService) commitmentsForInvoice(
 	out := make([]*commitment.Commitment, 0, len(all))
 	for _, c := range all {
 		c = withSubscriptionEnd(c, sub, periodStart, periodEnd)
-		if c.StartDate.Before(periodEnd) || owesRemaining(c, sub, periodStart, periodEnd) {
+		feeDue := c.CancellationFeeAmount != nil && terminatesOnInvoice(c, sub, periodStart, periodEnd)
+		if c.StartDate.Before(periodEnd) || owesRemaining(c, sub, periodStart, periodEnd) || feeDue {
 			out = append(out, c)
 		}
 	}
@@ -270,22 +278,35 @@ func (s *billingService) applyCommitmentPass(
 
 	for _, sc := range pass.stack {
 		amount := types.RoundToCurrencyPrecision(pass.settle[sc.C.ID], sub.Currency)
-		if !amount.IsPositive() {
-			continue
+		if amount.IsPositive() {
+			line := commitmentLine(
+				in,
+				sc,
+				nil,
+				types.CommitmentLineSettlement,
+				sc.C.InvoiceLabel+" (remaining commitment)",
+				decimal.NewFromInt(1),
+				amount,
+			)
+			line.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
+			line.PriceID = sc.C.CommittedPriceID
+			out = append(out, line)
 		}
 
-		line := commitmentLine(
-			in,
-			sc,
-			nil,
-			types.CommitmentLineSettlement,
-			sc.C.InvoiceLabel+" (remaining commitment)",
-			decimal.NewFromInt(1),
-			amount,
-		)
-		line.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
-		line.PriceID = sc.C.CommittedPriceID
-		out = append(out, line)
+		fee := pass.fees[sc.C.ID]
+		if fee.IsPositive() {
+			line := commitmentLine(
+				in,
+				sc,
+				nil,
+				types.CommitmentLineCancellationFee,
+				sc.C.InvoiceLabel+" (cancellation fee)",
+				decimal.NewFromInt(1),
+				fee,
+			)
+			line.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
+			out = append(out, line)
+		}
 	}
 
 	return out, alloc, nil
@@ -996,13 +1017,23 @@ func commitmentEffectiveEnd(c *commitment.Commitment) time.Time {
 }
 
 // owesRemaining reports whether a binding per_period bill_remaining commitment settles on the invoice for
-// (start, end] holding terminated_at; a termination at or before the subscription start settles on the first period.
+// (start, end].
 func owesRemaining(c *commitment.Commitment, sub *subscription.Subscription, start, end time.Time) bool {
-	if c.TerminatedAt == nil || !c.Binding || lo.FromPtr(c.OnEarlyTermination) != types.CommitmentTerminationBillRemaining {
+	if !c.Binding || lo.FromPtr(c.OnEarlyTermination) != types.CommitmentTerminationBillRemaining {
 		return false
 	}
 
 	if c.CollectionMethod != nil && *c.CollectionMethod != types.CommitmentCollectionPerPeriod {
+		return false
+	}
+
+	return terminatesOnInvoice(c, sub, start, end)
+}
+
+// terminatesOnInvoice reports whether the invoice for (start, end] holds terminated_at; a termination at or before
+// the subscription start lands on the first period.
+func terminatesOnInvoice(c *commitment.Commitment, sub *subscription.Subscription, start, end time.Time) bool {
+	if c.TerminatedAt == nil {
 		return false
 	}
 

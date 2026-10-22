@@ -506,6 +506,113 @@ func (s *BillingServiceSuite) TestCommitmentV2_BillRemaining_Settlement() {
 	s.True(total.Equal(dec("300")), "total %s", total)
 }
 
+// A cancellation fee adds one line to the invoice holding terminated_at, on top of whatever else it bills.
+func (s *BillingServiceSuite) TestCommitmentV2_CancellationFee_OnTerminatingInvoice() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+
+	tests := []struct {
+		name            string
+		binding         bool
+		onEarly         *types.CommitmentEarlyTermination
+		wantSettlements int
+	}{
+		{
+			name:            "bill_remaining",
+			binding:         true,
+			onEarly:         lo.ToPtr(types.CommitmentTerminationBillRemaining),
+			wantSettlements: 1,
+		},
+		{
+			name:            "forfeit",
+			binding:         true,
+			onEarly:         lo.ToPtr(types.CommitmentTerminationForfeit),
+			wantSettlements: 0,
+		},
+		{
+			name:            "non_binding",
+			binding:         false,
+			wantSettlements: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			id := "sub_fee_" + tt.name
+			p := s.usagePriceFor("price_"+id, s.testData.meters.apiCalls, "1")
+			li := &subscription.SubscriptionLineItem{
+				ID:          "subs_line_" + id,
+				PriceID:     p.ID,
+				MeterID:     s.testData.meters.apiCalls.ID,
+				DisplayName: "API",
+			}
+			sub := s.fixedDateSub(id, li)
+			aug, sep := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+
+			c := s.newTestCommitment(
+				"cmt_"+id,
+				sub,
+				types.COMMITMENT_TYPE_AMOUNT,
+				"100",
+				p.ID,
+				aug,
+				aug.AddDate(0, 3, 0),
+			)
+			c.Binding = tt.binding
+			c.OnEarlyTermination = tt.onEarly
+			if !tt.binding {
+				c.CollectionMethod = nil
+			}
+
+			c.CommitmentStatus = types.CommitmentStatusTerminated
+			c.TerminatedAt = lo.ToPtr(time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC))
+			s.storeCommitment(c)
+
+			usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
+				SubscriptionLineItemID: li.ID,
+				Price:                  p,
+				Quantity:               20,
+				Amount:                 20,
+			}}}
+			charges := func(from, to time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal) {
+				lines, total, err := s.service.CalculateMeterUsageCharges(
+					ctx,
+					sub,
+					usage,
+					from,
+					to,
+					types.UsageSourceInvoiceCreation,
+					nil,
+				)
+				s.Require().NoError(err)
+				return lines, total
+			}
+
+			withoutFee, totalWithoutFee := charges(aug, sep)
+			s.Empty(linesByKind(withoutFee, types.CommitmentLineCancellationFee))
+
+			c.CancellationFeeAmount = lo.ToPtr(dec("50"))
+			_, err := s.GetStores().CommitmentRepo.Update(ctx, c)
+			s.Require().NoError(err)
+
+			lines, total := charges(aug, sep)
+			s.Len(lines, len(withoutFee)+1)
+			s.Len(linesByKind(lines, types.CommitmentLineSettlement), tt.wantSettlements)
+			s.True(total.Equal(totalWithoutFee.Add(dec("50"))), "total %s, without fee %s", total, totalWithoutFee)
+
+			fee := linesByKind(lines, types.CommitmentLineCancellationFee)
+			s.Require().Len(fee, 1)
+			s.True(fee[0].Amount.Equal(dec("50")), "fee %s", fee[0].Amount)
+			s.Equal(c.ID, lo.FromPtr(fee[0].CommitmentID))
+			s.Equal(c.InvoiceLabel+" (cancellation fee)", lo.FromPtr(fee[0].DisplayName))
+
+			next, _ := charges(sep, sep.AddDate(0, 1, 0))
+			s.Empty(linesByKind(next, types.CommitmentLineCancellationFee))
+		})
+	}
+}
+
 func TestSpreadWindowCosts_ConservesLineCost(t *testing.T) {
 	third := func(q decimal.Decimal) decimal.Decimal { return q.Mul(dec("0.333333")) }
 	got := spreadWindowCosts([]decimal.Decimal{dec("1"), dec("1"), dec("1"), dec("0")}, dec("1.00"), third)
@@ -1417,6 +1524,17 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_TrueUpS
 	inv := s.recalcFixture("recalc_trueup", s.recalcCommitment("cmt_recalc_100", "100", 1))
 	// Within $10 plus a $90 true-up.
 	s.requireStableRecalculation(inv, 2, "100")
+}
+
+func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_CancellationFeeStaysSingle() {
+	c := s.recalcCommitment("cmt_recalc_fee", "100", 1)
+	c.CommitmentStatus = types.CommitmentStatusTerminated
+	c.TerminatedAt = lo.ToPtr(time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC))
+	c.CancellationFeeAmount = lo.ToPtr(dec("25"))
+	inv := s.recalcFixture("recalc_fee", c)
+
+	// Within $10, a $38.39 true-up to the 15 of 31 days earned, and the $25 fee.
+	s.requireStableRecalculation(inv, 3, "73.39")
 }
 
 func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_StackedStaysStable() {

@@ -105,11 +105,12 @@ func (s CommitmentStatus) Validate() error {
 type CommitmentLineKind string
 
 const (
-	CommitmentLineWithin     CommitmentLineKind = "within_commitment"
-	CommitmentLineOnDemand   CommitmentLineKind = "on_demand"
-	CommitmentLineTrueUp     CommitmentLineKind = "true_up"
-	CommitmentLineInstalment CommitmentLineKind = "instalment"
-	CommitmentLineSettlement CommitmentLineKind = "settlement"
+	CommitmentLineWithin          CommitmentLineKind = "within_commitment"
+	CommitmentLineOnDemand        CommitmentLineKind = "on_demand"
+	CommitmentLineTrueUp          CommitmentLineKind = "true_up"
+	CommitmentLineInstalment      CommitmentLineKind = "instalment"
+	CommitmentLineSettlement      CommitmentLineKind = "settlement"
+	CommitmentLineCancellationFee CommitmentLineKind = "cancellation_fee"
 )
 
 func validateEnum[T ~string](field string, v T, allowed []T) error {
