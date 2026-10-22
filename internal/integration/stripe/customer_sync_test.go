@@ -296,3 +296,83 @@ func TestDefaultPaymentMethodID(t *testing.T) {
 		},
 	}))
 }
+
+// The service has no Stripe client, so reaching Stripe would panic: an unlinked customer must
+// return first.
+func TestUpdateCustomerInStripe_UnlinkedCustomerIsSkipped(t *testing.T) {
+	customerSvc := &syncTestCustomerService{
+		customer: &customer.Customer{
+			ID:   "cust_test001",
+			Name: "Acme",
+		},
+	}
+	svc := NewCustomerService(nil, nil, &syncTestMappingRepo{}, &syncTestLocker{}, logger.NewNoopLogger())
+
+	err := svc.UpdateCustomerInStripe(testContext(), customerSvc.customer, customerSvc)
+
+	require.NoError(t, err)
+}
+
+func TestCustomerUpdateParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		customer    *customer.Customer
+		wantAddress *stripeapi.AddressParams
+	}{
+		{
+			name: "full address",
+			customer: &customer.Customer{
+				Name:              "Acme",
+				Email:             "billing@acme.test",
+				AddressLine1:      "1 Main St",
+				AddressLine2:      "Suite 2",
+				AddressCity:       "Austin",
+				AddressState:      "TX",
+				AddressPostalCode: "78701",
+				AddressCountry:    "US",
+			},
+			wantAddress: &stripeapi.AddressParams{
+				Line1:      stripeapi.String("1 Main St"),
+				Line2:      stripeapi.String("Suite 2"),
+				City:       stripeapi.String("Austin"),
+				State:      stripeapi.String("TX"),
+				PostalCode: stripeapi.String("78701"),
+				Country:    stripeapi.String("US"),
+			},
+		},
+		{
+			name: "country and postal code alone are still sent, which is all Stripe Tax needs",
+			customer: &customer.Customer{
+				Name:              "Acme",
+				Email:             "billing@acme.test",
+				AddressPostalCode: "78701",
+				AddressCountry:    "US",
+			},
+			wantAddress: &stripeapi.AddressParams{
+				Line1:      stripeapi.String(""),
+				Line2:      stripeapi.String(""),
+				City:       stripeapi.String(""),
+				State:      stripeapi.String(""),
+				PostalCode: stripeapi.String("78701"),
+				Country:    stripeapi.String("US"),
+			},
+		},
+		{
+			name: "no address leaves Stripe's alone",
+			customer: &customer.Customer{
+				Name:  "Acme",
+				Email: "billing@acme.test",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := customerUpdateParams(tt.customer)
+
+			assert.Equal(t, tt.customer.Name, *params.Name)
+			assert.Equal(t, tt.customer.Email, *params.Email)
+			assert.Equal(t, tt.wantAddress, params.Address)
+		})
+	}
+}

@@ -33,6 +33,10 @@ const (
 	CtxCustomerID         ContextKey = "ctx_customer_id"
 	CtxExternalCustomerID ContextKey = "ctx_external_customer_id"
 
+	// Hosted invoice context keys, set from a verified hosted invoice token
+	CtxHostedInvoiceTokenID ContextKey = "ctx_hosted_invoice_token_id"
+	CtxHostedInvoiceID      ContextKey = "ctx_hosted_invoice_id"
+
 	// Tenant internal state
 	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
 
@@ -89,6 +93,22 @@ func GetRoles(ctx context.Context) []string {
 func GetCustomerID(ctx context.Context) string {
 	if customerID, ok := ctx.Value(CtxCustomerID).(string); ok {
 		return customerID
+	}
+	return ""
+}
+
+// GetHostedInvoiceTokenID returns the verified hosted invoice token ID from the context
+func GetHostedInvoiceTokenID(ctx context.Context) string {
+	if id, ok := ctx.Value(CtxHostedInvoiceTokenID).(string); ok {
+		return id
+	}
+	return ""
+}
+
+// GetHostedInvoiceID returns the invoice ID of the verified hosted invoice token from the context
+func GetHostedInvoiceID(ctx context.Context) string {
+	if id, ok := ctx.Value(CtxHostedInvoiceID).(string); ok {
+		return id
 	}
 	return ""
 }

@@ -286,3 +286,23 @@ func TestRunReport_EventsVolumeMaxRange(t *testing.T) {
 	_, err = svc.RunReport(billingCtx(), "invoice_total", &dto.ReportQueryRequest{Shape: "scalar", Range: "2026-01-01..2026-09-09"})
 	require.NoError(t, err)
 }
+
+func TestExecuteView_EventsVolumeMaxRangeApplies(t *testing.T) {
+	svc := reportsSvc(&testutil.InMemoryReportsRepo{On: true})
+	def := func(rng string) *analytics.ViewDefinition {
+		return &analytics.ViewDefinition{
+			Family:  types.FamilyBilling,
+			Shape:   types.ShapeTimeseries,
+			Metrics: []types.Metric{types.MetricEventsVolume},
+			Time:    analytics.TimeSpecRaw{Range: rng, Grain: types.GrainDay},
+		}
+	}
+
+	_, err := svc.ExecuteView(billingCtx(), def("last_30_days"), nil)
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+	assert.Contains(t, cerrors.FlattenHints(err), "Choose a range of 7 days or less")
+
+	_, err = svc.ExecuteView(billingCtx(), def("last_7_days"), nil)
+	require.NoError(t, err)
+}

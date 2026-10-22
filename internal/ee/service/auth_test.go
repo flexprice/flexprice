@@ -15,10 +15,17 @@ import (
 )
 
 // recordingHook records each tenant handed to self-billing as "tenant|name|email".
-type recordingHook struct{ calls []string }
+type recordingHook struct {
+	calls   []string
+	updated []string
+}
 
 func (h *recordingHook) OnTenantCreated(_ context.Context, tenantID, name, email string) {
 	h.calls = append(h.calls, tenantID+"|"+name+"|"+email)
+}
+
+func (h *recordingHook) OnTenantBillingDetailsUpdated(_ context.Context, tenantID string) {
+	h.updated = append(h.updated, tenantID)
 }
 
 type AuthServiceSuite struct {

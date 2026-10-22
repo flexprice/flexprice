@@ -33,6 +33,7 @@ type alert struct {
 	Region     string                     `json:"region"`
 	FromStatus types.TenantInternalStatus `json:"from_status,omitempty"`
 	ToStatus   types.TenantInternalStatus `json:"to_status,omitempty"`
+	Reason     suspensionReason           `json:"reason,omitempty"`
 	OccurredAt time.Time                  `json:"occurred_at"`
 }
 

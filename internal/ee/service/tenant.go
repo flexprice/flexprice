@@ -109,6 +109,7 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 		return nil, err
 	}
 
+	before := *existingTenant
 	existingTenant.BillingDetails = req.BillingDetails.MergeInto(existingTenant.BillingDetails)
 
 	// Update the name only if it is explicitly provided (not nil), not empty, and different from existing
@@ -126,6 +127,10 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 	// Save the updated tenant
 	if err := s.TenantRepo.Update(ctx, existingTenant); err != nil {
 		return nil, err
+	}
+
+	if s.SelfBilling != nil && (before.Name != existingTenant.Name || before.BillingDetails.Address != existingTenant.BillingDetails.Address) {
+		s.SelfBilling.OnTenantBillingDetailsUpdated(ctx, existingTenant.ID)
 	}
 
 	return dto.NewTenantResponse(existingTenant), nil

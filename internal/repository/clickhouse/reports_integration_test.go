@@ -334,6 +334,7 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 		sub("s6", "c5", "cancelled", "2026-01-01 00:00:00", "2026-09-20 00:00:00", epoch),
 		sub("s7", "c6", "cancelled", "2026-01-01 00:00:00", epoch, epoch),
 		sub("s8", "c7", "cancelled", "2026-01-01 00:00:00", epoch, "2026-07-15 00:00:00"),
+		sub("s9", "c8", "active", "2026-01-01 00:00:00", epoch, "2026-09-10 00:00:00"),
 	}, ",")))
 	mergeTables(t, admin, db, "invoices", "credit_notes", "subscriptions")
 
@@ -382,12 +383,13 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 
 	nov := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)
-	// c1, c2 open; c3 cancelled_at, c5 end_date mid-window.
-	assert.Equal(t, [][]string{{"usd", "4"}}, run(types.MetricActiveCustomers, types.ShapeScalar, sep, oct))
+	// c1, c2, c8 open; c3 cancelled_at, c5 end_date mid-window.
+	// c8 has a scheduled cancellation that has not fired.
+	assert.Equal(t, [][]string{{"usd", "5"}}, run(types.MetricActiveCustomers, types.ShapeScalar, sep, oct))
 	// Cancelled and ended subs drop out; c4 starts.
-	assert.Equal(t, [][]string{{"usd", "3"}}, run(types.MetricActiveCustomers, types.ShapeScalar, oct, nov))
+	assert.Equal(t, [][]string{{"usd", "4"}}, run(types.MetricActiveCustomers, types.ShapeScalar, oct, nov))
 	// Both bounded intervals ended before window.
-	assert.Equal(t, [][]string{{"usd", "2"}}, run(types.MetricActiveCustomers, types.ShapeScalar, late, oct))
+	assert.Equal(t, [][]string{{"usd", "3"}}, run(types.MetricActiveCustomers, types.ShapeScalar, late, oct))
 }
 
 func TestReportsRepository_EventsVolume(t *testing.T) {

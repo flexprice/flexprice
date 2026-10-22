@@ -557,6 +557,19 @@ func (h *Handler) handleInvoicePaymentFailed(ctx context.Context, event *stripea
 		return err
 	}
 
+	// A failed Stripe charge on an invoice already paid elsewhere is not a failure of the invoice.
+	paid, err := h.paymentSvc.IsFlexPriceInvoicePaid(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+	if paid {
+		h.logger.Info(ctx, "Stripe payment failed on an invoice already paid in FlexPrice, skipping event",
+			"invoice_id", flexpriceInvoiceID,
+			"stripe_invoice_id", stripeInvoice.ID,
+			"event_id", event.ID)
+		return nil
+	}
+
 	// Both steps are idempotent, so errors are returned for Stripe to retry the event.
 	if err := services.SubscriptionService.MarkSubscriptionIncomplete(ctx, flexpriceInvoiceID); err != nil {
 		h.logger.Error(ctx, "failed to mark subscription incomplete for failed Stripe invoice",

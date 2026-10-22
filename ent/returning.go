@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -1693,6 +1694,68 @@ func scanReturningGroup(rows *sql.Rows) ([]*Group, error) {
 	var out []*Group
 	for rows.Next() {
 		node := &Group{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*HostedInvoiceToken.
+func (_u *HostedInvoiceTokenUpdate) SaveReturning(ctx context.Context) ([]*HostedInvoiceToken, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *HostedInvoiceTokenUpdate) sqlSaveReturning(ctx context.Context) ([]*HostedInvoiceToken, error) {
+	var out []*HostedInvoiceToken
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", hostedinvoicetoken.Table, hostedinvoicetoken.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningHostedInvoiceToken(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*HostedInvoiceToken.
+func (_d *HostedInvoiceTokenDelete) ExecReturning(ctx context.Context) ([]*HostedInvoiceToken, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *HostedInvoiceTokenDelete) sqlExecReturning(ctx context.Context) ([]*HostedInvoiceToken, error) {
+	var out []*HostedInvoiceToken
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", hostedinvoicetoken.Table, hostedinvoicetoken.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningHostedInvoiceToken(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningHostedInvoiceToken(rows *sql.Rows) ([]*HostedInvoiceToken, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*HostedInvoiceToken
+	for rows.Next() {
+		node := &HostedInvoiceToken{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

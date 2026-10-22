@@ -272,15 +272,8 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 	params.SetIdempotencyKey(customerCreateIdempotencyKey(ctx, ourCustomer.ID))
 
 	// Add address if available
-	if ourCustomer.AddressLine1 != "" || ourCustomer.AddressCity != "" {
-		params.Address = &stripe.AddressParams{
-			Line1:      stripe.String(ourCustomer.AddressLine1),
-			Line2:      stripe.String(ourCustomer.AddressLine2),
-			City:       stripe.String(ourCustomer.AddressCity),
-			State:      stripe.String(ourCustomer.AddressState),
-			PostalCode: stripe.String(ourCustomer.AddressPostalCode),
-			Country:    stripe.String(ourCustomer.AddressCountry),
-		}
+	if hasAddress(ourCustomer) {
+		params.Address = stripeAddressParams(ourCustomer)
 	}
 
 	stripeCustomer, err := stripeClient.V1Customers.Create(ctx, params)
@@ -645,6 +638,71 @@ func (s *CustomerService) UpdateStripeCustomerMetadata(ctx context.Context, stri
 		"flexprice_customer_id", cust.ID)
 
 	return nil
+}
+
+// UpdateCustomerInStripe pushes the customer's name, email and address to its linked Stripe
+// customer. A customer never linked to Stripe is skipped.
+func (s *CustomerService) UpdateCustomerInStripe(ctx context.Context, cust *customer.Customer, customerService interfaces.CustomerService) error {
+	stripeCustomerID, err := s.GetStripeCustomerID(ctx, cust.ID, customerService)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	stripeClient, _, err := s.client.GetStripeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = stripeClient.V1Customers.Update(ctx, stripeCustomerID, customerUpdateParams(cust))
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update the customer in Stripe").
+			WithReportableDetails(map[string]any{
+				"customer_id":        cust.ID,
+				"stripe_customer_id": stripeCustomerID,
+			}).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// customerUpdateParams carries the address only when one is set, so a customer with none
+// does not have Stripe's cleared.
+func customerUpdateParams(cust *customer.Customer) *stripe.CustomerUpdateParams {
+	params := &stripe.CustomerUpdateParams{
+		Name:  stripe.String(cust.Name),
+		Email: stripe.String(cust.Email),
+	}
+
+	if hasAddress(cust) {
+		params.Address = stripeAddressParams(cust)
+	}
+
+	return params
+}
+
+func hasAddress(cust *customer.Customer) bool {
+	return cust.AddressLine1 != "" ||
+		cust.AddressLine2 != "" ||
+		cust.AddressCity != "" ||
+		cust.AddressState != "" ||
+		cust.AddressPostalCode != "" ||
+		cust.AddressCountry != ""
+}
+
+func stripeAddressParams(cust *customer.Customer) *stripe.AddressParams {
+	return &stripe.AddressParams{
+		Line1:      stripe.String(cust.AddressLine1),
+		Line2:      stripe.String(cust.AddressLine2),
+		City:       stripe.String(cust.AddressCity),
+		State:      stripe.String(cust.AddressState),
+		PostalCode: stripe.String(cust.AddressPostalCode),
+		Country:    stripe.String(cust.AddressCountry),
+	}
 }
 
 // defaultPaymentMethodID is a nil-safe read of a Stripe customer's default payment

@@ -30,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -248,6 +249,10 @@ func NewTaxRateRepository(p RepositoryParams) taxrate.Repository {
 
 func NewFXRateRepository(p RepositoryParams) fxrate.Repository {
 	return entRepo.NewFXRateRepository(p.EntClient, p.Logger)
+}
+
+func NewHostedInvoiceTokenRepository(p RepositoryParams) hostedinvoicetoken.Repository {
+	return entRepo.NewHostedInvoiceTokenRepository(p.EntClient, p.Logger)
 }
 
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {

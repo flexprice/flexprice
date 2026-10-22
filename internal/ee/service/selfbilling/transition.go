@@ -2,6 +2,7 @@ package selfbilling
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -9,37 +10,61 @@ import (
 	"github.com/flexprice/flexprice/internal/utils"
 )
 
-// targetStatus is the status a tenant should have for its Flexprice Cloud subscription.
-// A paid subscription activates the tenant, a trial that ended unpaid or was cancelled suspends it,
-// and an active tenant is never suspended automatically.
-func targetStatus(current types.TenantInternalStatus, sub *remoteSubscription) types.TenantInternalStatus {
+// trialExpiryGrace allows for core's trial-end cron, which converts a trial within minutes. Still
+// trialing after that means conversion is failing, e.g. no billing address for tax.
+const trialExpiryGrace = time.Hour
+
+// suspensionReason says why a tenant was suspended; it is sent with the tenant_suspended alert.
+type suspensionReason string
+
+const (
+	suspensionReasonTrialExpired          suspensionReason = "trial_expired"
+	suspensionReasonPaymentIncomplete     suspensionReason = "payment_incomplete"
+	suspensionReasonSubscriptionCancelled suspensionReason = "subscription_cancelled"
+)
+
+// targetStatus is the status a tenant should have for its Flexprice Cloud subscription, and the
+// reason when that is a suspension. A paid subscription activates the tenant; a trial that ended
+// unpaid, was cancelled or never converted suspends it; an active tenant is never suspended.
+func targetStatus(current types.TenantInternalStatus, sub *remoteSubscription, now time.Time) (types.TenantInternalStatus, suspensionReason) {
 	if sub == nil {
-		return current
+		return current, ""
 	}
 
 	switch sub.status {
 	case types.SubscriptionStatusActive:
-		return types.TenantInternalStatusActive
+		return types.TenantInternalStatusActive, ""
 
-	case types.SubscriptionStatusIncomplete, types.SubscriptionStatusCancelled:
+	case types.SubscriptionStatusIncomplete:
 		if current == types.TenantInternalStatusTrialing {
-			return types.TenantInternalStatusSuspended
+			return types.TenantInternalStatusSuspended, suspensionReasonPaymentIncomplete
+		}
+
+	case types.SubscriptionStatusCancelled:
+		if current == types.TenantInternalStatusTrialing {
+			return types.TenantInternalStatusSuspended, suspensionReasonSubscriptionCancelled
+		}
+
+	case types.SubscriptionStatusTrialing:
+		expired := sub.trialEnd != nil && now.After(sub.trialEnd.Add(trialExpiryGrace))
+		if current == types.TenantInternalStatusTrialing && expired {
+			return types.TenantInternalStatusSuspended, suspensionReasonTrialExpired
 		}
 	}
-	return current
+	return current, ""
 }
 
 // updateTenantStatus moves the tenant to its target status; an active tenant always gets a production environment. Safe to repeat.
 func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.Tenant, sub *remoteSubscription) (types.TenantInternalStatus, error) {
 	ctx = types.SetTenantID(ctx, t.ID)
 
-	next := targetStatus(t.InternalStatus, sub)
+	next, reason := targetStatus(t.InternalStatus, sub, time.Now())
 	if next != t.InternalStatus {
 		updated := tenant.NewBuilder(t).WithInternalStatus(next).Build()
 		if err := s.TenantRepo.Update(ctx, updated); err != nil {
 			return "", err
 		}
-		s.Logger.Info(ctx, "self-billing tenant status updated", "tenant_id", t.ID, "from", t.InternalStatus, "to", next)
+		s.Logger.Info(ctx, "self-billing tenant status updated", "tenant_id", t.ID, "from", t.InternalStatus, "to", next, "reason", reason)
 
 		event := alertTenantSuspended
 		if next == types.TenantInternalStatusActive {
@@ -51,6 +76,7 @@ func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.T
 			TenantName: t.Name,
 			FromStatus: t.InternalStatus,
 			ToStatus:   next,
+			Reason:     reason,
 		})
 	}
 

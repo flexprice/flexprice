@@ -78,6 +78,7 @@ func (s *EntitlementQuantityTestSuite) setupServices() {
 	stores := s.GetStores()
 	params := ServiceParams{
 		CheckoutSessionRepo:          stores.CheckoutSessionRepo,
+		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),

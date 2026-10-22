@@ -39,6 +39,8 @@ type fakeClient struct {
 	trialCheckoutErr error
 	portalExtIDs     []string
 
+	billingUpdates map[string]billingDetails // extID -> last details passed to UpdateBillingDetails
+
 	ingested  [][]usageEvent // one entry per IngestBulk call
 	ingestErr error
 
@@ -56,7 +58,17 @@ func newFakeClient() *fakeClient {
 		subs:         map[string]*remoteSubscription{},
 		checkouts:    map[string]*remoteCheckout{},
 		summaries:    map[string]*remoteSummary{},
+
+		billingUpdates: map[string]billingDetails{},
 	}
+}
+
+func (f *fakeClient) billingUpdate(extID string) (billingDetails, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	d, ok := f.billingUpdates[extID]
+	return d, ok
 }
 
 func (f *fakeClient) EnsureCustomer(_ context.Context, in customerInput) error {
@@ -87,7 +99,11 @@ func (f *fakeClient) LatestSubscription(_ context.Context, extID string) (*remot
 	return f.subs[extID], f.err
 }
 
-func (f *fakeClient) UpdateBillingDetails(context.Context, string, billingDetails) error {
+func (f *fakeClient) UpdateBillingDetails(_ context.Context, extID string, details billingDetails) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.billingUpdates[extID] = details
 	return f.err
 }
 
@@ -529,6 +545,65 @@ func TestRunHourly(t *testing.T) {
 				assert.ErrorIs(t, err, want)
 			}
 			assert.Equal(t, tt.wantActive, tenantStatus(t, d, "t1") == types.TenantInternalStatusActive)
+		})
+	}
+}
+
+func TestOnTenantBillingDetailsUpdated(t *testing.T) {
+	tests := []struct {
+		name          string
+		billingTenant string
+		address       tenant.TenantAddress
+		wantPushed    bool
+		wantDetails   billingDetails
+	}{
+		{
+			name:       "pushes_latest_name_and_address",
+			address:    tenant.TenantAddress{Line1: "1 Main St", City: "Bengaluru", State: "KA", PostalCode: "560001", Country: "IN"},
+			wantPushed: true,
+			wantDetails: billingDetails{
+				name:       "Acme Inc",
+				line1:      "1 Main St",
+				city:       "Bengaluru",
+				state:      "KA",
+				postalCode: "560001",
+				country:    "IN",
+			},
+		},
+		{
+			name:        "no_address_pushes_name_only",
+			wantPushed:  true,
+			wantDetails: billingDetails{name: "Acme Inc"},
+		},
+		{
+			name:          "billing_tenant_skipped",
+			billingTenant: "t1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := newFakeClient()
+			s, d := newTestService(fc)
+			s.Config.Billing.TenantID = tt.billingTenant
+			require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{
+				ID:             "t1",
+				Name:           "Acme Inc",
+				Status:         types.StatusPublished,
+				InternalStatus: types.TenantInternalStatusTrialing,
+				BillingDetails: tenant.TenantBillingDetails{Email: "billing@acme.io", Address: tt.address},
+			}))
+
+			s.OnTenantBillingDetailsUpdated(context.Background(), "t1")
+
+			if !tt.wantPushed {
+				assert.Never(t, func() bool { _, ok := fc.billingUpdate("us:t1"); return ok }, 50*time.Millisecond, 10*time.Millisecond)
+				return
+			}
+
+			require.Eventually(t, func() bool { _, ok := fc.billingUpdate("us:t1"); return ok }, 2*time.Second, 5*time.Millisecond)
+			got, _ := fc.billingUpdate("us:t1")
+			assert.Equal(t, tt.wantDetails, got, "the email stays the signup email")
+			assert.True(t, fc.hasCustomer("us:t1"), "the customer is provisioned first, in case the update raced signup")
 		})
 	}
 }

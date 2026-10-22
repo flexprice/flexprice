@@ -1249,6 +1249,9 @@ type InvoiceResponse struct {
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
+	// hosted_invoice_url is the page where the customer can view, download and pay this invoice
+	HostedInvoiceURL string `json:"hosted_invoice_url,omitempty"`
+
 	// tax_applied_records contains the tax applied records associated with this invoice
 	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
 
@@ -1362,6 +1365,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 // WithCheckoutSession adds the gating checkout session to the invoice response
 func (r *InvoiceResponse) WithCheckoutSession(session *CheckoutSessionResponse) *InvoiceResponse {
 	r.CheckoutSession = session
+	return r
+}
+
+// WithHostedInvoiceURL sets the hosted invoice page link
+func (r *InvoiceResponse) WithHostedInvoiceURL(url string) *InvoiceResponse {
+	r.HostedInvoiceURL = url
 	return r
 }
 

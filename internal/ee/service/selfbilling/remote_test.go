@@ -281,6 +281,10 @@ func TestStartTrial(t *testing.T) {
 			name:     "subscription_created_meanwhile_is_not_duplicated",
 			existing: []map[string]any{{"id": "s1", "plan_id": "plan_1", "subscription_status": "trialing"}},
 		},
+		{
+			name:     "enterprise_subscription_gets_no_self_serve_trial",
+			existing: []map[string]any{{"id": "s1", "plan_id": "plan_enterprise", "subscription_status": "active"}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -322,7 +326,8 @@ func TestLatestSubscription(t *testing.T) {
 		{"live_beats_newer_cancelled", []map[string]any{sub("s1", "plan_1", active, 1), sub("s2", "plan_1", cancelled, 2)}, "s1", active},
 		{"only_cancelled_is_returned", []map[string]any{sub("s1", "plan_1", cancelled, 1)}, "s1", cancelled},
 		{"newest_cancelled_when_all_cancelled", []map[string]any{sub("s1", "plan_1", cancelled, 1), sub("s2", "plan_1", cancelled, 3)}, "s2", cancelled},
-		{"other_plans_ignored", []map[string]any{sub("s1", "plan_other", active, 5)}, "", ""},
+		{"enterprise_plan_counts", []map[string]any{sub("s1", "plan_enterprise", active, 5)}, "s1", active},
+		{"enterprise_live_beats_newer_cancelled_self_serve", []map[string]any{sub("s1", "plan_enterprise", active, 1), sub("s2", "plan_1", cancelled, 2)}, "s1", active},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -505,6 +510,42 @@ func TestUpdateBillingDetails_PreservesMetadata(t *testing.T) {
 			require.Len(t, f.updates, 1)
 			assert.Equal(t, "Acme", f.updates[0]["name"])
 			assert.Equal(t, "Pune", f.updates[0]["address_city"])
+		})
+	}
+}
+
+func TestUpdateBillingDetails_AddressSentWhole(t *testing.T) {
+	tests := []struct {
+		name        string
+		details     billingDetails
+		wantAddress bool
+	}{
+		{
+			name:        "empty_parts_sent_to_clear_stale_values",
+			details:     billingDetails{name: "Acme", line1: "1 Main St", city: "Pune", country: "IN"},
+			wantAddress: true,
+		},
+		{
+			name:    "no_address_leaves_it_untouched",
+			details: billingDetails{name: "Acme"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeCloud(map[string]string{"in:t1": "cust_1"})
+			c := newTestRemoteClient(t, f)
+
+			require.NoError(t, c.UpdateBillingDetails(context.Background(), "in:t1", tt.details))
+
+			require.Len(t, f.updates, 1)
+			for _, field := range []string{"address_line1", "address_line2", "address_city", "address_state", "address_country", "address_postal_code"} {
+				_, sent := f.updates[0][field]
+				assert.Equal(t, tt.wantAddress, sent, field)
+			}
+			if tt.wantAddress {
+				assert.Equal(t, "", f.updates[0]["address_line2"])
+				assert.Equal(t, "", f.updates[0]["address_state"])
+			}
 		})
 	}
 }

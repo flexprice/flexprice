@@ -47,6 +47,14 @@ func (e *stripeTaxEngine) GetProvider() types.TaxProvider {
 }
 
 func (e *stripeTaxEngine) Calculate(ctx context.Context, req dto.TaxCalculationRequest) (*dto.TaxCalculationResult, error) {
+	// No tax is due on a zero base, and Stripe rejects a customer without an address even then.
+	if !req.Amount.IsPositive() {
+		return &dto.TaxCalculationResult{
+			Provider:    types.TaxProviderStripe,
+			AmountTotal: req.Amount,
+		}, nil
+	}
+
 	client := stripeintegration.NewClient(e.ConnectionRepo, e.EncryptionService, e.Logger)
 	stripeClient, _, err := client.GetStripeClient(ctx)
 	if err != nil {

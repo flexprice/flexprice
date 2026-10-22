@@ -104,6 +104,10 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+	if err := h.invoiceService.WithHostedInvoiceURLs(c.Request.Context(), invoice); err != nil {
+		c.Error(err)
+		return
+	}
 
 	c.JSON(http.StatusOK, invoice)
 }
@@ -130,6 +134,10 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	resp, err := h.invoiceService.ListInvoices(c.Request.Context(), &filter)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "Failed to list invoices", "error", err)
+		c.Error(err)
+		return
+	}
+	if err := h.invoiceService.WithHostedInvoiceURLs(c.Request.Context(), resp.Items...); err != nil {
 		c.Error(err)
 		return
 	}
@@ -739,6 +747,10 @@ func (h *InvoiceHandler) QueryInvoices(c *gin.Context) {
 	resp, err := h.invoiceService.ListInvoices(c.Request.Context(), &filter)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "Failed to list invoices", "error", err)
+		c.Error(err)
+		return
+	}
+	if err := h.invoiceService.WithHostedInvoiceURLs(c.Request.Context(), resp.Items...); err != nil {
 		c.Error(err)
 		return
 	}

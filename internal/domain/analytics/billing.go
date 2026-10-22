@@ -13,6 +13,8 @@ type BillingMetric struct {
 	Currency bool
 	// Point-in-time metric; no time window.
 	Snapshot bool
+	// Widest allowed range in days; 0 = unlimited.
+	MaxRangeDays int
 }
 
 func invoiceTotalMetric(m types.Metric) *BillingMetric {
@@ -74,9 +76,10 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricNetBillingIssued:   currencyMetric(types.MetricNetBillingIssued, types.ShapeScalar, types.ShapeTimeseries),
 	types.MetricActiveCustomers:    currencyMetric(types.MetricActiveCustomers, types.ShapeScalar),
 	types.MetricEventsVolume: {
-		Metric:     types.MetricEventsVolume,
-		Dimensions: []string{"meter_id"},
-		Shapes:     []types.Shape{types.ShapeTimeseries, types.ShapeBreakdown},
+		Metric:       types.MetricEventsVolume,
+		Dimensions:   []string{"meter_id"},
+		Shapes:       []types.Shape{types.ShapeTimeseries, types.ShapeBreakdown},
+		MaxRangeDays: 7,
 	},
 }
 

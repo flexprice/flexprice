@@ -37,6 +37,7 @@ import (
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -154,6 +155,7 @@ func checkColumn(t, c string) error {
 			fxrate.Table:                   fxrate.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
+			hostedinvoicetoken.Table:       hostedinvoicetoken.ValidColumn,
 			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
 			invoice.Table:                  invoice.ValidColumn,
 			invoicelineitem.Table:          invoicelineitem.ValidColumn,

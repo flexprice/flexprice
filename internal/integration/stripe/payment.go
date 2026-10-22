@@ -1635,6 +1635,16 @@ func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Cont
 	return nil
 }
 
+// IsFlexPriceInvoicePaid reports whether the FlexPrice invoice is already fully settled.
+func (s *PaymentService) IsFlexPriceInvoicePaid(ctx context.Context, invoiceID string) (bool, error) {
+	inv, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return false, err
+	}
+	return inv.PaymentStatus == types.PaymentStatusSucceeded ||
+		inv.PaymentStatus == types.PaymentStatusOverpaid, nil
+}
+
 // ProcessExternalStripePayment processes a payment that was made directly in Stripe (external to FlexPrice)
 func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, paymentIntent *stripe.PaymentIntent, stripeInvoiceID string, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
 	// Get FlexPrice invoice ID from Stripe invoice
@@ -1644,6 +1654,24 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID)
 		return err
+	}
+
+	// Stripe collected money on an invoice that was already settled elsewhere, so it needs a manual refund.
+	paid, err := s.IsFlexPriceInvoicePaid(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+	if paid {
+		return ierr.NewError("stripe collected a payment on an invoice already settled in flexprice").
+			WithHint("Refund the Stripe payment or reconcile the invoice manually").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":        flexpriceInvoiceID,
+				"stripe_invoice_id": stripeInvoiceID,
+				"payment_intent_id": paymentIntent.ID,
+				"amount":            paymentIntent.Amount,
+				"currency":          paymentIntent.Currency,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Create external payment record

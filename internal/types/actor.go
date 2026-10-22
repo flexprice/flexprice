@@ -25,6 +25,7 @@ const (
 	SourceWorkflow       Source = "workflow"
 	SourceWebhook        Source = "webhook"
 	SourceConsumer       Source = "consumer"
+	SourceHostedInvoice  Source = "hosted_invoice"
 )
 
 // Actor identifies who made a change. It holds ids only; the activity read API resolves labels.

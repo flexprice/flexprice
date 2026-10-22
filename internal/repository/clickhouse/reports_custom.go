@@ -117,7 +117,7 @@ func buildActiveCustomers(in buildInput) (*reportQuery, error) {
 	b.WriteString(" FROM " + in.DB + ".subscriptions AS s WHERE " + in.Scope("s"))
 	b.WriteString(" AND s.subscription_status IN ('" + string(types.SubscriptionStatusActive) + "', '" + string(types.SubscriptionStatusTrialing) + "', '" + string(types.SubscriptionStatusCancelled) + "')")
 	b.WriteString(" AND s.start_date < toDateTime64({to:String}, 6, 'UTC')")
-	endExpr := "coalesce(nullIf(s.cancelled_at, " + chEpoch + "), nullIf(s.end_date, " + chEpoch + "))"
+	endExpr := "coalesce(nullIf(s.end_date, " + chEpoch + "), if(s.subscription_status = '" + string(types.SubscriptionStatusCancelled) + "', nullIf(s.cancelled_at, " + chEpoch + "), NULL))"
 	// Cancelled rows need a real end.
 	b.WriteString(" AND (s.subscription_status != '" + string(types.SubscriptionStatusCancelled) + "' OR " + endExpr + " IS NOT NULL)")
 	b.WriteString(" AND coalesce(" + endExpr + ", toDateTime64('2299-12-31 00:00:00', 6, 'UTC')) > toDateTime64({from:String}, 6, 'UTC')")

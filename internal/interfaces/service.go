@@ -31,6 +31,8 @@ type PaymentService interface {
 	CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
 	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
+	// GetOrCreateInvoicePaymentLink returns the invoice's open payment link on the gateway, or creates one.
+	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error)
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
@@ -323,7 +325,10 @@ type ServiceDependencies struct {
 	DB                              postgres.IClient
 }
 
-// SelfBillingHook provisions a newly created tenant on the billing tenant without importing self-billing.
+// SelfBillingHook keeps a tenant's Flexprice Cloud customer in step with the tenant without importing self-billing.
 type SelfBillingHook interface {
 	OnTenantCreated(ctx context.Context, tenantID, name, email string)
+
+	// OnTenantBillingDetailsUpdated copies the tenant's name and billing address to its Flexprice Cloud customer.
+	OnTenantBillingDetailsUpdated(ctx context.Context, tenantID string)
 }

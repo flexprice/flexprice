@@ -84,6 +84,14 @@ func (s *analyticsService) executeBilling(ctx context.Context, rv *analytics.Res
 	if err := s.requireReports(); err != nil {
 		return nil, err
 	}
+	if len(rv.Metrics) == 1 {
+		if bm, ok := analytics.LookupBillingMetric(rv.Metrics[0]); ok && bm.MaxRangeDays > 0 &&
+			rv.Time.To.Sub(rv.Time.From) > time.Duration(bm.MaxRangeDays)*24*time.Hour {
+			return nil, ierr.NewErrorf("range exceeds %d days for this report", bm.MaxRangeDays).
+				WithHint(fmt.Sprintf("Choose a range of %d days or less", bm.MaxRangeDays)).
+				Mark(ierr.ErrValidation)
+		}
+	}
 	out, err := s.ReportsRepo.RunReport(ctx, rv, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
 	if err != nil {
 		if s.Logger != nil {
@@ -589,11 +597,6 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 	rv, err := analytics.ResolveVariables(&def, nil)
 	if err != nil {
 		return nil, err
-	}
-	if d := entry.MaxRangeDays; d > 0 && rv.Time.To.Sub(rv.Time.From) > time.Duration(d)*24*time.Hour {
-		return nil, ierr.NewErrorf("range exceeds %d days for this report", d).
-			WithHint(fmt.Sprintf("Choose a range of %d days or less", d)).
-			Mark(ierr.ErrValidation)
 	}
 	rv.Compare = req.Compare
 	res, err := s.executeBilling(ctx, rv)

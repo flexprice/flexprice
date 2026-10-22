@@ -15,10 +15,10 @@ type billingClient interface {
 	// EnsureCustomer finds or creates the tenant's customer on Flexprice Cloud.
 	EnsureCustomer(ctx context.Context, in customerInput) error
 
-	// StartTrial subscribes the customer to the self-serve plan unless it already has a subscription to it; created reports a new subscription.
+	// StartTrial subscribes the customer to the self-serve plan unless it already has a subscription on any plan; created reports a new subscription.
 	StartTrial(ctx context.Context, extID string) (created bool, err error)
 
-	// LatestSubscription returns the newest non-cancelled self-serve subscription, else the newest cancelled one, else nil.
+	// LatestSubscription returns the newest non-cancelled subscription on any plan, else the newest cancelled one, else nil.
 	LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error)
 
 	// UpdateBillingDetails sets the customer's address and tax ID, keeping its other metadata.
@@ -61,6 +61,10 @@ type billingDetails struct {
 	country    string
 	postalCode string
 	taxID      string
+}
+
+func (d billingDetails) hasAddress() bool {
+	return d.line1 != "" || d.line2 != "" || d.city != "" || d.state != "" || d.country != "" || d.postalCode != ""
 }
 
 type remoteSubscription struct {

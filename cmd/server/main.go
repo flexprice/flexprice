@@ -185,6 +185,7 @@ func main() {
 			repository.NewUsageRecordRepository,
 			repository.NewTaxRateRepository,
 			repository.NewFXRateRepository,
+			repository.NewHostedInvoiceTokenRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
 			repository.NewCouponAssociationRepository,
@@ -309,6 +310,8 @@ func main() {
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
 			service.NewFXRateService,
+			service.NewHostedInvoiceTokenService,
+			service.NewHostedInvoiceService,
 			service.NewCouponService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
@@ -421,6 +424,7 @@ func provideHandlers(
 	oauthService service.OAuthService,
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
+	hostedInvoiceService service.HostedInvoiceService,
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
@@ -484,6 +488,7 @@ func provideHandlers(
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		SelfBilling:              v1.NewSelfBillingHandler(selfBillingService),
+		HostedInvoice:            v1.NewHostedInvoiceHandler(hostedInvoiceService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
@@ -529,6 +534,7 @@ func provideRouter(
 	webhookRequestRepo incomingwebhookevent.Repository,
 	environmentRepo environment.Repository,
 	userRepo user.Repository,
+	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -541,6 +547,7 @@ func provideRouter(
 		webhookRequestRepo,
 		environmentRepo,
 		userRepo,
+		hostedInvoiceService,
 	)
 }
 

@@ -23,6 +23,12 @@ func (b *Builder) WithInternalStatus(s types.TenantInternalStatus) *Builder {
 	return b
 }
 
+// WithBillingAddress sets the address in the tenant's billing details.
+func (b *Builder) WithBillingAddress(a TenantAddress) *Builder {
+	b.t.BillingDetails.Address = a
+	return b
+}
+
 // Build returns the resulting tenant copy.
 func (b *Builder) Build() *Tenant {
 	out := b.t

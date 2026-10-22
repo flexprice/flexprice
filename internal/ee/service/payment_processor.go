@@ -810,6 +810,11 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 		return err
 	}
 	if finalizedNow {
+		if err := NewHostedInvoiceTokenService(p.ServiceParams).Issue(ctx, invoice); err != nil {
+			p.Logger.Error(ctx, "failed to issue hosted invoice token at finalization",
+				"error", err,
+				"invoice_id", invoice.ID)
+		}
 		recordInvoiceTransition(ctx, invoice)
 	}
 

@@ -21968,6 +21968,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "hosted_invoice_url": {
+                    "description": "hosted_invoice_url is the page where the customer can view, download and pay this invoice",
+                    "type": "string"
+                },
                 "id": {
                     "description": "id is the unique identifier for this invoice",
                     "type": "string"

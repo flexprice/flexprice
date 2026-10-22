@@ -91,6 +91,49 @@ func (s *selfBillingService) OnTenantCreated(ctx context.Context, tenantID, name
 		return
 	}
 
+	s.runDetached(ctx, "provisioning", tenantID, func(ctx context.Context) error {
+		return s.provision(ctx, tenantID, name, email)
+	})
+}
+
+// OnTenantBillingDetailsUpdated copies the tenant's name and address to its Flexprice Cloud customer in the
+// background; checkout saves the address too, so a failure here is only logged.
+func (s *selfBillingService) OnTenantBillingDetailsUpdated(ctx context.Context, tenantID string) {
+	if !s.enabled() || s.Config.Billing.IsBillingTenant(tenantID) {
+		return
+	}
+
+	s.runDetached(ctx, "billing details sync", tenantID, func(ctx context.Context) error {
+		return s.syncBillingDetails(ctx, tenantID)
+	})
+}
+
+// syncBillingDetails sends the latest stored details, so overlapping updates converge, and provisions first
+// in case the update raced signup.
+func (s *selfBillingService) syncBillingDetails(ctx context.Context, tenantID string) error {
+	t, err := s.TenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.provision(ctx, t.ID, t.Name, t.BillingDetails.Email); err != nil {
+		return err
+	}
+
+	address := t.BillingDetails.Address
+	return s.client.UpdateBillingDetails(ctx, s.extID(t.ID), billingDetails{
+		name:       t.Name,
+		line1:      address.Line1,
+		line2:      address.Line2,
+		city:       address.City,
+		state:      address.State,
+		country:    address.Country,
+		postalCode: address.PostalCode,
+	})
+}
+
+// runDetached runs fn after the request returns, bounded by provisionTimeout; failures and panics are logged.
+func (s *selfBillingService) runDetached(ctx context.Context, op, tenantID string, fn func(context.Context) error) {
 	detached := context.WithoutCancel(ctx)
 	go func() {
 		ctx, cancel := context.WithTimeout(detached, provisionTimeout)
@@ -98,17 +141,17 @@ func (s *selfBillingService) OnTenantCreated(ctx context.Context, tenantID, name
 
 		defer func() {
 			if r := recover(); r != nil {
-				s.Logger.Error(ctx, "self-billing provisioning panicked", "error", fmt.Errorf("panic: %v", r), "tenant_id", tenantID)
+				s.Logger.Error(ctx, "self-billing background task panicked", "error", fmt.Errorf("panic: %v", r), "operation", op, "tenant_id", tenantID)
 			}
 		}()
 
-		if err := s.provision(ctx, tenantID, name, email); err != nil {
-			s.Logger.Error(ctx, "self-billing provisioning failed", "error", err, "tenant_id", tenantID)
+		if err := fn(ctx); err != nil {
+			s.Logger.Error(ctx, "self-billing background task failed", "error", err, "operation", op, "tenant_id", tenantID)
 		}
 	}()
 }
 
-// provision ensures the Flexprice Cloud customer and starts its trial when it has no self-serve subscription yet.
+// provision ensures the Flexprice Cloud customer and starts a self-serve trial when it has no subscription on any plan yet.
 func (s *selfBillingService) provision(ctx context.Context, tenantID, name, email string) error {
 	in := customerInput{
 		extID:    s.extID(tenantID),
