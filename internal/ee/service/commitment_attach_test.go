@@ -22,7 +22,10 @@ func (s *CommitmentServiceSuite) TestAddonAttach_RejectsPriceBreakingCommitment(
 	s.quantityCommitmentOnAPIOnlyGroup()
 
 	s.Require().NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{
-		ID: "addon_storage", LookupKey: "addon_storage", Name: "Storage", BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:        "addon_storage",
+		LookupKey: "addon_storage",
+		Name:      "Storage",
+		BaseModel: types.GetDefaultBaseModel(ctx),
 	}))
 	addonPrice := *s.fx.priceOtherMeterInGroup
 	addonPrice.ID, addonPrice.EntityType, addonPrice.EntityID = "price_addon_storage", types.PRICE_ENTITY_TYPE_ADDON, "addon_storage"
@@ -32,7 +35,9 @@ func (s *CommitmentServiceSuite) TestAddonAttach_RejectsPriceBreakingCommitment(
 	_, err := NewSubscriptionService(s.fullParams()).AddAddonToSubscription(ctx, &dto.AddAddonRequest{
 		SubscriptionID: s.fx.sub.ID,
 		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
-			AddonID: "addon_storage", Cadence: types.AddonCadenceRecurring, StartDate: &start,
+			AddonID:   "addon_storage",
+			Cadence:   types.AddonCadenceRecurring,
+			StartDate: &start,
 		},
 	})
 	s.requireValidation(err, "different meter")
@@ -46,7 +51,10 @@ func (s *CommitmentServiceSuite) TestPlanSync_SkipsPriceBreakingCommitment() {
 	sub.SubscriptionType = types.SubscriptionTypeStandalone
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, &plan.Plan{
-		ID: "plan_cmt", Name: "Plan", EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:            "plan_cmt",
+		Name:          "Plan",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}))
 
 	// A second meter would break the single-meter commitment; another API price joins it fine.
@@ -78,8 +86,10 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsLegacyCommitmentInSco
 
 	_, err = NewSubscriptionService(s.fullParams()).UpdateSubscriptionLineItem(s.GetContext(), s.fx.lineAPI.ID,
 		dto.UpdateSubscriptionLineItemRequest{
-			CommitmentAmount: lo.ToPtr(dec("50")), CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
-			CommitmentOverageFactor: lo.ToPtr(dec("1.5")), EffectiveFrom: lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
+			CommitmentAmount:        lo.ToPtr(dec("50")),
+			CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentOverageFactor: lo.ToPtr(dec("1.5")),
+			EffectiveFrom:           lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
 		})
 	s.requireValidation(err, "legacy line-item commitment")
 

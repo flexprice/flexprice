@@ -51,6 +51,7 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 		Name:       "Commit Co",
 		BaseModel:  types.GetDefaultBaseModel(ctx),
 	}
+
 	require.NoError(t, stores.CustomerRepo.Create(ctx, fx.customer))
 
 	fx.meterAPI = &meter.Meter{
@@ -83,6 +84,7 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+
 	require.NoError(t, stores.GroupRepo.Create(ctx, fx.group))
 
 	usagePrice := func(id, meterID string, amount decimal.Decimal) *price.Price {
@@ -159,6 +161,7 @@ func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.S
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+
 	require.NoError(t, stores.GroupRepo.Create(ctx, fx.groupAPIOnly))
 	// price_api_only moves price_api's twin into the API-only group; the other-meter price joins it unattached.
 	apiOnly := usagePrice("price_api_only", fx.meterAPI.ID, dec("0.06"))
@@ -827,7 +830,11 @@ func (s *CommitmentServiceSuite) TestUpdate_ReadsUnderCommitmentLockInTx() {
 		SettingsRepo:   stores.SettingsRepo,
 	}
 
-	_, err = NewCommitmentService(params).Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{Name: lo.ToPtr("Renamed")})
+	_, err = NewCommitmentService(params).Update(
+		s.GetContext(),
+		created.ID,
+		dto.UpdateCommitmentRequest{Name: lo.ToPtr("Renamed")},
+	)
 	s.Require().NoError(err)
 	s.Require().GreaterOrEqual(len(events), 3, "events %v", events)
 	s.Equal([]string{"tx", "lock:commitment:" + created.ID, "get"}, events[:3])
@@ -840,7 +847,11 @@ func (s *CommitmentServiceSuite) TestUpdate_AfterTerminateKeepsTerminated() {
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.Require().NoError(err)
 
-	updated, err := s.svc.Update(s.GetContext(), created.ID, dto.UpdateCommitmentRequest{InvoiceLabel: lo.ToPtr("Renamed")})
+	updated, err := s.svc.Update(
+		s.GetContext(),
+		created.ID,
+		dto.UpdateCommitmentRequest{InvoiceLabel: lo.ToPtr("Renamed")},
+	)
 	s.Require().NoError(err)
 	s.Equal("Renamed", updated.InvoiceLabel)
 	s.Equal(types.CommitmentStatusTerminated, updated.CommitmentStatus)

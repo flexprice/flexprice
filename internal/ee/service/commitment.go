@@ -454,6 +454,7 @@ func (s *commitmentService) terminate(
 	if !effectiveAt.Before(c.EndDate) {
 		return nil, invalidf("effective_at must be before the commitment end %s", c.EndDate.Format(time.RFC3339))
 	}
+
 	// Kept as requested, even before start_date: the settlement invoice is chosen from it and nothing is earned.
 	builder := commitment.NewCommitmentBuilder(c).
 		WithStatus(types.CommitmentStatusTerminated).
@@ -561,14 +562,24 @@ func (s *commitmentService) responseWithContext(
 	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
 }
 
-func (s *commitmentService) CheckPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) error {
+func (s *commitmentService) CheckPriceAttach(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	p *price.Price,
+	at time.Time,
+) error {
 	_, err := s.checkPriceAttach(ctx, sub, p, at)
 	return err
 }
 
 // checkPriceAttach is CheckPriceAttach that also returns the commitment the price would break.
 // It must run inside a transaction.
-func (s *commitmentService) checkPriceAttach(ctx context.Context, sub *subscription.Subscription, p *price.Price, at time.Time) (string, error) {
+func (s *commitmentService) checkPriceAttach(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	p *price.Price,
+	at time.Time,
+) (string, error) {
 	if p == nil || p.Type != types.PRICE_TYPE_USAGE {
 		return "", nil
 	}
@@ -585,15 +596,19 @@ func (s *commitmentService) checkPriceAttach(ctx context.Context, sub *subscript
 
 	// Serialise with createLocked, then re-read so a concurrent create is seen.
 	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitments:" + sub.ID}); err != nil {
-		return "", ierr.WithError(err).WithHint("Failed to lock subscription commitments").Mark(ierr.ErrInternal)
+		return "", ierr.WithError(err).
+			WithHint("Failed to lock subscription commitments").
+			Mark(ierr.ErrInternal)
 	}
 
 	if inScope, err = s.commitmentsInScope(ctx, sub.ID, p, at); err != nil || len(inScope) == 0 {
 		return "", err
 	}
+
 	if !billsEverySubscriptionPeriod(sub, p.BillingPeriod, p.BillingPeriodCount) {
 		return inScope[0].ID, errScopeCadence(p.ID)
 	}
+
 	cc, err := s.loadCommitmentContext(ctx, sub.ID)
 	if err != nil {
 		return "", err
@@ -692,7 +707,11 @@ func (s *commitmentService) checkAttachPairs(ctx context.Context, inScope []*com
 			}
 
 			if a.Type != b.Type || a.Measurement != b.Measurement {
-				return a.ID, invalidf("commitments %s and %s overlap on the new price but differ in type or measurement", a.ID, b.ID)
+				return a.ID, invalidf(
+					"commitments %s and %s overlap on the new price but differ in type or measurement",
+					a.ID,
+					b.ID,
+				)
 			}
 
 			same, err := s.sameCommitmentOverage(ctx, a, b)
@@ -701,10 +720,15 @@ func (s *commitmentService) checkAttachPairs(ctx context.Context, inScope []*com
 			}
 
 			if !same {
-				return a.ID, invalidf("commitments %s and %s overlap on the new price but have different overage rates", a.ID, b.ID)
+				return a.ID, invalidf(
+					"commitments %s and %s overlap on the new price but have different overage rates",
+					a.ID,
+					b.ID,
+				)
 			}
 		}
 	}
+
 	return "", nil
 }
 

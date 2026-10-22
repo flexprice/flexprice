@@ -62,8 +62,14 @@ func commitmentPeriods(
 		if !start.Before(end) {
 			continue
 		}
+
 		regular := types.FullBillingPeriod(p.Start, grid)
-		cp := commitmentPeriod{Start: start, End: end, FullStart: regular.Start, FullEnd: regular.End}
+		cp := commitmentPeriod{
+			Start:     start,
+			End:       end,
+			FullStart: regular.Start,
+			FullEnd:   regular.End,
+		}
 		fillPeriodValue(c, &cp, rates, bucket, sub.BillingAnchor)
 		out = append(out, cp)
 	}
@@ -72,10 +78,18 @@ func commitmentPeriods(
 }
 
 // clipCommitmentPeriod returns p cut to end at until, with its capacity and amount recomputed.
-func clipCommitmentPeriod(c *commitment.Commitment, p commitmentPeriod, until time.Time, rates commitmentRates, bucket types.WindowSize, anchor time.Time) commitmentPeriod {
+func clipCommitmentPeriod(
+	c *commitment.Commitment,
+	p commitmentPeriod,
+	until time.Time,
+	rates commitmentRates,
+	bucket types.WindowSize,
+	anchor time.Time,
+) commitmentPeriod {
 	if !until.Before(p.End) {
 		return p
 	}
+
 	out := p
 	out.End = maxTime(until, p.Start)
 	fillPeriodValue(c, &out, rates, bucket, anchor)
@@ -83,11 +97,18 @@ func clipCommitmentPeriod(c *commitment.Commitment, p commitmentPeriod, until ti
 }
 
 // fillPeriodValue sets the capacity and money value of cp from its Start and End.
-func fillPeriodValue(c *commitment.Commitment, cp *commitmentPeriod, rates commitmentRates, bucket types.WindowSize, anchor time.Time) {
+func fillPeriodValue(
+	c *commitment.Commitment,
+	cp *commitmentPeriod,
+	rates commitmentRates,
+	bucket types.WindowSize,
+	anchor time.Time,
+) {
 	rate := rates.Committed
 	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
 		rate = decimal.NewFromInt(1)
 	}
+
 	cp.ActiveBuckets = 0
 	if c.Measurement == types.CommitmentMeasurementWindow {
 		loc := c.Location()
@@ -96,15 +117,18 @@ func fillPeriodValue(c *commitment.Commitment, cp *commitmentPeriod, rates commi
 			if b.Before(c.StartDate) {
 				continue
 			}
+
 			if c.ActiveWindows.Contains(b, loc) {
 				cp.ActiveBuckets++
 			}
 		}
+
 		cp.Capacity = c.Value.Mul(decimal.NewFromInt(cp.ActiveBuckets))
 	} else {
 		fraction := decimal.NewFromInt(int64(cp.End.Sub(cp.Start))).Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
 		cp.Capacity = c.Value.Mul(fraction)
 	}
+
 	cp.Amount = cp.Capacity.Mul(rate)
 }
 

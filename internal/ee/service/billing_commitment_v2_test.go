@@ -23,16 +23,38 @@ func (s *BillingServiceSuite) enableCommitmentsV2() {
 }
 
 // newTestCommitment returns a binding per_period commitment scoped to one price, active from start to end.
-func (s *BillingServiceSuite) newTestCommitment(id string, sub *subscription.Subscription, typ types.CommitmentType, value, priceID string, start, end time.Time) *commitment.Commitment {
+func (s *BillingServiceSuite) newTestCommitment(
+	id string,
+	sub *subscription.Subscription,
+	typ types.CommitmentType,
+	value string,
+	priceID string,
+	start time.Time,
+	end time.Time,
+) *commitment.Commitment {
 	ctx := s.GetContext()
 	return &commitment.Commitment{
-		ID: id, SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Name: id, InvoiceLabel: "Commitment " + id,
-		Currency: sub.Currency, ScopeEntityType: types.CommitmentScopePrice, ScopeEntityID: priceID,
-		Type: typ, Value: dec(value), Measurement: types.CommitmentMeasurementBillingPeriod, Timezone: "UTC",
-		Priority: 1, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
-		StartDate: start, EndDate: end, CommitmentStatus: types.CommitmentStatusActive,
+		ID:                 id,
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		Name:               id,
+		InvoiceLabel:       "Commitment " + id,
+		Currency:           sub.Currency,
+		ScopeEntityType:    types.CommitmentScopePrice,
+		ScopeEntityID:      priceID,
+		Type:               typ,
+		Value:              dec(value),
+		Measurement:        types.CommitmentMeasurementBillingPeriod,
+		Timezone:           "UTC",
+		Priority:           1,
+		Binding:            true,
+		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		StartDate:          start,
+		EndDate:            end,
+		CommitmentStatus:   types.CommitmentStatusActive,
 		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
-		EnvironmentID:      types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 }
 
@@ -41,8 +63,23 @@ func (s *BillingServiceSuite) storeCommitment(c *commitment.Commitment) {
 	s.Require().NoError(err)
 }
 
-func (s *BillingServiceSuite) createCommitment(_ context.Context, typ types.CommitmentType, value, priceID string, start, end time.Time) *commitment.Commitment {
-	c := s.newTestCommitment(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), s.testData.subscription, typ, value, priceID, start, end)
+func (s *BillingServiceSuite) createCommitment(
+	_ context.Context,
+	typ types.CommitmentType,
+	value string,
+	priceID string,
+	start time.Time,
+	end time.Time,
+) *commitment.Commitment {
+	c := s.newTestCommitment(
+		types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT),
+		s.testData.subscription,
+		typ,
+		value,
+		priceID,
+		start,
+		end,
+	)
 	s.storeCommitment(c)
 	return c
 }
@@ -55,7 +92,10 @@ func (s *BillingServiceSuite) usageResponse(p *price.Price, qty string) *dto.Get
 	return &dto.GetUsageBySubscriptionResponse{
 		Currency: s.testData.subscription.Currency,
 		Charges: []*dto.SubscriptionUsageByMetersResponse{{
-			SubscriptionLineItemID: li.ID, Price: p, Quantity: dec(qty).InexactFloat64(), Amount: amount.InexactFloat64(),
+			SubscriptionLineItemID: li.ID,
+			Price:                  p,
+			Quantity:               dec(qty).InexactFloat64(),
+			Amount:                 amount.InexactFloat64(),
 		}},
 	}
 }
@@ -66,9 +106,24 @@ func (s *BillingServiceSuite) TestCommitmentV2_PerPeriodAmount_TrueUp() {
 	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	// $100 amount commitment on the api-calls price; 7000 calls cost $60 on the slab tiers.
-	c := s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+	c := s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		periodStart.AddDate(1, 0, 0),
+	)
 	usage := s.usageResponse(s.testData.prices.apiCalls, "7000")
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.Len(lines, 2)
 	within := linesByKind(lines, types.CommitmentLineWithin)
@@ -88,10 +143,33 @@ func (s *BillingServiceSuite) TestCommitmentV2_FlagOff_InvoiceUnchanged() {
 	s.setupTestData()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	usage := s.usageResponse(s.testData.prices.apiCalls, "7000")
-	before, beforeTotal, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	before, beforeTotal, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
-	s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
-	after, afterTotal, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		periodStart.AddDate(1, 0, 0),
+	)
+	after, afterTotal, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.Equal(before, after)
 	s.True(beforeTotal.Equal(afterTotal))
@@ -102,17 +180,47 @@ func (s *BillingServiceSuite) TestCommitmentV2_FlagOn_NoOverlap_InvoiceUnchanged
 	s.setupTestData()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	usage := s.usageResponse(s.testData.prices.apiCalls, "7000")
-	before, beforeTotal, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	before, beforeTotal, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.enableCommitmentsV2()
 	// Starts after the period, and one terminated before it began.
-	s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0))
-	old := s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart.AddDate(0, -2, 0), periodEnd.AddDate(1, 0, 0))
+	s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodEnd,
+		periodEnd.AddDate(1, 0, 0),
+	)
+	old := s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart.AddDate(0, -2, 0),
+		periodEnd.AddDate(1, 0, 0),
+	)
 	old.CommitmentStatus = types.CommitmentStatusTerminated
 	old.TerminatedAt = lo.ToPtr(periodStart.AddDate(0, 0, -1))
 	_, err = s.GetStores().CommitmentRepo.Update(ctx, old)
 	s.Require().NoError(err)
-	after, afterTotal, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	after, afterTotal, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.Equal(before, after)
 	s.True(beforeTotal.Equal(afterTotal))
@@ -130,32 +238,61 @@ func (s *BillingServiceSuite) TestCommitmentV2_PrefersNewCommitmentOverLegacyLin
 	li.CommitmentAmount = lo.ToPtr(dec("500"))
 	li.CommitmentTrueUpEnabled = true
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
-	s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, s.usageResponse(s.testData.prices.apiCalls, "7000"), periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		periodStart.AddDate(1, 0, 0),
+	)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		s.testData.subscription,
+		s.usageResponse(s.testData.prices.apiCalls, "7000"),
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	for _, l := range lines {
 		s.Nil(l.CommitmentInfo)
 		s.NotEmpty(l.Metadata[types.MetadataKeyCommitmentLineKind])
 	}
+
 	s.True(total.Equal(dec("100")), "total %s", total)
 }
 
 // fixedDateSub stores an August 2026 monthly subscription for the test customer with the given usage lines.
-func (s *BillingServiceSuite) fixedDateSub(id string, lines ...*subscription.SubscriptionLineItem) *subscription.Subscription {
+func (s *BillingServiceSuite) fixedDateSub(
+	id string,
+	lines ...*subscription.SubscriptionLineItem,
+) *subscription.Subscription {
 	ctx := s.GetContext()
 	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	sub := &subscription.Subscription{
-		ID: id, PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: start, BillingAnchor: start,
-		CurrentPeriodStart: start, CurrentPeriodEnd: start.AddDate(0, 1, 0), Currency: "usd",
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 id,
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          start,
+		BillingAnchor:      start,
+		CurrentPeriodStart: start,
+		CurrentPeriodEnd:   start.AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	for _, li := range lines {
 		li.SubscriptionID, li.CustomerID, li.StartDate = sub.ID, sub.CustomerID, start
 		li.EntityID, li.EntityType, li.PlanDisplayName = s.testData.plan.ID, types.SubscriptionLineItemEntityTypePlan, s.testData.plan.Name
 		li.PriceType, li.Currency, li.BillingPeriod, li.InvoiceCadence = types.PRICE_TYPE_USAGE, "usd", sub.BillingPeriod, types.InvoiceCadenceArrear
 		li.BaseModel = types.GetDefaultBaseModel(ctx)
 	}
+
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lines))
 	sub.LineItems = lines
 	return sub
@@ -163,14 +300,24 @@ func (s *BillingServiceSuite) fixedDateSub(id string, lines ...*subscription.Sub
 
 func (s *BillingServiceSuite) usagePriceFor(id string, m *meter.Meter, amount string) *price.Price {
 	p := &price.Price{
-		ID: id, Amount: dec(amount), Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: s.testData.plan.ID,
-		Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-		BillingModel: types.BILLING_MODEL_FLAT_FEE, BillingCadence: types.BILLING_CADENCE_RECURRING,
-		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		ID:                 id,
+		Amount:             dec(amount),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
+
 	if m != nil {
 		p.MeterID = m.ID
 	}
+
 	s.Require().NoError(s.GetStores().PriceRepo.Create(s.GetContext(), p))
 	return p
 }
@@ -182,14 +329,26 @@ func (s *BillingServiceSuite) TestCommitmentV2_StackedWindowed_Simplismart() {
 	s.enableCommitmentsV2()
 
 	gpuMeter := &meter.Meter{
-		ID: "meter_gpu_minutes", Name: "GPU minutes", EventName: "gpu",
-		Aggregation: meter.Aggregation{Type: types.AggregationMax, Field: "gpus", BucketSize: types.WindowSizeMinute},
-		BaseModel:   types.GetDefaultBaseModel(ctx),
+		ID:        "meter_gpu_minutes",
+		Name:      "GPU minutes",
+		EventName: "gpu",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "gpus",
+			BucketSize: types.WindowSizeMinute,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
+
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, gpuMeter))
 	h100 := s.usagePriceFor("price_h100", gpuMeter, "0.06")
-	li := &subscription.SubscriptionLineItem{ID: "subs_line_h100", PriceID: h100.ID, MeterID: gpuMeter.ID,
-		MeterDisplayName: gpuMeter.Name, DisplayName: "H100"}
+	li := &subscription.SubscriptionLineItem{
+		ID:               "subs_line_h100",
+		PriceID:          h100.ID,
+		MeterID:          gpuMeter.ID,
+		MeterDisplayName: gpuMeter.Name,
+		DisplayName:      "H100",
+	}
 	sub := s.fixedDateSub("sub_e9", li)
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
 
@@ -198,11 +357,22 @@ func (s *BillingServiceSuite) TestCommitmentV2_StackedWindowed_Simplismart() {
 	insert := func(at time.Time, gpus int64) {
 		id := s.GetUUID()
 		s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
-			Event: events.Event{ID: id, TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID, EventName: gpuMeter.EventName,
-				ExternalCustomerID: s.testData.customer.ExternalID, CustomerID: sub.CustomerID, Timestamp: at.UTC(), IngestedAt: at.UTC()},
-			MeterID: gpuMeter.ID, QtyTotal: decimal.NewFromInt(gpus), UniqueHash: id,
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           sub.TenantID,
+				EnvironmentID:      sub.EnvironmentID,
+				EventName:          gpuMeter.EventName,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				CustomerID:         sub.CustomerID,
+				Timestamp:          at.UTC(),
+				IngestedAt:         at.UTC(),
+			},
+			MeterID:    gpuMeter.ID,
+			QtyTotal:   decimal.NewFromInt(gpus),
+			UniqueHash: id,
 		}}))
 	}
+
 	insert(time.Date(2026, 8, 25, 3, 0, 0, 0, ist), 10)
 	insert(time.Date(2026, 8, 25, 10, 0, 0, 0, ist), 45)
 	insert(time.Date(2026, 8, 25, 11, 0, 0, 0, ist), 20)
@@ -211,16 +381,40 @@ func (s *BillingServiceSuite) TestCommitmentV2_StackedWindowed_Simplismart() {
 	p2 := s.usagePriceFor("price_c2_committed", gpuMeter, "0.0491667")
 	c1 := s.newTestCommitment("cmt_c1", sub, types.COMMITMENT_TYPE_QUANTITY, "8", h100.ID, periodStart, periodEnd)
 	c1.Measurement, c1.CommittedPriceID = types.CommitmentMeasurementWindow, lo.ToPtr(p1.ID)
-	c2 := s.newTestCommitment("cmt_c2", sub, types.COMMITMENT_TYPE_QUANTITY, "32", h100.ID, time.Date(2026, 8, 25, 0, 0, 0, 0, ist), periodEnd)
+	c2 := s.newTestCommitment(
+		"cmt_c2",
+		sub,
+		types.COMMITMENT_TYPE_QUANTITY,
+		"32",
+		h100.ID,
+		time.Date(2026, 8, 25, 0, 0, 0, 0, ist),
+		periodEnd,
+	)
 	c2.Measurement, c2.CommittedPriceID, c2.Priority = types.CommitmentMeasurementWindow, lo.ToPtr(p2.ID), 2
-	c2.Timezone, c2.ActiveWindows = "Asia/Kolkata", types.ActiveWindows{{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 21}}}
+	c2.Timezone = "Asia/Kolkata"
+	c2.ActiveWindows = types.ActiveWindows{
+		{
+			Start: types.Bucket{Hour: 9},
+			End:   types.Bucket{Hour: 21},
+		},
+	}
 	s.storeCommitment(c1)
 	s.storeCommitment(c2)
 
 	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
-		SubscriptionLineItemID: li.ID, Price: h100, Quantity: 75,
+		SubscriptionLineItemID: li.ID,
+		Price:                  h100,
+		Quantity:               75,
 	}}}
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, sub, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		sub,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 
 	byCmt := func(kind types.CommitmentLineKind, id string) dto.CreateInvoiceLineItemRequest {
@@ -228,6 +422,7 @@ func (s *BillingServiceSuite) TestCommitmentV2_StackedWindowed_Simplismart() {
 		s.Require().True(ok, "no %s line for %s", kind, id)
 		return found
 	}
+
 	s.True(byCmt(types.CommitmentLineWithin, c1.ID).Quantity.Equal(dec("24")))
 	s.True(byCmt(types.CommitmentLineWithin, c2.ID).Quantity.Equal(dec("44")))
 	onDemand := linesByKind(lines, types.CommitmentLineOnDemand)
@@ -235,14 +430,23 @@ func (s *BillingServiceSuite) TestCommitmentV2_StackedWindowed_Simplismart() {
 	s.True(onDemand[0].Quantity.Equal(dec("7")))
 	s.True(onDemand[0].Amount.Equal(dec("0.42")))
 	// C1 runs all 44,640 August minutes; C2 runs 7 days x 720 minutes from 25 Aug IST.
-	s.True(byCmt(types.CommitmentLineTrueUp, c1.ID).Quantity.Equal(dec("357096")), "c1 unused %s", byCmt(types.CommitmentLineTrueUp, c1.ID).Quantity)
-	s.True(byCmt(types.CommitmentLineTrueUp, c2.ID).Quantity.Equal(dec("161236")), "c2 unused %s", byCmt(types.CommitmentLineTrueUp, c2.ID).Quantity)
+	s.True(
+		byCmt(types.CommitmentLineTrueUp, c1.ID).Quantity.Equal(dec("357096")),
+		"c1 unused %s",
+		byCmt(types.CommitmentLineTrueUp, c1.ID).Quantity,
+	)
+	s.True(
+		byCmt(types.CommitmentLineTrueUp, c2.ID).Quantity.Equal(dec("161236")),
+		"c2 unused %s",
+		byCmt(types.CommitmentLineTrueUp, c2.ID).Quantity,
+	)
 	c1Period := byCmt(types.CommitmentLineWithin, c1.ID).Amount.Add(byCmt(types.CommitmentLineTrueUp, c1.ID).Amount)
 	s.True(c1Period.Equal(dec("17141.76")), "c1 period %s", c1Period)
 	sum := decimal.Zero
 	for _, l := range lines {
 		sum = sum.Add(l.Amount)
 	}
+
 	s.True(total.Equal(sum))
 }
 
@@ -251,21 +455,46 @@ func (s *BillingServiceSuite) TestCommitmentV2_BillRemaining_Settlement() {
 	s.setupTestData()
 	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
-	li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
+	li := &subscription.SubscriptionLineItem{
+		ID:          "subs_line_flat_api",
+		PriceID:     p.ID,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		DisplayName: "API",
+	}
 	sub := s.fixedDateSub("sub_settle", li)
 	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	s.seedAPICalls(sub, time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), 20)
 
 	// $100/month Aug-Oct, terminated on 16 Aug: 15 of 31 days earned, the rest of the $300 is settled.
-	c := s.newTestCommitment("cmt_settle", sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, periodStart, periodStart.AddDate(0, 3, 0))
+	c := s.newTestCommitment(
+		"cmt_settle",
+		sub,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		p.ID,
+		periodStart,
+		periodStart.AddDate(0, 3, 0),
+	)
 	c.OnEarlyTermination = lo.ToPtr(types.CommitmentTerminationBillRemaining)
 	c.CommitmentStatus = types.CommitmentStatusTerminated
 	c.TerminatedAt = lo.ToPtr(time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC))
 	s.storeCommitment(c)
 
 	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
-		SubscriptionLineItemID: li.ID, Price: p, Quantity: 20, Amount: 20,
+		SubscriptionLineItemID: li.ID,
+		Price:                  p,
+		Quantity:               20,
+		Amount:                 20,
 	}}}
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, sub, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		sub,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.True(linesByKind(lines, types.CommitmentLineWithin)[0].Amount.Equal(dec("20")))
 	trueUp := linesByKind(lines, types.CommitmentLineTrueUp)
@@ -285,6 +514,7 @@ func TestSpreadWindowCosts_ConservesLineCost(t *testing.T) {
 	for _, v := range got {
 		sum = sum.Add(v)
 	}
+
 	require.True(t, sum.Equal(dec("1.00")), "sum %s", sum)
 	require.True(t, got[0].Equal(dec("0.333333")))
 	require.True(t, got[2].Equal(dec("0.333334")), "residue lands on the last non-zero window, got %s", got[2])
@@ -301,13 +531,28 @@ func (s *BillingServiceSuite) TestCommitmentV2_LinesOutsideTheCallAreNotBilled()
 	s.setupTestData()
 	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
-	s.createCommitment(ctx, types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+	s.createCommitment(
+		ctx,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		periodStart.AddDate(1, 0, 0),
+	)
 	usage := s.usageResponse(s.testData.prices.apiCalls, "7000")
 	callSub := *s.testData.subscription
 	callSub.LineItems = lo.Filter(s.testData.subscription.LineItems, func(li *subscription.SubscriptionLineItem, _ int) bool {
 		return li.PriceID != s.testData.prices.apiCalls.ID
 	})
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, &callSub, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		&callSub,
+		usage,
+		periodStart,
+		periodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.Empty(lines)
 	s.True(total.IsZero(), "total %s", total)
@@ -319,15 +564,39 @@ func (s *BillingServiceSuite) TestCommitmentV2_WindowAcrossCommitmentPeriodsIsSk
 	s.setupTestData()
 	s.enableCommitmentsV2()
 	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
-	li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
+	li := &subscription.SubscriptionLineItem{
+		ID:          "subs_line_flat_api",
+		PriceID:     p.ID,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		DisplayName: "API",
+	}
 	sub := s.fixedDateSub("sub_span", li)
-	c := s.newTestCommitment("cmt_span", sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(0, 3, 0))
+	c := s.newTestCommitment(
+		"cmt_span",
+		sub,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		p.ID,
+		sub.CurrentPeriodStart,
+		sub.CurrentPeriodStart.AddDate(0, 3, 0),
+	)
 	s.storeCommitment(c)
 	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
-		SubscriptionLineItemID: li.ID, Price: p, Quantity: 20, Amount: 20,
+		SubscriptionLineItemID: li.ID,
+		Price:                  p,
+		Quantity:               20,
+		Amount:                 20,
 	}}}
 	from, to := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
-	lines, total, err := s.service.CalculateMeterUsageCharges(ctx, sub, usage, from, to, types.UsageSourceInvoiceCreation, nil)
+	lines, total, err := s.service.CalculateMeterUsageCharges(
+		ctx,
+		sub,
+		usage,
+		from,
+		to,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	s.Require().Len(lines, 1)
 	s.Empty(lines[0].Metadata[types.MetadataKeyCommitmentLineKind])
@@ -335,21 +604,52 @@ func (s *BillingServiceSuite) TestCommitmentV2_WindowAcrossCommitmentPeriodsIsSk
 }
 
 // settleFixture stores an Aug 2026 subscription with a $100/month bill_remaining commitment from Aug to Oct.
-func (s *BillingServiceSuite) settleFixture(id string) (*subscription.Subscription, *commitment.Commitment, *dto.GetUsageBySubscriptionResponse) {
+func (s *BillingServiceSuite) settleFixture(
+	id string,
+) (*subscription.Subscription, *commitment.Commitment, *dto.GetUsageBySubscriptionResponse) {
 	p := s.usagePriceFor("price_"+id, s.testData.meters.apiCalls, "1")
-	li := &subscription.SubscriptionLineItem{ID: "subs_line_" + id, PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
+	li := &subscription.SubscriptionLineItem{
+		ID:          "subs_line_" + id,
+		PriceID:     p.ID,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		DisplayName: "API",
+	}
 	sub := s.fixedDateSub(id, li)
-	c := s.newTestCommitment("cmt_"+id, sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(0, 3, 0))
+	c := s.newTestCommitment(
+		"cmt_"+id,
+		sub,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		p.ID,
+		sub.CurrentPeriodStart,
+		sub.CurrentPeriodStart.AddDate(0, 3, 0),
+	)
 	c.OnEarlyTermination = lo.ToPtr(types.CommitmentTerminationBillRemaining)
 	s.storeCommitment(c)
 	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
-		SubscriptionLineItemID: li.ID, Price: p, Quantity: 20, Amount: 20,
+		SubscriptionLineItemID: li.ID,
+		Price:                  p,
+		Quantity:               20,
+		Amount:                 20,
 	}}}
 	return sub, c, usage
 }
 
-func (s *BillingServiceSuite) settlementsFor(sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, from, to time.Time) []dto.CreateInvoiceLineItemRequest {
-	lines, _, err := s.service.CalculateMeterUsageCharges(s.GetContext(), sub, usage, from, to, types.UsageSourceInvoiceCreation, nil)
+func (s *BillingServiceSuite) settlementsFor(
+	sub *subscription.Subscription,
+	usage *dto.GetUsageBySubscriptionResponse,
+	from time.Time,
+	to time.Time,
+) []dto.CreateInvoiceLineItemRequest {
+	lines, _, err := s.service.CalculateMeterUsageCharges(
+		s.GetContext(),
+		sub,
+		usage,
+		from,
+		to,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
 	s.Require().NoError(err)
 	return linesByKind(lines, types.CommitmentLineSettlement)
 }
@@ -402,11 +702,20 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancel_SettlesO
 	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	sub := &subscription.Subscription{
-		ID: "sub_cmt_cancel", PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: aug,
-		BillingAnchor: aug, CurrentPeriodStart: aug, CurrentPeriodEnd: aug.AddDate(0, 1, 0), Currency: "usd",
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 "sub_cmt_cancel",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          aug,
+		BillingAnchor:      aug,
+		CurrentPeriodStart: aug,
+		CurrentPeriodEnd:   aug.AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	li := *s.testData.usageSubLineItem
 	li.ID, li.SubscriptionID, li.StartDate = "subs_line_cmt_cancel", sub.ID, aug
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{&li}))
@@ -417,23 +726,48 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancel_SettlesO
 		id := types.GenerateUUIDWithPrefix("mu")
 		ts := aug.Add(24 * time.Hour)
 		records = append(records, &events.MeterUsage{
-			Event: events.Event{ID: id, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-				EventName: s.testData.meter.EventName, CustomerID: s.testData.customer.ID,
-				ExternalCustomerID: s.testData.customer.ExternalID, Timestamp: ts, IngestedAt: ts},
-			MeterID: s.testData.meter.ID, QtyTotal: decimal.NewFromInt(1), UniqueHash: id,
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				EventName:          s.testData.meter.EventName,
+				CustomerID:         s.testData.customer.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+			},
+			MeterID:    s.testData.meter.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: id,
 		})
 	}
+
 	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
 
 	c := &commitment.Commitment{
-		ID: "cmt_cancel", SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Name: "Platform", InvoiceLabel: "Platform",
-		Currency: "usd", ScopeEntityType: types.CommitmentScopePrice, ScopeEntityID: li.PriceID,
-		Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone: "UTC", Priority: 1, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
-		StartDate: aug, EndDate: aug.AddDate(0, 3, 0), CommitmentStatus: types.CommitmentStatusActive,
+		ID:                 "cmt_cancel",
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		Name:               "Platform",
+		InvoiceLabel:       "Platform",
+		Currency:           "usd",
+		ScopeEntityType:    types.CommitmentScopePrice,
+		ScopeEntityID:      li.PriceID,
+		Type:               types.COMMITMENT_TYPE_AMOUNT,
+		Value:              dec("100"),
+		Measurement:        types.CommitmentMeasurementBillingPeriod,
+		Timezone:           "UTC",
+		Priority:           1,
+		Binding:            true,
+		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		StartDate:          aug,
+		EndDate:            aug.AddDate(0, 3, 0),
+		CommitmentStatus:   types.CommitmentStatusActive,
 		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationBillRemaining),
-		EnvironmentID:      types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
 	s.Require().NoError(err)
 
@@ -460,8 +794,10 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancel_SettlesO
 				out = append(out, l.Amount)
 			}
 		}
+
 		return out
 	}
+
 	within, trueUp, settle := amountOf(types.CommitmentLineWithin), amountOf(types.CommitmentLineTrueUp), amountOf(types.CommitmentLineSettlement)
 	s.Require().Len(within, 1)
 	s.True(within[0].Equal(dec("10")), "within %s", within[0])
@@ -473,7 +809,9 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancel_SettlesO
 }
 
 // futureSettleFixture stores an Aug 2026 subscription with a $100/month bill_remaining commitment from Sep to Dec.
-func (s *BillingServiceSuite) futureSettleFixture(id string) (*subscription.Subscription, *commitment.Commitment, *dto.GetUsageBySubscriptionResponse) {
+func (s *BillingServiceSuite) futureSettleFixture(
+	id string,
+) (*subscription.Subscription, *commitment.Commitment, *dto.GetUsageBySubscriptionResponse) {
 	sub, c, usage := s.settleFixture(id)
 	c.StartDate, c.EndDate = sub.CurrentPeriodEnd, sub.CurrentPeriodEnd.AddDate(0, 3, 0)
 	_, err := s.GetStores().CommitmentRepo.Update(s.GetContext(), c)
@@ -530,25 +868,49 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancelBeforeSta
 	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	sub := &subscription.Subscription{
-		ID: "sub_cmt_cancel_pre", PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: aug,
-		BillingAnchor: aug, CurrentPeriodStart: aug, CurrentPeriodEnd: aug.AddDate(0, 1, 0), Currency: "usd",
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 "sub_cmt_cancel_pre",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          aug,
+		BillingAnchor:      aug,
+		CurrentPeriodStart: aug,
+		CurrentPeriodEnd:   aug.AddDate(0, 1, 0),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	li := *s.testData.usageSubLineItem
 	li.ID, li.SubscriptionID, li.StartDate = "subs_line_cmt_cancel_pre", sub.ID, aug
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{&li}))
 
 	sep := aug.AddDate(0, 1, 0)
 	c := &commitment.Commitment{
-		ID: "cmt_cancel_pre", SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Name: "Platform", InvoiceLabel: "Platform",
-		Currency: "usd", ScopeEntityType: types.CommitmentScopePrice, ScopeEntityID: li.PriceID,
-		Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone: "UTC", Priority: 1, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
-		StartDate: sep, EndDate: sep.AddDate(0, 3, 0), CommitmentStatus: types.CommitmentStatusActive,
+		ID:                 "cmt_cancel_pre",
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		Name:               "Platform",
+		InvoiceLabel:       "Platform",
+		Currency:           "usd",
+		ScopeEntityType:    types.CommitmentScopePrice,
+		ScopeEntityID:      li.PriceID,
+		Type:               types.COMMITMENT_TYPE_AMOUNT,
+		Value:              dec("100"),
+		Measurement:        types.CommitmentMeasurementBillingPeriod,
+		Timezone:           "UTC",
+		Priority:           1,
+		Binding:            true,
+		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		StartDate:          sep,
+		EndDate:            sep.AddDate(0, 3, 0),
+		CommitmentStatus:   types.CommitmentStatusActive,
 		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationBillRemaining),
-		EnvironmentID:      types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
 	s.Require().NoError(err)
 
@@ -574,6 +936,7 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_ImmediateCancelBeforeSta
 			}
 		}
 	}
+
 	s.Require().Len(settlements, 1)
 	s.True(settlements[0].Equal(dec("300")), "settlement %s", settlements[0])
 }
@@ -599,14 +962,37 @@ func (s *BillingServiceSuite) TestCommitmentV2_TerminatedBeforeSubscriptionStart
 func TestClipCommitmentPeriod_TerminatedBeforeStartEarnsNothing(t *testing.T) {
 	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	for _, m := range []types.CommitmentMeasurement{types.CommitmentMeasurementBillingPeriod, types.CommitmentMeasurementWindow} {
-		c := &commitment.Commitment{Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec("100"), Measurement: m,
-			StartDate: aug, EndDate: aug.AddDate(0, 1, 0), TerminatedAt: lo.ToPtr(aug.AddDate(0, 0, -10))}
-		p := commitmentPeriod{Start: aug, End: aug.AddDate(0, 1, 0), FullStart: aug, FullEnd: aug.AddDate(0, 1, 0)}
-		got := clipCommitmentPeriod(c, p, *c.TerminatedAt, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug)
+		c := &commitment.Commitment{
+			Type:         types.COMMITMENT_TYPE_AMOUNT,
+			Value:        dec("100"),
+			Measurement:  m,
+			StartDate:    aug,
+			EndDate:      aug.AddDate(0, 1, 0),
+			TerminatedAt: lo.ToPtr(aug.AddDate(0, 0, -10)),
+		}
+		p := commitmentPeriod{
+			Start:     aug,
+			End:       aug.AddDate(0, 1, 0),
+			FullStart: aug,
+			FullEnd:   aug.AddDate(0, 1, 0),
+		}
+		got := clipCommitmentPeriod(
+			c,
+			p,
+			*c.TerminatedAt,
+			commitmentRates{Committed: dec("1")},
+			types.WindowSizeDay,
+			aug,
+		)
 		require.True(t, got.Amount.IsZero() && got.Capacity.IsZero(), "%s: amount %s", m, got.Amount)
 		require.False(t, got.End.Before(got.Start))
-		require.True(t, remainingValue(c, []commitmentPeriod{{Start: aug, End: aug.AddDate(0, 1, 0), FullStart: aug,
-			FullEnd: aug.AddDate(0, 1, 0), Amount: dec("100")}}, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug).Equal(dec("100")))
+		require.True(t, remainingValue(c, []commitmentPeriod{{
+			Start:     aug,
+			End:       aug.AddDate(0, 1, 0),
+			FullStart: aug,
+			FullEnd:   aug.AddDate(0, 1, 0),
+			Amount:    dec("100"),
+		}}, commitmentRates{Committed: dec("1")}, types.WindowSizeDay, aug).Equal(dec("100")))
 	}
 }
 
@@ -616,15 +1002,24 @@ func (s *BillingServiceSuite) subscriptionSvc() SubscriptionService {
 
 func (s *BillingServiceSuite) rawUsage(from, to time.Time) *dto.GetUsageBySubscriptionResponse {
 	usage, err := s.subscriptionSvc().GetUsageBySubscription(s.GetContext(), &dto.GetUsageBySubscriptionRequest{
-		SubscriptionID: s.testData.subscription.ID, StartTime: from, EndTime: to,
+		SubscriptionID: s.testData.subscription.ID,
+		StartTime:      from,
+		EndTime:        to,
 	})
 	s.Require().NoError(err)
 	return usage
 }
 
-func (s *BillingServiceSuite) rawUsageCharges(usage *dto.GetUsageBySubscriptionResponse, from, to time.Time) *dto.CalculateUsageChargesResult {
+func (s *BillingServiceSuite) rawUsageCharges(
+	usage *dto.GetUsageBySubscriptionResponse,
+	from time.Time,
+	to time.Time,
+) *dto.CalculateUsageChargesResult {
 	res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
-		Subscription: s.testData.subscription, Usage: usage, PeriodStart: from, PeriodEnd: to,
+		Subscription: s.testData.subscription,
+		Usage:        usage,
+		PeriodStart:  from,
+		PeriodEnd:    to,
 	})
 	s.Require().NoError(err)
 	return res
@@ -645,7 +1040,14 @@ func (s *BillingServiceSuite) TestCommitmentV2_PreviewMatchesInvoice() {
 		{
 			name: "amount commitment with true-up",
 			setup: func(periodStart time.Time) {
-				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+				s.createCommitment(
+					s.GetContext(),
+					types.COMMITMENT_TYPE_AMOUNT,
+					"100",
+					s.testData.prices.apiCalls.ID,
+					periodStart,
+					periodStart.AddDate(1, 0, 0),
+				)
 			},
 			kinds: []types.CommitmentLineKind{types.CommitmentLineWithin, types.CommitmentLineTrueUp},
 		},
@@ -662,6 +1064,7 @@ func (s *BillingServiceSuite) TestCommitmentV2_PreviewMatchesInvoice() {
 			kinds: []types.CommitmentLineKind{types.CommitmentLineWithin, types.CommitmentLineOnDemand},
 		},
 	}
+
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
@@ -672,10 +1075,20 @@ func (s *BillingServiceSuite) TestCommitmentV2_PreviewMatchesInvoice() {
 
 			raw := s.rawUsageCharges(s.rawUsage(periodStart, periodEnd), periodStart, periodEnd)
 			meterUsage, err := s.subscriptionSvc().GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-				SubscriptionID: s.testData.subscription.ID, StartTime: periodStart, EndTime: periodEnd,
+				SubscriptionID: s.testData.subscription.ID,
+				StartTime:      periodStart,
+				EndTime:        periodEnd,
 			})
 			s.Require().NoError(err)
-			lines, total, err := s.service.CalculateMeterUsageCharges(ctx, s.testData.subscription, meterUsage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil)
+			lines, total, err := s.service.CalculateMeterUsageCharges(
+				ctx,
+				s.testData.subscription,
+				meterUsage,
+				periodStart,
+				periodEnd,
+				types.UsageSourceInvoiceCreation,
+				nil,
+			)
 			s.Require().NoError(err)
 
 			preview, invoice := commitmentLinesOf(raw.LineItems), commitmentLinesOf(lines)
@@ -686,9 +1099,20 @@ func (s *BillingServiceSuite) TestCommitmentV2_PreviewMatchesInvoice() {
 				s.Equal(invoice[i].Metadata, preview[i].Metadata)
 				s.Equal(lo.FromPtr(invoice[i].CommitmentID), lo.FromPtr(preview[i].CommitmentID))
 				s.Equal(lo.FromPtr(invoice[i].DisplayName), lo.FromPtr(preview[i].DisplayName))
-				s.True(invoice[i].Quantity.Equal(preview[i].Quantity), "quantity %s vs %s", invoice[i].Quantity, preview[i].Quantity)
-				s.True(invoice[i].Amount.Equal(preview[i].Amount), "amount %s vs %s", invoice[i].Amount, preview[i].Amount)
+				s.True(
+					invoice[i].Quantity.Equal(preview[i].Quantity),
+					"quantity %s vs %s",
+					invoice[i].Quantity,
+					preview[i].Quantity,
+				)
+				s.True(
+					invoice[i].Amount.Equal(preview[i].Amount),
+					"amount %s vs %s",
+					invoice[i].Amount,
+					preview[i].Amount,
+				)
 			}
+
 			s.Len(raw.LineItems, len(preview), "in-scope usage is billed only through commitment lines")
 			s.True(raw.TotalAmount.Equal(total), "total %s vs %s", raw.TotalAmount, total)
 		})
@@ -700,7 +1124,14 @@ func (s *BillingServiceSuite) TestCommitmentV2_UsageAPIBreakdown() {
 	s.enableCommitmentsV2()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
 	// $100 amount commitment; the 500 recorded api calls cost $10.
-	c := s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+	c := s.createCommitment(
+		s.GetContext(),
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		periodStart.AddDate(1, 0, 0),
+	)
 
 	usage := s.rawUsage(periodStart, periodEnd)
 	s.Require().Len(usage.Commitments, 1)
@@ -739,17 +1170,32 @@ func (s *BillingServiceSuite) TestCommitmentV2_RawPathAndUsageAPIUnchangedWithou
 		{
 			name: "flag off",
 			setup: func(periodStart, _ time.Time) {
-				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+				s.createCommitment(
+					s.GetContext(),
+					types.COMMITMENT_TYPE_AMOUNT,
+					"100",
+					s.testData.prices.apiCalls.ID,
+					periodStart,
+					periodStart.AddDate(1, 0, 0),
+				)
 			},
 		},
 		{
 			name: "flag on, no overlapping commitment",
 			setup: func(_, periodEnd time.Time) {
 				s.enableCommitmentsV2()
-				s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0))
+				s.createCommitment(
+					s.GetContext(),
+					types.COMMITMENT_TYPE_AMOUNT,
+					"100",
+					s.testData.prices.apiCalls.ID,
+					periodEnd,
+					periodEnd.AddDate(1, 0, 0),
+				)
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			s.setupTestData()
@@ -775,13 +1221,23 @@ func (s *BillingServiceSuite) TestCommitmentV2_RawPathScopeGuards() {
 		s.setupTestData()
 		s.enableCommitmentsV2()
 		periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
-		s.createCommitment(s.GetContext(), types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0))
+		s.createCommitment(
+			s.GetContext(),
+			types.COMMITMENT_TYPE_AMOUNT,
+			"100",
+			s.testData.prices.apiCalls.ID,
+			periodStart,
+			periodStart.AddDate(1, 0, 0),
+		)
 		callSub := *s.testData.subscription
 		callSub.LineItems = lo.Filter(s.testData.subscription.LineItems, func(li *subscription.SubscriptionLineItem, _ int) bool {
 			return li.PriceID != s.testData.prices.apiCalls.ID
 		})
 		res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
-			Subscription: &callSub, Usage: s.usageResponse(s.testData.prices.apiCalls, "7000"), PeriodStart: periodStart, PeriodEnd: periodEnd,
+			Subscription: &callSub,
+			Usage:        s.usageResponse(s.testData.prices.apiCalls, "7000"),
+			PeriodStart:  periodStart,
+			PeriodEnd:    periodEnd,
 		})
 		s.Require().NoError(err)
 		s.Empty(res.LineItems)
@@ -791,13 +1247,24 @@ func (s *BillingServiceSuite) TestCommitmentV2_RawPathScopeGuards() {
 		s.setupTestData()
 		s.enableCommitmentsV2()
 		p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
-		li := &subscription.SubscriptionLineItem{ID: "subs_line_flat_api", PriceID: p.ID, MeterID: s.testData.meters.apiCalls.ID, DisplayName: "API"}
+		li := &subscription.SubscriptionLineItem{
+			ID:          "subs_line_flat_api",
+			PriceID:     p.ID,
+			MeterID:     s.testData.meters.apiCalls.ID,
+			DisplayName: "API",
+		}
 		sub := s.fixedDateSub("sub_span", li)
 		s.storeCommitment(s.newTestCommitment("cmt_span", sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(0, 3, 0)))
-		usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{Price: p, Quantity: 20, Amount: 20}}}
+		usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
+			Price:    p,
+			Quantity: 20,
+			Amount:   20,
+		}}}
 		res, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
-			Subscription: sub, Usage: usage,
-			PeriodStart: time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC), PeriodEnd: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC),
+			Subscription: sub,
+			Usage:        usage,
+			PeriodStart:  time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC),
+			PeriodEnd:    time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC),
 		})
 		s.Require().NoError(err)
 		s.Require().Len(res.LineItems, 1)
@@ -808,17 +1275,29 @@ func (s *BillingServiceSuite) TestCommitmentV2_RawPathScopeGuards() {
 
 // recalcFixture stores an Aug 2026 subscription with $10 of usage (500 calls at $0.02), the given commitments
 // on its usage price, and a draft invoice for August holding one stale usage line.
-func (s *EntitlementQuantityTestSuite) recalcFixture(id string, commitments ...*commitment.Commitment) *invoicedomain.Invoice {
+func (s *EntitlementQuantityTestSuite) recalcFixture(
+	id string,
+	commitments ...*commitment.Commitment,
+) *invoicedomain.Invoice {
 	ctx := s.GetContext()
 	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
 	aug := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	sep := aug.AddDate(0, 1, 0)
 	sub := &subscription.Subscription{
-		ID: "sub_" + id, PlanID: s.testData.plan.ID, CustomerID: s.testData.customer.ID, StartDate: aug,
-		BillingAnchor: aug, CurrentPeriodStart: aug, CurrentPeriodEnd: sep, Currency: "usd",
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
-		SubscriptionStatus: types.SubscriptionStatusActive, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 "sub_" + id,
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          aug,
+		BillingAnchor:      aug,
+		CurrentPeriodStart: aug,
+		CurrentPeriodEnd:   sep,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
+
 	li := *s.testData.usageSubLineItem
 	li.ID, li.SubscriptionID, li.StartDate = "subs_line_"+id, sub.ID, aug
 	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{&li}))
@@ -828,12 +1307,22 @@ func (s *EntitlementQuantityTestSuite) recalcFixture(id string, commitments ...*
 		muID := types.GenerateUUIDWithPrefix("mu")
 		ts := aug.Add(24 * time.Hour)
 		records = append(records, &events.MeterUsage{
-			Event: events.Event{ID: muID, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-				EventName: s.testData.meter.EventName, CustomerID: s.testData.customer.ID,
-				ExternalCustomerID: s.testData.customer.ExternalID, Timestamp: ts, IngestedAt: ts},
-			MeterID: s.testData.meter.ID, QtyTotal: decimal.NewFromInt(1), UniqueHash: muID,
+			Event: events.Event{
+				ID:                 muID,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				EventName:          s.testData.meter.EventName,
+				CustomerID:         s.testData.customer.ID,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				Timestamp:          ts,
+				IngestedAt:         ts,
+			},
+			MeterID:    s.testData.meter.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: muID,
 		})
 	}
+
 	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, records))
 
 	for _, c := range commitments {
@@ -845,18 +1334,34 @@ func (s *EntitlementQuantityTestSuite) recalcFixture(id string, commitments ...*
 
 	bp := string(types.BILLING_PERIOD_MONTHLY)
 	inv := &invoicedomain.Invoice{
-		ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE), CustomerID: sub.CustomerID,
-		SubscriptionID: lo.ToPtr(sub.ID), InvoiceType: types.InvoiceTypeSubscription,
-		InvoiceStatus: types.InvoiceStatusDraft, PaymentStatus: types.PaymentStatusPending, Currency: "usd",
-		BillingPeriod: &bp, PeriodStart: &aug, PeriodEnd: &sep, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusDraft,
+		PaymentStatus:  types.PaymentStatusPending,
+		Currency:       "usd",
+		BillingPeriod:  &bp,
+		PeriodStart:    &aug,
+		PeriodEnd:      &sep,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoicedomain.InvoiceLineItem{{
-			ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM), CustomerID: sub.CustomerID,
-			MeterID: lo.ToPtr(s.testData.meter.ID), PriceID: lo.ToPtr(li.PriceID), DisplayName: lo.ToPtr("stale"),
-			Amount: dec("1"), Quantity: dec("1"), Currency: "usd", EnvironmentID: types.GetEnvironmentID(ctx),
-			PeriodStart: &aug, PeriodEnd: &sep, SubscriptionLineItemID: lo.ToPtr(li.ID),
-			BaseModel: types.GetDefaultBaseModel(ctx),
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+			CustomerID:             sub.CustomerID,
+			MeterID:                lo.ToPtr(s.testData.meter.ID),
+			PriceID:                lo.ToPtr(li.PriceID),
+			DisplayName:            lo.ToPtr("stale"),
+			Amount:                 dec("1"),
+			Quantity:               dec("1"),
+			Currency:               "usd",
+			EnvironmentID:          types.GetEnvironmentID(ctx),
+			PeriodStart:            &aug,
+			PeriodEnd:              &sep,
+			SubscriptionLineItemID: lo.ToPtr(li.ID),
+			BaseModel:              types.GetDefaultBaseModel(ctx),
 		}},
 	}
+
 	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv))
 	return inv
 }
@@ -864,16 +1369,31 @@ func (s *EntitlementQuantityTestSuite) recalcFixture(id string, commitments ...*
 func (s *EntitlementQuantityTestSuite) recalcCommitment(id string, value string, priority int) *commitment.Commitment {
 	ctx := s.GetContext()
 	return &commitment.Commitment{
-		ID: id, Name: id, InvoiceLabel: id, Currency: "usd", ScopeEntityType: types.CommitmentScopePrice,
-		Type: types.COMMITMENT_TYPE_AMOUNT, Value: dec(value), Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone: "UTC", Priority: priority, Binding: true, CollectionMethod: lo.ToPtr(types.CommitmentCollectionPerPeriod),
-		CommitmentStatus: types.CommitmentStatusActive, OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
-		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:                 id,
+		Name:               id,
+		InvoiceLabel:       id,
+		Currency:           "usd",
+		ScopeEntityType:    types.CommitmentScopePrice,
+		Type:               types.COMMITMENT_TYPE_AMOUNT,
+		Value:              dec(value),
+		Measurement:        types.CommitmentMeasurementBillingPeriod,
+		Timezone:           "UTC",
+		Priority:           priority,
+		Binding:            true,
+		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		CommitmentStatus:   types.CommitmentStatusActive,
+		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 }
 
 // requireStableRecalculation recalculates the draft three times and checks the stored lines stay the same.
-func (s *EntitlementQuantityTestSuite) requireStableRecalculation(inv *invoicedomain.Invoice, wantLines int, wantTotal string) {
+func (s *EntitlementQuantityTestSuite) requireStableRecalculation(
+	inv *invoicedomain.Invoice,
+	wantLines int,
+	wantTotal string,
+) {
 	ctx := s.GetContext()
 	for i := 0; i < 3; i++ {
 		_, err := s.invoiceSvc.RecalculateInvoiceV2(ctx, inv.ID, false)
@@ -886,6 +1406,7 @@ func (s *EntitlementQuantityTestSuite) requireStableRecalculation(inv *invoicedo
 		for _, l := range stored.LineItems {
 			sum = sum.Add(l.Amount)
 		}
+
 		s.Require().Len(stored.LineItems, wantLines, "recalculation %d line count", i+1)
 		s.True(sum.Equal(stored.Total), "recalculation %d: lines %s, total %s", i+1, sum, stored.Total)
 		s.True(stored.Total.Equal(dec(wantTotal)), "recalculation %d: total %s", i+1, stored.Total)
@@ -903,4 +1424,202 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentV2_RecalculateDraft_Stacked
 		s.recalcCommitment("cmt_recalc_4", "4", 1), s.recalcCommitment("cmt_recalc_3", "3", 2))
 	// Within $4 and $3 on the same line item, plus $3 on-demand.
 	s.requireStableRecalculation(inv, 3, "10")
+}
+
+// countingMeterUsageRepo counts the meter_usage reads a billing run makes.
+type countingMeterUsageRepo struct {
+	events.MeterUsageRepository
+	reads int
+}
+
+func (r *countingMeterUsageRepo) GetUsage(
+	ctx context.Context,
+	params *events.MeterUsageQueryParams,
+) (*events.MeterUsageAggregationResult, error) {
+	r.reads++
+	return r.MeterUsageRepository.GetUsage(ctx, params)
+}
+
+func (r *countingMeterUsageRepo) GetUsageForBucketedMeters(
+	ctx context.Context,
+	params *events.MeterUsageQueryParams,
+) (*events.AggregationResult, error) {
+	r.reads++
+	return r.MeterUsageRepository.GetUsageForBucketedMeters(ctx, params)
+}
+
+// seedAPICalls records n api calls at `at`, both as raw events and as meter_usage rows.
+func (s *BillingServiceSuite) seedAPICalls(sub *subscription.Subscription, at time.Time, n int) {
+	ctx := s.GetContext()
+	for i := 0; i < n; i++ {
+		event := events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           sub.TenantID,
+			EnvironmentID:      sub.EnvironmentID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			CustomerID:         sub.CustomerID,
+			Timestamp:          at,
+			IngestedAt:         at,
+			Properties:         map[string]interface{}{},
+		}
+		s.Require().NoError(s.eventRepo.InsertEvent(ctx, &event))
+		s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+			Event:      event,
+			MeterID:    s.testData.meters.apiCalls.ID,
+			QtyTotal:   decimal.NewFromInt(1),
+			UniqueHash: event.ID,
+		}}))
+	}
+}
+
+// replacementFixture stores an Aug 2026 subscription with 20 api calls on 5 Aug and 20 on 20 Aug, and quantity commitment A
+// (overage $2). With switchAt set, A is terminated then and B (overage $3) runs from then; otherwise A runs the whole month.
+func (s *BillingServiceSuite) replacementFixture(switchAt *time.Time) *subscription.Subscription {
+	p := s.usagePriceFor("price_flat_api", s.testData.meters.apiCalls, "1")
+	li := &subscription.SubscriptionLineItem{
+		ID:          "subs_line_flat_api",
+		PriceID:     p.ID,
+		MeterID:     s.testData.meters.apiCalls.ID,
+		DisplayName: "API",
+	}
+	sub := s.fixedDateSub("sub_replacement", li)
+	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	s.seedAPICalls(sub, time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), 20)
+	s.seedAPICalls(sub, time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), 20)
+
+	committed := s.usagePriceFor("price_replacement_committed", s.testData.meters.apiCalls, "0.5")
+	newCommitment := func(id string, start time.Time, overage string) *commitment.Commitment {
+		overagePrice := s.usagePriceFor("price_"+id+"_overage", s.testData.meters.apiCalls, overage)
+		c := s.newTestCommitment(id, sub, types.COMMITMENT_TYPE_QUANTITY, "31", p.ID, start, periodEnd)
+		c.CommittedPriceID = lo.ToPtr(committed.ID)
+		c.OveragePriceID = lo.ToPtr(overagePrice.ID)
+		return c
+	}
+
+	a := newCommitment("cmt_a", periodStart, "2")
+	if switchAt == nil {
+		s.storeCommitment(a)
+		return sub
+	}
+
+	a.CommitmentStatus = types.CommitmentStatusTerminated
+	a.TerminatedAt = switchAt
+	s.storeCommitment(a)
+	s.storeCommitment(newCommitment("cmt_b", *switchAt, "3"))
+	return sub
+}
+
+func (s *BillingServiceSuite) meterUsageCommitmentLines(
+	svc BillingService,
+	sub *subscription.Subscription,
+) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal) {
+	ctx := s.GetContext()
+	usage, err := s.subscriptionSvc().GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      sub.CurrentPeriodStart,
+		EndTime:        sub.CurrentPeriodEnd,
+	})
+	s.Require().NoError(err)
+
+	lines, total, err := svc.CalculateMeterUsageCharges(
+		ctx,
+		sub,
+		usage,
+		sub.CurrentPeriodStart,
+		sub.CurrentPeriodEnd,
+		types.UsageSourceInvoiceCreation,
+		nil,
+	)
+	s.Require().NoError(err)
+	return commitmentLinesOf(lines), total
+}
+
+func (s *BillingServiceSuite) TestCommitmentV2_BillingPeriodSplitAtReplacement() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+	sub := s.replacementFixture(&switchAt)
+
+	// A holds 14 units (1-15 Aug of 31 days) and B 17 (15 Aug-1 Sep); each half's 20 calls fill its own commitment.
+	lines, total := s.meterUsageCommitmentLines(s.service, sub)
+	byKind := func(kind types.CommitmentLineKind, id string) dto.CreateInvoiceLineItemRequest {
+		found, ok := lo.Find(linesByKind(lines, kind), func(l dto.CreateInvoiceLineItemRequest) bool {
+			return lo.FromPtr(l.CommitmentID) == id
+		})
+		s.Require().True(ok, "no %s line for %s", kind, id)
+		return found
+	}
+
+	s.True(byKind(types.CommitmentLineWithin, "cmt_a").Amount.Equal(dec("7")))
+	s.True(byKind(types.CommitmentLineWithin, "cmt_b").Amount.Equal(dec("8.5")))
+	s.Require().Len(linesByKind(lines, types.CommitmentLineOnDemand), 2)
+	onDemandA := byKind(types.CommitmentLineOnDemand, "cmt_a")
+	s.True(onDemandA.Quantity.Round(6).Equal(dec("6")), "A on-demand %s", onDemandA.Quantity)
+	s.True(onDemandA.Amount.Equal(dec("12")), "A on-demand %s", onDemandA.Amount) // 6 × $2
+	onDemandB := byKind(types.CommitmentLineOnDemand, "cmt_b")
+	s.True(onDemandB.Quantity.Round(6).Equal(dec("3")), "B on-demand %s", onDemandB.Quantity)
+	s.True(onDemandB.Amount.Equal(dec("9")), "B on-demand %s", onDemandB.Amount) // 3 × $3
+	s.True(total.Equal(dec("36.5")), "total %s", total)
+
+	// The preview reads the same split from raw events.
+	usage, err := s.subscriptionSvc().GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      sub.CurrentPeriodStart,
+		EndTime:        sub.CurrentPeriodEnd,
+	})
+	s.Require().NoError(err)
+	raw, err := s.service.CalculateUsageCharges(ctx, &dto.CalculateUsageChargesParams{
+		Subscription: sub,
+		Usage:        usage,
+		PeriodStart:  sub.CurrentPeriodStart,
+		PeriodEnd:    sub.CurrentPeriodEnd,
+	})
+	s.Require().NoError(err)
+
+	preview := commitmentLinesOf(raw.LineItems)
+	s.Require().Len(preview, len(lines))
+	for i := range preview {
+		s.Equal(lines[i].Metadata, preview[i].Metadata)
+		s.Equal(lo.FromPtr(lines[i].CommitmentID), lo.FromPtr(preview[i].CommitmentID))
+		s.True(lines[i].Quantity.Equal(preview[i].Quantity), "quantity %s vs %s", lines[i].Quantity, preview[i].Quantity)
+		s.True(lines[i].Amount.Equal(preview[i].Amount), "amount %s vs %s", lines[i].Amount, preview[i].Amount)
+	}
+
+	s.True(raw.TotalAmount.Equal(total), "total %s vs %s", raw.TotalAmount, total)
+}
+
+func (s *BillingServiceSuite) TestCommitmentV2_BillingPeriodSplitQueries() {
+	tests := []struct {
+		name      string
+		switchAt  *time.Time
+		wantReads int
+	}{
+		{
+			name:      "no commitment boundary inside the period reads nothing",
+			wantReads: 0,
+		},
+		{
+			name:      "a boundary inside the period reads the line once for the first half",
+			switchAt:  lo.ToPtr(time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)),
+			wantReads: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupTestData()
+			s.enableCommitmentsV2()
+			sub := s.replacementFixture(tt.switchAt)
+
+			counter := &countingMeterUsageRepo{MeterUsageRepository: s.GetStores().MeterUsageRepo}
+			params := s.service.(*billingService).ServiceParams
+			params.MeterUsageRepo = counter
+			lines, _ := s.meterUsageCommitmentLines(NewBillingService(params), sub)
+
+			s.NotEmpty(lines)
+			s.Equal(tt.wantReads, counter.reads)
+		})
+	}
 }

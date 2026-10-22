@@ -426,8 +426,17 @@ func (s *billingService) CalculateMeterUsageCharges(
 	var commitmentLines []dto.CreateInvoiceLineItemRequest
 	commitmentTotal := decimal.Zero
 	if len(pass.stack) > 0 {
-		commitmentLines, commitmentTotal, err = s.runCommitmentPass(ctx, pass, sub, chargesByLineItemID,
-			periodStart, periodEnd, asOf, querySource, meterMap)
+		commitmentLines, commitmentTotal, err = s.runCommitmentPass(
+			ctx,
+			pass,
+			sub,
+			chargesByLineItemID,
+			periodStart,
+			periodEnd,
+			asOf,
+			querySource,
+			meterMap,
+		)
 		if err != nil {
 			return nil, decimal.Zero, err
 		}
@@ -440,6 +449,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		if err != nil || len(pass.stack) == 0 {
 			return lines, total, err
 		}
+
 		return append(lines, commitmentLines...), total.Add(commitmentTotal), nil
 	}
 

@@ -541,6 +541,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 				if err != nil {
 					return nil, err
 				}
+
 				if skip {
 					continue
 				}
@@ -734,6 +735,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 					if err != nil {
 						return nil, err
 					}
+
 					if skip {
 						continue
 					}

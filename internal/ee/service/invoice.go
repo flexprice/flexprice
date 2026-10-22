@@ -4174,13 +4174,18 @@ func (s *invoiceService) reconcileLineItems(
 		if item.PeriodStart == nil || item.PeriodEnd == nil {
 			return reconcileKey{}, false
 		}
-		k := reconcileKey{PeriodStart: *item.PeriodStart, PeriodEnd: *item.PeriodEnd}
+
+		k := reconcileKey{
+			PeriodStart: *item.PeriodStart,
+			PeriodEnd:   *item.PeriodEnd,
+		}
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
 			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
 		}
+
 		if item.SubscriptionLineItemID == nil {
 			return reconcileKey{}, false
 		}

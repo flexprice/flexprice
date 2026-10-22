@@ -830,6 +830,7 @@ func (s *billingService) CalculateUsageCharges(
 	if err != nil {
 		return nil, err
 	}
+
 	pass.fromEvents = true
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -1384,8 +1385,17 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	if len(pass.stack) > 0 {
-		commitmentLines, commitmentTotal, err := s.runCommitmentPass(ctx, pass, sub, rawChargesByLine(sub, usage),
-			periodStart, periodEnd, time.Now().UTC(), "", meterMap)
+		commitmentLines, commitmentTotal, err := s.runCommitmentPass(
+			ctx,
+			pass,
+			sub,
+			rawChargesByLine(sub, usage),
+			periodStart,
+			periodEnd,
+			time.Now().UTC(),
+			"",
+			meterMap,
+		)
 		if err != nil {
 			return nil, err
 		}
