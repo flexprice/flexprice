@@ -314,6 +314,65 @@ definitions:
     - metrics
     - shape
     type: object
+  commitment.Filter:
+    properties:
+      active_from:
+        description: ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom,
+          ActiveTo).
+        type: string
+      active_to:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      ids:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      scope_entity_ids:
+        items:
+          type: string
+        type: array
+      scope_entity_type:
+        $ref: '#/definitions/types.CommitmentScopeType'
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      statuses:
+        items:
+          $ref: '#/definitions/types.CommitmentStatus'
+        type: array
+      subscription_ids:
+        items:
+          type: string
+        type: array
+    type: object
   costsheet.Filter:
     properties:
       costsheetIDs:
@@ -1021,7 +1080,15 @@ definitions:
     type: object
   AnalyticsQueryMeta:
     properties:
+      from:
+        type: string
+      prev_from:
+        type: string
+      prev_to:
+        type: string
       query_source:
+        type: string
+      to:
         type: string
     type: object
   AnalyticsQueryRequest:
@@ -1587,6 +1654,15 @@ definitions:
       true_up_enabled:
         type: boolean
     type: object
+  CommitmentCancellationFee:
+    properties:
+      type:
+        $ref: '#/definitions/types.CommitmentCancellationFeeType'
+      value:
+        type: string
+    required:
+    - type
+    type: object
   CommitmentResponse:
     properties:
       active_windows:
@@ -1595,6 +1671,8 @@ definitions:
         type: array
       binding:
         type: boolean
+      cancellation_fee_amount:
+        type: string
       collection_method:
         $ref: '#/definitions/types.CommitmentCollectionMethod'
       commitment_status:
@@ -2121,7 +2199,7 @@ definitions:
           $ref: '#/definitions/types.ActiveWindow'
         type: array
       binding:
-        description: default true
+        description: default false
         type: boolean
       collection_method:
         $ref: '#/definitions/types.CommitmentCollectionMethod'
@@ -2473,7 +2551,6 @@ definitions:
           Defaults to "UTC" if not provided
         type: string
     required:
-    - contact_persons
     - external_id
     - name
     type: object
@@ -2633,9 +2710,6 @@ definitions:
         type: string
       amount:
         description: amount is the monetary amount for this line item
-        type: string
-      commitment_id:
-        description: commitment_id links this line item to the commitment it bills.
         type: string
       commitment_info:
         allOf:
@@ -5479,8 +5553,8 @@ definitions:
         description: fx_conversion is the frozen fiat→fiat conversion applied at finalize;
           nil when the invoice was never converted.
       hosted_invoice_url:
-        description: hosted_invoice_url is the page where the customer can view,
-          download and pay this invoice
+        description: hosted_invoice_url is the page where the customer can view, download
+          and pay this invoice
         type: string
       id:
         description: id is the unique identifier for this invoice
@@ -6680,6 +6754,152 @@ definitions:
         type: string
     required:
     - addon_association_id
+    type: object
+  ReportCatalogEntry:
+    properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/types.ReportCategory'
+        enum:
+        - billing
+        - receivables
+        - customers
+        - credits
+        - usage
+      default_shape:
+        enum:
+        - timeseries
+        - breakdown
+        - scalar
+        type: string
+      description:
+        type: string
+      dimensions:
+        items:
+          $ref: '#/definitions/ReportDimension'
+        type: array
+      grains:
+        items:
+          enum:
+          - day
+          - week
+          - month
+          type: string
+        type: array
+      improvement:
+        allOf:
+        - $ref: '#/definitions/types.ImprovementDirection'
+        enum:
+        - higher
+        - lower
+      key:
+        type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/types.ReportKind'
+        enum:
+        - flow
+        - ratio
+        - snapshot
+      name:
+        type: string
+      shapes:
+        items:
+          enum:
+          - timeseries
+          - breakdown
+          - scalar
+          type: string
+        type: array
+      supports_compare:
+        type: boolean
+      value_type:
+        allOf:
+        - $ref: '#/definitions/types.ReportValueType'
+        enum:
+        - money
+        - count
+        - days
+    type: object
+  ReportCatalogResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ReportCatalogEntry'
+        type: array
+    type: object
+  ReportDimension:
+    properties:
+      key:
+        type: string
+      label:
+        type: string
+    type: object
+  ReportFilter:
+    properties:
+      field:
+        type: string
+      op:
+        enum:
+        - eq
+        - in
+        type: string
+      value:
+        items:
+          type: string
+        type: array
+    type: object
+  ReportQueryRequest:
+    properties:
+      compare:
+        enum:
+        - previous_period
+        - previous_year
+        type: string
+      currency:
+        type: string
+      dimensions:
+        items:
+          type: string
+        type: array
+      filters:
+        items:
+          $ref: '#/definitions/ReportFilter'
+        type: array
+      grain:
+        enum:
+        - day
+        - week
+        - month
+        type: string
+      limit:
+        type: integer
+      range:
+        example: 2026-09-01..2026-10-01
+        type: string
+      shape:
+        enum:
+        - timeseries
+        - breakdown
+        - scalar
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/ReportSort'
+        type: array
+    required:
+    - range
+    - shape
+    type: object
+  ReportSort:
+    properties:
+      dir:
+        enum:
+        - asc
+        - desc
+        type: string
+      field:
+        type: string
     type: object
   ResumeSubscriptionRequest:
     description: Resumes a paused subscription now. The billing anchor is kept, so
@@ -8752,6 +8972,8 @@ definitions:
     type: object
   TerminateCommitmentRequest:
     properties:
+      cancellation_fee:
+        $ref: '#/definitions/CommitmentCancellationFee'
       effective_at:
         type: string
     type: object
@@ -9032,8 +9254,6 @@ definitions:
         description: timezone is the updated IANA timezone name for the customer (e.g.
           "Asia/Kolkata", "America/New_York")
         type: string
-    required:
-    - contact_persons
     type: object
   UpdateEntitlementRequest:
     properties:
@@ -14505,6 +14725,77 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.ActiveWindow:
+    properties:
+      end:
+        $ref: '#/definitions/types.Bucket'
+      start:
+        $ref: '#/definitions/types.Bucket'
+    type: object
+  types.CommitmentCancellationFeeType:
+    enum:
+    - flat
+    - percent_of_remaining
+    type: string
+    x-enum-varnames:
+    - CommitmentCancellationFeeFlat
+    - CommitmentCancellationFeePercentOfRemaining
+  types.CommitmentCollectionMethod:
+    enum:
+    - per_period
+    - billing_terms
+    type: string
+    x-enum-varnames:
+    - CommitmentCollectionPerPeriod
+    - CommitmentCollectionBillingTerms
+  types.CommitmentEarlyTermination:
+    enum:
+    - forfeit
+    - credit_note
+    - bill_remaining
+    type: string
+    x-enum-varnames:
+    - CommitmentTerminationForfeit
+    - CommitmentTerminationCreditNote
+    - CommitmentTerminationBillRemaining
+  types.CommitmentMeasurement:
+    enum:
+    - billing_period
+    - window
+    type: string
+    x-enum-varnames:
+    - CommitmentMeasurementBillingPeriod
+    - CommitmentMeasurementWindow
+  types.CommitmentScopeType:
+    enum:
+    - subscription
+    - group
+    - meter
+    - price
+    type: string
+    x-enum-varnames:
+    - CommitmentScopeSubscription
+    - CommitmentScopeGroup
+    - CommitmentScopeMeter
+    - CommitmentScopePrice
+  types.CommitmentStatus:
+    enum:
+    - active
+    - ended
+    - terminated
+    type: string
+    x-enum-varnames:
+    - CommitmentStatusActive
+    - CommitmentStatusEnded
+    - CommitmentStatusTerminated
+  types.ImprovementDirection:
+    enum:
+    - higher
+    - lower
+    type: string
+    x-enum-varnames:
+    - ImprovementHigher
+    - ImprovementLower
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -14518,6 +14809,40 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.ReportCategory:
+    enum:
+    - billing
+    - receivables
+    - customers
+    - credits
+    - usage
+    type: string
+    x-enum-varnames:
+    - ReportCategoryBilling
+    - ReportCategoryReceivables
+    - ReportCategoryCustomers
+    - ReportCategoryCredits
+    - ReportCategoryUsage
+  types.ReportKind:
+    enum:
+    - flow
+    - ratio
+    - snapshot
+    type: string
+    x-enum-varnames:
+    - ReportKindFlow
+    - ReportKindRatio
+    - ReportKindSnapshot
+  types.ReportValueType:
+    enum:
+    - money
+    - count
+    - days
+    type: string
+    x-enum-varnames:
+    - ReportValueTypeMoney
+    - ReportValueTypeCount
+    - ReportValueTypeDays
   types.TenantInternalStatus:
     enum:
     - trialing
@@ -16091,6 +16416,80 @@ paths:
       tags:
       - Analytics
       x-scope: read
+  /analytics/reports:
+    get:
+      description: Returns the catalog of reports with their allowed shapes, dimensions
+        and grains.
+      operationId: listAnalyticsReports
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ReportCatalogResponse'
+        "403":
+          description: Reports not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List financial reports
+      tags:
+      - Analytics
+      x-scope: read
+  /analytics/reports/{key}/query:
+    post:
+      consumes:
+      - application/json
+      description: Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD
+        (end exclusive) or last_N_days. compare is previous_period or previous_year.
+      operationId: runAnalyticsReport
+      parameters:
+      - description: Report key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Report query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ReportQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AnalyticsQueryResult'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Reports not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Report not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Run a financial report
+      tags:
+      - Analytics
+      x-scope: read
   /analytics/revenue:
     post:
       consumes:
@@ -16538,7 +16937,7 @@ paths:
         name: filter
         required: true
         schema:
-          $ref: '#/definitions/types.CommitmentFilter'
+          $ref: '#/definitions/commitment.Filter'
       produces:
       - application/json
       responses:

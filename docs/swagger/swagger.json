@@ -972,6 +972,117 @@
                 "x-scope": "read"
             }
         },
+        "/analytics/reports": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the catalog of reports with their allowed shapes, dimensions and grains.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "List financial reports",
+                "operationId": "listAnalyticsReports",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ReportCatalogResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/analytics/reports/{key}/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Run a financial report",
+                "operationId": "runAnalyticsReport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Report key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Report query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReportQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Report not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/analytics/revenue": {
             "post": {
                 "security": [
@@ -1482,7 +1593,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/types.CommitmentFilter"
+                            "$ref": "#/definitions/commitment.Filter"
                         }
                     }
                 ],
@@ -15442,6 +15553,91 @@
                 }
             }
         },
+        "commitment.Filter": {
+            "type": "object",
+            "properties": {
+                "active_from": {
+                    "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo).",
+                    "type": "string"
+                },
+                "active_to": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "scope_entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scope_entity_type": {
+                    "$ref": "#/definitions/types.CommitmentScopeType"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CommitmentStatus"
+                    }
+                },
+                "subscription_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "costsheet.Filter": {
             "type": "object",
             "properties": {
@@ -16449,7 +16645,19 @@
         "AnalyticsQueryMeta": {
             "type": "object",
             "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "prev_from": {
+                    "type": "string"
+                },
+                "prev_to": {
+                    "type": "string"
+                },
                 "query_source": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }
@@ -17191,6 +17399,20 @@
                 }
             }
         },
+        "CommitmentCancellationFee": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/types.CommitmentCancellationFeeType"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "CommitmentResponse": {
             "type": "object",
             "properties": {
@@ -17202,6 +17424,9 @@
                 },
                 "binding": {
                     "type": "boolean"
+                },
+                "cancellation_fee_amount": {
+                    "type": "string"
                 },
                 "collection_method": {
                     "$ref": "#/definitions/types.CommitmentCollectionMethod"
@@ -17971,7 +18196,7 @@
                     }
                 },
                 "binding": {
-                    "description": "default true",
+                    "description": "default false",
                     "type": "boolean"
                 },
                 "collection_method": {
@@ -18280,7 +18505,6 @@
             "description": "Request object for creating a new customer in the system",
             "type": "object",
             "required": [
-                "contact_persons",
                 "external_id",
                 "name"
             ],
@@ -18607,10 +18831,6 @@
                 },
                 "amount": {
                     "description": "amount is the monetary amount for this line item",
-                    "type": "string"
-                },
-                "commitment_id": {
-                    "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
                 },
                 "commitment_info": {
@@ -23834,6 +24054,210 @@
                 }
             }
         },
+        "ReportCatalogEntry": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "enum": [
+                        "billing",
+                        "receivables",
+                        "customers",
+                        "credits",
+                        "usage"
+                    ],
+                    "$ref": "#/definitions/types.ReportCategory"
+                },
+                "default_shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportDimension"
+                    }
+                },
+                "grains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "day",
+                            "week",
+                            "month"
+                        ]
+                    }
+                },
+                "improvement": {
+                    "enum": [
+                        "higher",
+                        "lower"
+                    ],
+                    "$ref": "#/definitions/types.ImprovementDirection"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "kind": {
+                    "enum": [
+                        "flow",
+                        "ratio",
+                        "snapshot"
+                    ],
+                    "$ref": "#/definitions/types.ReportKind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "shapes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "timeseries",
+                            "breakdown",
+                            "scalar"
+                        ]
+                    }
+                },
+                "supports_compare": {
+                    "type": "boolean"
+                },
+                "value_type": {
+                    "enum": [
+                        "money",
+                        "count",
+                        "days"
+                    ],
+                    "$ref": "#/definitions/types.ReportValueType"
+                }
+            }
+        },
+        "ReportCatalogResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportCatalogEntry"
+                    }
+                }
+            }
+        },
+        "ReportDimension": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReportFilter": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "in"
+                    ]
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "ReportQueryRequest": {
+            "type": "object",
+            "required": [
+                "range",
+                "shape"
+            ],
+            "properties": {
+                "compare": {
+                    "type": "string",
+                    "enum": [
+                        "previous_period",
+                        "previous_year"
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportFilter"
+                    }
+                },
+                "grain": {
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ]
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "range": {
+                    "type": "string",
+                    "example": "2026-09-01..2026-10-01"
+                },
+                "shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportSort"
+                    }
+                }
+            }
+        },
+        "ReportSort": {
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
         "ResumeSubscriptionRequest": {
             "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date.",
             "type": "object",
@@ -26450,6 +26874,9 @@
         "TerminateCommitmentRequest": {
             "type": "object",
             "properties": {
+                "cancellation_fee": {
+                    "$ref": "#/definitions/CommitmentCancellationFee"
+                },
                 "effective_at": {
                     "type": "string"
                 }
@@ -26703,9 +27130,6 @@
         "UpdateCustomerRequest": {
             "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated",
             "type": "object",
-            "required": [
-                "contact_persons"
-            ],
             "properties": {
                 "address_city": {
                     "description": "address_city is the updated city name with maximum 100 characters",
@@ -33928,6 +34352,102 @@
                 }
             }
         },
+        "types.ActiveWindow": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                }
+            }
+        },
+        "types.CommitmentCancellationFeeType": {
+            "type": "string",
+            "enum": [
+                "flat",
+                "percent_of_remaining"
+            ],
+            "x-enum-varnames": [
+                "CommitmentCancellationFeeFlat",
+                "CommitmentCancellationFeePercentOfRemaining"
+            ]
+        },
+        "types.CommitmentCollectionMethod": {
+            "type": "string",
+            "enum": [
+                "per_period",
+                "billing_terms"
+            ],
+            "x-enum-varnames": [
+                "CommitmentCollectionPerPeriod",
+                "CommitmentCollectionBillingTerms"
+            ]
+        },
+        "types.CommitmentEarlyTermination": {
+            "type": "string",
+            "enum": [
+                "forfeit",
+                "credit_note",
+                "bill_remaining"
+            ],
+            "x-enum-varnames": [
+                "CommitmentTerminationForfeit",
+                "CommitmentTerminationCreditNote",
+                "CommitmentTerminationBillRemaining"
+            ]
+        },
+        "types.CommitmentMeasurement": {
+            "type": "string",
+            "enum": [
+                "billing_period",
+                "window"
+            ],
+            "x-enum-varnames": [
+                "CommitmentMeasurementBillingPeriod",
+                "CommitmentMeasurementWindow"
+            ]
+        },
+        "types.CommitmentScopeType": {
+            "type": "string",
+            "enum": [
+                "subscription",
+                "group",
+                "meter",
+                "price"
+            ],
+            "x-enum-varnames": [
+                "CommitmentScopeSubscription",
+                "CommitmentScopeGroup",
+                "CommitmentScopeMeter",
+                "CommitmentScopePrice"
+            ]
+        },
+        "types.CommitmentStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "ended",
+                "terminated"
+            ],
+            "x-enum-varnames": [
+                "CommitmentStatusActive",
+                "CommitmentStatusEnded",
+                "CommitmentStatusTerminated"
+            ]
+        },
+        "types.ImprovementDirection": {
+            "type": "string",
+            "enum": [
+                "higher",
+                "lower"
+            ],
+            "x-enum-varnames": [
+                "ImprovementHigher",
+                "ImprovementLower"
+            ]
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -33947,6 +34467,49 @@
             "additionalProperties": {
                 "type": "string"
             }
+        },
+        "types.ReportCategory": {
+            "type": "string",
+            "enum": [
+                "billing",
+                "receivables",
+                "customers",
+                "credits",
+                "usage"
+            ],
+            "x-enum-varnames": [
+                "ReportCategoryBilling",
+                "ReportCategoryReceivables",
+                "ReportCategoryCustomers",
+                "ReportCategoryCredits",
+                "ReportCategoryUsage"
+            ]
+        },
+        "types.ReportKind": {
+            "type": "string",
+            "enum": [
+                "flow",
+                "ratio",
+                "snapshot"
+            ],
+            "x-enum-varnames": [
+                "ReportKindFlow",
+                "ReportKindRatio",
+                "ReportKindSnapshot"
+            ]
+        },
+        "types.ReportValueType": {
+            "type": "string",
+            "enum": [
+                "money",
+                "count",
+                "days"
+            ],
+            "x-enum-varnames": [
+                "ReportValueTypeMoney",
+                "ReportValueTypeCount",
+                "ReportValueTypeDays"
+            ]
         },
         "types.TenantInternalStatus": {
             "type": "string",

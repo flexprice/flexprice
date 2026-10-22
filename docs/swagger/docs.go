@@ -976,6 +976,117 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/analytics/reports": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the catalog of reports with their allowed shapes, dimensions and grains.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "List financial reports",
+                "operationId": "listAnalyticsReports",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ReportCatalogResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/analytics/reports/{key}/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Run a financial report",
+                "operationId": "runAnalyticsReport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Report key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Report query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReportQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Report not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/analytics/revenue": {
             "post": {
                 "security": [
@@ -1486,7 +1597,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/types.CommitmentFilter"
+                            "$ref": "#/definitions/commitment.Filter"
                         }
                     }
                 ],
@@ -15466,6 +15577,91 @@ const docTemplate = `{
                 }
             }
         },
+        "commitment.Filter": {
+            "type": "object",
+            "properties": {
+                "active_from": {
+                    "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo).",
+                    "type": "string"
+                },
+                "active_to": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "scope_entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scope_entity_type": {
+                    "$ref": "#/definitions/types.CommitmentScopeType"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CommitmentStatus"
+                    }
+                },
+                "subscription_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "costsheet.Filter": {
             "type": "object",
             "properties": {
@@ -16501,7 +16697,19 @@ const docTemplate = `{
         "AnalyticsQueryMeta": {
             "type": "object",
             "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "prev_from": {
+                    "type": "string"
+                },
+                "prev_to": {
+                    "type": "string"
+                },
                 "query_source": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }
@@ -17319,6 +17527,20 @@ const docTemplate = `{
                 }
             }
         },
+        "CommitmentCancellationFee": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/types.CommitmentCancellationFeeType"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "CommitmentResponse": {
             "type": "object",
             "properties": {
@@ -17330,6 +17552,9 @@ const docTemplate = `{
                 },
                 "binding": {
                     "type": "boolean"
+                },
+                "cancellation_fee_amount": {
+                    "type": "string"
                 },
                 "collection_method": {
                     "$ref": "#/definitions/types.CommitmentCollectionMethod"
@@ -18119,7 +18344,7 @@ const docTemplate = `{
                     }
                 },
                 "binding": {
-                    "description": "default true",
+                    "description": "default false",
                     "type": "boolean"
                 },
                 "collection_method": {
@@ -18456,7 +18681,6 @@ const docTemplate = `{
             "description": "Request object for creating a new customer in the system",
             "type": "object",
             "required": [
-                "contact_persons",
                 "external_id",
                 "name"
             ],
@@ -18795,10 +19019,6 @@ const docTemplate = `{
                 },
                 "amount": {
                     "description": "amount is the monetary amount for this line item",
-                    "type": "string"
-                },
-                "commitment_id": {
-                    "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
                 },
                 "commitment_info": {
@@ -24290,6 +24510,226 @@ const docTemplate = `{
                 }
             }
         },
+        "ReportCatalogEntry": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "enum": [
+                        "billing",
+                        "receivables",
+                        "customers",
+                        "credits",
+                        "usage"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportCategory"
+                        }
+                    ]
+                },
+                "default_shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportDimension"
+                    }
+                },
+                "grains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "day",
+                            "week",
+                            "month"
+                        ]
+                    }
+                },
+                "improvement": {
+                    "enum": [
+                        "higher",
+                        "lower"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ImprovementDirection"
+                        }
+                    ]
+                },
+                "key": {
+                    "type": "string"
+                },
+                "kind": {
+                    "enum": [
+                        "flow",
+                        "ratio",
+                        "snapshot"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportKind"
+                        }
+                    ]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "shapes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "timeseries",
+                            "breakdown",
+                            "scalar"
+                        ]
+                    }
+                },
+                "supports_compare": {
+                    "type": "boolean"
+                },
+                "value_type": {
+                    "enum": [
+                        "money",
+                        "count",
+                        "days"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportValueType"
+                        }
+                    ]
+                }
+            }
+        },
+        "ReportCatalogResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportCatalogEntry"
+                    }
+                }
+            }
+        },
+        "ReportDimension": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReportFilter": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "in"
+                    ]
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "ReportQueryRequest": {
+            "type": "object",
+            "required": [
+                "range",
+                "shape"
+            ],
+            "properties": {
+                "compare": {
+                    "type": "string",
+                    "enum": [
+                        "previous_period",
+                        "previous_year"
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportFilter"
+                    }
+                },
+                "grain": {
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ]
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "range": {
+                    "type": "string",
+                    "example": "2026-09-01..2026-10-01"
+                },
+                "shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportSort"
+                    }
+                }
+            }
+        },
+        "ReportSort": {
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
         "ResumeSubscriptionRequest": {
             "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date.",
             "type": "object",
@@ -27150,6 +27590,9 @@ const docTemplate = `{
         "TerminateCommitmentRequest": {
             "type": "object",
             "properties": {
+                "cancellation_fee": {
+                    "$ref": "#/definitions/CommitmentCancellationFee"
+                },
                 "effective_at": {
                     "type": "string"
                 }
@@ -27423,9 +27866,6 @@ const docTemplate = `{
         "UpdateCustomerRequest": {
             "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated",
             "type": "object",
-            "required": [
-                "contact_persons"
-            ],
             "properties": {
                 "address_city": {
                     "description": "address_city is the updated city name with maximum 100 characters",
@@ -34876,717 +35316,26 @@ const docTemplate = `{
                 }
             }
         },
-        "types.AWSMarketplaceSyncConfig": {
-            "type": "object",
-            "properties": {
-                "region": {
-                    "type": "string"
-                }
-            }
-        },
         "types.ActiveWindow": {
             "type": "object",
             "properties": {
                 "end": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Bucket"
                 },
                 "start": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Bucket"
                 }
             }
         },
-        "types.AddAddonParams": {
-            "type": "object",
-            "properties": {
-                "addons": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.AddAddonRef"
-                    }
-                },
-                "removes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.RemoveAddonRef"
-                    }
-                },
-                "subscription_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.AddAddonRef": {
-            "type": "object",
-            "properties": {
-                "addon_id": {
-                    "type": "string"
-                },
-                "association_id": {
-                    "type": "string"
-                },
-                "cadence": {
-                    "$ref": "#/definitions/types.AddonCadence"
-                },
-                "coupons": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CouponRef"
-                    }
-                },
-                "proration_behavior": {
-                    "description": "Needed to prorate the addon's first credit grant.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ProrationBehavior"
-                        }
-                    ]
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.AddonAssociationEntityType": {
+        "types.CommitmentCancellationFeeType": {
             "type": "string",
             "enum": [
-                "subscription",
-                "plan",
-                "addon"
+                "flat",
+                "percent_of_remaining"
             ],
             "x-enum-varnames": [
-                "AddonAssociationEntityTypeSubscription",
-                "AddonAssociationEntityTypePlan",
-                "AddonAssociationEntityTypeAddon"
-            ]
-        },
-        "types.AddonCadence": {
-            "type": "string",
-            "enum": [
-                "onetime",
-                "recurring"
-            ],
-            "x-enum-varnames": [
-                "AddonCadenceOnetime",
-                "AddonCadenceRecurring"
-            ]
-        },
-        "types.AddonFilter": {
-            "type": "object",
-            "properties": {
-                "addon_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "lookup_keys": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.AddonStatus": {
-            "type": "string",
-            "enum": [
-                "active",
-                "cancelled",
-                "pending"
-            ],
-            "x-enum-varnames": [
-                "AddonStatusActive",
-                "AddonStatusCancelled",
-                "AddonStatusPending"
-            ]
-        },
-        "types.AggregationType": {
-            "type": "string",
-            "enum": [
-                "COUNT",
-                "SUM",
-                "AVG",
-                "COUNT_UNIQUE",
-                "LATEST",
-                "SUM_WITH_MULTIPLIER",
-                "MAX",
-                "WEIGHTED_SUM"
-            ],
-            "x-enum-comments": {
-                "AggregationSumWithMultiplier": "Sum with a multiplier - [sum(value) * multiplier]"
-            },
-            "x-enum-varnames": [
-                "AggregationCount",
-                "AggregationSum",
-                "AggregationAvg",
-                "AggregationCountUnique",
-                "AggregationLatest",
-                "AggregationSumWithMultiplier",
-                "AggregationMax",
-                "AggregationWeightedSum"
-            ]
-        },
-        "types.AlertCondition": {
-            "type": "string",
-            "enum": [
-                "above",
-                "below"
-            ],
-            "x-enum-varnames": [
-                "AlertConditionAbove",
-                "AlertConditionBelow"
-            ]
-        },
-        "types.AlertEntityType": {
-            "type": "string",
-            "enum": [
-                "wallet",
-                "feature",
-                "subscription",
-                "subscription_line_item",
-                "group",
-                "entitlement_grant"
-            ],
-            "x-enum-varnames": [
-                "AlertEntityTypeWallet",
-                "AlertEntityTypeFeature",
-                "AlertEntityTypeSubscription",
-                "AlertEntityTypeSubscriptionLineItem",
-                "AlertEntityTypeGroup",
-                "AlertEntityTypeEntitlementGrant"
-            ]
-        },
-        "types.AlertInfo": {
-            "type": "object",
-            "properties": {
-                "alert_settings": {
-                    "$ref": "#/definitions/types.AlertSettings"
-                },
-                "timestamp": {
-                    "type": "string"
-                },
-                "value_at_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.AlertLogFilter": {
-            "type": "object",
-            "properties": {
-                "alert_status": {
-                    "$ref": "#/definitions/types.AlertState"
-                },
-                "alert_type": {
-                    "$ref": "#/definitions/types.AlertType"
-                },
-                "customer_id": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.AlertEntityType"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.AlertSettings": {
-            "type": "object",
-            "properties": {
-                "alert_enabled": {
-                    "type": "boolean"
-                },
-                "alert_threshold_type": {
-                    "$ref": "#/definitions/types.AlertThresholdType"
-                },
-                "critical": {
-                    "$ref": "#/definitions/types.AlertThreshold"
-                },
-                "info": {
-                    "$ref": "#/definitions/types.AlertThreshold"
-                },
-                "warning": {
-                    "$ref": "#/definitions/types.AlertThreshold"
-                }
-            }
-        },
-        "types.AlertSettingsFilter": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.AlertEntityType"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "parent_entity_id": {
-                    "type": "string"
-                },
-                "parent_entity_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "parent_entity_type": {
-                    "$ref": "#/definitions/types.AlertEntityType"
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.AlertState": {
-            "type": "string",
-            "enum": [
-                "ok",
-                "info",
-                "warning",
-                "in_alarm"
-            ],
-            "x-enum-varnames": [
-                "AlertStateOk",
-                "AlertStateInfo",
-                "AlertStateWarning",
-                "AlertStateInAlarm"
-            ]
-        },
-        "types.AlertThreshold": {
-            "type": "object",
-            "properties": {
-                "condition": {
-                    "$ref": "#/definitions/types.AlertCondition"
-                },
-                "threshold": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.AlertThresholdType": {
-            "type": "string",
-            "enum": [
-                "absolute",
-                "percentage"
-            ],
-            "x-enum-varnames": [
-                "AlertThresholdTypeAbsolute",
-                "AlertThresholdTypePercentage"
-            ]
-        },
-        "types.AlertType": {
-            "type": "string",
-            "enum": [
-                "low_ongoing_balance",
-                "low_credit_balance",
-                "feature_wallet_balance",
-                "subscription_spend",
-                "subscription_line_item_spend",
-                "subscription_group_spend",
-                "entitlement_grant_threshold",
-                "entitlement_grant_exhausted"
-            ],
-            "x-enum-varnames": [
-                "AlertTypeLowOngoingBalance",
-                "AlertTypeLowCreditBalance",
-                "AlertTypeFeatureWalletBalance",
-                "AlertTypeSubscriptionSpend",
-                "AlertTypeSubscriptionLineItemSpend",
-                "AlertTypeSubscriptionGroupSpend",
-                "AlertTypeEntitlementGrantThreshold",
-                "AlertTypeEntitlementGrantExhausted"
-            ]
-        },
-        "types.ApplicationStatus": {
-            "type": "string",
-            "enum": [
-                "applied",
-                "failed",
-                "pending",
-                "skipped",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "ApplicationStatusApplied",
-                "ApplicationStatusFailed",
-                "ApplicationStatusPending",
-                "ApplicationStatusSkipped",
-                "ApplicationStatusCancelled"
-            ]
-        },
-        "types.AutoTopup": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "cooldown": {
-                    "description": "Cooldown is an optional cooloff after a successful auto top-up before another may run.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Duration"
-                        }
-                    ]
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "invoicing": {
-                    "type": "boolean"
-                },
-                "threshold": {
-                    "type": "number"
-                }
-            }
-        },
-        "types.BillingCadence": {
-            "type": "string",
-            "enum": [
-                "RECURRING"
-            ],
-            "x-enum-varnames": [
-                "BILLING_CADENCE_RECURRING"
-            ]
-        },
-        "types.BillingCycle": {
-            "type": "string",
-            "enum": [
-                "anniversary",
-                "calendar"
-            ],
-            "x-enum-varnames": [
-                "BillingCycleAnniversary",
-                "BillingCycleCalendar"
-            ]
-        },
-        "types.BillingModel": {
-            "type": "string",
-            "enum": [
-                "FLAT_FEE",
-                "PACKAGE",
-                "TIERED"
-            ],
-            "x-enum-varnames": [
-                "BILLING_MODEL_FLAT_FEE",
-                "BILLING_MODEL_PACKAGE",
-                "BILLING_MODEL_TIERED"
-            ]
-        },
-        "types.BillingPeriod": {
-            "type": "string",
-            "enum": [
-                "MONTHLY",
-                "ANNUAL",
-                "WEEKLY",
-                "DAILY",
-                "QUARTERLY",
-                "HALF_YEARLY",
-                "ONETIME"
-            ],
-            "x-enum-varnames": [
-                "BILLING_PERIOD_MONTHLY",
-                "BILLING_PERIOD_ANNUAL",
-                "BILLING_PERIOD_WEEKLY",
-                "BILLING_PERIOD_DAILY",
-                "BILLING_PERIOD_QUARTER",
-                "BILLING_PERIOD_HALF_YEAR",
-                "BILLING_PERIOD_ONETIME"
-            ]
-        },
-        "types.BillingPeriodBehaviour": {
-            "type": "string",
-            "enum": [
-                "unchanged",
-                "anchor_at_effect",
-                "anchor_at_config"
-            ],
-            "x-enum-varnames": [
-                "BillingPeriodBehaviourUnchanged",
-                "BillingPeriodBehaviourAnchorAtEffect",
-                "BillingPeriodBehaviourAnchorAtConfig"
-            ]
-        },
-        "types.BillingTier": {
-            "type": "string",
-            "enum": [
-                "VOLUME",
-                "SLAB"
-            ],
-            "x-enum-varnames": [
-                "BILLING_TIER_VOLUME",
-                "BILLING_TIER_SLAB"
-            ]
-        },
-        "types.CancelImmediatelyInvoicePolicy": {
-            "type": "string",
-            "enum": [
-                "generate_invoice",
-                "skip"
-            ],
-            "x-enum-varnames": [
-                "CancelImmediatelyInvoicePolicyGenerateInvoice",
-                "CancelImmediatelyInvoicePolicySkip"
-            ]
-        },
-        "types.CancellationType": {
-            "type": "string",
-            "enum": [
-                "immediate",
-                "end_of_period",
-                "scheduled_date"
-            ],
-            "x-enum-varnames": [
-                "CancellationTypeImmediate",
-                "CancellationTypeEndOfPeriod",
-                "CancellationTypeScheduledDate"
-            ]
-        },
-        "types.CheckoutAction": {
-            "type": "string",
-            "enum": [
-                "create_subscription",
-                "modify_subscription",
-                "wallet_topup",
-                "add_addon",
-                "pay_invoice"
-            ],
-            "x-enum-varnames": [
-                "CheckoutActionCreateSubscription",
-                "CheckoutActionModifySubscription",
-                "CheckoutActionWalletTopup",
-                "CheckoutActionAddAddon",
-                "CheckoutActionPayInvoice"
-            ]
-        },
-        "types.CheckoutConfiguration": {
-            "type": "object",
-            "properties": {
-                "add_addon_params": {
-                    "$ref": "#/definitions/types.AddAddonParams"
-                },
-                "create_subscription_params": {
-                    "$ref": "#/definitions/types.CreateSubscriptionParams"
-                },
-                "modify_subscription_params": {
-                    "$ref": "#/definitions/types.ModifySubscriptionParams"
-                },
-                "pay_invoice_params": {
-                    "$ref": "#/definitions/types.PayInvoiceParams"
-                },
-                "wallet_topup_params": {
-                    "$ref": "#/definitions/types.WalletTopupParams"
-                }
-            }
-        },
-        "types.CheckoutPaymentProvider": {
-            "type": "string",
-            "enum": [
-                "razorpay",
-                "chargebee",
-                "stripe"
-            ],
-            "x-enum-varnames": [
-                "CheckoutPaymentProviderRazorpay",
-                "CheckoutPaymentProviderChargebee",
-                "CheckoutPaymentProviderStripe"
-            ]
-        },
-        "types.CheckoutPaymentProviderConfig": {
-            "type": "object",
-            "properties": {
-                "collection_method": {
-                    "$ref": "#/definitions/types.CollectionMethod"
-                },
-                "customer_not_present": {
-                    "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up).",
-                    "type": "boolean"
-                },
-                "max_mandate_limit": {
-                    "type": "string"
-                },
-                "payment_method": {
-                    "$ref": "#/definitions/types.PaymentMethodType"
-                }
-            }
-        },
-        "types.CheckoutStatus": {
-            "type": "string",
-            "enum": [
-                "initiated",
-                "pending",
-                "completed",
-                "failed",
-                "expired"
-            ],
-            "x-enum-varnames": [
-                "CheckoutStatusInitiated",
-                "CheckoutStatusPending",
-                "CheckoutStatusCompleted",
-                "CheckoutStatusFailed",
-                "CheckoutStatusExpired"
-            ]
-        },
-        "types.CollectionMethod": {
-            "type": "string",
-            "enum": [
-                "charge_automatically",
-                "send_invoice"
-            ],
-            "x-enum-varnames": [
-                "CollectionMethodChargeAutomatically",
-                "CollectionMethodSendInvoice"
-            ]
-        },
-        "types.ColumnRole": {
-            "type": "string",
-            "enum": [
-                "dimension",
-                "metric"
-            ],
-            "x-enum-varnames": [
-                "ColumnRoleDimension",
-                "ColumnRoleMetric"
-            ]
-        },
-        "types.ColumnType": {
-            "type": "string",
-            "enum": [
-                "string",
-                "decimal",
-                "datetime"
-            ],
-            "x-enum-varnames": [
-                "ColumnTypeString",
-                "ColumnTypeDecimal",
-                "ColumnTypeDatetime"
+                "CommitmentCancellationFeeFlat",
+                "CommitmentCancellationFeePercentOfRemaining"
             ]
         },
         "types.CommitmentCollectionMethod": {
@@ -35612,128 +35361,6 @@ const docTemplate = `{
                 "CommitmentTerminationCreditNote",
                 "CommitmentTerminationBillRemaining"
             ]
-        },
-        "types.CommitmentFilter": {
-            "type": "object",
-            "properties": {
-                "active_from": {
-                    "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo).",
-                    "type": "string"
-                },
-                "active_to": {
-                    "type": "string"
-                },
-                "customer_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "scope_entity_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "scope_entity_type": {
-                    "$ref": "#/definitions/types.CommitmentScopeType"
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "statuses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CommitmentStatus"
-                    }
-                },
-                "subscription_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "types.CommitmentInfo": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "computed_commitment_utilized_amount": {
-                    "type": "string"
-                },
-                "computed_overage_amount": {
-                    "type": "string"
-                },
-                "computed_true_up_amount": {
-                    "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
-                    "type": "string"
-                },
-                "duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "is_windowed": {
-                    "type": "boolean"
-                },
-                "overage_factor": {
-                    "type": "string"
-                },
-                "quantity": {
-                    "description": "Only used for quantity-based commitments",
-                    "type": "string"
-                },
-                "true_up_enabled": {
-                    "type": "boolean"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.CommitmentType"
-                }
-            }
         },
         "types.CommitmentMeasurement": {
             "type": "string",
@@ -35774,1513 +35401,15 @@ const docTemplate = `{
                 "CommitmentStatusTerminated"
             ]
         },
-        "types.CommitmentType": {
+        "types.ImprovementDirection": {
             "type": "string",
             "enum": [
-                "amount",
-                "quantity"
+                "higher",
+                "lower"
             ],
             "x-enum-varnames": [
-                "COMMITMENT_TYPE_AMOUNT",
-                "COMMITMENT_TYPE_QUANTITY"
-            ]
-        },
-        "types.CouponCadence": {
-            "type": "string",
-            "enum": [
-                "once",
-                "repeated",
-                "forever"
-            ],
-            "x-enum-varnames": [
-                "CouponCadenceOnce",
-                "CouponCadenceRepeated",
-                "CouponCadenceForever"
-            ]
-        },
-        "types.CouponFilter": {
-            "type": "object",
-            "properties": {
-                "coupon_codes": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "coupon_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.CouponRef": {
-            "type": "object",
-            "properties": {
-                "association_id": {
-                    "type": "string"
-                },
-                "coupon_id": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "price_id": {
-                    "type": "string"
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CouponType": {
-            "type": "string",
-            "enum": [
-                "fixed",
-                "percentage"
-            ],
-            "x-enum-varnames": [
-                "CouponTypeFixed",
-                "CouponTypePercentage"
-            ]
-        },
-        "types.CreateSubscriptionParams": {
-            "type": "object",
-            "properties": {
-                "billing_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "subscription_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CreditBreakdown": {
-            "type": "object",
-            "properties": {
-                "free": {
-                    "type": "string"
-                },
-                "purchased": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CreditGrantApplicationReason": {
-            "type": "string",
-            "enum": [
-                "first_time_recurring_credit_grant",
-                "recurring_credit_grant",
-                "onetime_credit_grant"
-            ],
-            "x-enum-comments": {
-                "ApplicationReasonFirstTimeRecurringCreditGrant": "#nosec G101 -- enum value name, not a secret"
-            },
-            "x-enum-varnames": [
-                "ApplicationReasonFirstTimeRecurringCreditGrant",
-                "ApplicationReasonRecurringCreditGrant",
-                "ApplicationReasonOnetimeCreditGrant"
-            ]
-        },
-        "types.CreditGrantCadence": {
-            "type": "string",
-            "enum": [
-                "ONETIME",
-                "RECURRING"
-            ],
-            "x-enum-varnames": [
-                "CreditGrantCadenceOneTime",
-                "CreditGrantCadenceRecurring"
-            ]
-        },
-        "types.CreditGrantExpiryDurationUnit": {
-            "type": "string",
-            "enum": [
-                "DAY",
-                "WEEK",
-                "MONTH",
-                "YEAR"
-            ],
-            "x-enum-varnames": [
-                "CreditGrantExpiryDurationUnitDays",
-                "CreditGrantExpiryDurationUnitWeeks",
-                "CreditGrantExpiryDurationUnitMonths",
-                "CreditGrantExpiryDurationUnitYears"
-            ]
-        },
-        "types.CreditGrantExpiryType": {
-            "type": "string",
-            "enum": [
-                "NEVER",
-                "DURATION",
-                "BILLING_CYCLE"
-            ],
-            "x-enum-varnames": [
-                "CreditGrantExpiryTypeNever",
-                "CreditGrantExpiryTypeDuration",
-                "CreditGrantExpiryTypeBillingCycle"
-            ]
-        },
-        "types.CreditGrantPeriod": {
-            "type": "string",
-            "enum": [
-                "DAILY",
-                "WEEKLY",
-                "MONTHLY",
-                "ANNUAL",
-                "QUARTERLY",
-                "HALF_YEARLY"
-            ],
-            "x-enum-varnames": [
-                "CREDIT_GRANT_PERIOD_DAILY",
-                "CREDIT_GRANT_PERIOD_WEEKLY",
-                "CREDIT_GRANT_PERIOD_MONTHLY",
-                "CREDIT_GRANT_PERIOD_ANNUAL",
-                "CREDIT_GRANT_PERIOD_QUARTER",
-                "CREDIT_GRANT_PERIOD_HALF_YEARLY"
-            ]
-        },
-        "types.CreditGrantScope": {
-            "type": "string",
-            "enum": [
-                "PLAN",
-                "SUBSCRIPTION",
-                "ADDON"
-            ],
-            "x-enum-varnames": [
-                "CreditGrantScopePlan",
-                "CreditGrantScopeSubscription",
-                "CreditGrantScopeAddon"
-            ]
-        },
-        "types.CreditNoteReason": {
-            "type": "string",
-            "enum": [
-                "DUPLICATE",
-                "FRAUDULENT",
-                "ORDER_CHANGE",
-                "UNSATISFACTORY",
-                "SERVICE_ISSUE",
-                "BILLING_ERROR",
-                "SUBSCRIPTION_CANCELLATION"
-            ],
-            "x-enum-varnames": [
-                "CreditNoteReasonDuplicate",
-                "CreditNoteReasonFraudulent",
-                "CreditNoteReasonOrderChange",
-                "CreditNoteReasonUnsatisfactory",
-                "CreditNoteReasonService",
-                "CreditNoteReasonBillingError",
-                "CreditNoteReasonSubscriptionCancellation"
-            ]
-        },
-        "types.CreditNoteStatus": {
-            "type": "string",
-            "enum": [
-                "DRAFT",
-                "FINALIZED",
-                "VOIDED"
-            ],
-            "x-enum-varnames": [
-                "CreditNoteStatusDraft",
-                "CreditNoteStatusFinalized",
-                "CreditNoteStatusVoided"
-            ]
-        },
-        "types.CreditNoteType": {
-            "type": "string",
-            "enum": [
-                "ADJUSTMENT",
-                "REFUND"
-            ],
-            "x-enum-varnames": [
-                "CreditNoteTypeAdjustment",
-                "CreditNoteTypeRefund"
-            ]
-        },
-        "types.CustomCurrency": {
-            "type": "object",
-            "properties": {
-                "amount_due": {
-                    "type": "string"
-                },
-                "code": {
-                    "type": "string"
-                },
-                "rate": {
-                    "description": "fiat per 1 unit of Code; the live factor while draft, frozen at finalization",
-                    "type": "string"
-                },
-                "subtotal": {
-                    "type": "string"
-                },
-                "total": {
-                    "type": "string"
-                },
-                "total_discount": {
-                    "type": "string"
-                },
-                "total_prepaid_credits_applied": {
-                    "type": "string"
-                },
-                "total_tax": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CustomCurrencyLineItem": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "invoice_level_discount": {
-                    "type": "string"
-                },
-                "line_item_discount": {
-                    "type": "string"
-                },
-                "prepaid_credits_applied": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.CustomerFilter": {
-            "type": "object",
-            "properties": {
-                "customer_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "email": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "external_id": {
-                    "type": "string"
-                },
-                "external_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.DataType": {
-            "type": "string",
-            "enum": [
-                "string",
-                "number",
-                "date",
-                "array"
-            ],
-            "x-enum-varnames": [
-                "DataTypeString",
-                "DataTypeNumber",
-                "DataTypeDate",
-                "DataTypeArray"
-            ]
-        },
-        "types.DebugTrackerStatus": {
-            "type": "string",
-            "enum": [
-                "unprocessed",
-                "not_found",
-                "found",
-                "error",
-                "processing",
-                "attributed"
-            ],
-            "x-enum-varnames": [
-                "DebugTrackerStatusUnprocessed",
-                "DebugTrackerStatusNotFound",
-                "DebugTrackerStatusFound",
-                "DebugTrackerStatusError",
-                "DebugTrackerStatusProcessing",
-                "DebugTrackerStatusAttributed"
-            ]
-        },
-        "types.DurationUnit": {
-            "type": "string",
-            "enum": [
-                "second",
-                "minute",
-                "hour",
-                "day"
-            ],
-            "x-enum-varnames": [
-                "DurationUnitSecond",
-                "DurationUnitMinute",
-                "DurationUnitHour",
-                "DurationUnitDay"
-            ]
-        },
-        "types.EntitlementAggregationMode": {
-            "type": "string",
-            "enum": [
-                "additive",
-                "parallel"
-            ],
-            "x-enum-varnames": [
-                "EntitlementAggregationModeAdditive",
-                "EntitlementAggregationModeParallel"
-            ]
-        },
-        "types.EntitlementEntityType": {
-            "type": "string",
-            "enum": [
-                "PLAN",
-                "SUBSCRIPTION",
-                "ADDON"
-            ],
-            "x-enum-varnames": [
-                "ENTITLEMENT_ENTITY_TYPE_PLAN",
-                "ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION",
-                "ENTITLEMENT_ENTITY_TYPE_ADDON"
-            ]
-        },
-        "types.EntitlementFilter": {
-            "type": "object",
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.EntitlementEntityType"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "feature_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "feature_type": {
-                    "$ref": "#/definitions/types.FeatureType"
-                },
-                "filters": {
-                    "description": "Specific filters for entitlements",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "has_grant_config": {
-                    "description": "HasGrantConfig filters on grant-config presence (grant_quota set or not).",
-                    "type": "boolean"
-                },
-                "is_enabled": {
-                    "type": "boolean"
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "plan_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.EntitlementGrantAllocationBehavior": {
-            "type": "string",
-            "enum": [
-                "first_usage",
-                "unit_start"
-            ],
-            "x-enum-varnames": [
-                "EntitlementGrantAllocationBehaviorFirstUsage",
-                "EntitlementGrantAllocationBehaviorUnitStart"
-            ]
-        },
-        "types.EntitlementGrantDurationUnit": {
-            "type": "string",
-            "enum": [
-                "hour",
-                "day",
-                "week",
-                "subscription_period"
-            ],
-            "x-enum-varnames": [
-                "EntitlementGrantDurationUnitHour",
-                "EntitlementGrantDurationUnitDay",
-                "EntitlementGrantDurationUnitWeek",
-                "EntitlementGrantDurationUnitSubscriptionPeriod"
-            ]
-        },
-        "types.EntitlementGrantMeasure": {
-            "type": "string",
-            "enum": [
-                "quantity",
-                "amount"
-            ],
-            "x-enum-varnames": [
-                "EntitlementGrantMeasureQuantity",
-                "EntitlementGrantMeasureAmount"
-            ]
-        },
-        "types.EntitlementGrantStatus": {
-            "type": "string",
-            "enum": [
-                "active",
-                "exhausted"
-            ],
-            "x-enum-varnames": [
-                "EntitlementGrantStatusActive",
-                "EntitlementGrantStatusExhausted"
-            ]
-        },
-        "types.EntitlementUsageResetPeriod": {
-            "type": "string",
-            "enum": [
-                "MONTHLY",
-                "ANNUAL",
-                "WEEKLY",
-                "DAILY",
-                "QUARTERLY",
-                "HALF_YEARLY",
-                "NEVER"
-            ],
-            "x-enum-varnames": [
-                "ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_ANNUAL",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_DAILY",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR",
-                "ENTITLEMENT_USAGE_RESET_PERIOD_NEVER"
-            ]
-        },
-        "types.EntityChangeBehaviour": {
-            "type": "string",
-            "enum": [
-                "carry",
-                "drop",
-                "add"
-            ],
-            "x-enum-varnames": [
-                "EntityChangeBehaviourCarry",
-                "EntityChangeBehaviourDrop",
-                "EntityChangeBehaviourAdd"
-            ]
-        },
-        "types.EntityCreationStatus": {
-            "type": "string",
-            "enum": [
-                "created",
-                "superseded",
-                "failed_already_exists"
-            ],
-            "x-enum-varnames": [
-                "EntityCreationStatusCreated",
-                "EntityCreationStatusSuperseded",
-                "EntityCreationStatusFailedAlreadyExists"
-            ]
-        },
-        "types.EntitySyncConfig": {
-            "type": "object",
-            "properties": {
-                "inbound": {
-                    "description": "Inbound from external provider to FlexPrice",
-                    "type": "boolean"
-                },
-                "outbound": {
-                    "description": "Outbound from FlexPrice to external provider",
-                    "type": "boolean"
-                }
-            }
-        },
-        "types.EntityType": {
-            "type": "string",
-            "enum": [
-                "EVENTS",
-                "PRICES",
-                "CUSTOMERS",
-                "FEATURES"
-            ],
-            "x-enum-varnames": [
-                "EntityTypeEvents",
-                "EntityTypePrices",
-                "EntityTypeCustomers",
-                "EntityTypeFeatures"
-            ]
-        },
-        "types.EnvironmentType": {
-            "type": "string",
-            "enum": [
-                "development",
-                "production"
-            ],
-            "x-enum-varnames": [
-                "EnvironmentDevelopment",
-                "EnvironmentProduction"
-            ]
-        },
-        "types.EventProcessingStatusType": {
-            "type": "string",
-            "enum": [
-                "processed",
-                "processing",
-                "failed"
-            ],
-            "x-enum-varnames": [
-                "EventProcessingStatusTypeProcessed",
-                "EventProcessingStatusTypeProcessing",
-                "EventProcessingStatusTypeFailed"
-            ]
-        },
-        "types.ExportMetadataEntityType": {
-            "type": "string",
-            "enum": [
-                "customer",
-                "wallet"
-            ],
-            "x-enum-varnames": [
-                "ExportMetadataEntityTypeCustomer",
-                "ExportMetadataEntityTypeWallet"
-            ]
-        },
-        "types.ExportMetadataField": {
-            "type": "object",
-            "required": [
-                "entity_type",
-                "field_key"
-            ],
-            "properties": {
-                "column_name": {
-                    "description": "CSV column header to be shown in the exported file",
-                    "type": "string"
-                },
-                "entity_type": {
-                    "description": "which entity's metadata to read from",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ExportMetadataEntityType"
-                        }
-                    ]
-                },
-                "field_key": {
-                    "description": "metadata key to look up",
-                    "type": "string"
-                }
-            }
-        },
-        "types.ExternalTaxDetails": {
-            "type": "object",
-            "properties": {
-                "calculation_expires_at": {
-                    "description": "CalculationExpiresAt is when the calculation can no longer be filed, RFC3339.",
-                    "type": "string"
-                },
-                "calculation_id": {
-                    "description": "CalculationID is the provider calculation this row was written from. Commit files it.",
-                    "type": "string"
-                },
-                "display_name": {
-                    "description": "DisplayName is the engine's own name for the tax, such as\n\"Integrated goods and services tax (IGST)\".",
-                    "type": "string"
-                },
-                "jurisdiction": {
-                    "$ref": "#/definitions/types.TaxJurisdiction"
-                },
-                "percentage": {
-                    "description": "Percentage is the resolved rate, such as \"18.0\". This is what was charged, not the\nrate that would apply if the tax were imposed.",
-                    "type": "string"
-                },
-                "reference": {
-                    "description": "Reference is what this row's provider transaction was filed under. It is unique across\nevery transaction on the account, so it is also the only way back to a transaction whose\nid failed to land here.",
-                    "type": "string"
-                },
-                "reversal": {
-                    "description": "Reversal is set only on a row that records tax being un-filed.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.TaxReversal"
-                        }
-                    ]
-                },
-                "sourcing": {
-                    "description": "Sourcing is whether the jurisdiction followed the seller's address or the buyer's.",
-                    "type": "string"
-                },
-                "tax_code": {
-                    "description": "TaxCode is the product tax category the engine priced against, such as txcd_10000000.\nIt belongs to the line rather than the rate, so today every row on an invoice carries\nthe account default. It only varies once tax is calculated per line item.",
-                    "type": "string"
-                },
-                "tax_type": {
-                    "description": "TaxType is the tax family, such as vat, igst or sales_tax.",
-                    "type": "string"
-                },
-                "taxability_reason": {
-                    "description": "TaxabilityReason is why the engine charged what it did, such as standard_rated or\nreverse_charge. Recorded, not yet rendered.",
-                    "type": "string"
-                }
-            }
-        },
-        "types.FXRateFilter": {
-            "type": "object",
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "from_currency": {
-                    "type": "string"
-                },
-                "fx_rate_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "scope": {
-                    "$ref": "#/definitions/types.FXRateScope"
-                },
-                "scope_id": {
-                    "type": "string"
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "to_currency": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.FXRateScope": {
-            "type": "string",
-            "enum": [
-                "tenant",
-                "customer",
-                "subscription"
-            ],
-            "x-enum-varnames": [
-                "FXRateScopeTenant",
-                "FXRateScopeCustomer",
-                "FXRateScopeSubscription"
-            ]
-        },
-        "types.FXRateSource": {
-            "type": "string",
-            "enum": [
-                "fixed",
-                "market"
-            ],
-            "x-enum-varnames": [
-                "FXRateSourceFixed",
-                "FXRateSourceMarket"
-            ]
-        },
-        "types.FactStatus": {
-            "type": "string",
-            "enum": [
-                "PROVISIONAL",
-                "FINAL"
-            ],
-            "x-enum-varnames": [
-                "FactProvisional",
-                "FactFinal"
-            ]
-        },
-        "types.FailurePoint": {
-            "type": "object",
-            "properties": {
-                "error": {
-                    "$ref": "#/definitions/errors.ErrorResponse"
-                },
-                "failure_point_type": {
-                    "$ref": "#/definitions/types.FailurePointType"
-                }
-            }
-        },
-        "types.FailurePointType": {
-            "type": "string",
-            "enum": [
-                "customer_lookup",
-                "meter_lookup",
-                "price_lookup",
-                "subscription_line_item_lookup",
-                "attributed_to_customer"
-            ],
-            "x-enum-varnames": [
-                "FailurePointTypeCustomerLookup",
-                "FailurePointTypeMeterLookup",
-                "FailurePointTypePriceLookup",
-                "FailurePointTypeSubscriptionLineItemLookup",
-                "FailurePointTypeAttributedToCustomer"
-            ]
-        },
-        "types.FeatureFilter": {
-            "type": "object",
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "feature_ids": {
-                    "description": "Feature specific filters",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "lookup_keys": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "meter_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name_contains": {
-                    "type": "string"
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.FeatureType": {
-            "type": "string",
-            "enum": [
-                "metered",
-                "boolean",
-                "static",
-                "config"
-            ],
-            "x-enum-varnames": [
-                "FeatureTypeMetered",
-                "FeatureTypeBoolean",
-                "FeatureTypeStatic",
-                "FeatureTypeConfig"
-            ]
-        },
-        "types.FileType": {
-            "type": "string",
-            "enum": [
-                "CSV",
-                "JSON"
-            ],
-            "x-enum-varnames": [
-                "FileTypeCSV",
-                "FileTypeJSON"
-            ]
-        },
-        "types.FilterCondition": {
-            "type": "object",
-            "properties": {
-                "data_type": {
-                    "$ref": "#/definitions/types.DataType"
-                },
-                "field": {
-                    "type": "string"
-                },
-                "operator": {
-                    "$ref": "#/definitions/types.FilterOperatorType"
-                },
-                "value": {
-                    "$ref": "#/definitions/types.Value"
-                }
-            }
-        },
-        "types.FilterOperatorType": {
-            "type": "string",
-            "enum": [
-                "eq",
-                "contains",
-                "not_contains",
-                "gt",
-                "lt",
-                "gte",
-                "in",
-                "not_in",
-                "before",
-                "after"
-            ],
-            "x-enum-varnames": [
-                "EQUAL",
-                "CONTAINS",
-                "NOT_CONTAINS",
-                "GREATER_THAN",
-                "LESS_THAN",
-                "GREATER_THAN_EQUAL",
-                "IN",
-                "NOT_IN",
-                "BEFORE",
-                "AFTER"
-            ]
-        },
-        "types.FxConversion": {
-            "type": "object",
-            "properties": {
-                "billing_currency": {
-                    "description": "BillingCurrency is the currency the invoice was issued in.",
-                    "type": "string"
-                },
-                "charge_currency": {
-                    "description": "ChargeCurrency is the invoice's original (draft) currency.",
-                    "type": "string"
-                },
-                "converted_at": {
-                    "description": "ConvertedAt is when the conversion ran.",
-                    "type": "string"
-                },
-                "rate": {
-                    "description": "Rate is the frozen rate: billing per 1 charge unit.",
-                    "type": "string"
-                },
-                "rate_id": {
-                    "description": "RateID is the fx_rates row used, for reference only; never read again.",
-                    "type": "string"
-                },
-                "scope": {
-                    "description": "Scope is where the rate was resolved: subscription, customer or tenant.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.FXRateScope"
-                        }
-                    ]
-                },
-                "source": {
-                    "description": "Source holds the original charge-currency amounts, before tax.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.FxConversionSource"
-                        }
-                    ]
-                }
-            }
-        },
-        "types.FxConversionSource": {
-            "type": "object",
-            "properties": {
-                "net": {
-                    "type": "string"
-                },
-                "subtotal": {
-                    "type": "string"
-                },
-                "total_discount": {
-                    "type": "string"
-                },
-                "total_prepaid_credits_applied": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.GlobalCustomField": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.Grain": {
-            "type": "string",
-            "enum": [
-                "hour",
-                "day",
-                "week",
-                "month"
-            ],
-            "x-enum-varnames": [
-                "GrainHour",
-                "GrainDay",
-                "GrainWeek",
-                "GrainMonth"
-            ]
-        },
-        "types.GroupEntityType": {
-            "type": "string",
-            "enum": [
-                "price",
-                "feature"
-            ],
-            "x-enum-varnames": [
-                "GroupEntityTypePrice",
-                "GroupEntityTypeFeature"
-            ]
-        },
-        "types.GroupFilter": {
-            "type": "object",
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "group_ids": {
-                    "description": "Group specific filters",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
-        "types.IntegrationEntityType": {
-            "type": "string",
-            "enum": [
-                "customer",
-                "plan",
-                "invoice",
-                "subscription",
-                "payment",
-                "credit_note",
-                "addon",
-                "item",
-                "item_price",
-                "price",
-                "invoice_line_item",
-                "subscription_line_item"
-            ],
-            "x-enum-varnames": [
-                "IntegrationEntityTypeCustomer",
-                "IntegrationEntityTypePlan",
-                "IntegrationEntityTypeInvoice",
-                "IntegrationEntityTypeSubscription",
-                "IntegrationEntityTypePayment",
-                "IntegrationEntityTypeCreditNote",
-                "IntegrationEntityTypeAddon",
-                "IntegrationEntityTypeItem",
-                "IntegrationEntityTypeItemPrice",
-                "IntegrationEntityTypePrice",
-                "IntegrationEntityTypeInvoiceLineItem",
-                "IntegrationEntityTypeSubscriptionLineItem"
-            ]
-        },
-        "types.InvoiceBillingReason": {
-            "type": "string",
-            "enum": [
-                "SUBSCRIPTION_CREATE",
-                "SUBSCRIPTION_CYCLE",
-                "SUBSCRIPTION_UPDATE",
-                "SUBSCRIPTION_TRIAL_END",
-                "SUBSCRIPTION_TRIAL_START",
-                "PRORATION",
-                "MANUAL",
-                "AUTO_INVOICE_THRESHOLD",
-                "WALLET_AUTO_TOPUP"
-            ],
-            "x-enum-varnames": [
-                "InvoiceBillingReasonSubscriptionCreate",
-                "InvoiceBillingReasonSubscriptionCycle",
-                "InvoiceBillingReasonSubscriptionUpdate",
-                "InvoiceBillingReasonSubscriptionTrialEnd",
-                "InvoiceBillingReasonSubscriptionTrialStart",
-                "InvoiceBillingReasonProration",
-                "InvoiceBillingReasonManual",
-                "InvoiceBillingReasonAutoInvoiceThreshold",
-                "InvoiceBillingReasonWalletAutoTopup"
-            ]
-        },
-        "types.InvoiceCadence": {
-            "type": "string",
-            "enum": [
-                "ARREAR",
-                "ADVANCE"
-            ],
-            "x-enum-varnames": [
-                "InvoiceCadenceArrear",
-                "InvoiceCadenceAdvance"
-            ]
-        },
-        "types.InvoiceFilter": {
-            "type": "object",
-            "properties": {
-                "amount_due_gt": {
-                    "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices",
-                    "type": "number"
-                },
-                "amount_remaining_gt": {
-                    "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
-                    "type": "number"
-                },
-                "billing_reason": {
-                    "description": "BillingReason filters invoices by why they were generated",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.InvoiceBillingReason"
-                        }
-                    ]
-                },
-                "currency": {
-                    "description": "currency filters invoices by their currency (ISO 4217 code, e.g. \"usd\", \"eur\").\nMatches on the invoices.currency column exactly.",
-                    "type": "string"
-                },
-                "customer_id": {
-                    "description": "customer_id filters invoices for a specific customer using FlexPrice's internal customer ID\nThis is the ID returned by FlexPrice when creating or retrieving customers",
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "external_customer_id": {
-                    "description": "external_customer_id filters invoices for a customer using your system's customer identifier\nThis is the ID you provided when creating the customer in FlexPrice",
-                    "type": "string"
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "finalized_at_gte": {
-                    "description": "finalized_at_gte filters invoices finalized at or after the given instant",
-                    "type": "string"
-                },
-                "invoice_ids": {
-                    "description": "invoice_ids restricts results to invoices with the specified IDs\nUse this to retrieve specific invoices when you know their exact identifiers",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "invoice_status": {
-                    "description": "invoice_status filters by the current state of invoices in their lifecycle\nMultiple statuses can be specified to include invoices in any of the listed states",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.InvoiceStatus"
-                    }
-                },
-                "invoice_type": {
-                    "description": "invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)\nUse this to separate recurring charges from one-time fees or credit adjustments",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.InvoiceType"
-                        }
-                    ]
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "payment_status": {
-                    "description": "payment_status filters by the payment state of invoices\nMultiple statuses can be specified to include invoices with any of the listed payment states",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.PaymentStatus"
-                    }
-                },
-                "period_end_gte": {
-                    "description": "period_end_gte filters invoices with period_end \u003e= value",
-                    "type": "string"
-                },
-                "period_end_lte": {
-                    "description": "period_end_lte filters invoices with period_end \u003c= value",
-                    "type": "string"
-                },
-                "period_start_gte": {
-                    "description": "period_start_gte filters invoices with period_start \u003e= value",
-                    "type": "string"
-                },
-                "period_start_lte": {
-                    "description": "period_start_lte filters invoices with period_start \u003c= value",
-                    "type": "string"
-                },
-                "skip_line_items": {
-                    "description": "SkipLineItems if true, will not include line items in the response",
-                    "type": "boolean"
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "subscription_customer_id": {
-                    "description": "subscription_customer_id filters invoices by the subscription owner's customer ID",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "subscription_id": {
-                    "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing",
-                    "type": "string"
-                },
-                "voided_at_gte": {
-                    "description": "voided_at_gte filters invoices voided at or after the given instant",
-                    "type": "string"
-                }
-            }
-        },
-        "types.InvoiceSourceType": {
-            "type": "string",
-            "enum": [
-                "checkout"
-            ],
-            "x-enum-varnames": [
-                "InvoiceSourceTypeCheckout"
-            ]
-        },
-        "types.InvoiceStatus": {
-            "type": "string",
-            "enum": [
-                "DRAFT",
-                "FINALIZED",
-                "VOIDED",
-                "SKIPPED"
-            ],
-            "x-enum-varnames": [
-                "InvoiceStatusDraft",
-                "InvoiceStatusFinalized",
-                "InvoiceStatusVoided",
-                "InvoiceStatusSkipped"
-            ]
-        },
-        "types.InvoiceSyncSettings": {
-            "type": "object",
-            "properties": {
-                "deposit_to_account_id": {
-                    "description": "Zoho chart-of-accounts id (\"Deposit To\"). Empty omits account_id, leaving Zoho's\nUndeposited Funds default.a",
-                    "type": "string"
-                },
-                "global_custom_fields": {
-                    "description": "Fixed values written to Zoho invoice custom fields on every sync, independent of\nany metadata source.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.GlobalCustomField"
-                    }
-                },
-                "metadata_custom_fields": {
-                    "description": "Copies metadata values onto Zoho invoice custom fields verbatim.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.MetadataCustomField"
-                    }
-                },
-                "normalize_fixed_to": {
-                    "description": "NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.\nFor example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes\nqty=3, rate=$100. Empty string means no normalization (keep original).",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.BillingPeriod"
-                        }
-                    ]
-                },
-                "payment_mode": {
-                    "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode.",
-                    "type": "string"
-                },
-                "service_period_custom_fields": {
-                    "description": "Zoho custom fields that receive the invoice's service start and end dates.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ServicePeriodCustomFields"
-                        }
-                    ]
-                },
-                "submit_for_approval": {
-                    "description": "Zoho rejects payments on draft invoices, and merchants configure a Zoho auto-approval\nrule for FlexPrice-sent invoices, so we submit, wait for that rule to fire, then pay.",
-                    "type": "boolean"
-                }
-            }
-        },
-        "types.InvoiceType": {
-            "type": "string",
-            "enum": [
-                "SUBSCRIPTION",
-                "ONE_OFF",
-                "CREDIT"
-            ],
-            "x-enum-varnames": [
-                "InvoiceTypeSubscription",
-                "InvoiceTypeOneOff",
-                "InvoiceTypeCredit"
-            ]
-        },
-        "types.LineItemGrouping": {
-            "type": "string",
-            "enum": [
-                "per_charge_period",
-                "per_billing_period"
-            ],
-            "x-enum-varnames": [
-                "LineItemGroupingPerChargePeriod",
-                "LineItemGroupingPerBillingPeriod"
+                "ImprovementHigher",
+                "ImprovementLower"
             ]
         },
         "types.ListResponse-dto_WalletResponse": {
@@ -37302,6 +35431,49 @@ const docTemplate = `{
             "additionalProperties": {
                 "type": "string"
             }
+        },
+        "types.ReportCategory": {
+            "type": "string",
+            "enum": [
+                "billing",
+                "receivables",
+                "customers",
+                "credits",
+                "usage"
+            ],
+            "x-enum-varnames": [
+                "ReportCategoryBilling",
+                "ReportCategoryReceivables",
+                "ReportCategoryCustomers",
+                "ReportCategoryCredits",
+                "ReportCategoryUsage"
+            ]
+        },
+        "types.ReportKind": {
+            "type": "string",
+            "enum": [
+                "flow",
+                "ratio",
+                "snapshot"
+            ],
+            "x-enum-varnames": [
+                "ReportKindFlow",
+                "ReportKindRatio",
+                "ReportKindSnapshot"
+            ]
+        },
+        "types.ReportValueType": {
+            "type": "string",
+            "enum": [
+                "money",
+                "count",
+                "days"
+            ],
+            "x-enum-varnames": [
+                "ReportValueTypeMoney",
+                "ReportValueTypeCount",
+                "ReportValueTypeDays"
+            ]
         },
         "types.TenantInternalStatus": {
             "type": "string",

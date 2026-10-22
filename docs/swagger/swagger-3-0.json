@@ -1167,6 +1167,145 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/analytics/reports": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "List financial reports",
+        "description": "Returns the catalog of reports with their allowed shapes, dimensions and grains.",
+        "operationId": "listAnalyticsReports",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportCatalogResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Reports not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/analytics/reports/{key}/query": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Run a financial report",
+        "description": "Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.",
+        "operationId": "runAnalyticsReport",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Report key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Report query request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Reports not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Report not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/analytics/revenue": {
       "post": {
         "tags": [
@@ -1760,7 +1899,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/types.CommitmentFilter"
+                "$ref": "#/components/schemas/commitment.Filter"
               }
             }
           },
@@ -18103,6 +18242,93 @@
           }
         }
       },
+      "commitment.Filter": {
+        "type": "object",
+        "properties": {
+          "active_from": {
+            "type": "string",
+            "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo)."
+          },
+          "active_to": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "scope_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope_entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CommitmentStatus"
+            }
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "costsheet.Filter": {
         "type": "object",
         "properties": {
@@ -19137,7 +19363,19 @@
       "AnalyticsQueryMeta": {
         "type": "object",
         "properties": {
+          "from": {
+            "type": "string"
+          },
+          "prev_from": {
+            "type": "string"
+          },
+          "prev_to": {
+            "type": "string"
+          },
           "query_source": {
+            "type": "string"
+          },
+          "to": {
             "type": "string"
           }
         }
@@ -19859,6 +20097,20 @@
           }
         }
       },
+      "CommitmentCancellationFee": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentCancellationFeeType"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "CommitmentResponse": {
         "type": "object",
         "properties": {
@@ -19870,6 +20122,9 @@
           },
           "binding": {
             "type": "boolean"
+          },
+          "cancellation_fee_amount": {
+            "type": "string"
           },
           "collection_method": {
             "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
@@ -20654,7 +20909,7 @@
           },
           "binding": {
             "type": "boolean",
-            "description": "default true"
+            "description": "default false"
           },
           "collection_method": {
             "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
@@ -20950,7 +21205,6 @@
       },
       "CreateCustomerRequest": {
         "required": [
-          "contact_persons",
           "external_id",
           "name"
         ],
@@ -21281,10 +21535,6 @@
           "amount": {
             "type": "string",
             "description": "amount is the monetary amount for this line item"
-          },
-          "commitment_id": {
-            "type": "string",
-            "description": "commitment_id links this line item to the commitment it bills."
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -26560,6 +26810,189 @@
           }
         }
       },
+      "ReportCatalogEntry": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/types.ReportCategory"
+          },
+          "default_shape": {
+            "type": "string",
+            "enum": [
+              "timeseries",
+              "breakdown",
+              "scalar"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportDimension"
+            }
+          },
+          "grains": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ]
+            }
+          },
+          "improvement": {
+            "$ref": "#/components/schemas/types.ImprovementDirection"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.ReportKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shapes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "timeseries",
+                "breakdown",
+                "scalar"
+              ]
+            }
+          },
+          "supports_compare": {
+            "type": "boolean"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.ReportValueType"
+          }
+        }
+      },
+      "ReportCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportCatalogEntry"
+            }
+          }
+        }
+      },
+      "ReportDimension": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "ReportFilter": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "in"
+            ]
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReportQueryRequest": {
+        "required": [
+          "range",
+          "shape"
+        ],
+        "type": "object",
+        "properties": {
+          "compare": {
+            "type": "string",
+            "enum": [
+              "previous_period",
+              "previous_year"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportFilter"
+            }
+          },
+          "grain": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "range": {
+            "type": "string",
+            "example": "2026-09-01..2026-10-01"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "timeseries",
+              "breakdown",
+              "scalar"
+            ]
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportSort"
+            }
+          }
+        }
+      },
+      "ReportSort": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "field": {
+            "type": "string"
+          }
+        }
+      },
       "ResumeSubscriptionRequest": {
         "type": "object",
         "properties": {
@@ -29202,6 +29635,9 @@
       "TerminateCommitmentRequest": {
         "type": "object",
         "properties": {
+          "cancellation_fee": {
+            "$ref": "#/components/schemas/CommitmentCancellationFee"
+          },
           "effective_at": {
             "type": "string",
             "format": "date-time"
@@ -29455,9 +29891,6 @@
         }
       },
       "UpdateCustomerRequest": {
-        "required": [
-          "contact_persons"
-        ],
         "type": "object",
         "properties": {
           "address_city": {
@@ -31345,18 +31778,6 @@
         },
         "x-speakeasy-name-override": "AWSMarketplaceSyncConfig"
       },
-      "types.ActiveWindow": {
-        "type": "object",
-        "properties": {
-          "end": {
-            "type": "string"
-          },
-          "start": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "ActiveWindow"
-      },
       "types.AddAddonParams": {
         "type": "object",
         "properties": {
@@ -32106,120 +32527,6 @@
         ],
         "x-speakeasy-name-override": "ColumnType"
       },
-      "types.CommitmentCollectionMethod": {
-        "type": "string",
-        "enum": [
-          "per_period",
-          "billing_terms"
-        ],
-        "x-enum-varnames": [
-          "CommitmentCollectionPerPeriod",
-          "CommitmentCollectionBillingTerms"
-        ],
-        "x-speakeasy-name-override": "CommitmentCollectionMethod"
-      },
-      "types.CommitmentEarlyTermination": {
-        "type": "string",
-        "enum": [
-          "forfeit",
-          "credit_note",
-          "bill_remaining"
-        ],
-        "x-enum-varnames": [
-          "CommitmentTerminationForfeit",
-          "CommitmentTerminationCreditNote",
-          "CommitmentTerminationBillRemaining"
-        ],
-        "x-speakeasy-name-override": "CommitmentEarlyTermination"
-      },
-      "types.CommitmentFilter": {
-        "type": "object",
-        "properties": {
-          "active_from": {
-            "type": "string",
-            "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo)."
-          },
-          "active_to": {
-            "type": "string"
-          },
-          "customer_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "end_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expand": {
-            "type": "string"
-          },
-          "filters": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.FilterCondition"
-            }
-          },
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "limit": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "offset": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "order": {
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ]
-          },
-          "scope_entity_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "scope_entity_type": {
-            "$ref": "#/components/schemas/types.CommitmentScopeType"
-          },
-          "sort": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.SortCondition"
-            }
-          },
-          "start_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "statuses": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CommitmentStatus"
-            }
-          },
-          "subscription_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "x-speakeasy-name-override": "CommitmentFilter"
-      },
       "types.CommitmentInfo": {
         "type": "object",
         "properties": {
@@ -32257,48 +32564,6 @@
           }
         },
         "x-speakeasy-name-override": "CommitmentInfo"
-      },
-      "types.CommitmentMeasurement": {
-        "type": "string",
-        "enum": [
-          "billing_period",
-          "window"
-        ],
-        "x-enum-varnames": [
-          "CommitmentMeasurementBillingPeriod",
-          "CommitmentMeasurementWindow"
-        ],
-        "x-speakeasy-name-override": "CommitmentMeasurement"
-      },
-      "types.CommitmentScopeType": {
-        "type": "string",
-        "enum": [
-          "subscription",
-          "group",
-          "meter",
-          "price"
-        ],
-        "x-enum-varnames": [
-          "CommitmentScopeSubscription",
-          "CommitmentScopeGroup",
-          "CommitmentScopeMeter",
-          "CommitmentScopePrice"
-        ],
-        "x-speakeasy-name-override": "CommitmentScopeType"
-      },
-      "types.CommitmentStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "ended",
-          "terminated"
-        ],
-        "x-enum-varnames": [
-          "CommitmentStatusActive",
-          "CommitmentStatusEnded",
-          "CommitmentStatusTerminated"
-        ],
-        "x-speakeasy-name-override": "CommitmentStatus"
       },
       "types.CommitmentType": {
         "type": "string",
@@ -36453,6 +36718,10 @@
           "amount": {
             "type": "string"
           },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
+          },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
           },
@@ -37113,6 +37382,110 @@
           }
         }
       },
+      "types.ActiveWindow": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          }
+        },
+        "x-speakeasy-name-override": "ActiveWindow"
+      },
+      "types.CommitmentCancellationFeeType": {
+        "type": "string",
+        "enum": [
+          "flat",
+          "percent_of_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCancellationFeeFlat",
+          "CommitmentCancellationFeePercentOfRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentCancellationFeeType"
+      },
+      "types.CommitmentCollectionMethod": {
+        "type": "string",
+        "enum": [
+          "per_period",
+          "billing_terms"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCollectionPerPeriod",
+          "CommitmentCollectionBillingTerms"
+        ],
+        "x-speakeasy-name-override": "CommitmentCollectionMethod"
+      },
+      "types.CommitmentEarlyTermination": {
+        "type": "string",
+        "enum": [
+          "forfeit",
+          "credit_note",
+          "bill_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentTerminationForfeit",
+          "CommitmentTerminationCreditNote",
+          "CommitmentTerminationBillRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentEarlyTermination"
+      },
+      "types.CommitmentMeasurement": {
+        "type": "string",
+        "enum": [
+          "billing_period",
+          "window"
+        ],
+        "x-enum-varnames": [
+          "CommitmentMeasurementBillingPeriod",
+          "CommitmentMeasurementWindow"
+        ],
+        "x-speakeasy-name-override": "CommitmentMeasurement"
+      },
+      "types.CommitmentScopeType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "group",
+          "meter",
+          "price"
+        ],
+        "x-enum-varnames": [
+          "CommitmentScopeSubscription",
+          "CommitmentScopeGroup",
+          "CommitmentScopeMeter",
+          "CommitmentScopePrice"
+        ],
+        "x-speakeasy-name-override": "CommitmentScopeType"
+      },
+      "types.CommitmentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "ended",
+          "terminated"
+        ],
+        "x-enum-varnames": [
+          "CommitmentStatusActive",
+          "CommitmentStatusEnded",
+          "CommitmentStatusTerminated"
+        ],
+        "x-speakeasy-name-override": "CommitmentStatus"
+      },
+      "types.ImprovementDirection": {
+        "type": "string",
+        "enum": [
+          "higher",
+          "lower"
+        ],
+        "x-enum-varnames": [
+          "ImprovementHigher",
+          "ImprovementLower"
+        ],
+        "x-speakeasy-name-override": "ImprovementDirection"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -37134,6 +37507,52 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.ReportCategory": {
+        "type": "string",
+        "enum": [
+          "billing",
+          "receivables",
+          "customers",
+          "credits",
+          "usage"
+        ],
+        "x-enum-varnames": [
+          "ReportCategoryBilling",
+          "ReportCategoryReceivables",
+          "ReportCategoryCustomers",
+          "ReportCategoryCredits",
+          "ReportCategoryUsage"
+        ],
+        "x-speakeasy-name-override": "ReportCategory"
+      },
+      "types.ReportKind": {
+        "type": "string",
+        "enum": [
+          "flow",
+          "ratio",
+          "snapshot"
+        ],
+        "x-enum-varnames": [
+          "ReportKindFlow",
+          "ReportKindRatio",
+          "ReportKindSnapshot"
+        ],
+        "x-speakeasy-name-override": "ReportKind"
+      },
+      "types.ReportValueType": {
+        "type": "string",
+        "enum": [
+          "money",
+          "count",
+          "days"
+        ],
+        "x-enum-varnames": [
+          "ReportValueTypeMoney",
+          "ReportValueTypeCount",
+          "ReportValueTypeDays"
+        ],
+        "x-speakeasy-name-override": "ReportValueType"
       },
       "types.TenantInternalStatus": {
         "type": "string",
