@@ -97,4 +97,6 @@ func TestCommitmentEnums_Validate(t *testing.T) {
 	require.Error(t, CommitmentCollectionMethod("x").Validate())
 	require.NoError(t, CommitmentTerminationBillRemaining.Validate())
 	require.Error(t, CommitmentEarlyTermination("refund").Validate())
+	require.NoError(t, CommitmentCancellationFeePercentOfRemaining.Validate())
+	require.Error(t, CommitmentCancellationFeeType("percent").Validate())
 }

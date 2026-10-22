@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type commitmentBuilder struct {
@@ -51,6 +52,11 @@ func (b *commitmentBuilder) WithStatus(s types.CommitmentStatus) *commitmentBuil
 
 func (b *commitmentBuilder) WithTerminatedAt(t time.Time) *commitmentBuilder {
 	b.c.TerminatedAt = &t
+	return b
+}
+
+func (b *commitmentBuilder) WithCancellationFeeAmount(v decimal.Decimal) *commitmentBuilder {
+	b.c.CancellationFeeAmount = &v
 	return b
 }
 

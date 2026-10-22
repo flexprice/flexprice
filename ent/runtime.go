@@ -471,7 +471,7 @@ func init() {
 	// commitment.DefaultCommitmentStatus holds the default value on creation for the commitment_status field.
 	commitment.DefaultCommitmentStatus = types.CommitmentStatus(commitmentDescCommitmentStatus.Default.(string))
 	// commitmentDescMetadata is the schema descriptor for metadata field.
-	commitmentDescMetadata := commitmentFields[27].Descriptor()
+	commitmentDescMetadata := commitmentFields[28].Descriptor()
 	// commitment.DefaultMetadata holds the default value on creation for the metadata field.
 	commitment.DefaultMetadata = commitmentDescMetadata.Default.(types.Metadata)
 	connectionMixin := schema.Connection{}.Mixin()

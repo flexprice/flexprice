@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // CommitmentUpdate is the builder for updating Commitment entities.
@@ -148,6 +149,26 @@ func (_u *CommitmentUpdate) SetNillableTerminatedAt(v *time.Time) *CommitmentUpd
 // ClearTerminatedAt clears the value of the "terminated_at" field.
 func (_u *CommitmentUpdate) ClearTerminatedAt() *CommitmentUpdate {
 	_u.mutation.ClearTerminatedAt()
+	return _u
+}
+
+// SetCancellationFeeAmount sets the "cancellation_fee_amount" field.
+func (_u *CommitmentUpdate) SetCancellationFeeAmount(v decimal.Decimal) *CommitmentUpdate {
+	_u.mutation.SetCancellationFeeAmount(v)
+	return _u
+}
+
+// SetNillableCancellationFeeAmount sets the "cancellation_fee_amount" field if the given value is not nil.
+func (_u *CommitmentUpdate) SetNillableCancellationFeeAmount(v *decimal.Decimal) *CommitmentUpdate {
+	if v != nil {
+		_u.SetCancellationFeeAmount(*v)
+	}
+	return _u
+}
+
+// ClearCancellationFeeAmount clears the value of the "cancellation_fee_amount" field.
+func (_u *CommitmentUpdate) ClearCancellationFeeAmount() *CommitmentUpdate {
+	_u.mutation.ClearCancellationFeeAmount()
 	return _u
 }
 
@@ -295,6 +316,12 @@ func (_u *CommitmentUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.TerminatedAtCleared() {
 		_spec.ClearField(commitment.FieldTerminatedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CancellationFeeAmount(); ok {
+		_spec.SetField(commitment.FieldCancellationFeeAmount, field.TypeOther, value)
+	}
+	if _u.mutation.CancellationFeeAmountCleared() {
+		_spec.ClearField(commitment.FieldCancellationFeeAmount, field.TypeOther)
 	}
 	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(commitment.FieldIdempotencyKey, field.TypeString)
@@ -444,6 +471,26 @@ func (_u *CommitmentUpdateOne) SetNillableTerminatedAt(v *time.Time) *Commitment
 // ClearTerminatedAt clears the value of the "terminated_at" field.
 func (_u *CommitmentUpdateOne) ClearTerminatedAt() *CommitmentUpdateOne {
 	_u.mutation.ClearTerminatedAt()
+	return _u
+}
+
+// SetCancellationFeeAmount sets the "cancellation_fee_amount" field.
+func (_u *CommitmentUpdateOne) SetCancellationFeeAmount(v decimal.Decimal) *CommitmentUpdateOne {
+	_u.mutation.SetCancellationFeeAmount(v)
+	return _u
+}
+
+// SetNillableCancellationFeeAmount sets the "cancellation_fee_amount" field if the given value is not nil.
+func (_u *CommitmentUpdateOne) SetNillableCancellationFeeAmount(v *decimal.Decimal) *CommitmentUpdateOne {
+	if v != nil {
+		_u.SetCancellationFeeAmount(*v)
+	}
+	return _u
+}
+
+// ClearCancellationFeeAmount clears the value of the "cancellation_fee_amount" field.
+func (_u *CommitmentUpdateOne) ClearCancellationFeeAmount() *CommitmentUpdateOne {
+	_u.mutation.ClearCancellationFeeAmount()
 	return _u
 }
 
@@ -621,6 +668,12 @@ func (_u *CommitmentUpdateOne) sqlSave(ctx context.Context) (_node *Commitment, 
 	}
 	if _u.mutation.TerminatedAtCleared() {
 		_spec.ClearField(commitment.FieldTerminatedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.CancellationFeeAmount(); ok {
+		_spec.SetField(commitment.FieldCancellationFeeAmount, field.TypeOther, value)
+	}
+	if _u.mutation.CancellationFeeAmountCleared() {
+		_spec.ClearField(commitment.FieldCancellationFeeAmount, field.TypeOther)
 	}
 	if _u.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(commitment.FieldIdempotencyKey, field.TypeString)

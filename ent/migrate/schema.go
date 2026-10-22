@@ -359,6 +359,7 @@ var (
 		{Name: "on_early_termination", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "commitment_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "terminated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cancellation_fee_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(128)"}},
 		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
@@ -386,7 +387,7 @@ var (
 			{
 				Name:    "commitment_tenant_id_environment_id_idempotency_key",
 				Unique:  true,
-				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[33]},
+				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[34]},
 			},
 		},
 	}

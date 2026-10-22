@@ -350,6 +350,20 @@ func (_c *CommitmentCreate) SetNillableTerminatedAt(v *time.Time) *CommitmentCre
 	return _c
 }
 
+// SetCancellationFeeAmount sets the "cancellation_fee_amount" field.
+func (_c *CommitmentCreate) SetCancellationFeeAmount(v decimal.Decimal) *CommitmentCreate {
+	_c.mutation.SetCancellationFeeAmount(v)
+	return _c
+}
+
+// SetNillableCancellationFeeAmount sets the "cancellation_fee_amount" field if the given value is not nil.
+func (_c *CommitmentCreate) SetNillableCancellationFeeAmount(v *decimal.Decimal) *CommitmentCreate {
+	if v != nil {
+		_c.SetCancellationFeeAmount(*v)
+	}
+	return _c
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (_c *CommitmentCreate) SetIdempotencyKey(v string) *CommitmentCreate {
 	_c.mutation.SetIdempotencyKey(v)
@@ -744,6 +758,10 @@ func (_c *CommitmentCreate) createSpec() (*Commitment, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TerminatedAt(); ok {
 		_spec.SetField(commitment.FieldTerminatedAt, field.TypeTime, value)
 		_node.TerminatedAt = &value
+	}
+	if value, ok := _c.mutation.CancellationFeeAmount(); ok {
+		_spec.SetField(commitment.FieldCancellationFeeAmount, field.TypeOther, value)
+		_node.CancellationFeeAmount = &value
 	}
 	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(commitment.FieldIdempotencyKey, field.TypeString, value)

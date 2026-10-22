@@ -190,7 +190,38 @@ type UpdateCommitmentRequest struct {
 }
 
 type TerminateCommitmentRequest struct {
-	EffectiveAt *time.Time `json:"effective_at,omitempty"`
+	EffectiveAt     *time.Time                 `json:"effective_at,omitempty"`
+	CancellationFee *CommitmentCancellationFee `json:"cancellation_fee,omitempty"`
+}
+
+// CommitmentCancellationFee is charged on top of on_early_termination; value is a percent for percent_of_remaining.
+type CommitmentCancellationFee struct {
+	Type  types.CommitmentCancellationFeeType `json:"type" validate:"required"`
+	Value decimal.Decimal                     `json:"value" swaggertype:"string"`
+}
+
+func (r *TerminateCommitmentRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	fee := r.CancellationFee
+	if fee == nil {
+		return nil
+	}
+
+	if err := fee.Type.Validate(); err != nil {
+		return err
+	}
+
+	switch {
+	case !fee.Value.IsPositive():
+		return invalid("cancellation_fee.value must be greater than zero")
+	case fee.Type == types.CommitmentCancellationFeePercentOfRemaining && fee.Value.GreaterThan(decimal.NewFromInt(100)):
+		return invalid("cancellation_fee.value must be at most 100 for percent_of_remaining")
+	}
+
+	return nil
 }
 
 type CommitmentResponse struct {

@@ -10,35 +10,36 @@ import (
 
 // Commitment is a subscription-level spend or quantity commitment.
 type Commitment struct {
-	ID                  string                            `json:"id"`
-	SubscriptionID      string                            `json:"subscription_id"`
-	CustomerID          string                            `json:"customer_id"`
-	Name                string                            `json:"name"`
-	InvoiceLabel        string                            `json:"invoice_label"`
-	InvoiceDescription  *string                           `json:"invoice_description,omitempty"`
-	Currency            string                            `json:"currency"`
-	ScopeEntityType     types.CommitmentScopeType         `json:"scope_entity_type"`
-	ScopeEntityID       string                            `json:"scope_entity_id"`
-	Type                types.CommitmentType              `json:"type"`
-	Value               decimal.Decimal                   `json:"value" swaggertype:"string"`
-	CommittedPriceID    *string                           `json:"committed_price_id,omitempty"`
-	OveragePriceID      *string                           `json:"overage_price_id,omitempty"`
-	Measurement         types.CommitmentMeasurement       `json:"measurement"`
-	ActiveWindows       types.ActiveWindows               `json:"active_windows,omitempty"`
-	Timezone            string                            `json:"timezone"`
-	Priority            int                               `json:"priority"`
-	Binding             bool                              `json:"binding"`
-	CollectionMethod    *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
-	TotalAmount         *decimal.Decimal                  `json:"total_amount,omitempty" swaggertype:"string"`
-	InstalmentInvoicing *string                           `json:"instalment_invoicing,omitempty"`
-	StartDate           time.Time                         `json:"start_date"`
-	EndDate             time.Time                         `json:"end_date"`
-	OnEarlyTermination  *types.CommitmentEarlyTermination `json:"on_early_termination,omitempty"`
-	CommitmentStatus    types.CommitmentStatus            `json:"commitment_status"`
-	TerminatedAt        *time.Time                        `json:"terminated_at,omitempty"`
-	IdempotencyKey      *string                           `json:"idempotency_key,omitempty"`
-	Metadata            types.Metadata                    `json:"metadata,omitempty"`
-	EnvironmentID       string                            `json:"environment_id"`
+	ID                    string                            `json:"id"`
+	SubscriptionID        string                            `json:"subscription_id"`
+	CustomerID            string                            `json:"customer_id"`
+	Name                  string                            `json:"name"`
+	InvoiceLabel          string                            `json:"invoice_label"`
+	InvoiceDescription    *string                           `json:"invoice_description,omitempty"`
+	Currency              string                            `json:"currency"`
+	ScopeEntityType       types.CommitmentScopeType         `json:"scope_entity_type"`
+	ScopeEntityID         string                            `json:"scope_entity_id"`
+	Type                  types.CommitmentType              `json:"type"`
+	Value                 decimal.Decimal                   `json:"value" swaggertype:"string"`
+	CommittedPriceID      *string                           `json:"committed_price_id,omitempty"`
+	OveragePriceID        *string                           `json:"overage_price_id,omitempty"`
+	Measurement           types.CommitmentMeasurement       `json:"measurement"`
+	ActiveWindows         types.ActiveWindows               `json:"active_windows,omitempty"`
+	Timezone              string                            `json:"timezone"`
+	Priority              int                               `json:"priority"`
+	Binding               bool                              `json:"binding"`
+	CollectionMethod      *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
+	TotalAmount           *decimal.Decimal                  `json:"total_amount,omitempty" swaggertype:"string"`
+	InstalmentInvoicing   *string                           `json:"instalment_invoicing,omitempty"`
+	StartDate             time.Time                         `json:"start_date"`
+	EndDate               time.Time                         `json:"end_date"`
+	OnEarlyTermination    *types.CommitmentEarlyTermination `json:"on_early_termination,omitempty"`
+	CommitmentStatus      types.CommitmentStatus            `json:"commitment_status"`
+	TerminatedAt          *time.Time                        `json:"terminated_at,omitempty"`
+	CancellationFeeAmount *decimal.Decimal                  `json:"cancellation_fee_amount,omitempty" swaggertype:"string"`
+	IdempotencyKey        *string                           `json:"idempotency_key,omitempty"`
+	Metadata              types.Metadata                    `json:"metadata,omitempty"`
+	EnvironmentID         string                            `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -71,35 +72,36 @@ func FromEnt(e *ent.Commitment) *Commitment {
 	}
 
 	return &Commitment{
-		ID:                  e.ID,
-		SubscriptionID:      e.SubscriptionID,
-		CustomerID:          e.CustomerID,
-		Name:                e.Name,
-		InvoiceLabel:        e.InvoiceLabel,
-		InvoiceDescription:  e.InvoiceDescription,
-		Currency:            e.Currency,
-		ScopeEntityType:     e.ScopeEntityType,
-		ScopeEntityID:       e.ScopeEntityID,
-		Type:                e.Type,
-		Value:               e.Value,
-		CommittedPriceID:    e.CommittedPriceID,
-		OveragePriceID:      e.OveragePriceID,
-		Measurement:         e.Measurement,
-		ActiveWindows:       e.ActiveWindows,
-		Timezone:            e.Timezone,
-		Priority:            e.Priority,
-		Binding:             e.Binding,
-		CollectionMethod:    e.CollectionMethod,
-		TotalAmount:         e.TotalAmount,
-		InstalmentInvoicing: e.InstalmentInvoicing,
-		StartDate:           e.StartDate,
-		EndDate:             e.EndDate,
-		OnEarlyTermination:  e.OnEarlyTermination,
-		CommitmentStatus:    e.CommitmentStatus,
-		TerminatedAt:        e.TerminatedAt,
-		IdempotencyKey:      e.IdempotencyKey,
-		Metadata:            e.Metadata,
-		EnvironmentID:       e.EnvironmentID,
+		ID:                    e.ID,
+		SubscriptionID:        e.SubscriptionID,
+		CustomerID:            e.CustomerID,
+		Name:                  e.Name,
+		InvoiceLabel:          e.InvoiceLabel,
+		InvoiceDescription:    e.InvoiceDescription,
+		Currency:              e.Currency,
+		ScopeEntityType:       e.ScopeEntityType,
+		ScopeEntityID:         e.ScopeEntityID,
+		Type:                  e.Type,
+		Value:                 e.Value,
+		CommittedPriceID:      e.CommittedPriceID,
+		OveragePriceID:        e.OveragePriceID,
+		Measurement:           e.Measurement,
+		ActiveWindows:         e.ActiveWindows,
+		Timezone:              e.Timezone,
+		Priority:              e.Priority,
+		Binding:               e.Binding,
+		CollectionMethod:      e.CollectionMethod,
+		TotalAmount:           e.TotalAmount,
+		InstalmentInvoicing:   e.InstalmentInvoicing,
+		StartDate:             e.StartDate,
+		EndDate:               e.EndDate,
+		OnEarlyTermination:    e.OnEarlyTermination,
+		CommitmentStatus:      e.CommitmentStatus,
+		TerminatedAt:          e.TerminatedAt,
+		CancellationFeeAmount: e.CancellationFeeAmount,
+		IdempotencyKey:        e.IdempotencyKey,
+		Metadata:              e.Metadata,
+		EnvironmentID:         e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

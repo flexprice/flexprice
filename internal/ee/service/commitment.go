@@ -353,18 +353,22 @@ func (s *commitmentService) Update(
 	return s.toResponse(ctx, updated)
 }
 
-// Terminate ends an active commitment at effective_at (default now). Settlement lines for bill_remaining
-// are added by the final invoice, not here.
+// Terminate ends an active commitment at effective_at (default now), storing the optional cancellation fee.
+// Settlement and fee lines are added by the final invoice, not here.
 func (s *commitmentService) Terminate(
 	ctx context.Context,
 	id string,
 	req dto.TerminateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	effectiveAt := lo.FromPtrOr(req.EffectiveAt, time.Now().UTC())
 	var out *commitment.Commitment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
-		out, err = s.terminate(txCtx, id, effectiveAt)
+		out, err = s.terminate(txCtx, id, effectiveAt, req.CancellationFee)
 		return err
 	})
 	if err != nil {
@@ -399,7 +403,7 @@ func (s *commitmentService) TerminateForSubscription(
 				continue
 			}
 
-			if _, err := s.terminate(txCtx, c.ID, effectiveAt); err != nil {
+			if _, err := s.terminate(txCtx, c.ID, effectiveAt, nil); err != nil {
 				return err
 			}
 
@@ -430,6 +434,7 @@ func (s *commitmentService) terminate(
 	ctx context.Context,
 	id string,
 	effectiveAt time.Time,
+	fee *dto.CommitmentCancellationFee,
 ) (*commitment.Commitment, error) {
 	if err := s.lockCommitment(ctx, id); err != nil {
 		return nil, err
@@ -454,11 +459,61 @@ func (s *commitmentService) terminate(
 		effectiveAt = c.StartDate
 	}
 
-	terminated := commitment.NewCommitmentBuilder(c).
+	builder := commitment.NewCommitmentBuilder(c).
 		WithStatus(types.CommitmentStatusTerminated).
-		WithTerminatedAt(effectiveAt).
-		Build()
-	return s.CommitmentRepo.Update(ctx, terminated)
+		WithTerminatedAt(effectiveAt)
+
+	if fee != nil {
+		amount, err := s.cancellationFeeAmount(ctx, c, fee, effectiveAt)
+		if err != nil {
+			return nil, err
+		}
+
+		builder = builder.WithCancellationFeeAmount(amount)
+	}
+
+	return s.CommitmentRepo.Update(ctx, builder.Build())
+}
+
+// cancellationFeeAmount prices the fee in the commitment currency; a percent fee applies to the value not yet
+// earned at terminatedAt.
+func (s *commitmentService) cancellationFeeAmount(
+	ctx context.Context,
+	c *commitment.Commitment,
+	fee *dto.CommitmentCancellationFee,
+	terminatedAt time.Time,
+) (decimal.Decimal, error) {
+	if fee.Type == types.CommitmentCancellationFeeFlat {
+		return types.RoundToCurrencyPrecision(fee.Value, c.Currency), nil
+	}
+
+	cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	total, err := s.responseWithContext(ctx, c, cc)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	remaining := *total.CommitmentValue
+	if terminatedAt.After(c.StartDate) {
+		// The value of a term cut at terminatedAt is what has been earned.
+		earnedTerm := *c
+		earnedTerm.EndDate = terminatedAt
+		earned, err := s.responseWithContext(ctx, &earnedTerm, cc)
+		if err != nil {
+			return decimal.Zero, err
+		}
+
+		remaining = remaining.Sub(*earned.CommitmentValue)
+	}
+
+	amount := remaining.
+		Mul(fee.Value).
+		Div(decimal.NewFromInt(100))
+	return types.RoundToCurrencyPrecision(amount, c.Currency), nil
 }
 
 // ActiveForPeriod returns commitments whose term overlaps [from, to), including terminated ones,

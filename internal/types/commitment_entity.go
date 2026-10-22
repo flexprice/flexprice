@@ -70,6 +70,21 @@ func (e CommitmentEarlyTermination) Validate() error {
 	})
 }
 
+// CommitmentCancellationFeeType selects how the fee charged on an early terminate is computed.
+type CommitmentCancellationFeeType string
+
+const (
+	CommitmentCancellationFeeFlat               CommitmentCancellationFeeType = "flat"
+	CommitmentCancellationFeePercentOfRemaining CommitmentCancellationFeeType = "percent_of_remaining"
+)
+
+func (t CommitmentCancellationFeeType) Validate() error {
+	return validateEnum("cancellation_fee.type", t, []CommitmentCancellationFeeType{
+		CommitmentCancellationFeeFlat,
+		CommitmentCancellationFeePercentOfRemaining,
+	})
+}
+
 type CommitmentStatus string
 
 const (

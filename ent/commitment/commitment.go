@@ -78,6 +78,8 @@ const (
 	FieldCommitmentStatus = "commitment_status"
 	// FieldTerminatedAt holds the string denoting the terminated_at field in the database.
 	FieldTerminatedAt = "terminated_at"
+	// FieldCancellationFeeAmount holds the string denoting the cancellation_fee_amount field in the database.
+	FieldCancellationFeeAmount = "cancellation_fee_amount"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldMetadata holds the string denoting the metadata field in the database.
@@ -121,6 +123,7 @@ var Columns = []string{
 	FieldOnEarlyTermination,
 	FieldCommitmentStatus,
 	FieldTerminatedAt,
+	FieldCancellationFeeAmount,
 	FieldIdempotencyKey,
 	FieldMetadata,
 }
@@ -339,6 +342,11 @@ func ByCommitmentStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByTerminatedAt orders the results by the terminated_at field.
 func ByTerminatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTerminatedAt, opts...).ToFunc()
+}
+
+// ByCancellationFeeAmount orders the results by the cancellation_fee_amount field.
+func ByCancellationFeeAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCancellationFeeAmount, opts...).ToFunc()
 }
 
 // ByIdempotencyKey orders the results by the idempotency_key field.

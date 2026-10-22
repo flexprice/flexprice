@@ -161,6 +161,11 @@ func (Commitment) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		field.Other("cancellation_fee_amount", decimal.Decimal{}).
+			SchemaType(numeric).
+			Optional().
+			Nillable(),
+
 		field.String("idempotency_key").
 			SchemaType(varchar("128")).
 			Optional().

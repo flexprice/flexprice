@@ -9116,49 +9116,50 @@ func (m *CheckoutSessionMutation) ResetEdge(name string) error {
 // CommitmentMutation represents an operation that mutates the Commitment nodes in the graph.
 type CommitmentMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *string
-	tenant_id            *string
-	status               *string
-	created_at           *time.Time
-	updated_at           *time.Time
-	created_by           *string
-	updated_by           *string
-	environment_id       *string
-	subscription_id      *string
-	customer_id          *string
-	name                 *string
-	invoice_label        *string
-	invoice_description  *string
-	currency             *string
-	scope_entity_type    *types.CommitmentScopeType
-	scope_entity_id      *string
-	_type                *types.CommitmentType
-	value                *decimal.Decimal
-	committed_price_id   *string
-	overage_price_id     *string
-	measurement          *types.CommitmentMeasurement
-	active_windows       *types.ActiveWindows
-	appendactive_windows types.ActiveWindows
-	timezone             *string
-	priority             *int
-	addpriority          *int
-	binding              *bool
-	collection_method    *types.CommitmentCollectionMethod
-	total_amount         *decimal.Decimal
-	instalment_invoicing *string
-	start_date           *time.Time
-	end_date             *time.Time
-	on_early_termination *types.CommitmentEarlyTermination
-	commitment_status    *types.CommitmentStatus
-	terminated_at        *time.Time
-	idempotency_key      *string
-	metadata             *types.Metadata
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*Commitment, error)
-	predicates           []predicate.Commitment
+	op                      Op
+	typ                     string
+	id                      *string
+	tenant_id               *string
+	status                  *string
+	created_at              *time.Time
+	updated_at              *time.Time
+	created_by              *string
+	updated_by              *string
+	environment_id          *string
+	subscription_id         *string
+	customer_id             *string
+	name                    *string
+	invoice_label           *string
+	invoice_description     *string
+	currency                *string
+	scope_entity_type       *types.CommitmentScopeType
+	scope_entity_id         *string
+	_type                   *types.CommitmentType
+	value                   *decimal.Decimal
+	committed_price_id      *string
+	overage_price_id        *string
+	measurement             *types.CommitmentMeasurement
+	active_windows          *types.ActiveWindows
+	appendactive_windows    types.ActiveWindows
+	timezone                *string
+	priority                *int
+	addpriority             *int
+	binding                 *bool
+	collection_method       *types.CommitmentCollectionMethod
+	total_amount            *decimal.Decimal
+	instalment_invoicing    *string
+	start_date              *time.Time
+	end_date                *time.Time
+	on_early_termination    *types.CommitmentEarlyTermination
+	commitment_status       *types.CommitmentStatus
+	terminated_at           *time.Time
+	cancellation_fee_amount *decimal.Decimal
+	idempotency_key         *string
+	metadata                *types.Metadata
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*Commitment, error)
+	predicates              []predicate.Commitment
 }
 
 var _ ent.Mutation = (*CommitmentMutation)(nil)
@@ -10609,6 +10610,55 @@ func (m *CommitmentMutation) ResetTerminatedAt() {
 	delete(m.clearedFields, commitment.FieldTerminatedAt)
 }
 
+// SetCancellationFeeAmount sets the "cancellation_fee_amount" field.
+func (m *CommitmentMutation) SetCancellationFeeAmount(d decimal.Decimal) {
+	m.cancellation_fee_amount = &d
+}
+
+// CancellationFeeAmount returns the value of the "cancellation_fee_amount" field in the mutation.
+func (m *CommitmentMutation) CancellationFeeAmount() (r decimal.Decimal, exists bool) {
+	v := m.cancellation_fee_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancellationFeeAmount returns the old "cancellation_fee_amount" field's value of the Commitment entity.
+// If the Commitment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommitmentMutation) OldCancellationFeeAmount(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancellationFeeAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancellationFeeAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancellationFeeAmount: %w", err)
+	}
+	return oldValue.CancellationFeeAmount, nil
+}
+
+// ClearCancellationFeeAmount clears the value of the "cancellation_fee_amount" field.
+func (m *CommitmentMutation) ClearCancellationFeeAmount() {
+	m.cancellation_fee_amount = nil
+	m.clearedFields[commitment.FieldCancellationFeeAmount] = struct{}{}
+}
+
+// CancellationFeeAmountCleared returns if the "cancellation_fee_amount" field was cleared in this mutation.
+func (m *CommitmentMutation) CancellationFeeAmountCleared() bool {
+	_, ok := m.clearedFields[commitment.FieldCancellationFeeAmount]
+	return ok
+}
+
+// ResetCancellationFeeAmount resets all changes to the "cancellation_fee_amount" field.
+func (m *CommitmentMutation) ResetCancellationFeeAmount() {
+	m.cancellation_fee_amount = nil
+	delete(m.clearedFields, commitment.FieldCancellationFeeAmount)
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (m *CommitmentMutation) SetIdempotencyKey(s string) {
 	m.idempotency_key = &s
@@ -10741,7 +10791,7 @@ func (m *CommitmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CommitmentMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.tenant_id != nil {
 		fields = append(fields, commitment.FieldTenantID)
 	}
@@ -10838,6 +10888,9 @@ func (m *CommitmentMutation) Fields() []string {
 	if m.terminated_at != nil {
 		fields = append(fields, commitment.FieldTerminatedAt)
 	}
+	if m.cancellation_fee_amount != nil {
+		fields = append(fields, commitment.FieldCancellationFeeAmount)
+	}
 	if m.idempotency_key != nil {
 		fields = append(fields, commitment.FieldIdempotencyKey)
 	}
@@ -10916,6 +10969,8 @@ func (m *CommitmentMutation) Field(name string) (ent.Value, bool) {
 		return m.CommitmentStatus()
 	case commitment.FieldTerminatedAt:
 		return m.TerminatedAt()
+	case commitment.FieldCancellationFeeAmount:
+		return m.CancellationFeeAmount()
 	case commitment.FieldIdempotencyKey:
 		return m.IdempotencyKey()
 	case commitment.FieldMetadata:
@@ -10993,6 +11048,8 @@ func (m *CommitmentMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldCommitmentStatus(ctx)
 	case commitment.FieldTerminatedAt:
 		return m.OldTerminatedAt(ctx)
+	case commitment.FieldCancellationFeeAmount:
+		return m.OldCancellationFeeAmount(ctx)
 	case commitment.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
 	case commitment.FieldMetadata:
@@ -11230,6 +11287,13 @@ func (m *CommitmentMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTerminatedAt(v)
 		return nil
+	case commitment.FieldCancellationFeeAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancellationFeeAmount(v)
+		return nil
 	case commitment.FieldIdempotencyKey:
 		v, ok := value.(string)
 		if !ok {
@@ -11325,6 +11389,9 @@ func (m *CommitmentMutation) ClearedFields() []string {
 	if m.FieldCleared(commitment.FieldTerminatedAt) {
 		fields = append(fields, commitment.FieldTerminatedAt)
 	}
+	if m.FieldCleared(commitment.FieldCancellationFeeAmount) {
+		fields = append(fields, commitment.FieldCancellationFeeAmount)
+	}
 	if m.FieldCleared(commitment.FieldIdempotencyKey) {
 		fields = append(fields, commitment.FieldIdempotencyKey)
 	}
@@ -11380,6 +11447,9 @@ func (m *CommitmentMutation) ClearField(name string) error {
 		return nil
 	case commitment.FieldTerminatedAt:
 		m.ClearTerminatedAt()
+		return nil
+	case commitment.FieldCancellationFeeAmount:
+		m.ClearCancellationFeeAmount()
 		return nil
 	case commitment.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
@@ -11490,6 +11560,9 @@ func (m *CommitmentMutation) ResetField(name string) error {
 		return nil
 	case commitment.FieldTerminatedAt:
 		m.ResetTerminatedAt()
+		return nil
+	case commitment.FieldCancellationFeeAmount:
+		m.ResetCancellationFeeAmount()
 		return nil
 	case commitment.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()

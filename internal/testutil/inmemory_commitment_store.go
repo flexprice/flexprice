@@ -130,6 +130,7 @@ func (s *InMemoryCommitmentStore) Update(ctx context.Context, c *commitment.Comm
 	updated.InvoiceDescription = c.InvoiceDescription
 	updated.Metadata = c.Metadata
 	updated.TerminatedAt = c.TerminatedAt
+	updated.CancellationFeeAmount = c.CancellationFeeAmount
 	updated.UpdatedAt = time.Now().UTC()
 	updated.UpdatedBy = types.GetUserID(ctx)
 

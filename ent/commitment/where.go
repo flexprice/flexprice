@@ -227,6 +227,11 @@ func TerminatedAt(v time.Time) predicate.Commitment {
 	return predicate.Commitment(sql.FieldEQ(FieldTerminatedAt, v))
 }
 
+// CancellationFeeAmount applies equality check predicate on the "cancellation_fee_amount" field. It's identical to CancellationFeeAmountEQ.
+func CancellationFeeAmount(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldEQ(FieldCancellationFeeAmount, v))
+}
+
 // IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
 func IdempotencyKey(v string) predicate.Commitment {
 	return predicate.Commitment(sql.FieldEQ(FieldIdempotencyKey, v))
@@ -2229,6 +2234,56 @@ func TerminatedAtIsNil() predicate.Commitment {
 // TerminatedAtNotNil applies the NotNil predicate on the "terminated_at" field.
 func TerminatedAtNotNil() predicate.Commitment {
 	return predicate.Commitment(sql.FieldNotNull(FieldTerminatedAt))
+}
+
+// CancellationFeeAmountEQ applies the EQ predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountEQ(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldEQ(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountNEQ applies the NEQ predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountNEQ(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldNEQ(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountIn applies the In predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountIn(vs ...decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldIn(FieldCancellationFeeAmount, vs...))
+}
+
+// CancellationFeeAmountNotIn applies the NotIn predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountNotIn(vs ...decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldNotIn(FieldCancellationFeeAmount, vs...))
+}
+
+// CancellationFeeAmountGT applies the GT predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountGT(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldGT(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountGTE applies the GTE predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountGTE(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldGTE(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountLT applies the LT predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountLT(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldLT(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountLTE applies the LTE predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountLTE(v decimal.Decimal) predicate.Commitment {
+	return predicate.Commitment(sql.FieldLTE(FieldCancellationFeeAmount, v))
+}
+
+// CancellationFeeAmountIsNil applies the IsNil predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountIsNil() predicate.Commitment {
+	return predicate.Commitment(sql.FieldIsNull(FieldCancellationFeeAmount))
+}
+
+// CancellationFeeAmountNotNil applies the NotNil predicate on the "cancellation_fee_amount" field.
+func CancellationFeeAmountNotNil() predicate.Commitment {
+	return predicate.Commitment(sql.FieldNotNull(FieldCancellationFeeAmount))
 }
 
 // IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.

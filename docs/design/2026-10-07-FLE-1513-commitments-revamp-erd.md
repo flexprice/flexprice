@@ -261,6 +261,7 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 | `on_early_termination` | varchar(20)   | yes  | Binding only: `forfeit` (default), `credit_note` (billing_terms only) or `bill_remaining`                                                                                                                                           |
 | `commitment_status`    | varchar(20)   | no   | `active`, `ended` or `terminated`                                                                                                                                                                                                   |
 | `terminated_at`        | timestamptz   | yes  | When termination took effect                                                                                                                                                                                                        |
+| `cancellation_fee_amount` | numeric(20,8) | yes  | Fee charged by the terminate API, rounded to the commitment currency (§8). NULL when none was charged.                                                                                                                              |
 | `idempotency_key`      | varchar(128)  | yes  | D32                                                                                                                                                                                                                                 |
 | `metadata`             | jsonb         | yes  | Free-form                                                                                                                                                                                                                           |
 
@@ -716,6 +717,14 @@ Future owners (phase 5, each with its own ERD): fixed subscription line items, a
 4. Set `commitment_status = terminated` and `terminated_at = effective_at`.
 
 Scenarios A15 and A16 work through the numbers.
+
+**Cancellation fee.** Only the terminate API charges one, through an optional `cancellation_fee {type, value}`. Subscription cancellation and plan change never do.
+
+- `flat`: the fee is `value`.
+- `percent_of_remaining`: the fee is `value`% of Value − Earned at `effective_at`; `value` is at most 100.
+- `value` must be greater than 0, and `effective_at` must be before `end_date`. Binding and non-binding commitments both accept a fee.
+- The amount is rounded to the commitment currency and stored in `cancellation_fee_amount`. Nothing is stored at create.
+- It is charged on top of `on_early_termination`: the invoice whose period holds `terminated_at` adds one `cancellation_fee` line, alongside any settlement line.
 
 ## 9. Billed, earned, deferred and analytics
 

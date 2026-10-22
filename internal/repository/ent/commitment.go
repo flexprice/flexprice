@@ -184,6 +184,7 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
 		SetNillableTerminatedAt(c.TerminatedAt).
+		SetNillableCancellationFeeAmount(c.CancellationFeeAmount).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 

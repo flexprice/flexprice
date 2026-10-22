@@ -393,6 +393,127 @@ func (s *CommitmentServiceSuite) TestTerminate_ClampsTerminatedAtToStartDate() {
 	s.True(resp.TerminatedAt.Equal(created.StartDate), "got %s", resp.TerminatedAt)
 }
 
+func (s *CommitmentServiceSuite) TestTerminate_StoresFlatCancellationFee() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Binding = lo.ToPtr(false)
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	at := created.StartDate.AddDate(0, 4, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt: &at,
+		CancellationFee: &dto.CommitmentCancellationFee{
+			Type:  types.CommitmentCancellationFeeFlat,
+			Value: dec("250.005"),
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CancellationFeeAmount)
+	s.True(resp.CancellationFeeAmount.Equal(dec("250.01")), "got %s", resp.CancellationFeeAmount)
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.CancellationFeeAmount)
+	s.True(got.CancellationFeeAmount.Equal(dec("250.01")))
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_StoresPercentOfRemainingCancellationFee() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Type = types.COMMITMENT_TYPE_AMOUNT
+	req.Value = decimal.NewFromInt(100)
+	req.CommittedRate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	// $1,200 over 12 months, 3 earned: 10% of the remaining $900.
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt: &at,
+		CancellationFee: &dto.CommitmentCancellationFee{
+			Type:  types.CommitmentCancellationFeePercentOfRemaining,
+			Value: decimal.NewFromInt(10),
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CancellationFeeAmount)
+	s.True(resp.CancellationFeeAmount.Equal(decimal.NewFromInt(90)), "got %s", resp.CancellationFeeAmount)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	midTerm := created.StartDate.AddDate(0, 3, 0)
+	tests := []struct {
+		name string
+		at   time.Time
+		fee  dto.CommitmentCancellationFee
+	}{
+		{
+			name: "unknown type",
+			at:   midTerm,
+			fee: dto.CommitmentCancellationFee{
+				Type:  "percent",
+				Value: decimal.NewFromInt(10),
+			},
+		},
+		{
+			name: "missing type",
+			at:   midTerm,
+			fee: dto.CommitmentCancellationFee{
+				Value: decimal.NewFromInt(10),
+			},
+		},
+		{
+			name: "zero value",
+			at:   midTerm,
+			fee: dto.CommitmentCancellationFee{
+				Type:  types.CommitmentCancellationFeeFlat,
+				Value: decimal.Zero,
+			},
+		},
+		{
+			name: "negative value",
+			at:   midTerm,
+			fee: dto.CommitmentCancellationFee{
+				Type:  types.CommitmentCancellationFeeFlat,
+				Value: decimal.NewFromInt(-5),
+			},
+		},
+		{
+			name: "percent above 100",
+			at:   midTerm,
+			fee: dto.CommitmentCancellationFee{
+				Type:  types.CommitmentCancellationFeePercentOfRemaining,
+				Value: dec("100.01"),
+			},
+		},
+		{
+			name: "terminate at end_date",
+			at:   created.EndDate,
+			fee: dto.CommitmentCancellationFee{
+				Type:  types.CommitmentCancellationFeeFlat,
+				Value: decimal.NewFromInt(10),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+				EffectiveAt:     &tt.at,
+				CancellationFee: &tt.fee,
+			})
+			s.True(ierr.IsValidation(err), "got %v", err)
+		})
+	}
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+	s.Nil(got.CancellationFeeAmount)
+}
+
 func (s *CommitmentServiceSuite) TestTerminateForSubscription_ClampsAndIsIdempotent() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
@@ -423,6 +544,7 @@ func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveCo
 		s.Require().NoError(err)
 		s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
 		s.True(got.TerminatedAt.Equal(at))
+		s.Nil(got.CancellationFeeAmount)
 	}
 }
 

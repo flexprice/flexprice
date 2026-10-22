@@ -84,6 +84,8 @@ type Commitment struct {
 	CommitmentStatus types.CommitmentStatus `json:"commitment_status,omitempty"`
 	// TerminatedAt holds the value of the "terminated_at" field.
 	TerminatedAt *time.Time `json:"terminated_at,omitempty"`
+	// CancellationFeeAmount holds the value of the "cancellation_fee_amount" field.
+	CancellationFeeAmount *decimal.Decimal `json:"cancellation_fee_amount,omitempty"`
 	// IdempotencyKey holds the value of the "idempotency_key" field.
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -96,7 +98,7 @@ func (*Commitment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case commitment.FieldTotalAmount:
+		case commitment.FieldTotalAmount, commitment.FieldCancellationFeeAmount:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case commitment.FieldActiveWindows:
 			values[i] = new([]byte)
@@ -335,6 +337,13 @@ func (_m *Commitment) assignValues(columns []string, values []any) error {
 				_m.TerminatedAt = new(time.Time)
 				*_m.TerminatedAt = value.Time
 			}
+		case commitment.FieldCancellationFeeAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field cancellation_fee_amount", values[i])
+			} else if value.Valid {
+				_m.CancellationFeeAmount = new(decimal.Decimal)
+				*_m.CancellationFeeAmount = *value.S.(*decimal.Decimal)
+			}
 		case commitment.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
@@ -494,6 +503,11 @@ func (_m *Commitment) String() string {
 	if v := _m.TerminatedAt; v != nil {
 		builder.WriteString("terminated_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.CancellationFeeAmount; v != nil {
+		builder.WriteString("cancellation_fee_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := _m.IdempotencyKey; v != nil {
