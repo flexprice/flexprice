@@ -47,8 +47,11 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 	for _, sc := range in.Stack {
 		alloc := in.Alloc.ByCommitment[sc.C.ID]
 		if alloc == nil {
-			alloc = &commitmentAllocation{UsedByLine: map[string]decimal.Decimal{}}
+			alloc = &commitmentAllocation{
+				UsedByLine: map[string]decimal.Decimal{},
+			}
 		}
+
 		withinValue := decimal.Zero
 		usedValue := decimal.Zero
 		largest := -1
@@ -57,33 +60,40 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 			if !used.IsPositive() {
 				continue
 			}
+
 			sl, err := lookupScopedLine(in.Lines, lineID)
 			if err != nil {
 				return nil, err
 			}
+
 			allocatedByLine[lineID] = allocatedByLine[lineID].Add(used)
 			qty, amount := used, used.Mul(sc.Rates.Committed)
 			if sc.C.Type == types.COMMITMENT_TYPE_AMOUNT {
 				qty = proportionalQuantity(sl, used)
 				amount = used
 			}
+
 			line := commitmentLine(in, sc, sl, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount)
 			withinValue = withinValue.Add(line.Amount)
 			usedValue = usedValue.Add(amount)
 			if largest < 0 || line.Amount.GreaterThan(out[largest].Amount) {
 				largest = len(out)
 			}
+
 			out = append(out, line)
 		}
+
 		// Lines rounded one by one can drift from their rounded total; the largest line absorbs the drift.
 		if largest >= 0 {
 			drift := types.RoundToCurrencyPrecision(usedValue, in.Currency).Sub(withinValue)
 			out[largest].Amount = out[largest].Amount.Add(drift)
 			withinValue = withinValue.Add(drift)
 		}
+
 		if !sc.C.Binding {
 			continue
 		}
+
 		// True-up is the rounded period amount minus the rounded within lines, so they sum exactly.
 		periodAmount := types.RoundToCurrencyPrecision(in.PeriodByCmt[sc.C.ID].Amount, in.Currency)
 		trueUp := decimal.Max(periodAmount.Sub(withinValue), decimal.Zero)
@@ -91,8 +101,17 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 		if sc.C.Type == types.COMMITMENT_TYPE_AMOUNT {
 			trueUpQty = decimal.NewFromInt(1)
 		}
+
 		if trueUp.IsPositive() {
-			line := commitmentLine(in, sc, nil, types.CommitmentLineTrueUp, sc.C.InvoiceLabel+" (unused)", trueUpQty, trueUp)
+			line := commitmentLine(
+				in,
+				sc,
+				nil,
+				types.CommitmentLineTrueUp,
+				sc.C.InvoiceLabel+" (unused)",
+				trueUpQty,
+				trueUp,
+			)
 			line.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
 			line.PriceID = sc.C.CommittedPriceID
 			out = append(out, line)
@@ -100,7 +119,19 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 	}
 
 	// On-demand is priced window by window, so bucketed tiers match the normal path, at the overage
-	// of the commitment in force in that window.
+	// of the commitment in force in that window. Billing-period usage is priced once per owner instead.
+	onDemandAmount := func(owner *stackedCommitment, sl *scopedLine, qty decimal.Decimal) decimal.Decimal {
+		if owner.C.Type != types.COMMITMENT_TYPE_QUANTITY {
+			return qty
+		}
+
+		if owner.Rates.Overage != nil {
+			return qty.Mul(*owner.Rates.Overage)
+		}
+
+		return in.PriceCost(sl.Price, qty)
+	}
+
 	var onDemand []*onDemandTotal
 	totalByKey := map[string]*onDemandTotal{}
 	for _, od := range in.Alloc.OnDemand {
@@ -108,31 +139,47 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 		if err != nil {
 			return nil, err
 		}
+
 		allocatedByLine[od.LineID] = allocatedByLine[od.LineID].Add(od.Quantity)
 		key := od.LineID + "/" + od.Owner.C.ID
 		total, ok := totalByKey[key]
 		if !ok {
-			total = &onDemandTotal{Line: sl, Owner: od.Owner}
+			total = &onDemandTotal{
+				Line:  sl,
+				Owner: od.Owner,
+			}
 			totalByKey[key] = total
 			onDemand = append(onDemand, total)
 		}
-		amount := od.Quantity
-		if od.Owner.C.Type == types.COMMITMENT_TYPE_QUANTITY {
-			amount = in.PriceCost(sl.Price, od.Quantity)
-			if od.Owner.Rates.Overage != nil {
-				amount = od.Quantity.Mul(*od.Owner.Rates.Overage)
-			}
-		}
+
 		total.Quantity = total.Quantity.Add(od.Quantity)
-		total.Amount = total.Amount.Add(amount)
+		if od.Owner.C.Measurement != types.CommitmentMeasurementBillingPeriod {
+			total.Amount = total.Amount.Add(onDemandAmount(od.Owner, sl, od.Quantity))
+		}
 	}
-	sort.SliceStable(onDemand, func(i, j int) bool { return onDemand[i].Line.Item.ID < onDemand[j].Line.Item.ID })
+
+	sort.SliceStable(onDemand, func(i, j int) bool {
+		return onDemand[i].Line.Item.ID < onDemand[j].Line.Item.ID
+	})
 	for _, total := range onDemand {
+		if total.Owner.C.Measurement == types.CommitmentMeasurementBillingPeriod {
+			total.Amount = onDemandAmount(total.Owner, total.Line, total.Quantity)
+		}
+
 		showQty := total.Quantity
 		if total.Owner.C.Type == types.COMMITMENT_TYPE_AMOUNT {
 			showQty = proportionalQuantity(total.Line, total.Quantity)
 		}
-		out = append(out, commitmentLine(in, total.Owner, total.Line, types.CommitmentLineOnDemand, lineDisplayName(total.Line), showQty, total.Amount))
+
+		out = append(out, commitmentLine(
+			in,
+			total.Owner,
+			total.Line,
+			types.CommitmentLineOnDemand,
+			lineDisplayName(total.Line),
+			showQty,
+			total.Amount,
+		))
 	}
 
 	lineIDs := lo.Keys(in.Lines)
@@ -144,17 +191,31 @@ func buildCommitmentLines(in commitmentLineInput) ([]dto.CreateInvoiceLineItemRe
 		if owner.C.Type == types.COMMITMENT_TYPE_AMOUNT {
 			expected = sl.Cost
 		}
+
 		if !allocatedByLine[lineID].Equal(expected) {
 			return nil, ierr.NewErrorf("commitment allocation mismatch for line item %s", lineID).
 				WithHint("within plus on-demand must equal the line's usage").
-				WithReportableDetails(map[string]interface{}{"allocated": allocatedByLine[lineID].String(), "expected": expected.String()}).
+				WithReportableDetails(map[string]interface{}{
+					"allocated": allocatedByLine[lineID].String(),
+					"expected":  expected.String(),
+				}).
 				Mark(ierr.ErrInternal)
 		}
+
 		// Free usage takes no amount capacity, but its quantity still shows on the invoice.
 		if owner.C.Type == types.COMMITMENT_TYPE_AMOUNT && sl.Cost.IsZero() && sl.Quantity.IsPositive() {
-			out = append(out, commitmentLine(in, owner, sl, types.CommitmentLineOnDemand, lineDisplayName(sl), sl.Quantity, decimal.Zero))
+			out = append(out, commitmentLine(
+				in,
+				owner,
+				sl,
+				types.CommitmentLineOnDemand,
+				lineDisplayName(sl),
+				sl.Quantity,
+				decimal.Zero,
+			))
 		}
 	}
+
 	return out, nil
 }
 
@@ -164,10 +225,19 @@ func lookupScopedLine(lines map[string]*scopedLine, lineID string) (*scopedLine,
 		return nil, ierr.NewErrorf("commitment allocation references unknown line item %s", lineID).
 			Mark(ierr.ErrInternal)
 	}
+
 	return sl, nil
 }
 
-func commitmentLine(in commitmentLineInput, sc *stackedCommitment, sl *scopedLine, kind types.CommitmentLineKind, name string, qty, amount decimal.Decimal) dto.CreateInvoiceLineItemRequest {
+func commitmentLine(
+	in commitmentLineInput,
+	sc *stackedCommitment,
+	sl *scopedLine,
+	kind types.CommitmentLineKind,
+	name string,
+	qty decimal.Decimal,
+	amount decimal.Decimal,
+) dto.CreateInvoiceLineItemRequest {
 	line := dto.CreateInvoiceLineItemRequest{
 		DisplayName:  lo.ToPtr(name),
 		Quantity:     qty,
@@ -180,9 +250,11 @@ func commitmentLine(in commitmentLineInput, sc *stackedCommitment, sl *scopedLin
 			types.MetadataKeyCommitmentID:       sc.C.ID,
 		},
 	}
+
 	if sc.C.InvoiceDescription != nil && kind != types.CommitmentLineOnDemand {
 		line.Metadata[types.MetadataKeyDescription] = *sc.C.InvoiceDescription
 	}
+
 	if sl != nil {
 		line.PriceID = lo.ToPtr(sl.Item.PriceID)
 		line.PriceType = lo.ToPtr(string(sl.Item.PriceType))
@@ -196,6 +268,7 @@ func commitmentLine(in commitmentLineInput, sc *stackedCommitment, sl *scopedLin
 		line.EntityType = lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment))
 		line.EntityID = lo.ToPtr(sc.C.ID)
 	}
+
 	return line
 }
 
@@ -206,6 +279,7 @@ func ownerOf(stack []*stackedCommitment, lineID string) *stackedCommitment {
 			return stack[i]
 		}
 	}
+
 	return stack[0]
 }
 
@@ -214,6 +288,7 @@ func proportionalQuantity(sl *scopedLine, value decimal.Decimal) decimal.Decimal
 	if sl.Cost.IsZero() {
 		return decimal.Zero
 	}
+
 	return sl.Quantity.Mul(value).Div(sl.Cost)
 }
 
@@ -221,5 +296,6 @@ func lineDisplayName(sl *scopedLine) string {
 	if sl.Item.DisplayName != "" {
 		return sl.Item.DisplayName
 	}
+
 	return sl.Price.DisplayName
 }

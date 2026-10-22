@@ -370,7 +370,7 @@ Scope is resolved on every invoice, so prices added later are picked up automati
 
 ### 6.2 Measurement and time windows
 
-- `billing_period`**:** capacity is `value` once per commitment period. Usage is the period's total quantity (quantity commitments) or total cost at line-item prices (amount commitments).
+- `billing_period`**:** capacity is `value` once per commitment period. Usage is the period's total quantity (quantity commitments) or total cost at line-item prices (amount commitments). When a commitment starts or ends inside the invoice period, usage is split at that date: each stretch fills only the commitments in force in it, a commitment's capacity is shared across the stretches it covers, and on-demand in a stretch is priced at the overage of the commitment in force there.
 - `window`**:** capacity is `value` in every bucket. Usage per bucket comes from the existing bucketed path (`fillBucketedValuesForWindowedCommitment`, `generateBucketStarts`). Empty buckets count as zero, so unused capacity is counted.
 - `active_windows`**:** a bucket counts only if its start, in `timezone`, falls inside a range. Outside the ranges, the commitment has no capacity.
 
