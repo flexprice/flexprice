@@ -79,6 +79,14 @@ func TestInMemoryCommitmentStore_ActiveWindowAndIsolation(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, "cmt_b", got[0].ID)
+
+	got, err = store.List(ctx, nil)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+
+	count, err := store.Count(ctx, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
 }
 
 func TestInMemoryCommitmentStore_Update(t *testing.T) {

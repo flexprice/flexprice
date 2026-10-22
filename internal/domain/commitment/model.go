@@ -164,6 +164,18 @@ func (f Filter) Validate() error {
 		}
 	}
 
+	for _, condition := range f.Filters {
+		if err := condition.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, sort := range f.Sort {
+		if err := sort.Validate(); err != nil {
+			return err
+		}
+	}
+
 	for _, s := range f.Statuses {
 		if err := s.Validate(); err != nil {
 			return err

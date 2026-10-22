@@ -265,6 +265,10 @@ func (r *commitmentRepository) Count(ctx context.Context, filter *domain.Filter)
 		filter = domain.NewNoLimitFilter()
 	}
 
+	if err := filter.Validate(); err != nil {
+		return 0, err
+	}
+
 	span := StartRepositorySpan(ctx, "commitment", "count", map[string]interface{}{})
 	defer FinishSpan(span)
 

@@ -187,3 +187,29 @@ func TestCommitmentRepository_CountAppliesFilters(t *testing.T) {
 	require.Len(t, driver.queries, 1)
 	require.Contains(t, driver.queries[0], `AND "currency" = $4`)
 }
+
+func TestCommitmentRepository_RejectsConditionWithoutValue(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "tenant_1"), "env_1")
+	repo, driver := newCapturingCommitmentRepository()
+
+	filter := &domain.Filter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		Filters: []*types.FilterCondition{
+			{
+				Field:    lo.ToPtr("name"),
+				Operator: lo.ToPtr(types.EQUAL),
+				DataType: lo.ToPtr(types.DataTypeString),
+			},
+		},
+	}
+
+	_, err := repo.List(ctx, filter)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+
+	_, err = repo.Count(ctx, filter)
+	require.Error(t, err)
+	require.True(t, ierr.IsValidation(err))
+
+	require.Empty(t, driver.queries)
+}

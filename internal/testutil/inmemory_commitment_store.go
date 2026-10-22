@@ -145,9 +145,17 @@ func (s *InMemoryCommitmentStore) Update(ctx context.Context, c *commitment.Comm
 }
 
 func (s *InMemoryCommitmentStore) List(ctx context.Context, f *commitment.Filter) ([]*commitment.Commitment, error) {
+	if f == nil {
+		f = commitment.NewNoLimitFilter()
+	}
+
 	return s.InMemoryStore.List(ctx, f, commitmentFilterFn, commitmentSortFn)
 }
 
 func (s *InMemoryCommitmentStore) Count(ctx context.Context, f *commitment.Filter) (int, error) {
+	if f == nil {
+		f = commitment.NewNoLimitFilter()
+	}
+
 	return s.InMemoryStore.Count(ctx, f, commitmentFilterFn)
 }
