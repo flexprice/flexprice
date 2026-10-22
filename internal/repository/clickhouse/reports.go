@@ -169,6 +169,8 @@ func (r *ReportsRepository) query(ctx context.Context, q *reportQuery) ([][]stri
 		settings["query_cache_ttl"] = r.cfg.QueryCacheTTLSeconds
 		// Cache, not throw, on now().
 		settings["query_cache_nondeterministic_function_handling"] = "save"
+	} else {
+		settings["use_query_cache"] = 0
 	}
 	ctx = clickhouse_go.Context(ctx, clickhouse_go.WithParameters(q.Params), clickhouse_go.WithSettings(settings))
 

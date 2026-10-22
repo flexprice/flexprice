@@ -85,15 +85,15 @@ func TestReportsRepository_Datasets(t *testing.T) {
 		row("c4", "t2", pub, 0, 1, q("Other"), q("x4"), q("US"), sep(4)),
 		row("c5", "t1", "archived", 0, 1, q("Dup"), q("x1"), q("US"), sep(5)))
 
-	seed(db, "invoices", sc+"customer_id, currency, invoice_status, total, period_start",
-		row("i1", "t1", pub, 0, 1, q("c1"), q("usd"), q("FINALIZED"), "1", sep(5)),
-		row("i1", "t1", pub, 0, 2, q("c1"), q("usd"), q("FINALIZED"), "10", sep(5)),
-		row("i2", "t1", pub, 0, 1, q("c1"), q("usd"), q("FINALIZED"), "20", sep(6)),
-		row("i3", "t1", pub, 0, 1, q("c2"), q("inr"), q("FINALIZED"), "5", sep(7)),
-		row("i4", "t1", pub, 1, 1, q("c1"), q("usd"), q("FINALIZED"), "99", sep(8)),
-		row("i5", "t2", pub, 0, 1, q("c4"), q("usd"), q("FINALIZED"), "77", sep(8)),
-		row("i7", "t1", pub, 0, 1, q("c2"), q("usd"), q("FINALIZED"), "40", aug(10)),
-		row("i8", "t1", pub, 0, 1, q("c2"), q("usd"), q("DRAFT"), "1000", aug(12)))
+	seed(db, "invoices", sc+"customer_id, currency, invoice_status, total, period_start, finalized_at",
+		row("i1", "t1", pub, 0, 1, q("c1"), q("usd"), q("FINALIZED"), "1", sep(5), sep(5)),
+		row("i1", "t1", pub, 0, 2, q("c1"), q("usd"), q("FINALIZED"), "10", sep(5), sep(5)),
+		row("i2", "t1", pub, 0, 1, q("c1"), q("usd"), q("FINALIZED"), "20", sep(6), sep(6)),
+		row("i3", "t1", pub, 0, 1, q("c2"), q("inr"), q("FINALIZED"), "5", sep(7), sep(7)),
+		row("i4", "t1", pub, 1, 1, q("c1"), q("usd"), q("FINALIZED"), "99", sep(8), sep(8)),
+		row("i5", "t2", pub, 0, 1, q("c4"), q("usd"), q("FINALIZED"), "77", sep(8), sep(8)),
+		row("i7", "t1", pub, 0, 1, q("c2"), q("usd"), q("FINALIZED"), "40", aug(10), aug(10)),
+		row("i8", "t1", pub, 0, 1, q("c2"), q("usd"), q("DRAFT"), "1000", aug(12), aug(12)))
 
 	// Tenant t3: payment-timing invoices.
 	pay := func(id, status, payStatus, issue, paid, due, remaining string) string {
@@ -239,7 +239,7 @@ func TestReportsRepository_Datasets(t *testing.T) {
 	t.Run("cross_check_invoice_total", func(t *testing.T) {
 		wide := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 		got := run(&analytics.ViewDefinition{Dataset: "invoices", Measures: []*analytics.Measure{sum("total")},
-			Filters: finalized, Time: analytics.TimeSpecRaw{Field: "billing_period", Grain: types.GrainMonth}}, wide, to, "")
+			Filters: finalized, Time: analytics.TimeSpecRaw{Field: "finalized_at", Grain: types.GrainMonth}}, wide, to, "")
 		res, err := repo.RunReport(ctx, &analytics.ResolvedView{
 			Family: types.FamilyBilling, Shape: types.ShapeTimeseries, Metrics: []types.Metric{types.MetricInvoiceTotal},
 			Time: analytics.TimeSpec{From: wide, To: to, Grain: types.GrainMonth},

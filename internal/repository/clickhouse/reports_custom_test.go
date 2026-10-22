@@ -1,6 +1,7 @@
 package clickhouse
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/analytics"
@@ -26,10 +27,9 @@ func TestBuildNetBilling(t *testing.T) {
 	assert.Contains(t, q.SQL, "reports_db.credit_notes AS n WHERE")
 	assert.Contains(t, q.SQL, "i.invoice_status = 'FINALIZED'")
 	assert.Contains(t, q.SQL, "n.credit_note_status = 'FINALIZED'")
-	assert.Contains(t, q.SQL, "coalesce(nullIf(i.period_start, toDateTime64(0, 6)), i.issue_date) >= toDateTime64({from:String}, 6, 'UTC')")
-	assert.Contains(t, q.SQL, "SELECT nullIf(coalesce(nullIf(period_start, toDateTime64(0, 6)), issue_date), toDateTime64(0, 6)) AS b")
-	assert.NotContains(t, q.SQL, "i.finalized_at")
-	assert.Contains(t, q.SQL, "n.created_at >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "i.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "SELECT nullIf(finalized_at, toDateTime64(0, 6)) AS b")
+	assert.Contains(t, q.SQL, "n.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
 	assert.Contains(t, q.SQL, "GROUP BY bucket, d_currency ORDER BY bucket, d_currency LIMIT 11")
 	assert.NotContains(t, q.SQL, "'t'")
 	require.Len(t, q.Columns, 3)
@@ -41,13 +41,21 @@ func TestBuildNetBilling(t *testing.T) {
 	assert.NotContains(t, q.SQL, "LIMIT")
 }
 
+func TestBuildCreditConsumptionIsSelectQuery(t *testing.T) {
+	q, err := buildBillingQuery(customRV(types.MetricCreditConsumption, types.ShapeTimeseries), "reports_db", "t", "e", 100)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(q.SQL, "SELECT "))
+	assert.Contains(t, q.SQL, "FROM (SELECT d.*, JSONExtractArrayRaw")
+	assert.Contains(t, q.SQL, "GROUP BY bucket, d_credit_type, d_currency")
+}
+
 func TestBuildNetBillingIssued(t *testing.T) {
 	q, err := buildBillingQuery(customRV(types.MetricNetBillingIssued, types.ShapeTimeseries), "reports_db", "t", "e", 10)
 	require.NoError(t, err)
-	assert.Contains(t, q.SQL, "i.issue_date >= toDateTime64({from:String}, 6, 'UTC')")
-	assert.Contains(t, q.SQL, "SELECT nullIf(issue_date, toDateTime64(0, 6)) AS b")
+	assert.Contains(t, q.SQL, "i.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "SELECT nullIf(finalized_at, toDateTime64(0, 6)) AS b")
 	assert.NotContains(t, q.SQL, "period_start")
-	assert.Contains(t, q.SQL, "n.created_at >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "n.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
 	require.Len(t, q.Columns, 3)
 	assert.Equal(t, "net_billing_issued", q.Columns[2].Name)
 

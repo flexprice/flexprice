@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const billTime = "nullIf(coalesce(nullIf(period_start, toDateTime64(0, 6)), issue_date), toDateTime64(0, 6))"
+const billTime = "nullIf(finalized_at, toDateTime64(0, 6))"
 
 // Range predicates use the raw expression.
-const billCol = "coalesce(nullIf(period_start, toDateTime64(0, 6)), issue_date)"
+const billCol = "finalized_at"
 
 func billingRV(shape types.Shape, dims ...string) *analytics.ResolvedView {
 	return &analytics.ResolvedView{
@@ -336,7 +336,7 @@ func TestBuildBillingQuery_InvoiceTotalIssued(t *testing.T) {
 	rv.Compare = "previous_period"
 	q, err := buildBillingQuery(rv, "reports_db", "t", "e", 0)
 	require.NoError(t, err)
-	assert.Contains(t, q.SQL, "issue_date >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
 	assert.Contains(t, q.SQL, "invoice_status = 'FINALIZED'")
 	assert.NotContains(t, q.SQL, "period_start")
 	assert.Equal(t, []string{"bucket", "currency", "invoice_total_issued", "invoice_total_issued_prev"}, columnNames(q))
@@ -356,7 +356,7 @@ func TestBuildBillingQuery_ARPUBilled(t *testing.T) {
 	assert.Contains(t, q.SQL, "invoice_status = 'FINALIZED'")
 	assert.Contains(t, q.SQL, "status = 'published'")
 	assert.Contains(t, q.SQL, "_peerdb_is_deleted = 0")
-	assert.Contains(t, q.SQL, invoiceBillingTime(""))
+	assert.Contains(t, q.SQL, "finalized_at >=")
 	assert.NotContains(t, q.SQL, "paid_at")
 	assert.NotContains(t, q.SQL, "amount_paid")
 }
