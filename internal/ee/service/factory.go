@@ -12,6 +12,7 @@ import (
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -142,6 +143,7 @@ type ServiceParams struct {
 	ActivityRepo                 domainActivity.Repository
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
+	CommitmentRepo               commitment.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -257,6 +259,7 @@ func NewServiceParams(
 	activityRepo domainActivity.Repository,
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
+	commitmentRepo commitment.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -336,5 +339,6 @@ func NewServiceParams(
 		ActivityRepo:                 activityRepo,
 		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
+		CommitmentRepo:               commitmentRepo,
 	}
 }

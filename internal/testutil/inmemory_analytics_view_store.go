@@ -64,6 +64,11 @@ func (s *InMemoryAnalyticsViewStore) Update(ctx context.Context, v *domainAnalyt
 	if err != nil {
 		return err
 	}
+	if cur.Version != v.Version-1 {
+		return ierr.NewErrorf("analytics view %s changed concurrently", v.ID).
+			WithHint("View was modified by someone else; reload and retry").
+			Mark(ierr.ErrVersionConflict)
+	}
 	cur.Name, cur.Definition, cur.Version = v.Name, v.Definition, v.Version
 	cur.UpdatedBy, cur.UpdatedAt = types.GetUserID(ctx), time.Now()
 	return s.InMemoryStore.Update(ctx, cur.ID, cur)

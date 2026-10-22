@@ -324,6 +324,72 @@ var (
 			},
 		},
 	}
+	// CommitmentsColumns holds the columns for the "commitments" table.
+	CommitmentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "invoice_label", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "invoice_description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(500)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "scope_entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "scope_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "value", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "committed_price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "overage_price_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "measurement", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "active_windows", Type: field.TypeJSON, Nullable: true},
+		{Name: "timezone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(64)"}},
+		{Name: "priority", Type: field.TypeInt, Default: 0},
+		{Name: "binding", Type: field.TypeBool, Default: false},
+		{Name: "collection_method", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "total_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "instalment_invoicing", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime},
+		{Name: "on_early_termination", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "commitment_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "terminated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(128)"}},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// CommitmentsTable holds the schema information for the "commitments" table.
+	CommitmentsTable = &schema.Table{
+		Name:       "commitments",
+		Columns:    CommitmentsColumns,
+		PrimaryKey: []*schema.Column{CommitmentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "commitment_tenant_id_environment_id_subscription_id_commitment_status",
+				Unique:  false,
+				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[8], CommitmentsColumns[31]},
+			},
+			{
+				Name:    "commitment_tenant_id_environment_id_scope_entity_type_scope_entity_id",
+				Unique:  false,
+				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[14], CommitmentsColumns[15]},
+			},
+			{
+				Name:    "commitment_tenant_id_environment_id_customer_id",
+				Unique:  false,
+				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[9]},
+			},
+			{
+				Name:    "commitment_tenant_id_environment_id_idempotency_key",
+				Unique:  true,
+				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[33]},
+			},
+		},
+	}
 	// ConnectionsColumns holds the columns for the "connections" table.
 	ConnectionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1444,6 +1510,7 @@ var (
 		{Name: "line_item_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "invoice_level_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "subscription_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "commitment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "adjusted_entitlement_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "parent_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -1458,7 +1525,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "invoice_line_items_invoices_line_items",
-				Columns:    []*schema.Column{InvoiceLineItemsColumns[36]},
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[37]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1467,7 +1534,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[36], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[37], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_customer_id_status",
@@ -1498,6 +1565,14 @@ var (
 				Name:    "invoicelineitem_subscription_id_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoiceLineItemsColumns[9], InvoiceLineItemsColumns[2]},
+			},
+			{
+				Name:    "invoicelineitem_tenant_id_environment_id_commitment_id",
+				Unique:  false,
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[32]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(commitment_id IS NOT NULL)",
+				},
 			},
 		},
 	}
@@ -3031,6 +3106,7 @@ var (
 		AuthsTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,
+		CommitmentsTable,
 		ConnectionsTable,
 		CostsheetsTable,
 		CouponsTable,

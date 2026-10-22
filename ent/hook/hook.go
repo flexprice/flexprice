@@ -105,6 +105,18 @@ func (f CheckoutSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CheckoutSessionMutation", m)
 }
 
+// The CommitmentFunc type is an adapter to allow the use of ordinary
+// function as Commitment mutator.
+type CommitmentFunc func(context.Context, *ent.CommitmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommitmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommitmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommitmentMutation", m)
+}
+
 // The ConnectionFunc type is an adapter to allow the use of ordinary
 // function as Connection mutator.
 type ConnectionFunc func(context.Context, *ent.ConnectionMutation) (ent.Value, error)

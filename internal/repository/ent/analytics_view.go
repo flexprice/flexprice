@@ -192,6 +192,7 @@ func (r *analyticsViewRepository) Update(ctx context.Context, v *domainAnalytics
 			analyticsview.TenantID(types.GetTenantID(ctx)),
 			analyticsview.EnvironmentID(types.GetEnvironmentID(ctx)),
 			analyticsview.Status(string(types.StatusPublished)),
+			analyticsview.Version(v.Version-1),
 		).
 		SetName(v.Name).
 		SetDefinition(*v.Definition).
@@ -203,9 +204,12 @@ func (r *analyticsViewRepository) Update(ctx context.Context, v *domainAnalytics
 		return ierr.WithError(err).WithHint("Failed to update analytics view").Mark(ierr.ErrDatabase)
 	}
 	if n == 0 {
-		return ierr.NewErrorf("analytics view %s not found", v.ID).
-			WithHintf("analytics view with ID %s was not found", v.ID).
-			Mark(ierr.ErrNotFound)
+		if _, err := r.Get(ctx, v.ID); err != nil {
+			return err
+		}
+		return ierr.NewErrorf("analytics view %s changed concurrently", v.ID).
+			WithHint("View was modified by someone else; reload and retry").
+			Mark(ierr.ErrVersionConflict)
 	}
 	SetSpanSuccess(span)
 	return nil

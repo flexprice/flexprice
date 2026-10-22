@@ -125,6 +125,9 @@ const (
 	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
 
+	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
+	UUID_PREFIX_COMMITMENT = "cmt"
+
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"
 	UUID_PREFIX_RUN      = "run"

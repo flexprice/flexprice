@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -98,6 +99,8 @@ type Client struct {
 	BillingSequence *BillingSequenceClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
+	// Commitment is the client for interacting with the Commitment builders.
+	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -217,6 +220,7 @@ func (c *Client) init() {
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.CheckoutSession = NewCheckoutSessionClient(c.config)
+	c.Commitment = NewCommitmentClient(c.config)
 	c.Connection = NewConnectionClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
 	c.Coupon = NewCouponClient(c.config)
@@ -367,6 +371,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
+		Commitment:               NewCommitmentClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -444,6 +449,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
+		Commitment:               NewCommitmentClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -524,8 +530,8 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.AnalyticsView,
-		c.Auth, c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet,
-		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.Auth, c.BillingSequence, c.CheckoutSession, c.Commitment, c.Connection,
+		c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
@@ -546,8 +552,8 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.AnalyticsView,
-		c.Auth, c.BillingSequence, c.CheckoutSession, c.Connection, c.Costsheet,
-		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.Auth, c.BillingSequence, c.CheckoutSession, c.Commitment, c.Connection,
+		c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
@@ -582,6 +588,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingSequence.mutate(ctx, m)
 	case *CheckoutSessionMutation:
 		return c.CheckoutSession.mutate(ctx, m)
+	case *CommitmentMutation:
+		return c.Commitment.mutate(ctx, m)
 	case *ConnectionMutation:
 		return c.Connection.mutate(ctx, m)
 	case *CostsheetMutation:
@@ -1780,6 +1788,139 @@ func (c *CheckoutSessionClient) mutate(ctx context.Context, m *CheckoutSessionMu
 		return (&CheckoutSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CheckoutSession mutation op: %q", m.Op())
+	}
+}
+
+// CommitmentClient is a client for the Commitment schema.
+type CommitmentClient struct {
+	config
+}
+
+// NewCommitmentClient returns a client for the Commitment from the given config.
+func NewCommitmentClient(c config) *CommitmentClient {
+	return &CommitmentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `commitment.Hooks(f(g(h())))`.
+func (c *CommitmentClient) Use(hooks ...Hook) {
+	c.hooks.Commitment = append(c.hooks.Commitment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `commitment.Intercept(f(g(h())))`.
+func (c *CommitmentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Commitment = append(c.inters.Commitment, interceptors...)
+}
+
+// Create returns a builder for creating a Commitment entity.
+func (c *CommitmentClient) Create() *CommitmentCreate {
+	mutation := newCommitmentMutation(c.config, OpCreate)
+	return &CommitmentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Commitment entities.
+func (c *CommitmentClient) CreateBulk(builders ...*CommitmentCreate) *CommitmentCreateBulk {
+	return &CommitmentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CommitmentClient) MapCreateBulk(slice any, setFunc func(*CommitmentCreate, int)) *CommitmentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CommitmentCreateBulk{err: fmt.Errorf("calling to CommitmentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CommitmentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CommitmentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Commitment.
+func (c *CommitmentClient) Update() *CommitmentUpdate {
+	mutation := newCommitmentMutation(c.config, OpUpdate)
+	return &CommitmentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CommitmentClient) UpdateOne(_m *Commitment) *CommitmentUpdateOne {
+	mutation := newCommitmentMutation(c.config, OpUpdateOne, withCommitment(_m))
+	return &CommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CommitmentClient) UpdateOneID(id string) *CommitmentUpdateOne {
+	mutation := newCommitmentMutation(c.config, OpUpdateOne, withCommitmentID(id))
+	return &CommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Commitment.
+func (c *CommitmentClient) Delete() *CommitmentDelete {
+	mutation := newCommitmentMutation(c.config, OpDelete)
+	return &CommitmentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CommitmentClient) DeleteOne(_m *Commitment) *CommitmentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CommitmentClient) DeleteOneID(id string) *CommitmentDeleteOne {
+	builder := c.Delete().Where(commitment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CommitmentDeleteOne{builder}
+}
+
+// Query returns a query builder for Commitment.
+func (c *CommitmentClient) Query() *CommitmentQuery {
+	return &CommitmentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCommitment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Commitment entity by its id.
+func (c *CommitmentClient) Get(ctx context.Context, id string) (*Commitment, error) {
+	return c.Query().Where(commitment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CommitmentClient) GetX(ctx context.Context, id string) *Commitment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CommitmentClient) Hooks() []Hook {
+	return c.hooks.Commitment
+}
+
+// Interceptors returns the client interceptors.
+func (c *CommitmentClient) Interceptors() []Interceptor {
+	return c.inters.Commitment
+}
+
+func (c *CommitmentClient) mutate(ctx context.Context, m *CommitmentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CommitmentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CommitmentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CommitmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CommitmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Commitment mutation op: %q", m.Op())
 	}
 }
 
@@ -9061,7 +9202,7 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 type (
 	hooks struct {
 		Addon, AddonAssociation, AlertLogs, AlertSettings, AnalyticsView, Auth,
-		BillingSequence, CheckoutSession, Connection, Costsheet, Coupon,
+		BillingSequence, CheckoutSession, Commitment, Connection, Costsheet, Coupon,
 		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
@@ -9075,7 +9216,7 @@ type (
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, AlertSettings, AnalyticsView, Auth,
-		BillingSequence, CheckoutSession, Connection, Costsheet, Coupon,
+		BillingSequence, CheckoutSession, Commitment, Connection, Costsheet, Coupon,
 		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
 		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,

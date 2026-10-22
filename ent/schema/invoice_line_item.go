@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -192,6 +193,14 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Immutable().
 			Comment("ID of the subscription_line_item that generated this invoice line item"),
 
+		field.String("commitment_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		field.Other("adjusted_entitlement_quantity", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -246,5 +255,7 @@ func (InvoiceLineItem) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
 		index.Fields("period_start", "period_end"),
 		index.Fields("subscription_id", "status"),
+		index.Fields("tenant_id", "environment_id", "commitment_id").
+			Annotations(entsql.IndexWhere("(commitment_id IS NOT NULL)")),
 	}
 }

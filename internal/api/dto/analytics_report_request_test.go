@@ -16,11 +16,11 @@ func TestReportQueryRequest_UnsupportedCompareAndNoCurrency(t *testing.T) {
 		Shapes:       []types.Shape{types.ShapeScalar},
 		DefaultShape: types.ShapeScalar,
 	}
-	err := (&ReportQueryRequest{Shape: "scalar", Compare: "previous_period"}).validateAgainst(e, 0)
+	err := (&ReportQueryRequest{Shape: "scalar", Compare: "previous_period"}).toQuery().ValidateAgainst(e, 0)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 
-	err = (&ReportQueryRequest{Shape: "scalar", Currency: "usd"}).validateAgainst(e, 0)
+	err = (&ReportQueryRequest{Shape: "scalar", Currency: "usd"}).toQuery().ValidateAgainst(e, 0)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 }

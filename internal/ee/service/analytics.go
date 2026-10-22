@@ -48,6 +48,9 @@ func (s *analyticsService) ExecuteView(ctx context.Context, def *analytics.ViewD
 	if def != nil && def.Family == types.FamilyDataset {
 		return s.RunDataset(ctx, def)
 	}
+	if def != nil && def.Family == types.FamilyReport {
+		return nil, errReportFamilyViaViews()
+	}
 	rv, err := analytics.ResolveVariables(def, vars)
 	if err != nil {
 		return nil, err
@@ -216,12 +219,6 @@ func (s *analyticsService) QueryView(ctx context.Context, id string, vars map[st
 	if err != nil {
 		return nil, err
 	}
-	if v.Definition != nil && v.Definition.Family == types.FamilyReport {
-		return nil, ierr.NewError("custom reports run through the reports endpoint").
-			WithHint("POST /analytics/reports/{key}/query with the saved settings").
-			Mark(ierr.ErrValidation)
-	}
-
 	if v.Definition != nil && v.Definition.Family == types.FamilyDataset {
 		return nil, ierr.NewError("builder reports run through the datasets endpoint").
 			WithHint("POST /analytics/datasets/query with the saved definition").
@@ -231,39 +228,10 @@ func (s *analyticsService) QueryView(ctx context.Context, id string, vars map[st
 	return s.ExecuteView(ctx, v.Definition, vars)
 }
 
-func validateCustomReport(def *analytics.ViewDefinition, maxRows int) error {
-	if err := def.Validate(); err != nil {
-		return err
-	}
-	req := &dto.ReportQueryRequest{
-		Shape:      string(def.Shape),
-		Dimensions: def.Dimensions,
-		Grain:      string(def.Time.Grain),
-		Compare:    def.Compare,
-		Currency:   def.Currency,
-		Limit:      def.Limit,
-	}
-	for _, f := range def.Filters {
-		if f != nil {
-			req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: string(f.Op), Value: f.Value})
-		}
-	}
-	for _, so := range def.Sort {
-		if so != nil {
-			req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
-		}
-	}
-	entry, err := req.ValidateForReport(string(def.Metrics[0]), maxRows)
-	if err != nil {
-		return err
-	}
-	days, _ := analytics.ReportRangeMaxDays(def.Time.Range)
-	if d := entry.MaxRangeDays; d > 0 && days > d {
-		return ierr.NewErrorf("range exceeds %d days for this report", d).
-			WithHint(fmt.Sprintf("Choose a range of %d days or less", d)).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
+func errReportFamilyViaViews() error {
+	return ierr.NewError("custom reports run through the reports endpoint").
+		WithHint("POST /analytics/reports/{key}/query with the saved settings").
+		Mark(ierr.ErrValidation)
 }
 
 func (s *analyticsService) validateDefinition(def *analytics.ViewDefinition) error {
@@ -277,7 +245,7 @@ func (s *analyticsService) validateDefinition(def *analytics.ViewDefinition) err
 		if err := s.requireReports(); err != nil {
 			return err
 		}
-		return validateCustomReport(def, s.ReportsRepo.MaxRows())
+		return def.ValidateReport(s.ReportsRepo.MaxRows())
 	}
 	return def.Validate()
 }
@@ -292,7 +260,14 @@ func (s *analyticsService) ListViews(ctx context.Context, family types.Family) (
 	}
 	out := make([]*analytics.View, 0, len(all))
 	for _, v := range all {
-		if v.Definition != nil && v.Definition.Family == family {
+		if v.Definition == nil {
+			continue
+		}
+		vf := v.Definition.Family
+		if vf == "" {
+			vf = types.FamilyUsage
+		}
+		if vf == family {
 			out = append(out, v)
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -374,6 +375,105 @@ func init() {
 	checkoutsessionDescPaymentProvider := checkoutsessionFields[4].Descriptor()
 	// checkoutsession.PaymentProviderValidator is a validator for the "payment_provider" field. It is called by the builders before save.
 	checkoutsession.PaymentProviderValidator = checkoutsessionDescPaymentProvider.Validators[0].(func(string) error)
+	commitmentMixin := schema.Commitment{}.Mixin()
+	commitmentMixinFields0 := commitmentMixin[0].Fields()
+	_ = commitmentMixinFields0
+	commitmentMixinFields1 := commitmentMixin[1].Fields()
+	_ = commitmentMixinFields1
+	commitmentFields := schema.Commitment{}.Fields()
+	_ = commitmentFields
+	// commitmentDescTenantID is the schema descriptor for tenant_id field.
+	commitmentDescTenantID := commitmentMixinFields0[0].Descriptor()
+	// commitment.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	commitment.TenantIDValidator = commitmentDescTenantID.Validators[0].(func(string) error)
+	// commitmentDescStatus is the schema descriptor for status field.
+	commitmentDescStatus := commitmentMixinFields0[1].Descriptor()
+	// commitment.DefaultStatus holds the default value on creation for the status field.
+	commitment.DefaultStatus = commitmentDescStatus.Default.(string)
+	// commitmentDescCreatedAt is the schema descriptor for created_at field.
+	commitmentDescCreatedAt := commitmentMixinFields0[2].Descriptor()
+	// commitment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	commitment.DefaultCreatedAt = commitmentDescCreatedAt.Default.(func() time.Time)
+	// commitmentDescUpdatedAt is the schema descriptor for updated_at field.
+	commitmentDescUpdatedAt := commitmentMixinFields0[3].Descriptor()
+	// commitment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	commitment.DefaultUpdatedAt = commitmentDescUpdatedAt.Default.(func() time.Time)
+	// commitment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	commitment.UpdateDefaultUpdatedAt = commitmentDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// commitmentDescEnvironmentID is the schema descriptor for environment_id field.
+	commitmentDescEnvironmentID := commitmentMixinFields1[0].Descriptor()
+	// commitment.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	commitment.DefaultEnvironmentID = commitmentDescEnvironmentID.Default.(string)
+	// commitmentDescSubscriptionID is the schema descriptor for subscription_id field.
+	commitmentDescSubscriptionID := commitmentFields[1].Descriptor()
+	// commitment.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	commitment.SubscriptionIDValidator = commitmentDescSubscriptionID.Validators[0].(func(string) error)
+	// commitmentDescCustomerID is the schema descriptor for customer_id field.
+	commitmentDescCustomerID := commitmentFields[2].Descriptor()
+	// commitment.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	commitment.CustomerIDValidator = commitmentDescCustomerID.Validators[0].(func(string) error)
+	// commitmentDescName is the schema descriptor for name field.
+	commitmentDescName := commitmentFields[3].Descriptor()
+	// commitment.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	commitment.NameValidator = commitmentDescName.Validators[0].(func(string) error)
+	// commitmentDescInvoiceLabel is the schema descriptor for invoice_label field.
+	commitmentDescInvoiceLabel := commitmentFields[4].Descriptor()
+	// commitment.InvoiceLabelValidator is a validator for the "invoice_label" field. It is called by the builders before save.
+	commitment.InvoiceLabelValidator = commitmentDescInvoiceLabel.Validators[0].(func(string) error)
+	// commitmentDescCurrency is the schema descriptor for currency field.
+	commitmentDescCurrency := commitmentFields[6].Descriptor()
+	// commitment.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	commitment.CurrencyValidator = commitmentDescCurrency.Validators[0].(func(string) error)
+	// commitmentDescScopeEntityType is the schema descriptor for scope_entity_type field.
+	commitmentDescScopeEntityType := commitmentFields[7].Descriptor()
+	// commitment.ScopeEntityTypeValidator is a validator for the "scope_entity_type" field. It is called by the builders before save.
+	commitment.ScopeEntityTypeValidator = commitmentDescScopeEntityType.Validators[0].(func(string) error)
+	// commitmentDescScopeEntityID is the schema descriptor for scope_entity_id field.
+	commitmentDescScopeEntityID := commitmentFields[8].Descriptor()
+	// commitment.ScopeEntityIDValidator is a validator for the "scope_entity_id" field. It is called by the builders before save.
+	commitment.ScopeEntityIDValidator = commitmentDescScopeEntityID.Validators[0].(func(string) error)
+	// commitmentDescType is the schema descriptor for type field.
+	commitmentDescType := commitmentFields[9].Descriptor()
+	// commitment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	commitment.TypeValidator = commitmentDescType.Validators[0].(func(string) error)
+	// commitmentDescMeasurement is the schema descriptor for measurement field.
+	commitmentDescMeasurement := commitmentFields[13].Descriptor()
+	// commitment.MeasurementValidator is a validator for the "measurement" field. It is called by the builders before save.
+	commitment.MeasurementValidator = commitmentDescMeasurement.Validators[0].(func(string) error)
+	// commitmentDescTimezone is the schema descriptor for timezone field.
+	commitmentDescTimezone := commitmentFields[15].Descriptor()
+	// commitment.TimezoneValidator is a validator for the "timezone" field. It is called by the builders before save.
+	commitment.TimezoneValidator = func() func(string) error {
+		validators := commitmentDescTimezone.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(timezone string) error {
+			for _, fn := range fns {
+				if err := fn(timezone); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// commitmentDescPriority is the schema descriptor for priority field.
+	commitmentDescPriority := commitmentFields[16].Descriptor()
+	// commitment.DefaultPriority holds the default value on creation for the priority field.
+	commitment.DefaultPriority = commitmentDescPriority.Default.(int)
+	// commitmentDescBinding is the schema descriptor for binding field.
+	commitmentDescBinding := commitmentFields[17].Descriptor()
+	// commitment.DefaultBinding holds the default value on creation for the binding field.
+	commitment.DefaultBinding = commitmentDescBinding.Default.(bool)
+	// commitmentDescCommitmentStatus is the schema descriptor for commitment_status field.
+	commitmentDescCommitmentStatus := commitmentFields[24].Descriptor()
+	// commitment.DefaultCommitmentStatus holds the default value on creation for the commitment_status field.
+	commitment.DefaultCommitmentStatus = types.CommitmentStatus(commitmentDescCommitmentStatus.Default.(string))
+	// commitmentDescMetadata is the schema descriptor for metadata field.
+	commitmentDescMetadata := commitmentFields[27].Descriptor()
+	// commitment.DefaultMetadata holds the default value on creation for the metadata field.
+	commitment.DefaultMetadata = commitmentDescMetadata.Default.(types.Metadata)
 	connectionMixin := schema.Connection{}.Mixin()
 	connectionMixinFields0 := connectionMixin[0].Fields()
 	_ = connectionMixinFields0

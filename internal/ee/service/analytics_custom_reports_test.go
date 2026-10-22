@@ -139,3 +139,34 @@ func TestCustomReport_DisabledReportsIs403(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, ierr.IsPermissionDenied(err))
 }
+
+func TestExecuteView_RejectsReportFamily(t *testing.T) {
+	svc, _ := customSvc()
+	_, err := svc.ExecuteView(userCtx("env_1"), reportDef(types.MetricInvoiceTotal, types.ShapeBreakdown, "last_7_days"), nil)
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestListViews_EmptyFamilyIsUsage(t *testing.T) {
+	svc, _ := customSvc()
+	ctx := userCtx("env_1")
+	require.NoError(t, svc.CreateView(ctx, &analytics.View{Name: "usage", Definition: &analytics.ViewDefinition{
+		Shape: types.ShapeBreakdown, Metrics: []types.Metric{types.MetricUsageQuantity}, Dimensions: []string{"meter_id"},
+	}}))
+	list, err := svc.ListViews(ctx, types.FamilyUsage)
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+}
+
+func TestUpdateView_StaleVersionConflicts(t *testing.T) {
+	svc, views := customSvc()
+	ctx := userCtx("env_1")
+	v := &analytics.View{Name: "A", Definition: reportDef(types.MetricInvoiceTotal, types.ShapeScalar, "this_month")}
+	require.NoError(t, svc.CreateView(ctx, v))
+
+	stale := &analytics.View{ID: v.ID, Name: "B", Version: 1, Definition: reportDef(types.MetricInvoiceTotal, types.ShapeScalar, "this_month")}
+	require.NoError(t, views.Update(ctx, &analytics.View{ID: v.ID, Name: "B", Version: 2, Definition: stale.Definition}))
+	err := views.Update(ctx, &analytics.View{ID: v.ID, Name: "C", Version: 2, Definition: stale.Definition})
+	require.Error(t, err)
+	assert.True(t, ierr.IsVersionConflict(err))
+}
