@@ -20,12 +20,15 @@ import (
 	"github.com/cockroachdb/errors"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/utils"
 )
 
-const defaultPresignExpiry = 30 * time.Minute
+const (
+	defaultPresignExpiry = 30 * time.Minute
+)
 
 // Config holds everything needed to construct an S3-backed storagetypes.Storage.
 type Config struct {
@@ -61,6 +64,8 @@ type Config struct {
 	// exists (see infrastructure repo's s3-federation module, Plan 2).
 	FederationRoleARN     string
 	FederationTokenSource stscreds.IdentityTokenRetriever // nil unless federation enabled
+	// PublicOnly refuses connections to non-public addresses; set for tenant-supplied config.
+	PublicOnly bool
 }
 
 type client struct {
@@ -101,6 +106,11 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 	opts := []func(*awsConfig.LoadOptions) error{
 		awsConfig.WithRegion(cfg.Region),
 	}
+	var httpClient aws.HTTPClient
+	if cfg.PublicOnly {
+		httpClient = newPublicOnlyHTTPClient()
+		opts = append(opts, awsConfig.WithHTTPClient(httpClient))
+	}
 
 	switch {
 	case cfg.AWSAccessKeyID != "" && cfg.AWSSecretAccessKey != "":
@@ -119,7 +129,8 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 		// config (Flexprice's own caller identity), never LoadDefaultConfig/the ambient
 		// chain — see the AssumeRoleBase* doc comment on Config for why.
 		stsClient := sts.NewFromConfig(aws.Config{
-			Region: cfg.AssumeRoleBaseRegion,
+			Region:     cfg.AssumeRoleBaseRegion,
+			HTTPClient: httpClient,
 			Credentials: credentials.NewStaticCredentialsProvider(
 				cfg.AssumeRoleBaseAccessKeyID, cfg.AssumeRoleBaseSecretAccessKey, cfg.AssumeRoleBaseSessionToken,
 			),
@@ -429,4 +440,9 @@ func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// newPublicOnlyHTTPClient has no overall timeout; the caller's context bounds uploads.
+func newPublicOnlyHTTPClient() *http.Client {
+	return httpclient.NewPublicOnlyClient(0)
 }
