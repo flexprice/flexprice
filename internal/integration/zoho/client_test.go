@@ -63,7 +63,7 @@ func TestTokenRefreshAPIDomainValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/oauth/v2/token" {
-					fmt.Fprintf(w, `{"access_token":"tok","api_domain":%q,"expires_in":3600}`, tc.apiDomain)
+					_, _ = w.Write([]byte(fmt.Sprintf(`{"access_token":"tok","api_domain":%q,"expires_in":3600}`, tc.apiDomain)))
 					return
 				}
 				w.WriteHeader(http.StatusNotFound)
@@ -101,7 +101,7 @@ func TestUpstreamBodyNotReturned(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, secretBody)
+				_, _ = w.Write([]byte(secretBody))
 			}))
 			defer srv.Close()
 
