@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
 
@@ -35,6 +36,10 @@ func WebhookLoggingMiddleware(
 
 		headers := make(map[string][]string, len(c.Request.Header))
 		for k, v := range c.Request.Header {
+			if isSensitiveWebhookHeader(k) {
+				headers[k] = []string{redactedValue}
+				continue
+			}
 			headers[k] = v
 		}
 		req := &domainIncomingWebhookEvent.IncomingWebhookEvent{
@@ -46,7 +51,7 @@ func WebhookLoggingMiddleware(
 			Path:          c.Request.URL.Path,
 			RequestID:     requestID,
 			Headers:       headers,
-			Body:          string(peek),
+			Body:          redactWebhookBody(peek),
 		}
 		if err := repo.Create(c.Request.Context(), req); err != nil {
 			log.Error(c.Request.Context(), "failed to persist webhook event",
@@ -68,4 +73,54 @@ func extractProvider(path string) string {
 		return parts[2]
 	}
 	return "unknown"
+}
+
+const redactedValue = "[redacted]"
+
+var sensitiveHeaderParts = []string{"authorization", "api-key", "apikey", "cookie", "secret", "token", "signature"}
+
+var sensitiveBodyKeys = map[string]bool{
+	"secret_token": true, "password": true, "api_key": true, "apikey": true,
+	"access_token": true, "refresh_token": true, "client_secret": true,
+}
+
+func isSensitiveWebhookHeader(name string) bool {
+	name = strings.ToLower(name)
+	for _, part := range sensitiveHeaderParts {
+		if strings.Contains(name, part) {
+			return true
+		}
+	}
+	return false
+}
+
+// redactWebhookBody returns a copy safe to store; non-JSON bodies pass through.
+func redactWebhookBody(body []byte) string {
+	var doc any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return string(body)
+	}
+	redactJSON(doc)
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return string(body)
+	}
+	return string(out)
+}
+
+func redactJSON(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, child := range t {
+			if sensitiveBodyKeys[strings.ToLower(k)] {
+				t[k] = redactedValue
+				continue
+			}
+			redactJSON(child)
+		}
+	case []any:
+		for _, child := range t {
+			redactJSON(child)
+		}
+	}
 }
