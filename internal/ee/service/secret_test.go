@@ -753,3 +753,23 @@ func (s *SecretServiceSuite) TestCreateAPIKeyRejectsArchivedOwner() {
 	})
 	s.Error(err)
 }
+
+func (s *SecretServiceSuite) TestVerifyAPIKeyAllowsMissingOwner() {
+	ctx := s.GetContext()
+	s.Require().NoError(s.secretRepo.Create(ctx, &secret.Secret{
+		ID:       "secret_missing_owner",
+		Name:     "missing owner key",
+		Type:     types.SecretTypePrivateKey,
+		Provider: types.SecretProviderFlexPrice,
+		Value:    s.encryptionSvc.Hash("missing_owner_key"),
+		UserID:   "user_never_existed",
+		UserType: string(types.UserTypeUser),
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	}))
+
+	_, err := s.service.VerifyAPIKey(ctx, "missing_owner_key")
+	s.NoError(err)
+}

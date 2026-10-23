@@ -385,7 +385,10 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 
 	if secretEntity.UserID != "" {
 		owner, err := s.userRepo.GetByID(types.SetTenantID(ctx, secretEntity.TenantID), secretEntity.UserID)
-		if err != nil || owner.Status != types.StatusPublished {
+		switch {
+		case ierr.IsNotFound(err):
+			s.logger.Info(ctx, "api key owner not found", "secret_id", secretEntity.ID, "tenant_id", secretEntity.TenantID)
+		case err != nil || owner.Status != types.StatusPublished:
 			return nil, ierr.NewError("API key owner is not active").
 				WithHint("Invalid API key").
 				Mark(ierr.ErrValidation)
