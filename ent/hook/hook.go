@@ -453,6 +453,30 @@ func (f PaymentMethodFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentMethodMutation", m)
 }
 
+// The PerformanceObligationFunc type is an adapter to allow the use of ordinary
+// function as PerformanceObligation mutator.
+type PerformanceObligationFunc func(context.Context, *ent.PerformanceObligationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PerformanceObligationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PerformanceObligationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PerformanceObligationMutation", m)
+}
+
+// The PerformanceObligationAssociationFunc type is an adapter to allow the use of ordinary
+// function as PerformanceObligationAssociation mutator.
+type PerformanceObligationAssociationFunc func(context.Context, *ent.PerformanceObligationAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PerformanceObligationAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PerformanceObligationAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PerformanceObligationAssociationMutation", m)
+}
+
 // The PlanFunc type is an adapter to allow the use of ordinary
 // function as Plan mutator.
 type PlanFunc func(context.Context, *ent.PlanMutation) (ent.Value, error)

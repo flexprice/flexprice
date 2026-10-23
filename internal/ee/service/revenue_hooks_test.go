@@ -191,6 +191,17 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 				BaseModel:          types.GetDefaultBaseModel(ctx),
 			}
 			require.NoError(t, subRepo.Create(ctx, sub))
+			lineItemRepo := testutil.NewInMemorySubscriptionLineItemStore()
+			subRepo.SetLineItemStore(lineItemRepo)
+			require.NoError(t, lineItemRepo.Create(ctx, &subscription.SubscriptionLineItem{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+				SubscriptionID: sub.ID,
+				PriceID:        "price_1",
+				// Usage has no period segment, so the gate test needs no billing engine.
+				PriceType:     types.PRICE_TYPE_USAGE,
+				BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				BaseModel:     types.GetDefaultBaseModel(ctx),
+			}))
 
 			settingsRepo := testutil.NewInMemorySettingsStore()
 			if tt.setting != nil {
@@ -204,11 +215,13 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 			}
 
 			contractRepo := testutil.NewInMemoryContractStore()
+			pobRepo := testutil.NewInMemoryPOBStore(contractRepo)
 			params := ServiceParams{
 				Logger:       logger.NewNoopLogger(),
 				SubRepo:      subRepo,
 				SettingsRepo: settingsRepo,
 				ContractRepo: contractRepo,
+				POBRepo:      pobRepo,
 			}
 			NotifySubscriptionChanged(ctx, params, sub.ID)
 
@@ -217,12 +230,19 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 				require.NoError(t, err)
 				return count
 			}
+			countPOBs := func() int {
+				count, err := pobRepo.Count(ctx, nil)
+				require.NoError(t, err)
+				return count
+			}
+			// One line item, so one POB alongside the contract.
 			if tt.wantContracts > 0 {
-				require.Eventually(t, func() bool { return countContracts() == tt.wantContracts }, 5*time.Second, 10*time.Millisecond)
+				require.Eventually(t, func() bool { return countContracts() == tt.wantContracts && countPOBs() == tt.wantContracts }, 5*time.Second, 10*time.Millisecond)
 				return
 			}
 			time.Sleep(300 * time.Millisecond)
 			require.Equal(t, 0, countContracts())
+			require.Equal(t, 0, countPOBs())
 		})
 	}
 }

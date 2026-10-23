@@ -18,12 +18,6 @@ const (
 	ContractStatusCancelled ContractStatus = "cancelled"
 )
 
-type ContractSourceEntityType string
-
-const (
-	ContractSourceEntityTypeSubscription ContractSourceEntityType = "subscription"
-)
-
 type PerformanceObligationStatus string
 
 const (
@@ -31,6 +25,14 @@ const (
 	PerformanceObligationStatusActive    PerformanceObligationStatus = "active"
 	PerformanceObligationStatusSatisfied PerformanceObligationStatus = "satisfied"
 	PerformanceObligationStatusCancelled PerformanceObligationStatus = "cancelled"
+)
+
+// RevRecEntityType is the kind of entity a revrec record links to or is sourced from.
+type RevRecEntityType string
+
+const (
+	RevRecEntityTypeSubscription         RevRecEntityType = "subscription"
+	RevRecEntityTypeSubscriptionLineItem RevRecEntityType = "subscription_line_item"
 )
 
 // CatchUpMode is where a superseding schedule segment starts.

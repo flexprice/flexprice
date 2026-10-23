@@ -23,10 +23,10 @@ type ContractResponse struct {
 }
 
 type ContractAssociationResponse struct {
-	ID         string                         `json:"id"`
-	EntityType types.ContractSourceEntityType `json:"entity_type"`
-	EntityID   string                         `json:"entity_id"`
-	CreatedAt  time.Time                      `json:"created_at"`
+	ID         string                 `json:"id"`
+	EntityType types.RevRecEntityType `json:"entity_type"`
+	EntityID   string                 `json:"entity_id"`
+	CreatedAt  time.Time              `json:"created_at"`
 }
 
 func NewContractResponse(c *contract.Contract) *ContractResponse {

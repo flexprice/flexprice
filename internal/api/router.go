@@ -57,6 +57,7 @@ type Handlers struct {
 	Addon                    *v1.AddonHandler
 	Product                  *v1.ProductHandler
 	Contract                 *v1.ContractHandler
+	PerformanceObligation    *v1.PerformanceObligationHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -372,6 +373,12 @@ func NewRouter(
 		{
 			contract.POST("/search", handlers.Contract.QueryContracts)
 			contract.GET("/:id", handlers.Contract.GetContract)
+		}
+
+		performanceObligation := v1Private.Group("/performance_obligations")
+		{
+			performanceObligation.POST("/search", handlers.PerformanceObligation.QueryPerformanceObligations)
+			performanceObligation.GET("/:id", handlers.PerformanceObligation.GetPerformanceObligation)
 		}
 
 		group := v1Private.Group("/groups")

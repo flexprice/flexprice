@@ -163,7 +163,7 @@ func (b *Builder) Build() *Contract {
 type Association struct {
 	id         string
 	contractID string
-	entityType types.ContractSourceEntityType
+	entityType types.RevRecEntityType
 	entityID   string
 	status     types.Status
 	createdAt  time.Time
@@ -183,7 +183,7 @@ func (a *Association) ContractID() string {
 	return a.contractID
 }
 
-func (a *Association) EntityType() types.ContractSourceEntityType {
+func (a *Association) EntityType() types.RevRecEntityType {
 	if a == nil {
 		return ""
 	}
@@ -235,7 +235,7 @@ func (b *AssociationBuilder) WithContractID(contractID string) *AssociationBuild
 	return b
 }
 
-func (b *AssociationBuilder) WithEntityType(entityType types.ContractSourceEntityType) *AssociationBuilder {
+func (b *AssociationBuilder) WithEntityType(entityType types.RevRecEntityType) *AssociationBuilder {
 	b.association.entityType = entityType
 	return b
 }

@@ -117,6 +117,12 @@ type PaymentAttempt func(*sql.Selector)
 // PaymentMethod is the predicate function for paymentmethod builders.
 type PaymentMethod func(*sql.Selector)
 
+// PerformanceObligation is the predicate function for performanceobligation builders.
+type PerformanceObligation func(*sql.Selector)
+
+// PerformanceObligationAssociation is the predicate function for performanceobligationassociation builders.
+type PerformanceObligationAssociation func(*sql.Selector)
+
 // Plan is the predicate function for plan builders.
 type Plan func(*sql.Selector)
 

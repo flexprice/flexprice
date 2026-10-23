@@ -119,7 +119,7 @@ func (s *contractService) createForSubscription(ctx context.Context, sub *subscr
 	a := domainContract.NewAssociationBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT_ASSOCIATION)).
 		WithContractID(c.ID()).
-		WithEntityType(types.ContractSourceEntityTypeSubscription).
+		WithEntityType(types.RevRecEntityTypeSubscription).
 		WithEntityID(sub.ID).
 		WithStatus(types.StatusPublished).
 		WithCreatedAt(now).

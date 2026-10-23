@@ -212,6 +212,8 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 		return nil, err
 	}
 
+	service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil

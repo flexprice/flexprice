@@ -52,6 +52,8 @@ import (
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
+	"github.com/flexprice/flexprice/ent/performanceobligation"
+	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -160,6 +162,10 @@ type Client struct {
 	PaymentAttempt *PaymentAttemptClient
 	// PaymentMethod is the client for interacting with the PaymentMethod builders.
 	PaymentMethod *PaymentMethodClient
+	// PerformanceObligation is the client for interacting with the PerformanceObligation builders.
+	PerformanceObligation *PerformanceObligationClient
+	// PerformanceObligationAssociation is the client for interacting with the PerformanceObligationAssociation builders.
+	PerformanceObligationAssociation *PerformanceObligationAssociationClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -258,6 +264,8 @@ func (c *Client) init() {
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
 	c.PaymentMethod = NewPaymentMethodClient(c.config)
+	c.PerformanceObligation = NewPerformanceObligationClient(c.config)
+	c.PerformanceObligationAssociation = NewPerformanceObligationAssociationClient(c.config)
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
@@ -373,70 +381,72 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                      ctx,
-		config:                   cfg,
-		Addon:                    NewAddonClient(cfg),
-		AddonAssociation:         NewAddonAssociationClient(cfg),
-		AlertLogs:                NewAlertLogsClient(cfg),
-		AlertSettings:            NewAlertSettingsClient(cfg),
-		AnalyticsView:            NewAnalyticsViewClient(cfg),
-		Auth:                     NewAuthClient(cfg),
-		BillingSequence:          NewBillingSequenceClient(cfg),
-		CheckoutSession:          NewCheckoutSessionClient(cfg),
-		Commitment:               NewCommitmentClient(cfg),
-		Connection:               NewConnectionClient(cfg),
-		Contract:                 NewContractClient(cfg),
-		ContractAssociation:      NewContractAssociationClient(cfg),
-		Costsheet:                NewCostsheetClient(cfg),
-		Coupon:                   NewCouponClient(cfg),
-		CouponApplication:        NewCouponApplicationClient(cfg),
-		CouponAssociation:        NewCouponAssociationClient(cfg),
-		CreditGrant:              NewCreditGrantClient(cfg),
-		CreditGrantApplication:   NewCreditGrantApplicationClient(cfg),
-		CreditNote:               NewCreditNoteClient(cfg),
-		CreditNoteLineItem:       NewCreditNoteLineItemClient(cfg),
-		Customer:                 NewCustomerClient(cfg),
-		Entitlement:              NewEntitlementClient(cfg),
-		EntitlementGrant:         NewEntitlementGrantClient(cfg),
-		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
-		Environment:              NewEnvironmentClient(cfg),
-		FXRate:                   NewFXRateClient(cfg),
-		Feature:                  NewFeatureClient(cfg),
-		Group:                    NewGroupClient(cfg),
-		HostedInvoiceToken:       NewHostedInvoiceTokenClient(cfg),
-		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
-		Invoice:                  NewInvoiceClient(cfg),
-		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
-		Meter:                    NewMeterClient(cfg),
-		Payment:                  NewPaymentClient(cfg),
-		PaymentAttempt:           NewPaymentAttemptClient(cfg),
-		PaymentMethod:            NewPaymentMethodClient(cfg),
-		Plan:                     NewPlanClient(cfg),
-		Price:                    NewPriceClient(cfg),
-		PriceUnit:                NewPriceUnitClient(cfg),
-		Product:                  NewProductClient(cfg),
-		Refund:                   NewRefundClient(cfg),
-		RevenueFact:              NewRevenueFactClient(cfg),
-		ScheduledTask:            NewScheduledTaskClient(cfg),
-		Secret:                   NewSecretClient(cfg),
-		Settings:                 NewSettingsClient(cfg),
-		Subscription:             NewSubscriptionClient(cfg),
-		SubscriptionLineItem:     NewSubscriptionLineItemClient(cfg),
-		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
-		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
-		SubscriptionSchedule:     NewSubscriptionScheduleClient(cfg),
-		SystemEvent:              NewSystemEventClient(cfg),
-		Task:                     NewTaskClient(cfg),
-		TaxApplied:               NewTaxAppliedClient(cfg),
-		TaxAssociation:           NewTaxAssociationClient(cfg),
-		TaxRate:                  NewTaxRateClient(cfg),
-		Tenant:                   NewTenantClient(cfg),
-		UsageRecord:              NewUsageRecordClient(cfg),
-		User:                     NewUserClient(cfg),
-		Wallet:                   NewWalletClient(cfg),
-		WalletTransaction:        NewWalletTransactionClient(cfg),
-		WorkflowExecution:        NewWorkflowExecutionClient(cfg),
+		ctx:                              ctx,
+		config:                           cfg,
+		Addon:                            NewAddonClient(cfg),
+		AddonAssociation:                 NewAddonAssociationClient(cfg),
+		AlertLogs:                        NewAlertLogsClient(cfg),
+		AlertSettings:                    NewAlertSettingsClient(cfg),
+		AnalyticsView:                    NewAnalyticsViewClient(cfg),
+		Auth:                             NewAuthClient(cfg),
+		BillingSequence:                  NewBillingSequenceClient(cfg),
+		CheckoutSession:                  NewCheckoutSessionClient(cfg),
+		Commitment:                       NewCommitmentClient(cfg),
+		Connection:                       NewConnectionClient(cfg),
+		Contract:                         NewContractClient(cfg),
+		ContractAssociation:              NewContractAssociationClient(cfg),
+		Costsheet:                        NewCostsheetClient(cfg),
+		Coupon:                           NewCouponClient(cfg),
+		CouponApplication:                NewCouponApplicationClient(cfg),
+		CouponAssociation:                NewCouponAssociationClient(cfg),
+		CreditGrant:                      NewCreditGrantClient(cfg),
+		CreditGrantApplication:           NewCreditGrantApplicationClient(cfg),
+		CreditNote:                       NewCreditNoteClient(cfg),
+		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
+		Customer:                         NewCustomerClient(cfg),
+		Entitlement:                      NewEntitlementClient(cfg),
+		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
+		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
+		Environment:                      NewEnvironmentClient(cfg),
+		FXRate:                           NewFXRateClient(cfg),
+		Feature:                          NewFeatureClient(cfg),
+		Group:                            NewGroupClient(cfg),
+		HostedInvoiceToken:               NewHostedInvoiceTokenClient(cfg),
+		IncomingWebhookEvent:             NewIncomingWebhookEventClient(cfg),
+		Invoice:                          NewInvoiceClient(cfg),
+		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
+		Meter:                            NewMeterClient(cfg),
+		Payment:                          NewPaymentClient(cfg),
+		PaymentAttempt:                   NewPaymentAttemptClient(cfg),
+		PaymentMethod:                    NewPaymentMethodClient(cfg),
+		PerformanceObligation:            NewPerformanceObligationClient(cfg),
+		PerformanceObligationAssociation: NewPerformanceObligationAssociationClient(cfg),
+		Plan:                             NewPlanClient(cfg),
+		Price:                            NewPriceClient(cfg),
+		PriceUnit:                        NewPriceUnitClient(cfg),
+		Product:                          NewProductClient(cfg),
+		Refund:                           NewRefundClient(cfg),
+		RevenueFact:                      NewRevenueFactClient(cfg),
+		ScheduledTask:                    NewScheduledTaskClient(cfg),
+		Secret:                           NewSecretClient(cfg),
+		Settings:                         NewSettingsClient(cfg),
+		Subscription:                     NewSubscriptionClient(cfg),
+		SubscriptionLineItem:             NewSubscriptionLineItemClient(cfg),
+		SubscriptionPause:                NewSubscriptionPauseClient(cfg),
+		SubscriptionPhase:                NewSubscriptionPhaseClient(cfg),
+		SubscriptionSchedule:             NewSubscriptionScheduleClient(cfg),
+		SystemEvent:                      NewSystemEventClient(cfg),
+		Task:                             NewTaskClient(cfg),
+		TaxApplied:                       NewTaxAppliedClient(cfg),
+		TaxAssociation:                   NewTaxAssociationClient(cfg),
+		TaxRate:                          NewTaxRateClient(cfg),
+		Tenant:                           NewTenantClient(cfg),
+		UsageRecord:                      NewUsageRecordClient(cfg),
+		User:                             NewUserClient(cfg),
+		Wallet:                           NewWalletClient(cfg),
+		WalletTransaction:                NewWalletTransactionClient(cfg),
+		WorkflowExecution:                NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
@@ -454,70 +464,72 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                      ctx,
-		config:                   cfg,
-		Addon:                    NewAddonClient(cfg),
-		AddonAssociation:         NewAddonAssociationClient(cfg),
-		AlertLogs:                NewAlertLogsClient(cfg),
-		AlertSettings:            NewAlertSettingsClient(cfg),
-		AnalyticsView:            NewAnalyticsViewClient(cfg),
-		Auth:                     NewAuthClient(cfg),
-		BillingSequence:          NewBillingSequenceClient(cfg),
-		CheckoutSession:          NewCheckoutSessionClient(cfg),
-		Commitment:               NewCommitmentClient(cfg),
-		Connection:               NewConnectionClient(cfg),
-		Contract:                 NewContractClient(cfg),
-		ContractAssociation:      NewContractAssociationClient(cfg),
-		Costsheet:                NewCostsheetClient(cfg),
-		Coupon:                   NewCouponClient(cfg),
-		CouponApplication:        NewCouponApplicationClient(cfg),
-		CouponAssociation:        NewCouponAssociationClient(cfg),
-		CreditGrant:              NewCreditGrantClient(cfg),
-		CreditGrantApplication:   NewCreditGrantApplicationClient(cfg),
-		CreditNote:               NewCreditNoteClient(cfg),
-		CreditNoteLineItem:       NewCreditNoteLineItemClient(cfg),
-		Customer:                 NewCustomerClient(cfg),
-		Entitlement:              NewEntitlementClient(cfg),
-		EntitlementGrant:         NewEntitlementGrantClient(cfg),
-		EntityIntegrationMapping: NewEntityIntegrationMappingClient(cfg),
-		Environment:              NewEnvironmentClient(cfg),
-		FXRate:                   NewFXRateClient(cfg),
-		Feature:                  NewFeatureClient(cfg),
-		Group:                    NewGroupClient(cfg),
-		HostedInvoiceToken:       NewHostedInvoiceTokenClient(cfg),
-		IncomingWebhookEvent:     NewIncomingWebhookEventClient(cfg),
-		Invoice:                  NewInvoiceClient(cfg),
-		InvoiceLineItem:          NewInvoiceLineItemClient(cfg),
-		InvoiceSequence:          NewInvoiceSequenceClient(cfg),
-		Meter:                    NewMeterClient(cfg),
-		Payment:                  NewPaymentClient(cfg),
-		PaymentAttempt:           NewPaymentAttemptClient(cfg),
-		PaymentMethod:            NewPaymentMethodClient(cfg),
-		Plan:                     NewPlanClient(cfg),
-		Price:                    NewPriceClient(cfg),
-		PriceUnit:                NewPriceUnitClient(cfg),
-		Product:                  NewProductClient(cfg),
-		Refund:                   NewRefundClient(cfg),
-		RevenueFact:              NewRevenueFactClient(cfg),
-		ScheduledTask:            NewScheduledTaskClient(cfg),
-		Secret:                   NewSecretClient(cfg),
-		Settings:                 NewSettingsClient(cfg),
-		Subscription:             NewSubscriptionClient(cfg),
-		SubscriptionLineItem:     NewSubscriptionLineItemClient(cfg),
-		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
-		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
-		SubscriptionSchedule:     NewSubscriptionScheduleClient(cfg),
-		SystemEvent:              NewSystemEventClient(cfg),
-		Task:                     NewTaskClient(cfg),
-		TaxApplied:               NewTaxAppliedClient(cfg),
-		TaxAssociation:           NewTaxAssociationClient(cfg),
-		TaxRate:                  NewTaxRateClient(cfg),
-		Tenant:                   NewTenantClient(cfg),
-		UsageRecord:              NewUsageRecordClient(cfg),
-		User:                     NewUserClient(cfg),
-		Wallet:                   NewWalletClient(cfg),
-		WalletTransaction:        NewWalletTransactionClient(cfg),
-		WorkflowExecution:        NewWorkflowExecutionClient(cfg),
+		ctx:                              ctx,
+		config:                           cfg,
+		Addon:                            NewAddonClient(cfg),
+		AddonAssociation:                 NewAddonAssociationClient(cfg),
+		AlertLogs:                        NewAlertLogsClient(cfg),
+		AlertSettings:                    NewAlertSettingsClient(cfg),
+		AnalyticsView:                    NewAnalyticsViewClient(cfg),
+		Auth:                             NewAuthClient(cfg),
+		BillingSequence:                  NewBillingSequenceClient(cfg),
+		CheckoutSession:                  NewCheckoutSessionClient(cfg),
+		Commitment:                       NewCommitmentClient(cfg),
+		Connection:                       NewConnectionClient(cfg),
+		Contract:                         NewContractClient(cfg),
+		ContractAssociation:              NewContractAssociationClient(cfg),
+		Costsheet:                        NewCostsheetClient(cfg),
+		Coupon:                           NewCouponClient(cfg),
+		CouponApplication:                NewCouponApplicationClient(cfg),
+		CouponAssociation:                NewCouponAssociationClient(cfg),
+		CreditGrant:                      NewCreditGrantClient(cfg),
+		CreditGrantApplication:           NewCreditGrantApplicationClient(cfg),
+		CreditNote:                       NewCreditNoteClient(cfg),
+		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
+		Customer:                         NewCustomerClient(cfg),
+		Entitlement:                      NewEntitlementClient(cfg),
+		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
+		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
+		Environment:                      NewEnvironmentClient(cfg),
+		FXRate:                           NewFXRateClient(cfg),
+		Feature:                          NewFeatureClient(cfg),
+		Group:                            NewGroupClient(cfg),
+		HostedInvoiceToken:               NewHostedInvoiceTokenClient(cfg),
+		IncomingWebhookEvent:             NewIncomingWebhookEventClient(cfg),
+		Invoice:                          NewInvoiceClient(cfg),
+		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
+		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
+		Meter:                            NewMeterClient(cfg),
+		Payment:                          NewPaymentClient(cfg),
+		PaymentAttempt:                   NewPaymentAttemptClient(cfg),
+		PaymentMethod:                    NewPaymentMethodClient(cfg),
+		PerformanceObligation:            NewPerformanceObligationClient(cfg),
+		PerformanceObligationAssociation: NewPerformanceObligationAssociationClient(cfg),
+		Plan:                             NewPlanClient(cfg),
+		Price:                            NewPriceClient(cfg),
+		PriceUnit:                        NewPriceUnitClient(cfg),
+		Product:                          NewProductClient(cfg),
+		Refund:                           NewRefundClient(cfg),
+		RevenueFact:                      NewRevenueFactClient(cfg),
+		ScheduledTask:                    NewScheduledTaskClient(cfg),
+		Secret:                           NewSecretClient(cfg),
+		Settings:                         NewSettingsClient(cfg),
+		Subscription:                     NewSubscriptionClient(cfg),
+		SubscriptionLineItem:             NewSubscriptionLineItemClient(cfg),
+		SubscriptionPause:                NewSubscriptionPauseClient(cfg),
+		SubscriptionPhase:                NewSubscriptionPhaseClient(cfg),
+		SubscriptionSchedule:             NewSubscriptionScheduleClient(cfg),
+		SystemEvent:                      NewSystemEventClient(cfg),
+		Task:                             NewTaskClient(cfg),
+		TaxApplied:                       NewTaxAppliedClient(cfg),
+		TaxAssociation:                   NewTaxAssociationClient(cfg),
+		TaxRate:                          NewTaxRateClient(cfg),
+		Tenant:                           NewTenantClient(cfg),
+		UsageRecord:                      NewUsageRecordClient(cfg),
+		User:                             NewUserClient(cfg),
+		Wallet:                           NewWalletClient(cfg),
+		WalletTransaction:                NewWalletTransactionClient(cfg),
+		WorkflowExecution:                NewWorkflowExecutionClient(cfg),
 	}, nil
 }
 
@@ -555,11 +567,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.EntityIntegrationMapping, c.Environment, c.FXRate, c.Feature, c.Group,
 		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
 		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Product, c.Refund, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -577,11 +590,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.EntityIntegrationMapping, c.Environment, c.FXRate, c.Feature, c.Group,
 		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
 		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
-		c.Plan, c.Price, c.PriceUnit, c.Product, c.Refund, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -664,6 +678,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PaymentAttempt.mutate(ctx, m)
 	case *PaymentMethodMutation:
 		return c.PaymentMethod.mutate(ctx, m)
+	case *PerformanceObligationMutation:
+		return c.PerformanceObligation.mutate(ctx, m)
+	case *PerformanceObligationAssociationMutation:
+		return c.PerformanceObligationAssociation.mutate(ctx, m)
 	case *PlanMutation:
 		return c.Plan.mutate(ctx, m)
 	case *PriceMutation:
@@ -6024,6 +6042,272 @@ func (c *PaymentMethodClient) mutate(ctx context.Context, m *PaymentMethodMutati
 	}
 }
 
+// PerformanceObligationClient is a client for the PerformanceObligation schema.
+type PerformanceObligationClient struct {
+	config
+}
+
+// NewPerformanceObligationClient returns a client for the PerformanceObligation from the given config.
+func NewPerformanceObligationClient(c config) *PerformanceObligationClient {
+	return &PerformanceObligationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `performanceobligation.Hooks(f(g(h())))`.
+func (c *PerformanceObligationClient) Use(hooks ...Hook) {
+	c.hooks.PerformanceObligation = append(c.hooks.PerformanceObligation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `performanceobligation.Intercept(f(g(h())))`.
+func (c *PerformanceObligationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PerformanceObligation = append(c.inters.PerformanceObligation, interceptors...)
+}
+
+// Create returns a builder for creating a PerformanceObligation entity.
+func (c *PerformanceObligationClient) Create() *PerformanceObligationCreate {
+	mutation := newPerformanceObligationMutation(c.config, OpCreate)
+	return &PerformanceObligationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PerformanceObligation entities.
+func (c *PerformanceObligationClient) CreateBulk(builders ...*PerformanceObligationCreate) *PerformanceObligationCreateBulk {
+	return &PerformanceObligationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PerformanceObligationClient) MapCreateBulk(slice any, setFunc func(*PerformanceObligationCreate, int)) *PerformanceObligationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PerformanceObligationCreateBulk{err: fmt.Errorf("calling to PerformanceObligationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PerformanceObligationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PerformanceObligationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PerformanceObligation.
+func (c *PerformanceObligationClient) Update() *PerformanceObligationUpdate {
+	mutation := newPerformanceObligationMutation(c.config, OpUpdate)
+	return &PerformanceObligationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PerformanceObligationClient) UpdateOne(_m *PerformanceObligation) *PerformanceObligationUpdateOne {
+	mutation := newPerformanceObligationMutation(c.config, OpUpdateOne, withPerformanceObligation(_m))
+	return &PerformanceObligationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PerformanceObligationClient) UpdateOneID(id string) *PerformanceObligationUpdateOne {
+	mutation := newPerformanceObligationMutation(c.config, OpUpdateOne, withPerformanceObligationID(id))
+	return &PerformanceObligationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PerformanceObligation.
+func (c *PerformanceObligationClient) Delete() *PerformanceObligationDelete {
+	mutation := newPerformanceObligationMutation(c.config, OpDelete)
+	return &PerformanceObligationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PerformanceObligationClient) DeleteOne(_m *PerformanceObligation) *PerformanceObligationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PerformanceObligationClient) DeleteOneID(id string) *PerformanceObligationDeleteOne {
+	builder := c.Delete().Where(performanceobligation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PerformanceObligationDeleteOne{builder}
+}
+
+// Query returns a query builder for PerformanceObligation.
+func (c *PerformanceObligationClient) Query() *PerformanceObligationQuery {
+	return &PerformanceObligationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePerformanceObligation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PerformanceObligation entity by its id.
+func (c *PerformanceObligationClient) Get(ctx context.Context, id string) (*PerformanceObligation, error) {
+	return c.Query().Where(performanceobligation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PerformanceObligationClient) GetX(ctx context.Context, id string) *PerformanceObligation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PerformanceObligationClient) Hooks() []Hook {
+	return c.hooks.PerformanceObligation
+}
+
+// Interceptors returns the client interceptors.
+func (c *PerformanceObligationClient) Interceptors() []Interceptor {
+	return c.inters.PerformanceObligation
+}
+
+func (c *PerformanceObligationClient) mutate(ctx context.Context, m *PerformanceObligationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PerformanceObligationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PerformanceObligationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PerformanceObligationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PerformanceObligationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PerformanceObligation mutation op: %q", m.Op())
+	}
+}
+
+// PerformanceObligationAssociationClient is a client for the PerformanceObligationAssociation schema.
+type PerformanceObligationAssociationClient struct {
+	config
+}
+
+// NewPerformanceObligationAssociationClient returns a client for the PerformanceObligationAssociation from the given config.
+func NewPerformanceObligationAssociationClient(c config) *PerformanceObligationAssociationClient {
+	return &PerformanceObligationAssociationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `performanceobligationassociation.Hooks(f(g(h())))`.
+func (c *PerformanceObligationAssociationClient) Use(hooks ...Hook) {
+	c.hooks.PerformanceObligationAssociation = append(c.hooks.PerformanceObligationAssociation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `performanceobligationassociation.Intercept(f(g(h())))`.
+func (c *PerformanceObligationAssociationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PerformanceObligationAssociation = append(c.inters.PerformanceObligationAssociation, interceptors...)
+}
+
+// Create returns a builder for creating a PerformanceObligationAssociation entity.
+func (c *PerformanceObligationAssociationClient) Create() *PerformanceObligationAssociationCreate {
+	mutation := newPerformanceObligationAssociationMutation(c.config, OpCreate)
+	return &PerformanceObligationAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PerformanceObligationAssociation entities.
+func (c *PerformanceObligationAssociationClient) CreateBulk(builders ...*PerformanceObligationAssociationCreate) *PerformanceObligationAssociationCreateBulk {
+	return &PerformanceObligationAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PerformanceObligationAssociationClient) MapCreateBulk(slice any, setFunc func(*PerformanceObligationAssociationCreate, int)) *PerformanceObligationAssociationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PerformanceObligationAssociationCreateBulk{err: fmt.Errorf("calling to PerformanceObligationAssociationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PerformanceObligationAssociationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PerformanceObligationAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PerformanceObligationAssociation.
+func (c *PerformanceObligationAssociationClient) Update() *PerformanceObligationAssociationUpdate {
+	mutation := newPerformanceObligationAssociationMutation(c.config, OpUpdate)
+	return &PerformanceObligationAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PerformanceObligationAssociationClient) UpdateOne(_m *PerformanceObligationAssociation) *PerformanceObligationAssociationUpdateOne {
+	mutation := newPerformanceObligationAssociationMutation(c.config, OpUpdateOne, withPerformanceObligationAssociation(_m))
+	return &PerformanceObligationAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PerformanceObligationAssociationClient) UpdateOneID(id string) *PerformanceObligationAssociationUpdateOne {
+	mutation := newPerformanceObligationAssociationMutation(c.config, OpUpdateOne, withPerformanceObligationAssociationID(id))
+	return &PerformanceObligationAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PerformanceObligationAssociation.
+func (c *PerformanceObligationAssociationClient) Delete() *PerformanceObligationAssociationDelete {
+	mutation := newPerformanceObligationAssociationMutation(c.config, OpDelete)
+	return &PerformanceObligationAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PerformanceObligationAssociationClient) DeleteOne(_m *PerformanceObligationAssociation) *PerformanceObligationAssociationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PerformanceObligationAssociationClient) DeleteOneID(id string) *PerformanceObligationAssociationDeleteOne {
+	builder := c.Delete().Where(performanceobligationassociation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PerformanceObligationAssociationDeleteOne{builder}
+}
+
+// Query returns a query builder for PerformanceObligationAssociation.
+func (c *PerformanceObligationAssociationClient) Query() *PerformanceObligationAssociationQuery {
+	return &PerformanceObligationAssociationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePerformanceObligationAssociation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PerformanceObligationAssociation entity by its id.
+func (c *PerformanceObligationAssociationClient) Get(ctx context.Context, id string) (*PerformanceObligationAssociation, error) {
+	return c.Query().Where(performanceobligationassociation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PerformanceObligationAssociationClient) GetX(ctx context.Context, id string) *PerformanceObligationAssociation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PerformanceObligationAssociationClient) Hooks() []Hook {
+	return c.hooks.PerformanceObligationAssociation
+}
+
+// Interceptors returns the client interceptors.
+func (c *PerformanceObligationAssociationClient) Interceptors() []Interceptor {
+	return c.inters.PerformanceObligationAssociation
+}
+
+func (c *PerformanceObligationAssociationClient) mutate(ctx context.Context, m *PerformanceObligationAssociationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PerformanceObligationAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PerformanceObligationAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PerformanceObligationAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PerformanceObligationAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PerformanceObligationAssociation mutation op: %q", m.Op())
+	}
+}
+
 // PlanClient is a client for the Plan schema.
 type PlanClient struct {
 	config
@@ -9631,11 +9915,12 @@ type (
 		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment, FXRate,
 		Feature, Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Product, Refund, RevenueFact,
-		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
-		WalletTransaction, WorkflowExecution []ent.Hook
+		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
+		Price, PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret,
+		Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, AlertSettings, AnalyticsView, Auth,
@@ -9645,11 +9930,12 @@ type (
 		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment, FXRate,
 		Feature, Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
-		PaymentMethod, Plan, Price, PriceUnit, Product, Refund, RevenueFact,
-		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
-		WalletTransaction, WorkflowExecution []ent.Interceptor
+		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
+		Price, PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret,
+		Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		WorkflowExecution []ent.Interceptor
 	}
 )
 

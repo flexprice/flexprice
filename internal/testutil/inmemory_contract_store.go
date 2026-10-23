@@ -24,7 +24,7 @@ func NewInMemoryContractStore() *InMemoryContractStore {
 	}
 }
 
-func associationKey(entityType types.ContractSourceEntityType, entityID string) string {
+func associationKey(entityType types.RevRecEntityType, entityID string) string {
 	return string(entityType) + ":" + entityID
 }
 
@@ -47,7 +47,7 @@ func (s *InMemoryContractStore) GetByID(ctx context.Context, id string) (*contra
 }
 
 func (s *InMemoryContractStore) GetBySubscriptionID(ctx context.Context, subscriptionID string) (*contract.Contract, error) {
-	a, err := s.associations.Get(ctx, associationKey(types.ContractSourceEntityTypeSubscription, subscriptionID))
+	a, err := s.associations.Get(ctx, associationKey(types.RevRecEntityTypeSubscription, subscriptionID))
 	if err != nil {
 		return nil, ierr.NewError("contract not found").
 			WithHintf("Contract with subscription_id %s was not found", subscriptionID).
@@ -100,7 +100,7 @@ func (s *InMemoryContractStore) filterFn(ctx context.Context, c *contract.Contra
 	}
 	if len(f.SubscriptionIDs) > 0 {
 		return lo.ContainsBy(f.SubscriptionIDs, func(subID string) bool {
-			a, err := s.associations.Get(ctx, associationKey(types.ContractSourceEntityTypeSubscription, subID))
+			a, err := s.associations.Get(ctx, associationKey(types.RevRecEntityTypeSubscription, subID))
 			return err == nil && a.ContractID() == c.ID()
 		})
 	}

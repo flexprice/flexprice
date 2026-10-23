@@ -40,7 +40,7 @@ func AssociationFromEnt(e *ent.ContractAssociation) *domainContract.Association 
 	return domainContract.NewAssociationBuilder(nil).
 		WithID(e.ID).
 		WithContractID(e.ContractID).
-		WithEntityType(types.ContractSourceEntityType(e.EntityType)).
+		WithEntityType(types.RevRecEntityType(e.EntityType)).
 		WithEntityID(e.EntityID).
 		WithStatus(types.Status(e.Status)).
 		WithCreatedAt(e.CreatedAt).

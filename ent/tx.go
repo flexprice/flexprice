@@ -88,6 +88,10 @@ type Tx struct {
 	PaymentAttempt *PaymentAttemptClient
 	// PaymentMethod is the client for interacting with the PaymentMethod builders.
 	PaymentMethod *PaymentMethodClient
+	// PerformanceObligation is the client for interacting with the PerformanceObligation builders.
+	PerformanceObligation *PerformanceObligationClient
+	// PerformanceObligationAssociation is the client for interacting with the PerformanceObligationAssociation builders.
+	PerformanceObligationAssociation *PerformanceObligationAssociationClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -306,6 +310,8 @@ func (tx *Tx) init() {
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.PaymentMethod = NewPaymentMethodClient(tx.config)
+	tx.PerformanceObligation = NewPerformanceObligationClient(tx.config)
+	tx.PerformanceObligationAssociation = NewPerformanceObligationAssociationClient(tx.config)
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)

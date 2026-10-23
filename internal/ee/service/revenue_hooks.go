@@ -6,6 +6,7 @@ import (
 	"time"
 
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -82,7 +83,12 @@ func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscr
 			return err
 		}
 
-		_, err = contractsvc.NewContractService(params.ContractRepo).SyncForSubscription(ctx, sub)
+		c, err := contractsvc.NewContractService(params.ContractRepo).SyncForSubscription(ctx, sub)
+		if err != nil {
+			return err
+		}
+
+		_, err = pobsvc.NewPerformanceObligationService(params.POBRepo, params.ContractRepo, params.SubRepo, params.InvoiceRepo, params.TaxAppliedRepo, params.RevenueFactRepo).SyncForSubscription(ctx, sub, c)
 		return err
 	})
 }

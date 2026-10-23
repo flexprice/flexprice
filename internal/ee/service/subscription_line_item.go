@@ -138,6 +138,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 
 	priceResp, priceErr := NewPriceService(s.ServiceParams).GetPrice(ctx, lineItem.PriceID)
 	if priceErr != nil {
@@ -394,6 +395,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		if err != nil {
 			return nil, err
 		}
+		NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 		return resp, nil
 	}
@@ -402,6 +404,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 	return resp, nil
 }
@@ -873,6 +876,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"end_date", endDate,
 		)
 
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {

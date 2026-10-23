@@ -174,7 +174,7 @@ func (s *ContractServiceSuite) TestGetContractIncludesAssociations() {
 	s.Equal(c.ID(), resp.ID)
 	s.Equal(types.ContractStatusActive, resp.ContractStatus)
 	s.Require().Len(resp.Associations, 1)
-	s.Equal(types.ContractSourceEntityTypeSubscription, resp.Associations[0].EntityType)
+	s.Equal(types.RevRecEntityTypeSubscription, resp.Associations[0].EntityType)
 	s.Equal(sub.ID, resp.Associations[0].EntityID)
 }
 

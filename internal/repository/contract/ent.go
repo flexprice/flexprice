@@ -135,7 +135,7 @@ func (r *repository) GetBySubscriptionID(ctx context.Context, subscriptionID str
 		Where(
 			entContractAssociation.TenantID(types.GetTenantID(ctx)),
 			entContractAssociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			entContractAssociation.EntityType(string(types.ContractSourceEntityTypeSubscription)),
+			entContractAssociation.EntityType(string(types.RevRecEntityTypeSubscription)),
 			entContractAssociation.EntityID(subscriptionID),
 			entContractAssociation.Status(string(types.StatusPublished)),
 		).
@@ -409,7 +409,7 @@ func subscriptionsPredicate(ctx context.Context, subscriptionIDs []string) predi
 				Where(sql.And(
 					sql.EQ(t.C(entContractAssociation.FieldTenantID), types.GetTenantID(ctx)),
 					sql.EQ(t.C(entContractAssociation.FieldEnvironmentID), types.GetEnvironmentID(ctx)),
-					sql.EQ(t.C(entContractAssociation.FieldEntityType), string(types.ContractSourceEntityTypeSubscription)),
+					sql.EQ(t.C(entContractAssociation.FieldEntityType), string(types.RevRecEntityTypeSubscription)),
 					sql.EQ(t.C(entContractAssociation.FieldStatus), string(types.StatusPublished)),
 					sql.In(t.C(entContractAssociation.FieldEntityID), lo.ToAnySlice(subscriptionIDs)...),
 				)),

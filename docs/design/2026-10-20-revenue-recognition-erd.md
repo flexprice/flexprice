@@ -25,7 +25,7 @@ Steps:
 
 1. Product & Price
 2. Contract
-3. PerformanceObligation & RevenueSchedule
+3. PerformanceObligation & earned to date
 4. AccountingCalendar & AccountingPeriod
 5. LedgerAccount
 6. AccountingEvent & Journal
@@ -211,16 +211,16 @@ type ContractService interface {
 
 
 
-### Step 3 — PerformanceObligation & RevenueSchedule
+### Step 3 — PerformanceObligation & earned to date
 
-A POB is a continuing promise inside a contract, made of one or more subscription line items. A revenue schedule is a persisted, versioned allocation of consideration over a finite interval; per-period recognition amounts are derived from it, never stored.
+A POB is a continuing promise inside a contract, made of one or more subscription line items. Phase 1 earns on a **billing basis**, derived on read: billed amounts are the finalized invoice lines, each spread over its own service period; nothing about earning is persisted. A contract basis (booked amounts, SSP allocation, a persisted revenue schedule) is a later, per-POB alternative behind the same `EarnedToDate`.
 
 Four reporting categories, one engine:
 
 - **Actual** — posted recognition journals (Step 6).
 - **Pending** — earned but not yet posted: the open month to date, and ended months the daily run has not posted.
-- **Scheduled** — persisted schedule segments not yet earned.
-- **Extrapolated** — recurring fixed POBs with no end date only, after the last segment, valued on read by the billing engine. Never persisted.
+- **Scheduled** — invoiced but not yet earned (the deferred part of finalized invoice lines).
+- **Extrapolated** — recurring fixed POBs with no end date only, after the last invoiced period, valued on read by the billing engine. Never persisted.
 
 
 
@@ -253,7 +253,6 @@ CREATE TABLE performance_obligation_associations (
     tenant_id      varchar(50) NOT NULL,
     environment_id varchar(50) NOT NULL,
     pob_id         varchar(50) NOT NULL,
-    scope          varchar(20) NOT NULL,           -- billing
     entity_type    varchar(50) NOT NULL,           -- subscription_line_item
     entity_id      varchar(50) NOT NULL,
     status         varchar(50) NOT NULL DEFAULT 'published',
@@ -261,37 +260,11 @@ CREATE TABLE performance_obligation_associations (
     created_by     varchar(50)
 );
 
--- resolve the POB of a line item; one POB per entity per scope
-CREATE UNIQUE INDEX ON performance_obligation_associations (tenant_id, environment_id, scope, entity_type, entity_id)
+-- resolve the POB of a line item; one POB per entity
+CREATE UNIQUE INDEX ON performance_obligation_associations (tenant_id, environment_id, entity_type, entity_id)
     WHERE status = 'published';
 -- entities of a POB (forecast, service term)
 CREATE INDEX ON performance_obligation_associations (tenant_id, environment_id, pob_id);
-
-CREATE TABLE revenue_schedules (                -- append-only
-    id                 varchar(50)   PRIMARY KEY,  -- prefix "rev_sched"
-    tenant_id          varchar(50)   NOT NULL,
-    environment_id     varchar(50)   NOT NULL,
-    pob_id             varchar(50)   NOT NULL,
-    source_at          timestamptz   NOT NULL,     -- when the triggering event committed; latest covering wins
-    sequence           bigint        NOT NULL,     -- monotonic per POB; breaks source_at ties
-    period_start       timestamptz   NOT NULL,     -- inclusive
-    period_end         timestamptz   NOT NULL,     -- exclusive; equals period_start for point_in_time
-    allocated_amount   numeric(20,8) NOT NULL,     
-    source_entity_type varchar(50)   NOT NULL,     -- subscription_line_item | invoice_line_item
-    source_entity_id   varchar(50)   NOT NULL,
-    idempotency_key    varchar(255)  NOT NULL,     -- triggering event, e.g. period_open:{sli}:{start}, invoice_finalized:{inv_line}
-    status             varchar(50)   NOT NULL DEFAULT 'published',
-    created_at         timestamptz   NOT NULL,
-    created_by         varchar(50)
-);
-
--- sequence allocated under a POB row lock
-CREATE UNIQUE INDEX ON revenue_schedules (tenant_id, environment_id, pob_id, sequence);
--- effective schedule of a POB in precedence order (recognition run, waterfall)
-CREATE INDEX ON revenue_schedules (tenant_id, environment_id, pob_id, source_at, sequence);
--- idempotency: one segment per triggering event
-CREATE UNIQUE INDEX ON revenue_schedules (tenant_id, environment_id, pob_id, idempotency_key)
-    WHERE status = 'published';
 ```
 
 
@@ -316,28 +289,13 @@ const (
 
 type POBStatus string // draft | active | satisfied | cancelled
 
-type CatchUpMode string
-const (
-    CatchUpProspective   CatchUpMode = "prospective"   // replacement starts at the effective date
-    CatchUpRetrospective CatchUpMode = "retrospective" // replacement covers the original interval
-)
+// RevRecEntityType types contract and POB associations (and later earning sources).
+type RevRecEntityType string // subscription | subscription_line_item
 ```
 
 
 
-#### Schedule rules
-
-
-| Event                                                                                                                               | Schedule effect                                                                                                                                                                                                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Billing period starts (subscription created / activated, period cron renewal)                                                       | Open a segment `[period_start, period_end)` per fixed POB, valued with the billing engine's line calculation (price × quantity, coupons applied). Advance and arrears alike.                                                                                                                                       |
-| One-time charge                                                                                                                     | Same, with `period_start = period_end`.                                                                                                                                                                                                                                                                            |
-| Usage line item                                                                                                                     | No segments. Earned comes from `revenue_facts` (below).                                                                                                                                                                                                                                                            |
-| Modification (price override, line item change, plan change v2, line item removal, cancellation, coupon added / removed mid-period) | New line items join the POB of their predecessor or get a new POB. Append a superseding segment over the affected span: prospective by default, from the effective date to the period end.                                                                                                                         |
-| Invoice finalized (`SUBSCRIPTION`)                                                                                                  | If a fixed line's line net (Step 6: after discounts and inclusive tax) differs from the effective schedule over the line's period, append a superseding segment with the invoiced net, retrospective over that period, sourced `invoice_line_item`. Prepaid credits applied are settlement, not deviation. |
-| Invoice voided                                                                                                                      | If the voided line set the effective segment, append a superseding segment with the billing engine's valuation, sourced `subscription_line_item`.                                                                                                                                                                  |
-| Invoice finalized / voided (`ONE_OFF`)                                                                                              | None. Subscription-linked proration lines are already scheduled by the modification that produced them. Other subscription-linked lines keep the subscription's contract but no POB; standalone invoices (no subscription) have neither. Both post billing journals only (Step 6).                               |
-
+#### Earning rules
 
 Recognition method is derived once from the first line item's price:
 
@@ -349,59 +307,55 @@ Recognition method is derived once from the first line item's price:
 | USAGE                           | `as_consumed`   |
 
 
-**Usage evidence (**`as_consumed`**).** Read from `revenue_facts` by `sub_line_item_id` for the POB's line items:
+**Earned to date.** `earned(pob, asOf)` is a sum:
 
-- Open billing period: earned = Σ PROVISIONAL `net_amount` (the period-to-date bill), which accrues unbilled.
-- Invoiced period: each day earns its FINAL row (marginal), period_only rows spread evenly by day, and the residual (invoice line net − Σ rows) lands on the period's last day. Already-reported days never move.
-- Without revenue analytics enabled, there is no accrual and the invoiced amount spreads evenly.
+- **Invoiced:** every line of a finalized (not voided) invoice whose `subscription_line_item_id` belongs to the POB earns its line net (Step 6) over its own service period with the POB's amortization method (Step 4). Proration lines (`ONE_OFF` invoices) are lines like any other, so a mid-period change adds a credit line and a charge line; nothing is superseded. A line with no period earns at finalization.
+- **Unbilled accrual, only with revenue analytics enabled:** PROVISIONAL `revenue_facts` of the POB's line items earn on their day (period_only rows evenly over their period). A row stops counting once a finalized `SUBSCRIPTION` invoice line covers its day; proration lines never switch it off. With revenue analytics off, revenue is recognized only once invoiced.
+- Cancelling or modifying without proration changes nothing for the paid period: it keeps earning, and the new state reaches the next invoice.
+- Daily amounts are `earned(day_end) − earned(day_start)`, never rounded per day.
 
-**Earned to date.** `earned(pob, asOf)` evaluates the effective curve cumulatively: for each date the covering segment with the highest `(source_at, sequence)` applies, using its original full-interval curve. Daily amounts are `earned(day_end) − earned(day_start)`, never rounded per day.
+Usage (`as_consumed`) POBs earn zero in Phase 1; usage evidence follows.
 
 #### APIs
 
 
 | Endpoint                                  | Role                                                     |
 | ----------------------------------------- | -------------------------------------------------------- |
-| `GET /v1/performance_obligations/{id}`    | Get, with associations and schedule segments             |
+| `GET /v1/performance_obligations/{id}`    | Get, with associations                                   |
 | `POST /v1/performance_obligations/search` | Filter by contract, customer, status, recognition method |
 
 
-Read-only: POBs and schedules are derived from subscriptions and billing.
+Read-only: POBs are derived from subscriptions.
 
 #### Invariants
 
 - Created with the contract as `draft`; status cascades from the contract: `draft → active` on activation, `draft → cancelled` if the contract is cancelled. `active → satisfied` once every associated line item has ended and `service_end` has passed.
 - Recognition runs on `active` and `satisfied` POBs (a satisfied POB still posts its last month and later corrections); never on `draft` or `cancelled`.
-- An entity belongs to at most one POB per scope; associations stay within the POB's contract.
+- An entity belongs to at most one POB; associations stay within the POB's contract.
 - A new line item joins its predecessor's POB only when every continuity rule holds; otherwise it gets a new POB. Plan change v2 carried lines keep their row, so keep their POB. Continuity rules:
   - it has a `predecessor_line_item_id`;
   - its derived recognition method equals the POB's.
-- Recognition and amortization methods are locked once recognition starts.
-- Segments are append-only and finite: `period_start ≤ period_end`, within the POB's service term. A higher `(source_at, sequence)` supersedes overlapping dates, so a late-processed event (e.g. applied by the repair job) slots in at its event time, not on top; earlier segments are never re-amortized over their surviving dates. `source_at` is the commit time of the triggering event (line item change, invoice `finalized_at` / `voided_at`, period renewal), never its effective date.
-- Only the current billing period is persisted; future renewals are extrapolated on read (Step 7).
-- A schedule changes async after the subscription write or invoice that caused it commits (post-commit hook, like `revenue_facts`). A failed schedule write is logged and never fails the source write; a repair job reconciles line items and invoices against segments.
+- Recognition and amortization methods never change after creation.
+- POBs sync async after the subscription write that caused it commits (create, activation, termination, line item add / update / delete, plan change, period renewal). A failed sync is logged and never fails the source write; `Reconcile(contract)` repairs.
 - Nothing is written unless the environment has revenue recognition enabled.
 
 
 
 #### Services
 
-`PerformanceObligationService` (new) — owns POB identity, associations and schedule segments, and evaluates earned-to-date for the recognition run (Step 6).
+`PerformanceObligationService` (new) — owns POB identity and associations, and evaluates earned-to-date for the recognition run (Step 6) and reports (Step 7).
 
 ```go
 type PerformanceObligationService interface {
-    SyncForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*pob.PerformanceObligation, error)
-    OpenPeriod(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) error
-    ApplyModification(ctx context.Context, sub *subscription.Subscription, effectiveAt time.Time, mode types.CatchUpMode) error
-    ApplyInvoice(ctx context.Context, inv *invoice.Invoice) error // finalize and void
-    Reconcile(ctx context.Context, contractID string) error       // repair job
-    EarnedToDate(ctx context.Context, pobID string, asOf time.Time) (decimal.Decimal, error)
+    SyncForSubscription(ctx context.Context, sub *subscription.Subscription, c *contract.Contract) ([]*pob.PerformanceObligation, error)
+    EarnedToDate(ctx context.Context, contractID string, asOf time.Time) (map[string]decimal.Decimal, error) // per POB
+    Reconcile(ctx context.Context, contractID string) error // repair job
     GetPerformanceObligation(ctx context.Context, id string) (*dto.PerformanceObligationResponse, error)
-    GetPerformanceObligations(ctx context.Context, filter *types.PerformanceObligationFilter) (*dto.ListPerformanceObligationsResponse, error)
+    GetPerformanceObligations(ctx context.Context, filter *pob.Filter) (*dto.ListPerformanceObligationsResponse, error)
 }
 ```
 
-Deferred: commitments and true-ups, net-negative proration (wallet credit), SSP allocation (Phase 3).
+Deferred: contract basis with persisted schedules (ramps, free periods, SSP allocation, edits), usage evidence, commitments and true-ups, net-negative proration (wallet credit).
 
 ### Step 4 — AccountingCalendar & AccountingPeriod
 
@@ -450,7 +404,7 @@ type RevenueRecognitionConfig struct {
 
 #### Amortization arithmetic
 
-A segment covers local dates `[ds, de)` with amount `A`. Each covered day `d` has a weight:
+A billed amount `A` covers local dates `[ds, de)` (its service period). Each covered day `d` has a weight:
 
 
 | Method                 | `w(d)`                                 | Effect                                                       |
@@ -460,7 +414,7 @@ A segment covers local dates `[ds, de)` with amount `A`. Each covered day `d` ha
 | `period_even_prorated` | 1 / days in `d`'s month                | Equal per full month; partial months by the share they cover |
 
 
-- `earned_seg(asOf) = A × Σ_{d < asOf} w(d) / Σ_{d ∈ seg} w(d)`. For each day, the covering segment with the highest `(source_at, sequence)` applies (Step 3).
+- `earned(asOf) = A × Σ_{d < asOf} w(d) / Σ_{d ∈ [ds, de)} w(d)`. Billed amounts are additive: a POB earns their sum (Step 3).
 - `point_in_time`: all of `A` on `ds`.
 
 Example: $300 over `[Jan 15, Apr 15)`, `period_even_prorated`.
@@ -469,13 +423,13 @@ Example: $300 over `[Jan 15, Apr 15)`, `period_even_prorated`.
 | Month     | Days covered | `w(d)` | Month weight | Earned      |
 | --------- | ------------ | ------ | ------------ | ----------- |
 | Jan       | 17           | 1/31   | 0.548        | $54.56      |
-| Feb       | 28           | 1/28   | 1            | $99.50      |
+| Feb       | 28           | 1/28   | 1            | $99.51      |
 | Mar       | 31           | 1/31   | 1            | $99.50      |
 | Apr       | 14           | 1/30   | 0.467        | $46.43      |
 | **Total** |              |        | **3.015**    | **$300.00** |
 
 
-On Mar 10: `300 × (0.548 + 1 + 9/31) / 3.015 = $182.95`. The same segment under `daily` is $3.33 a day for 90 days; under `period_even` it is $75 for each of the four months.
+On Mar 10: `300 × (0.548 + 1 + 9/31) / 3.015 = $182.95`. The same amount under `daily` is $3.33 a day for 90 days; under `period_even` it is $75 for each of the four months.
 
 - Never rounded per day. A period's recognition amount is `round(earned(period_end)) − round(earned(period_start))` at currency precision, so periods sum exactly to `A`.
 
@@ -629,7 +583,7 @@ No `entry_date`: Phase 1 never closes a period, so it equals `business_date`; on
 - `offset(P) = min(billed(P), earned(P))`. The run posts `offset(P) − offsets already posted up to P`: Dr `deferred_revenue` / Cr `unbilled_receivable`; a negative amount mirrors it.
 - At every month end deferred = `max(billed − earned, 0)` and unbilled = `max(earned − billed, 0)`, whatever order the entries posted in. A POB never carries both.
 
-Billed means invoiced by `P_end` (the invoice's date), not the service period it covers: an arrears invoice dated Feb 1 for January usage is February billing, so January closes with unbilled. Invoice lines resolve their POB through `subscription_line_item_id`. A line's **line net** is `amount − line_item_discount − invoice_level_discount − inclusive tax` (inclusive tax allocated to lines pro rata by net when stored per invoice); billing entries and schedule true-ups (Step 3) use the same line net, so tax never becomes revenue. `ONE_OFF` lines with no POB are recognized at finalize; their entry keeps the subscription's contract when the invoice has one, and `contract_id` is null for standalone invoices.
+Billed means invoiced by `P_end` (the invoice's date), not the service period it covers: an arrears invoice dated Feb 1 for January usage is February billing, so January closes with unbilled. Invoice lines resolve their POB through `subscription_line_item_id`. A line's **line net** is `amount − line_item_discount − invoice_level_discount − inclusive tax` (inclusive tax allocated to lines pro rata by net when stored per invoice); billing entries and earned to date (Step 3) use the same line net, so tax never becomes revenue. `ONE_OFF` lines with no POB are recognized at finalize; their entry keeps the subscription's contract when the invoice has one, and `contract_id` is null for standalone invoices.
 
 
 | Event (business date)                                         | Entry                                                                                                                                                                                                                                             |
@@ -693,10 +647,10 @@ Read-only: the journal is derived from billing and schedules.
 - Entries are immutable. Each has at least one debit and one credit line, positive amounts, Σ debits = Σ credits, one currency (the invoice's), one period. Corrections are deltas or inverses linked by `reversal_of`.
 - Billing entries carry the idempotency key `{event_type}:{source_entity_id}`: one entry per event per source. A corrected invoice is a void (`invoice_voided`, same source) plus a new invoice (new source), never a re-post under the same key. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
 - Billing entries post async after the source commits (post-commit hook, like `revenue_facts`), each in its own transaction. A failure is logged and never fails the source write; `Reconcile` re-posts anything missing.
-- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. A billing entry dated in an ended month makes the next run recompute that month's offset and every later one. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
+- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. A billing entry dated in an ended month makes the next run recompute that month's offset and every later one. Each run re-evaluates the last ended month and any earlier month a newly finalized or voided invoice or a changed usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
 - Business dates are local dates in the subscription's timezone (the customer's without a subscription); the entry posts to that date's period (Step 4).
 - Billing entries post for `draft` contracts too; recognition only for `active` and `satisfied` POBs, catching up on the first run.
-- Enabling revenue recognition replays every contract from its start: contracts, POBs and segments, then billing entries in business-date order, then recognition. No opening-balance entries.
+- Enabling revenue recognition replays every contract from its start: contracts and POBs, then billing entries in business-date order, then recognition. No opening-balance entries.
 - Nothing is written unless the environment has revenue recognition enabled.
 
 
@@ -726,11 +680,11 @@ type JournalService interface {
 
 - Credit notes set `finalized_at` on finalize and `voided_at` on void (`creditnote.go:794`, `:679`; both are null today). These are the business dates of their entries.
 - Payment hooks fire after the payment row is saved (`payment_processor.go:171-179`), so a payment entry never posts for an unsaved row.
-- Quantity-change proration invoices set `subscription_line_item_id` on their line (`subscription_modification_quantity.go:1068`; only `price_id` is set today). Without it the line resolves no POB, posts as revenue at finalize, and is recognized again through the modification's segment.
+- Quantity-change proration invoices set `subscription_line_item_id` on their line (`subscription_modification_quantity.go:1068`; only `price_id` is set today). Without it the line resolves no POB, posts as revenue at finalize, and is recognized again through the POB.
 
 ### Step 7 — Rollforward & Waterfall
 
-Reports are queries over the journal and the POB schedules; nothing is persisted. The rollforward explains how an account's balance moved in ended months; the waterfall shows revenue per customer per month, past, current and future.
+Reports are queries over the journal and POB earned-to-date; nothing is persisted. The rollforward explains how an account's balance moved in ended months; the waterfall shows revenue per customer per month, past, current and future.
 
 
 | View                                                                | Endpoint                                   | Request                                                                          |
@@ -887,8 +841,8 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 
 - `actual` — posted `revenue` lines of `P` (credit − debit). `ONE_OFF` lines with no POB count here at finalize; they group under their contract when subscription-linked, and under a row with null keys otherwise (and always under a null `pob_id`), so rows always add up to `totals`. Credit notes are in `contra_revenue`, not in the waterfall.
 - `pending` — earned but not yet posted: `PreviewRecognition` at `now`, with the open month treated as ended at `now`. It covers the open month to date and any ended month the daily run has not posted.
-- `scheduled` — not yet earned, from persisted segments: `round(earned(P_end)) − round(earned(max(P_start, now)))` for the open and future months. Only the current billing period is persisted (Step 3), so recurring POBs with no end date schedule only to its end.
-- `extrapolated` — only with `extrapolate`, only for recurring fixed POBs with no `service_end`, after the last segment: each future billing period is valued by the billing engine as a full period, amortized with the POB's method, and stops at the subscription's end or cancellation date. Never posted.
+- `scheduled` — invoiced but not yet earned: `round(earned(P_end)) − round(earned(max(P_start, now)))` over finalized invoice lines, for the open and future months. Recurring POBs with no end date schedule only to the end of their last invoiced period.
+- `extrapolated` — only with `extrapolate`, only for recurring fixed POBs with no `service_end`, after the last invoiced period: each future billing period is valued by the billing engine as a full period, amortized with the POB's method, and stops at the subscription's end or cancellation date. Never posted.
 - Usage (`as_consumed`) is never scheduled or extrapolated; it appears as actual and pending only.
 - `deferred` / `unbilled` — the group's closing balances of those accounts for ended months, from the journal as in the rollforward.
 
@@ -918,7 +872,7 @@ Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
 
 #### Services
 
-`RevenueReportService` (new) — builds the rollforward and the waterfall from journal lines, `PreviewRecognition` and POB schedules.
+`RevenueReportService` (new) — builds the rollforward and the waterfall from journal lines, `PreviewRecognition` and POB earned-to-date.
 
 ```go
 type RevenueReportService interface {
