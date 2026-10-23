@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -204,24 +205,8 @@ func TestCommitmentServiceSuite(t *testing.T) { suite.Run(t, new(CommitmentServi
 
 func (s *CommitmentServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
-	stores := s.GetStores()
-	params := ServiceParams{
-		Logger:         s.GetLogger(),
-		Config:         s.GetConfig(),
-		DB:             s.GetDB(),
-		CommitmentRepo: stores.CommitmentRepo,
-		SubRepo:        stores.SubscriptionRepo,
-		PriceRepo:      stores.PriceRepo,
-		MeterRepo:      stores.MeterRepo,
-		GroupRepo:      stores.GroupRepo,
-		SettingsRepo:   stores.SettingsRepo,
-		PlanRepo:       stores.PlanRepo,
-		AddonRepo:      stores.AddonRepo,
-		PriceUnitRepo:  stores.PriceUnitRepo,
-	}
-
-	s.svc = NewCommitmentService(params)
-	s.fx = seedCommitmentFixtures(s.T(), s.GetContext(), stores)
+	s.svc = NewCommitmentService(s.fullParams())
+	s.fx = seedCommitmentFixtures(s.T(), s.GetContext(), s.GetStores())
 }
 
 func (s *CommitmentServiceSuite) TestCreate_ComputesNoStoredTotalForPerPeriod() {
@@ -471,6 +456,252 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
 	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
 }
 
+// createChargeable creates a binding quantity commitment of 100 units/month at 1.00 for 12 months from 1 Jan 2027,
+// so 1,200.00 in total and 100.00 earned per month.
+func (s *CommitmentServiceSuite) createChargeable(binding bool) *dto.CommitmentResponse {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Value, req.CommittedRate, req.Binding = decimal.NewFromInt(100), lo.ToPtr(dec("1")), lo.ToPtr(binding)
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	return created
+}
+
+func (s *CommitmentServiceSuite) invoiceLines(invoiceID string) []*invoice.InvoiceLineItem {
+	lines, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), invoiceID)
+	s.Require().NoError(err)
+	return lines
+}
+
+func (s *CommitmentServiceSuite) requireLine(line *invoice.InvoiceLineItem, kind types.CommitmentLineKind, amount, commitmentID string) {
+	s.Equal(string(kind), line.Metadata[types.MetadataKeyCommitmentLineKind])
+	s.Equal(commitmentID, line.Metadata[types.MetadataKeyCommitmentID])
+	s.Equal(commitmentID, lo.FromPtr(line.CommitmentID))
+	s.Equal(commitmentID, lo.FromPtr(line.EntityID))
+	s.Equal(string(types.InvoiceLineItemEntityTypeCommitment), lo.FromPtr(line.EntityType))
+	s.True(line.Quantity.Equal(decimal.NewFromInt(1)), "quantity %s", line.Quantity)
+	s.True(line.Amount.Equal(dec(amount)), "amount %s, want %s", line.Amount, amount)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_FlatFeeBillsOneOffInvoice() {
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:     &at,
+		CancellationFee: &dto.CommitmentCancellationFee{Type: types.CommitmentCancellationFeeFlat, Value: dec("250.5")},
+	})
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, resp.CommitmentStatus)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), *resp.TerminationInvoiceID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+	s.Equal(s.fx.customer.ID, inv.CustomerID)
+	s.True(inv.AmountDue.Equal(dec("250.5")), "got %s", inv.AmountDue)
+	lines := s.invoiceLines(inv.ID)
+	s.Require().Len(lines, 1)
+	s.requireLine(lines[0], types.CommitmentLineCancellationFee, "250.5", created.ID)
+	s.Equal(created.InvoiceLabel+" (cancellation fee)", lo.FromPtr(lines[0].DisplayName))
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_PercentFeeAppliesToUnearnedValue() {
+	created := s.createChargeable(true)
+	// 3 of 12 monthly periods earned: 900.00 unearned, so 10% is 90.00.
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt: &at,
+		CancellationFee: &dto.CommitmentCancellationFee{
+			Type:  types.CommitmentCancellationFeePercentOfRemaining,
+			Value: decimal.NewFromInt(10),
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+	lines := s.invoiceLines(*resp.TerminationInvoiceID)
+	s.Require().Len(lines, 1)
+	s.requireLine(lines[0], types.CommitmentLineCancellationFee, "90", created.ID)
+}
+
+// billRemaining terminates with bill_remaining and returns the single settlement line.
+func (s *CommitmentServiceSuite) billRemaining(created *dto.CommitmentResponse, at time.Time) *invoice.InvoiceLineItem {
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:   &at,
+		BillRemaining: true,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+	lines := s.invoiceLines(*resp.TerminationInvoiceID)
+	s.Require().Len(lines, 1)
+	s.Equal(created.InvoiceLabel+" (remaining commitment)", lo.FromPtr(lines[0].DisplayName))
+	return lines[0]
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_BillRemainingOnPeriodBoundary() {
+	created := s.createChargeable(true)
+	line := s.billRemaining(created, created.StartDate.AddDate(0, 3, 0))
+	s.requireLine(line, types.CommitmentLineSettlement, "900", created.ID)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_BillRemainingProratesMidPeriod() {
+	created := s.createChargeable(true)
+	// January has 31 days: 15/31 of 100.00 is earned, so 1200 - 48.3871 = 1151.61.
+	line := s.billRemaining(created, created.StartDate.AddDate(0, 0, 15))
+	s.requireLine(line, types.CommitmentLineSettlement, "1151.61", created.ID)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_BillRemainingBeforeTermStartBillsFullValue() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Value, req.CommittedRate = decimal.NewFromInt(100), lo.ToPtr(dec("1"))
+	req.StartDate = req.StartDate.AddDate(0, 2, 0)
+	req.EndDate = req.StartDate.AddDate(1, 0, 0)
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	line := s.billRemaining(created, created.StartDate.AddDate(0, -1, 0))
+	s.requireLine(line, types.CommitmentLineSettlement, "1200", created.ID)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_FeeAndBillRemainingShareOneInvoice() {
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:     &at,
+		CancellationFee: &dto.CommitmentCancellationFee{Type: types.CommitmentCancellationFeeFlat, Value: decimal.NewFromInt(50)},
+		BillRemaining:   true,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+
+	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Require().Len(invoices, 1)
+	s.True(invoices[0].AmountDue.Equal(decimal.NewFromInt(950)), "got %s", invoices[0].AmountDue)
+
+	lines := s.invoiceLines(*resp.TerminationInvoiceID)
+	s.Require().Len(lines, 2)
+	byKind := lo.KeyBy(lines, func(l *invoice.InvoiceLineItem) string { return l.Metadata[types.MetadataKeyCommitmentLineKind] })
+	s.requireLine(byKind[string(types.CommitmentLineCancellationFee)], types.CommitmentLineCancellationFee, "50", created.ID)
+	s.requireLine(byKind[string(types.CommitmentLineSettlement)], types.CommitmentLineSettlement, "900", created.ID)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_WithoutChargesCreatesNoInvoice() {
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+	s.Nil(resp.TerminationInvoiceID)
+
+	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Empty(invoices)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_ChargesRequireBindingCommitment() {
+	created := s.createChargeable(false)
+	at := created.StartDate.AddDate(0, 3, 0)
+	for name, req := range map[string]dto.TerminateCommitmentRequest{
+		"fee": {
+			EffectiveAt:     &at,
+			CancellationFee: &dto.CommitmentCancellationFee{Type: types.CommitmentCancellationFeeFlat, Value: decimal.NewFromInt(5)},
+		},
+		"bill remaining": {EffectiveAt: &at, BillRemaining: true},
+	} {
+		s.Run(name, func() {
+			_, err := s.svc.Terminate(s.GetContext(), created.ID, req)
+			s.requireValidation(err, "binding")
+		})
+	}
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_ChargesCannotReachBackIntoInvoicedPeriods() {
+	created := s.createChargeable(true)
+	sub := *s.fx.sub
+	sub.CurrentPeriodStart = created.StartDate.AddDate(0, 2, 0)
+	sub.CurrentPeriodEnd = created.StartDate.AddDate(0, 3, 0)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), &sub))
+
+	at := created.StartDate.AddDate(0, 1, 14)
+	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at, BillRemaining: true})
+	s.requireValidation(err, "current_period_start")
+
+	// Without a charge only the end_date bound applies.
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, resp.CommitmentStatus)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_ChargesAtCurrentPeriodStartAreAllowed() {
+	created := s.createChargeable(true)
+	at := s.fx.sub.CurrentPeriodStart
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at, BillRemaining: true})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminationInvoiceID)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_ChargesRejectedAtOrAfterEnd() {
+	created := s.createChargeable(true)
+	at := created.EndDate
+	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at, BillRemaining: true})
+	s.True(ierr.IsValidation(err), "got %v", err)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_SecondTerminateBillsNothing() {
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	req := dto.TerminateCommitmentRequest{EffectiveAt: &at, BillRemaining: true}
+	_, err := s.svc.Terminate(s.GetContext(), created.ID, req)
+	s.Require().NoError(err)
+
+	_, err = s.svc.Terminate(s.GetContext(), created.ID, req)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Len(invoices, 1)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_RejectedWhenDisabled() {
+	created := s.createChargeable(true)
+	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
+	at := created.StartDate.AddDate(0, 3, 0)
+	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+}
+
+// failingInvoiceRepo rejects every invoice insert.
+type failingInvoiceRepo struct{ invoice.Repository }
+
+func (failingInvoiceRepo) Create(context.Context, *invoice.Invoice) error {
+	return ierr.NewError("invoice store unavailable").Mark(ierr.ErrDatabase)
+}
+
+func (failingInvoiceRepo) CreateWithLineItems(context.Context, *invoice.Invoice) error {
+	return ierr.NewError("invoice store unavailable").Mark(ierr.ErrDatabase)
+}
+
+// The in-memory DB has no rollback, so the invoice is created before the status change: a failure leaves the
+// commitment active here, and the transaction guarantees the same against a real database.
+func (s *CommitmentServiceSuite) TestTerminate_InvoiceFailureLeavesCommitmentActive() {
+	created := s.createChargeable(true)
+	params := s.fullParams()
+	params.InvoiceRepo = failingInvoiceRepo{params.InvoiceRepo}
+
+	at := created.StartDate.AddDate(0, 3, 0)
+	_, err := NewCommitmentService(params).Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt:   &at,
+		BillRemaining: true,
+	})
+	s.Require().Error(err)
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+	s.Nil(got.TerminatedAt)
+}
+
 func (s *CommitmentServiceSuite) TestTerminateForSubscription_KeepsRequestedDateAndIsIdempotent() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
@@ -617,6 +848,8 @@ func (s *CommitmentServiceSuite) fullParams() ServiceParams {
 		MeterRepo:                    st.MeterRepo,
 		CustomerRepo:                 st.CustomerRepo,
 		InvoiceRepo:                  st.InvoiceRepo,
+		InvoiceLineItemRepo:          st.InvoiceLineItemRepo,
+		HostedInvoiceTokenRepo:       st.HostedInvoiceTokenRepo,
 		EntitlementRepo:              st.EntitlementRepo,
 		FeatureRepo:                  st.FeatureRepo,
 		AddonRepo:                    st.AddonRepo,

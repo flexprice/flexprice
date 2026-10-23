@@ -176,6 +176,7 @@ type UpdateCommitmentRequest struct {
 type TerminateCommitmentRequest struct {
 	EffectiveAt     *time.Time                 `json:"effective_at,omitempty"`
 	CancellationFee *CommitmentCancellationFee `json:"cancellation_fee,omitempty"`
+	BillRemaining   bool                       `json:"bill_remaining,omitempty"`
 }
 
 // CommitmentCancellationFee is charged on early termination; value is a percent for percent_of_remaining.
@@ -211,6 +212,7 @@ func (r *TerminateCommitmentRequest) Validate() error {
 type CommitmentResponse struct {
 	*commitment.Commitment `json:",inline"`
 	CommitmentValue        *decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
+	TerminationInvoiceID   *string          `json:"termination_invoice_id,omitempty"`
 }
 
 type ListCommitmentsResponse = types.ListResponse[*CommitmentResponse] // @name ListCommitmentsResponse
