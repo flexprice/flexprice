@@ -419,6 +419,71 @@ var (
 			},
 		},
 	}
+	// ContractsColumns holds the columns for the "contracts" table.
+	ContractsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "term_start", Type: field.TypeTime, Nullable: true},
+		{Name: "term_end", Type: field.TypeTime, Nullable: true},
+		{Name: "ended_at", Type: field.TypeTime, Nullable: true},
+		{Name: "contract_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+	}
+	// ContractsTable holds the schema information for the "contracts" table.
+	ContractsTable = &schema.Table{
+		Name:       "contracts",
+		Columns:    ContractsColumns,
+		PrimaryKey: []*schema.Column{ContractsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "contract_tenant_id_environment_id_customer_id",
+				Unique:  false,
+				Columns: []*schema.Column{ContractsColumns[1], ContractsColumns[7], ContractsColumns[8]},
+			},
+		},
+	}
+	// ContractAssociationsColumns holds the columns for the "contract_associations" table.
+	ContractAssociationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "contract_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// ContractAssociationsTable holds the schema information for the "contract_associations" table.
+	ContractAssociationsTable = &schema.Table{
+		Name:       "contract_associations",
+		Columns:    ContractAssociationsColumns,
+		PrimaryKey: []*schema.Column{ContractAssociationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_contract_association_unique",
+				Unique:  true,
+				Columns: []*schema.Column{ContractAssociationsColumns[1], ContractAssociationsColumns[7], ContractAssociationsColumns[9], ContractAssociationsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+			{
+				Name:    "contractassociation_tenant_id_environment_id_contract_id",
+				Unique:  false,
+				Columns: []*schema.Column{ContractAssociationsColumns[1], ContractAssociationsColumns[7], ContractAssociationsColumns[8]},
+			},
+		},
+	}
 	// CostsheetsColumns holds the columns for the "costsheets" table.
 	CostsheetsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3149,6 +3214,8 @@ var (
 		CheckoutSessionsTable,
 		CommitmentsTable,
 		ConnectionsTable,
+		ContractsTable,
+		ContractAssociationsTable,
 		CostsheetsTable,
 		CouponsTable,
 		CouponApplicationsTable,

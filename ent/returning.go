@@ -19,6 +19,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -766,6 +768,130 @@ func scanReturningConnection(rows *sql.Rows) ([]*Connection, error) {
 	var out []*Connection
 	for rows.Next() {
 		node := &Connection{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*Contract.
+func (_u *ContractUpdate) SaveReturning(ctx context.Context) ([]*Contract, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ContractUpdate) sqlSaveReturning(ctx context.Context) ([]*Contract, error) {
+	var out []*Contract
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", contract.Table, contract.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContract(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*Contract.
+func (_d *ContractDelete) ExecReturning(ctx context.Context) ([]*Contract, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ContractDelete) sqlExecReturning(ctx context.Context) ([]*Contract, error) {
+	var out []*Contract
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", contract.Table, contract.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContract(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningContract(rows *sql.Rows) ([]*Contract, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*Contract
+	for rows.Next() {
+		node := &Contract{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*ContractAssociation.
+func (_u *ContractAssociationUpdate) SaveReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ContractAssociationUpdate) sqlSaveReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	var out []*ContractAssociation
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", contractassociation.Table, contractassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContractAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*ContractAssociation.
+func (_d *ContractAssociationDelete) ExecReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ContractAssociationDelete) sqlExecReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	var out []*ContractAssociation
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", contractassociation.Table, contractassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContractAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningContractAssociation(rows *sql.Rows) ([]*ContractAssociation, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*ContractAssociation
+	for rows.Next() {
+		node := &ContractAssociation{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

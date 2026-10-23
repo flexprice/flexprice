@@ -63,6 +63,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -146,6 +147,7 @@ type ServiceParams struct {
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
 	ProductRepo                  productRepo.Repository
+	ContractRepo                 contractRepo.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -263,6 +265,7 @@ func NewServiceParams(
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
 	productRepo productRepo.Repository,
+	contractRepo contractRepo.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -344,5 +347,6 @@ func NewServiceParams(
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
 		ProductRepo:                  productRepo,
+		ContractRepo:                 contractRepo,
 	}
 }

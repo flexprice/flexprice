@@ -386,6 +386,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	// Inline fx_rates: create the subscription-scope rates now that the subscription id exists.
 	if err := s.handleFxOverride(ctx, sub, inlineFXTarget, req.FxRates); err != nil {
@@ -900,6 +901,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	// Create response
 	response := &dto.SubscriptionResponse{Subscription: sub}
@@ -2312,6 +2314,7 @@ func (s *subscriptionService) CancelSubscription(
 			WithHint("Failed to process subscription cancellation").
 			Mark(ierr.ErrDatabase)
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscription.ID)
 
 	if !req.SuppressWebhook {
 		// Step 10: Publish events
@@ -3707,6 +3710,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
 			isSubscriptionCancelled = true
+			NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
@@ -5529,6 +5533,7 @@ func (s *subscriptionService) activateIncompleteSubscription(ctx context.Context
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	s.Logger.Info(ctx, "successfully activated incomplete subscription",
 		"subscription_id", subscriptionID,
@@ -5724,6 +5729,7 @@ func (s *subscriptionService) completeTrialConversionToActive(ctx context.Contex
 
 	if activated {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 	}
 	return nil
 }

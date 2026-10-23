@@ -56,6 +56,7 @@ type Handlers struct {
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	Product                  *v1.ProductHandler
+	Contract                 *v1.ContractHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -365,6 +366,12 @@ func NewRouter(
 			product.GET("/:id", handlers.Product.GetProduct)
 			product.PUT("/:id", write(types.EntityProduct, types.ActionWrite), handlers.Product.UpdateProduct)
 			product.DELETE("/:id", write(types.EntityProduct, types.ActionWrite), handlers.Product.DeleteProduct)
+		}
+
+		contract := v1Private.Group("/contracts")
+		{
+			contract.POST("/search", handlers.Contract.QueryContracts)
+			contract.GET("/:id", handlers.Contract.GetContract)
 		}
 
 		group := v1Private.Group("/groups")

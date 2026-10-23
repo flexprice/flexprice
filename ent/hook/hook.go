@@ -129,6 +129,30 @@ func (f ConnectionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectionMutation", m)
 }
 
+// The ContractFunc type is an adapter to allow the use of ordinary
+// function as Contract mutator.
+type ContractFunc func(context.Context, *ent.ContractMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContractFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContractMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContractMutation", m)
+}
+
+// The ContractAssociationFunc type is an adapter to allow the use of ordinary
+// function as ContractAssociation mutator.
+type ContractAssociationFunc func(context.Context, *ent.ContractAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContractAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContractAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContractAssociationMutation", m)
+}
+
 // The CostsheetFunc type is an adapter to allow the use of ordinary
 // function as Costsheet mutator.
 type CostsheetFunc func(context.Context, *ent.CostsheetMutation) (ent.Value, error)

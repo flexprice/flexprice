@@ -15,6 +15,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -512,6 +514,88 @@ func init() {
 	connectionDescProviderType := connectionFields[2].Descriptor()
 	// connection.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
 	connection.ProviderTypeValidator = connectionDescProviderType.Validators[0].(func(string) error)
+	contractMixin := schema.Contract{}.Mixin()
+	contractMixinFields0 := contractMixin[0].Fields()
+	_ = contractMixinFields0
+	contractMixinFields1 := contractMixin[1].Fields()
+	_ = contractMixinFields1
+	contractFields := schema.Contract{}.Fields()
+	_ = contractFields
+	// contractDescTenantID is the schema descriptor for tenant_id field.
+	contractDescTenantID := contractMixinFields0[0].Descriptor()
+	// contract.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	contract.TenantIDValidator = contractDescTenantID.Validators[0].(func(string) error)
+	// contractDescStatus is the schema descriptor for status field.
+	contractDescStatus := contractMixinFields0[1].Descriptor()
+	// contract.DefaultStatus holds the default value on creation for the status field.
+	contract.DefaultStatus = contractDescStatus.Default.(string)
+	// contractDescCreatedAt is the schema descriptor for created_at field.
+	contractDescCreatedAt := contractMixinFields0[2].Descriptor()
+	// contract.DefaultCreatedAt holds the default value on creation for the created_at field.
+	contract.DefaultCreatedAt = contractDescCreatedAt.Default.(func() time.Time)
+	// contractDescUpdatedAt is the schema descriptor for updated_at field.
+	contractDescUpdatedAt := contractMixinFields0[3].Descriptor()
+	// contract.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	contract.DefaultUpdatedAt = contractDescUpdatedAt.Default.(func() time.Time)
+	// contract.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	contract.UpdateDefaultUpdatedAt = contractDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// contractDescEnvironmentID is the schema descriptor for environment_id field.
+	contractDescEnvironmentID := contractMixinFields1[0].Descriptor()
+	// contract.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	contract.DefaultEnvironmentID = contractDescEnvironmentID.Default.(string)
+	// contractDescCustomerID is the schema descriptor for customer_id field.
+	contractDescCustomerID := contractFields[1].Descriptor()
+	// contract.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	contract.CustomerIDValidator = contractDescCustomerID.Validators[0].(func(string) error)
+	// contractDescCurrency is the schema descriptor for currency field.
+	contractDescCurrency := contractFields[2].Descriptor()
+	// contract.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	contract.CurrencyValidator = contractDescCurrency.Validators[0].(func(string) error)
+	// contractDescContractStatus is the schema descriptor for contract_status field.
+	contractDescContractStatus := contractFields[6].Descriptor()
+	// contract.ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.
+	contract.ContractStatusValidator = contractDescContractStatus.Validators[0].(func(string) error)
+	contractassociationMixin := schema.ContractAssociation{}.Mixin()
+	contractassociationMixinFields0 := contractassociationMixin[0].Fields()
+	_ = contractassociationMixinFields0
+	contractassociationMixinFields1 := contractassociationMixin[1].Fields()
+	_ = contractassociationMixinFields1
+	contractassociationFields := schema.ContractAssociation{}.Fields()
+	_ = contractassociationFields
+	// contractassociationDescTenantID is the schema descriptor for tenant_id field.
+	contractassociationDescTenantID := contractassociationMixinFields0[0].Descriptor()
+	// contractassociation.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	contractassociation.TenantIDValidator = contractassociationDescTenantID.Validators[0].(func(string) error)
+	// contractassociationDescStatus is the schema descriptor for status field.
+	contractassociationDescStatus := contractassociationMixinFields0[1].Descriptor()
+	// contractassociation.DefaultStatus holds the default value on creation for the status field.
+	contractassociation.DefaultStatus = contractassociationDescStatus.Default.(string)
+	// contractassociationDescCreatedAt is the schema descriptor for created_at field.
+	contractassociationDescCreatedAt := contractassociationMixinFields0[2].Descriptor()
+	// contractassociation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	contractassociation.DefaultCreatedAt = contractassociationDescCreatedAt.Default.(func() time.Time)
+	// contractassociationDescUpdatedAt is the schema descriptor for updated_at field.
+	contractassociationDescUpdatedAt := contractassociationMixinFields0[3].Descriptor()
+	// contractassociation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	contractassociation.DefaultUpdatedAt = contractassociationDescUpdatedAt.Default.(func() time.Time)
+	// contractassociation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	contractassociation.UpdateDefaultUpdatedAt = contractassociationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// contractassociationDescEnvironmentID is the schema descriptor for environment_id field.
+	contractassociationDescEnvironmentID := contractassociationMixinFields1[0].Descriptor()
+	// contractassociation.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	contractassociation.DefaultEnvironmentID = contractassociationDescEnvironmentID.Default.(string)
+	// contractassociationDescContractID is the schema descriptor for contract_id field.
+	contractassociationDescContractID := contractassociationFields[1].Descriptor()
+	// contractassociation.ContractIDValidator is a validator for the "contract_id" field. It is called by the builders before save.
+	contractassociation.ContractIDValidator = contractassociationDescContractID.Validators[0].(func(string) error)
+	// contractassociationDescEntityType is the schema descriptor for entity_type field.
+	contractassociationDescEntityType := contractassociationFields[2].Descriptor()
+	// contractassociation.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	contractassociation.EntityTypeValidator = contractassociationDescEntityType.Validators[0].(func(string) error)
+	// contractassociationDescEntityID is the schema descriptor for entity_id field.
+	contractassociationDescEntityID := contractassociationFields[3].Descriptor()
+	// contractassociation.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	contractassociation.EntityIDValidator = contractassociationDescEntityID.Validators[0].(func(string) error)
 	costsheetMixin := schema.Costsheet{}.Mixin()
 	costsheetMixinFields0 := costsheetMixin[0].Fields()
 	_ = costsheetMixinFields0

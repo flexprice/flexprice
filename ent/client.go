@@ -25,6 +25,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -104,6 +106,10 @@ type Client struct {
 	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
+	// Contract is the client for interacting with the Contract builders.
+	Contract *ContractClient
+	// ContractAssociation is the client for interacting with the ContractAssociation builders.
+	ContractAssociation *ContractAssociationClient
 	// Costsheet is the client for interacting with the Costsheet builders.
 	Costsheet *CostsheetClient
 	// Coupon is the client for interacting with the Coupon builders.
@@ -225,6 +231,8 @@ func (c *Client) init() {
 	c.CheckoutSession = NewCheckoutSessionClient(c.config)
 	c.Commitment = NewCommitmentClient(c.config)
 	c.Connection = NewConnectionClient(c.config)
+	c.Contract = NewContractClient(c.config)
+	c.ContractAssociation = NewContractAssociationClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
 	c.Coupon = NewCouponClient(c.config)
 	c.CouponApplication = NewCouponApplicationClient(c.config)
@@ -377,6 +385,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
 		Commitment:               NewCommitmentClient(cfg),
 		Connection:               NewConnectionClient(cfg),
+		Contract:                 NewContractClient(cfg),
+		ContractAssociation:      NewContractAssociationClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
 		CouponApplication:        NewCouponApplicationClient(cfg),
@@ -456,6 +466,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CheckoutSession:          NewCheckoutSessionClient(cfg),
 		Commitment:               NewCommitmentClient(cfg),
 		Connection:               NewConnectionClient(cfg),
+		Contract:                 NewContractClient(cfg),
+		ContractAssociation:      NewContractAssociationClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
 		CouponApplication:        NewCouponApplicationClient(cfg),
@@ -537,17 +549,17 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.AnalyticsView,
 		c.Auth, c.BillingSequence, c.CheckoutSession, c.Commitment, c.Connection,
-		c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
-		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Product,
-		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntitlementGrant,
+		c.EntityIntegrationMapping, c.Environment, c.FXRate, c.Feature, c.Group,
+		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.Product, c.Refund, c.RevenueFact,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -559,17 +571,17 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings, c.AnalyticsView,
 		c.Auth, c.BillingSequence, c.CheckoutSession, c.Commitment, c.Connection,
-		c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
-		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit, c.Product,
-		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon, c.CouponApplication,
+		c.CouponAssociation, c.CreditGrant, c.CreditGrantApplication, c.CreditNote,
+		c.CreditNoteLineItem, c.Customer, c.Entitlement, c.EntitlementGrant,
+		c.EntityIntegrationMapping, c.Environment, c.FXRate, c.Feature, c.Group,
+		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.Plan, c.Price, c.PriceUnit, c.Product, c.Refund, c.RevenueFact,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -598,6 +610,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Commitment.mutate(ctx, m)
 	case *ConnectionMutation:
 		return c.Connection.mutate(ctx, m)
+	case *ContractMutation:
+		return c.Contract.mutate(ctx, m)
+	case *ContractAssociationMutation:
+		return c.ContractAssociation.mutate(ctx, m)
 	case *CostsheetMutation:
 		return c.Costsheet.mutate(ctx, m)
 	case *CouponMutation:
@@ -2062,6 +2078,272 @@ func (c *ConnectionClient) mutate(ctx context.Context, m *ConnectionMutation) (V
 		return (&ConnectionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Connection mutation op: %q", m.Op())
+	}
+}
+
+// ContractClient is a client for the Contract schema.
+type ContractClient struct {
+	config
+}
+
+// NewContractClient returns a client for the Contract from the given config.
+func NewContractClient(c config) *ContractClient {
+	return &ContractClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contract.Hooks(f(g(h())))`.
+func (c *ContractClient) Use(hooks ...Hook) {
+	c.hooks.Contract = append(c.hooks.Contract, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contract.Intercept(f(g(h())))`.
+func (c *ContractClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Contract = append(c.inters.Contract, interceptors...)
+}
+
+// Create returns a builder for creating a Contract entity.
+func (c *ContractClient) Create() *ContractCreate {
+	mutation := newContractMutation(c.config, OpCreate)
+	return &ContractCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Contract entities.
+func (c *ContractClient) CreateBulk(builders ...*ContractCreate) *ContractCreateBulk {
+	return &ContractCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContractClient) MapCreateBulk(slice any, setFunc func(*ContractCreate, int)) *ContractCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContractCreateBulk{err: fmt.Errorf("calling to ContractClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContractCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContractCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Contract.
+func (c *ContractClient) Update() *ContractUpdate {
+	mutation := newContractMutation(c.config, OpUpdate)
+	return &ContractUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContractClient) UpdateOne(_m *Contract) *ContractUpdateOne {
+	mutation := newContractMutation(c.config, OpUpdateOne, withContract(_m))
+	return &ContractUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContractClient) UpdateOneID(id string) *ContractUpdateOne {
+	mutation := newContractMutation(c.config, OpUpdateOne, withContractID(id))
+	return &ContractUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Contract.
+func (c *ContractClient) Delete() *ContractDelete {
+	mutation := newContractMutation(c.config, OpDelete)
+	return &ContractDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContractClient) DeleteOne(_m *Contract) *ContractDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContractClient) DeleteOneID(id string) *ContractDeleteOne {
+	builder := c.Delete().Where(contract.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContractDeleteOne{builder}
+}
+
+// Query returns a query builder for Contract.
+func (c *ContractClient) Query() *ContractQuery {
+	return &ContractQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContract},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Contract entity by its id.
+func (c *ContractClient) Get(ctx context.Context, id string) (*Contract, error) {
+	return c.Query().Where(contract.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContractClient) GetX(ctx context.Context, id string) *Contract {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ContractClient) Hooks() []Hook {
+	return c.hooks.Contract
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContractClient) Interceptors() []Interceptor {
+	return c.inters.Contract
+}
+
+func (c *ContractClient) mutate(ctx context.Context, m *ContractMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContractCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContractUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContractUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContractDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Contract mutation op: %q", m.Op())
+	}
+}
+
+// ContractAssociationClient is a client for the ContractAssociation schema.
+type ContractAssociationClient struct {
+	config
+}
+
+// NewContractAssociationClient returns a client for the ContractAssociation from the given config.
+func NewContractAssociationClient(c config) *ContractAssociationClient {
+	return &ContractAssociationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `contractassociation.Hooks(f(g(h())))`.
+func (c *ContractAssociationClient) Use(hooks ...Hook) {
+	c.hooks.ContractAssociation = append(c.hooks.ContractAssociation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `contractassociation.Intercept(f(g(h())))`.
+func (c *ContractAssociationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ContractAssociation = append(c.inters.ContractAssociation, interceptors...)
+}
+
+// Create returns a builder for creating a ContractAssociation entity.
+func (c *ContractAssociationClient) Create() *ContractAssociationCreate {
+	mutation := newContractAssociationMutation(c.config, OpCreate)
+	return &ContractAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ContractAssociation entities.
+func (c *ContractAssociationClient) CreateBulk(builders ...*ContractAssociationCreate) *ContractAssociationCreateBulk {
+	return &ContractAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ContractAssociationClient) MapCreateBulk(slice any, setFunc func(*ContractAssociationCreate, int)) *ContractAssociationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ContractAssociationCreateBulk{err: fmt.Errorf("calling to ContractAssociationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ContractAssociationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ContractAssociationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ContractAssociation.
+func (c *ContractAssociationClient) Update() *ContractAssociationUpdate {
+	mutation := newContractAssociationMutation(c.config, OpUpdate)
+	return &ContractAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ContractAssociationClient) UpdateOne(_m *ContractAssociation) *ContractAssociationUpdateOne {
+	mutation := newContractAssociationMutation(c.config, OpUpdateOne, withContractAssociation(_m))
+	return &ContractAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ContractAssociationClient) UpdateOneID(id string) *ContractAssociationUpdateOne {
+	mutation := newContractAssociationMutation(c.config, OpUpdateOne, withContractAssociationID(id))
+	return &ContractAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ContractAssociation.
+func (c *ContractAssociationClient) Delete() *ContractAssociationDelete {
+	mutation := newContractAssociationMutation(c.config, OpDelete)
+	return &ContractAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ContractAssociationClient) DeleteOne(_m *ContractAssociation) *ContractAssociationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ContractAssociationClient) DeleteOneID(id string) *ContractAssociationDeleteOne {
+	builder := c.Delete().Where(contractassociation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ContractAssociationDeleteOne{builder}
+}
+
+// Query returns a query builder for ContractAssociation.
+func (c *ContractAssociationClient) Query() *ContractAssociationQuery {
+	return &ContractAssociationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeContractAssociation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ContractAssociation entity by its id.
+func (c *ContractAssociationClient) Get(ctx context.Context, id string) (*ContractAssociation, error) {
+	return c.Query().Where(contractassociation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ContractAssociationClient) GetX(ctx context.Context, id string) *ContractAssociation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ContractAssociationClient) Hooks() []Hook {
+	return c.hooks.ContractAssociation
+}
+
+// Interceptors returns the client interceptors.
+func (c *ContractAssociationClient) Interceptors() []Interceptor {
+	return c.inters.ContractAssociation
+}
+
+func (c *ContractAssociationClient) mutate(ctx context.Context, m *ContractAssociationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ContractAssociationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ContractAssociationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ContractAssociationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ContractAssociationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ContractAssociation mutation op: %q", m.Op())
 	}
 }
 
@@ -9343,31 +9625,31 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 type (
 	hooks struct {
 		Addon, AddonAssociation, AlertLogs, AlertSettings, AnalyticsView, Auth,
-		BillingSequence, CheckoutSession, Commitment, Connection, Costsheet, Coupon,
-		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
-		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
-		HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Hook
+		BillingSequence, CheckoutSession, Commitment, Connection, Contract,
+		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment, FXRate,
+		Feature, Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, Product, Refund, RevenueFact,
+		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
+		WalletTransaction, WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, AlertSettings, AnalyticsView, Auth,
-		BillingSequence, CheckoutSession, Commitment, Connection, Costsheet, Coupon,
-		CouponApplication, CouponAssociation, CreditGrant, CreditGrantApplication,
-		CreditNote, CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
-		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
-		HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod, Plan, Price,
-		PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Interceptor
+		BillingSequence, CheckoutSession, Commitment, Connection, Contract,
+		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
+		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
+		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment, FXRate,
+		Feature, Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, Product, Refund, RevenueFact,
+		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
+		WalletTransaction, WorkflowExecution []ent.Interceptor
 	}
 )
 

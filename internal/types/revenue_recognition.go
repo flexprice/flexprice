@@ -18,6 +18,12 @@ const (
 	ContractStatusCancelled ContractStatus = "cancelled"
 )
 
+type ContractSourceEntityType string
+
+const (
+	ContractSourceEntityTypeSubscription ContractSourceEntityType = "subscription"
+)
+
 type PerformanceObligationStatus string
 
 const (

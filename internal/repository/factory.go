@@ -61,6 +61,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -275,6 +276,10 @@ func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
 
 func NewProductRepository(p RepositoryParams) productRepo.Repository {
 	return productRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewContractRepository(p RepositoryParams) contractRepo.Repository {
+	return contractRepo.NewRepository(p.EntClient, p.Logger)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -70,6 +71,27 @@ func asyncRevenueFactsUpdate(ctx context.Context, params ServiceParams, op, invo
 	if !types.RegisterPostCommit(ctx, start) {
 		start()
 	}
+}
+
+// NotifySubscriptionChanged syncs the subscription's revenue recognition records after the caller commits.
+// Every subscription lifecycle site calls this one helper.
+func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscriptionID string) {
+	asyncRevRecUpdate(ctx, params, "subscription sync", subscriptionID, func(ctx context.Context) error {
+		sub, _, err := params.SubRepo.GetWithLineItems(ctx, subscriptionID)
+		if err != nil {
+			return err
+		}
+
+		_, err = contractsvc.NewContractService(params.ContractRepo).SyncForSubscription(ctx, sub)
+		return err
+	})
+}
+
+// notifySubscriptionArchived archives the revenue recognition records of an abandoned draft subscription.
+func notifySubscriptionArchived(ctx context.Context, params ServiceParams, subscriptionID string) {
+	asyncRevRecUpdate(ctx, params, "subscription archive", subscriptionID, func(ctx context.Context) error {
+		return contractsvc.NewContractService(params.ContractRepo).ArchiveForSubscription(ctx, subscriptionID)
+	})
 }
 
 // asyncRevRecUpdate runs one revenue recognition write detached from the caller, after

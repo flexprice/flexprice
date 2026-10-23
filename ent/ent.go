@@ -22,6 +22,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -142,6 +144,8 @@ func checkColumn(t, c string) error {
 			checkoutsession.Table:          checkoutsession.ValidColumn,
 			commitment.Table:               commitment.ValidColumn,
 			connection.Table:               connection.ValidColumn,
+			contract.Table:                 contract.ValidColumn,
+			contractassociation.Table:      contractassociation.ValidColumn,
 			costsheet.Table:                costsheet.ValidColumn,
 			coupon.Table:                   coupon.ValidColumn,
 			couponapplication.Table:        couponapplication.ValidColumn,
