@@ -3,9 +3,11 @@ package clickhouse
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash"
 	"maps"
 	"slices"
 	"time"
@@ -84,7 +86,7 @@ func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.Resolve
 	if r.conn == nil {
 		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
 	}
-	q, err := buildBillingQueryWithUsage(rv, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	q, err := r.buildReport(rv, tenantID, environmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +101,10 @@ func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.Datase
 	if r.conn == nil {
 		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
 	}
-	q, err := buildDatasetQuery(dq, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	w := *dq
+	w.From = r.stableTime(dq.From)
+	w.To = r.stableTime(dq.To)
+	q, err := buildDatasetQuery(&w, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +113,22 @@ func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.Datase
 		return nil, err
 	}
 	return reportResult(q, rows, r.cfg.MaxResultRows)
+}
+
+func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, environmentID string) (*reportQuery, error) {
+	w := *rv
+	w.Time.From = r.stableTime(rv.Time.From)
+	w.Time.To = r.stableTime(rv.Time.To)
+	return buildBillingQueryWithUsage(&w, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+}
+
+// stableTime lets relative ranges share cache keys.
+func (r *ReportsRepository) stableTime(t time.Time) time.Time {
+	g := min(time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second, time.Minute)
+	if g <= 0 {
+		return t
+	}
+	return t.Truncate(g)
 }
 
 func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.ReportResult, error) {
@@ -146,11 +167,19 @@ func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch fu
 // Params carry tenant and environment.
 func reportCacheKey(ctx context.Context, q *reportQuery) string {
 	h := sha256.New()
-	h.Write([]byte(q.SQL))
+	writeLengthPrefixed(h, q.SQL)
 	for _, k := range slices.Sorted(maps.Keys(q.Params)) {
-		h.Write([]byte("\x00" + k + "\x00" + q.Params[k]))
+		writeLengthPrefixed(h, k)
+		writeLengthPrefixed(h, q.Params[k])
 	}
 	return cache.GenerateKey(ctx, cache.PrefixReportResult, hex.EncodeToString(h.Sum(nil)))
+}
+
+func writeLengthPrefixed(h hash.Hash, s string) {
+	var n [8]byte
+	binary.BigEndian.PutUint64(n[:], uint64(len(s)))
+	h.Write(n[:])
+	h.Write([]byte(s))
 }
 
 func (r *ReportsRepository) query(ctx context.Context, q *reportQuery) ([][]string, error) {

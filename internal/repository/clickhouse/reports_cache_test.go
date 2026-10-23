@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -79,4 +82,27 @@ func TestReportsCache(t *testing.T) {
 		assert.Equal(t, 2, calls)
 		assert.NotEqual(t, reportCacheKey(ctx, q), reportCacheKey(ctx, other))
 	})
+}
+
+func TestReportCacheKey_NoDelimiterCollision(t *testing.T) {
+	ctx := context.Background()
+	a := &reportQuery{SQL: "q", Params: map[string]string{"f0": "a\x00f1\x00b"}}
+	b := &reportQuery{SQL: "q", Params: map[string]string{"f0": "a", "f1": "b"}}
+	assert.NotEqual(t, reportCacheKey(ctx, a), reportCacheKey(ctx, b))
+}
+
+func TestReportsRepository_RelativeRangesShareKey(t *testing.T) {
+	ctx := context.Background()
+	r := &ReportsRepository{cfg: config.ReportsConfig{Database: "db", QueryCacheTTLSeconds: 60}}
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	key := func(now time.Time) string {
+		q, err := r.buildReport(&analytics.ResolvedView{
+			Family: types.FamilyBilling, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal},
+			Time: analytics.TimeSpec{From: now.AddDate(0, 0, -7), To: now},
+		}, "t1", "e1")
+		require.NoError(t, err)
+		return reportCacheKey(ctx, q)
+	}
+	assert.Equal(t, key(base.Add(123456*time.Microsecond)), key(base.Add(41*time.Second)))
+	assert.NotEqual(t, key(base), key(base.Add(time.Minute)))
 }
