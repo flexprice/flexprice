@@ -409,7 +409,9 @@ func (c *Client) doBooksRequest(
 		c.logger.Error(ctx, "Zoho API request failed",
 			"error", "non_2xx_from_zoho_api",
 			"status_code", resp.StatusCode,
-			"response_body", string(bodyBytes))
+			"zoho_code", zohoErrResp.Code,
+			"zoho_message", zohoErrResp.Message,
+			"response_body_bytes", len(bodyBytes))
 		return ierr.WithError(&ZohoAPIError{
 			Code:       zohoErrResp.Code,
 			Message:    zohoErrResp.Message,
@@ -483,7 +485,7 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 		c.logger.Error(ctx, "Zoho token refresh failed",
 			"error", "non_2xx_from_token_endpoint",
 			"status_code", resp.StatusCode,
-			"response_body", string(bodyBytes))
+			"response_body_bytes", len(bodyBytes))
 		return "", ierr.NewError("Zoho token refresh failed").
 			WithHintf("Zoho token endpoint returned status %d", resp.StatusCode).
 			Mark(ierr.ErrHTTPClient)

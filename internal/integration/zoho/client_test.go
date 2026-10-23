@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,10 @@ type plainCrypto struct{}
 func (plainCrypto) Encrypt(s string) (string, error) { return s, nil }
 func (plainCrypto) Decrypt(s string) (string, error) { return s, nil }
 func (plainCrypto) Hash(s string) string             { return s }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 const secretBody = "internal-upstream-detail"
 
@@ -69,6 +74,15 @@ func TestTokenRefreshAPIDomainValidation(t *testing.T) {
 				w.WriteHeader(http.StatusNotFound)
 			}))
 			defer srv.Close()
+
+			origTransport := http.DefaultTransport
+			http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				r = r.Clone(r.Context())
+				r.URL.Scheme = "http"
+				r.URL.Host = strings.TrimPrefix(srv.URL, "http://")
+				return origTransport.RoundTrip(r)
+			})
+			t.Cleanup(func() { http.DefaultTransport = origTransport })
 
 			c, store, ctx := newClient(t, &types.ZohoBooksConnectionMetadata{
 				ClientID: "id", ClientSecret: "secret", RefreshToken: "rt",

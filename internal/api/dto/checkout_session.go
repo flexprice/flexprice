@@ -42,6 +42,7 @@ type RedirectionParams struct {
 	CancelURL  *string `json:"cancel_url,omitempty"`
 }
 
+// Validate checks each set URL is https (http only for localhost).
 func (p RedirectionParams) Validate() error {
 	for name, raw := range map[string]*string{
 		"success_url": p.SuccessURL,
