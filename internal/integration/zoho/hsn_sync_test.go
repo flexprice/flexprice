@@ -53,7 +53,7 @@ func (c *capturingItemSyncSvc) EnsureItemsMapped(_ context.Context, inputs []Ite
 func hsnPrice(id, code, parentID string) *price.Price {
 	p := &price.Price{ID: id, ParentPriceID: parentID}
 	if code != "" {
-		p.Metadata = price.JSONBMetadata{types.MetadataKeyHSNSAC: code}
+		p.Metadata = types.Metadata{types.MetadataKeyHSNSAC: code}
 	}
 	return p
 }

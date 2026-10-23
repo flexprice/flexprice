@@ -462,18 +462,18 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		startDate = &now
 	}
 
-	metadata := priceDomain.JSONBMetadata(r.Metadata)
+	metadata := types.Metadata(r.Metadata)
 	if r.Metadata == nil {
-		metadata = make(priceDomain.JSONBMetadata)
+		metadata = make(types.Metadata)
 	}
 
 	// Initialize transformQuantity with default divide_by=1 if not provided
-	var transformQuantity priceDomain.JSONBTransformQuantity
+	var transformQuantity priceDomain.TransformQuantity
 	if r.TransformQuantity != nil {
-		transformQuantity = priceDomain.JSONBTransformQuantity(*r.TransformQuantity)
+		transformQuantity = *r.TransformQuantity
 	} else {
 		// Default to divide_by=1 when TransformQuantity is not provided
-		transformQuantity = priceDomain.JSONBTransformQuantity{
+		transformQuantity = priceDomain.TransformQuantity{
 			DivideBy: 1,
 		}
 	}
@@ -550,8 +550,8 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	return price, nil
 }
 
-// convertTiers converts CreatePriceTier slice to priceDomain.JSONBTiers with optimized error handling
-func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.JSONBTiers, error) {
+// convertTiers converts CreatePriceTier slice to []priceDomain.PriceTier with optimized error handling
+func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) ([]priceDomain.PriceTier, error) {
 	if len(tiers) == 0 {
 		return nil, nil
 	}
@@ -572,7 +572,7 @@ func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.
 		}
 	}
 
-	return priceDomain.JSONBTiers(priceTiers), nil
+	return priceTiers, nil
 }
 
 // createDecimalError creates a standardized decimal parsing error
@@ -762,8 +762,8 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 		if targetBillingModel == types.BILLING_MODEL_PACKAGE {
 			if r.TransformQuantity != nil {
 				createReq.TransformQuantity = r.TransformQuantity
-			} else if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-				transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+			} else if existingPrice.TransformQuantity != (price.TransformQuantity{}) {
+				transformQuantity := existingPrice.TransformQuantity
 				createReq.TransformQuantity = &transformQuantity
 			}
 		}

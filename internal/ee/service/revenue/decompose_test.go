@@ -53,7 +53,7 @@ func volumeTiered(t *testing.T) *price.Price {
 		Type:         types.PRICE_TYPE_USAGE,
 		BillingModel: types.BILLING_MODEL_TIERED,
 		TierMode:     types.BILLING_TIER_VOLUME,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo, UnitAmount: decimal.RequireFromString("0.01")},
 			{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 		},
@@ -69,7 +69,7 @@ func graduated(t *testing.T) *price.Price {
 		Type:         types.PRICE_TYPE_USAGE,
 		BillingModel: types.BILLING_MODEL_TIERED,
 		TierMode:     types.BILLING_TIER_SLAB,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo, UnitAmount: decimal.RequireFromString("0.01")},
 			{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 		},
@@ -130,7 +130,7 @@ func TestDecompositionMode(t *testing.T) {
 		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeDay}}
 	pkg := &price.Price{ID: "price_pkg", Amount: decimal.NewFromInt(1),
 		BillingModel:      types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP}}
+		TransformQuantity: price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP}}
 	// Windows that nest inside a day are priced per window and grouped into
 	// days, whatever the pricing shape.
 	assert.Equal(t, types.Marginal, decompositionMode(pkg, bucketedSum))
@@ -422,7 +422,7 @@ func TestListRate_PerUnit(t *testing.T) {
 		ID:                "price_pkg",
 		Amount:            decimal.NewFromInt(1),
 		BillingModel:      types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
+		TransformQuantity: price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
 	}
 	assert.Equal(t, "0.1", listRate(pkg).String(), "package: amount spread over the block")
 

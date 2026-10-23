@@ -106,7 +106,7 @@ func TestSyncPlanToChargebee_SyncsThreePricesAndCreatesMappings(t *testing.T) {
 			Currency:     "USD",
 			BillingModel: types.BILLING_MODEL_PACKAGE,
 			Amount:       decimal.NewFromInt(20),
-			TransformQuantity: price.JSONBTransformQuantity{
+			TransformQuantity: price.TransformQuantity{
 				DivideBy: 5,
 				Round:    types.ROUND_UP,
 			},
@@ -118,7 +118,7 @@ func TestSyncPlanToChargebee_SyncsThreePricesAndCreatesMappings(t *testing.T) {
 			Currency:     "USD",
 			BillingModel: types.BILLING_MODEL_TIERED,
 			TierMode:     types.BILLING_TIER_SLAB,
-			Tiers: price.JSONBTiers{
+			Tiers: []price.PriceTier{
 				{UpTo: &upTo100, UnitAmount: decimal.NewFromFloat(0.10)},
 				{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.05)},
 			},

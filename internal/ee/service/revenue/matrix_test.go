@@ -74,7 +74,7 @@ func matrixTieredPrice(mode types.BillingTier) func(ctx context.Context, planID,
 			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			InvoiceCadence:     types.InvoiceCadenceArrear,
 			TierMode:           mode,
-			Tiers: price.JSONBTiers{
+			Tiers: []price.PriceTier{
 				{UpTo: &upTo, UnitAmount: decimal.RequireFromString("0.01")},
 				{UpTo: nil, UnitAmount: decimal.RequireFromString("0.005")},
 			},
@@ -97,7 +97,7 @@ func matrixPackagePrice(ctx context.Context, planID, meterID, priceID string) *p
 		BillingModel:       types.BILLING_MODEL_PACKAGE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
-		TransformQuantity:  price.JSONBTransformQuantity{DivideBy: 250, Round: types.ROUND_UP},
+		TransformQuantity:  price.TransformQuantity{DivideBy: 250, Round: types.ROUND_UP},
 		MeterID:            meterID,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
@@ -829,7 +829,7 @@ func (s *RevenueRollupSuite) TestE2E_BucketedPackagePerDay() {
 	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, mtr))
 
 	p := matrixPackagePrice(ctx, pl.ID, mtr.ID, "price_bkt")
-	p.TransformQuantity = price.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP}
+	p.TransformQuantity = price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
 
 	s.sub = &subscription.Subscription{

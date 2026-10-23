@@ -32,7 +32,7 @@ func TestToCreatePriceRequestPreservesHSNSAC(t *testing.T) {
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
 		Amount:             decimal.NewFromInt(15000),
-		Metadata:           price.JSONBMetadata{types.MetadataKeyHSNSAC: testHSNSAC},
+		Metadata:           types.Metadata{types.MetadataKeyHSNSAC: testHSNSAC},
 	}
 
 	t.Run("carried over when the update omits metadata", func(t *testing.T) {

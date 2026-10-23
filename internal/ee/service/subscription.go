@@ -1544,8 +1544,8 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 		if targetBillingModel == types.BILLING_MODEL_PACKAGE {
 			if override.TransformQuantity != nil {
 				createPriceReq.TransformQuantity = override.TransformQuantity
-			} else if originalPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-				transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
+			} else if originalPrice.TransformQuantity != (price.TransformQuantity{}) {
+				transformQuantity := originalPrice.TransformQuantity
 				createPriceReq.TransformQuantity = &transformQuantity
 			}
 		}
