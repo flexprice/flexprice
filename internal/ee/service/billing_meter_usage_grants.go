@@ -172,7 +172,7 @@ func (s *billingService) adjustMeterUsageGrants(
 		if err != nil {
 			return adjustMeterUsageGrantsResult{}, false, err
 		}
-		res.Overage = overage
+		res.Overage = decimal.Max(overage, decimal.Zero)
 	}
 
 	switch measure {

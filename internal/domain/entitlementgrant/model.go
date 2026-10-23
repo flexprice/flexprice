@@ -27,9 +27,8 @@ type EntitlementGrant struct {
 	ValidTo             time.Time                             `json:"valid_to"`
 	GrantStatus         types.EntitlementGrantStatus          `json:"grant_status"`
 	LastComputedAt      *time.Time                            `json:"last_computed_at,omitempty"`
-	// QuotaCrossedAt is set once, when the evaluator first sees usage >= quota. It holds
-	// the evaluation time, not the exact event-level crossing — the interval billing lane
-	// forgives whatever was consumed between the two.
+	// QuotaCrossedAt records the current exhaustion's evaluation time, not the exact
+	// event crossing. Recovery clears it so a later exhaustion records a new crossing.
 	QuotaCrossedAt *time.Time     `json:"quota_crossed_at,omitempty"`
 	Metadata       types.Metadata `json:"metadata,omitempty"`
 	EnvironmentID  string         `json:"environment_id"`

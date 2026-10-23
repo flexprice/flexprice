@@ -312,7 +312,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
-		usage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
+		rawUsage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
 		if err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: usage refresh failed",
 				"grant_id", g.ID, "error", err)
@@ -320,24 +320,23 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
+		// Grant consumption is nonnegative; each refresh starts from signed metering data.
+		usage := decimal.Max(rawUsage, decimal.Zero)
+
 		if err := s.transitionEntitlementGrantAlert(ctx, alertLogsSvc, cust, g, usage, at); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: alert transition failed",
 				"grant_id", g.ID, "error", err)
 			errs = append(errs, err)
 		}
 
-		// Record the quota exhaustion timestamp, once per grant.
-		// NOTE: this is the EVALUATION time, not the exact crossing time.
-		// finding that exactly needs extra ClickHouse queries (binary search on the
-		// running usage). Billing only charges usage AFTER this timestamp, so
-		// overage accrued before detection is never billed: pro-customer,
-		// bounded by the debounce delay. If exactness is ever needed, the
-		// upgrade path is the binary-searched crossing (see ERD decisions).
-		// Unlimited windows track usage for display but have no ceiling to cross,
-		// so they never stamp a crossing and never bill overage.
+		// Keep the evaluation-time crossing while exhausted; recovery starts a new crossing cycle.
 		cross := g.QuotaCrossedAt
-		if cross == nil && g.IsExhausted(usage) {
-			cross = &at
+		if g.IsExhausted(usage) {
+			if cross == nil {
+				cross = &at
+			}
+		} else {
+			cross = nil
 		}
 
 		// Snapshot the refreshed state; last_computed_at >= valid_to marks a
@@ -346,8 +345,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			WithUsage(usage).
 			WithLastComputedAt(&at).
 			WithQuotaCrossedAt(cross)
-		if g.IsExhausted(usage) && g.GrantStatus == types.EntitlementGrantStatusActive {
+		if g.IsExhausted(usage) {
 			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
+		} else {
+			builder = builder.WithGrantStatus(types.EntitlementGrantStatusActive)
 		}
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
@@ -358,10 +359,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 	return errors.Join(errs...)
 }
 
-// refreshEntitlementGrantUsage refreshes the grant's consumed usage over
-// [valid_from, min(at, valid_to)).
+// refreshEntitlementGrantUsage evaluates through min(at, valid_to). NEVER SUM
+// quantity grants use the running balance; other quantity grants use their own window.
 //
-//   - quantity measure: one raw meter-usage query over the window.
+//   - quantity measure: signed window usage or checkpoint-backed running balance.
 //   - amount measure: rides the billing path (GetSubscriptionMeterUsageWithSub +
 //     ConvertToBillingCharges), which splits the window into per-line-item date
 //     ranges — a mid-window price change produces a new line-item segment, so
@@ -384,6 +385,12 @@ func (s *alertService) refreshEntitlementGrantUsage(
 
 	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
 	if g.Measure == types.EntitlementGrantMeasureQuantity {
+		if keepsRunningAggregate(m) {
+			return meterUsageSvc.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+				CustomerID: sub.CustomerID, ExternalCustomerIDs: extCustomerIDs,
+				MeterID: m.ID, AggregationType: m.Aggregation.Type, Until: end,
+			})
+		}
 		usage, err := meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
 			TenantID:            g.TenantID,
 			EnvironmentID:       g.EnvironmentID,
@@ -423,8 +430,12 @@ func (s *alertService) transitionEntitlementGrantAlert(
 	usage decimal.Decimal,
 	at time.Time,
 ) error {
+	status := types.AlertStateInAlarm
 	if !g.IsExhausted(usage) {
-		return nil
+		if !g.ValidTo.After(at) {
+			return nil
+		}
+		status = types.AlertStateOk
 	}
 
 	// Zero quota is spent by definition, and dividing by it would panic.
@@ -442,7 +453,7 @@ func (s *alertService) transitionEntitlementGrantAlert(
 		ParentEntityID:   &g.SubscriptionID,
 		CustomerID:       &custID,
 		AlertType:        types.AlertTypeEntitlementGrantExhausted,
-		AlertStatus:      types.AlertStateInAlarm,
+		AlertStatus:      status,
 		AlertInfo: types.AlertInfo{
 			ValueAtTime: ratio,
 			Timestamp:   at,

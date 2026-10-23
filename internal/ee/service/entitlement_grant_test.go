@@ -77,6 +77,7 @@ func (s *EntitlementGrantSuite) buildServiceParams() ServiceParams {
 		AddonRepo:                stores.AddonRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		MeterUsageRepo:           stores.MeterUsageRepo,
+		MeterUsageCheckpointRepo: stores.MeterUsageCheckpointRepo,
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	}
 }
