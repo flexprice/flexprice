@@ -360,7 +360,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 
 	currentTime := time.Now().UnixMilli()
 	if !hubspotTimestampFresh(timestampInt, currentTime) {
-		h.logger.Info(context.Background(), "timestamp outside tolerance, rejecting webhook",
+		h.logger.Debug(c.Request.Context(), "timestamp outside tolerance, rejecting webhook",
 			"timestamp", timestampInt,
 			"current_time", currentTime,
 			"age_ms", currentTime-timestampInt)
