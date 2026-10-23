@@ -334,7 +334,7 @@ const (
 | One-time charge                                                                                                                     | Same, with `period_start = period_end`.                                                                                                                                                                                                                                                                            |
 | Usage line item                                                                                                                     | No segments. Earned comes from `revenue_facts` (below).                                                                                                                                                                                                                                                            |
 | Modification (price override, line item change, plan change v2, line item removal, cancellation, coupon added / removed mid-period) | New line items join the POB of their predecessor or get a new POB. Append a superseding segment over the affected span: prospective by default, from the effective date to the period end.                                                                                                                         |
-| Invoice finalized (`SUBSCRIPTION`)                                                                                                  | If a fixed line's net (`amount − line_item_discount − invoice_level_discount`) differs from the effective schedule over the line's period, append a superseding segment with the invoiced net, retrospective over that period, sourced `invoice_line_item`. Prepaid credits applied are settlement, not deviation. |
+| Invoice finalized (`SUBSCRIPTION`)                                                                                                  | If a fixed line's line net (Step 6: after discounts and inclusive tax) differs from the effective schedule over the line's period, append a superseding segment with the invoiced net, retrospective over that period, sourced `invoice_line_item`. Prepaid credits applied are settlement, not deviation. |
 | Invoice voided                                                                                                                      | If the voided line set the effective segment, append a superseding segment with the billing engine's valuation, sourced `subscription_line_item`.                                                                                                                                                                  |
 | Invoice finalized / voided (`ONE_OFF`)                                                                                              | None. Subscription-linked proration lines are already scheduled by the modification that produced them. Other subscription-linked lines keep the subscription's contract but no POB; standalone invoices (no subscription) have neither. Both post billing journals only (Step 6).                               |
 
@@ -547,8 +547,8 @@ type StatementType string // balance_sheet | income_statement
 | --------------------- | -------------- | ------------------------------------------------------------------------------------------------------------ |
 | `cash`                | asset          | Payment succeeded (debit), refund succeeded (credit)                                                         |
 | `accounts_receivable` | asset          | Invoice finalized / voided, credit note, credits applied, payment, refund                                    |
-| `unbilled_receivable` | asset          | Earned before invoiced (usage, arrears)                                                                      |
-| `deferred_revenue`    | liability      | Invoiced before earned                                                                                       |
+| `unbilled_receivable` | asset          | Recognition (debit); offset (credit). Holds earned but not yet invoiced                                      |
+| `deferred_revenue`    | liability      | POB invoice lines (credit); offset (debit). Holds invoiced but not yet earned                                |
 | `customer_credit`     | liability      | Wallet top-up `ONE_OFF` invoice finalized (credit); credits applied to an invoice, `CREDITS` payment (debit) |
 | `tax_payable`         | liability      | Invoice tax; tax reversed by a credit note                                                                   |
 | `revenue`             | revenue        | Recognition; standalone one-off invoices at finalize                                                         |
@@ -579,7 +579,7 @@ CREATE TABLE journal_entries (                     -- immutable
     id                 varchar(50)  PRIMARY KEY,   -- prefix "je"
     tenant_id          varchar(50)  NOT NULL,
     environment_id     varchar(50)  NOT NULL,
-    event_type         varchar(50)  NOT NULL,      -- invoice_finalized | invoice_voided | credit_note_finalized | credit_note_voided | payment_succeeded | payment_reversed | refund_succeeded | revenue_earned
+    event_type         varchar(50)  NOT NULL,      -- invoice_finalized | invoice_voided | credit_note_finalized | credit_note_voided | payment_succeeded | payment_reversed | refund_succeeded | revenue_earned | revenue_offset
     source_entity_type varchar(50)  NOT NULL,      -- invoice | credit_note | payment | refund | pob
     source_entity_id   varchar(50)  NOT NULL,
     idempotency_key    varchar(255),               -- billing entries only; recognition relies on the POB lock
@@ -623,39 +623,59 @@ No `entry_date`: Phase 1 never closes a period, so it equals `business_date`; on
 
 #### Posting rules
 
-**POB position.** Per POB, `billed − earned` from its lines: deferred = Σ(credit − debit) on `deferred_revenue`, unbilled = Σ(debit − credit) on `unbilled_receivable`. A POB never carries both. A billing amount `+b` credits unbilled up to its balance, then deferred; an earning `+e` debits deferred up to its balance, then unbilled. Negative amounts mirror this. Invoice lines resolve their POB through `subscription_line_item_id`. `ONE_OFF` lines with no POB are recognized at finalize; their entry keeps the subscription's contract when the invoice has one, and `contract_id` is null for standalone invoices.
+**POB position.** Billing and recognition post gross and never read a balance: a POB invoice line always credits `deferred_revenue`, and recognition always debits `unbilled_receivable`. For each ended month `P` the run then posts the **offset**, which removes from both accounts the part that is both billed and earned:
+
+- `billed(P)` = the POB's invoice credits to `deferred_revenue` (net of voids) in entries dated up to `P_end`; `earned(P)` = its recognized revenue up to `P`.
+- `offset(P) = min(billed(P), earned(P))`. The run posts `offset(P) − offsets already posted up to P`: Dr `deferred_revenue` / Cr `unbilled_receivable`; a negative amount mirrors it.
+- At every month end deferred = `max(billed − earned, 0)` and unbilled = `max(earned − billed, 0)`, whatever order the entries posted in. A POB never carries both.
+
+Billed means invoiced by `P_end` (the invoice's date), not the service period it covers: an arrears invoice dated Feb 1 for January usage is February billing, so January closes with unbilled. Invoice lines resolve their POB through `subscription_line_item_id`. A line's **line net** is `amount − line_item_discount − invoice_level_discount − inclusive tax` (inclusive tax allocated to lines pro rata by net when stored per invoice); billing entries and schedule true-ups (Step 3) use the same line net, so tax never becomes revenue. `ONE_OFF` lines with no POB are recognized at finalize; their entry keeps the subscription's contract when the invoice has one, and `contract_id` is null for standalone invoices.
 
 
 | Event (business date)                                         | Entry                                                                                                                                                                                                                                             |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SUBSCRIPTION` / proration invoice finalized (`finalized_at`) | Dr AR (invoice `total`, already net of credits), Dr `customer_credit` (credits applied) / per line, its net (after discounts and inclusive tax) to its POB: Cr `unbilled_receivable` up to the POB's unbilled balance, the rest Cr `deferred_revenue`; Cr `tax_payable` (total tax) |
-| `ONE_OFF` lines with no POB finalized                         | Dr AR / Cr `revenue`, Cr `tax_payable`                                                                                                                                                                                                            |
-| Wallet top-up `ONE_OFF` invoice finalized                     | Dr AR / Cr `customer_credit` (invoice metadata carries `wallet_transaction_id`)                                                                                                                                                                   |
-| Invoice voided (`voided_at`)                                  | Inverse POB billing, Dr `tax_payable` / Cr AR by the gross including credits applied; the void's wallet refund returns the credits                                                                                                                |
+| Invoice finalized (`finalized_at`)                            | Dr AR (invoice `total`, already net of credits), Dr `customer_credit` (credits applied) / Cr `tax_payable` (total tax), and per line by its line net: POB line Cr `deferred_revenue` (with its `pob_id`); no-POB `ONE_OFF` line Cr `revenue`; wallet top-up invoice (metadata carries `wallet_transaction_id`) Cr `customer_credit` |
+| Invoice voided (`voided_at`)                                  | Per line, the inverse of its finalize credit (POB line: Dr `deferred_revenue`; no-POB line: Dr `revenue`; top-up: Dr `customer_credit`), Dr `tax_payable` / Cr AR by the gross including credits applied; the void's wallet refund returns the credits |
 | Credit note finalized                                         | Dr `contra_revenue`, Dr `tax_payable` (when reversed) / Cr AR                                                                                                                                                                                     |
 | Credit note voided                                            | Inverse of its finalize entry, `reversal_of` set                                                                                                                                                                                                  |
 | Payment succeeded (`succeeded_at`)                            | Dr `cash` / Cr AR; method `CREDITS`: Dr `customer_credit` / Cr AR                                                                                                                                                                                 |
 | Payment reversed                                              | Inverse of the payment entry, `reversal_of` set                                                                                                                                                                                                   |
 | Refund succeeded (`succeeded_at`)                             | Dr AR / Cr `cash` (`GATEWAY`, `OUT_OF_BAND`) or Cr `customer_credit` (`WALLET`)                                                                                                                                                                   |
-| Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − round(earned(P_start)) − posted(P)`. Positive `δ`: Dr `deferred_revenue` up to the POB's deferred balance, the rest Dr `unbilled_receivable` / Cr `revenue`. Negative `δ` mirrors it     |
+| Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − round(earned(P_start)) − posted(P)`. Positive `δ`: Dr `unbilled_receivable` / Cr `revenue`; negative mirrors it |
+| Offset (last day of the period)                               | Per POB and ended month `P`, in the same transaction as its recognition: Dr `deferred_revenue` / Cr `unbilled_receivable` by `offset(P) −` offsets posted up to `P`; negative mirrors it |
 
 
 Credits and voids: an invoice of 100 with 20 credits applied, paid 80, then voided. Finalize Dr AR 80, Dr `customer_credit` 20; payment Cr AR 80; void Cr AR 100 (gross including credits); the void's wallet refund (`refund_succeeded`, `WALLET`) Dr AR 100 / Cr `customer_credit` 100. AR nets to 0, and `customer_credit` holds 80: the paid cash moved to the wallet, with the 20 credits restored.
 
 `posted(P)` is Σ(credit − debit) on the POB's `revenue` lines in recognition entries of `P`: what is already in the journal for that month, so a run posts only the gap. Recognition entries are per POB and every line carries `pob_id`; `pob_id` is null only on billing lines that belong to no POB (AR, tax, cash, customer credit, standalone one-off revenue).
 
-Example: $1,200 annual prepaid from Jan 1, `period_even`, invoiced Jan 1 (Cr `deferred_revenue` 1,200).
+Example 1, prepaid: $1,200 annual from Jan 1, `period_even`, invoiced Jan 1 (Dr AR 1,200 / Cr `deferred_revenue` 1,200).
 
 
-| Run      | Period | Earned in `P` | `posted(P)` | `δ`  | Entry                                        |
-| -------- | ------ | ------------- | ----------- | ---- | -------------------------------------------- |
-| Jan 2–31 | —      | —             | —           | —    | None; January has not ended                  |
-| Feb 1    | Jan    | 100           | 0           | +100 | Dr `deferred_revenue` 100 / Cr `revenue` 100 |
-| Feb 2    | Jan    | 100           | 100         | 0    | None                                         |
-| Mar 1    | Feb    | 100           | 0           | +100 | Dr `deferred_revenue` 100 / Cr `revenue` 100 |
+| Run      | Period | `δ`  | `billed` | `earned` | Offset to date | Entries                                                                                            |
+| -------- | ------ | ---- | -------- | -------- | -------------- | -------------------------------------------------------------------------------------------------- |
+| Jan 2–31 | —      | —    | —        | —        | —              | None; January has not ended                                                                        |
+| Feb 1    | Jan    | +100 | 1,200    | 100      | 100            | Dr `unbilled_receivable` 100 / Cr `revenue` 100; Dr `deferred_revenue` 100 / Cr `unbilled_receivable` 100 |
+| Feb 2    | Jan    | 0    | 1,200    | 100      | 100            | None                                                                                               |
+| Mar 1    | Feb    | +100 | 1,200    | 200      | 200            | Same pair, 100 each                                                                                |
 
 
-A backdated modification that cuts January's earned to 90 makes the next run post `δ = −10` to January: Dr `revenue` 10 / Cr `deferred_revenue` 10. Without it, deferred after March 1 is 1,200 − 100 − 100 = 1,000; with it, 1,010.
+January closes at deferred 1,100, unbilled 0; February at 1,000 and 0. A backdated modification that cuts January's earned to 90 makes the next run post `δ = −10` (Dr `revenue` 10 / Cr `unbilled_receivable` 10) and an offset of −10 (Dr `unbilled_receivable` 10 / Cr `deferred_revenue` 10): deferred after March 1 becomes 1,010.
+
+Example 2, arrears usage posted out of order: January usage $300, invoiced Feb 1 at 00:05; the recognition run for January runs Feb 1 at 02:00. February usage $250, invoiced Mar 1.
+
+
+| When         | Entry                                                                                              | Period |
+| ------------ | -------------------------------------------------------------------------------------------------- | ------ |
+| Feb 1, 00:05 | Invoice: Dr AR 300 / Cr `deferred_revenue` 300                                                     | Feb    |
+| Feb 1, 02:00 | January recognition: Dr `unbilled_receivable` 300 / Cr `revenue` 300                               | Jan    |
+| Feb 1, 02:00 | January offset: billed by Jan 31 = 0, earned 300, `min` = 0; none                                  | Jan    |
+| Mar 1, 00:05 | Invoice: Dr AR 250 / Cr `deferred_revenue` 250                                                     | Mar    |
+| Mar 1, 02:00 | February recognition: Dr `unbilled_receivable` 250 / Cr `revenue` 250                              | Feb    |
+| Mar 1, 02:00 | February offset: billed by Feb 28 = 300, earned 550, `min` = 300; Dr `deferred_revenue` 300 / Cr `unbilled_receivable` 300 | Feb    |
+
+
+January closes at unbilled 300, deferred 0; February at unbilled 250 (300 + 250 − 300), deferred 0. Posting the 00:05 invoices after the 02:00 runs gives the same balances.
 
 #### APIs
 
@@ -673,7 +693,7 @@ Read-only: the journal is derived from billing and schedules.
 - Entries are immutable. Each has at least one debit and one credit line, positive amounts, Σ debits = Σ credits, one currency (the invoice's), one period. Corrections are deltas or inverses linked by `reversal_of`.
 - Billing entries carry the idempotency key `{event_type}:{source_entity_id}`: one entry per event per source. A corrected invoice is a void (`invoice_voided`, same source) plus a new invoice (new source), never a re-post under the same key. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
 - Billing entries post async after the source commits (post-commit hook, like `revenue_facts`), each in its own transaction. A failure is logged and never fails the source write; `Reconcile` re-posts anything missing.
-- Recognition posts only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
+- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. A billing entry dated in an ended month makes the next run recompute that month's offset and every later one. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
 - Business dates are local dates in the subscription's timezone (the customer's without a subscription); the entry posts to that date's period (Step 4).
 - Billing entries post for `draft` contracts too; recognition only for `active` and `satisfied` POBs, catching up on the first run.
 - Enabling revenue recognition replays every contract from its start: contracts, POBs and segments, then billing entries in business-date order, then recognition. No opening-balance entries.
@@ -706,6 +726,7 @@ type JournalService interface {
 
 - Credit notes set `finalized_at` on finalize and `voided_at` on void (`creditnote.go:794`, `:679`; both are null today). These are the business dates of their entries.
 - Payment hooks fire after the payment row is saved (`payment_processor.go:171-179`), so a payment entry never posts for an unsaved row.
+- Quantity-change proration invoices set `subscription_line_item_id` on their line (`subscription_modification_quantity.go:1068`; only `price_id` is set today). Without it the line resolves no POB, posts as revenue at finalize, and is recognized again through the modification's segment.
 
 ### Step 7 — Rollforward & Waterfall
 
@@ -848,13 +869,13 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 
 **Signs.** Amounts are in the account's normal direction: a movement is positive when it increases the balance.
 
-**Movement categories**, fixed in code from the entry's `event_type`:
+**Movement categories**, fixed in code from the entry's `event_type` and the line's account. The offset is one entry: it shows as `earned` in the deferred rollforward and as `invoiced` in the unbilled rollforward.
 
 
 | Category      | Event types                                   |
 | ------------- | --------------------------------------------- |
-| `invoiced`    | `invoice_finalized`, `invoice_voided`         |
-| `earned`      | `revenue_earned`                              |
+| `invoiced`    | `invoice_finalized`, `invoice_voided`; `revenue_offset` on `unbilled_receivable` |
+| `earned`      | `revenue_earned`; `revenue_offset` on `deferred_revenue`     |
 | `adjustments` | `credit_note_finalized`, `credit_note_voided` |
 | `payments`    | `payment_succeeded`, `payment_reversed`       |
 | `refunds`     | `refund_succeeded`                            |
