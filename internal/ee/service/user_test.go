@@ -12,6 +12,7 @@ import (
 
 	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
@@ -25,6 +26,18 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
+
+type fakeRemoveProvider struct {
+	authProvider.Provider
+	errs  []error
+	calls int
+}
+
+func (f *fakeRemoveProvider) RemoveUser(context.Context, string) error {
+	err := f.errs[f.calls]
+	f.calls++
+	return err
+}
 
 type UserServiceSuite struct {
 	suite.Suite
@@ -812,6 +825,39 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		key, err := s.secretRepo.Get(ctx, "key-1")
 		s.NoError(err)
 		s.Equal(types.StatusDeleted, key.Status)
+	})
+
+	s.Run("provider_failure_then_retry_completes", func() {
+		seedStore()
+		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
+			ID:        "key-1",
+			UserID:    "user-1",
+			UserType:  string(types.UserTypeUser),
+			BaseModel: types.BaseModel{TenantID: types.DefaultTenantID, Status: types.StatusPublished},
+		})
+		fake := &fakeRemoveProvider{errs: []error{cockroachErrors.New("provider down"), nil}}
+		s.userService.newProvider = func(*config.Configuration) authProvider.Provider { return fake }
+
+		s.Error(s.userService.RemoveUser(ctx, "user-1"))
+		archived, err := s.userRepo.GetByID(ctx, "user-1")
+		s.NoError(err)
+		s.Equal(types.StatusArchived, archived.Status)
+		key, err := s.secretRepo.Get(ctx, "key-1")
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, key.Status)
+
+		s.NoError(s.userService.RemoveUser(ctx, "user-1"))
+		s.Equal(2, fake.calls)
+	})
+
+	s.Run("retry_provider_not_found_is_success", func() {
+		seedStore()
+		fake := &fakeRemoveProvider{errs: []error{cockroachErrors.New("provider down"), ierr.NewError("gone").Mark(ierr.ErrNotFound)}}
+		s.userService.newProvider = func(*config.Configuration) authProvider.Provider { return fake }
+
+		s.Error(s.userService.RemoveUser(ctx, "user-1"))
+		s.NoError(s.userService.RemoveUser(ctx, "user-1"))
+		s.Equal(2, fake.calls)
 	})
 
 	s.Run("empty_id_returns_validation_error", func() {
