@@ -53,6 +53,7 @@ type Handlers struct {
 	Tax                      *v1.TaxHandler
 	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
+	Commitment               *v1.CommitmentHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	Integration              *v1.IntegrationHandler
@@ -661,6 +662,16 @@ func NewRouter(
 			// {
 			// 	paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
 			// }
+		}
+
+		commitments := v1Private.Group("/commitments")
+		{
+			commitments.POST("", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.CreateCommitment)
+			commitments.POST("/preview", handlers.Commitment.PreviewCommitment)
+			commitments.POST("/search", handlers.Commitment.QueryCommitments)
+			commitments.GET("/:id", handlers.Commitment.GetCommitment)
+			commitments.PUT("/:id", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.UpdateCommitment)
+			commitments.POST("/:id/terminate", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TerminateCommitment)
 		}
 
 		// Coupon routes
