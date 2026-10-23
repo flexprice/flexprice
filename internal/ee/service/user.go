@@ -46,6 +46,7 @@ type userService struct {
 	rbacService     *rbac.RBACService
 	settingsService SettingsService
 	logger          *logger.Logger
+	newProvider     func(*config.Configuration) authProvider.Provider
 }
 
 func NewUserService(
@@ -708,7 +709,18 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	}
 
 	tenantID := existingUser.TenantID
-	provider := authProvider.NewProvider(s.cfg)
+	newProvider := s.newProvider
+	if newProvider == nil {
+		newProvider = authProvider.NewProvider
+	}
+	provider := newProvider(s.cfg)
+
+	if existingUser.Status != types.StatusPublished {
+		if err := s.secretRepo.RevokeByUserID(ctx, id); err != nil {
+			return err
+		}
+		return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
+	}
 
 	err = s.db.WithTx(ctx, func(ctx context.Context) error {
 		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
@@ -740,7 +752,11 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 		return err
 	}
 
-	if err := provider.RemoveUser(ctx, id); err != nil {
+	return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
+}
+
+func (s *userService) removeProviderLogin(ctx context.Context, provider authProvider.Provider, actorUserID, id, tenantID string) error {
+	if err := provider.RemoveUser(ctx, id); err != nil && !ierr.IsNotFound(err) {
 		s.logger.Error(ctx, "provider login removal failed",
 			"error", err,
 			"target_user_id", id,
