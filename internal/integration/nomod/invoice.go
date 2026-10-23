@@ -65,6 +65,9 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 			WithHint("Failed to get FlexPrice invoice").
 			Mark(ierr.ErrDatabase)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &NomodInvoiceSyncResponse{}, nil
+	}
 
 	// Step 3: Check if invoice is already synced to avoid duplicates
 	existingMapping, err := s.GetExistingNomodMapping(ctx, req.InvoiceID)

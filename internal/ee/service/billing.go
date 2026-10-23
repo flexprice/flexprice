@@ -2542,7 +2542,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),
 		PaymentStatus:    lo.ToPtr(types.PaymentStatusPending),
 		Currency:         sub.Currency,
-		AmountDue:        result.TotalAmount,
+		AmountDue:        decimal.Max(result.TotalAmount, decimal.Zero),
 		Total:            result.TotalAmount,
 		Subtotal:         result.TotalAmount,
 		Description:      description,

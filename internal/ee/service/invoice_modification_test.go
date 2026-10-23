@@ -46,7 +46,7 @@ func TestRecalculateInvoiceTotals(t *testing.T) {
 		assert.True(t, decimal.NewFromInt(5).Equal(inv.TotalTax))
 	})
 
-	t.Run("floors total at zero when discount and tax exceed subtotal", func(t *testing.T) {
+	t.Run("preserves negative total and floors amount due at zero", func(t *testing.T) {
 		inv := &invoice.Invoice{
 			TotalDiscount:              decimal.NewFromInt(80),
 			TotalTax:                   decimal.NewFromInt(0),
@@ -59,9 +59,9 @@ func TestRecalculateInvoiceTotals(t *testing.T) {
 
 		s.recalculateTotalsFromLineItems(inv, lineItems)
 
-		// subtotal = 50; raw total = 50 - 30 - 80 + 0 = -60 -> floored to 0
+		// subtotal = 50; total = 50 - 30 - 80 + 0 = -60; nothing is payable.
 		assert.True(t, decimal.NewFromInt(50).Equal(inv.Subtotal))
-		assert.True(t, decimal.Zero.Equal(inv.Total))
+		assert.True(t, decimal.NewFromInt(-60).Equal(inv.Total))
 		assert.True(t, decimal.Zero.Equal(inv.AmountDue))
 		assert.True(t, decimal.Zero.Equal(inv.AmountRemaining))
 	})

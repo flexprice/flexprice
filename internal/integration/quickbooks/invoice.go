@@ -58,6 +58,9 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 			WithHint("Failed to get Flexprice invoice").
 			Mark(ierr.ErrDatabase)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &QuickBooksInvoiceSyncResponse{}, nil
+	}
 
 	// Step 1: Check if mapping exists
 	existingMapping, err := s.getExistingQuickBooksMapping(ctx, req.InvoiceID)

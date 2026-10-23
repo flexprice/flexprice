@@ -576,6 +576,9 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if err != nil {
 		return nil, fmt.Errorf("fetching invoice: %w", err)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &SyncInvoiceResponse{}, nil
+	}
 
 	// Step 1: Idempotency guard.
 	existingMapping, err := s.getExistingInvoiceMapping(ctx, req.InvoiceID)

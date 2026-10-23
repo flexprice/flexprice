@@ -219,6 +219,9 @@ func (s *InvoiceService) SyncInvoiceToChargebee(
 			WithHint("Failed to get FlexPrice invoice").
 			Mark(ierr.ErrDatabase)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &ChargebeeInvoiceSyncResponse{}, nil
+	}
 
 	// Step 3: Check if invoice is already synced to avoid duplicates
 	existingMapping, err := s.GetExistingChargebeeMapping(ctx, req.InvoiceID)

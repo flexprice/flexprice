@@ -814,10 +814,10 @@ func TestSyncInvoice_UsesNonCatalogPrices(t *testing.T) {
 	assert.NotContains(t, string(itemJSON), `"price_id"`, "must not reference a catalog price")
 }
 
-// TestSyncInvoice_NettedProrationChargesAmountDue verifies that a plan-change invoice
+// TestSyncInvoice_NegativeProrationLineSkipsSync verifies that a plan-change invoice
 // with a charge line and a unused-time credit is sent to Paddle as one non-catalog price
 // at AmountDue, not the gross charge with the credit zeroed.
-func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
+func TestSyncInvoice_NegativeProrationLineSkipsSync(t *testing.T) {
 	ctx := buildTestContext()
 
 	const invoiceID = "inv_netted_proration"
@@ -920,19 +920,10 @@ func TestSyncInvoice_NettedProrationChargesAmountDue(t *testing.T) {
 
 	resp, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
 	require.NoError(t, err)
-	assert.Equal(t, chargeTxnID, resp.PaddleTransactionID)
+	assert.Empty(t, resp.PaddleTransactionID)
+	require.Empty(t, capturedChargeItems, "a negative line prevents the entire invoice sync")
+	assert.Empty(t, capturedProductNames)
 
-	require.Len(t, capturedChargeItems, 1, "must charge one item at the net, not one per line")
-	itemJSON, marshalErr := json.Marshal(capturedChargeItems[0])
-	require.NoError(t, marshalErr)
-	assert.Contains(t, string(itemJSON), `"139768"`, "unit price must be AmountDue in cents")
-	assert.NotContains(t, string(itemJSON), `"199668"`, "must not charge the gross amount")
-	assert.NotContains(t, string(itemJSON), `"price_id"`, "must not reference a catalog price")
-	assert.Contains(t, string(itemJSON), "Upgrade: Team → Team Starter",
-		"clubbed charge must carry the invoice collection display name")
-
-	assert.Equal(t, []string{"Team Starter"}, capturedProductNames,
-		"the catalog product must keep the SKU name, not the invoice label")
 }
 
 // TestEnsureBulkProductSynced_AlreadyMapped verifies that when a price→Paddle product mapping

@@ -228,20 +228,6 @@ func (s *walletService) settlementTargets(ctx context.Context, sub *subscription
 	return targets, nil
 }
 
-// usageNet returns the draft's usage charges after discounts, in its denomination: what
-// finalization can place credits on.
-func usageNet(draft *invoice.Invoice) decimal.Decimal {
-	net := decimal.Zero
-	for _, item := range draft.LineItems {
-		if lo.FromPtr(item.PriceType) != string(types.PRICE_TYPE_USAGE) {
-			continue
-		}
-		d := item.Denomination()
-		net = net.Add(decimal.Max(decimal.Zero, d.Amount.Sub(d.LineItemDiscount).Sub(d.InvoiceLevelDiscount)))
-	}
-	return net
-}
-
 // earlierDraftUsageBeforeExpiry returns an earlier period's usage from before the expiry, after
 // discounts.
 func (s *walletService) earlierDraftUsageBeforeExpiry(ctx context.Context, sub *subscription.Subscription, draft *invoice.Invoice, expiry time.Time) (decimal.Decimal, error) {
@@ -250,6 +236,20 @@ func (s *walletService) earlierDraftUsageBeforeExpiry(ctx context.Context, sub *
 		return usageNet(draft), nil
 	}
 	return NewBillingService(s.ServiceParams).UsageNetForWindow(ctx, sub, lo.FromPtr(draft.PeriodStart), expiry)
+}
+
+// usageNet returns the invoice's usage charges after discounts, in its denomination: what
+// finalization can place credits on. Each usage line is floored independently.
+func usageNet(inv *invoice.Invoice) decimal.Decimal {
+	net := decimal.Zero
+	for _, item := range inv.LineItems {
+		if lo.FromPtr(item.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			continue
+		}
+		d := item.Denomination()
+		net = net.Add(decimal.Max(decimal.Zero, d.Amount.Sub(d.LineItemDiscount).Sub(d.InvoiceLevelDiscount)))
+	}
+	return net
 }
 
 func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID, currency string, periodStart, periodEnd time.Time) (bool, error) {

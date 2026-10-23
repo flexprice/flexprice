@@ -67,6 +67,9 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 			WithHint("Failed to fetch invoice").
 			Mark(ierr.ErrInternal)
 	}
+	if !inv.SyncsToVendors() {
+		return nil
+	}
 
 	// Step 1: Create draft invoice with currency and due date
 	properties := InvoiceProperties{

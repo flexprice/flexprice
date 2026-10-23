@@ -239,7 +239,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 // Default helper methods
 
 func (i *Invoice) GetRemainingAmount() decimal.Decimal {
-	return i.AmountDue.Sub(i.AmountPaid)
+	return decimal.Max(i.AmountDue.Sub(i.AmountPaid), decimal.Zero)
 }
 
 // ResolveServicePeriod returns the coverage envelope of this invoice's selected line items.
@@ -403,7 +403,7 @@ func (i *Invoice) MirrorTaxIntoDenomination() {
 	cc := i.CustomCurrency
 	cc.TotalTax = cc.FromFiat(i.TotalTax)
 	cc.Total = cc.FromFiat(i.Total)
-	cc.AmountDue = cc.Total
+	cc.AmountDue = decimal.Max(cc.Total.Sub(cc.FromFiat(i.AdjustmentAmount)), decimal.Zero)
 }
 
 // ProjectCustomCurrency recomputes the fiat amount columns from the denomination. Runs at
@@ -432,4 +432,17 @@ type PendingProviderInvoice struct {
 	InvoiceID     string
 	TenantID      string
 	EnvironmentID string
+}
+
+// SyncsToVendors excludes skipped invoices and invoices with signed negative charges.
+func (i *Invoice) SyncsToVendors() bool {
+	if i.InvoiceStatus == types.InvoiceStatusSkipped || i.Total.IsNegative() {
+		return false
+	}
+	for _, item := range i.LineItems {
+		if item != nil && (item.Amount.IsNegative() || item.Denomination().Amount.IsNegative()) {
+			return false
+		}
+	}
+	return true
 }

@@ -465,8 +465,8 @@ func (s *creditAdjustmentService) ApplyExpiringCreditToInvoice(
 		// as finalization does. Both calls are no-ops otherwise.
 		inv.RestoreFromDenomination()
 		inv.TotalPrepaidCreditsApplied = inv.TotalPrepaidCreditsApplied.Add(amount)
-		inv.Total = decimal.Max(decimal.Zero, inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied))
-		inv.AmountDue = inv.Total
+		inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
+		inv.AmountDue = decimal.Max(inv.Total.Sub(inv.AdjustmentAmount), decimal.Zero)
 		inv.CaptureCustomCurrencyDenomination()
 		inv.ProjectCustomCurrency()
 		inv.AmountRemaining = decimal.Max(decimal.Zero, inv.AmountDue.Sub(inv.AmountPaid))

@@ -77,6 +77,9 @@ func (s *InvoiceSyncService) SyncInvoiceToMoyasar(
 			WithHint("Failed to get FlexPrice invoice").
 			Mark(ierr.ErrDatabase)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &MoyasarInvoiceSyncResponse{}, nil
+	}
 
 	// Step 3: Check if invoice is already synced to avoid duplicates
 	existingMapping, err := s.GetExistingMoyasarMapping(ctx, req.InvoiceID)

@@ -672,3 +672,12 @@ func TestIsZohoRequestRejected(t *testing.T) {
 	assert.False(t, IsZohoRequestRejected(wrap(http.StatusInternalServerError)))
 	assert.False(t, IsZohoRequestRejected(errors.New("network down")))
 }
+
+func TestSyncInvoiceToZoho_NegativeLineSkipsBeforeProviderCalls(t *testing.T) {
+	inv := &invoice.Invoice{ID: "inv_signed", Total: decimal.NewFromInt(5), LineItems: []*invoice.InvoiceLineItem{
+		{Amount: decimal.NewFromInt(50)}, {Amount: decimal.NewFromInt(-45)},
+	}}
+	svc := &InvoiceService{invoiceRepo: &fakeSyncInvoiceRepo{inv: inv}}
+	_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: inv.ID})
+	require.NoError(t, err)
+}

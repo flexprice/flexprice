@@ -63,6 +63,9 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("Failed to get FlexPrice invoice").Mark(ierr.ErrDatabase)
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &StripeInvoiceSyncResponse{}, nil
+	}
 
 	// Step 3: Check if invoice is already synced
 	existingMapping, err := s.getExistingStripeMapping(ctx, req.InvoiceID)

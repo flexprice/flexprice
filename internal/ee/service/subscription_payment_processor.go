@@ -391,7 +391,8 @@ func (s *subscriptionPaymentProcessor) processPayment(
 		"amount_remaining", remainingAmount,
 	)
 
-	if remainingAmount.IsZero() {
+	if !remainingAmount.IsPositive() {
+		result.RemainingAmount = decimal.Zero
 		result.Success = true
 		return result
 	}

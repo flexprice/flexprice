@@ -617,7 +617,7 @@ func (r *CreateInvoiceRequest) Validate() error {
 		// Round both values to currency precision before comparing to avoid floating-point accumulation errors
 		roundedTotal := types.RoundToCurrencyPrecision(totalAmount, r.Currency)
 		roundedAmountDue := types.RoundToCurrencyPrecision(r.AmountDue, r.Currency)
-		if !roundedTotal.Equal(roundedAmountDue) {
+		if !roundedTotal.Equal(roundedAmountDue) && !decimal.Max(roundedTotal, decimal.Zero).Equal(roundedAmountDue) {
 			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", roundedTotal.String(), roundedAmountDue.String()).Mark(ierr.ErrValidation)
 		}
 	}
@@ -888,9 +888,9 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 	}
 
 	// Amount may be negative on any invoice type: a credit line offsets charges on the same
-	// document (plan change, multi-addon). Non-negativity is enforced on the invoice aggregates.
+	// document (plan change, multi-addon). Usage quantities may also be signed.
 
-	if r.Quantity.IsNegative() {
+	if r.Quantity.IsNegative() && lo.FromPtr(r.PriceType) != string(types.PRICE_TYPE_USAGE) {
 		return ierr.NewError("quantity must be non-negative").
 			WithHint("Quantity cannot be negative").
 			Mark(ierr.ErrValidation)

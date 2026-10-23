@@ -88,6 +88,9 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	if err != nil {
 		return nil, err
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &ZohoInvoiceSyncResponse{}, nil
+	}
 
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityType = types.IntegrationEntityTypeInvoice

@@ -95,8 +95,8 @@ func convertInvoiceAmounts(inv *invoice.Invoice, resolution *FXRateResolution, c
 
 	// Pre-tax total; tax is added on the converted amounts in the finalize step that follows.
 	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
-	inv.AmountDue = inv.Total
-	inv.AmountRemaining = inv.Total // nothing is paid before conversion
+	inv.AmountDue = decimal.Max(inv.Total.Sub(inv.AdjustmentAmount), decimal.Zero)
+	inv.AmountRemaining = decimal.Max(inv.AmountDue.Sub(inv.AmountPaid), decimal.Zero)
 	inv.Currency = billingCurrency
 
 	inv.FxConversion = &types.FxConversion{

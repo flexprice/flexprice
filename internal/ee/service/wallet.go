@@ -3422,11 +3422,13 @@ func (s *walletService) pendingCharges(ctx context.Context, w *wallet.Wallet, us
 }
 
 // usageNetOfDraftCredits sums live usage minus credits already applied to each period's draft.
+// Floor each subscription's net pending charge: negative usage can reduce its liability,
+// but cannot restore spent credits or offset another subscription's charges.
 func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied map[string]decimal.Decimal) decimal.Decimal {
 	total := decimal.Zero
 	for subscriptionID, u := range usage {
 		paid := decimal.Max(decimal.Zero, decimal.Min(creditsApplied[subscriptionID], u.amount))
-		total = total.Add(u.amount.Sub(paid))
+		total = total.Add(decimal.Max(u.amount.Sub(paid), decimal.Zero))
 	}
 	return total
 }

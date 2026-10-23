@@ -70,9 +70,9 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 	if err != nil {
 		return err
 	}
-	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
-		return ierr.NewError("cannot sync a skipped invoice").
-			WithHint("Skipped invoices (zero-dollar) cannot be synced to external vendors").
+	if !inv.SyncsToVendors() {
+		return ierr.NewError("invoice cannot be synced to external vendors").
+			WithHint("Skipped invoices, negative totals, and negative line items cannot be synced to external vendors").
 			Mark(ierr.ErrValidation)
 	}
 

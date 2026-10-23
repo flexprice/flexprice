@@ -59,6 +59,9 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 	if err != nil {
 		return nil, err
 	}
+	if !flexInvoice.SyncsToVendors() {
+		return &WhopInvoiceSyncResponse{}, nil
+	}
 
 	existingMapping, err := s.getExistingWhopMapping(ctx, req.InvoiceID)
 	if err != nil && !ierr.IsNotFound(err) {
