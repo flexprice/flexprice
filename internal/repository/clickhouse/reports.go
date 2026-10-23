@@ -133,7 +133,7 @@ func (r *ReportsRepository) stableTime(t time.Time) time.Time {
 	if !r.resultCacheOn() {
 		return t
 	}
-	return t.Truncate(min(time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second, time.Minute))
+	return t.Truncate(time.Minute)
 }
 
 func (r *ReportsRepository) resultCacheOn() bool {

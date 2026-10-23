@@ -122,3 +122,13 @@ func TestReportsRepository_BuildReportNilView(t *testing.T) {
 	_, err := r.buildReport(nil, "t1", "e1")
 	require.Error(t, err)
 }
+
+func TestReportsRepository_FixedRangesKeepDayBoundaries(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	for _, ttl := range []int{7, 59, 60, 1800} {
+		r := &ReportsRepository{cfg: config.ReportsConfig{QueryCacheTTLSeconds: ttl}, cache: testutil.NewInMemoryRedis()}
+		assert.Equal(t, from, r.stableTime(from), ttl)
+		assert.Equal(t, to, r.stableTime(to), ttl)
+	}
+}
