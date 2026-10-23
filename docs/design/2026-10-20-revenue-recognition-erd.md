@@ -272,7 +272,7 @@ CREATE TABLE revenue_schedules (                -- append-only
     tenant_id          varchar(50)   NOT NULL,
     environment_id     varchar(50)   NOT NULL,
     pob_id             varchar(50)   NOT NULL,
-    source_at          timestamptz   NOT NULL,     -- when the triggering event committed; latest covering wins
+    source_at          timestamptz   NOT NULL,     -- read from the source record, never the write time; latest covering wins
     sequence           bigint        NOT NULL,     -- monotonic per POB; breaks source_at ties
     period_start       timestamptz   NOT NULL,     -- inclusive
     period_end         timestamptz   NOT NULL,     -- exclusive; equals period_start for point_in_time
@@ -330,7 +330,7 @@ const (
 
 | Event                                                                                                                               | Schedule effect                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Billing period starts (subscription created / activated, period cron renewal)                                                       | Open a segment `[period_start, period_end)` per fixed POB, valued with the billing engine's line calculation (price × quantity, coupons applied). Advance and arrears alike.                                                                                                                                       |
+| Billing period starts (subscription created / activated, period cron renewal)                                                       | Open a segment `[period_start, period_end)` per fixed POB, valued at the line net the billing engine would invoice (price × quantity, coupons applied, inclusive tax excluded; Step 6). Advance and arrears alike.                                                                                                                                       |
 | One-time charge                                                                                                                     | Same, with `period_start = period_end`.                                                                                                                                                                                                                                                                            |
 | Usage line item                                                                                                                     | No segments. Earned comes from `revenue_facts` (below).                                                                                                                                                                                                                                                            |
 | Modification (price override, line item change, plan change v2, line item removal, cancellation, coupon added / removed mid-period) | New line items join the POB of their predecessor or get a new POB. Append a superseding segment over the affected span: prospective by default, from the effective date to the period end.                                                                                                                         |
@@ -377,7 +377,7 @@ Read-only: POBs and schedules are derived from subscriptions and billing.
   - it has a `predecessor_line_item_id`;
   - its derived recognition method equals the POB's.
 - Recognition and amortization methods are locked once recognition starts.
-- Segments are append-only and finite: `period_start ≤ period_end`, within the POB's service term. A higher `(source_at, sequence)` supersedes overlapping dates, so a late-processed event (e.g. applied by the repair job) slots in at its event time, not on top; earlier segments are never re-amortized over their surviving dates. `source_at` is the commit time of the triggering event (line item change, invoice `finalized_at` / `voided_at`, period renewal), never its effective date.
+- Segments are append-only and finite: `period_start ≤ period_end`, within the POB's service term. A higher `(source_at, sequence)` supersedes overlapping dates, so a late-processed event (e.g. applied by the repair job) slots in at its event time, not on top; earlier segments are never re-amortized over their surviving dates. `source_at` is read from the source record (line item change timestamp, invoice `finalized_at` / `voided_at`, period renewal time), never the time the segment row is written or the change's effective date, so repairs and replays rank as the original history did.
 - Only the current billing period is persisted; future renewals are extrapolated on read (Step 7).
 - A schedule changes async after the subscription write or invoice that caused it commits (post-commit hook, like `revenue_facts`). A failed schedule write is logged and never fails the source write; a repair job reconciles line items and invoices against segments.
 - Nothing is written unless the environment has revenue recognition enabled.
@@ -693,7 +693,7 @@ Read-only: the journal is derived from billing and schedules.
 - Entries are immutable. Each has at least one debit and one credit line, positive amounts, Σ debits = Σ credits, one currency (the invoice's), one period. Corrections are deltas or inverses linked by `reversal_of`.
 - Billing entries carry the idempotency key `{event_type}:{source_entity_id}`: one entry per event per source. A corrected invoice is a void (`invoice_voided`, same source) plus a new invoice (new source), never a re-post under the same key. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
 - Billing entries post async after the source commits (post-commit hook, like `revenue_facts`), each in its own transaction. A failure is logged and never fails the source write; `Reconcile` re-posts anything missing.
-- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. A billing entry dated in an ended month makes the next run recompute that month's offset and every later one. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
+- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. Offsets use cumulative billed and earned, so any change dated in an ended month `M`, billing or a recognition correction, makes the next run recompute offsets for every ended month from `M` forward, in month order, even where that month's own `δ` is 0. Each run re-evaluates the last ended month and any earlier month a new segment or usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
 - Business dates are local dates in the subscription's timezone (the customer's without a subscription); the entry posts to that date's period (Step 4).
 - Billing entries post for `draft` contracts too; recognition only for `active` and `satisfied` POBs, catching up on the first run.
 - Enabling revenue recognition replays every contract from its start: contracts, POBs and segments, then billing entries in business-date order, then recognition. No opening-balance entries.
@@ -703,7 +703,7 @@ Read-only: the journal is derived from billing and schedules.
 
 #### Services
 
-`JournalService` (new) — builds, balances and posts entries; owns the recognition run and the backfill. A new daily Temporal schedule `revenue_recognition` fans out over enabled environments like `RevenueRollupWorkflow`; each run calls `Reconcile`, then per contract `PerformanceObligationService.Reconcile` (Step 3 repair) and `Recognize`.
+`JournalService` (new) — builds, balances and posts entries; owns the recognition run and the backfill. A new daily Temporal schedule `revenue_recognition` fans out over enabled environments like `RevenueRollupWorkflow`; each run calls `Reconcile` over the last 7 days, then per contract `PerformanceObligationService.Reconcile` (Step 3 repair) and `Recognize`.
 
 ```go
 type JournalService interface {
@@ -713,14 +713,14 @@ type JournalService interface {
     PostRefund(ctx context.Context, r *refund.Refund) error
     Recognize(ctx context.Context, contractID string, asOf time.Time) error
     Backfill(ctx context.Context) error                                  // replay on enable
-    Reconcile(ctx context.Context, since time.Time) error                // re-posts billing entries missing since `since`
+    Reconcile(ctx context.Context, from, to time.Time) error             // re-posts billing entries missing for events in [from, to)
     PreviewRecognition(ctx context.Context, contractID string, asOf time.Time) ([]*journal.JournalEntry, error) // unsaved dry run of Recognize; feeds waterfall pending
     GetJournalEntry(ctx context.Context, id string) (*dto.JournalEntryResponse, error)
     GetJournalEntries(ctx context.Context, filter *types.JournalEntryFilter) (*dto.ListJournalEntriesResponse, error)
 }
 ```
 
-`Reconcile` is environment-wide, not per contract, so it also covers standalone `ONE_OFF` invoices, wallet top-ups and their payments. It finds every invoice, credit note, payment or refund finalized, voided, succeeded or reversed since `since` that has no entry under its key, and posts it. Recognition needs no repair: every run recomputes `δ`.
+`Reconcile` is environment-wide, not per contract, so it also covers standalone `ONE_OFF` invoices, wallet top-ups and their payments. It finds every invoice, credit note, payment or refund finalized, voided, succeeded or reversed in `[from, to)` that has no entry under its key, and posts it. It is idempotent, so any range can be rerun: the daily run covers the last 7 days, and ops rerun a longer range (after an outage or a posting fix) through a Temporal workflow that takes the range. Recognition needs no repair: every run recomputes `δ`.
 
 #### Related changes
 
