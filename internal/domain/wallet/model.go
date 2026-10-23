@@ -12,34 +12,34 @@ import (
 
 // Wallet represents a credit wallet for a customer
 type Wallet struct {
-	ID            string             `db:"id" json:"id"`
-	CustomerID    string             `db:"customer_id" json:"customer_id"`
-	Currency      string             `db:"currency" json:"currency"`
-	Balance       decimal.Decimal    `db:"balance" json:"balance" swaggertype:"string"`
-	CreditBalance decimal.Decimal    `db:"credit_balance" json:"credit_balance" swaggertype:"string"`
-	WalletStatus  types.WalletStatus `db:"wallet_status" json:"wallet_status"`
-	Name          string             `db:"name" json:"name,omitempty"`
-	Description   string             `db:"description" json:"description"`
-	Metadata      types.Metadata     `db:"metadata" json:"metadata" activity:"drop"`
-	AutoTopup     *types.AutoTopup   `db:"auto_topup" json:"auto_topup,omitempty"`
-	WalletType    types.WalletType   `db:"wallet_type" json:"wallet_type"`
-	Config        types.WalletConfig `db:"config" json:"config"`
+	ID            string             `json:"id"`
+	CustomerID    string             `json:"customer_id"`
+	Currency      string             `json:"currency"`
+	Balance       decimal.Decimal    `json:"balance" swaggertype:"string"`
+	CreditBalance decimal.Decimal    `json:"credit_balance" swaggertype:"string"`
+	WalletStatus  types.WalletStatus `json:"wallet_status"`
+	Name          string             `json:"name,omitempty"`
+	Description   string             `json:"description"`
+	Metadata      types.Metadata     `json:"metadata" activity:"drop"`
+	AutoTopup     *types.AutoTopup   `json:"auto_topup,omitempty"`
+	WalletType    types.WalletType   `json:"wallet_type"`
+	Config        types.WalletConfig `json:"config"`
 
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
 	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
-	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate" swaggertype:"string"`
+	ConversionRate decimal.Decimal `json:"conversion_rate" swaggertype:"string"`
 
 	// topup_conversion_rate is the conversion rate for the topup to the currency
 	// ex if topup_conversion_rate is 1, then 1 USD = 1 credit
 	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
-	TopupConversionRate decimal.Decimal `db:"topup_conversion_rate" json:"topup_conversion_rate" swaggertype:"string"`
+	TopupConversionRate decimal.Decimal `json:"topup_conversion_rate" swaggertype:"string"`
 
-	EnvironmentID string               `db:"environment_id" json:"environment_id"`
-	AlertSettings *types.AlertSettings `db:"alert_settings" json:"alert_settings,omitempty"`
-	AlertState    types.AlertState     `db:"alert_state" json:"alert_state"`
+	EnvironmentID string               `json:"environment_id"`
+	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	AlertState    types.AlertState     `json:"alert_state"`
 	types.BaseModel
 }
 

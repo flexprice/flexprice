@@ -8,13 +8,13 @@ import (
 
 // Connection represents an integration connection in the system
 type Connection struct {
-	ID                  string                   `db:"id" json:"id"`
-	Name                string                   `db:"name" json:"name"`
-	ProviderType        types.SecretProvider     `db:"provider_type" json:"provider_type"`
-	EncryptedSecretData types.ConnectionMetadata `db:"encrypted_secret_data" json:"encrypted_secret_data"`
-	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
-	SyncConfig          *types.SyncConfig        `db:"sync_config" json:"sync_config,omitempty"`
-	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
+	ID                  string                   `json:"id"`
+	Name                string                   `json:"name"`
+	ProviderType        types.SecretProvider     `json:"provider_type"`
+	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data"`
+	Metadata            map[string]interface{}   `json:"metadata"`
+	SyncConfig          *types.SyncConfig        `json:"sync_config,omitempty"`
+	EnvironmentID       string                   `json:"environment_id"`
 	types.BaseModel
 }
 

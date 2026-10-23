@@ -8,14 +8,14 @@ import (
 // AlertSettings represents a single row in the alert_settings table: the threshold
 // configuration for one monitored entity (subscription, subscription line item, or group).
 type AlertSettings struct {
-	ID               string                `db:"id" json:"id"`
-	EntityType       types.AlertEntityType `db:"entity_type" json:"entity_type"`
-	EntityID         string                `db:"entity_id" json:"entity_id"`
-	ParentEntityType *string               `db:"parent_entity_type" json:"parent_entity_type,omitempty"`
-	ParentEntityID   *string               `db:"parent_entity_id" json:"parent_entity_id,omitempty"`
-	Enabled          bool                  `db:"enabled" json:"enabled"`
-	Config           *types.AlertSettings  `db:"config" json:"config"`
-	EnvironmentID    string                `db:"environment_id" json:"environment_id"`
+	ID               string                `json:"id"`
+	EntityType       types.AlertEntityType `json:"entity_type"`
+	EntityID         string                `json:"entity_id"`
+	ParentEntityType *string               `json:"parent_entity_type,omitempty"`
+	ParentEntityID   *string               `json:"parent_entity_id,omitempty"`
+	Enabled          bool                  `json:"enabled"`
+	Config           *types.AlertSettings  `json:"config"`
+	EnvironmentID    string                `json:"environment_id"`
 	types.BaseModel
 }
 

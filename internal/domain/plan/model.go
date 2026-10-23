@@ -9,13 +9,13 @@ import (
 )
 
 type Plan struct {
-	ID            string         `db:"id" json:"id"`
-	Name          string         `db:"name" json:"name"`
-	LookupKey     string         `db:"lookup_key" json:"lookup_key"`
-	Description   string         `db:"description" json:"description"`
-	EnvironmentID string         `db:"environment_id" json:"environment_id"`
-	Metadata      types.Metadata `db:"metadata" json:"metadata" activity:"drop"`
-	DisplayOrder  *int           `db:"display_order" json:"display_order,omitempty"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	LookupKey     string         `json:"lookup_key"`
+	Description   string         `json:"description"`
+	EnvironmentID string         `json:"environment_id"`
+	Metadata      types.Metadata `json:"metadata" activity:"drop"`
+	DisplayOrder  *int           `json:"display_order,omitempty"`
 	types.BaseModel
 }
 
