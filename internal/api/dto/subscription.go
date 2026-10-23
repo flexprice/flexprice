@@ -689,12 +689,6 @@ func (r *AddAddonRequest) Validate() error {
 	}
 
 	if r.Checkout != nil {
-		if len(r.OverrideLineItems) > 0 {
-			return ierr.NewError("override_line_items is not supported with checkout").
-				WithHint("Remove checkout to use override_line_items, or remove override_line_items to gate this addon behind payment").
-				Mark(ierr.ErrValidation)
-		}
-
 		if len(r.LineItemCommitments) > 0 {
 			return ierr.NewError("line_item_commitments is not supported with checkout").
 				WithHint("Remove checkout to use line_item_commitments, or remove line_item_commitments to gate this addon behind payment").

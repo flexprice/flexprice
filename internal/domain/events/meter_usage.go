@@ -204,6 +204,20 @@ type UsageActivity struct {
 	Unattributed bool
 }
 
+// PropertyLookupParams scopes a lookup of property keys, or of one key's values, to a customer's usage.
+type PropertyLookupParams struct {
+	TenantID           string
+	EnvironmentID      string
+	ExternalCustomerID string
+	FeatureIDs         []string
+	MeterIDs           []string
+	StartTime          time.Time
+	EndTime            time.Time
+	Key                string
+	Prefix             string
+	Limit              int
+}
+
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches
@@ -264,4 +278,10 @@ type MeterUsageRepository interface {
 	// GetUsageActivitySince returns the customers with any usage ingested after
 	// the given time, so a rollup can scan what changed instead of everything.
 	GetUsageActivitySince(ctx context.Context, params *UsageActivityParams) (*UsageActivity, error)
+
+	// GetPropertyKeys returns the property keys in the customer's recent usage, most seen first.
+	GetPropertyKeys(ctx context.Context, params *PropertyLookupParams) ([]string, error)
+
+	// GetPropertyValues returns the Key's non-empty values starting with Prefix, most seen first, up to Limit.
+	GetPropertyValues(ctx context.Context, params *PropertyLookupParams) ([]string, error)
 }

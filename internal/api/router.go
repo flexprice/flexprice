@@ -234,6 +234,8 @@ func NewRouter(
 			meterUsage.POST("/query", handlers.MeterUsage.QueryUsage)
 			meterUsage.POST("/analytics", handlers.MeterUsage.GetAnalytics)
 			meterUsage.POST("/detailed-analytics", handlers.MeterUsage.GetDetailedAnalytics)
+			meterUsage.POST("/properties", handlers.MeterUsage.GetPropertyKeys)
+			meterUsage.POST("/properties/values", handlers.MeterUsage.GetPropertyValues)
 		}
 
 		// Analytics query + view endpoints
@@ -786,6 +788,8 @@ func NewRouter(
 
 		// Analytics
 		customerPortalAPI.POST("/analytics/revenue", handlers.CustomerPortal.GetAnalytics)
+		customerPortalAPI.POST("/analytics/properties", handlers.CustomerPortal.GetPropertyKeys)
+		customerPortalAPI.POST("/analytics/properties/values", handlers.CustomerPortal.GetPropertyValues)
 
 		// Cost Analytics
 		customerPortalAPI.POST("/analytics/cost", handlers.CustomerPortal.GetCostAnalytics)

@@ -7,6 +7,8 @@ import (
 
 	cockroachErrors "github.com/cockroachdb/errors"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -311,6 +313,31 @@ func TestAddAddonParams_LegacyJSONRoundTrip(t *testing.T) {
 	out, err := json.Marshal(&params)
 	require.NoError(t, err)
 	assert.NotContains(t, string(out), "removes")
+	assert.NotContains(t, string(out), "price_overrides")
+}
+
+func TestAddAddonParams_PriceOverridesJSONRoundTrip(t *testing.T) {
+	ref := validAddAddonRef()
+	ref.PriceOverrides = []AddonPriceOverrideRef{
+		{PriceID: "price_plan_1", OverridePriceID: "price_sub_1", Quantity: lo.ToPtr(decimal.NewFromInt(5))},
+		{PriceID: "price_plan_2", OverridePriceID: "price_sub_2"},
+	}
+	batch := &CheckoutConfiguration{AddAddonBatchParams: []*AddAddonParams{
+		{SubscriptionID: "subs_child", Addons: []AddAddonRef{ref}},
+	}}
+
+	out, err := json.Marshal(batch)
+	require.NoError(t, err)
+
+	var decoded CheckoutConfiguration
+	require.NoError(t, json.Unmarshal(out, &decoded))
+	require.NoError(t, decoded.Validate(CheckoutActionAddAddon))
+
+	got := decoded.AddAddonEntries()[0].Addons[0].PriceOverrides
+	require.Len(t, got, 2)
+	assert.Equal(t, "price_sub_1", got[0].OverridePriceID)
+	assert.True(t, got[0].Quantity.Equal(decimal.NewFromInt(5)))
+	assert.Nil(t, got[1].Quantity)
 }
 
 func TestCheckoutConfiguration_ValidateAddAddonBatch(t *testing.T) {

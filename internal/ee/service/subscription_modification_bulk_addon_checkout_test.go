@@ -47,7 +47,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckoutFor(
 	params := s.service.(*subscriptionService).ServiceParams
 	sub := s.testData.subscription
 
-	changeSvc := NewAddonChangeService(params)
+	changeSvc := NewAddonChangeService(params).(*addonChangeService)
 	req := AddonChangeRequest{
 		Subscription: sub,
 		Adds:         []AddonAdd{{Request: add}},
@@ -56,7 +56,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckoutFor(
 		req.Removes = []*dto.RemoveAddonRequest{s.modifyRemove(outgoingAssociationID, at)}
 	}
 
-	config, err := changeSvc.Resolve(ctx, req)
+	config, overrides, err := changeSvc.resolvePayFirst(ctx, req)
 	s.Require().NoError(err)
 	s.Require().True(config.getQuote().NetAmount().GreaterThan(decimal.Zero),
 		"the batch must owe money for there to be anything to gate on")
@@ -79,7 +79,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckoutFor(
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
-			AddAddonParams: addonChangeCheckoutParams(config),
+			AddAddonParams: addonChangeCheckoutParams(config, overrides),
 		}),
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
@@ -597,8 +597,8 @@ func (s *SubscriptionServiceSuite) seedGroupedPayFirstCheckout(
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
 		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
 			AddAddonBatchParams: []*types.AddAddonParams{
-				addonChangeCheckoutParams(parentConfig),
-				addonChangeCheckoutParams(childConfig),
+				addonChangeCheckoutParams(parentConfig, nil),
+				addonChangeCheckoutParams(childConfig, nil),
 			},
 		}),
 		CheckoutInvoiceID: &draft.ID,
@@ -668,7 +668,7 @@ func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_Completion_AppliesE
 		})
 	}
 	s.Require().NoError(complete())
-	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, addonChangeCheckoutParams(childConfig)),
+	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, addonChangeCheckoutParams(childConfig, nil)),
 		"a replayed entry is a no-op")
 
 	removed, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, outgoing)
@@ -747,4 +747,167 @@ func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_GuardsAndCleanupSee
 	for _, inv := range s.oneOffInvoicesFor(parent.ID) {
 		s.NotEqual(types.StatusPublished, inv.Status, "the draft is archived")
 	}
+}
+
+func (s *SubscriptionServiceSuite) overriddenAdd(addonID string, at time.Time, amount int64) *dto.AddAddonToSubscriptionRequest {
+	add := s.modifyAdd(addonID, at)
+	add.OverrideLineItems = []dto.OverrideLineItemRequest{{
+		PriceID: "price_" + addonID,
+		Amount:  lo.ToPtr(decimal.NewFromInt(amount)),
+	}}
+	return add
+}
+
+func (s *SubscriptionServiceSuite) subscriptionScopedPrices(subscriptionID string) int {
+	filter := types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{subscriptionID}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION)
+	prices, err := s.GetStores().PriceRepo.List(s.GetContext(), filter)
+	s.Require().NoError(err)
+	return len(prices)
+}
+
+// The draft bills the override, completion repoints the line item at the price minted at execute,
+// and a second delivery mints nothing.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_DraftAndCompletionBillTheOverride() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_pfo_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+
+	listPrice, _, err := s.addonChangeService().Preview(ctx, AddonChangeRequest{
+		Subscription: sub,
+		Adds:         []AddonAdd{s.addEntry("addon_pfo_in", at)},
+	})
+	s.Require().NoError(err)
+
+	session, _, draft := s.seedPayFirstAddonBatchCheckoutFor(s.overriddenAdd("addon_pfo_in", at, 10), "", at)
+	s.True(draft.Total.LessThan(listPrice.getQuote().NetAmount()),
+		"the draft must bill the override, drafted %s against list %s", draft.Total, listPrice.getQuote().NetAmount())
+
+	ref := session.Configuration.ToCheckoutConfiguration().AddAddonParams.Addons[0].PriceOverrides
+	s.Require().Len(ref, 1)
+	s.Equal("price_addon_pfo_in", ref[0].PriceID)
+	s.Equal(1, s.subscriptionScopedPrices(sub.ID), "execute mints the override price once")
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		ProviderPaymentIntentID: "pay_addons_override_001",
+	}))
+	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, session.Configuration.ToCheckoutConfiguration().AddAddonParams),
+		"a second delivery is a no-op")
+
+	lineItems := s.addonLineItemsFor(sub.ID, "addon_pfo_in")
+	s.Require().Len(lineItems, 1)
+	s.Equal(ref[0].OverridePriceID, lineItems[0].PriceID, "completion bills the price minted at execute")
+	s.Equal(1, s.subscriptionScopedPrices(sub.ID), "completion must not mint the override again")
+}
+
+// The addon's prices changed while the checkout was open: completion fails rather than bill the list price.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_PriceGoneFailsCompletion() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_pfg_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+
+	session, _, _ := s.seedPayFirstAddonBatchCheckoutFor(s.overriddenAdd("addon_pfg_in", at, 10), "", at)
+	params := session.Configuration.ToCheckoutConfiguration().AddAddonParams
+	params.Addons[0].PriceOverrides[0].PriceID = "price_no_longer_on_addon"
+
+	err := subService.applyAddAddonCheckoutParams(ctx, params)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Empty(s.addonLineItemsFor(sub.ID, "addon_pfg_in"))
+}
+
+// An override that turns the net into a credit has nothing to collect, so it applies immediately at the override price.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_NetNotPositive_AppliesImmediately() {
+	ctx := s.GetContext()
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_pfon_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_pfon_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_pfon_out", 30)
+
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	resp, err := s.modificationService().Execute(ctx, sub.ID, s.addonsCheckoutRequest(&dto.SubModifyBulkAddonParams{
+		Adds:    []*dto.AddAddonToSubscriptionRequest{s.overriddenAdd("addon_pfon_in", at, 10)},
+		Removes: []*dto.RemoveAddonRequest{s.modifyRemove(outgoing, at)},
+	}))
+	s.Require().NoError(err)
+
+	s.Nil(resp.CheckoutSession, "the override makes the net a credit, so there is nothing to collect")
+	lineItems := s.addonLineItemsFor(sub.ID, "addon_pfon_in")
+	s.Require().Len(lineItems, 1)
+	s.NotEqual("price_addon_pfon_in", lineItems[0].PriceID, "the change applied at the override price")
+}
+
+// Same for a grouped batch: an override on the child that turns the group net into a credit applies immediately.
+func (s *SubscriptionServiceSuite) TestGroupedModifyCheckout_Overrides_NetNotPositive_AppliesImmediately() {
+	ctx := s.GetContext()
+	parent, child := s.seedAddonGroup()
+
+	s.seedFixedPriceAddon("addon_grpo_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
+	s.seedFixedPriceAddon("addon_grpo_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	outgoing := s.attachForRemoval("addon_grpo_out", 30)
+
+	at := parent.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+	req := s.groupedModifyRequest(
+		dto.GroupedInvoicingChange{SubscriptionID: parent.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Removes: []*dto.RemoveAddonRequest{s.modifyRemove(outgoing, at)},
+		}},
+		dto.GroupedInvoicingChange{SubscriptionID: child.ID, AddonBulkParams: &dto.SubModifyBulkAddonParams{
+			Adds: []*dto.AddAddonToSubscriptionRequest{s.overriddenAdd("addon_grpo_in", at, 10)},
+		}},
+	)
+	req.Checkout = s.razorpayCheckoutParams()
+
+	resp, err := s.modificationService().Execute(ctx, parent.ID, req)
+	s.Require().NoError(err)
+
+	s.Nil(resp.CheckoutSession)
+	lineItems := s.addonLineItemsFor(child.ID, "addon_grpo_in")
+	s.Require().Len(lineItems, 1)
+	s.NotEqual("price_addon_grpo_in", lineItems[0].PriceID, "the child's addon applied at the override price")
+	s.Empty(s.oneOffInvoicesFor(child.ID))
+}
+
+// A failed provider call deletes the override prices pay-first minted, along with the pending attach.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_ProviderFailureDeletesMintedPrices() {
+	ctx := s.GetContext()
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_pfof_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+
+	// No payment provider is configured in this suite, so the session creation fails.
+	_, err := s.modificationService().Execute(ctx, sub.ID, s.addonsCheckoutRequest(&dto.SubModifyBulkAddonParams{
+		Adds: []*dto.AddAddonToSubscriptionRequest{s.overriddenAdd("addon_pfof_in", at, 50)},
+	}))
+	s.Require().Error(err)
+
+	s.Zero(s.subscriptionScopedPrices(sub.ID), "no line item will ever reference the minted override price")
+	s.Empty(s.addonLineItemsFor(sub.ID, "addon_pfof_in"))
+}
+
+// An abandoned checkout deletes the override prices of its pending attaches.
+func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_CleanupDeletesMintedPrices() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	sub := s.monthlyPeriodSubscription()
+
+	s.seedFixedPriceAddon("addon_pfoc_in", decimal.NewFromInt(90), types.InvoiceCadenceAdvance)
+	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
+
+	session, _, _ := s.seedPayFirstAddonBatchCheckoutFor(s.overriddenAdd("addon_pfoc_in", at, 50), "", at)
+	s.Require().Equal(1, s.subscriptionScopedPrices(sub.ID))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, session, nil))
+
+	s.Zero(s.subscriptionScopedPrices(sub.ID))
 }

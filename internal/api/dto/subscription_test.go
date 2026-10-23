@@ -464,3 +464,34 @@ func TestCreateSubscriptionRequestValidate_FxRates(t *testing.T) {
 		})
 	}
 }
+
+func TestAddAddonRequestValidate_CheckoutAllowsOverridesNotCommitments(t *testing.T) {
+	request := func(mutate func(*AddAddonRequest)) *AddAddonRequest {
+		req := &AddAddonRequest{
+			SubscriptionID: "subs_123",
+			Checkout: &CheckoutParams{
+				PaymentParams: PaymentParams{PaymentProvider: types.CheckoutPaymentProviderRazorpay},
+			},
+			AddAddonToSubscriptionRequest: AddAddonToSubscriptionRequest{
+				AddonID: "addon_123",
+				Cadence: types.AddonCadenceRecurring,
+			},
+		}
+		mutate(req)
+		return req
+	}
+
+	withOverride := request(func(r *AddAddonRequest) {
+		r.OverrideLineItems = []OverrideLineItemRequest{{PriceID: "price_123", Amount: lo.ToPtr(decimal.NewFromInt(10))}}
+	})
+	if err := withOverride.Validate(); err != nil {
+		t.Fatalf("override_line_items with checkout must validate, got %v", err)
+	}
+
+	withCommitment := request(func(r *AddAddonRequest) {
+		r.LineItemCommitments = map[string]*LineItemCommitmentConfig{"price_123": {}}
+	})
+	if err := withCommitment.Validate(); err == nil {
+		t.Fatal("line_item_commitments with checkout must still be rejected")
+	}
+}

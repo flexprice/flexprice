@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -5165,4 +5166,144 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NilMeter() {
 	s.Equal("", charges[0].MeterDisplayName)
 	s.Equal("meter_missing", charges[0].MeterID)
 	s.True(totalCost.Equal(decimal.NewFromFloat(0.10)), "expected 10 * $0.01, got %s", totalCost)
+}
+
+func (s *MeterUsageServiceSuite) TestAggregationPropertyKeys() {
+	ctx := s.GetContext()
+	meters := []*meter.Meter{
+		{ID: "meter_tokens", EventName: "llm", Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}},
+		{ID: "meter_users", EventName: "llm", Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "user_id"}},
+		{ID: "meter_calls", EventName: "llm", Aggregation: meter.Aggregation{Type: types.AggregationCount, Field: "model"}},
+		{ID: "meter_expr", EventName: "llm", Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "region", Expression: "input_tokens + output_tokens"}},
+		{ID: "meter_bytes", EventName: "upload", Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "bytes"}},
+	}
+	for _, m := range meters {
+		m.BaseModel = types.GetDefaultBaseModel(ctx)
+		s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	}
+
+	keys, err := aggregationPropertyKeys(ctx, s.GetStores().MeterRepo, []string{"meter_users"})
+	s.NoError(err)
+	s.ElementsMatch([]string{"tokens", "input_tokens", "output_tokens"}, lo.Keys(keys))
+}
+
+func (s *MeterUsageServiceSuite) TestGetGroupablePropertyKeys() {
+	ctx := s.GetContext()
+	for _, m := range []*meter.Meter{
+		{ID: "meter_tokens", EventName: "api_call", Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"}},
+		{ID: "meter_other", EventName: "other", Aggregation: meter.Aggregation{Type: types.AggregationSum}},
+	} {
+		m.BaseModel = types.GetDefaultBaseModel(ctx)
+		s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, &feature.Feature{ID: "feat_other", MeterID: "meter_other", BaseModel: types.GetDefaultBaseModel(ctx)}))
+
+	ts := s.periodStart.Add(time.Hour)
+	ext := s.customer.ExternalID
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, ext, "", ts, 1, map[string]interface{}{"region": "us", "model": "a", "tokens": 5})
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, ext, "", ts, 1, map[string]interface{}{"region": "eu", "model": "b"})
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, ext, "", ts, 1, map[string]interface{}{"region": "eu", "plan-tier": "pro"})
+	s.insertMeterUsageWithProps(ctx, "meter_other", ext, "", ts, 1, map[string]interface{}{"zone": "z1"})
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, "ext_cust_2", "", ts, 1, map[string]interface{}{"secret": "x"})
+
+	tests := []struct {
+		name       string
+		featureIDs []string
+		want       []string
+	}{
+		{name: "meters with usage, aggregation and unusable keys dropped", want: []string{"region", "model", "zone"}},
+		{name: "scoped to feature", featureIDs: []string{"feat_other"}, want: []string{"zone"}},
+		{name: "unknown feature", featureIDs: []string{"feat_missing"}, want: []string{}},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			keys, err := s.svc.GetGroupablePropertyKeys(ctx, &events.PropertyLookupParams{
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: ext,
+				FeatureIDs:         tt.featureIDs,
+				StartTime:          s.periodStart,
+				EndTime:            s.periodEnd,
+			})
+			s.NoError(err)
+			s.Equal(tt.want, keys)
+		})
+	}
+}
+
+func (s *MeterUsageServiceSuite) TestGetPropertyValues() {
+	ctx := s.GetContext()
+	ts := s.periodStart.Add(time.Hour)
+	ext := s.customer.ExternalID
+	for region, n := range map[interface{}]int{"us-east": 3, "us-west": 2, "eu": 1, 5: 1, "": 1} {
+		for range n {
+			s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, ext, "", ts, 1, map[string]interface{}{"region": region})
+		}
+	}
+	s.insertMeterUsageWithProps(ctx, s.meterAPI.ID, "ext_cust_2", "", ts, 1, map[string]interface{}{"region": "us-secret"})
+
+	tests := []struct {
+		name       string
+		key        string
+		prefix     string
+		limit      int
+		featureIDs []string
+		want       []string
+		wantErr    bool
+	}{
+		{name: "default limit, non-string and empty values dropped", key: "region", want: []string{"us-east", "us-west", "eu"}},
+		{name: "prefix", key: "region", prefix: "us-", want: []string{"us-east", "us-west"}},
+		{name: "limit", key: "region", limit: 1, want: []string{"us-east"}},
+		{name: "negative limit uses the default", key: "region", limit: -1, want: []string{"us-east", "us-west", "eu"}},
+		{name: "unknown feature", key: "region", featureIDs: []string{"feat_missing"}, want: []string{}},
+		{name: "invalid key", key: "region'; DROP", wantErr: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			values, err := s.svc.GetPropertyValues(ctx, &events.PropertyLookupParams{
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: ext,
+				FeatureIDs:         tt.featureIDs,
+				StartTime:          s.periodStart,
+				EndTime:            s.periodEnd,
+				Key:                tt.key,
+				Prefix:             tt.prefix,
+				Limit:              tt.limit,
+			})
+			if tt.wantErr {
+				s.True(ierr.IsValidation(err))
+				return
+			}
+			s.NoError(err)
+			s.Equal(tt.want, values)
+		})
+	}
+}
+
+func TestVisiblePropertyKey(t *testing.T) {
+	aggregationKeys := map[string]struct{}{"tokens": {}}
+	tests := []struct {
+		name string
+		key  string
+		cfg  *types.CustomerPortalUsageProperties
+		want bool
+	}{
+		{name: "no config", key: "region", want: false},
+		{name: "disabled", key: "region", cfg: &types.CustomerPortalUsageProperties{}, want: false},
+		{name: "enabled", key: "region", cfg: &types.CustomerPortalUsageProperties{Enabled: true}, want: true},
+		{name: "aggregation key", key: "tokens", cfg: &types.CustomerPortalUsageProperties{Enabled: true}, want: false},
+		{name: "aggregation key even if allowed", key: "tokens", cfg: &types.CustomerPortalUsageProperties{Enabled: true, AllowedKeys: []string{"tokens"}}, want: false},
+		{name: "hidden", key: "region", cfg: &types.CustomerPortalUsageProperties{Enabled: true, HiddenKeys: []string{"region"}}, want: false},
+		{name: "not in allowed", key: "region", cfg: &types.CustomerPortalUsageProperties{Enabled: true, AllowedKeys: []string{"model"}}, want: false},
+		{name: "in allowed", key: "model", cfg: &types.CustomerPortalUsageProperties{Enabled: true, AllowedKeys: []string{"model"}}, want: true},
+		{name: "allowed and hidden", key: "model", cfg: &types.CustomerPortalUsageProperties{Enabled: true, AllowedKeys: []string{"model"}, HiddenKeys: []string{"model"}}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := visiblePropertyKey(tt.key, tt.cfg, aggregationKeys); got != tt.want {
+				t.Errorf("visiblePropertyKey(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
+	}
 }

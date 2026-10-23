@@ -1191,5 +1191,70 @@ func (s *InMemoryMeterUsageStore) GetDailyUsageByMeter(_ context.Context, params
 	return byMeter, nil
 }
 
+// GetPropertyKeys counts property keys over all matching records; test data is too small to need sampling.
+func (s *InMemoryMeterUsageStore) GetPropertyKeys(_ context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	counts := make(map[string]uint64)
+	for _, r := range s.records {
+		if !matchPropertyLookup(r, params) {
+			continue
+		}
+		for key := range r.Properties {
+			counts[key]++
+		}
+	}
+	return sortedByCount(counts), nil
+}
+
+// GetPropertyValues mirrors the ClickHouse query: string values only, as JSONExtractString returns "" otherwise.
+func (s *InMemoryMeterUsageStore) GetPropertyValues(_ context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	counts := make(map[string]uint64)
+	for _, r := range s.records {
+		if !matchPropertyLookup(r, params) {
+			continue
+		}
+		if value, _ := r.Properties[params.Key].(string); value != "" && strings.HasPrefix(value, params.Prefix) {
+			counts[value]++
+		}
+	}
+
+	values := sortedByCount(counts)
+	if len(values) > params.Limit {
+		values = values[:params.Limit]
+	}
+	return values, nil
+}
+
+func matchPropertyLookup(r *events.MeterUsage, params *events.PropertyLookupParams) bool {
+	return r.TenantID == params.TenantID && r.EnvironmentID == params.EnvironmentID &&
+		(params.ExternalCustomerID == "" || r.ExternalCustomerID == params.ExternalCustomerID) && lo.Contains(params.MeterIDs, r.MeterID) &&
+		!r.Timestamp.Before(params.StartTime) && r.Timestamp.Before(params.EndTime)
+}
+
+// sortedByCount returns the map's keys by count, highest first, ties by name.
+func sortedByCount(counts map[string]uint64) []string {
+	keys := lo.Keys(counts)
+	sort.Slice(keys, func(i, j int) bool {
+		if counts[keys[i]] != counts[keys[j]] {
+			return counts[keys[i]] > counts[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	return keys
+}
+
 // Ensure interface compliance
 var _ events.MeterUsageRepository = (*InMemoryMeterUsageStore)(nil)
