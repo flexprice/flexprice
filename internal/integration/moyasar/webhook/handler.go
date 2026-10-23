@@ -49,7 +49,7 @@ func NewHandler(
 type ServiceDependencies = interfaces.ServiceDependencies
 
 // HandleWebhookEvent processes a Moyasar webhook event.
-// Never returns an error to the caller — Moyasar must always receive 200 OK.
+// It returns an error only for a transient failure Moyasar should redeliver.
 // All errors are logged internally.
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "processing Moyasar webhook event",
@@ -185,7 +185,12 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 				"moyasar_payment_id", payment.ID,
 				"error", err,
 			)
-			h.releaseOrphanedCardCheck(ctx, flexpricePaymentID, payment.ID)
+			if !h.releaseOrphanedCardCheck(ctx, flexpricePaymentID, payment.ID) {
+				// Nothing recorded the charge, so only a redelivery can retry it.
+				return ierr.WithError(err).
+					WithHint("Orphaned card check could not be recorded or released").
+					Mark(ierr.ErrSystem)
+			}
 			return nil
 		}
 		flexpricePaymentID = adopted.ID
@@ -335,8 +340,8 @@ func (h *Handler) adoptOrphanedCardCheck(ctx context.Context, closed *dto.Paymen
 }
 
 // releaseOrphanedCardCheck gives an orphaned card check back to the customer
-// (void, else full refund). The Flexprice payment belongs to the earlier attempt and is left as is.
-func (h *Handler) releaseOrphanedCardCheck(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) {
+// (void, else full refund) and reports whether it did. The earlier attempt's payment is left as is.
+func (h *Handler) releaseOrphanedCardCheck(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) bool {
 	h.logger.Debug(ctx, "card check paid against a closed payment, releasing the charge",
 		"flexprice_payment_id", flexpricePaymentID,
 		"gateway_payment_id", gatewayPaymentID,
@@ -348,7 +353,7 @@ func (h *Handler) releaseOrphanedCardCheck(ctx context.Context, flexpricePayment
 			"flexprice_payment_id", flexpricePaymentID,
 			"gateway_payment_id", gatewayPaymentID,
 		)
-		return
+		return true
 	}
 	h.logger.Info(ctx, "void attempt failed, falling back to refund",
 		"flexprice_payment_id", flexpricePaymentID,
@@ -362,12 +367,13 @@ func (h *Handler) releaseOrphanedCardCheck(ctx context.Context, flexpricePayment
 			"gateway_payment_id", gatewayPaymentID,
 			"error", refundErr,
 		)
-		return
+		return false
 	}
 	h.logger.Info(ctx, "orphaned card check refunded",
 		"flexprice_payment_id", flexpricePaymentID,
 		"gateway_payment_id", gatewayPaymentID,
 	)
+	return true
 }
 
 // voidOrRefundAuthPayment attempts to void an AUTH payment, falling back to a full refund.

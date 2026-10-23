@@ -212,10 +212,12 @@ func TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded(t *testing.T) {
 		voidErr      error
 		refundErr    error
 		wantRefunded bool
+		wantErr      bool
 	}{
 		{name: "void succeeds"},
 		{name: "refund after a failed void", voidErr: errors.New("void window closed"), wantRefunded: true},
-		{name: "both fail", voidErr: errors.New("void failed"), refundErr: errors.New("refund failed"), wantRefunded: true},
+		// Nothing holds the charge, so the error asks Moyasar to redeliver.
+		{name: "both fail", voidErr: errors.New("void failed"), refundErr: errors.New("refund failed"), wantRefunded: true, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -237,7 +239,11 @@ func TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded(t *testing.T) {
 
 			err := h.HandleWebhookEvent(context.Background(), paidEvent, "env_1", &webhook.ServiceDependencies{PaymentService: paymentSvc})
 
-			require.NoError(t, err)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, []string{"moy_retry"}, client.voided)
 			if tt.wantRefunded {
 				assert.Equal(t, []string{"moy_retry"}, client.refunded)
