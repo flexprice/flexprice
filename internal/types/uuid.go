@@ -69,6 +69,7 @@ const (
 	UUID_PREFIX_FEATURE                    = "feat"
 	UUID_PREFIX_EVENT                      = "event"
 	UUID_PREFIX_METER                      = "meter"
+	UUID_PREFIX_METER_USAGE_CHECKPOINT     = "muc"
 	UUID_PREFIX_PLAN                       = "plan"
 	UUID_PREFIX_PRICE                      = "price"
 	UUID_PREFIX_INVOICE                    = "inv"

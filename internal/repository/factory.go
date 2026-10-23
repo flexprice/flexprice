@@ -7,6 +7,7 @@ import (
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
@@ -32,10 +33,10 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -171,6 +172,10 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
+}
+
+func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.Repository {
+	return entRepo.NewMeterUsageCheckpointRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

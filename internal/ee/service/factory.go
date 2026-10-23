@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -86,6 +87,7 @@ type ServiceParams struct {
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -186,6 +188,7 @@ func NewServiceParams(
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
+	meterUsageCheckpointRepo meterusagecheckpoint.Repository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -262,6 +265,7 @@ func NewServiceParams(
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
+		MeterUsageCheckpointRepo:     meterUsageCheckpointRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,

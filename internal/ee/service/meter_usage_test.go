@@ -75,6 +75,7 @@ func (s *MeterUsageServiceSuite) SetupTest() {
 		CustomerRepo:             s.GetStores().CustomerRepo,
 		FeatureRepo:              s.GetStores().FeatureRepo,
 		MeterUsageRepo:           s.meterUsageRepo,
+		MeterUsageCheckpointRepo: s.GetStores().MeterUsageCheckpointRepo,
 		EnvironmentRepo:          s.GetStores().EnvironmentRepo,
 		TenantRepo:               s.GetStores().TenantRepo,
 		EventRepo:                s.GetStores().EventRepo,

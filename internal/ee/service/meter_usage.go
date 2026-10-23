@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -59,6 +60,15 @@ type MeterUsageService interface {
 	// GetUsageTotal returns a meter's aggregated usage total (FINAL consistency;
 	// supports a single range or multiple disjoint TimeRanges in one query).
 	GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error)
+
+	// GetCheckpointedUsage returns raw SUM usage before the cutoff using a checkpoint and its tail.
+	GetCheckpointedUsage(ctx context.Context, req CheckpointedUsageRequest) (decimal.Decimal, error)
+
+	// SaveUsageCheckpoint recomputes a cutoff from the preceding checkpoint, without double-counting retries.
+	SaveUsageCheckpoint(ctx context.Context, req CheckpointedUsageRequest, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
+
+	// SaveUsageCheckpointsForSubscription records running SUM balances for the subscription's usage meters.
+	SaveUsageCheckpointsForSubscription(ctx context.Context, sub *subscription.Subscription, until time.Time, invoiceID *string) error
 
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.
@@ -500,14 +510,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		activeMeterIDs[id] = true
 	}
 
-	// 8. Build meter_id → line items map (only meters with data)
+	isAnalyticsQuery := req.WindowSize != "" || len(req.PropertyFilters) > 0 || len(req.Sources) > 0 || len(req.GroupBy) > 0
+
+	// 8. Include running SUM meters even when the requested window has no events.
 	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
 	meterAggType := make(map[string]types.AggregationType)
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
-		if !activeMeterIDs[item.MeterID] {
+		if !activeMeterIDs[item.MeterID] && (isAnalyticsQuery || !keepsRunningAggregate(result.MeterMap[item.MeterID])) {
 			continue
 		}
 		meterToLineItems[item.MeterID] = append(meterToLineItems[item.MeterID], item)
@@ -568,11 +580,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		// Use GetDetailedAnalytics when a window size, property/source filters, or extra
 		// group-by dimensions are requested (analytics path). Fall back to the faster
 		// GetUsageMultiMeter only for plain scalar billing queries.
-		isAnalyticsQuery := req.WindowSize != "" ||
-			len(req.PropertyFilters) > 0 ||
-			len(req.Sources) > 0 ||
-			len(req.GroupBy) > 0
-
 		if isAnalyticsQuery {
 			// Decide whether user-supplied group_by adds dimensions beyond meter_id.
 			// If yes, split the batch: commitment line items query with meter_id only
@@ -612,23 +619,41 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				return nil, err
 			}
 		} else {
-			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
-			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
-			// set by billing callers, so nothing is lost here.
+			var windowMeterIDs, runningMeterIDs []string
+			for _, meterID := range meterIDs {
+				if keepsRunningAggregate(result.MeterMap[meterID]) {
+					runningMeterIDs = append(runningMeterIDs, meterID)
+				} else {
+					windowMeterIDs = append(windowMeterIDs, meterID)
+				}
+			}
 			queryParams := &events.MeterUsageQueryParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
 				ExternalCustomerIDs: externalCustomerIDs,
-				MeterIDs:            meterIDs,
+				MeterIDs:            windowMeterIDs,
 				StartTime:           group.Start,
 				EndTime:             group.End,
 				AggregationType:     group.AggType,
 				UseFinal:            req.UseFinal,
 			}
 
-			results, err := s.repo.GetUsageMultiMeter(ctx, queryParams)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", group.AggType, err)
+			var results []*events.MeterUsageAggregationResult
+			if len(windowMeterIDs) > 0 {
+				results, err = s.repo.GetUsageMultiMeter(ctx, queryParams)
+				if err != nil {
+					return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", group.AggType, err)
+				}
+			}
+			for _, meterID := range runningMeterIDs {
+				total, err := s.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+					CustomerID: sub.CustomerID, ExternalCustomerIDs: externalCustomerIDs,
+					MeterID: meterID, AggregationType: types.AggregationSum, Until: group.End,
+				})
+				if err != nil {
+					return nil, err
+				}
+				results = append(results, &events.MeterUsageAggregationResult{MeterID: meterID, TotalValue: total})
 			}
 
 			resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
