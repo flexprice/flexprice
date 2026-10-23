@@ -1005,6 +1005,8 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 		Gateway:           string(types.SecretProviderMoyasar),
 		Amount:            decimal.NewFromInt(1),
 		Currency:          moyasar.DefaultCurrency,
+		// One payment per attempt: a shared one, once failed, can't record a later successful card.
+		IdempotencyKey: types.GenerateUUIDWithPrefix("moyasar_card_setup"),
 	})
 	if err != nil {
 		return "", "", err
