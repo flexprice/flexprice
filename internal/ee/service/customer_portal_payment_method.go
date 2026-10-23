@@ -22,6 +22,9 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 	if req == nil {
 		return nil, ierr.NewError("request is required").Mark(ierr.ErrValidation)
 	}
+	if err := req.RedirectionParams.Validate(); err != nil {
+		return nil, err
+	}
 
 	customerID, err := s.portalCustomerID(ctx)
 	if err != nil {
