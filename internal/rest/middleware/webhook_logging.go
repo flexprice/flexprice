@@ -38,7 +38,7 @@ func WebhookLoggingMiddleware(
 
 		headers := make(map[string][]string, len(c.Request.Header))
 		for k, v := range c.Request.Header {
-			if isSensitiveWebhookHeader(k) {
+			if isSensitiveKey(k) {
 				headers[k] = []string{redactedValue}
 				continue
 			}
@@ -79,26 +79,15 @@ func extractProvider(path string) string {
 
 const redactedValue = "[redacted]"
 
-var sensitiveHeaderParts = []string{"authorization", "api-key", "apikey", "cookie", "secret", "token", "signature"}
+const unparseableBody = "[redacted: unparseable body]"
 
-func isSensitiveWebhookHeader(name string) bool {
-	name = strings.ToLower(name)
-	for _, part := range sensitiveHeaderParts {
+// isSensitiveKey matches header names and body keys.
+func isSensitiveKey(name string) bool {
+	name = strings.ReplaceAll(strings.ToLower(name), "-", "_")
+	for _, part := range []string{"authorization", "api_key", "apikey", "cookie", "secret", "token", "signature", "password", "private_key"} {
 		if strings.Contains(name, part) {
 			return true
 		}
-	}
-	return false
-}
-
-const unparseableBody = "[redacted: unparseable body]"
-
-func isSensitiveKey(name string) bool {
-	switch strings.ReplaceAll(strings.ToLower(name), "-", "_") {
-	case "token", "secret", "authorization", "private_key", "id_token",
-		"webhook_secret", "signing_secret", "client_secret", "access_token",
-		"refresh_token", "password", "secret_token", "api_key", "apikey":
-		return true
 	}
 	return false
 }
@@ -110,9 +99,11 @@ func redactWebhookBody(body []byte, contentType string) string {
 	if len(trimmed) == 0 {
 		return string(body)
 	}
-	looksJSON := strings.Contains(mediaType, "json") || trimmed[0] == '{' || trimmed[0] == '['
+	isForm := mediaType == "application/x-www-form-urlencoded"
+	looksJSON := strings.Contains(mediaType, "json") ||
+		((trimmed[0] == '{' || trimmed[0] == '[') && (!isForm || json.Valid(trimmed)))
 	if !looksJSON {
-		if mediaType != "application/x-www-form-urlencoded" {
+		if !isForm {
 			return string(body)
 		}
 		form, err := url.ParseQuery(string(body))

@@ -100,6 +100,17 @@ func TestWebhookLoggingMiddleware_Redaction(t *testing.T) {
 			wantRaw: `{"secret_token":"[redacted]"}`,
 		},
 		{
+			name:    "bracket-prefixed form field",
+			headers: map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+			body:    "[items]=one&card_token=leak",
+			wantRaw: "%5Bitems%5D=one&card_token=%5Bredacted%5D",
+		},
+		{
+			name:    "provider-specific credential key",
+			body:    `{"data":{"source":{"payment_token":"leak","last4":"4242"}}}`,
+			wantRaw: `{"data":{"source":{"last4":"4242","payment_token":"[redacted]"}}}`,
+		},
+		{
 			name:    "plain text passes through",
 			headers: map[string]string{"Content-Type": "text/plain"},
 			body:    "token=leak",
