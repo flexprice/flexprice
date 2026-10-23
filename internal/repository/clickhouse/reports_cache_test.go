@@ -93,7 +93,7 @@ func TestReportCacheKey_NoDelimiterCollision(t *testing.T) {
 
 func TestReportsRepository_RelativeRangesShareKey(t *testing.T) {
 	ctx := context.Background()
-	r := &ReportsRepository{cfg: config.ReportsConfig{Database: "db", QueryCacheTTLSeconds: 60}}
+	r := &ReportsRepository{cfg: config.ReportsConfig{Database: "db", QueryCacheTTLSeconds: 60}, cache: testutil.NewInMemoryRedis()}
 	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 	key := func(now time.Time) string {
 		q, err := r.buildReport(&analytics.ResolvedView{
@@ -105,4 +105,20 @@ func TestReportsRepository_RelativeRangesShareKey(t *testing.T) {
 	}
 	assert.Equal(t, key(base.Add(123456*time.Microsecond)), key(base.Add(41*time.Second)))
 	assert.NotEqual(t, key(base), key(base.Add(time.Minute)))
+}
+
+func TestReportsRepository_NoCacheKeepsExactWindow(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 45, 0, time.UTC)
+	for name, r := range map[string]*ReportsRepository{
+		"no redis": {cfg: config.ReportsConfig{Database: "db", QueryCacheTTLSeconds: 60}},
+		"zero ttl": {cfg: config.ReportsConfig{Database: "db"}, cache: testutil.NewInMemoryRedis()},
+	} {
+		assert.Equal(t, now, r.stableTime(now), name)
+	}
+}
+
+func TestReportsRepository_BuildReportNilView(t *testing.T) {
+	r := &ReportsRepository{cfg: config.ReportsConfig{Database: "db"}}
+	_, err := r.buildReport(nil, "t1", "e1")
+	require.Error(t, err)
 }

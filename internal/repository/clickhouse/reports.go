@@ -116,6 +116,9 @@ func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.Datase
 }
 
 func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, environmentID string) (*reportQuery, error) {
+	if rv == nil {
+		return buildBillingQueryWithUsage(rv, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	}
 	w := *rv
 	w.Time.From = r.stableTime(rv.Time.From)
 	w.Time.To = r.stableTime(rv.Time.To)
@@ -124,11 +127,14 @@ func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, en
 
 // stableTime lets relative ranges share cache keys.
 func (r *ReportsRepository) stableTime(t time.Time) time.Time {
-	g := min(time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second, time.Minute)
-	if g <= 0 {
+	if !r.resultCacheOn() {
 		return t
 	}
-	return t.Truncate(g)
+	return t.Truncate(min(time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second, time.Minute))
+}
+
+func (r *ReportsRepository) resultCacheOn() bool {
+	return r.cache != nil && r.cache.IsEnabled() && r.cfg.QueryCacheTTLSeconds > 0
 }
 
 func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.ReportResult, error) {
@@ -145,7 +151,7 @@ func (r *ReportsRepository) run(ctx context.Context, q *reportQuery) ([][]string
 }
 
 func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch func() ([][]string, error)) ([][]string, error) {
-	if r.cache == nil || !r.cache.IsEnabled() || r.cfg.QueryCacheTTLSeconds <= 0 {
+	if !r.resultCacheOn() {
 		return fetch()
 	}
 	key := reportCacheKey(ctx, q)
