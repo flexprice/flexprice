@@ -70,6 +70,21 @@ func (e CommitmentEarlyTermination) Validate() error {
 	})
 }
 
+// CommitmentCancellationFeeType selects how the fee charged on an early terminate is computed.
+type CommitmentCancellationFeeType string
+
+const (
+	CommitmentCancellationFeeFlat               CommitmentCancellationFeeType = "flat"
+	CommitmentCancellationFeePercentOfRemaining CommitmentCancellationFeeType = "percent_of_remaining"
+)
+
+func (t CommitmentCancellationFeeType) Validate() error {
+	return validateEnum("cancellation_fee.type", t, []CommitmentCancellationFeeType{
+		CommitmentCancellationFeeFlat,
+		CommitmentCancellationFeePercentOfRemaining,
+	})
+}
+
 type CommitmentStatus string
 
 const (
@@ -90,11 +105,12 @@ func (s CommitmentStatus) Validate() error {
 type CommitmentLineKind string
 
 const (
-	CommitmentLineWithin     CommitmentLineKind = "within_commitment"
-	CommitmentLineOnDemand   CommitmentLineKind = "on_demand"
-	CommitmentLineTrueUp     CommitmentLineKind = "true_up"
-	CommitmentLineInstalment CommitmentLineKind = "instalment"
-	CommitmentLineSettlement CommitmentLineKind = "settlement"
+	CommitmentLineWithin          CommitmentLineKind = "within_commitment"
+	CommitmentLineOnDemand        CommitmentLineKind = "on_demand"
+	CommitmentLineTrueUp          CommitmentLineKind = "true_up"
+	CommitmentLineInstalment      CommitmentLineKind = "instalment"
+	CommitmentLineSettlement      CommitmentLineKind = "settlement"
+	CommitmentLineCancellationFee CommitmentLineKind = "cancellation_fee"
 )
 
 func validateEnum[T ~string](field string, v T, allowed []T) error {
