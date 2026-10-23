@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/samber/lo"
@@ -24,7 +25,7 @@ func TestRedirectionParamsValidate(t *testing.T) {
 		{"no host", "https:///path", true},
 		{"userinfo", "https://user:pw@example.com/", true},
 		{"mixed case scheme prefix bypass", "https:javascript:alert(1)", true},
-		{"too long", "https://example.com/" + string(make([]byte, 2100)), true},
+		{"too long", "https://example.com/" + strings.Repeat("a", 2100), true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
