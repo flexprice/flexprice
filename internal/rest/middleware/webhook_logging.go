@@ -106,7 +106,15 @@ func isSensitiveKey(name string) bool {
 // redactWebhookBody returns a copy safe to store; other bodies pass through.
 func redactWebhookBody(body []byte, contentType string) string {
 	mediaType, _, _ := mime.ParseMediaType(contentType)
-	if mediaType == "application/x-www-form-urlencoded" {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return string(body)
+	}
+	looksJSON := strings.Contains(mediaType, "json") || trimmed[0] == '{' || trimmed[0] == '['
+	if !looksJSON {
+		if mediaType != "application/x-www-form-urlencoded" {
+			return string(body)
+		}
 		form, err := url.ParseQuery(string(body))
 		if err != nil {
 			return unparseableBody
@@ -117,14 +125,6 @@ func redactWebhookBody(body []byte, contentType string) string {
 			}
 		}
 		return form.Encode()
-	}
-
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return string(body)
-	}
-	if !strings.Contains(mediaType, "json") && trimmed[0] != '{' && trimmed[0] != '[' {
-		return string(body)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(body))

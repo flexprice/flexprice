@@ -94,6 +94,12 @@ func TestWebhookLoggingMiddleware_Redaction(t *testing.T) {
 			wantRaw: "a=1&client-secret=%5Bredacted%5D&token=%5Bredacted%5D",
 		},
 		{
+			name:    "json body under form content type",
+			headers: map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+			body:    `{"secret_token":"leak"}`,
+			wantRaw: `{"secret_token":"[redacted]"}`,
+		},
+		{
 			name:    "plain text passes through",
 			headers: map[string]string{"Content-Type": "text/plain"},
 			body:    "token=leak",
