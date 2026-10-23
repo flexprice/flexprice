@@ -22,6 +22,12 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 		return nil, ierr.NewError("request is required").Mark(ierr.ErrValidation)
 	}
 
+	if req.Checkout != nil {
+		if err := req.Checkout.RedirectionParams.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	w, err := s.authorizeWallet(ctx, walletID)
 	if err != nil {
 		return nil, err
