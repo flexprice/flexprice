@@ -39,7 +39,6 @@ func AllowWhenSuspended() PermissionOption {
 	return func(r *permissionRules) { r.allowWhenSuspended = true }
 }
 
-// abortIfSuspended rejects the request when its tenant is suspended.
 func abortIfSuspended(c *gin.Context) bool {
 	if types.GetTenantInternalStatus(c.Request.Context()) != types.TenantInternalStatusSuspended {
 		return false
