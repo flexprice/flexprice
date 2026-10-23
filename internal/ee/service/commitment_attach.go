@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // checkLineItemCommitmentAttach runs the commitment price-attach guard for a usage line item joining sub.
@@ -35,6 +36,72 @@ func checkLineItemCommitmentAttach(
 	}
 
 	return svc.CheckPriceAttach(ctx, sub, p, li.StartDate)
+}
+
+// checkLineItemCommitmentDetach rejects ending a usage line item at endDate when an active binding commitment
+// scopes it and no other line item stays in its scope, which would silently stop billing its minimum.
+// Call it after any replacement line exists, so a successor keeps the scope non-empty.
+func checkLineItemCommitmentDetach(
+	ctx context.Context,
+	params ServiceParams,
+	sub *subscription.Subscription,
+	li *subscription.SubscriptionLineItem,
+	endDate time.Time,
+) error {
+	if li == nil || li.PriceType != types.PRICE_TYPE_USAGE {
+		return nil
+	}
+
+	svc := &commitmentService{ServiceParams: params}
+	enabled, err := svc.IsEnabled(ctx)
+	if err != nil || !enabled {
+		return err
+	}
+
+	f := commitment.NewNoLimitFilter()
+	f.SubscriptionIDs = []string{sub.ID}
+	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
+	active, err := params.CommitmentRepo.List(ctx, f)
+	if err != nil || len(active) == 0 {
+		return err
+	}
+
+	cc, err := svc.loadCommitmentContext(ctx, sub.ID)
+	if err != nil {
+		return err
+	}
+
+	p := cc.Prices[li.PriceID]
+	if p == nil {
+		if p, err = params.PriceRepo.Get(ctx, li.PriceID); err != nil {
+			return err
+		}
+	}
+
+	for _, c := range active {
+		from := maxTime(endDate, c.StartDate)
+		if !c.Binding || !from.Before(c.EndDate) || !commitmentCoversLine(c, li, p) {
+			continue
+		}
+
+		if !li.StartDate.Before(c.EndDate) {
+			continue
+		}
+
+		remaining := lo.Filter(
+			scopeLinesInPeriod(c.ScopeEntityType, c.ScopeEntityID, cc, from, c.EndDate),
+			func(other *subscription.SubscriptionLineItem, _ int) bool { return other.ID != li.ID },
+		)
+		if len(remaining) == 0 {
+			return invalidf(
+				"line item %s is the last line in scope of binding commitment %s; terminate the commitment first",
+				li.ID,
+				c.ID,
+			)
+		}
+	}
+
+	return nil
 }
 
 // rejectLegacyCommitmentInScope rejects legacy line-item commitment fields on a line that an active

@@ -575,6 +575,12 @@ func (s *subscriptionModificationService) applyLineItemChange(
 				return err
 			}
 
+			if mod.getNewPriceRequest() != nil {
+				if err := checkLineItemCommitmentDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
+					return err
+				}
+			}
+
 			if err := NewCouponAssociationService(sp).CreateCouponRefAssociations(
 				txCtx, request.GetSubscription(), mod.getCoupons(), newItem.ID); err != nil {
 				return err

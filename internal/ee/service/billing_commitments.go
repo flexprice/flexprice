@@ -736,7 +736,7 @@ func (l *commitmentLoader) externalIDs(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-// rawChargesByLine keys raw-events usage charges by line item, matching on price as the raw-events path does.
+// rawChargesByLine keys usage charges by line item: on the charge's line item ID when set, else on price.
 func rawChargesByLine(
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
@@ -752,6 +752,13 @@ func rawChargesByLine(
 		}
 
 		for _, charge := range usage.Charges {
+			if charge.SubscriptionLineItemID != "" {
+				if charge.SubscriptionLineItemID == item.ID {
+					out[item.ID] = append(out[item.ID], charge)
+				}
+				continue
+			}
+
 			if charge.Price != nil && charge.Price.ID == item.PriceID {
 				out[item.ID] = append(out[item.ID], charge)
 			}

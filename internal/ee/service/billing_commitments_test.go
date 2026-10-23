@@ -1514,3 +1514,25 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
 	s.True(within.Amount.Add(trueUp.Amount).Equal(dec("155")), "within %s + true-up %s", within.Amount, trueUp.Amount)
 	s.True(within.Amount.Equal(full.ValueWithin), "invoice within %s vs breakdown %s", within.Amount, full.ValueWithin)
 }
+
+func TestRawChargesByLine_SplitsChargesAcrossLinesSharingAPrice(t *testing.T) {
+	shared := &price.Price{ID: "price_shared"}
+	sub := &subscription.Subscription{LineItems: []*subscription.SubscriptionLineItem{
+		{ID: "li_old", PriceID: shared.ID, PriceType: types.PRICE_TYPE_USAGE},
+		{ID: "li_new", PriceID: shared.ID, PriceType: types.PRICE_TYPE_USAGE},
+	}}
+	usage := &dto.GetUsageBySubscriptionResponse{Charges: []*dto.SubscriptionUsageByMetersResponse{
+		{SubscriptionLineItemID: "li_old", Price: shared},
+		{SubscriptionLineItemID: "li_new", Price: shared},
+		{SubscriptionLineItemID: "li_new", Price: shared},
+	}}
+
+	got := rawChargesByLine(sub, usage)
+	require.Len(t, got["li_old"], 1)
+	require.Len(t, got["li_new"], 2)
+
+	untagged := &dto.GetUsageBySubscriptionResponse{Charges: []*dto.SubscriptionUsageByMetersResponse{{Price: shared}}}
+	got = rawChargesByLine(sub, untagged)
+	require.Len(t, got["li_old"], 1)
+	require.Len(t, got["li_new"], 1)
+}

@@ -279,7 +279,7 @@ func invalid(msg string) error {
 }
 
 // validateOverlaps requires active commitments sharing a line item to differ in priority, and active or
-// terminated ones to agree on type, measurement and overage rate; a terminated commitment still counts through
+// terminated ones to agree on type, measurement, bucket size (for windows) and overage rate; a terminated commitment still counts through
 // the end of the billing period it was terminated in, which it bills up to.
 func (s *commitmentService) validateOverlaps(
 	ctx context.Context,
@@ -329,6 +329,18 @@ func (s *commitmentService) validateOverlaps(
 
 		if other.Type != req.Type || other.Measurement != req.Measurement {
 			return invalidf("overlapping commitment %s has a different type or measurement", other.ID)
+		}
+
+		if req.Measurement == types.CommitmentMeasurementWindow {
+			want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+			if got := bucketFor(other, cc); got != "" && got != want {
+				return invalidf(
+					"overlapping commitment %s measures by window with bucket size %q; this commitment has bucket size %q",
+					other.ID,
+					got,
+					want,
+				)
+			}
 		}
 
 		same, err := s.sameOverage(ctx, other, req)
