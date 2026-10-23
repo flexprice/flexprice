@@ -496,6 +496,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FlatFeeBillsOneOffInvoice() {
 	inv, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), *resp.TerminationInvoiceID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
 	s.Equal(s.fx.customer.ID, inv.CustomerID)
 	s.True(inv.AmountDue.Equal(dec("250.5")), "got %s", inv.AmountDue)
 	lines := s.invoiceLines(inv.ID)

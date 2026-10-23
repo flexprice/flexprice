@@ -610,7 +610,7 @@ func (s *commitmentService) billTermination(
 		SubscriptionID: lo.ToPtr(cc.Sub.ID),
 		InvoiceType:    types.InvoiceTypeOneOff,
 		Currency:       c.Currency,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
+		BillingReason:  types.InvoiceBillingReasonProration,
 		AmountDue:      total,
 		Total:          total,
 		Subtotal:       total,
