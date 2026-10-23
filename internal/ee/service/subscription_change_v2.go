@@ -37,7 +37,6 @@ type planChangeRequest struct {
 
 	creditGrants                *planChangeCreditGrants
 	closingEntitlementOverrides []*entitlement.Entitlement
-	closingEntitlementGrants    []*entitlementgrant.EntitlementGrant
 
 	anchorAtEffect bool
 
@@ -279,54 +278,6 @@ func (s *subscriptionService) resolveClosingEntitlements(ctx context.Context, r 
 		})
 	}
 
-	return s.resolveClosingEntitlementGrants(ctx, r, fromPlanEntIDs)
-}
-
-// resolveClosingEntitlementGrants collects the subscription's grant windows still open at the
-// change instant whose config is an outgoing-plan entitlement or an override closing with it.
-func (s *subscriptionService) resolveClosingEntitlementGrants(
-	ctx context.Context,
-	r *planChangeRequest,
-	fromPlanEntIDs map[string]bool,
-) error {
-	// Grants key off the entitlement the subscription actually resolves to, which is the
-	// override where one is active and the plan entitlement otherwise.
-
-	// NOTE: This logic doesnot close entitlement grants that are additive and derived from
-	// some entities which are not being closed like addon. There is no way to be certain on
-	// what qouta had been used in that grant and associate it to different constituent grant qoutas.
-	// If needed, later on a prorated handling could be added to close the existing grant and open a
-	// new one with prorated qouta.
-
-	configIDs := lo.Keys(fromPlanEntIDs)
-	for _, ent := range r.closingEntitlementOverrides {
-		configIDs = append(configIDs, ent.ID)
-	}
-
-	filter := types.NewNoLimitEntitlementGrantFilter().
-		WithSubscriptionIDs(r.currentSub.ID).
-		WithEntitlementConfigIDs(configIDs...)
-	filter.ValidToAfter = &r.effectiveAt
-
-	grants, err := s.EntitlementGrantRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	for _, g := range grants {
-		if g == nil {
-			continue
-		}
-
-		r.closingEntitlementGrants = append(r.closingEntitlementGrants, g)
-		r.changes = append(r.changes, &dto.EntityChangeResult{
-			EntityType:  types.SubscriptionChangeEntityTypeEntitlementGrant,
-			ReferenceID: g.FeatureID(),
-			EntityID:    g.ID,
-			Behaviour:   types.EntityChangeBehaviourDrop,
-		})
-	}
-
 	return nil
 }
 
@@ -399,35 +350,45 @@ func (s *subscriptionService) closeEntitlementOverrides(ctx context.Context, r *
 	return nil
 }
 
-// closeEntitlementGrants ends the outgoing plan's open grant windows at the change instant.
-// Closing shrinks valid_to, which the evaluator treats as a window owed one final usage
-// refresh, so events landing before the swap still reach the billing reads.
-func (s *subscriptionService) closeEntitlementGrants(ctx context.Context, r *planChangeRequest) error {
-	for _, g := range r.closingEntitlementGrants {
-		// A window opening after the swap has nothing to keep; close it empty rather than inverted.
-		closeAt := r.effectiveAt
-		if closeAt.Before(g.ValidFrom) {
-			closeAt = g.ValidFrom
-		}
-
-		closed := entitlementgrant.NewEntitlementGrantBuilder(g).
-			WithWindow(g.ValidFrom, closeAt).
-			Build()
-
-		if _, err := s.EntitlementGrantRepo.Update(ctx, closed); err != nil {
-			return err
-		}
-
-		s.Logger.Info(ctx, "closed entitlement grant window on plan change",
-			"subscription_id", r.currentSub.ID,
-			"grant_id", closed.ID,
-			"entitlement_config_id", closed.EntitlementConfigID,
-			"feature_id", closed.FeatureID(),
-			"from_plan_id", r.fromPlan.ID,
-			"valid_to", closeAt)
+// applyPlanChangeEntitlementGrants uses the addon change flow to close outgoing
+// allowances and open incoming ones with carry-forward and optional proration.
+func (s *subscriptionService) applyPlanChangeEntitlementGrants(ctx context.Context, r *planChangeRequest) error {
+	grantSvc := newSubscriptionGrantService(s.ServiceParams)
+	outgoing, err := NewEntitlementService(s.ServiceParams).GetPlanEntitlements(ctx, r.fromPlan.ID)
+	if err != nil {
+		return err
 	}
-
-	return nil
+	removed := append(dto.ToEntitlements(outgoing), r.closingEntitlementOverrides...)
+	ecsByFeature, err := grantSvc.GetSubscriptionGrantECsByFeature(ctx, r.updatedSub)
+	if err != nil {
+		return err
+	}
+	incoming := make([]*entitlement.Entitlement, 0)
+	surviving := make(map[string][]*entitlement.Entitlement)
+	for featureID, ecs := range ecsByFeature {
+		for _, ec := range ecs {
+			if ec.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN && ec.EntityID == r.toPlan.ID {
+				incoming = append(incoming, ec)
+			} else {
+				surviving[featureID] = append(surviving[featureID], ec)
+			}
+		}
+	}
+	grants, err := grantSvc.resolveGrantProration(ctx, r.updatedSub, incoming, surviving,
+		r.effectiveAt, r.behavior, grantProrationSourcePlanChange)
+	if err != nil {
+		return err
+	}
+	for i, g := range grants {
+		grants[i] = entitlementgrant.NewEntitlementGrantBuilder(g).
+			WithWindow(types.LatestOf(r.effectiveAt, g.ValidFrom), g.ValidTo).
+			Build()
+	}
+	return grantSvc.applyEntitlementGrantChange(ctx, &GrantChangeConfig{
+		sub: r.updatedSub, incomingECs: incoming, survivingECsByFeature: surviving,
+		entitlementGrantsToAdd: grants, entitlementsToRemove: removed,
+		entitlementChangeAt: r.effectiveAt, entitlementChangeOrigin: grantProrationSourcePlanChange,
+	})
 }
 
 func (s *subscriptionService) checkPlanChangePreconditions(
@@ -899,7 +860,7 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		if err := s.closeEntitlementGrants(txCtx, r); err != nil {
+		if err := s.applyPlanChangeEntitlementGrants(txCtx, r); err != nil {
 			return err
 		}
 

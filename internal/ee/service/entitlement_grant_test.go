@@ -2650,3 +2650,91 @@ func (s *EntitlementGrantSuite) TestGrantState_ReportsQuotaCrossedAt() {
 	s.True(byID["eg-crossed"].QuotaCrossedAt.Equal(crossed))
 	s.Nil(byID["eg-open"].QuotaCrossedAt, "a window with room left has not crossed")
 }
+
+func (s *EntitlementGrantSuite) TestCreateEntitlement_NeverMeterValidation() {
+	for _, tc := range []struct {
+		name        string
+		aggregation types.AggregationType
+		reset       types.ResetUsage
+		measure     types.EntitlementGrantMeasure
+		duration    types.EntitlementGrantDurationUnit
+		mode        types.EntitlementAggregationMode
+		entity      types.EntitlementEntityType
+		wantError   string
+	}{
+		{"supported", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
+		{"amount", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureAmount, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "quantity measure"},
+		{"day", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitDay, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "subscription_period duration"},
+		{"parallel", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeParallel, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "parallel grants"},
+		{"addon", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon grants"},
+		{"count", types.AggregationCount, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "SUM aggregation"},
+		{"normal_amount", types.AggregationSum, types.ResetUsageBillingPeriod, types.EntitlementGrantMeasureAmount, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
+		{"normal_day_parallel", types.AggregationSum, types.ResetUsageBillingPeriod, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitDay, types.EntitlementAggregationModeParallel, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
+		{"normal_addon", types.AggregationSum, types.ResetUsageBillingPeriod, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_ADDON, ""},
+	} {
+		s.Run(tc.name, func() {
+			ctx := s.GetContext()
+			m := &meter.Meter{ID: "meter-never-validation-" + tc.name, EventName: "usage", ResetUsage: tc.reset,
+				Aggregation: meter.Aggregation{Type: tc.aggregation}, BaseModel: types.GetDefaultBaseModel(ctx)}
+			s.Require().NoError(s.meterStore.CreateMeter(ctx, m))
+			f := s.simpleFeature("feature-never-validation-"+tc.name, m.ID)
+			p := s.simplePlan("plan-never-validation-" + tc.name)
+			if tc.entity == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+				s.Require().NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{ID: p.ID, Name: p.ID,
+					EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}))
+			}
+			req := dto.CreateEntitlementRequest{EntityType: tc.entity, EntityID: p.ID, FeatureID: f.ID,
+				FeatureType: types.FeatureTypeMetered, IsEnabled: true, GrantMeasure: tc.measure,
+				GrantDurationUnit: tc.duration, GrantQuota: lo.ToPtr(decimal.NewFromInt(100)), AggregationMode: tc.mode}
+			if tc.duration != types.EntitlementGrantDurationUnitSubscriptionPeriod {
+				req.GrantDurationValue = lo.ToPtr(1)
+			}
+			_, err := s.entService.CreateEntitlement(ctx, req)
+			if tc.wantError != "" {
+				s.Require().Error(err)
+				s.Contains(err.Error(), tc.wantError)
+			} else {
+				s.NoError(err)
+			}
+		})
+	}
+}
+
+func (s *EntitlementGrantSuite) TestUpdateEntitlement_RejectsUnsupportedNeverGrantShape() {
+	ctx := s.GetContext()
+	m := s.simpleMeter("meter-never-update")
+	m.ResetUsage = types.ResetUsageNever
+	s.Require().NoError(s.meterStore.InMemoryStore.Update(ctx, m.ID, m))
+	f := s.simpleFeature("feature-never-update", m.ID)
+	p := s.simplePlan("plan-never-update")
+	created, err := s.entService.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+		EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN, EntityID: p.ID, FeatureID: f.ID,
+		FeatureType: types.FeatureTypeMetered, IsEnabled: true, GrantMeasure: types.EntitlementGrantMeasureQuantity,
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod, GrantQuota: lo.ToPtr(decimal.NewFromInt(100)),
+	})
+	s.Require().NoError(err)
+	_, err = s.entService.UpdateEntitlement(ctx, created.ID, dto.UpdateEntitlementRequest{GrantMeasure: lo.ToPtr(types.EntitlementGrantMeasureAmount)})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "quantity measure")
+}
+
+func (s *EntitlementGrantSuite) TestIsNeverResetMeter_OnlyIdentifiesResetSetting() {
+	ctx := s.GetContext()
+	for _, tc := range []struct {
+		name        string
+		aggregation types.AggregationType
+		reset       types.ResetUsage
+		want        bool
+	}{
+		{"sum_never", types.AggregationSum, types.ResetUsageNever, true},
+		{"count_never", types.AggregationCount, types.ResetUsageNever, true},
+		{"sum_period", types.AggregationSum, types.ResetUsageBillingPeriod, false},
+	} {
+		m := &meter.Meter{ID: tc.name, EventName: tc.name, ResetUsage: tc.reset, Aggregation: meter.Aggregation{Type: tc.aggregation}, BaseModel: types.GetDefaultBaseModel(ctx)}
+		s.Require().NoError(s.meterStore.CreateMeter(ctx, m))
+		f := s.simpleFeature("feature-"+tc.name, m.ID)
+		never, err := s.grantService.(*entitlementGrantService).isNeverResetMeter(ctx, f.ID)
+		s.Require().NoError(err)
+		s.Equal(tc.want, never)
+	}
+}

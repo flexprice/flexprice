@@ -379,7 +379,7 @@ func (s *alertService) refreshEntitlementGrantUsage(
 	if end.After(g.ValidTo) {
 		end = g.ValidTo
 	}
-	if !end.After(g.ValidFrom) {
+	if end.Before(g.ValidFrom) {
 		return decimal.Zero, nil
 	}
 

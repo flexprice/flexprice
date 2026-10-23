@@ -211,10 +211,35 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	if err := s.advanceGroupedInvoicingChildrenPeriod(ctx, sub, input.PeriodStart, input.PeriodEnd); err != nil {
 		return nil, err
 	}
+	s.refreshEntitlementGrantsAfterRollover(ctx, sub)
 
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil
+}
+
+func (s *BillingActivities) refreshEntitlementGrantsAfterRollover(ctx context.Context, sub *subscription.Subscription) {
+	if s.serviceParams.EntitlementGrantRepo == nil ||
+		(sub.SubscriptionStatus != types.SubscriptionStatusActive && sub.SubscriptionStatus != types.SubscriptionStatusTrialing) {
+		return
+	}
+	entitlements, err := s.subscriptionService.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+	if err != nil {
+		s.logger.Error(ctx, "failed to resolve entitlements for rollover refresh",
+			"error", err, "subscription_id", sub.ID)
+		return
+	}
+	for _, ec := range entitlements {
+		if ec == nil || ec.Entitlement == nil || !ec.HasGrantConfig() ||
+			ec.Feature == nil || ec.Feature.Meter == nil || ec.Feature.Meter.ResetUsage != types.ResetUsageNever {
+			continue
+		}
+		if err := service.NewAlertService(s.serviceParams).RefreshEntitlementGrantsForCustomer(ctx, sub.CustomerID); err != nil {
+			s.logger.Error(ctx, "entitlement grant refresh after rollover failed",
+				"error", err, "subscription_id", sub.ID)
+		}
+		return
+	}
 }
 
 func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
@@ -253,6 +278,9 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 				"child_subscription_id", child.ID,
 				"parent_subscription_id", parent.ID)
 			return err
+		}
+		if child.CustomerID != parent.CustomerID {
+			s.refreshEntitlementGrantsAfterRollover(ctx, child)
 		}
 	}
 
