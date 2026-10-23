@@ -27,7 +27,9 @@ func TestInMemorySecretStoreRevokeByUserID(t *testing.T) {
 	add("other-user", "t1", "env1", "u2")
 	add("other-tenant", "t2", "env1", "u1")
 
-	require.NoError(t, store.RevokeByUserID(ctx, "u1"))
+	revoked, err := store.RevokeByUserID(ctx, "u1")
+	require.NoError(t, err)
+	require.Len(t, revoked, 61)
 
 	for id, want := range map[string]types.Status{
 		"a0": types.StatusDeleted, "a59": types.StatusDeleted, "b1": types.StatusDeleted,
