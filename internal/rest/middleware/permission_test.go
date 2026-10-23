@@ -388,3 +388,46 @@ func TestRequirePermission_Suspended(t *testing.T) {
 		})
 	}
 }
+
+func TestRequirePermission_Shadow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	pm := NewPermissionMiddleware(realRBACService(t), newTestLogger(t))
+
+	tests := []struct {
+		name   string
+		roles  []string
+		shadow bool
+		want   int
+	}{
+		{"shadow lets an under-scoped key through", []string{types.RoleEventIngestor.String()}, true, http.StatusOK},
+		{"shadow lets a caller with no roles through", nil, true, http.StatusOK},
+		{"shadow passes an authorized reader", []string{types.RoleAllReader.String()}, true, http.StatusOK},
+		{"enforced gate still denies an under-scoped key", []string{types.RoleEventIngestor.String()}, false, http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var opts []PermissionOption
+			if tt.shadow {
+				opts = append(opts, Shadow())
+			}
+
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				ctx := c.Request.Context()
+				if tt.roles != nil {
+					ctx = context.WithValue(ctx, types.CtxRoles, tt.roles)
+				}
+				c.Request = c.Request.WithContext(ctx)
+				c.Next()
+			})
+			r.GET("/customers/:id", pm.RequirePermission(types.EntityCustomer, types.ActionRead, opts...), func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/customers/c1", nil))
+			assert.Equal(t, tt.want, w.Code)
+		})
+	}
+}
