@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// cardCheck returns a CUSTOMER card-check payment in the given state.
 func cardCheck(status types.PaymentStatus, gatewayPaymentID string) *dto.PaymentResponse {
 	return &dto.PaymentResponse{
 		ID:               "pay_card_check",
@@ -20,6 +21,7 @@ func cardCheck(status types.PaymentStatus, gatewayPaymentID string) *dto.Payment
 	}
 }
 
+// TestIsOrphanedCardCheck covers which paid card checks count as orphaned.
 func TestIsOrphanedCardCheck(t *testing.T) {
 	tests := []struct {
 		name          string
