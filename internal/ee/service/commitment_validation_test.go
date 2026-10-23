@@ -154,3 +154,69 @@ func TestValidateBoundary(t *testing.T) {
 	require.Contains(t, err.Error(), "1 Apr 2027")
 	require.Contains(t, err.Error(), "1 May 2027")
 }
+
+func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
+	amountA := func(r *dto.CreateCommitmentRequest) {
+		r.Type, r.CommittedRate, r.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
+	}
+	overageA := func(r *dto.CreateCommitmentRequest) { r.OverageRate = lo.ToPtr(dec("0.07")) }
+	startB := func(start time.Time) func(r *dto.CreateCommitmentRequest) {
+		return func(r *dto.CreateCommitmentRequest) { r.StartDate = start }
+	}
+
+	// A is terminated mid-way through its May 2027 billing period, which it still bills up to the end of.
+	terminatedAt := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		mutateA func(r *dto.CreateCommitmentRequest)
+		mutateB func(r *dto.CreateCommitmentRequest)
+		wantErr string
+	}{
+		{
+			name:    "different type in the period A was terminated in",
+			mutateA: amountA,
+			mutateB: startB(time.Date(2027, 5, 15, 0, 0, 0, 0, time.UTC)),
+			wantErr: "different type or measurement",
+		},
+		{
+			name:    "different overage rate in A's final billing period",
+			mutateA: overageA,
+			mutateB: func(r *dto.CreateCommitmentRequest) {
+				r.StartDate, r.OverageRate = time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC), lo.ToPtr(dec("0.08"))
+			},
+			wantErr: "different overage rate",
+		},
+		{
+			name:    "different type in the next billing period",
+			mutateA: amountA,
+			mutateB: startB(time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)),
+		},
+		{
+			name:    "same type and priority recreated after termination",
+			mutateA: func(r *dto.CreateCommitmentRequest) {},
+			mutateB: startB(terminatedAt),
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			a := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			tc.mutateA(&a)
+			created, err := s.svc.Create(s.GetContext(), a)
+			s.Require().NoError(err)
+			_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &terminatedAt})
+			s.Require().NoError(err)
+
+			b := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			tc.mutateB(&b)
+			_, err = s.svc.Create(s.GetContext(), b)
+			if tc.wantErr == "" {
+				s.Require().NoError(err)
+				return
+			}
+
+			s.requireValidation(err, tc.wantErr)
+		})
+	}
+}

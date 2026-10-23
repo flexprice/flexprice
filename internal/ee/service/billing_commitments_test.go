@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -730,4 +731,78 @@ func TestCommitmentLoader_SpreadWindowCosts_ConservesLineCost(t *testing.T) {
 	// No usage in any window: the line cost (if any) lands on the last window.
 	got = spreadWindowCosts([]decimal.Decimal{dec("0"), dec("0")}, dec("0"), third)
 	require.True(t, got[0].IsZero() && got[1].IsZero())
+}
+
+// The states below are only reachable by bypassing create validation, so the loader fails closed on them.
+func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnLineInTwoStacks() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub, p := s.apiFixture("sub_two_stacks")
+	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+
+	// An amount commitment terminated mid-period, then a quantity commitment on the same line.
+	committed := s.usagePriceFor("price_two_stacks_committed", s.testData.meters.apiCalls, "0.5")
+	a := s.newTestCommitment("cmt_amount", sub, types.COMMITMENT_TYPE_AMOUNT, "100", p.ID, periodStart, periodEnd)
+	a.CommitmentStatus, a.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(switchAt)
+	b := s.newTestCommitment("cmt_quantity", sub, types.COMMITMENT_TYPE_QUANTITY, "31", p.ID, switchAt, periodEnd)
+	b.CommittedPriceID = lo.ToPtr(committed.ID)
+	s.storeCommitment(a)
+	s.storeCommitment(b)
+
+	_, err := s.service.(*billingService).newCommitmentLoader(
+		s.GetContext(), sub, periodStart, periodEnd, periodEnd, rawChargesByLine(sub, s.meterUsage(sub)), nil,
+		types.UsageSourceInvoiceCreation, false,
+	)
+	s.Require().Error(err)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+	for _, want := range []string{"subs_line_flat_api", "cmt_amount", "cmt_quantity"} {
+		s.Contains(err.Error(), want)
+	}
+}
+
+func (s *BillingServiceSuite) TestCommitmentLoader_FailsClosedOnDifferentOverageRates() {
+	tests := []struct {
+		name    string
+		overage []string // overage rate per commitment, "" for none
+	}{
+		{name: "two different rates", overage: []string{"2", "3"}},
+		{name: "a rate and none", overage: []string{"2", ""}},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupTestData()
+			s.enableCommitmentsV2()
+			sub, p := s.apiFixture("sub_overage")
+			periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+			switchAt := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+			committed := s.usagePriceFor("price_overage_committed", s.testData.meters.apiCalls, "0.5")
+			for i, id := range []string{"cmt_first", "cmt_second"} {
+				start := periodStart
+				if i == 1 {
+					start = switchAt
+				}
+
+				c := s.newTestCommitment(id, sub, types.COMMITMENT_TYPE_QUANTITY, "31", p.ID, start, periodEnd)
+				c.CommittedPriceID = lo.ToPtr(committed.ID)
+				if tt.overage[i] != "" {
+					c.OveragePriceID = lo.ToPtr(s.usagePriceFor("price_"+id+"_overage", s.testData.meters.apiCalls, tt.overage[i]).ID)
+				}
+
+				if i == 0 {
+					c.CommitmentStatus, c.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(switchAt)
+				}
+
+				s.storeCommitment(c)
+			}
+
+			l := s.loaderFor(sub, s.meterUsage(sub), periodStart, periodEnd, false)
+			_, _, err := l.Stacks(s.GetContext())
+			s.Require().Error(err)
+			s.True(ierr.IsInvalidOperation(err), "got %v", err)
+			s.Contains(err.Error(), "cmt_first")
+			s.Contains(err.Error(), "cmt_second")
+		})
+	}
 }
