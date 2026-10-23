@@ -650,6 +650,21 @@ func (s *CommitmentServiceSuite) TestTerminateResources_NoopWhenDisabled() {
 	}))
 }
 
+func (s *CommitmentServiceSuite) TestAttachPrice_RejectsSecondMeterInQuantityGroupScope() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	subSvc := NewSubscriptionService(s.fullParams())
+	_, err = subSvc.AddSubscriptionLineItem(
+		s.GetContext(),
+		s.fx.sub.ID,
+		dto.CreateSubscriptionLineItemRequest{PriceID: s.fx.priceOtherMeterInGroup.ID},
+	)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+}
+
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_NoopCases() {
 	sub, p := s.fx.sub, s.fx.priceOtherMeterInGroup
 	at := sub.StartDate

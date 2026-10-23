@@ -640,6 +640,12 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 		lineItems = append(lineItems, attach.getLineItems()...)
 	}
 
+	for _, li := range lineItems {
+		if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, li); err != nil {
+			return err
+		}
+	}
+
 	if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems); err != nil {
 		return err
 	}
