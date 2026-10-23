@@ -118,9 +118,7 @@ type PortalPayInvoiceResponse struct {
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
 }
 
-// PortalUpdateCustomerRequest carries the profile fields a portal customer may
-// edit. external_id, billing_currency, tax_treatment, metadata and integration
-// mappings are not accepted.
+// PortalUpdateCustomerRequest contains customer-editable profile fields.
 type PortalUpdateCustomerRequest struct {
 	Name              *string `json:"name"`
 	Email             *string `json:"email" validate:"omitempty,email"`
@@ -134,6 +132,7 @@ type PortalUpdateCustomerRequest struct {
 	Timezone          *string `json:"timezone" validate:"omitempty,timezone"`
 }
 
+// ToUpdateCustomerRequest maps editable profile fields to a customer update.
 func (r PortalUpdateCustomerRequest) ToUpdateCustomerRequest() UpdateCustomerRequest {
 	return UpdateCustomerRequest{
 		Name:              r.Name,
