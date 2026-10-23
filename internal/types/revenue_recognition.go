@@ -63,6 +63,62 @@ const (
 	LedgerAccountContraRevenue      LedgerAccountKey = "contra_revenue"
 )
 
+// AccountClass groups ledger accounts; it fixes their normal side and statement.
+type AccountClass string
+
+const (
+	AccountClassAsset         AccountClass = "asset"
+	AccountClassLiability     AccountClass = "liability"
+	AccountClassRevenue       AccountClass = "revenue"
+	AccountClassContraRevenue AccountClass = "contra_revenue"
+)
+
+type StatementType string
+
+const (
+	StatementTypeBalanceSheet    StatementType = "balance_sheet"
+	StatementTypeIncomeStatement StatementType = "income_statement"
+)
+
+// Class returns the account's class, or "" for an unknown key.
+func (k LedgerAccountKey) Class() AccountClass {
+	switch k {
+	case LedgerAccountCash, LedgerAccountReceivable, LedgerAccountUnbilledReceivable:
+		return AccountClassAsset
+	case LedgerAccountDeferredRevenue, LedgerAccountCustomerCredit, LedgerAccountTaxPayable:
+		return AccountClassLiability
+	case LedgerAccountRevenue:
+		return AccountClassRevenue
+	case LedgerAccountContraRevenue:
+		return AccountClassContraRevenue
+	default:
+		return ""
+	}
+}
+
+// NormalSide is the side that increases the balance: debit for assets and contra revenue, credit otherwise.
+func (k LedgerAccountKey) NormalSide() JournalDirection {
+	switch k.Class() {
+	case AccountClassAsset, AccountClassContraRevenue:
+		return JournalDirectionDebit
+	case AccountClassLiability, AccountClassRevenue:
+		return JournalDirectionCredit
+	default:
+		return ""
+	}
+}
+
+func (k LedgerAccountKey) Statement() StatementType {
+	switch k.Class() {
+	case AccountClassRevenue, AccountClassContraRevenue:
+		return StatementTypeIncomeStatement
+	case AccountClassAsset, AccountClassLiability:
+		return StatementTypeBalanceSheet
+	default:
+		return ""
+	}
+}
+
 type JournalDirection string
 
 const (

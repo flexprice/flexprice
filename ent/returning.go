@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -163,6 +164,68 @@ func (t *returningTx) Exec(ctx context.Context, query string, args, v any) error
 		return err
 	}
 	return t.Tx.Exec(ctx, query, args, v)
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*AccountingPeriod.
+func (_u *AccountingPeriodUpdate) SaveReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *AccountingPeriodUpdate) sqlSaveReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	var out []*AccountingPeriod
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", accountingperiod.Table, accountingperiod.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningAccountingPeriod(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*AccountingPeriod.
+func (_d *AccountingPeriodDelete) ExecReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *AccountingPeriodDelete) sqlExecReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	var out []*AccountingPeriod
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", accountingperiod.Table, accountingperiod.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningAccountingPeriod(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningAccountingPeriod(rows *sql.Rows) ([]*AccountingPeriod, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*AccountingPeriod
+	for rows.Next() {
+		node := &AccountingPeriod{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
 }
 
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*Addon.

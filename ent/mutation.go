@@ -11,6 +11,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -91,6 +92,7 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeAccountingPeriod                 = "AccountingPeriod"
 	TypeAddon                            = "Addon"
 	TypeAddonAssociation                 = "AddonAssociation"
 	TypeAlertLogs                        = "AlertLogs"
@@ -156,6 +158,830 @@ const (
 	TypeWalletTransaction                = "WalletTransaction"
 	TypeWorkflowExecution                = "WorkflowExecution"
 )
+
+// AccountingPeriodMutation represents an operation that mutates the AccountingPeriod nodes in the graph.
+type AccountingPeriodMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	tenant_id      *string
+	status         *string
+	created_at     *time.Time
+	updated_at     *time.Time
+	created_by     *string
+	updated_by     *string
+	environment_id *string
+	period_start   *time.Time
+	period_status  *string
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*AccountingPeriod, error)
+	predicates     []predicate.AccountingPeriod
+}
+
+var _ ent.Mutation = (*AccountingPeriodMutation)(nil)
+
+// accountingperiodOption allows management of the mutation configuration using functional options.
+type accountingperiodOption func(*AccountingPeriodMutation)
+
+// newAccountingPeriodMutation creates new mutation for the AccountingPeriod entity.
+func newAccountingPeriodMutation(c config, op Op, opts ...accountingperiodOption) *AccountingPeriodMutation {
+	m := &AccountingPeriodMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAccountingPeriod,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAccountingPeriodID sets the ID field of the mutation.
+func withAccountingPeriodID(id string) accountingperiodOption {
+	return func(m *AccountingPeriodMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *AccountingPeriod
+		)
+		m.oldValue = func(ctx context.Context) (*AccountingPeriod, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().AccountingPeriod.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAccountingPeriod sets the old AccountingPeriod of the mutation.
+func withAccountingPeriod(node *AccountingPeriod) accountingperiodOption {
+	return func(m *AccountingPeriodMutation) {
+		m.oldValue = func(context.Context) (*AccountingPeriod, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m AccountingPeriodMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m AccountingPeriodMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of AccountingPeriod entities.
+func (m *AccountingPeriodMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *AccountingPeriodMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *AccountingPeriodMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().AccountingPeriod.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *AccountingPeriodMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *AccountingPeriodMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *AccountingPeriodMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *AccountingPeriodMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *AccountingPeriodMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *AccountingPeriodMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *AccountingPeriodMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *AccountingPeriodMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *AccountingPeriodMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *AccountingPeriodMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *AccountingPeriodMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *AccountingPeriodMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *AccountingPeriodMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *AccountingPeriodMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *AccountingPeriodMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[accountingperiod.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *AccountingPeriodMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[accountingperiod.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *AccountingPeriodMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, accountingperiod.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *AccountingPeriodMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *AccountingPeriodMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *AccountingPeriodMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[accountingperiod.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *AccountingPeriodMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[accountingperiod.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *AccountingPeriodMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, accountingperiod.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *AccountingPeriodMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *AccountingPeriodMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *AccountingPeriodMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[accountingperiod.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *AccountingPeriodMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[accountingperiod.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *AccountingPeriodMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, accountingperiod.FieldEnvironmentID)
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *AccountingPeriodMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *AccountingPeriodMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *AccountingPeriodMutation) ResetPeriodStart() {
+	m.period_start = nil
+}
+
+// SetPeriodStatus sets the "period_status" field.
+func (m *AccountingPeriodMutation) SetPeriodStatus(s string) {
+	m.period_status = &s
+}
+
+// PeriodStatus returns the value of the "period_status" field in the mutation.
+func (m *AccountingPeriodMutation) PeriodStatus() (r string, exists bool) {
+	v := m.period_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStatus returns the old "period_status" field's value of the AccountingPeriod entity.
+// If the AccountingPeriod object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountingPeriodMutation) OldPeriodStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStatus: %w", err)
+	}
+	return oldValue.PeriodStatus, nil
+}
+
+// ResetPeriodStatus resets all changes to the "period_status" field.
+func (m *AccountingPeriodMutation) ResetPeriodStatus() {
+	m.period_status = nil
+}
+
+// Where appends a list predicates to the AccountingPeriodMutation builder.
+func (m *AccountingPeriodMutation) Where(ps ...predicate.AccountingPeriod) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the AccountingPeriodMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *AccountingPeriodMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.AccountingPeriod, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *AccountingPeriodMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *AccountingPeriodMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (AccountingPeriod).
+func (m *AccountingPeriodMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *AccountingPeriodMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.tenant_id != nil {
+		fields = append(fields, accountingperiod.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, accountingperiod.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, accountingperiod.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, accountingperiod.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, accountingperiod.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, accountingperiod.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, accountingperiod.FieldEnvironmentID)
+	}
+	if m.period_start != nil {
+		fields = append(fields, accountingperiod.FieldPeriodStart)
+	}
+	if m.period_status != nil {
+		fields = append(fields, accountingperiod.FieldPeriodStatus)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *AccountingPeriodMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case accountingperiod.FieldTenantID:
+		return m.TenantID()
+	case accountingperiod.FieldStatus:
+		return m.Status()
+	case accountingperiod.FieldCreatedAt:
+		return m.CreatedAt()
+	case accountingperiod.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case accountingperiod.FieldCreatedBy:
+		return m.CreatedBy()
+	case accountingperiod.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case accountingperiod.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case accountingperiod.FieldPeriodStart:
+		return m.PeriodStart()
+	case accountingperiod.FieldPeriodStatus:
+		return m.PeriodStatus()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *AccountingPeriodMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case accountingperiod.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case accountingperiod.FieldStatus:
+		return m.OldStatus(ctx)
+	case accountingperiod.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case accountingperiod.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case accountingperiod.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case accountingperiod.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case accountingperiod.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case accountingperiod.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case accountingperiod.FieldPeriodStatus:
+		return m.OldPeriodStatus(ctx)
+	}
+	return nil, fmt.Errorf("unknown AccountingPeriod field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AccountingPeriodMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case accountingperiod.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case accountingperiod.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case accountingperiod.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case accountingperiod.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case accountingperiod.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case accountingperiod.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case accountingperiod.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case accountingperiod.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case accountingperiod.FieldPeriodStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStatus(v)
+		return nil
+	}
+	return fmt.Errorf("unknown AccountingPeriod field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *AccountingPeriodMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *AccountingPeriodMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *AccountingPeriodMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown AccountingPeriod numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *AccountingPeriodMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(accountingperiod.FieldCreatedBy) {
+		fields = append(fields, accountingperiod.FieldCreatedBy)
+	}
+	if m.FieldCleared(accountingperiod.FieldUpdatedBy) {
+		fields = append(fields, accountingperiod.FieldUpdatedBy)
+	}
+	if m.FieldCleared(accountingperiod.FieldEnvironmentID) {
+		fields = append(fields, accountingperiod.FieldEnvironmentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *AccountingPeriodMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *AccountingPeriodMutation) ClearField(name string) error {
+	switch name {
+	case accountingperiod.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case accountingperiod.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case accountingperiod.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountingPeriod nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *AccountingPeriodMutation) ResetField(name string) error {
+	switch name {
+	case accountingperiod.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case accountingperiod.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case accountingperiod.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case accountingperiod.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case accountingperiod.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case accountingperiod.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case accountingperiod.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case accountingperiod.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case accountingperiod.FieldPeriodStatus:
+		m.ResetPeriodStatus()
+		return nil
+	}
+	return fmt.Errorf("unknown AccountingPeriod field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *AccountingPeriodMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *AccountingPeriodMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *AccountingPeriodMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *AccountingPeriodMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *AccountingPeriodMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *AccountingPeriodMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *AccountingPeriodMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown AccountingPeriod unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *AccountingPeriodMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown AccountingPeriod edge %s", name)
+}
 
 // AddonMutation represents an operation that mutates the Addon nodes in the graph.
 type AddonMutation struct {

@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -78,6 +79,39 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	accountingperiodMixin := schema.AccountingPeriod{}.Mixin()
+	accountingperiodMixinFields0 := accountingperiodMixin[0].Fields()
+	_ = accountingperiodMixinFields0
+	accountingperiodMixinFields1 := accountingperiodMixin[1].Fields()
+	_ = accountingperiodMixinFields1
+	accountingperiodFields := schema.AccountingPeriod{}.Fields()
+	_ = accountingperiodFields
+	// accountingperiodDescTenantID is the schema descriptor for tenant_id field.
+	accountingperiodDescTenantID := accountingperiodMixinFields0[0].Descriptor()
+	// accountingperiod.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	accountingperiod.TenantIDValidator = accountingperiodDescTenantID.Validators[0].(func(string) error)
+	// accountingperiodDescStatus is the schema descriptor for status field.
+	accountingperiodDescStatus := accountingperiodMixinFields0[1].Descriptor()
+	// accountingperiod.DefaultStatus holds the default value on creation for the status field.
+	accountingperiod.DefaultStatus = accountingperiodDescStatus.Default.(string)
+	// accountingperiodDescCreatedAt is the schema descriptor for created_at field.
+	accountingperiodDescCreatedAt := accountingperiodMixinFields0[2].Descriptor()
+	// accountingperiod.DefaultCreatedAt holds the default value on creation for the created_at field.
+	accountingperiod.DefaultCreatedAt = accountingperiodDescCreatedAt.Default.(func() time.Time)
+	// accountingperiodDescUpdatedAt is the schema descriptor for updated_at field.
+	accountingperiodDescUpdatedAt := accountingperiodMixinFields0[3].Descriptor()
+	// accountingperiod.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	accountingperiod.DefaultUpdatedAt = accountingperiodDescUpdatedAt.Default.(func() time.Time)
+	// accountingperiod.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	accountingperiod.UpdateDefaultUpdatedAt = accountingperiodDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// accountingperiodDescEnvironmentID is the schema descriptor for environment_id field.
+	accountingperiodDescEnvironmentID := accountingperiodMixinFields1[0].Descriptor()
+	// accountingperiod.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	accountingperiod.DefaultEnvironmentID = accountingperiodDescEnvironmentID.Default.(string)
+	// accountingperiodDescPeriodStatus is the schema descriptor for period_status field.
+	accountingperiodDescPeriodStatus := accountingperiodFields[2].Descriptor()
+	// accountingperiod.PeriodStatusValidator is a validator for the "period_status" field. It is called by the builders before save.
+	accountingperiod.PeriodStatusValidator = accountingperiodDescPeriodStatus.Validators[0].(func(string) error)
 	addonMixin := schema.Addon{}.Mixin()
 	addonMixinFields0 := addonMixin[0].Fields()
 	_ = addonMixinFields0

@@ -9,6 +9,35 @@ import (
 )
 
 var (
+	// AccountingPeriodsColumns holds the columns for the "accounting_periods" table.
+	AccountingPeriodsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "period_start", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "period_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+	}
+	// AccountingPeriodsTable holds the schema information for the "accounting_periods" table.
+	AccountingPeriodsTable = &schema.Table{
+		Name:       "accounting_periods",
+		Columns:    AccountingPeriodsColumns,
+		PrimaryKey: []*schema.Column{AccountingPeriodsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_accounting_period_unique",
+				Unique:  true,
+				Columns: []*schema.Column{AccountingPeriodsColumns[1], AccountingPeriodsColumns[7], AccountingPeriodsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+		},
+	}
 	// AddonsColumns holds the columns for the "addons" table.
 	AddonsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3270,6 +3299,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		AccountingPeriodsTable,
 		AddonsTable,
 		AddonAssociationsTable,
 		AlertLogsTable,

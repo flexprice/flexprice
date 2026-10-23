@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
@@ -197,6 +198,7 @@ func main() {
 			repository.NewProductRepository,
 			repository.NewContractRepository,
 			repository.NewPerformanceObligationRepository,
+			repository.NewAccountingPeriodRepository,
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSubscriptionPhaseRepository,
@@ -324,6 +326,7 @@ func main() {
 			service.NewProductService,
 			contractsvc.NewContractService,
 			pobsvc.NewPerformanceObligationService,
+			accountingperiodsvc.NewAccountingPeriodService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewSubscriptionModificationService,
@@ -420,6 +423,7 @@ func provideHandlers(
 	productService service.ProductService,
 	contractService contractsvc.ContractService,
 	pobService pobsvc.PerformanceObligationService,
+	accountingPeriodService accountingperiodsvc.AccountingPeriodService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
@@ -493,6 +497,7 @@ func provideHandlers(
 		Product:                  v1.NewProductHandler(productService, logger),
 		Contract:                 v1.NewContractHandler(contractService, logger),
 		PerformanceObligation:    v1.NewPerformanceObligationHandler(pobService, logger),
+		AccountingPeriod:         v1.NewAccountingPeriodHandler(accountingPeriodService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),

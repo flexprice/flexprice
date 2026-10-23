@@ -9,6 +9,18 @@ import (
 	"github.com/flexprice/flexprice/ent"
 )
 
+// The AccountingPeriodFunc type is an adapter to allow the use of ordinary
+// function as AccountingPeriod mutator.
+type AccountingPeriodFunc func(context.Context, *ent.AccountingPeriodMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AccountingPeriodFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AccountingPeriodMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountingPeriodMutation", m)
+}
+
 // The AddonFunc type is an adapter to allow the use of ordinary
 // function as Addon mutator.
 type AddonFunc func(context.Context, *ent.AddonMutation) (ent.Value, error)

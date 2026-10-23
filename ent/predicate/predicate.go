@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// AccountingPeriod is the predicate function for accountingperiod builders.
+type AccountingPeriod func(*sql.Selector)
+
 // Addon is the predicate function for addon builders.
 type Addon func(*sql.Selector)
 

@@ -58,6 +58,7 @@ type Handlers struct {
 	Product                  *v1.ProductHandler
 	Contract                 *v1.ContractHandler
 	PerformanceObligation    *v1.PerformanceObligationHandler
+	AccountingPeriod         *v1.AccountingPeriodHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -379,6 +380,11 @@ func NewRouter(
 		{
 			performanceObligation.POST("/search", handlers.PerformanceObligation.QueryPerformanceObligations)
 			performanceObligation.GET("/:id", handlers.PerformanceObligation.GetPerformanceObligation)
+		}
+
+		accountingPeriod := v1Private.Group("/accounting_periods")
+		{
+			accountingPeriod.POST("/search", handlers.AccountingPeriod.QueryAccountingPeriods)
 		}
 
 		group := v1Private.Group("/groups")
