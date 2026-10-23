@@ -957,6 +957,35 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		return false, false, ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
+	// Retries must not release twice: settle a void or refund that already
+	// happened, and skip a charge that never held money.
+	current, err := m.Client.GetPayment(ctx, gatewayPaymentID)
+	if err != nil {
+		return false, false, err
+	}
+	switch moyasar.MoyasarPaymentStatus(current.Status) {
+	case moyasar.MoyasarPaymentStatusVoided:
+		if err := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		}); err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	case moyasar.MoyasarPaymentStatusRefunded:
+		if err := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			RefundedAt:         time.Now().UTC(),
+		}); err != nil {
+			return false, false, err
+		}
+		return false, true, nil
+	case moyasar.MoyasarPaymentStatusInitiated, moyasar.MoyasarPaymentStatusFailed:
+		return false, false, nil
+	}
+
 	// Try void first
 	if _, voidErr := m.Client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
