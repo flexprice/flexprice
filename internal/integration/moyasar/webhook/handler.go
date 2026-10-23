@@ -337,7 +337,7 @@ func (h *Handler) adoptOrphanedCardCheck(ctx context.Context, closed *dto.Paymen
 // releaseOrphanedCardCheck gives an orphaned card check back to the customer
 // (void, else full refund). The Flexprice payment belongs to the earlier attempt and is left as is.
 func (h *Handler) releaseOrphanedCardCheck(ctx context.Context, flexpricePaymentID string, gatewayPaymentID string) {
-	h.logger.Info(ctx, "card check paid against a closed payment, releasing the charge",
+	h.logger.Debug(ctx, "card check paid against a closed payment, releasing the charge",
 		"flexprice_payment_id", flexpricePaymentID,
 		"gateway_payment_id", gatewayPaymentID,
 	)
