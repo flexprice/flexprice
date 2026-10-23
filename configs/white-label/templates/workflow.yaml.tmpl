@@ -10,6 +10,8 @@ sources:
     swagger-json-mcp:
         inputs:
             - location: docs/swagger/swagger-3-0-mcp.json
+        overlays:
+            - location: .speakeasy/overlays/wl-server-url.yaml
 targets:
     flexprice-go:
         target: go
