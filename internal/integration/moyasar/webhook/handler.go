@@ -178,8 +178,18 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 	}
 
 	if isOrphanedCardCheck(flexpricePayment, payment) {
-		h.releaseOrphanedCardCheck(ctx, flexpricePaymentID, payment.ID)
-		return nil
+		adopted, err := h.adoptOrphanedCardCheck(ctx, flexpricePayment, payment, services)
+		if err != nil {
+			h.logger.Error(ctx, "failed to record orphaned card check, releasing it",
+				"flexprice_payment_id", flexpricePaymentID,
+				"moyasar_payment_id", payment.ID,
+				"error", err,
+			)
+			h.releaseOrphanedCardCheck(ctx, flexpricePaymentID, payment.ID)
+			return nil
+		}
+		flexpricePaymentID = adopted.ID
+		flexpricePayment = adopted
 	}
 
 	now := time.Now().UTC()
@@ -299,6 +309,29 @@ func isOrphanedCardCheck(flexpricePayment *dto.PaymentResponse, payment *moyasar
 	}
 	status := moyasar.MoyasarPaymentStatus(payment.Status)
 	return status == moyasar.MoyasarPaymentStatusPaid || status == moyasar.MoyasarPaymentStatusCaptured
+}
+
+// adoptOrphanedCardCheck records an orphaned card check as its own CUSTOMER payment,
+// keyed by the Moyasar payment so redeliveries resolve to the same record.
+func (h *Handler) adoptOrphanedCardCheck(ctx context.Context, closed *dto.PaymentResponse, payment *moyasar.MoyasarPayment, services *ServiceDependencies) (*dto.PaymentResponse, error) {
+	adoptedID, err := h.lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
+		DestinationID:     closed.DestinationID,
+		PaymentMethodType: closed.PaymentMethodType,
+		Gateway:           string(types.PaymentGatewayTypeMoyasar),
+		Amount:            closed.Amount,
+		Currency:          closed.Currency,
+		IdempotencyKey:    "moyasar_card_check_" + payment.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	h.logger.Info(ctx, "recorded orphaned card check as its own payment",
+		"closed_payment_id", closed.ID,
+		"flexprice_payment_id", adoptedID,
+		"moyasar_payment_id", payment.ID,
+	)
+	return services.PaymentService.GetPayment(ctx, adoptedID)
 }
 
 // releaseOrphanedCardCheck gives an orphaned card check back to the customer
