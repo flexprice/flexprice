@@ -41,7 +41,7 @@ Internal domain milestones enqueue messages onto **system-events Kafka topics** 
 1. **WebhookService.RegisterHandler** hooks into **`pubsub.Router`** when processing mode allows (`includeProcessingHandlers` true in deployment modes exercising consumers).
 2. **Payload factories** hydrate JSON from many read-services (see [`internal/webhook/module.go`](../../internal/webhook/module.go) injecting invoice/plan/feature/subscription/etc. services).
 3. **WebhookPublisher** (backed by shared Kafka producer) emits final envelope (potential persistence of `systemevent` aggregates — follow `publisher` package interplay with `repository/ent/SystemEvent`).
-4. **Svix integration** optionally delivers routed events (see Svix handlers in webhook API endpoints for dashboard onboarding).
+4. **Svix integration** optionally delivers routed events (see Svix handlers in webhook API endpoints for dashboard onboarding). The dashboard endpoint (`GET /webhooks/dashboard`) requires webhook write permission.
 
 ### Async operations
 
