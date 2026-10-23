@@ -310,6 +310,30 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *secretRepository) RevokeByUserID(ctx context.Context, userID string) error {
+	revoked, err := r.client.Writer(ctx).Secret.Update().
+		Where(
+			secret.UserID(userID),
+			secret.TenantID(types.GetTenantID(ctx)),
+			secret.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusDeleted)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(time.Now().UTC()).
+		SaveReturning(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to revoke user API keys").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, s := range revoked {
+		r.DeleteCache(ctx, s.Value)
+	}
+	return nil
+}
+
 type SecretQuery = *ent.SecretQuery
 
 type SecretQueryOptions struct{}

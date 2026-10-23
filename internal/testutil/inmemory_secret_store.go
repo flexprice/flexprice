@@ -150,6 +150,19 @@ func (s *InMemorySecretStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
+func (s *InMemorySecretStore) RevokeByUserID(ctx context.Context, userID string) error {
+	secrets, err := s.InMemoryStore.List(ctx, &types.SecretFilter{UserID: &userID}, secretFilterFn, secretSortFn)
+	if err != nil {
+		return err
+	}
+	for _, sec := range secrets {
+		if sec.Status == types.StatusPublished {
+			sec.Status = types.StatusDeleted
+		}
+	}
+	return nil
+}
+
 func (s *InMemorySecretStore) GetAPIKeyByValue(ctx context.Context, value string) (*secret.Secret, error) {
 	secrets, err := s.ListAll(ctx, &types.SecretFilter{
 		QueryFilter: types.NewDefaultQueryFilter(),
