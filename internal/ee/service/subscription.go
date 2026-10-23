@@ -3209,6 +3209,14 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
+
+	if !req.LifetimeUsage {
+		billingSvc := &billingService{ServiceParams: s.ServiceParams}
+		response.Commitments, err = billingSvc.commitmentUsageBreakdown(ctx, subscription, response, usageStartTime, usageEndTime)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return response, nil
 }
 

@@ -2071,6 +2071,21 @@ type GetUsageBySubscriptionResponse struct {
 	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
 	OverageAmount      float64                              `json:"overage_amount,omitempty"`      // Amount charged at overage rate
 	HasOverage         bool                                 `json:"has_overage"`                   // Whether any usage exceeded commitment
+	// Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.
+	Commitments []*CommitmentUsageBreakdown `json:"commitments,omitempty"`
+}
+
+// CommitmentUsageBreakdown is one commitment's usage value and billed amount for the usage window.
+type CommitmentUsageBreakdown struct {
+	CommitmentID string          `json:"commitment_id"`
+	InvoiceLabel string          `json:"invoice_label"`
+	PeriodAmount decimal.Decimal `json:"period_amount" swaggertype:"string"`
+	Capacity     decimal.Decimal `json:"capacity" swaggertype:"string"`
+	Used         decimal.Decimal `json:"used" swaggertype:"string"`
+	Unused       decimal.Decimal `json:"unused" swaggertype:"string"`
+	ValueWithin  decimal.Decimal `json:"value_within" swaggertype:"string"`
+	ValueUnused  decimal.Decimal `json:"value_unused" swaggertype:"string"`
+	BilledAmount decimal.Decimal `json:"billed_amount" swaggertype:"string"`
 }
 
 type SubscriptionUsageByMetersResponse struct {

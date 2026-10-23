@@ -279,6 +279,72 @@ func (l *commitmentLoader) InvoiceLines(ctx context.Context) ([]dto.CreateInvoic
 	return lines, total, nil
 }
 
+// UsageBreakdown reports each commitment's capacity, usage and billed amount for the loaded window.
+// When usage exceeds capacity, ValueWithin reaches PeriodAmount and ValueUnused is 0.
+func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.CommitmentUsageBreakdown, error) {
+	stacks, allocs, err := l.Stacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+		return l.priceSvc.CalculateCost(ctx, p, qty)
+	}
+	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
+
+	var out []*dto.CommitmentUsageBreakdown
+	for si, stack := range stacks {
+		for ci, sc := range stack.Commitments {
+			used := allocs[si].Commitments[ci]
+			b := &dto.CommitmentUsageBreakdown{
+				CommitmentID: sc.C.ID,
+				InvoiceLabel: sc.C.InvoiceLabel,
+				PeriodAmount: types.RoundToCurrencyPrecision(sc.Period.Amount, l.sub.Currency),
+				Capacity:     used.Capacity,
+				Used:         used.Used,
+				Unused:       used.Unused,
+			}
+
+			trueUp := decimal.Zero
+			for _, line := range lines {
+				if lo.FromPtr(line.CommitmentID) != sc.C.ID {
+					continue
+				}
+
+				switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
+				case types.CommitmentLineWithin:
+					b.ValueWithin = b.ValueWithin.Add(line.Amount)
+				case types.CommitmentLineTrueUp:
+					trueUp = trueUp.Add(line.Amount)
+				}
+			}
+
+			b.ValueUnused = decimal.Max(b.PeriodAmount.Sub(b.ValueWithin), decimal.Zero)
+			b.BilledAmount = b.ValueWithin.Add(trueUp)
+			out = append(out, b)
+		}
+	}
+
+	return out, nil
+}
+
+// commitmentUsageBreakdown reports each commitment's usage for the window from the raw-events usage; nil when none applies.
+func (s *billingService) commitmentUsageBreakdown(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	usage *dto.GetUsageBySubscriptionResponse,
+	start, end time.Time,
+) ([]*dto.CommitmentUsageBreakdown, error) {
+	loader, err := s.newCommitmentLoader(
+		ctx, sub, start, end, time.Now().UTC(), rawChargesByLine(sub, usage), nil, "", true,
+	)
+	if err != nil || len(loader.commitments) == 0 {
+		return nil, err
+	}
+
+	return loader.UsageBreakdown(ctx)
+}
+
 // linkLines creates the stack's usage lines, links them to the commitments scoping them and returns each
 // line's meter, aligned with stack.Lines.
 func (l *commitmentLoader) linkLines(ctx context.Context, stack *commitmentStack) ([]*meter.Meter, error) {

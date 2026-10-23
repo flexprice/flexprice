@@ -1276,3 +1276,241 @@ func (s *EntitlementQuantityTestSuite) TestCommitmentWiring_RecalculateDraft_Sta
 	// Within $4 and $3 on the same line item, plus $3 on-demand.
 	s.requireStableRecalculation(inv, 3, "10")
 }
+
+// rawUsageWindow returns the raw-events usage of [from, to), with the commitment breakdown for that window.
+func (s *BillingServiceSuite) rawUsageWindow(sub *subscription.Subscription, from, to time.Time) *dto.GetUsageBySubscriptionResponse {
+	usage, err := s.subscriptionSvc().GetUsageBySubscription(s.GetContext(), &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      from,
+		EndTime:        to,
+	})
+	s.Require().NoError(err)
+	return usage
+}
+
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	periodStart := sub.CurrentPeriodStart
+	// $100 amount commitment; the 500 recorded api calls cost $10.
+	c := s.createCommitment(
+		types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
+	)
+
+	usage := s.rawUsage(sub)
+	s.Require().Len(usage.Commitments, 1)
+	b := usage.Commitments[0]
+	s.Equal(c.ID, b.CommitmentID)
+	s.Equal(c.InvoiceLabel, b.InvoiceLabel)
+	s.True(b.PeriodAmount.Equal(dec("100")), "period amount %s", b.PeriodAmount)
+	// The now-based fixture prorates capacity by a fraction of a second, so compare it rounded.
+	s.True(types.RoundToCurrencyPrecision(b.Capacity, "usd").Equal(dec("100")), "capacity %s", b.Capacity)
+	s.True(b.Used.Equal(dec("10")), "used %s", b.Used)
+	s.True(b.Used.Add(b.Unused).Equal(b.Capacity), "used %s + unused %s", b.Used, b.Unused)
+	s.True(b.ValueWithin.Equal(dec("10")), "value within %s", b.ValueWithin)
+	s.True(b.ValueUnused.Equal(dec("90")), "value unused %s", b.ValueUnused)
+	s.True(b.ValueWithin.Add(b.ValueUnused).Equal(b.PeriodAmount))
+	s.True(b.BilledAmount.Equal(dec("100")), "billed %s", b.BilledAmount)
+
+	// A mid-period window reports what the preview for that window bills.
+	now := time.Now().UTC()
+	partial := s.rawUsageWindow(sub, periodStart, now)
+	s.Require().Len(partial.Commitments, 1)
+	preview, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+		Subscription: sub,
+		Usage:        partial,
+		PeriodStart:  periodStart,
+		PeriodEnd:    now,
+	})
+	s.Require().NoError(err)
+	within := loaderLinesOfKind(preview.LineItems, types.CommitmentLineWithin)
+	trueUp := loaderLinesOfKind(preview.LineItems, types.CommitmentLineTrueUp)
+	s.Require().Len(within, 1)
+	s.Require().Len(trueUp, 1)
+	s.True(partial.Commitments[0].ValueWithin.Equal(within[0].Amount))
+	s.True(partial.Commitments[0].ValueUnused.Equal(trueUp[0].Amount))
+	s.True(partial.Commitments[0].BilledAmount.Equal(preview.TotalAmount))
+}
+
+// Usage over capacity fills the commitment: ValueWithin reaches PeriodAmount and nothing is unused.
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_UsageOverCapacity() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	// $5 amount commitment against $10 of usage.
+	c := s.createCommitment(
+		types.COMMITMENT_TYPE_AMOUNT, "5", s.testData.prices.apiCalls.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(1, 0, 0),
+	)
+
+	usage := s.rawUsage(sub)
+	s.Require().Len(usage.Commitments, 1)
+	b := usage.Commitments[0]
+	s.Equal(c.ID, b.CommitmentID)
+	s.True(b.PeriodAmount.Equal(dec("5")), "period amount %s", b.PeriodAmount)
+	s.True(b.ValueWithin.Equal(dec("5")), "value within %s", b.ValueWithin)
+	s.True(b.ValueUnused.IsZero(), "value unused %s", b.ValueUnused)
+	s.True(types.RoundToCurrencyPrecision(b.Unused, "usd").IsZero(), "unused %s", b.Unused)
+	s.True(b.BilledAmount.Equal(dec("5")), "billed %s", b.BilledAmount)
+}
+
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_QuantityCommitmentStack() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	committed := s.usagePriceFor("price_breakdown_committed", s.testData.meters.apiCalls, "0.01")
+	// 300 of the 500 calls are committed at $0.01; the other 200 are billed on the line's own price.
+	c := s.newTestCommitment(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), sub,
+		types.COMMITMENT_TYPE_QUANTITY, "300", s.testData.prices.apiCalls.ID, sub.CurrentPeriodStart, sub.CurrentPeriodStart.AddDate(1, 0, 0))
+	c.CommittedPriceID = lo.ToPtr(committed.ID)
+	s.storeCommitment(c)
+
+	usage := s.rawUsage(sub)
+	s.Require().Len(usage.Commitments, 1)
+	b := usage.Commitments[0]
+	s.True(b.PeriodAmount.Equal(dec("3")), "period amount %s", b.PeriodAmount)
+	s.True(b.Capacity.Round(0).Equal(dec("300")), "capacity %s", b.Capacity)
+	s.True(b.Used.Round(0).Equal(dec("300")), "used %s", b.Used)
+	s.True(b.ValueWithin.Equal(dec("3")), "value within %s", b.ValueWithin)
+	s.True(b.ValueUnused.IsZero(), "value unused %s", b.ValueUnused)
+	s.True(b.BilledAmount.Equal(dec("3")), "billed %s", b.BilledAmount)
+}
+
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_NilWithoutApplicableCommitments() {
+	tests := []struct {
+		name  string
+		setup func(periodStart, periodEnd time.Time)
+	}{
+		{
+			name: "flag off",
+			setup: func(periodStart, _ time.Time) {
+				s.createCommitment(
+					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
+				)
+			},
+		},
+		{
+			name: "flag on, no commitment",
+			setup: func(_, _ time.Time) {
+				s.enableCommitmentsV2()
+			},
+		},
+		{
+			name: "flag on, no overlapping commitment",
+			setup: func(_, periodEnd time.Time) {
+				s.enableCommitmentsV2()
+				s.createCommitment(
+					types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodEnd, periodEnd.AddDate(1, 0, 0),
+				)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupTestData()
+			sub := s.testData.subscription
+			tt.setup(sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+			s.Nil(s.rawUsage(sub).Commitments)
+		})
+	}
+}
+
+// A window commitment mid-period counts only elapsed buckets as capacity; the invoice at period end
+// then trues up to the whole period amount.
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_MidPeriodWindow() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+
+	dayMeter := &meter.Meter{
+		ID:        "meter_daily_gpu",
+		Name:      "Daily GPU",
+		EventName: "daily_gpu",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "gpus",
+			BucketSize: types.WindowSizeDay,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, dayMeter))
+	usagePrice := s.usagePriceFor("price_daily_gpu", dayMeter, "1")
+	committedPrice := s.usagePriceFor("price_daily_gpu_committed", dayMeter, "0.5")
+	li := &subscription.SubscriptionLineItem{
+		ID:               "subs_line_daily_gpu",
+		PriceID:          usagePrice.ID,
+		MeterID:          dayMeter.ID,
+		MeterDisplayName: dayMeter.Name,
+		DisplayName:      "Daily GPU",
+	}
+	sub := s.fixedDateSub("sub_midperiod", li)
+	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+
+	insert := func(at time.Time, gpus int64) {
+		id := s.GetUUID()
+		s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           sub.TenantID,
+				EnvironmentID:      sub.EnvironmentID,
+				EventName:          dayMeter.EventName,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				CustomerID:         sub.CustomerID,
+				Timestamp:          at,
+				IngestedAt:         at,
+			},
+			MeterID:    dayMeter.ID,
+			QtyTotal:   decimal.NewFromInt(gpus),
+			UniqueHash: id,
+		}}))
+	}
+	insert(time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC), 15)
+	insert(time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC), 4)
+
+	// 10 GPUs per day committed at $0.50, over a 31-day period.
+	c := s.newTestCommitment("cmt_daily_gpu", sub, types.COMMITMENT_TYPE_QUANTITY, "10", usagePrice.ID, periodStart, periodEnd)
+	c.Measurement, c.CommittedPriceID = types.CommitmentMeasurementWindow, lo.ToPtr(committedPrice.ID)
+	s.storeCommitment(c)
+
+	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{{
+		SubscriptionLineItemID: li.ID,
+		Price:                  usagePrice,
+	}}}
+	breakdownAt := func(asOf time.Time) *dto.CommitmentUsageBreakdown {
+		l, err := s.service.(*billingService).newCommitmentLoader(
+			ctx, sub, periodStart, periodEnd, asOf, rawChargesByLine(sub, usage), nil, types.UsageSourceInvoiceCreation, false,
+		)
+		s.Require().NoError(err)
+		out, err := l.UsageBreakdown(ctx)
+		s.Require().NoError(err)
+		s.Require().Len(out, 1)
+		return out[0]
+	}
+
+	// Aug 1-10 have elapsed: 10 buckets of capacity, of which the 15 GPUs on Aug 2 fill one.
+	mid := breakdownAt(time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC))
+	s.True(mid.PeriodAmount.Equal(dec("155")), "period amount %s", mid.PeriodAmount)
+	s.True(mid.Capacity.Equal(dec("100")), "capacity %s", mid.Capacity)
+	s.True(mid.Used.Equal(dec("10")), "used %s", mid.Used)
+	s.True(mid.Unused.Equal(dec("90")), "unused %s", mid.Unused)
+	s.True(mid.ValueWithin.Equal(dec("5")), "value within %s", mid.ValueWithin)
+	s.True(mid.ValueUnused.Equal(dec("150")), "value unused %s", mid.ValueUnused)
+
+	// With the whole period elapsed the capacity is every bucket and Aug 20's usage counts.
+	full := breakdownAt(periodEnd)
+	s.True(full.Capacity.Equal(dec("310")), "capacity %s", full.Capacity)
+	s.True(full.Used.Equal(dec("14")), "used %s", full.Used)
+	s.True(full.ValueWithin.Equal(dec("7")), "value within %s", full.ValueWithin)
+	s.True(full.BilledAmount.Equal(dec("155")), "billed %s", full.BilledAmount)
+
+	// The invoice at period end trues up to the whole period amount.
+	lines, _, err := s.service.CalculateMeterUsageCharges(
+		ctx, sub, s.meterUsage(sub), periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil,
+	)
+	s.Require().NoError(err)
+	within := s.loaderLine(lines, types.CommitmentLineWithin, c.ID)
+	trueUp := s.loaderLine(lines, types.CommitmentLineTrueUp, c.ID)
+	s.True(within.Amount.Add(trueUp.Amount).Equal(dec("155")), "within %s + true-up %s", within.Amount, trueUp.Amount)
+	s.True(within.Amount.Equal(full.ValueWithin), "invoice within %s vs breakdown %s", within.Amount, full.ValueWithin)
+}
