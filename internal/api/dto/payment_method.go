@@ -223,7 +223,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	if r.SuccessURL != "" {
 		if !isValidURL(r.SuccessURL) {
 			return errors.NewError("invalid success_url format").
-				WithHint("Success URL must be a valid HTTP/HTTPS URL").
+				WithHint("Success URL must be an https URL (http only for localhost)").
 				WithReportableDetails(map[string]interface{}{
 					"success_url": r.SuccessURL,
 				}).
@@ -234,7 +234,7 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	if r.CancelURL != "" {
 		if !isValidURL(r.CancelURL) {
 			return errors.NewError("invalid cancel_url format").
-				WithHint("Cancel URL must be a valid HTTP/HTTPS URL").
+				WithHint("Cancel URL must be an https URL (http only for localhost)").
 				WithReportableDetails(map[string]interface{}{
 					"cancel_url": r.CancelURL,
 				}).
