@@ -876,6 +876,19 @@ func (s *CommitmentServiceSuite) fullParams() ServiceParams {
 	}
 }
 
+func (s *CommitmentServiceSuite) TestCancelSubscription_TerminatesCommitments() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+	subSvc := NewSubscriptionService(s.fullParams())
+	at := created.StartDate.AddDate(0, 2, 0)
+	s.Require().NoError(subSvc.TerminateSubscriptionResources(s.GetContext(), dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID: s.fx.sub.ID, EffectiveDate: at,
+	}))
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+}
+
 func (s *CommitmentServiceSuite) TestTerminateResources_NoopWhenDisabled() {
 	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
 	subSvc := NewSubscriptionService(s.fullParams())
