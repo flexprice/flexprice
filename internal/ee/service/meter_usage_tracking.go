@@ -325,7 +325,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				)
 				continue
 			}
-			if qty.IsNegative() {
+			if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 				qty = decimal.Zero
 			}
 			records = append(records, &events.MeterUsage{
@@ -490,7 +490,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 			continue
 		}
 
-		if qty.IsNegative() {
+		if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 			s.Logger.Info(ctx, "negative quantity, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
