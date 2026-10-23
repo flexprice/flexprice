@@ -41,6 +41,7 @@ const (
 	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
 	SettingKeyCommitmentsV2               SettingKey = "commitments_v2"
+	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -68,6 +69,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyUsageAlertConfig,
 		SettingKeyTaxConfig,
 		SettingKeyCommitmentsV2,
+		SettingKeyRevenueRecognitionConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -965,6 +967,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{"enabled": false},
 			Description:  "Enable first-class commitments",
 		},
+		SettingKeyRevenueRecognitionConfig: {
+			Key:          SettingKeyRevenueRecognitionConfig,
+			DefaultValue: map[string]interface{}{"enabled": false},
+			Description:  "Enable revenue recognition",
+		},
 	}, nil
 }
 
@@ -1144,6 +1151,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return cfg.Validate()
 
+	case SettingKeyRevenueRecognitionConfig:
+		cfg, err := utils.ToStruct[RevenueRecognitionConfig](value)
+		if err != nil {
+			return err
+		}
+		return cfg.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1290,5 +1304,14 @@ type CommitmentsV2Config struct {
 }
 
 func (c CommitmentsV2Config) Validate() error {
+	return nil
+}
+
+// RevenueRecognitionConfig gates every revenue recognition write per environment.
+type RevenueRecognitionConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
+func (c RevenueRecognitionConfig) Validate() error {
 	return nil
 }

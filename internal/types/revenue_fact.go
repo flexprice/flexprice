@@ -73,19 +73,19 @@ type RecognitionMethod string
 const (
 	// RecognitionMethodPointInTime recognizes the full amount on a single day.
 	RecognitionMethodPointInTime RecognitionMethod = "point_in_time"
-	// RecognitionMethodRatable recognizes straight-line over the service window.
-	RecognitionMethodRatable RecognitionMethod = "ratable"
-	// RecognitionMethodUsage recognizes as usage is delivered.
-	RecognitionMethodUsage RecognitionMethod = "usage"
+	// RecognitionMethodStraightLine recognizes straight-line over the service window.
+	RecognitionMethodStraightLine RecognitionMethod = "straight_line"
+	// RecognitionMethodAsConsumed recognizes as usage is delivered.
+	RecognitionMethodAsConsumed RecognitionMethod = "as_consumed"
 )
 
 func (m RecognitionMethod) Validate() error {
 	switch m {
-	case RecognitionMethodPointInTime, RecognitionMethodRatable, RecognitionMethodUsage:
+	case RecognitionMethodPointInTime, RecognitionMethodStraightLine, RecognitionMethodAsConsumed:
 		return nil
 	default:
 		return ierr.NewErrorf("invalid recognition method %q", m).
-			WithHint("recognition_method must be one of: point_in_time, ratable, usage").
+			WithHint("recognition_method must be one of: point_in_time, straight_line, as_consumed").
 			Mark(ierr.ErrValidation)
 	}
 }

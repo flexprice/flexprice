@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // notifyInvoiceFinalized emits the finalized webhook and kicks the revenue-facts
@@ -68,4 +70,57 @@ func asyncRevenueFactsUpdate(ctx context.Context, params ServiceParams, op, invo
 	if !types.RegisterPostCommit(ctx, start) {
 		start()
 	}
+}
+
+// asyncRevRecUpdate runs one revenue recognition write detached from the caller, after
+// it commits, and only if revenue recognition is enabled for the tenant and environment.
+func asyncRevRecUpdate(ctx context.Context, params ServiceParams, op, entityID string, run func(context.Context) error) {
+	detached := types.WithoutDBTransaction(context.WithoutCancel(ctx))
+
+	start := func() {
+		asyncCtx, cancel := context.WithTimeout(detached, time.Minute)
+		go func() {
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					params.Logger.Error(asyncCtx, "panic in revenue recognition "+op,
+						"error", fmt.Sprintf("%v", r),
+						"entity_id", entityID)
+				}
+			}()
+
+			enabled, err := revRecEnabled(asyncCtx, params)
+			if err == nil && enabled {
+				err = run(asyncCtx)
+			}
+			if err != nil {
+				params.Logger.Error(asyncCtx, "revenue recognition "+op+" failed",
+					"error", err,
+					"entity_id", entityID)
+			}
+		}()
+	}
+
+	if !types.RegisterPostCommit(ctx, start) {
+		start()
+	}
+}
+
+func revRecEnabled(ctx context.Context, params ServiceParams) (bool, error) {
+	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
+		return false, nil
+	}
+
+	setting, err := params.SettingsRepo.GetByKey(ctx, types.SettingKeyRevenueRecognitionConfig)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	cfg, err := utils.ToStruct[types.RevenueRecognitionConfig](setting.Value)
+	if err != nil {
+		return false, err
+	}
+	return cfg.Enabled, nil
 }
