@@ -747,10 +747,11 @@ func NewRouter(
 	// this handler may write.
 	customerPortalAPI.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	customerPortalAPI.Use(middleware.ErrorHandler())
+	blockSuspended := middleware.BlockWhenSuspended()
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)
-		customerPortalAPI.PUT("/info", handlers.CustomerPortal.UpdateCustomer)
+		customerPortalAPI.PUT("/info", blockSuspended, handlers.CustomerPortal.UpdateCustomer)
 		customerPortalAPI.GET("/usage", handlers.CustomerPortal.GetUsageSummary)
 
 		// Subscriptions
@@ -760,25 +761,25 @@ func NewRouter(
 		// Invoices
 		customerPortalAPI.POST("/invoices", handlers.CustomerPortal.GetInvoices)
 		customerPortalAPI.GET("/invoices/:id", handlers.CustomerPortal.GetInvoice)
-		customerPortalAPI.POST("/invoices/:id/pay", handlers.CustomerPortal.PayInvoice)
+		customerPortalAPI.POST("/invoices/:id/pay", blockSuspended, handlers.CustomerPortal.PayInvoice)
 		customerPortalAPI.GET("/invoices/:id/pdf", handlers.CustomerPortal.GetInvoicePDF)
 
 		// Wallets
 		customerPortalAPI.POST("/wallets", handlers.CustomerPortal.GetWallets)
 		customerPortalAPI.GET("/wallets/:id", handlers.CustomerPortal.GetWallet)
 		customerPortalAPI.GET("/wallets/:id/transactions", handlers.CustomerPortal.GetWalletTransactions)
-		customerPortalAPI.POST("/wallets/:id/top-up", handlers.CustomerPortal.TopUpWallet)
-		customerPortalAPI.PUT("/wallets/:id/auto-topup", handlers.CustomerPortal.UpdateAutoTopup)
+		customerPortalAPI.POST("/wallets/:id/top-up", blockSuspended, handlers.CustomerPortal.TopUpWallet)
+		customerPortalAPI.PUT("/wallets/:id/auto-topup", blockSuspended, handlers.CustomerPortal.UpdateAutoTopup)
 
 		// Checkout
 		customerPortalAPI.GET("/checkout-sessions/:id", handlers.CustomerPortal.GetCheckoutSession)
-		customerPortalAPI.POST("/checkout-sessions/:id/cancel", handlers.CustomerPortal.CancelCheckoutSession)
+		customerPortalAPI.POST("/checkout-sessions/:id/cancel", blockSuspended, handlers.CustomerPortal.CancelCheckoutSession)
 
 		// Payment methods
 		customerPortalAPI.GET("/payment-methods", handlers.CustomerPortal.ListPaymentMethods)
-		customerPortalAPI.POST("/payment-methods", handlers.CustomerPortal.AddPaymentMethod)
-		customerPortalAPI.POST("/payment-methods/delete", handlers.CustomerPortal.DeletePaymentMethod)
-		customerPortalAPI.POST("/payment-methods/default", handlers.CustomerPortal.SetDefaultPaymentMethod)
+		customerPortalAPI.POST("/payment-methods", blockSuspended, handlers.CustomerPortal.AddPaymentMethod)
+		customerPortalAPI.POST("/payment-methods/delete", blockSuspended, handlers.CustomerPortal.DeletePaymentMethod)
+		customerPortalAPI.POST("/payment-methods/default", blockSuspended, handlers.CustomerPortal.SetDefaultPaymentMethod)
 
 		// Portal config (theme, sections, tabs) — tenant-authored
 		customerPortalAPI.GET("/config", handlers.CustomerPortal.GetPortalConfig)
