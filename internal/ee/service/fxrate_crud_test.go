@@ -373,6 +373,40 @@ func (s *FXRateCRUDSuite) TestDeleteFXRate() {
 	}
 }
 
+func (s *FXRateCRUDSuite) TestListFXRates() {
+	cases := []struct {
+		name    string
+		filter  *types.FXRateFilter
+		wantErr bool
+	}{
+		{name: "nil filter uses defaults", filter: nil},
+		{name: "nil embedded query filter uses defaults", filter: &types.FXRateFilter{}},
+		{
+			name:    "invalid query filter is rejected",
+			filter:  &types.FXRateFilter{QueryFilter: &types.QueryFilter{Order: lo.ToPtr("sideways")}},
+			wantErr: true,
+		},
+	}
+
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			s.ClearStores()
+			s.createTenantRate("usd", "inr", "83")
+			list, err := s.svc.ListFXRates(s.GetContext(), c.filter)
+			if c.wantErr {
+				s.Error(err)
+				s.True(ierr.IsValidation(err), "unexpected error kind: %v", err)
+				return
+			}
+			s.NoError(err)
+			s.Len(list.Items, 1)
+			if c.filter != nil {
+				s.False(c.filter.IsUnlimited(), "list must be paginated by default")
+			}
+		})
+	}
+}
+
 // onlyRateID returns the id of the single tenant rate currently stored.
 func (s *FXRateCRUDSuite) onlyRateID() string {
 	scope := types.FXRateScopeTenant
