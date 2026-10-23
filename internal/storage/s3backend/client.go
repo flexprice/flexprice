@@ -28,7 +28,6 @@ import (
 
 const (
 	defaultPresignExpiry = 30 * time.Minute
-	publicOnlyTimeout    = 15 * time.Minute
 )
 
 // Config holds everything needed to construct an S3-backed storagetypes.Storage.
@@ -109,7 +108,7 @@ func New(ctx context.Context, cfg *Config, log *logger.Logger) (storagetypes.Sto
 	}
 	var httpClient aws.HTTPClient
 	if cfg.PublicOnly {
-		httpClient = httpclient.NewPublicOnlyClient(publicOnlyTimeout)
+		httpClient = newPublicOnlyHTTPClient()
 		opts = append(opts, awsConfig.WithHTTPClient(httpClient))
 	}
 
@@ -441,4 +440,9 @@ func contentTypeFor(format storagetypes.UploadFormat, compressed bool) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// newPublicOnlyHTTPClient has no overall timeout; the caller's context bounds uploads.
+func newPublicOnlyHTTPClient() *http.Client {
+	return httpclient.NewPublicOnlyClient(0)
 }
