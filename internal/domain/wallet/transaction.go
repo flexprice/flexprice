@@ -198,6 +198,10 @@ type CreditTopupsExportData struct {
 	Credits             decimal.Decimal
 	Currency            string
 	InvoiceID           string
+	// The billing period of the linked invoice. Empty when there is no invoice or it has no period,
+	// as with one-off top-up invoices.
+	InvoicePeriodStart *time.Time
+	InvoicePeriodEnd   *time.Time
 	// AmountPaid is what the credits were bought for: the invoice after discount, before tax, for
 	// an invoiced purchase, and zero for free and bonus grants. Not set for other credits.
 	AmountPaid *decimal.Decimal
@@ -214,6 +218,8 @@ type WalletDebitsExportData struct {
 	Currency            string
 	TransactionReason   types.TransactionReason
 	InvoiceID           string
+	InvoicePeriodStart  *time.Time
+	InvoicePeriodEnd    *time.Time
 	CreditTransactionID string
 	Credits             decimal.Decimal
 	// The wallet balance around this row. A debit drawing from several credits steps down row by row.

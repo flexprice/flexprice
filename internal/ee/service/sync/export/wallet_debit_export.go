@@ -28,6 +28,8 @@ type WalletDebitCSV struct {
 	Currency                   string `csv:"currency"`
 	TransactionReason          string `csv:"transaction_reason"`
 	InvoiceID                  string `csv:"invoice_id"`
+	InvoicePeriodStart         string `csv:"invoice_period_start"` // RFC3339; empty when the invoice has no period
+	InvoicePeriodEnd           string `csv:"invoice_period_end"`
 	CreditTransactionID        string `csv:"credit_transaction_id"`
 	Credits                    string `csv:"credits"`
 	CreditBalanceBefore        string `csv:"credit_balance_before"`
@@ -114,6 +116,8 @@ func toWalletDebitCSV(d *wallet.WalletDebitsExportData) *WalletDebitCSV {
 		Currency:                   d.Currency,
 		TransactionReason:          string(d.TransactionReason),
 		InvoiceID:                  d.InvoiceID,
+		InvoicePeriodStart:         timeOrEmpty(d.InvoicePeriodStart),
+		InvoicePeriodEnd:           timeOrEmpty(d.InvoicePeriodEnd),
 		CreditTransactionID:        d.CreditTransactionID,
 		Credits:                    d.Credits.String(),
 		CreditBalanceBefore:        d.CreditBalanceBefore.String(),

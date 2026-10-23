@@ -1179,6 +1179,8 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			wt.credit_amount,
 			wt.currency,
 			CASE WHEN wt.source_type = 'INVOICE' THEN wt.source_id END,
+			i.period_start,
+			i.period_end,
 			` + amountPaidSQL("wt", "i") + `,
 			wt.created_at
 		FROM
@@ -1240,6 +1242,8 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.Credits,
 			&exportData.Currency,
 			&invoiceID,
+			&exportData.InvoicePeriodStart,
+			&exportData.InvoicePeriodEnd,
 			&exportData.AmountPaid,
 			&exportData.CreatedAt,
 		)
@@ -1384,6 +1388,8 @@ func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantI
 			debit.currency,
 			debit.transaction_reason,
 			CASE WHEN debit.source_type = 'INVOICE' THEN debit.source_id END,
+			debit_invoice.period_start,
+			debit_invoice.period_end,
 			drawn.credit_transaction_id,
 			COALESCE(drawn.credits, debit.credit_amount),
 			debit.credit_balance_before - COALESCE(SUM(drawn.credits) OVER drawn_so_far - drawn.credits, 0),
@@ -1398,6 +1404,7 @@ func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantI
 			page debit
 			INNER JOIN wallets wallet ON wallet.id = debit.wallet_id
 			INNER JOIN customers customer ON customer.id = wallet.customer_id
+			LEFT JOIN invoices debit_invoice ON debit_invoice.id = debit.source_id AND debit.source_type = 'INVOICE'
 			` + drawnSQL("debit") + `
 			LEFT JOIN wallet_value value ON value.debit_id = debit.id AND value.ord = COALESCE(drawn.ord, 0)
 		WINDOW drawn_so_far AS (PARTITION BY debit.id ORDER BY drawn.ord)
@@ -1443,6 +1450,8 @@ func (r *walletRepository) GetWalletDebitsForExport(ctx context.Context, tenantI
 			&exportData.Currency,
 			&exportData.TransactionReason,
 			&invoiceID,
+			&exportData.InvoicePeriodStart,
+			&exportData.InvoicePeriodEnd,
 			&creditTransactionID,
 			&exportData.Credits,
 			&exportData.CreditBalanceBefore,

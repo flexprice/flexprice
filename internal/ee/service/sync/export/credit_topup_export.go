@@ -35,6 +35,8 @@ type CreditTopupCSV struct {
 	Credits             string `csv:"credits"`
 	Currency            string `csv:"currency"`
 	InvoiceID           string `csv:"invoice_id"`
+	InvoicePeriodStart  string `csv:"invoice_period_start"` // RFC3339; empty when the invoice has no period
+	InvoicePeriodEnd    string `csv:"invoice_period_end"`
 	AmountPaid          string `csv:"amount_paid"` // Empty when the credits were not bought or given free
 	CreatedAt           string `csv:"created_at"`  // RFC3339 format
 }
@@ -158,6 +160,8 @@ func (e *CreditTopupExporter) convertToCSVRecords(topupData []*wallet.CreditTopu
 			Credits:             topup.Credits.String(),
 			Currency:            topup.Currency,
 			InvoiceID:           topup.InvoiceID,
+			InvoicePeriodStart:  timeOrEmpty(topup.InvoicePeriodStart),
+			InvoicePeriodEnd:    timeOrEmpty(topup.InvoicePeriodEnd),
 			CreatedAt:           topup.CreatedAt.Format(time.RFC3339),
 		}
 		if topup.AmountPaid != nil {
