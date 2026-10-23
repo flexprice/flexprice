@@ -107,6 +107,7 @@ func (s *BillingServiceSuite) setupService() {
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
 	})
 }
 
