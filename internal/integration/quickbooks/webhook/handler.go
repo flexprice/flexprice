@@ -6,12 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -63,10 +65,12 @@ func (h *Handler) VerifyWebhookSignature(ctx context.Context, payload []byte, si
 
 	// Check if webhook verifier token is configured
 	if qbConfig.WebhookVerifierToken == "" {
-		h.logger.Info(ctx, "webhook verifier token not configured - SECURITY RISK, skipping signature verification",
+		h.logger.Info(ctx, "webhook verifier token not configured, rejecting webhook",
 			"connection_id", conn.ID,
-			"note", "Configure webhook_verifier_token in QuickBooks connection for production security")
-		return nil // Allow webhook without verification (for development)
+			"hint", "configure webhook_verifier_token on the QuickBooks connection")
+		return ierr.NewError("webhook verifier token not configured").
+			WithHint("Configure webhook_verifier_token on the QuickBooks connection").
+			Mark(ierr.ErrPermissionDenied)
 	}
 
 	// Compute HMAC-SHA256
@@ -98,7 +102,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 			Mark(ierr.ErrValidation)
 	}
 
-	// Process each event notification
+	var errs []error
 	for _, notification := range webhookPayload.EventNotifications {
 		realmID := notification.RealmID
 
@@ -112,6 +116,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 			h.logger.Error(ctx, "failed to get QuickBooks connection",
 				"error", err,
 				"realm_id", realmID)
+			errs = append(errs, err)
 			continue
 		}
 
@@ -140,12 +145,12 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 					"entity_name", entity.Name,
 					"entity_id", entity.ID,
 					"operation", entity.Operation)
-				// Continue processing other entities
+				errs = append(errs, err)
 			}
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // processEntityChange processes a single entity change event
@@ -181,14 +186,14 @@ func (h *Handler) processEntityChange(ctx context.Context, entity *EntityChange,
 	}
 
 	// Handle payment event
-	return h.handlePaymentEvent(ctx, entity.ID, paymentService, invoiceService)
+	return h.handlePaymentEvent(ctx, entity.ID, paymentService, invoiceService, services.DB)
 }
 
 // handlePaymentEvent processes a Payment entity change
-func (h *Handler) handlePaymentEvent(ctx context.Context, paymentID string, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
+func (h *Handler) handlePaymentEvent(ctx context.Context, paymentID string, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService, db postgres.IClient) error {
 	h.logger.Info(ctx, "handling QuickBooks payment event",
 		"quickbooks_payment_id", paymentID)
 
 	// Delegate to payment service
-	return h.paymentSvc.HandleExternalPaymentFromWebhook(ctx, paymentID, paymentService, invoiceService)
+	return h.paymentSvc.HandleExternalPaymentFromWebhook(ctx, paymentID, paymentService, invoiceService, db)
 }
