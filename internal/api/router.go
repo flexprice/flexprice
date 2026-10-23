@@ -95,7 +95,9 @@ func NewRouter(
 	userRepo domainUser.Repository,
 	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
-	// gin.SetMode(gin.ReleaseMode)
+	if cfg.Deployment.Mode != types.ModeLocal {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	// Create a new gin engine without default middleware
 	router := gin.New()
@@ -748,7 +750,7 @@ func NewRouter(
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)
-		customerPortalAPI.PUT("/info", write(types.EntityCustomer, types.ActionWrite), handlers.CustomerPortal.UpdateCustomer)
+		customerPortalAPI.PUT("/info", handlers.CustomerPortal.UpdateCustomer)
 		customerPortalAPI.GET("/usage", handlers.CustomerPortal.GetUsageSummary)
 
 		// Subscriptions
