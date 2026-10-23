@@ -730,10 +730,6 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 				Mark(ierr.ErrValidation)
 		}
 
-		if err := provider.RemoveUser(ctx, id); err != nil {
-			return err
-		}
-
 		if err := s.secretRepo.RevokeByUserID(ctx, id); err != nil {
 			return err
 		}
@@ -741,6 +737,15 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 		return s.userRepo.Delete(ctx, id)
 	})
 	if err != nil {
+		return err
+	}
+
+	if err := provider.RemoveUser(ctx, id); err != nil {
+		s.logger.Error(ctx, "provider login removal failed",
+			"error", err,
+			"target_user_id", id,
+			"tenant_id", tenantID,
+		)
 		return err
 	}
 
