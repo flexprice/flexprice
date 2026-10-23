@@ -666,6 +666,9 @@ type CreateSubscriptionRequest struct {
 
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
+	// Commitments are created with the subscription; their subscription_id is set server-side.
+	Commitments []CreateCommitmentRequest `json:"commitments,omitempty"`
+
 	SubscriptionCreationConfig
 }
 
@@ -1029,6 +1032,20 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 	return nil
 }
 
+// validateCommitments checks each inline commitment's shape on a copy, so no write happens for a bad request.
+func (r *CreateSubscriptionRequest) validateCommitments() error {
+	for i := range r.Commitments {
+		c := r.Commitments[i]
+		c.SubscriptionID = "pending"
+		c.ApplyDefaults(lo.CoalesceOrEmpty(r.Timezone, types.DefaultTimezone))
+		if err := c.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
@@ -1058,6 +1075,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := r.validateCommitments(); err != nil {
+		return err
 	}
 
 	if r.IncludePriceIDs != nil {
