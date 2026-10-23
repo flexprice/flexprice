@@ -821,7 +821,7 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.userService = &userService{db: testutil.NewMockPostgresClient(testLogger(s.T())), userRepo: s.userRepo, tenantRepo: s.tenantRepo, secretRepo: s.secretRepo, cfg: &config.Configuration{}, logger: testLogger(s.T())}
 	}
 
-	s.Run("success_user_removed_api_key_retained", func() {
+	s.Run("success_user_removed_api_key_revoked", func() {
 		seedStore()
 		_ = s.secretRepo.Create(ctx, &domainSecret.Secret{
 			ID:       "key-1",
@@ -840,8 +840,8 @@ func (s *UserServiceSuite) TestRemoveUser() {
 		s.Equal(types.StatusArchived, removedUser.Status)
 
 		key, err := s.secretRepo.Get(ctx, "key-1")
-		s.NoError(err, "the user's API key must remain active after removal")
-		s.Equal(types.StatusPublished, key.Status)
+		s.NoError(err)
+		s.Equal(types.StatusDeleted, key.Status)
 	})
 
 	s.Run("empty_id_returns_validation_error", func() {

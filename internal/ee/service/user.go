@@ -734,6 +734,10 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			return err
 		}
 
+		if err := s.secretRepo.RevokeByUserID(ctx, id); err != nil {
+			return err
+		}
+
 		return s.userRepo.Delete(ctx, id)
 	})
 	if err != nil {
