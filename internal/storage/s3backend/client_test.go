@@ -445,3 +445,19 @@ func TestClient_FileURL_MatchesProviderScheme(t *testing.T) {
 	want := storage.FileURL(storage.ProviderS3, "test-bucket", "exports/report.csv")
 	assert.Equal(t, want, got)
 }
+
+func TestClient_PublicOnly_BlocksLoopbackEndpoint(t *testing.T) {
+	var hit bool
+	cfg, closeSrv := newFakeS3Server(t, func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeSrv()
+	cfg.PublicOnly = true
+
+	s, err := s3backend.New(context.Background(), cfg, logger.NewNoopLogger())
+	require.NoError(t, err)
+
+	require.Error(t, s.ValidateConnection(context.Background()))
+	assert.False(t, hit, "loopback server must not receive a request")
+}

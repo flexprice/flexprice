@@ -1523,6 +1523,7 @@ func (f *Factory) buildS3Storage(ctx context.Context, conn *connection.Connectio
 		AWSAccessKeyID:     accessKey,
 		AWSSecretAccessKey: secretKey,
 		AWSSessionToken:    sessionToken,
+		PublicOnly:         true,
 	}
 	if dst != nil {
 		s3Cfg.EndpointURL = dst.endpointURL
