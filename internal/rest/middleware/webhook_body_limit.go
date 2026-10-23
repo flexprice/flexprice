@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// MaxWebhookBodyBytes is the default webhook body size cap.
 const MaxWebhookBodyBytes = 5 << 20
 
 // WebhookBodyLimitMiddleware rejects oversized webhook bodies with 413.
