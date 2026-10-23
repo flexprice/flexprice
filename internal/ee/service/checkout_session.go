@@ -440,7 +440,7 @@ func (s *checkoutSessionService) terminateCheckoutSession(ctx context.Context, s
 }
 
 func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, session *domainCheckout.CheckoutSession, reason error) error {
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 
 	if cfg.WalletTopupParams != nil && cfg.WalletTopupParams.WalletTransactionID != "" {
 		failReason := "checkout session expired before payment"
@@ -617,7 +617,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 
 	// Callers know only part of the result — the webhook has the payment id but not the
 	// redirect action. Merge onto what is stored so the claim does not clobber the rest.
-	mergedResult := types.NewCheckoutProviderResultFrom(session.ProviderResult.ToProviderResult()).
+	mergedResult := types.NewCheckoutProviderResultFrom(session.ProviderResult).
 		Overlay(providerResult).
 		Build()
 
@@ -644,7 +644,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	session.CheckoutStatus = types.CheckoutStatusCompleted
 	session.CompletedAt = &now
 	if mergedResult != nil {
-		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(mergedResult)
+		session.ProviderResult = mergedResult
 	}
 	metrics.RecordCounter(ctx, metrics.CheckoutSessions, 1, checkoutMetricLabels(session, types.CheckoutStatusCompleted)...)
 	s.publishCheckoutEvent(ctx, dto.ToCheckoutSessionResponse(session), types.WebhookEventCheckoutSessionCompleted)
@@ -662,11 +662,11 @@ func checkoutMetricLabels(session *domainCheckout.CheckoutSession, status types.
 
 // checkoutChargeMode relies on auto-charge responses carrying no URL while auth links always do.
 func checkoutChargeMode(session *domainCheckout.CheckoutSession) string {
-	result := session.ProviderResult.ToProviderResult()
+	result := session.ProviderResult
 	switch {
 	case result == nil:
 		return chargeModeNone
-	case lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig()).CollectionMethod == types.CollectionMethodSendInvoice:
+	case lo.FromPtr(session.PaymentProviderConfig).CollectionMethod == types.CollectionMethodSendInvoice:
 		return chargeModePaymentLink
 	case lo.FromPtr(result.NextAction).URL != "":
 		return chargeModeAuthLink
@@ -913,7 +913,7 @@ func (s *checkoutSessionService) fulfillCheckoutSession(
 		return err
 	}
 	s.recordGatewayHandles(ctx, payResp.ID, providerResult)
-	session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+	session.ProviderResult = providerResult
 	session.CheckoutStatus = types.CheckoutStatusPending
 	return s.savePendingSession(ctx, session)
 }

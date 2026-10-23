@@ -259,11 +259,11 @@ func (s *SubscriptionServiceSuite) seedCollidingCheckoutSession(idempKey string)
 		Action:          types.CheckoutActionCreateSubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				SubscriptionID: "subs_some_other_subscription",
 			},
-		}),
+		},
 		IdempotencyKey: &idempKey,
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
@@ -401,9 +401,9 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckout(
 		Action:          types.CheckoutActionCreateSubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{SubscriptionID: subResp.ID},
-		}),
+		},
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -572,20 +572,20 @@ func (s *SubscriptionServiceSuite) TestCompleteSubscriptionCheckout_LegacyResult
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_complete_legacy")
 
 	// Rewrite the session into the legacy shape: slim params, ids in Result.
-	session.Configuration = domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+	session.Configuration = types.CheckoutConfiguration{
 		CreateSubscriptionParams: &types.CreateSubscriptionParams{
 			PlanID:        "plan_complete_legacy",
 			Currency:      "usd",
 			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 		},
-	})
-	session.Result = domainCheckout.ToJSONBCheckoutResult(&types.CheckoutResult{
+	}
+	session.Result = &types.CheckoutResult{
 		CreateSubscriptionResult: &types.CreateSubscriptionResult{
 			SubscriptionID: draftSub.ID,
 			InvoiceID:      draft.ID,
 			PaymentID:      *session.CheckoutPaymentID,
 		},
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
@@ -633,13 +633,13 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupWithDup
 	s.seedFixedPricePlan("plan_cleanup_result_dup", decimal.NewFromInt(50), 0)
 
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_cleanup_result_dup")
-	session.Result = domainCheckout.ToJSONBCheckoutResult(&types.CheckoutResult{
+	session.Result = &types.CheckoutResult{
 		CreateSubscriptionResult: &types.CreateSubscriptionResult{
 			SubscriptionID: draftSub.ID,
 			InvoiceID:      draft.ID,
 			PaymentID:      *session.CheckoutPaymentID,
 		},
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
@@ -669,20 +669,20 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionCheckout_CleanupLegacyR
 	s.seedFixedPricePlan("plan_cleanup_legacy", decimal.NewFromInt(50), 0)
 
 	session, draftSub, draft := s.seedPayFirstSubscriptionCheckout("plan_cleanup_legacy")
-	session.Configuration = domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+	session.Configuration = types.CheckoutConfiguration{
 		CreateSubscriptionParams: &types.CreateSubscriptionParams{
 			PlanID:        "plan_cleanup_legacy",
 			Currency:      "usd",
 			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 		},
-	})
-	session.Result = domainCheckout.ToJSONBCheckoutResult(&types.CheckoutResult{
+	}
+	session.Result = &types.CheckoutResult{
 		CreateSubscriptionResult: &types.CreateSubscriptionResult{
 			SubscriptionID: draftSub.ID,
 			InvoiceID:      draft.ID,
 			PaymentID:      *session.CheckoutPaymentID,
 		},
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
@@ -906,9 +906,9 @@ func (s *SubscriptionServiceSuite) seedPayFirstSubscriptionCheckoutWithGrants(
 		Action:          types.CheckoutActionCreateSubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{SubscriptionID: subResp.ID},
-		}),
+		},
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),

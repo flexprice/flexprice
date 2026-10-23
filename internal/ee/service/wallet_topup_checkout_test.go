@@ -31,9 +31,9 @@ func (s *WalletServiceSuite) seedPendingWalletTopupCheckout(walletID string, ide
 		Action:          types.CheckoutActionWalletTopup,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			WalletTopupParams: &types.WalletTopupParams{WalletID: walletID},
-		}),
+		},
 		IdempotencyKey: idempotencyKey,
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
@@ -306,12 +306,12 @@ func (s *WalletServiceSuite) TestCompleteWalletTopupCheckout_CreditsWalletAndBon
 		Action:          types.CheckoutActionWalletTopup,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			WalletTopupParams: &types.WalletTopupParams{
 				WalletID:            s.testData.wallet.ID,
 				WalletTransactionID: txID,
 			},
-		}),
+		},
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),

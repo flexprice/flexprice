@@ -278,7 +278,7 @@ func (s *CheckoutPollSuite) seedSession(
 		PaymentProvider:   types.CheckoutPaymentProviderRazorpay,
 		CheckoutPaymentID: lo.ToPtr(p.ID),
 		CheckoutInvoiceID: lo.ToPtr(inv.ID),
-		Configuration: domainCheckout.JSONBCheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{SubscriptionID: sub.ID},
 		},
 		ExpiresAt:     time.Now().UTC().Add(20 * time.Minute),
@@ -626,13 +626,13 @@ func (s *CheckoutPollSuite) TestCompletion_PreservesProviderResult() {
 	ctx := s.GetContext()
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 
-	session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+	session.ProviderResult = &types.CheckoutProviderResult{
 		ProviderSessionID: "plink_001",
 		NextAction: &types.PaymentAction{
 			Type: types.PaymentActionTypePaymentLink,
 			URL:  "https://rzp.io/i/abc",
 		},
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	// A fragment, exactly as the webhook sends one.
@@ -643,7 +643,7 @@ func (s *CheckoutPollSuite) TestCompletion_PreservesProviderResult() {
 
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
-	pr := stored.ProviderResult.ToProviderResult()
+	pr := stored.ProviderResult
 	s.Require().NotNil(pr)
 	s.Equal("pay_rzp_001", pr.ProviderPaymentIntentID, "the fragment is applied")
 	s.Equal("plink_001", pr.ProviderSessionID, "and the rest survives")
@@ -775,9 +775,7 @@ func (s *CheckoutPollSuite) TestLinkExpirySentToProviderDerivesFromTheSessionDea
 	// Backdate the session as a fulfilment slower than the grace window would leave it.
 	session.ExpiresAt = time.Now().UTC().Add(-10 * time.Minute).
 		Add(session.PaymentProvider.SessionExpiry())
-	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
-		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodSendInvoice},
-	)
+	session.PaymentProviderConfig = &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodSendInvoice}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
@@ -808,9 +806,7 @@ func (s *CheckoutPollSuite) TestSavedMethodChargeExtendsSessionPastSettlement() 
 			s.provider.charged = true
 			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
 			session.PaymentProvider = provider
-			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
-				&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
-			)
+			session.PaymentProviderConfig = &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically}
 			linkExpiry := session.ExpiresAt
 
 			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
@@ -838,9 +834,9 @@ func (s *CheckoutPollSuite) TestFallsBackToSessionHandlesWhenThePaymentHasNone()
 	ctx := s.GetContext()
 	session := s.seedSession(types.CheckoutStatusPending, "", "")
 
-	session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+	session.ProviderResult = &types.CheckoutProviderResult{
 		ProviderSessionID: "plink_from_session",
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 
 	s.provider.state = &interfaces.PaymentState{
@@ -873,16 +869,14 @@ func (s *CheckoutPollSuite) TestCheckoutChargeMode_MatchesProviderPath() {
 			ctx := s.GetContext()
 			s.provider.charged = tt.charged
 			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
-			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
-				&types.CheckoutPaymentProviderConfig{CollectionMethod: tt.method},
-			)
+			session.PaymentProviderConfig = &types.CheckoutPaymentProviderConfig{CollectionMethod: tt.method}
 			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
 			s.Require().NoError(err)
 
 			s.Equal(chargeModeNone, checkoutChargeMode(session))
 			result, err := s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
 			s.Require().NoError(err)
-			session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(result)
+			session.ProviderResult = result
 			s.Equal(tt.want, checkoutChargeMode(session))
 		})
 	}
@@ -892,13 +886,11 @@ func (s *CheckoutPollSuite) TestCompletion_CountedWithActionAndChargeMode() {
 	r := metricstest.Install(s.T())
 	ctx := s.GetContext()
 	session := s.seedSession(types.CheckoutStatusPending, "plink_mode", "")
-	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
-		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
-	)
-	session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+	session.PaymentProviderConfig = &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically}
+	session.ProviderResult = &types.CheckoutProviderResult{
 		ProviderSessionID: "plink_mode",
 		NextAction:        &types.PaymentAction{Type: types.PaymentActionTypeCheckoutURL, URL: "https://rzp.io/auth"},
-	})
+	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 	match := map[string]string{
 		"provider":    string(types.CheckoutPaymentProviderRazorpay),
@@ -918,9 +910,7 @@ func (s *CheckoutPollSuite) seedAutoChargeSession() (*domainCheckout.CheckoutSes
 	ctx := s.GetContext()
 	session := s.seedSession(types.CheckoutStatusInitiated, "", "")
 	session.CheckoutPaymentID = nil
-	session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(
-		&types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically},
-	)
+	session.PaymentProviderConfig = &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
 	inv, err := s.GetStores().InvoiceRepo.Get(ctx, *session.CheckoutInvoiceID)
 	s.Require().NoError(err)

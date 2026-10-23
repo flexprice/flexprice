@@ -296,14 +296,14 @@ func (s *SubscriptionModificationServiceSuite) seedPendingModifyCheckout(
 		Action:          types.CheckoutActionModifySubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: &types.ModifySubscriptionParams{
 				SubscriptionID: subscriptionID,
 				LineItemModifications: []types.ModifySubscriptionLineItem{
 					{LineItemID: "subs_line_placeholder", Quantity: lo.ToPtr(decimal.NewFromInt(1))},
 				},
 			},
-		}),
+		},
 		IdempotencyKey: idempotencyKey,
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
@@ -2047,9 +2047,9 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		Action:          types.CheckoutActionModifySubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: request.toModifySubscriptionParams(),
-		}),
+		},
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -2225,7 +2225,7 @@ func (s *SubscriptionModificationServiceSuite) seedPendingAddAddonCheckout(
 		Action:          types.CheckoutActionAddAddon,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: &types.AddAddonParams{
 				SubscriptionID: subscriptionID,
 				Addons: []types.AddAddonRef{{
@@ -2235,7 +2235,7 @@ func (s *SubscriptionModificationServiceSuite) seedPendingAddAddonCheckout(
 					StartDate:     s.GetNow(),
 				}},
 			},
-		}),
+		},
 		ExpiresAt: time.Now().UTC().Add(time.Hour),
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
@@ -2398,9 +2398,9 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		Action:          types.CheckoutActionModifySubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: request.toModifySubscriptionParams(),
-		}),
+		},
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -2475,9 +2475,9 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 		Action:          types.CheckoutActionModifySubscription,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			ModifySubscriptionParams: request.toModifySubscriptionParams(),
-		}),
+		},
 		CheckoutInvoiceID: &invID,
 		CheckoutPaymentID: &payID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),

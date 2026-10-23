@@ -333,7 +333,7 @@ func (s *PortalWalletSuite) seedPendingSession(id string) {
 		Action:          types.CheckoutActionWalletTopup,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderChargebee,
-		Configuration: domainCheckout.JSONBCheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			WalletTopupParams: &types.WalletTopupParams{WalletID: s.walletID},
 		},
 		ExpiresAt: time.Now().UTC().Add(30 * time.Minute),
