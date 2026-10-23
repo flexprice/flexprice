@@ -1505,6 +1505,7 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 		ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 		DisplayName:          originalPrice.DisplayName,      // Preserve original price display name
 		PriceUnitType:        originalPrice.PriceUnitType,    // Always copy from original (cannot be changed)
+		ProductID:            originalPrice.ProductID,
 		SkipEntityValidation: true,
 	}
 	if override.BucketSize == dto.BucketSizeNone {

@@ -103,6 +103,8 @@ type Price struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *string `json:"group_id,omitempty"`
+	// ProductID holds the value of the "product_id" field.
+	ProductID *string `json:"product_id,omitempty"`
 	// Sequence holds the value of the "sequence" field.
 	Sequence int64 `json:"sequence,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -155,7 +157,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriodDays, price.FieldSequence:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldBucketSize, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldBucketSize, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID, price.FieldProductID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -447,6 +449,13 @@ func (_m *Price) assignValues(columns []string, values []any) error {
 				_m.GroupID = new(string)
 				*_m.GroupID = value.String
 			}
+		case price.FieldProductID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field product_id", values[i])
+			} else if value.Valid {
+				_m.ProductID = new(string)
+				*_m.ProductID = value.String
+			}
 		case price.FieldSequence:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field sequence", values[i])
@@ -641,6 +650,11 @@ func (_m *Price) String() string {
 	builder.WriteString(", ")
 	if v := _m.GroupID; v != nil {
 		builder.WriteString("group_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ProductID; v != nil {
+		builder.WriteString("product_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

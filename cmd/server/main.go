@@ -34,11 +34,11 @@ import (
 	kafkaPubsub "github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/pyroscope"
-	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -192,6 +192,7 @@ func main() {
 			repository.NewCouponAssociationRepository,
 			repository.NewCouponApplicationRepository,
 			repository.NewAddonRepository,
+			repository.NewProductRepository,
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSubscriptionPhaseRepository,
@@ -316,6 +317,7 @@ func main() {
 			service.NewCouponService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
+			service.NewProductService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewSubscriptionModificationService,
@@ -409,6 +411,7 @@ func provideHandlers(
 	couponService service.CouponService,
 	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
+	productService service.ProductService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
@@ -479,6 +482,7 @@ func provideHandlers(
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
+		Product:                  v1.NewProductHandler(productService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
