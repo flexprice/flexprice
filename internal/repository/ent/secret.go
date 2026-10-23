@@ -450,7 +450,7 @@ func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
 	r.cache.ForceCacheDelete(ctx, cacheKey)
 }
 
-// Tenant-independent: auth lookup has no tenant in ctx.
+// Auth lookup runs without tenant.
 func secretCacheKey(value string) string {
-	return cache.GenerateKey(nil, cache.PrefixSecret, value)
+	return cache.GenerateKey(context.Background(), cache.PrefixSecret, value)
 }
