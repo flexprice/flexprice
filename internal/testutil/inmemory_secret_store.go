@@ -150,21 +150,25 @@ func (s *InMemorySecretStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemorySecretStore) RevokeByUserID(ctx context.Context, userID string) error {
+func (s *InMemorySecretStore) InvalidateCache(context.Context, []*secret.Secret) {}
+
+func (s *InMemorySecretStore) RevokeByUserID(ctx context.Context, userID string) ([]*secret.Secret, error) {
 	allEnvs := types.SetEnvironmentID(ctx, "")
 	secrets, err := s.InMemoryStore.List(allEnvs, &types.SecretFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		UserID:      &userID,
 	}, secretFilterFn, secretSortFn)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	var revoked []*secret.Secret
 	for _, sec := range secrets {
 		if sec.Status == types.StatusPublished {
 			sec.Status = types.StatusDeleted
+			revoked = append(revoked, sec)
 		}
 	}
-	return nil
+	return revoked, nil
 }
 
 func (s *InMemorySecretStore) GetAPIKeyByValue(ctx context.Context, value string) (*secret.Secret, error) {
