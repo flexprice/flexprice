@@ -74,8 +74,7 @@ func (s *userService) AddUser(ctx context.Context, req admindto.AddUserRequest) 
 	return admindto.NewUserResponse(u), nil
 }
 
-// RemoveUser removes a person from their tenant: it archives their row, then deletes their
-// Supabase login. API keys they created keep working.
+// RemoveUser archives a person, revokes their API keys, then deletes their Supabase login.
 func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -129,6 +128,9 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 				Mark(ierr.ErrValidation)
 		}
 
+		if err := s.SecretRepo.RevokeByUserID(ctx, target.ID); err != nil {
+			return err
+		}
 		if err := s.UserRepo.Delete(ctx, target.ID); err != nil {
 			return err
 		}
