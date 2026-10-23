@@ -26,6 +26,8 @@ type AnalyticsService interface {
 	GetView(ctx context.Context, id string) (*analytics.View, error)
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
+	ListDatasets(ctx context.Context) (*dto.DatasetCatalogResponse, error)
+	RunDataset(ctx context.Context, def *analytics.ViewDefinition) (*dto.AnalyticsQueryResult, error)
 }
 
 type analyticsService struct {
@@ -43,6 +45,9 @@ func NewAnalyticsService(params ServiceParams) AnalyticsService {
 }
 
 func (s *analyticsService) ExecuteView(ctx context.Context, def *analytics.ViewDefinition, vars map[string][]string) (*dto.AnalyticsQueryResult, error) {
+	if def != nil && def.Family == types.FamilyDataset {
+		return s.RunDataset(ctx, def)
+	}
 	if def != nil && def.Family == types.FamilyReport {
 		return nil, errReportFamilyViaViews()
 	}
@@ -214,6 +219,12 @@ func (s *analyticsService) QueryView(ctx context.Context, id string, vars map[st
 	if err != nil {
 		return nil, err
 	}
+	if v.Definition != nil && v.Definition.Family == types.FamilyDataset {
+		return nil, ierr.NewError("builder reports run through the datasets endpoint").
+			WithHint("POST /analytics/datasets/query with the saved definition").
+			Mark(ierr.ErrValidation)
+	}
+
 	return s.ExecuteView(ctx, v.Definition, vars)
 }
 
@@ -224,6 +235,12 @@ func errReportFamilyViaViews() error {
 }
 
 func (s *analyticsService) validateDefinition(def *analytics.ViewDefinition) error {
+	if def.Family == types.FamilyDataset {
+		if err := s.requireReports(); err != nil {
+			return err
+		}
+		return analytics.ValidateDataset(*def)
+	}
 	if def.Family == types.FamilyReport {
 		if err := s.requireReports(); err != nil {
 			return err
@@ -590,4 +607,104 @@ func addChangePct(res *dto.AnalyticsQueryResult, key string) {
 		}
 		res.Rows[i] = append(row, pct)
 	}
+}
+
+func (s *analyticsService) ListDatasets(_ context.Context) (*dto.DatasetCatalogResponse, error) {
+	if err := s.requireReports(); err != nil {
+		return nil, err
+	}
+	out := &dto.DatasetCatalogResponse{Items: []*dto.DatasetCatalogEntry{}}
+	for _, d := range analytics.Datasets() {
+		out.Items = append(out.Items, &dto.DatasetCatalogEntry{
+			Key:          d.Key,
+			Label:        d.Label,
+			Description:  d.Description,
+			MaxRangeDays: d.MaxRangeDays,
+			Fields:       d.Fields,
+		})
+	}
+	return out, nil
+}
+
+func measureLabel(ds *analytics.Dataset, m *analytics.Measure) string {
+	if m.Agg == "count" {
+		return "Count"
+	}
+	label := m.Field
+	if f, ok := ds.Field(m.Field); ok {
+		label = f.Label
+	}
+	prefix := map[string]string{
+		"count_distinct": "Count of ",
+		"sum":            "Sum of ",
+		"avg":            "Average of ",
+		"median":         "Median of ",
+		"min":            "Min of ",
+		"max":            "Max of ",
+	}[m.Agg]
+	return prefix + label
+}
+
+func (s *analyticsService) RunDataset(ctx context.Context, in *analytics.ViewDefinition) (*dto.AnalyticsQueryResult, error) {
+	if err := s.requireReports(); err != nil {
+		return nil, err
+	}
+	if in == nil {
+		return nil, ierr.NewError("view definition is required").Mark(ierr.ErrValidation)
+	}
+	def := *in
+	def.Family = types.FamilyDataset
+	if err := analytics.ValidateDataset(def); err != nil {
+		return nil, err
+	}
+	rv, err := analytics.ResolveVariables(&def, nil)
+	if err != nil {
+		return nil, err
+	}
+	ds, _ := analytics.LookupDataset(def.Dataset)
+
+	out, err := s.ReportsRepo.RunDataset(ctx, &analytics.DatasetQuery{
+		Def: &def, From: rv.Time.From, To: rv.Time.To, Compare: def.Compare,
+	}, types.GetTenantID(ctx), types.GetEnvironmentID(ctx))
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Error(ctx, "dataset analytics execution failed", "error", err)
+		}
+		return nil, err
+	}
+	rows := out.Rows
+	if rows == nil {
+		rows = [][]string{}
+	}
+
+	res := dto.AnalyticsQueryResult{Rows: rows, Meta: dto.AnalyticsQueryMeta{QuerySource: "dataset"}}
+	res.Meta.From = rv.Time.From.UTC().Format(time.RFC3339)
+	res.Meta.To = rv.Time.To.UTC().Format(time.RFC3339)
+	if def.Compare != "" {
+		pf, pt, _, err := analytics.PreviousWindow(rv.Time.From, rv.Time.To, def.Compare)
+		if err != nil {
+			return nil, err
+		}
+		res.Meta.PrevFrom = pf.UTC().Format(time.RFC3339)
+		res.Meta.PrevTo = pt.UTC().Format(time.RFC3339)
+	}
+	for _, c := range out.Columns {
+		res.Columns = append(res.Columns, dto.NewAnalyticsColumn(c.Name, c.Type, c.Role, ""))
+	}
+	res.Meta.MeasureLabels = make(map[string]string, len(def.Measures))
+	for i, m := range def.Measures {
+		res.Meta.MeasureLabels[fmt.Sprintf("m%d", i)] = measureLabel(ds, m)
+	}
+	if def.Compare != "" {
+		for i := range def.Measures {
+			addChangePct(&res, fmt.Sprintf("m%d", i))
+		}
+	}
+	if analytics.DatasetShape(def) == types.ShapeBreakdown {
+		if err := sortBreakdownRows(&res, def.Sort); err != nil {
+			return nil, err
+		}
+		truncateRows(&res, def.Limit)
+	}
+	return &res, nil
 }

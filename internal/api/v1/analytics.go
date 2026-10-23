@@ -389,3 +389,64 @@ func (h *AnalyticsHandler) GetRevenueAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, res)
 }
+
+// ListDatasets returns the report-builder dataset catalog.
+// @Summary List report builder datasets
+// @Description Returns datasets with their fields, kinds and allowed roles.
+// @ID listAnalyticsDatasets
+// @Tags Analytics
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.DatasetCatalogResponse
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/datasets [get]
+func (h *AnalyticsHandler) ListDatasets(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	res, err := h.svc.ListDatasets(ctx)
+	if err != nil {
+		h.log.Error(ctx, "failed to list analytics datasets", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// QueryDataset runs a report-builder definition.
+// @Summary Run a report builder query
+// @Description Runs a dataset definition and returns the shaped result.
+// @ID queryAnalyticsDataset
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.DatasetQueryRequest true "Dataset query request"
+// @Success 200 {object} dto.AnalyticsQueryResult
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/datasets/query [post]
+func (h *AnalyticsHandler) QueryDataset(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.DatasetQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	res, err := h.svc.RunDataset(ctx, req.Definition)
+	if err != nil {
+		h.log.Error(ctx, "failed to run analytics dataset query", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
