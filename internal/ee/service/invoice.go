@@ -3344,6 +3344,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Delegate all payment behavior handling to the payment processor
 		err := paymentProcessor.HandlePaymentBehavior(ctx, sub, invoiceResponse, finalPaymentBehavior, flowType)
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to process payment for subscription invoice",
 				"error", err.Error(),

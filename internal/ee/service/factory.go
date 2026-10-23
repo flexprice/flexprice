@@ -63,6 +63,10 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
+	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -144,6 +148,10 @@ type ServiceParams struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	ProductRepo                  productRepo.Repository
+	ContractRepo                 contractRepo.Repository
+	POBRepo                      pobRepo.Repository
+	AccountingPeriodRepo         accountingPeriodRepo.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -260,6 +268,10 @@ func NewServiceParams(
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
+	productRepo productRepo.Repository,
+	contractRepo contractRepo.Repository,
+	pobRepo pobRepo.Repository,
+	accountingPeriodRepo accountingPeriodRepo.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -340,5 +352,9 @@ func NewServiceParams(
 		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
+		ProductRepo:                  productRepo,
+		ContractRepo:                 contractRepo,
+		POBRepo:                      pobRepo,
+		AccountingPeriodRepo:         accountingPeriodRepo,
 	}
 }

@@ -103,6 +103,7 @@ func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 	return nil
 }
 
@@ -143,6 +144,8 @@ func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Conte
 }
 
 func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.Context, subscriptionID string) error {
+	notifySubscriptionArchived(ctx, s.ServiceParams, subscriptionID)
+
 	addonFilter := types.NewNoLimitAddonAssociationFilter()
 	addonFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	addonFilter.EntityIDs = []string{subscriptionID}

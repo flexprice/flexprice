@@ -378,6 +378,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.TaxConfig](s, ctx, key)
 	case types.SettingKeyCommitmentsV2:
 		return getSettingByKey[types.CommitmentsV2Config](s, ctx, key)
+	case types.SettingKeyRevenueRecognitionConfig:
+		return getSettingByKey[types.RevenueRecognitionConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -446,6 +448,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.TaxConfig](s, ctx, key, req)
 	case types.SettingKeyCommitmentsV2:
 		return updateSettingByKey[types.CommitmentsV2Config](s, ctx, key, req)
+	case types.SettingKeyRevenueRecognitionConfig:
+		return updateSettingByKey[types.RevenueRecognitionConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

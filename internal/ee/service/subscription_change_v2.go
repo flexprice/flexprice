@@ -927,6 +927,7 @@ func (s *subscriptionService) executePlanChangeAt(
 	s.attemptPlanChangePayment(ctx, resp)
 
 	// After commit so webhook failure cannot roll back a completed change.
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPlanChanged, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 

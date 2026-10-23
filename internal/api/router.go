@@ -55,6 +55,10 @@ type Handlers struct {
 	Coupon                   *v1.CouponHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
+	Product                  *v1.ProductHandler
+	Contract                 *v1.ContractHandler
+	PerformanceObligation    *v1.PerformanceObligationHandler
+	AccountingPeriod         *v1.AccountingPeriodHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -354,6 +358,33 @@ func NewRouter(
 			addon.GET("/:id/creditgrants", handlers.Addon.GetAddonCreditGrants)
 			addon.POST("/:id/sync/subscriptions", write(types.EntityAddon, types.ActionWrite), handlers.Addon.SyncAddonPrices)
 			addon.DELETE("/:id", write(types.EntityAddon, types.ActionWrite), handlers.Addon.DeleteAddon)
+		}
+
+		product := v1Private.Group("/products")
+		{
+			product.POST("/search", handlers.Product.QueryProducts)
+			product.POST("", write(types.EntityProduct, types.ActionWrite), handlers.Product.CreateProduct)
+			product.GET("", handlers.Product.ListProducts)
+			product.GET("/:id", handlers.Product.GetProduct)
+			product.PUT("/:id", write(types.EntityProduct, types.ActionWrite), handlers.Product.UpdateProduct)
+			product.DELETE("/:id", write(types.EntityProduct, types.ActionWrite), handlers.Product.DeleteProduct)
+		}
+
+		contract := v1Private.Group("/contracts")
+		{
+			contract.POST("/search", handlers.Contract.QueryContracts)
+			contract.GET("/:id", handlers.Contract.GetContract)
+		}
+
+		performanceObligation := v1Private.Group("/performance_obligations")
+		{
+			performanceObligation.POST("/search", handlers.PerformanceObligation.QueryPerformanceObligations)
+			performanceObligation.GET("/:id", handlers.PerformanceObligation.GetPerformanceObligation)
+		}
+
+		accountingPeriod := v1Private.Group("/accounting_periods")
+		{
+			accountingPeriod.POST("/search", handlers.AccountingPeriod.QueryAccountingPeriods)
 		}
 
 		group := v1Private.Group("/groups")

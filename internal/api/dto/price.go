@@ -57,6 +57,8 @@ type CreatePriceRequest struct {
 
 	// GroupID is the id of the group to add the price to
 	GroupID string `json:"group_id,omitempty"`
+
+	ProductID string `json:"product_id,omitempty"`
 }
 
 type PriceUnitConfig struct {
@@ -122,6 +124,9 @@ type UpdatePriceRequest struct {
 	// If provided as empty string (""), the group will be removed (price will be ungrouped)
 	// If provided as a group ID, the price will be assigned to that group (must exist and be published)
 	GroupID *string `json:"group_id,omitempty"`
+
+	// ProductID sets the price's product while it has none; once set it never changes.
+	ProductID string `json:"product_id,omitempty"`
 }
 
 type PriceResponse struct {
@@ -514,6 +519,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		GroupID:            r.GroupID,
+		ProductID:          r.ProductID,
 	}
 
 	// Set type-specific fields
@@ -703,6 +709,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.MeterID = lo.Ternary(existingPrice.Type == types.PRICE_TYPE_USAGE, existingPrice.MeterID, "")
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 	createReq.DisplayName = existingPrice.DisplayName
+	createReq.ProductID = existingPrice.ProductID
 
 	// Bucketing: unset inherits, the sentinel clears, anything else replaces.
 	switch r.BucketSize {

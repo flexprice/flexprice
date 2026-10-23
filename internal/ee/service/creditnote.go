@@ -677,6 +677,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		originalStatus = cn.CreditNoteStatus
 
 		cn.CreditNoteStatus = types.CreditNoteStatusVoided
+		cn.VoidedAt = lo.ToPtr(time.Now().UTC())
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
 			return err
 		}
@@ -792,6 +793,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string, r
 		}
 
 		cn.CreditNoteStatus = types.CreditNoteStatusFinalized
+		cn.FinalizedAt = lo.ToPtr(time.Now().UTC())
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
 			return err
 		}

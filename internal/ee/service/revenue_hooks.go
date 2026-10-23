@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // notifyInvoiceFinalized emits the finalized webhook and kicks the revenue-facts
@@ -68,4 +72,83 @@ func asyncRevenueFactsUpdate(ctx context.Context, params ServiceParams, op, invo
 	if !types.RegisterPostCommit(ctx, start) {
 		start()
 	}
+}
+
+// NotifySubscriptionChanged syncs the subscription's revenue recognition records after the caller commits.
+// Every subscription lifecycle site calls this one helper.
+func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscriptionID string) {
+	asyncRevRecUpdate(ctx, params, "subscription sync", subscriptionID, func(ctx context.Context) error {
+		sub, _, err := params.SubRepo.GetWithLineItems(ctx, subscriptionID)
+		if err != nil {
+			return err
+		}
+
+		c, err := contractsvc.NewContractService(params.ContractRepo).SyncForSubscription(ctx, sub)
+		if err != nil {
+			return err
+		}
+
+		_, err = pobsvc.NewPerformanceObligationService(params.POBRepo, params.ContractRepo, params.SubRepo, params.InvoiceRepo, params.TaxAppliedRepo, params.RevenueFactRepo).SyncForSubscription(ctx, sub, c)
+		return err
+	})
+}
+
+// notifySubscriptionArchived archives the revenue recognition records of an abandoned draft subscription.
+func notifySubscriptionArchived(ctx context.Context, params ServiceParams, subscriptionID string) {
+	asyncRevRecUpdate(ctx, params, "subscription archive", subscriptionID, func(ctx context.Context) error {
+		return contractsvc.NewContractService(params.ContractRepo).ArchiveForSubscription(ctx, subscriptionID)
+	})
+}
+
+// asyncRevRecUpdate runs one revenue recognition write detached from the caller, after
+// it commits, and only if revenue recognition is enabled for the tenant and environment.
+func asyncRevRecUpdate(ctx context.Context, params ServiceParams, op, entityID string, run func(context.Context) error) {
+	detached := types.WithoutDBTransaction(context.WithoutCancel(ctx))
+
+	start := func() {
+		asyncCtx, cancel := context.WithTimeout(detached, time.Minute)
+		go func() {
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					params.Logger.Error(asyncCtx, "panic in revenue recognition "+op,
+						"error", fmt.Sprintf("%v", r),
+						"entity_id", entityID)
+				}
+			}()
+
+			enabled, err := revRecEnabled(asyncCtx, params)
+			if err == nil && enabled {
+				err = run(asyncCtx)
+			}
+			if err != nil {
+				params.Logger.Error(asyncCtx, "revenue recognition "+op+" failed",
+					"error", err,
+					"entity_id", entityID)
+			}
+		}()
+	}
+
+	if !types.RegisterPostCommit(ctx, start) {
+		start()
+	}
+}
+
+func revRecEnabled(ctx context.Context, params ServiceParams) (bool, error) {
+	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
+		return false, nil
+	}
+
+	setting, err := params.SettingsRepo.GetByKey(ctx, types.SettingKeyRevenueRecognitionConfig)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	cfg, err := utils.ToStruct[types.RevenueRecognitionConfig](setting.Value)
+	if err != nil {
+		return false, err
+	}
+	return cfg.Enabled, nil
 }
