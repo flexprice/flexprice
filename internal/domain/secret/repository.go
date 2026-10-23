@@ -29,6 +29,9 @@ type Repository interface {
 	// GetAPIKeyByValue retrieves an API key by value
 	GetAPIKeyByValue(ctx context.Context, value string) (*Secret, error)
 
+	// RevokeByUserID deletes every published secret owned by the user, across environments
+	RevokeByUserID(ctx context.Context, userID string) error
+
 	// UpdateLastUsed updates the last used timestamp of a secret
 	UpdateLastUsed(ctx context.Context, id string) error
 }

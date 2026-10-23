@@ -701,3 +701,55 @@ func (s *SecretServiceSuite) TestDelete() {
 		})
 	}
 }
+
+func (s *SecretServiceSuite) archivedOwner(id string) {
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().UserRepo.Create(ctx, &domainUser.User{
+		ID:    id,
+		Email: id + "@example.com",
+		Type:  types.UserTypeUser,
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}))
+}
+
+func (s *SecretServiceSuite) TestVerifyAPIKeyRejectsArchivedOwner() {
+	ctx := s.GetContext()
+	s.archivedOwner("user_removed_verify")
+	s.Require().NoError(s.secretRepo.Create(ctx, &secret.Secret{
+		ID:       "secret_removed_owner",
+		Name:     "removed owner key",
+		Type:     types.SecretTypePrivateKey,
+		Provider: types.SecretProviderFlexPrice,
+		Value:    s.encryptionSvc.Hash("removed_owner_key"),
+		UserID:   "user_removed_verify",
+		UserType: string(types.UserTypeUser),
+		BaseModel: types.BaseModel{
+			TenantID: types.DefaultTenantID,
+			Status:   types.StatusPublished,
+		},
+	}))
+
+	_, err := s.service.VerifyAPIKey(ctx, "removed_owner_key")
+	s.NoError(err)
+
+	s.Require().NoError(s.GetStores().UserRepo.Delete(ctx, "user_removed_verify"))
+	_, err = s.service.VerifyAPIKey(ctx, "removed_owner_key")
+	s.Error(err)
+}
+
+func (s *SecretServiceSuite) TestCreateAPIKeyRejectsArchivedOwner() {
+	ctx := s.GetContext()
+	s.archivedOwner("user_removed_create")
+	s.Require().NoError(s.GetStores().UserRepo.Delete(ctx, "user_removed_create"))
+
+	_, _, err := s.service.CreateAPIKey(s.writerCtx("user_removed_create"), &dto.CreateAPIKeyRequest{
+		Name: "late key",
+		Type: types.SecretTypePrivateKey,
+	})
+	s.Error(err)
+}
