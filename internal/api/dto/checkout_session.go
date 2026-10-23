@@ -42,6 +42,24 @@ type RedirectionParams struct {
 	CancelURL  *string `json:"cancel_url,omitempty"`
 }
 
+func (p RedirectionParams) Validate() error {
+	for name, raw := range map[string]*string{
+		"success_url": p.SuccessURL,
+		"failure_url": p.FailureURL,
+		"cancel_url":  p.CancelURL,
+	} {
+		if raw == nil || *raw == "" {
+			continue
+		}
+		if !isValidURL(*raw) {
+			return ierr.NewError("invalid " + name).
+				WithHint(name + " must be an absolute https URL").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // CheckoutParams is the reusable checkout opt-in payload shared by
 // create-session, payment-gated subscription modify, and wallet top-up.
 type CheckoutParams struct {
@@ -57,6 +75,9 @@ func (p *CheckoutParams) Validate() error {
 		return nil
 	}
 	if err := p.EntityCreationOptions.Validate(); err != nil {
+		return err
+	}
+	if err := p.RedirectionParams.Validate(); err != nil {
 		return err
 	}
 	return p.PaymentParams.Validate()

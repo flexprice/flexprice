@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/errors"
@@ -318,23 +318,26 @@ func (r *ListPaymentMethodsRequest) Validate() error {
 	return nil
 }
 
-// isValidURL checks if a string is a valid HTTP/HTTPS URL
+// isValidURL accepts empty or absolute https URLs (http only for loopback).
 func isValidURL(urlStr string) bool {
 	if urlStr == "" {
-		return true // Empty URLs are allowed (optional)
+		return true
 	}
-
-	// Must start with http:// or https://
-	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
+	if len(urlStr) > 2048 {
 		return false
 	}
-
-	// Basic length check
-	if len(urlStr) > 2048 {
-		return false // URLs longer than 2048 chars are generally not supported
+	u, err := url.Parse(urlStr)
+	if err != nil || u.Hostname() == "" || u.User != nil {
+		return false
 	}
-
-	return true
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		h := u.Hostname()
+		return h == "localhost" || h == "127.0.0.1"
+	}
+	return false
 }
 
 type SetupActionType string
