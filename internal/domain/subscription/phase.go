@@ -10,22 +10,22 @@ import (
 // SubscriptionPhase represents a phase in a subscription lifecycle
 type SubscriptionPhase struct {
 	// ID is the unique identifier for the subscription phase
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// SubscriptionID is the identifier for the subscription
-	SubscriptionID string `db:"subscription_id" json:"subscription_id"`
+	SubscriptionID string `json:"subscription_id"`
 
 	// StartDate is when the phase starts
-	StartDate time.Time `db:"start_date" json:"start_date"`
+	StartDate time.Time `json:"start_date"`
 
 	// EndDate is when the phase ends (nil if phase is still active or indefinite)
-	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
 
 	// Metadata contains additional key-value pairs
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty"`
 
 	// EnvironmentID is the environment identifier for the phase
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }

@@ -203,7 +203,7 @@ func TestBuildUsageCurve_GraduatedPrice(t *testing.T) {
 		Type:         types.PRICE_TYPE_USAGE,
 		BillingModel: types.BILLING_MODEL_TIERED,
 		TierMode:     types.BILLING_TIER_SLAB,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo, UnitAmount: tier1},
 			{UpTo: nil, UnitAmount: tier2},
 		},
@@ -284,7 +284,7 @@ func TestBuildUsageCurve_GraduatedWithEntitlementLimit(t *testing.T) {
 		Type:         types.PRICE_TYPE_USAGE,
 		BillingModel: types.BILLING_MODEL_TIERED,
 		TierMode:     types.BILLING_TIER_SLAB,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo, UnitAmount: tier1},
 			{UpTo: nil, UnitAmount: tier2},
 		},
@@ -383,7 +383,7 @@ func seamFlatPrice(t *testing.T, unitAmount string) *price.Price {
 // pairs. An upTo of "0" marks the final, open-ended tier (UpTo = nil).
 func seamGraduatedPrice(t *testing.T, tiers [][2]string) *price.Price {
 	t.Helper()
-	priceTiers := make(price.JSONBTiers, 0, len(tiers))
+	priceTiers := make([]price.PriceTier, 0, len(tiers))
 	for _, tier := range tiers {
 		upToStr, unitAmountStr := tier[0], tier[1]
 		var upTo *uint64
@@ -528,7 +528,7 @@ func TestSplitCurveAtCommitment_GraduatedQuantitySplit(t *testing.T) {
 		Type:         types.PRICE_TYPE_USAGE,
 		BillingModel: types.BILLING_MODEL_TIERED,
 		TierMode:     types.BILLING_TIER_SLAB,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo, UnitAmount: tier1},
 			{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 		},

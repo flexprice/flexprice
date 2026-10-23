@@ -35,7 +35,7 @@ func TestInMemoryCheckoutSessionStore_List_SubscriptionIDMatchesBothParamsBlobs(
 			Action:          action,
 			CheckoutStatus:  types.CheckoutStatusPending,
 			PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-			Configuration:   domainCheckout.ToJSONBCheckoutConfiguration(cfg),
+			Configuration:   cfg,
 			ExpiresAt:       time.Now().UTC().Add(time.Hour),
 			BaseModel:       base,
 		}

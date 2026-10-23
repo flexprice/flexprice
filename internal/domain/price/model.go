@@ -2,8 +2,6 @@ package price
 
 import (
 	"context"
-	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -19,128 +17,115 @@ import (
 // max active prices per entity is 3000
 const MAX_ACTIVE_PRICES = 5000
 
-// JSONB types for complex fields
-// JSONBTiers are the tiers for the price when BillingModel is TIERED
-type JSONBTiers []PriceTier
-
-// JSONBTransformQuantity is the quantity transformation in case of PACKAGE billing model
-type JSONBTransformQuantity TransformQuantity
-
-// JSONBMetadata is a jsonb field for additional information
-type JSONBMetadata map[string]string
-
-// JSONBFilters are the filter values for the price in case of usage based pricing
-type JSONBFilters map[string][]string
-
-// Price model with JSONB tags
+// Price is the domain model for a price
 type Price struct {
 	// ID uuid identifier for the price
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// Amount stored in main currency units (e.g., dollars, not cents)
 	// For USD: 12.50 means $12.50
-	Amount decimal.Decimal `db:"amount" json:"amount" swaggertype:"string"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// DisplayAmount is the formatted amount with currency symbol
 	// For USD: $12.50
-	DisplayAmount string `db:"display_amount" json:"display_amount"`
+	DisplayAmount string `json:"display_amount"`
 
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
-	Currency string `db:"currency" json:"currency"`
+	Currency string `json:"currency"`
 
 	// PriceUnitType is the type of the price unit (FIAT, CUSTOM)
-	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
+	PriceUnitType types.PriceUnitType `json:"price_unit_type"`
 
 	// PriceUnitID is the id of the price unit (for CUSTOM type)
-	PriceUnitID *string `db:"price_unit_id" json:"price_unit_id,omitempty"`
+	PriceUnitID *string `json:"price_unit_id,omitempty"`
 
 	// PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
-	PriceUnit *string `db:"price_unit" json:"price_unit,omitempty"`
+	PriceUnit *string `json:"price_unit,omitempty"`
 
 	// PriceUnitAmount is the amount of the price unit
-	PriceUnitAmount *decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty" swaggertype:"string"`
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
 
 	// DisplayPriceUnitAmount is the formatted amount of the price unit
-	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount,omitempty"`
+	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
 
 	// ConversionRate is the conversion rate of the price unit to the fiat currency
-	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
+	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty" swaggertype:"string"`
 
-	Type types.PriceType `db:"type" json:"type"`
+	Type types.PriceType `json:"type"`
 
-	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
+	BillingPeriod types.BillingPeriod `json:"billing_period"`
 
 	// BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12
-	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
+	BillingPeriodCount int `json:"billing_period_count" default:"1"`
 
-	BillingModel types.BillingModel `db:"billing_model" json:"billing_model"`
+	BillingModel types.BillingModel `json:"billing_model"`
 
 	// DisplayName is the name of the price
-	DisplayName string `db:"display_name" json:"display_name"`
+	DisplayName string `json:"display_name"`
 
 	// MinQuantity is the minimum quantity of the price
-	MinQuantity *decimal.Decimal `db:"min_quantity" json:"min_quantity,omitempty" swaggertype:"string" extensions:"x-nullable"`
+	MinQuantity *decimal.Decimal `json:"min_quantity,omitempty" swaggertype:"string" extensions:"x-nullable"`
 
-	BillingCadence types.BillingCadence `db:"billing_cadence" json:"billing_cadence"`
+	BillingCadence types.BillingCadence `json:"billing_cadence"`
 
-	InvoiceCadence types.InvoiceCadence `db:"invoice_cadence" json:"invoice_cadence"`
+	InvoiceCadence types.InvoiceCadence `json:"invoice_cadence"`
 
 	// TrialPeriodDays is the number of days for the trial period
 	// Note: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)
-	TrialPeriodDays int `db:"trial_period_days" json:"trial_period_days"`
+	TrialPeriodDays int `json:"trial_period_days"`
 
-	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode,omitempty"`
+	TierMode types.BillingTier `json:"tier_mode,omitempty"`
 
 	// BucketSize windows the meter's aggregation for this price: the meter
 	// aggregates within each window and the window results are summed. Empty
 	// means unbucketed. Only valid on USAGE prices whose meter aggregates MAX
 	// or SUM. Resolved through ResolveBucketSize, never read directly.
-	BucketSize types.WindowSize `db:"bucket_size" json:"bucket_size,omitempty"`
+	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
 
-	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers,omitempty"`
+	Tiers []PriceTier `json:"tiers,omitempty"`
 
 	// PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED
-	PriceUnitTiers JSONBTiers `db:"price_unit_tiers,jsonb" json:"price_unit_tiers,omitempty"`
+	PriceUnitTiers []PriceTier `json:"price_unit_tiers,omitempty"`
 
 	// MeterID is the id of the meter for usage based pricing
-	MeterID string `db:"meter_id" json:"meter_id"`
+	MeterID string `json:"meter_id"`
 
 	// LookupKey used for looking up the price in the database
-	LookupKey string `db:"lookup_key" json:"lookup_key"`
+	LookupKey string `json:"lookup_key"`
 
 	// Description of the price
-	Description string `db:"description" json:"description"`
+	Description string `json:"description"`
 
-	TransformQuantity JSONBTransformQuantity `db:"transform_quantity,jsonb" json:"transform_quantity"`
+	TransformQuantity TransformQuantity `json:"transform_quantity"`
 
-	Metadata JSONBMetadata `db:"metadata,jsonb" json:"metadata" activity:"drop"`
+	Metadata types.Metadata `json:"metadata" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the price
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	// EntityType holds the value of the "entity_type" field.
-	EntityType types.PriceEntityType `db:"entity_type" json:"entity_type,omitempty"`
+	EntityType types.PriceEntityType `json:"entity_type,omitempty"`
 
 	// EntityID holds the value of the "entity_id" field.
-	EntityID string `db:"entity_id" json:"entity_id,omitempty"`
+	EntityID string `json:"entity_id,omitempty"`
 
 	// ParentPriceID references the root price (always set for price lineage tracking)
-	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
+	ParentPriceID string `json:"parent_price_id,omitempty"`
 
 	// GroupID references the group this price belongs to
-	GroupID string `db:"group_id" json:"group_id,omitempty"`
+	GroupID string `json:"group_id,omitempty"`
 
 	// StartDate is the start date of the price
-	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
+	StartDate *time.Time `json:"start_date,omitempty"`
 
 	// EndDate is the end date of the price
-	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
 
 	// Sequence is the monotonic stamp bumped on every state change that
 	// subscription line items need to react to. Read by the plan-price sync;
 	// set by the database (DEFAULT nextval) on create and by the price
 	// repository on termination / compatibility-affecting edits.
-	Sequence int64 `db:"sequence" json:"sequence,omitempty" activity:"drop"`
+	Sequence int64 `json:"sequence,omitempty" activity:"drop"`
 
 	types.BaseModel
 }
@@ -376,29 +361,6 @@ type PriceTier struct {
 	TransformQuantity *TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
-// TODO : comeup with a better way to handle jsonb fields
-
-// Scanner/Valuer implementations for JSONBTiers
-func (j *JSONBTiers) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return ierr.NewError("invalid type for jsonb tiers").
-			WithHint("Invalid type for JSONB tiers").
-			Mark(ierr.ErrValidation)
-	}
-	return json.Unmarshal(bytes, j)
-}
-
-func (j JSONBTiers) Value() (driver.Value, error) {
-	if j == nil {
-		return nil, nil
-	}
-	return json.Marshal(j)
-}
-
 // GetTierUpTo returns the up_to value for the tier and treats null case as MaxUint64.
 // NOTE: Only to be used for sorting of tiers to avoid any unexpected behaviour
 func (t PriceTier) GetTierUpTo() uint64 {
@@ -408,68 +370,6 @@ func (t PriceTier) GetTierUpTo() uint64 {
 	return math.MaxUint64
 }
 
-// Scanner/Valuer implementations for JSONBTransform
-func (j *JSONBTransformQuantity) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return ierr.NewError("invalid type for jsonb transform").
-			WithHint("Invalid type for JSONB transform").
-			Mark(ierr.ErrValidation)
-	}
-	return json.Unmarshal(bytes, j)
-}
-
-func (j JSONBTransformQuantity) Value() (driver.Value, error) {
-	if j == (JSONBTransformQuantity{}) {
-		return nil, nil
-	}
-	return json.Marshal(j)
-}
-
-// Scanner/Valuer implementations for JSONBMetadata
-func (j *JSONBMetadata) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return ierr.NewError("invalid type for jsonb metadata").
-			WithHint("Invalid type for JSONB metadata").
-			Mark(ierr.ErrValidation)
-	}
-	return json.Unmarshal(bytes, &j)
-}
-
-func (j JSONBMetadata) Value() (driver.Value, error) {
-	if j == nil {
-		return nil, nil
-	}
-	return json.Marshal(j)
-}
-
-func (j *JSONBFilters) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return ierr.NewError("invalid type for jsonb filters").
-			WithHint("Invalid type for JSONB filters").
-			Mark(ierr.ErrValidation)
-	}
-	return json.Unmarshal(bytes, j)
-}
-
-func (j JSONBFilters) Value() (driver.Value, error) {
-	if j == nil {
-		return nil, nil
-	}
-	return json.Marshal(j)
-}
-
 // FromEnt converts an Ent Price to a domain Price
 func FromEnt(e *ent.Price) *Price {
 	if e == nil {
@@ -477,9 +377,9 @@ func FromEnt(e *ent.Price) *Price {
 	}
 
 	// Convert tiers from ent model to price tiers
-	var tiers JSONBTiers
+	var tiers []PriceTier
 	if len(e.Tiers) > 0 {
-		tiers = make(JSONBTiers, len(e.Tiers))
+		tiers = make([]PriceTier, len(e.Tiers))
 		for i, tier := range e.Tiers {
 			tiers[i] = PriceTier{
 				UpTo:              tier.UpTo,
@@ -494,9 +394,9 @@ func FromEnt(e *ent.Price) *Price {
 	}
 
 	// Convert price unit tiers from ent model to price tiers
-	var priceUnitTiers JSONBTiers
+	var priceUnitTiers []PriceTier
 	if len(e.PriceUnitTiers) > 0 {
-		priceUnitTiers = make(JSONBTiers, len(e.PriceUnitTiers))
+		priceUnitTiers = make([]PriceTier, len(e.PriceUnitTiers))
 		for i, tier := range e.PriceUnitTiers {
 			priceUnitTiers[i] = PriceTier{
 				UpTo:              tier.UpTo,
@@ -531,8 +431,8 @@ func FromEnt(e *ent.Price) *Price {
 		MeterID:                lo.FromPtr(e.MeterID),
 		LookupKey:              e.LookupKey,
 		Description:            e.Description,
-		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
-		Metadata:               JSONBMetadata(e.Metadata),
+		TransformQuantity:      TransformQuantity(e.TransformQuantity),
+		Metadata:               types.Metadata(e.Metadata),
 		EnvironmentID:          e.EnvironmentID,
 		PriceUnitID:            e.PriceUnitID,
 		PriceUnit:              e.PriceUnit,
@@ -570,8 +470,8 @@ func FromEntList(list []*ent.Price) []*Price {
 	return prices
 }
 
-// ToEntTiersFromJSONB converts JSONBTiers to ent tiers (reusable for both Tiers and PriceUnitTiers)
-func ToEntTiersFromJSONB(jsonbTiers JSONBTiers) []*types.PriceTier {
+// ToEntTiersFromJSONB converts []PriceTier to ent tiers (reusable for both Tiers and PriceUnitTiers)
+func ToEntTiersFromJSONB(jsonbTiers []PriceTier) []*types.PriceTier {
 	if len(jsonbTiers) == 0 {
 		return nil
 	}

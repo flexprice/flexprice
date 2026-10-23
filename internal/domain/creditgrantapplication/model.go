@@ -10,22 +10,22 @@ import (
 )
 
 type CreditGrantApplication struct {
-	ID                              string                             `json:"id,omitempty" db:"id"`
-	EnvironmentID                   string                             `json:"environment_id,omitempty" db:"environment_id"`
-	CreditGrantID                   string                             `json:"credit_grant_id,omitempty" db:"credit_grant_id"`
-	SubscriptionID                  string                             `json:"subscription_id,omitempty" db:"subscription_id"`
-	ScheduledFor                    time.Time                          `json:"scheduled_for,omitempty" db:"scheduled_for"`
-	AppliedAt                       *time.Time                         `json:"applied_at,omitempty" db:"applied_at"`
-	PeriodStart                     time.Time                          `json:"period_start,omitempty" db:"period_start"`
-	PeriodEnd                       *time.Time                         `json:"period_end,omitempty" db:"period_end"`
-	ApplicationStatus               types.ApplicationStatus            `json:"application_status,omitempty" db:"application_status"`
-	Credits                         decimal.Decimal                    `json:"credits,omitempty" db:"credits" swaggertype:"string"`
-	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason,omitempty" db:"application_reason"`
-	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application,omitempty" db:"subscription_status_at_application"`
-	RetryCount                      int                                `json:"retry_count,omitempty" db:"retry_count"`
-	FailureReason                   *string                            `json:"failure_reason,omitempty" db:"failure_reason"`
-	Metadata                        types.Metadata                     `json:"metadata,omitempty" db:"metadata"`
-	IdempotencyKey                  string                             `json:"idempotency_key,omitempty" db:"idempotency_key"`
+	ID                              string                             `json:"id,omitempty"`
+	EnvironmentID                   string                             `json:"environment_id,omitempty"`
+	CreditGrantID                   string                             `json:"credit_grant_id,omitempty"`
+	SubscriptionID                  string                             `json:"subscription_id,omitempty"`
+	ScheduledFor                    time.Time                          `json:"scheduled_for,omitempty"`
+	AppliedAt                       *time.Time                         `json:"applied_at,omitempty"`
+	PeriodStart                     time.Time                          `json:"period_start,omitempty"`
+	PeriodEnd                       *time.Time                         `json:"period_end,omitempty"`
+	ApplicationStatus               types.ApplicationStatus            `json:"application_status,omitempty"`
+	Credits                         decimal.Decimal                    `json:"credits,omitempty" swaggertype:"string"`
+	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason,omitempty"`
+	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application,omitempty"`
+	RetryCount                      int                                `json:"retry_count,omitempty"`
+	FailureReason                   *string                            `json:"failure_reason,omitempty"`
+	Metadata                        types.Metadata                     `json:"metadata,omitempty"`
+	IdempotencyKey                  string                             `json:"idempotency_key,omitempty"`
 
 	types.BaseModel
 }

@@ -12,26 +12,26 @@ import (
 
 type Subscription struct {
 	// ID is the unique identifier for the subscription
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// LookupKey is the key used to lookup the subscription in our system
-	LookupKey string `db:"lookup_key" json:"lookup_key,omitempty"`
+	LookupKey string `json:"lookup_key,omitempty"`
 
 	// CustomerID is the identifier for the customer in our system
-	CustomerID string `db:"customer_id" json:"customer_id"`
+	CustomerID string `json:"customer_id"`
 
 	// PlanID is the identifier for the plan in our system
-	PlanID string `db:"plan_id" json:"plan_id"`
+	PlanID string `json:"plan_id"`
 
-	SubscriptionStatus types.SubscriptionStatus `db:"subscription_status" json:"subscription_status"`
+	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status"`
 
 	// Currency is the currency of the subscription in lowercase 3 digit ISO codes
-	Currency string `db:"currency" json:"currency"`
+	Currency string `json:"currency"`
 
 	// BillingAnchor is the reference point that aligns future billing cycle dates.
 	// It sets the day of week for week intervals, the day of month for month and year intervals,
 	// and the month of year for year intervals. The timestamp is in UTC format.
-	BillingAnchor time.Time `db:"billing_anchor" json:"billing_anchor"`
+	BillingAnchor time.Time `json:"billing_anchor"`
 
 	// BillingCycle is the cycle of the billing anchor.
 	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
@@ -40,75 +40,75 @@ type Subscription struct {
 	// Calendar billing means the billing anchor will be the appropriate date based on the billing period.
 	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
 	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
-	BillingCycle types.BillingCycle `db:"billing_cycle" json:"billing_cycle"`
+	BillingCycle types.BillingCycle `json:"billing_cycle"`
 
 	// StartDate is the start date of the subscription
-	StartDate time.Time `db:"start_date" json:"start_date"`
+	StartDate time.Time `json:"start_date"`
 
 	// EndDate is the end date of the subscription
-	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
 
 	// CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.
 	// At the end of this period, a new invoice will be created.
-	CurrentPeriodStart time.Time `db:"current_period_start" json:"current_period_start"`
+	CurrentPeriodStart time.Time `json:"current_period_start"`
 
 	// CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.
 	// At the end of this period, a new invoice will be created.
-	CurrentPeriodEnd time.Time `db:"current_period_end" json:"current_period_end"`
+	CurrentPeriodEnd time.Time `json:"current_period_end"`
 
 	// CanceledAt is the date the subscription was canceled
-	CancelledAt *time.Time `db:"cancelled_at" json:"cancelled_at,omitempty"`
+	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 
 	// CancelAt is the date the subscription will be canceled
-	CancelAt *time.Time `db:"cancel_at" json:"cancel_at"`
+	CancelAt *time.Time `json:"cancel_at"`
 
 	// CancelAtPeriodEnd is whether the subscription was canceled at the end of the current period
-	CancelAtPeriodEnd bool `db:"cancel_at_period_end" json:"cancel_at_period_end"`
+	CancelAtPeriodEnd bool `json:"cancel_at_period_end"`
 
 	// TrialStart is the start date of the trial period
-	TrialStart *time.Time `db:"trial_start" json:"trial_start"`
+	TrialStart *time.Time `json:"trial_start"`
 
 	// TrialEnd is the end date of the trial period
-	TrialEnd *time.Time `db:"trial_end" json:"trial_end"`
+	TrialEnd *time.Time `json:"trial_end"`
 
-	BillingCadence types.BillingCadence `db:"billing_cadence" json:"billing_cadence"`
+	BillingCadence types.BillingCadence `json:"billing_cadence"`
 
-	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
+	BillingPeriod types.BillingPeriod `json:"billing_period"`
 
 	// BillingPeriodCount is the total number units of the billing period.
-	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
+	BillingPeriodCount int `json:"billing_period_count" default:"1"`
 
 	// Version is used for optimistic locking
-	Version int `db:"version" json:"version" activity:"drop"`
+	Version int `json:"version" activity:"drop"`
 
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty" activity:"drop"`
+	Metadata types.Metadata `json:"metadata,omitempty" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the subscription
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
-	PauseStatus types.PauseStatus `db:"pause_status" json:"pause_status"`
+	PauseStatus types.PauseStatus `json:"pause_status"`
 
 	// ActivePauseID references the current active pause configuration
 	// This will be null if no pause is active or scheduled
-	ActivePauseID *string `db:"active_pause_id" json:"active_pause_id,omitempty"`
+	ActivePauseID *string `json:"active_pause_id,omitempty"`
 
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
-	CommitmentAmount *decimal.Decimal `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on a MONTHLY subscription)
-	CommitmentDuration *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
-	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty" swaggertype:"string"`
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 
 	// PaymentBehavior determines how subscription payments are handled
-	PaymentBehavior string `db:"payment_behavior" json:"payment_behavior"`
+	PaymentBehavior string `json:"payment_behavior"`
 
 	// CollectionMethod determines how invoices are collected
-	CollectionMethod string `db:"collection_method" json:"collection_method"`
+	CollectionMethod string `json:"collection_method"`
 
 	// GatewayPaymentMethodID is the gateway payment method ID for this subscription
-	GatewayPaymentMethodID *string `db:"gateway_payment_method_id" json:"gateway_payment_method_id,omitempty" activity:"redact"`
+	GatewayPaymentMethodID *string `json:"gateway_payment_method_id,omitempty" activity:"redact"`
 
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 
@@ -124,31 +124,31 @@ type Subscription struct {
 
 	// LineItemGrouping controls whether a charge shorter than the billing period bills
 	// as one line item per charge period (default) or one per billing period.
-	LineItemGrouping types.LineItemGrouping `db:"line_item_grouping" json:"line_item_grouping"`
+	LineItemGrouping types.LineItemGrouping `json:"line_item_grouping"`
 
 	EnableTrueUp bool `json:"enable_true_up"`
 	// InvoicingCustomerID is the customer ID to use for invoicing
 	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
-	InvoicingCustomerID *string `db:"invoicing_customer_id" json:"invoicing_customer_id,omitempty"`
+	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
 
 	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
-	ParentSubscriptionID *string `db:"parent_subscription_id" json:"parent_subscription_id,omitempty"`
+	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
-	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
+	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 
 	// SubscriptionType categorises the subscription within a customer hierarchy (standalone, parent, inherited).
-	SubscriptionType types.SubscriptionType `db:"subscription_type" json:"subscription_type"`
+	SubscriptionType types.SubscriptionType `json:"subscription_type"`
 
 	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
 	// an intermediate invoice. Overrides the plan-level threshold when set.
 	// Nil means: inherit from the plan's threshold (which may also be nil = disabled).
-	AutoInvoiceThreshold *decimal.Decimal `db:"auto_invoice_threshold" json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
+	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 
 	// SyncedPriceSequence is the plan-price sequence up to which this
 	// subscription's line items have been reconciled. Bumped by the
 	// plan-price sync after a successful pass.
-	SyncedPriceSequence int64 `db:"synced_price_sequence" json:"synced_price_sequence,omitempty" activity:"drop"`
+	SyncedPriceSequence int64 `json:"synced_price_sequence,omitempty" activity:"drop"`
 
 	types.BaseModel
 }

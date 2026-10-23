@@ -10,22 +10,22 @@ import (
 
 // CouponApplication represents a coupon application to an invoice
 type CouponApplication struct {
-	ID                  string                 `json:"id" db:"id"`
-	CouponID            string                 `json:"coupon_id" db:"coupon_id"`
-	CouponAssociationID string                 `json:"coupon_association_id" db:"coupon_association_id"`
-	InvoiceID           string                 `json:"invoice_id" db:"invoice_id"`
-	InvoiceLineItemID   *string                `json:"invoice_line_item_id,omitempty" db:"invoice_line_item_id"`
-	SubscriptionID      *string                `json:"subscription_id,omitempty" db:"subscription_id"`
-	AppliedAt           time.Time              `json:"applied_at" db:"applied_at"`
-	OriginalPrice       decimal.Decimal        `json:"original_price" db:"original_price" swaggertype:"string"`
-	FinalPrice          decimal.Decimal        `json:"final_price" db:"final_price" swaggertype:"string"`
-	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" db:"discounted_amount" swaggertype:"string"`
-	DiscountType        types.CouponType       `json:"discount_type" db:"discount_type"`
-	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty" db:"discount_percentage" swaggertype:"string"`
-	Currency            string                 `json:"currency" db:"currency"`
-	CouponSnapshot      map[string]interface{} `json:"coupon_snapshot,omitempty" db:"coupon_snapshot"`
-	Metadata            map[string]string      `json:"metadata,omitempty" db:"metadata"`
-	EnvironmentID       string                 `json:"environment_id" db:"environment_id"`
+	ID                  string                 `json:"id"`
+	CouponID            string                 `json:"coupon_id"`
+	CouponAssociationID string                 `json:"coupon_association_id"`
+	InvoiceID           string                 `json:"invoice_id"`
+	InvoiceLineItemID   *string                `json:"invoice_line_item_id,omitempty"`
+	SubscriptionID      *string                `json:"subscription_id,omitempty"`
+	AppliedAt           time.Time              `json:"applied_at"`
+	OriginalPrice       decimal.Decimal        `json:"original_price" swaggertype:"string"`
+	FinalPrice          decimal.Decimal        `json:"final_price" swaggertype:"string"`
+	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" swaggertype:"string"`
+	DiscountType        types.CouponType       `json:"discount_type"`
+	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty" swaggertype:"string"`
+	Currency            string                 `json:"currency"`
+	CouponSnapshot      map[string]interface{} `json:"coupon_snapshot,omitempty"`
+	Metadata            map[string]string      `json:"metadata,omitempty"`
+	EnvironmentID       string                 `json:"environment_id"`
 
 	types.BaseModel
 }

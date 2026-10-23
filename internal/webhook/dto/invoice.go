@@ -108,28 +108,28 @@ type Plan struct {
 }
 
 type Price struct {
-	ID                     string                       `json:"id"`
-	Amount                 decimal.Decimal              `json:"amount" swaggertype:"string"`
-	DisplayAmount          string                       `json:"display_amount"`
-	Currency               string                       `json:"currency"`
-	Type                   types.PriceType              `json:"type"`
-	BillingPeriod          types.BillingPeriod          `json:"billing_period"`
-	BillingPeriodCount     int                          `json:"billing_period_count"`
-	BillingModel           types.BillingModel           `json:"billing_model"`
-	BillingCadence         types.BillingCadence         `json:"billing_cadence"`
-	InvoiceCadence         types.InvoiceCadence         `json:"invoice_cadence"`
-	DisplayName            string                       `json:"display_name,omitempty"`
-	LookupKey              string                       `json:"lookup_key,omitempty"`
-	Description            string                       `json:"description,omitempty"`
-	TierMode               types.BillingTier            `json:"tier_mode,omitempty"`
-	Tiers                  price.JSONBTiers             `json:"tiers,omitempty"`
-	TransformQuantity      price.JSONBTransformQuantity `json:"transform_quantity,omitempty"`
-	MeterID                string                       `json:"meter_id,omitempty"`
-	PriceUnit              *string                      `json:"price_unit,omitempty"`
-	PriceUnitAmount        *decimal.Decimal             `json:"price_unit_amount,omitempty" swaggertype:"string"`
-	DisplayPriceUnitAmount string                       `json:"display_price_unit_amount,omitempty"`
-	Metadata               price.JSONBMetadata          `json:"metadata,omitempty"`
-	Meter                  *Meter                       `json:"meter,omitempty"`
+	ID                     string                  `json:"id"`
+	Amount                 decimal.Decimal         `json:"amount" swaggertype:"string"`
+	DisplayAmount          string                  `json:"display_amount"`
+	Currency               string                  `json:"currency"`
+	Type                   types.PriceType         `json:"type"`
+	BillingPeriod          types.BillingPeriod     `json:"billing_period"`
+	BillingPeriodCount     int                     `json:"billing_period_count"`
+	BillingModel           types.BillingModel      `json:"billing_model"`
+	BillingCadence         types.BillingCadence    `json:"billing_cadence"`
+	InvoiceCadence         types.InvoiceCadence    `json:"invoice_cadence"`
+	DisplayName            string                  `json:"display_name,omitempty"`
+	LookupKey              string                  `json:"lookup_key,omitempty"`
+	Description            string                  `json:"description,omitempty"`
+	TierMode               types.BillingTier       `json:"tier_mode,omitempty"`
+	Tiers                  []price.PriceTier       `json:"tiers,omitempty"`
+	TransformQuantity      price.TransformQuantity `json:"transform_quantity,omitempty"`
+	MeterID                string                  `json:"meter_id,omitempty"`
+	PriceUnit              *string                 `json:"price_unit,omitempty"`
+	PriceUnitAmount        *decimal.Decimal        `json:"price_unit_amount,omitempty" swaggertype:"string"`
+	DisplayPriceUnitAmount string                  `json:"display_price_unit_amount,omitempty"`
+	Metadata               types.Metadata          `json:"metadata,omitempty"`
+	Meter                  *Meter                  `json:"meter,omitempty"`
 }
 
 type Meter struct {

@@ -685,7 +685,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_Package() {
 		Amount:       decimal.NewFromInt(50),
 		Currency:     "usd",
 		BillingModel: types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 10,
 			Round:    types.ROUND_UP,
 		},
@@ -859,7 +859,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_PackageScenarios() {
 		Amount:       decimal.NewFromInt(1), // $1.00 per package
 		Currency:     "usd",
 		BillingModel: types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 100,            // Package size of 100 units
 			Round:    types.ROUND_UP, // Always round up to next package
 		},
@@ -953,7 +953,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_PackageRoundingModes() 
 		Amount:       decimal.NewFromInt(1), // $1.00 per package
 		Currency:     "usd",
 		BillingModel: types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 100, // Package size of 100 units
 		},
 	}
@@ -1037,7 +1037,7 @@ func (s *PriceServiceSuite) TestCalculateBucketedCost_Package() {
 		Amount:       decimal.NewFromInt(1), // $1 per package
 		Currency:     "usd",
 		BillingModel: types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 10,             // 10 units per package
 			Round:    types.ROUND_UP, // Round up
 		},
@@ -1171,7 +1171,7 @@ func (s *PriceServiceSuite) TestCalculateBucketedCost_ComplexScenario() {
 		Amount:       decimal.NewFromInt(5), // $5 per package
 		Currency:     "usd",
 		BillingModel: types.BILLING_MODEL_PACKAGE,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 100,            // 100 units per package
 			Round:    types.ROUND_UP, // Round up
 		},
@@ -1852,7 +1852,7 @@ func (s *PriceServiceSuite) TestDeletePrice_EdgeCases() {
 			Currency:   "usd",
 			EntityType: types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:   "plan-1",
-			Metadata: price.JSONBMetadata{
+			Metadata: types.Metadata{
 				"description": "Test price with metadata",
 				"category":    "test",
 				"version":     "1.0",
@@ -1886,7 +1886,7 @@ func (s *PriceServiceSuite) TestDeletePrice_EdgeCases() {
 			EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:     "plan-1",
 			BillingModel: types.BILLING_MODEL_PACKAGE,
-			TransformQuantity: price.JSONBTransformQuantity{
+			TransformQuantity: price.TransformQuantity{
 				DivideBy: 100,
 				Round:    types.ROUND_UP,
 			},
@@ -2503,7 +2503,7 @@ func (s *PriceServiceSuite) TestGetByLookupKey() {
 			EntityType: types.PRICE_ENTITY_TYPE_PLAN,
 			EntityID:   "plan-1",
 			LookupKey:  "meta_price_key",
-			Metadata: price.JSONBMetadata{
+			Metadata: types.Metadata{
 				"category":    "premium",
 				"description": "Premium pricing tier",
 			},
@@ -3289,8 +3289,8 @@ func shapedPrice(s pricingShape, unit types.PriceUnitType) *price.Price {
 		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, InvoiceCadence: types.InvoiceCadenceArrear,
 		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1", PriceUnitType: unit,
 		BillingModel: s.model, TierMode: s.mode, Amount: decimal.NewFromInt(3),
-		Tiers:             price.JSONBTiers{{UpTo: nil, UnitAmount: decimal.NewFromInt(1)}},
-		TransformQuantity: price.JSONBTransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
+		Tiers:             []price.PriceTier{{UpTo: nil, UnitAmount: decimal.NewFromInt(1)}},
+		TransformQuantity: price.TransformQuantity{DivideBy: 10, Round: types.ROUND_UP},
 	}
 	if unit == types.PRICE_UNIT_TYPE_CUSTOM {
 		p.PriceUnit = lo.ToPtr("crd")

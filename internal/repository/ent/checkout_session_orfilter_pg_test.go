@@ -47,7 +47,7 @@ func TestCheckoutConfigFilter_ORsBothParamsBlobs(t *testing.T) {
 			Action:          action,
 			CheckoutStatus:  types.CheckoutStatusPending,
 			PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-			Configuration:   domainCheckout.ToJSONBCheckoutConfiguration(cfgJSON),
+			Configuration:   cfgJSON,
 			ExpiresAt:       time.Now().UTC().Add(time.Hour),
 			BaseModel:       base,
 		}

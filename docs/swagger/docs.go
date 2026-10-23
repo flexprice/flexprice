@@ -23212,7 +23212,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/price.JSONBMetadata"
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "meter": {
                     "$ref": "#/definitions/MeterResponse"
@@ -23287,7 +23287,7 @@ const docTemplate = `{
                     }
                 },
                 "transform_quantity": {
-                    "$ref": "#/definitions/price.JSONBTransformQuantity"
+                    "$ref": "#/definitions/price.TransformQuantity"
                 },
                 "trial_period_days": {
                     "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
@@ -26051,7 +26051,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "filter_values": {
-                    "$ref": "#/definitions/price.JSONBFilters"
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
                 },
                 "is_overage": {
                     "description": "Whether this charge is at overage rate",
@@ -33718,38 +33724,6 @@ const docTemplate = `{
                 }
             }
         },
-        "price.JSONBFilters": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "array",
-                "items": {
-                    "type": "string"
-                }
-            }
-        },
-        "price.JSONBMetadata": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "string"
-            }
-        },
-        "price.JSONBTransformQuantity": {
-            "type": "object",
-            "properties": {
-                "divide_by": {
-                    "description": "Divide quantity by this number",
-                    "type": "integer"
-                },
-                "round": {
-                    "description": "up or down",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.RoundType"
-                        }
-                    ]
-                }
-            }
-        },
         "price.Price": {
             "type": "object",
             "properties": {
@@ -33845,7 +33819,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/price.JSONBMetadata"
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "meter_id": {
                     "description": "MeterID is the id of the meter for usage based pricing",
@@ -33911,7 +33885,7 @@ const docTemplate = `{
                     }
                 },
                 "transform_quantity": {
-                    "$ref": "#/definitions/price.JSONBTransformQuantity"
+                    "$ref": "#/definitions/price.TransformQuantity"
                 },
                 "trial_period_days": {
                     "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
@@ -35036,7 +35010,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "metadata": {
-                    "$ref": "#/definitions/price.JSONBMetadata"
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "meter": {
                     "$ref": "#/definitions/webhookDto.Meter"
@@ -35060,7 +35034,7 @@ const docTemplate = `{
                     }
                 },
                 "transform_quantity": {
-                    "$ref": "#/definitions/price.JSONBTransformQuantity"
+                    "$ref": "#/definitions/price.TransformQuantity"
                 },
                 "type": {
                     "$ref": "#/definitions/types.PriceType"

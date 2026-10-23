@@ -26,7 +26,7 @@ func (s *subscriptionService) pendingCheckoutSessionForAssociation(
 	}
 
 	for _, session := range sessions {
-		cfg := session.Configuration.ToCheckoutConfiguration()
+		cfg := session.Configuration
 		for _, params := range cfg.AddAddonEntries() {
 			for _, ref := range params.Removes {
 				if ref.AssociationID == associationID {

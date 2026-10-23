@@ -7,17 +7,17 @@ import (
 
 // AlertLog represents an alert log entry for monitoring entity states
 type AlertLog struct {
-	ID               string                `db:"id" json:"id"`
-	EntityType       types.AlertEntityType `db:"entity_type" json:"entity_type"`
-	EntityID         string                `db:"entity_id" json:"entity_id"`
-	ParentEntityType *string               `db:"parent_entity_type" json:"parent_entity_type,omitempty"`
-	ParentEntityID   *string               `db:"parent_entity_id" json:"parent_entity_id,omitempty"`
-	CustomerID       *string               `db:"customer_id" json:"customer_id,omitempty"`
-	AlertSettingID   *string               `db:"alert_setting_id" json:"alert_setting_id,omitempty"`
-	AlertType        types.AlertType       `db:"alert_type" json:"alert_type"`
-	AlertStatus      types.AlertState      `db:"alert_status" json:"alert_status"`
-	AlertInfo        types.AlertInfo       `db:"alert_info" json:"alert_info"`
-	EnvironmentID    string                `db:"environment_id" json:"environment_id"`
+	ID               string                `json:"id"`
+	EntityType       types.AlertEntityType `json:"entity_type"`
+	EntityID         string                `json:"entity_id"`
+	ParentEntityType *string               `json:"parent_entity_type,omitempty"`
+	ParentEntityID   *string               `json:"parent_entity_id,omitempty"`
+	CustomerID       *string               `json:"customer_id,omitempty"`
+	AlertSettingID   *string               `json:"alert_setting_id,omitempty"`
+	AlertType        types.AlertType       `json:"alert_type"`
+	AlertStatus      types.AlertState      `json:"alert_status"`
+	AlertInfo        types.AlertInfo       `json:"alert_info"`
+	EnvironmentID    string                `json:"environment_id"`
 	types.BaseModel
 }
 

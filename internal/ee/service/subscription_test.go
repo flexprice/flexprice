@@ -4016,7 +4016,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			BillingModel:       types.BILLING_MODEL_PACKAGE,
 			InvoiceCadence:     types.InvoiceCadenceArrear, // Arrear billing
 			MeterID:            s.testData.meters.apiCalls.ID,
-			TransformQuantity: price.JSONBTransformQuantity{
+			TransformQuantity: price.TransformQuantity{
 				DivideBy: 100, // Package size of 100 units
 				Round:    types.ROUND_UP,
 			},
@@ -6792,7 +6792,7 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithBucketedMaxAggr
 					BillingModel:       types.BILLING_MODEL_PACKAGE,
 					InvoiceCadence:     types.InvoiceCadenceArrear,
 					MeterID:            bucketedMaxMeter.ID,
-					TransformQuantity: price.JSONBTransformQuantity{
+					TransformQuantity: price.TransformQuantity{
 						DivideBy: 10, // Package size of 10 units
 						Round:    types.ROUND_UP,
 					},

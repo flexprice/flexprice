@@ -136,8 +136,8 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, cu
 		Action:                r.Action,
 		CheckoutStatus:        types.CheckoutStatusInitiated,
 		PaymentProvider:       r.PaymentProvider,
-		Configuration:         domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
-		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(r.PaymentProviderConfig),
+		Configuration:         r.Configuration,
+		PaymentProviderConfig: r.PaymentProviderConfig,
 		IdempotencyKey:        r.IdempotencyKey,
 		SuccessURL:            r.SuccessURL,
 		FailureURL:            r.FailureURL,
@@ -205,8 +205,8 @@ func (r *PayFirstCheckoutRequest) ToCheckoutSession(ctx context.Context, custome
 		Action:                r.Action,
 		CheckoutStatus:        types.CheckoutStatusInitiated,
 		PaymentProvider:       r.Checkout.PaymentProvider,
-		Configuration:         domainCheckout.ToJSONBCheckoutConfiguration(r.Configuration),
-		PaymentProviderConfig: domainCheckout.ToJSONBCheckoutPaymentProviderConfig(r.Checkout.PaymentProviderConfig),
+		Configuration:         r.Configuration,
+		PaymentProviderConfig: r.Checkout.PaymentProviderConfig,
 		IdempotencyKey:        r.Checkout.IdempotencyKey,
 		SuccessURL:            r.Checkout.SuccessURL,
 		FailureURL:            r.Checkout.FailureURL,
@@ -233,7 +233,7 @@ func ValidateCheckoutSessionForCompletion(session *domainCheckout.CheckoutSessio
 			Mark(ierr.ErrValidation)
 	}
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	switch session.Action {
 	case types.CheckoutActionCreateSubscription:
 		if cfg.CreateSubscriptionParams == nil {
@@ -376,7 +376,7 @@ func ToCheckoutSessionResponse(s *domainCheckout.CheckoutSession) *CheckoutSessi
 		Metadata:          s.Metadata,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
-		PaymentAction:     s.ProviderResult.ToProviderResult().PaymentAction(),
+		PaymentAction:     s.ProviderResult.PaymentAction(),
 		Terminal:          s.CheckoutStatus.IsTerminal(),
 	}
 }

@@ -1662,7 +1662,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		}
 
 		// Update the price tiers with converted values
-		p.Tiers = price.JSONBTiers(convertedTiers)
+		p.Tiers = convertedTiers
 	}
 
 	// 6. Set price unit metadata

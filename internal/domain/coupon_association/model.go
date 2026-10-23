@@ -11,16 +11,16 @@ import (
 // CouponAssociation represents a coupon association with a subscription or subscription line item
 // subscription_id is mandatory, subscription_line_item_id is optional
 type CouponAssociation struct {
-	ID                     string            `json:"id" db:"id"`
-	CouponID               string            `json:"coupon_id" db:"coupon_id"`
-	SubscriptionID         string            `json:"subscription_id" db:"subscription_id"`                               // Mandatory
-	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty" db:"subscription_line_item_id"` // Optional
-	SubscriptionPhaseID    *string           `json:"subscription_phase_id,omitempty" db:"subscription_phase_id"`         // Optional
-	StartDate              time.Time         `json:"start_date" db:"start_date"`
-	EndDate                *time.Time        `json:"end_date,omitempty" db:"end_date"` // Optional
-	Metadata               map[string]string `json:"metadata,omitempty" db:"metadata"`
-	EnvironmentID          string            `json:"environment_id" db:"environment_id"`
-	Coupon                 *coupon.Coupon    `json:"coupon,omitempty" db:"coupon"`
+	ID                     string            `json:"id"`
+	CouponID               string            `json:"coupon_id"`
+	SubscriptionID         string            `json:"subscription_id"`                     // Mandatory
+	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty"` // Optional
+	SubscriptionPhaseID    *string           `json:"subscription_phase_id,omitempty"`     // Optional
+	StartDate              time.Time         `json:"start_date"`
+	EndDate                *time.Time        `json:"end_date,omitempty"` // Optional
+	Metadata               map[string]string `json:"metadata,omitempty"`
+	EnvironmentID          string            `json:"environment_id"`
+	Coupon                 *coupon.Coupon    `json:"coupon,omitempty"`
 	types.BaseModel
 }
 

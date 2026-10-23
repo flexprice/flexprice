@@ -12,45 +12,45 @@ import (
 
 // Transaction represents a wallet transaction
 type Transaction struct {
-	ID                  string                      `db:"id" json:"id"`
-	WalletID            string                      `db:"wallet_id" json:"wallet_id"`
-	CustomerID          string                      `db:"customer_id" json:"customer_id"`
-	Type                types.TransactionType       `db:"type" json:"type"`
-	Amount              decimal.Decimal             `db:"amount" json:"amount" swaggertype:"string"`
-	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount" swaggertype:"string"`
-	CreditBalanceBefore decimal.Decimal             `db:"credit_balance_before" json:"credit_balance_before" swaggertype:"string"`
-	CreditBalanceAfter  decimal.Decimal             `db:"credit_balance_after" json:"credit_balance_after" swaggertype:"string"`
-	TxStatus            types.TransactionStatus     `db:"transaction_status" json:"transaction_status"`
-	ReferenceType       types.WalletTxReferenceType `db:"reference_type" json:"reference_type"`
-	ReferenceID         string                      `db:"reference_id" json:"reference_id"`
-	Description         string                      `db:"description" json:"description"`
-	Metadata            types.Metadata              `db:"metadata" json:"metadata"`
-	ExpiryDate          *time.Time                  `db:"expiry_date" json:"expiry_date"`
-	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available" swaggertype:"string"`
-	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
-	Priority            *int                        `db:"priority" json:"priority"`
-	Currency            string                      `db:"currency" json:"currency"`
+	ID                  string                      `json:"id"`
+	WalletID            string                      `json:"wallet_id"`
+	CustomerID          string                      `json:"customer_id"`
+	Type                types.TransactionType       `json:"type"`
+	Amount              decimal.Decimal             `json:"amount" swaggertype:"string"`
+	CreditAmount        decimal.Decimal             `json:"credit_amount" swaggertype:"string"`
+	CreditBalanceBefore decimal.Decimal             `json:"credit_balance_before" swaggertype:"string"`
+	CreditBalanceAfter  decimal.Decimal             `json:"credit_balance_after" swaggertype:"string"`
+	TxStatus            types.TransactionStatus     `json:"transaction_status"`
+	ReferenceType       types.WalletTxReferenceType `json:"reference_type"`
+	ReferenceID         string                      `json:"reference_id"`
+	Description         string                      `json:"description"`
+	Metadata            types.Metadata              `json:"metadata"`
+	ExpiryDate          *time.Time                  `json:"expiry_date"`
+	CreditsAvailable    decimal.Decimal             `json:"credits_available" swaggertype:"string"`
+	TransactionReason   types.TransactionReason     `json:"transaction_reason"`
+	Priority            *int                        `json:"priority"`
+	Currency            string                      `json:"currency"`
 
 	// ParentTransactionID is the ID of the parent wallet_transaction this row was earned from
 	// (the purchase tx, for a bonus grant). Empty for ordinary transactions.
-	ParentTransactionID string `db:"parent_transaction_id" json:"parent_transaction_id,omitempty"`
+	ParentTransactionID string `json:"parent_transaction_id,omitempty"`
 
 	// SourceType/SourceID identify the entity this transaction's value comes from or goes to
 	// (e.g. an invoice). Empty when there is none.
-	SourceType types.WalletTxSourceType `db:"source_type" json:"source_type,omitempty"`
-	SourceID   string                   `db:"source_id" json:"source_id,omitempty"`
+	SourceType types.WalletTxSourceType `json:"source_type,omitempty"`
+	SourceID   string                   `json:"source_id,omitempty"`
 
 	// ConsumptionBreakdown is set on debits: the credits drawn from each credit batch.
-	ConsumptionBreakdown []*types.WalletTxConsumption `db:"consumption_breakdown" json:"consumption_breakdown,omitempty"`
+	ConsumptionBreakdown []*types.WalletTxConsumption `json:"consumption_breakdown,omitempty"`
 
 	// conversion_rate is the conversion rate for the transaction to the currency
-	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
+	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty" swaggertype:"string"`
 
 	// topup_conversion_rate is the conversion rate for the topup to the currency
-	TopupConversionRate *decimal.Decimal `db:"topup_conversion_rate" json:"topup_conversion_rate,omitempty" swaggertype:"string"`
+	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
 
-	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
-	EnvironmentID  string `db:"environment_id" json:"environment_id"`
+	IdempotencyKey string `json:"idempotency_key"`
+	EnvironmentID  string `json:"environment_id"`
 	types.BaseModel
 }
 

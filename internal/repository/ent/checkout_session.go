@@ -54,10 +54,10 @@ func (r *checkoutSessionRepository) Create(ctx context.Context, s *domainCheckou
 		SetPaymentProvider(s.PaymentProvider).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
-		SetConfiguration(types.CheckoutConfiguration(s.Configuration)).
-		SetPaymentProviderConfig((*types.CheckoutPaymentProviderConfig)(s.PaymentProviderConfig)).
-		SetResult((*types.CheckoutResult)(s.Result)).
-		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
+		SetConfiguration(s.Configuration).
+		SetPaymentProviderConfig(s.PaymentProviderConfig).
+		SetResult(s.Result).
+		SetProviderResult(s.ProviderResult).
 		SetNillableIdempotencyKey(s.IdempotencyKey).
 		SetNillableSuccessURL(s.SuccessURL).
 		SetNillableFailureURL(s.FailureURL).
@@ -137,8 +137,8 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetCheckoutStatus(s.CheckoutStatus).
 		SetNillableCheckoutInvoiceID(s.CheckoutInvoiceID).
 		SetNillableCheckoutPaymentID(s.CheckoutPaymentID).
-		SetResult((*types.CheckoutResult)(s.Result)).
-		SetProviderResult((*types.CheckoutProviderResult)(s.ProviderResult)).
+		SetResult(s.Result).
+		SetProviderResult(s.ProviderResult).
 		SetExpiresAt(s.ExpiresAt).
 		SetNillableCompletedAt(s.CompletedAt).
 		SetNillableCancelledAt(s.CancelledAt).

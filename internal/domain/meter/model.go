@@ -12,31 +12,31 @@ import (
 
 type Meter struct {
 	// ID is the unique identifier for the meter
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// EventName is the unique identifier for the event that this meter is tracking
 	// It is a mandatory field in the events table and hence being used as the primary matching field
 	// We can have multiple meters tracking the same event but with different filters and aggregation
-	EventName string `db:"event_name" json:"event_name"`
+	EventName string `json:"event_name"`
 
 	// Name is the display name of the meter
-	Name string `db:"name" json:"name"`
+	Name string `json:"name"`
 
 	// Aggregation defines the aggregation type and field for the meter
 	// It is used to aggregate the events into a single value for calculating the usage
-	Aggregation Aggregation `db:"aggregation" json:"aggregation"`
+	Aggregation Aggregation `json:"aggregation"`
 
 	// Filters define the criteria for the meter to be applied on the events before aggregation
 	// It also defines the possible values on which later the charges will be applied
-	Filters []Filter `db:"filters" json:"filters"`
+	Filters []Filter `json:"filters"`
 
 	// ResetUsage defines whether the usage should be reset periodically or not
 	// For ex meters tracking total storage used do not get reset but meters tracking
 	// total API requests do.
-	ResetUsage types.ResetUsage `db:"reset_usage" json:"reset_usage"`
+	ResetUsage types.ResetUsage `json:"reset_usage"`
 
 	// EnvironmentID is the environment identifier for the meter
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	// BaseModel is the base model for the meter
 	types.BaseModel

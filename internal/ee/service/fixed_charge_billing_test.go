@@ -286,7 +286,7 @@ func (s *FixedChargeBillingSuite) TestPackage_Advance_Monthly() {
 		BillingModel:       types.BILLING_MODEL_PACKAGE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 10,
 			Round:    types.ROUND_UP,
 		},
@@ -360,7 +360,7 @@ func (s *FixedChargeBillingSuite) TestPackage_Arrear_Monthly() {
 		BillingModel:       types.BILLING_MODEL_PACKAGE,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
-		TransformQuantity: price.JSONBTransformQuantity{
+		TransformQuantity: price.TransformQuantity{
 			DivideBy: 10,
 			Round:    types.ROUND_UP,
 		},
@@ -438,7 +438,7 @@ func (s *FixedChargeBillingSuite) TestTieredSlab_Advance_Monthly() {
 		TierMode:           types.BILLING_TIER_SLAB,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
 			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
 		},
@@ -516,7 +516,7 @@ func (s *FixedChargeBillingSuite) TestTieredVolume_Advance_Monthly() {
 		TierMode:           types.BILLING_TIER_VOLUME,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
 			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
 		},
@@ -680,7 +680,7 @@ func (s *FixedChargeBillingSuite) TestMixedPlan_FlatFeeAndTieredSlab_Advance() {
 		TierMode:           types.BILLING_TIER_SLAB,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		Tiers: price.JSONBTiers{
+		Tiers: []price.PriceTier{
 			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
 			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
 		},
@@ -922,7 +922,7 @@ func (s *FixedChargeProrationSuite) build(spec pvSubSpec) *pvSub {
 			BaseModel: types.GetDefaultBaseModel(ctx),
 		}
 		if it.transform != nil {
-			pr.TransformQuantity = price.JSONBTransformQuantity(*it.transform)
+			pr.TransformQuantity = *it.transform
 		}
 		s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, pr))
 

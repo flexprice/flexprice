@@ -6177,7 +6177,7 @@ definitions:
         description: LookupKey used for looking up the price in the database
         type: string
       metadata:
-        $ref: '#/definitions/price.JSONBMetadata'
+        $ref: '#/definitions/types.Metadata'
       meter:
         $ref: '#/definitions/MeterResponse'
       meter_id:
@@ -6235,7 +6235,7 @@ definitions:
           $ref: '#/definitions/price.PriceTier'
         type: array
       transform_quantity:
-        $ref: '#/definitions/price.JSONBTransformQuantity'
+        $ref: '#/definitions/price.TransformQuantity'
       trial_period_days:
         description: |-
           TrialPeriodDays is the number of days for the trial period
@@ -8239,7 +8239,11 @@ definitions:
       display_amount:
         type: string
       filter_values:
-        $ref: '#/definitions/price.JSONBFilters'
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
       is_overage:
         description: Whether this charge is at overage rate
         type: boolean
@@ -13921,26 +13925,6 @@ definitions:
       workflow_id:
         type: string
     type: object
-  price.JSONBFilters:
-    additionalProperties:
-      items:
-        type: string
-      type: array
-    type: object
-  price.JSONBMetadata:
-    additionalProperties:
-      type: string
-    type: object
-  price.JSONBTransformQuantity:
-    properties:
-      divide_by:
-        description: Divide quantity by this number
-        type: integer
-      round:
-        allOf:
-        - $ref: '#/definitions/types.RoundType'
-        description: up or down
-    type: object
   price.Price:
     properties:
       amount:
@@ -14018,7 +14002,7 @@ definitions:
         description: LookupKey used for looking up the price in the database
         type: string
       metadata:
-        $ref: '#/definitions/price.JSONBMetadata'
+        $ref: '#/definitions/types.Metadata'
       meter_id:
         description: MeterID is the id of the meter for usage based pricing
         type: string
@@ -14070,7 +14054,7 @@ definitions:
           $ref: '#/definitions/price.PriceTier'
         type: array
       transform_quantity:
-        $ref: '#/definitions/price.JSONBTransformQuantity'
+        $ref: '#/definitions/price.TransformQuantity'
       trial_period_days:
         description: |-
           TrialPeriodDays is the number of days for the trial period
@@ -14828,7 +14812,7 @@ definitions:
       lookup_key:
         type: string
       metadata:
-        $ref: '#/definitions/price.JSONBMetadata'
+        $ref: '#/definitions/types.Metadata'
       meter:
         $ref: '#/definitions/webhookDto.Meter'
       meter_id:
@@ -14844,7 +14828,7 @@ definitions:
           $ref: '#/definitions/price.PriceTier'
         type: array
       transform_quantity:
-        $ref: '#/definitions/price.JSONBTransformQuantity'
+        $ref: '#/definitions/price.TransformQuantity'
       type:
         $ref: '#/definitions/types.PriceType'
     type: object
