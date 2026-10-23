@@ -419,7 +419,7 @@ func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Se
 		"secret_id": secret.ID,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, secret.Value)
+	cacheKey := secretCacheKey(secret.Value)
 	r.cache.ForceCacheSet(ctx, cacheKey, secret, cache.ExpiryDefaultInMemory)
 }
 
@@ -428,7 +428,7 @@ func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecr
 		"secret_id": key,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	value, found := r.cache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
@@ -446,6 +446,11 @@ func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
 	})
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	r.cache.ForceCacheDelete(ctx, cacheKey)
+}
+
+// Tenant-independent: auth lookup has no tenant in ctx.
+func secretCacheKey(value string) string {
+	return cache.GenerateKey(nil, cache.PrefixSecret, value)
 }
