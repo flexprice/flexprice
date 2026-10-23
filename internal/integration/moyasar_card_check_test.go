@@ -119,7 +119,8 @@ func (s *MoyasarCardCheckSuite) TestVoidOrRefundAuthPayment() {
 		{name: "refund when the void fails", status: moyasar.MoyasarPaymentStatusCaptured, voidErr: errors.New("void window closed"), wantRefunded: true, wantCalls: 2, wantStatus: types.PaymentStatusRefunded},
 		{name: "already voided is only recorded", status: moyasar.MoyasarPaymentStatusVoided, wantVoided: true, wantStatus: types.PaymentStatusVoided},
 		{name: "already refunded is only recorded", status: moyasar.MoyasarPaymentStatusRefunded, wantRefunded: true, wantStatus: types.PaymentStatusRefunded},
-		{name: "failed charge holds nothing", status: moyasar.MoyasarPaymentStatusFailed, wantStatus: types.PaymentStatusSucceeded},
+		{name: "failed charge is closed without a release", status: moyasar.MoyasarPaymentStatusFailed, wantStatus: types.PaymentStatusVoided},
+		{name: "unfinished charge is closed without a release", status: moyasar.MoyasarPaymentStatusInitiated, wantStatus: types.PaymentStatusVoided},
 	}
 
 	for _, tt := range tests {

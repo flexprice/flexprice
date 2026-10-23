@@ -958,7 +958,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	}
 
 	// Retries must not release twice: settle a void or refund that already
-	// happened, and skip a charge that never held money.
+	// happened, and close a charge that never held money as voided (nothing to release).
 	current, err := m.Client.GetPayment(ctx, gatewayPaymentID)
 	if err != nil {
 		return false, false, err
@@ -983,7 +983,11 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		}
 		return false, true, nil
 	case moyasar.MoyasarPaymentStatusInitiated, moyasar.MoyasarPaymentStatusFailed:
-		return false, false, nil
+		return false, false, m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		})
 	}
 
 	// Try void first
