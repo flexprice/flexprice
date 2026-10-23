@@ -875,9 +875,18 @@ func (s *billingService) CalculateUsageCharges(
 	}
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
+	commitments, err := s.newCommitmentLoader(
+		ctx, sub, periodStart, periodEnd, time.Now().UTC(), rawChargesByLine(sub, usage), meterMap, "", true,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	handledByCommitments := commitments.HandledLineIDs()
+
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
+		if item.PriceType != types.PRICE_TYPE_USAGE || handledByCommitments[item.ID] {
 			continue
 		}
 
@@ -1375,6 +1384,16 @@ func (s *billingService) CalculateUsageCharges(
 				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
 			}
 		}
+	}
+
+	if len(handledByCommitments) > 0 {
+		commitmentLines, commitmentTotal, err := commitments.InvoiceLines(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		usageCharges = append(usageCharges, commitmentLines...)
+		totalUsageCost = totalUsageCost.Add(commitmentTotal)
 	}
 
 	return &dto.CalculateUsageChargesResult{LineItems: usageCharges, TotalAmount: totalUsageCost}, nil
