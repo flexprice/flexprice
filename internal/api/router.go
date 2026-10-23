@@ -106,7 +106,9 @@ func NewRouter(
 	userRepo domainUser.Repository,
 	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
-	// gin.SetMode(gin.ReleaseMode)
+	if cfg.Deployment.Mode != types.ModeLocal {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	// Process-global: also covers the admin engine and any future engine.
 	middleware.InstallMicrosecondBinding()
@@ -843,7 +845,7 @@ func NewRouter(
 	{
 		// Customer specific
 		customerPortalAPI.GET("/info", handlers.CustomerPortal.GetCustomer)
-		customerPortalAPI.PUT("/info", write(types.EntityCustomer, types.ActionWrite), handlers.CustomerPortal.UpdateCustomer)
+		customerPortalAPI.PUT("/info", handlers.CustomerPortal.UpdateCustomer)
 		customerPortalAPI.GET("/usage", handlers.CustomerPortal.GetUsageSummary)
 
 		// Subscriptions
