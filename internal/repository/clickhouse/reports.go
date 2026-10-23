@@ -101,6 +101,9 @@ func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.Datase
 	if r.conn == nil {
 		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
 	}
+	if dq == nil || dq.Def == nil {
+		return nil, ierr.NewError("dataset query is required").Mark(ierr.ErrValidation)
+	}
 	w := *dq
 	w.From = r.stableTime(dq.From)
 	w.To = r.stableTime(dq.To)
