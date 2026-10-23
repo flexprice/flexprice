@@ -417,13 +417,16 @@ func (c *Client) doBooksRequest(
 		var zohoErrResp ZohoErrorResponse
 		_ = json.Unmarshal(bodyBytes, &zohoErrResp)
 
+		c.logger.Error(ctx, "Zoho API request failed",
+			"error", "non_2xx_from_zoho_api",
+			"status_code", resp.StatusCode,
+			"response_body", string(bodyBytes))
 		return ierr.WithError(&ZohoAPIError{
 			Code:       zohoErrResp.Code,
 			Message:    zohoErrResp.Message,
 			HTTPStatus: resp.StatusCode,
 		}).
 			WithHintf("Zoho API returned status %d", resp.StatusCode).
-			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)
 	}
 	if respBody != nil && len(bodyBytes) > 0 {
@@ -491,9 +494,12 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.logger.Error(ctx, "Zoho token refresh failed",
+			"error", "non_2xx_from_token_endpoint",
+			"status_code", resp.StatusCode,
+			"response_body", string(bodyBytes))
 		return "", ierr.NewError("Zoho token refresh failed").
 			WithHintf("Zoho token endpoint returned status %d", resp.StatusCode).
-			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)
 	}
 
