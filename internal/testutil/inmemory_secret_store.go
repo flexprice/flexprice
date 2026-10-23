@@ -151,7 +151,11 @@ func (s *InMemorySecretStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s *InMemorySecretStore) RevokeByUserID(ctx context.Context, userID string) error {
-	secrets, err := s.InMemoryStore.List(ctx, &types.SecretFilter{UserID: &userID}, secretFilterFn, secretSortFn)
+	allEnvs := types.SetEnvironmentID(ctx, "")
+	secrets, err := s.InMemoryStore.List(allEnvs, &types.SecretFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		UserID:      &userID,
+	}, secretFilterFn, secretSortFn)
 	if err != nil {
 		return err
 	}

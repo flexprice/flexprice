@@ -328,8 +328,10 @@ func (r *secretRepository) RevokeByUserID(ctx context.Context, userID string) er
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Auth lookups cache without tenant/env scope.
+	cacheCtx := types.SetEnvironmentID(types.SetTenantID(ctx, ""), "")
 	for _, s := range revoked {
-		r.DeleteCache(ctx, s.Value)
+		r.DeleteCache(cacheCtx, s.Value)
 	}
 	return nil
 }
