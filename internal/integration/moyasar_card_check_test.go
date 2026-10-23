@@ -19,6 +19,7 @@ import (
 type stubMoyasarClient struct {
 	moyasar.MoyasarClient
 	status   moyasar.MoyasarPaymentStatus
+	getErr   error
 	voidErr  error
 	voided   int
 	refunded int
@@ -29,6 +30,9 @@ func (c *stubMoyasarClient) GetMoyasarConfig(_ context.Context) (*moyasar.Moyasa
 }
 
 func (c *stubMoyasarClient) GetPayment(_ context.Context, paymentID string) (*moyasar.MoyasarPayment, error) {
+	if c.getErr != nil {
+		return nil, c.getErr
+	}
 	return &moyasar.MoyasarPayment{ID: paymentID, Status: string(c.status)}, nil
 }
 
@@ -49,10 +53,12 @@ type MoyasarCardCheckSuite struct {
 	customerID string
 }
 
+// TestMoyasarCardCheck runs the Moyasar card-check tests against the payment service.
 func TestMoyasarCardCheck(t *testing.T) {
 	suite.Run(t, new(MoyasarCardCheckSuite))
 }
 
+// SetupTest wires the Moyasar integration to the payment service and creates the customer.
 func (s *MoyasarCardCheckSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	params := service.ServiceParams{
@@ -146,6 +152,34 @@ func (s *MoyasarCardCheckSuite) TestVoidOrRefundAuthPayment() {
 			p, err := s.GetStores().PaymentRepo.Get(ctx, paymentID)
 			s.Require().NoError(err)
 			s.Equal(tt.wantStatus, p.PaymentStatus)
+		})
+	}
+}
+
+// TestVoidOrRefundAuthPaymentErrors checks that lookup and recording failures are returned for a retry.
+func (s *MoyasarCardCheckSuite) TestVoidOrRefundAuthPaymentErrors() {
+	tests := []struct {
+		name      string
+		status    moyasar.MoyasarPaymentStatus
+		getErr    error
+		paymentID string
+	}{
+		{name: "Moyasar lookup fails", getErr: errors.New("moyasar unavailable"), paymentID: "pay_any"},
+		{name: "recording an existing void fails", status: moyasar.MoyasarPaymentStatusVoided, paymentID: "pay_missing"},
+		{name: "recording an existing refund fails", status: moyasar.MoyasarPaymentStatusRefunded, paymentID: "pay_missing"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			s.client.status = tt.status
+			s.client.getErr = tt.getErr
+
+			voided, refunded, err := s.moyasar.VoidOrRefundAuthPayment(s.GetContext(), tt.paymentID, "moy_card_check")
+			s.Error(err)
+			s.False(voided)
+			s.False(refunded)
+			s.Zero(s.client.voided + s.client.refunded)
 		})
 	}
 }

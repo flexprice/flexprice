@@ -77,10 +77,12 @@ type OrphanedCardCheckSuite struct {
 	customerID string
 }
 
+// TestOrphanedCardCheck runs the orphaned card-check webhook tests against the payment service.
 func TestOrphanedCardCheck(t *testing.T) {
 	suite.Run(t, new(OrphanedCardCheckSuite))
 }
 
+// SetupTest wires the payment service and lifecycle and creates the customer.
 func (s *OrphanedCardCheckSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	params := service.ServiceParams{
@@ -142,6 +144,7 @@ var paidEvent = &webhook.MoyasarWebhookEvent{
 	Data: webhook.PaymentEventData{ID: "moy_retry"},
 }
 
+// TestApprovedRetryIsRecordedSavedAndReleased checks an approved retry on a declined attempt is recorded, saved and released once.
 func (s *OrphanedCardCheckSuite) TestApprovedRetryIsRecordedSavedAndReleased() {
 	tests := []struct {
 		name       string
@@ -205,25 +208,46 @@ func (f *failingPaymentService) CreatePayment(_ context.Context, _ *dto.CreatePa
 	return nil, errors.New("database unavailable")
 }
 
+// TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded checks the fallback that
+// releases an orphaned charge directly when it can't get its own payment.
 func TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded(t *testing.T) {
-	closed := &dto.PaymentResponse{
-		ID:                "pay_declined",
-		DestinationType:   types.PaymentDestinationTypeCustomer,
-		DestinationID:     "cust_1",
-		PaymentStatus:     types.PaymentStatusFailed,
-		GatewayPaymentID:  lo.ToPtr("moy_declined"),
-		PaymentMethodType: types.PaymentMethodTypeCard,
-		Amount:            decimal.NewFromInt(1),
-		Currency:          "SAR",
+	tests := []struct {
+		name         string
+		voidErr      error
+		refundErr    error
+		wantRefunded bool
+	}{
+		{name: "void succeeds"},
+		{name: "refund after a failed void", voidErr: errors.New("void window closed"), wantRefunded: true},
+		{name: "both fail", voidErr: errors.New("void failed"), refundErr: errors.New("refund failed"), wantRefunded: true},
 	}
-	paymentSvc := &failingPaymentService{payment: closed}
-	log := logger.NewNoopLogger()
-	client := &stubMoyasarClient{payment: approvedRetry(closed.ID)}
-	h := webhook.NewHandler(client, nil, nil, &stubPaymentMethodRepo{}, payments.NewPaymentLifecycle(paymentSvc, nil, log), log)
 
-	err := h.HandleWebhookEvent(context.Background(), paidEvent, "env_1", &webhook.ServiceDependencies{PaymentService: paymentSvc})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			closed := &dto.PaymentResponse{
+				ID:                "pay_declined",
+				DestinationType:   types.PaymentDestinationTypeCustomer,
+				DestinationID:     "cust_1",
+				PaymentStatus:     types.PaymentStatusFailed,
+				GatewayPaymentID:  lo.ToPtr("moy_declined"),
+				PaymentMethodType: types.PaymentMethodTypeCard,
+				Amount:            decimal.NewFromInt(1),
+				Currency:          "SAR",
+			}
+			paymentSvc := &failingPaymentService{payment: closed}
+			log := logger.NewNoopLogger()
+			client := &stubMoyasarClient{payment: approvedRetry(closed.ID), voidErr: tt.voidErr, refundErr: tt.refundErr}
+			h := webhook.NewHandler(client, nil, nil, &stubPaymentMethodRepo{}, payments.NewPaymentLifecycle(paymentSvc, nil, log), log)
 
-	require.NoError(t, err)
-	assert.Equal(t, []string{"moy_retry"}, client.voided)
-	assert.Empty(t, client.refunded)
+			err := h.HandleWebhookEvent(context.Background(), paidEvent, "env_1", &webhook.ServiceDependencies{PaymentService: paymentSvc})
+
+			require.NoError(t, err)
+			assert.Equal(t, []string{"moy_retry"}, client.voided)
+			if tt.wantRefunded {
+				assert.Equal(t, []string{"moy_retry"}, client.refunded)
+			} else {
+				assert.Empty(t, client.refunded)
+			}
+		})
+	}
 }
