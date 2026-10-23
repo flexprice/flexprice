@@ -53,12 +53,10 @@ type MoyasarCardCheckSuite struct {
 	customerID string
 }
 
-// TestMoyasarCardCheck runs the Moyasar card-check tests against the payment service.
 func TestMoyasarCardCheck(t *testing.T) {
 	suite.Run(t, new(MoyasarCardCheckSuite))
 }
 
-// SetupTest wires the Moyasar integration to the payment service and creates the customer.
 func (s *MoyasarCardCheckSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	params := service.ServiceParams{
@@ -156,7 +154,7 @@ func (s *MoyasarCardCheckSuite) TestVoidOrRefundAuthPayment() {
 	}
 }
 
-// TestVoidOrRefundAuthPaymentErrors checks that lookup and recording failures are returned for a retry.
+// Lookup and recording failures are returned, so the settlement job tries again.
 func (s *MoyasarCardCheckSuite) TestVoidOrRefundAuthPaymentErrors() {
 	tests := []struct {
 		name      string

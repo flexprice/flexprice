@@ -77,12 +77,10 @@ type OrphanedCardCheckSuite struct {
 	customerID string
 }
 
-// TestOrphanedCardCheck runs the orphaned card-check webhook tests against the payment service.
 func TestOrphanedCardCheck(t *testing.T) {
 	suite.Run(t, new(OrphanedCardCheckSuite))
 }
 
-// SetupTest wires the payment service and lifecycle and creates the customer.
 func (s *OrphanedCardCheckSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	params := service.ServiceParams{
@@ -144,7 +142,6 @@ var paidEvent = &webhook.MoyasarWebhookEvent{
 	Data: webhook.PaymentEventData{ID: "moy_retry"},
 }
 
-// TestApprovedRetryIsRecordedSavedAndReleased checks an approved retry on a declined attempt is recorded, saved and released once.
 func (s *OrphanedCardCheckSuite) TestApprovedRetryIsRecordedSavedAndReleased() {
 	tests := []struct {
 		name       string
@@ -208,8 +205,7 @@ func (f *failingPaymentService) CreatePayment(_ context.Context, _ *dto.CreatePa
 	return nil, errors.New("database unavailable")
 }
 
-// TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded checks the fallback that
-// releases an orphaned charge directly when it can't get its own payment.
+// An orphaned charge that can't get its own payment is released directly.
 func TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded(t *testing.T) {
 	tests := []struct {
 		name         string

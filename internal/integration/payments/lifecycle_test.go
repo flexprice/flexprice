@@ -130,7 +130,6 @@ func (s *PaymentLifecycleSuite) TestInitiatePayment_Success() {
 	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
 }
 
-// TestInitiatePayment_Idempotency checks when InitiatePayment reuses or creates a payment.
 func (s *PaymentLifecycleSuite) TestInitiatePayment_Idempotency() {
 	tests := []struct {
 		name       string
