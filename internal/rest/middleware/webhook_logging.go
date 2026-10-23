@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime"
+	"net/url"
 	"strings"
 
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
@@ -51,7 +53,7 @@ func WebhookLoggingMiddleware(
 			Path:          c.Request.URL.Path,
 			RequestID:     requestID,
 			Headers:       headers,
-			Body:          redactWebhookBody(peek),
+			Body:          redactWebhookBody(peek, c.GetHeader("Content-Type")),
 		}
 		if err := repo.Create(c.Request.Context(), req); err != nil {
 			log.Error(c.Request.Context(), "failed to persist webhook event",
@@ -79,11 +81,6 @@ const redactedValue = "[redacted]"
 
 var sensitiveHeaderParts = []string{"authorization", "api-key", "apikey", "cookie", "secret", "token", "signature"}
 
-var sensitiveBodyKeys = map[string]bool{
-	"secret_token": true, "password": true, "api_key": true, "apikey": true,
-	"access_token": true, "refresh_token": true, "client_secret": true,
-}
-
 func isSensitiveWebhookHeader(name string) bool {
 	name = strings.ToLower(name)
 	for _, part := range sensitiveHeaderParts {
@@ -94,16 +91,55 @@ func isSensitiveWebhookHeader(name string) bool {
 	return false
 }
 
-// redactWebhookBody returns a copy safe to store; non-JSON bodies pass through.
-func redactWebhookBody(body []byte) string {
-	var doc any
-	if err := json.Unmarshal(body, &doc); err != nil {
+const unparseableBody = "[redacted: unparseable body]"
+
+func isSensitiveKey(name string) bool {
+	switch strings.ReplaceAll(strings.ToLower(name), "-", "_") {
+	case "token", "secret", "authorization", "private_key", "id_token",
+		"webhook_secret", "signing_secret", "client_secret", "access_token",
+		"refresh_token", "password", "secret_token", "api_key", "apikey":
+		return true
+	}
+	return false
+}
+
+// redactWebhookBody returns a copy safe to store; other bodies pass through.
+func redactWebhookBody(body []byte, contentType string) string {
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	if mediaType == "application/x-www-form-urlencoded" {
+		form, err := url.ParseQuery(string(body))
+		if err != nil {
+			return unparseableBody
+		}
+		for k := range form {
+			if isSensitiveKey(k) {
+				form[k] = []string{redactedValue}
+			}
+		}
+		return form.Encode()
+	}
+
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
 		return string(body)
+	}
+	if !strings.Contains(mediaType, "json") && trimmed[0] != '{' && trimmed[0] != '[' {
+		return string(body)
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	var doc any
+	if err := dec.Decode(&doc); err != nil {
+		return unparseableBody
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return unparseableBody
 	}
 	redactJSON(doc)
 	out, err := json.Marshal(doc)
 	if err != nil {
-		return string(body)
+		return unparseableBody
 	}
 	return string(out)
 }
@@ -112,7 +148,7 @@ func redactJSON(v any) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, child := range t {
-			if sensitiveBodyKeys[strings.ToLower(k)] {
+			if isSensitiveKey(k) {
 				t[k] = redactedValue
 				continue
 			}

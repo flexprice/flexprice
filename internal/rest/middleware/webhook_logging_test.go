@@ -47,6 +47,7 @@ func TestWebhookLoggingMiddleware_Redaction(t *testing.T) {
 		body       string
 		wantHeader map[string]string
 		wantBody   map[string]any
+		wantRaw    string
 	}{
 		{
 			name:       "sensitive headers case-insensitive",
@@ -59,6 +60,44 @@ func TestWebhookLoggingMiddleware_Redaction(t *testing.T) {
 			name:     "top-level and nested body keys",
 			body:     `{"secret_token":"s","Password":"p","n":{"access_token":"t","ok":1},"l":[{"refresh_token":"r"}]}`,
 			wantBody: map[string]any{"secret_token": "[redacted]", "Password": "[redacted]", "n": map[string]any{"access_token": "[redacted]", "ok": float64(1)}, "l": []any{map[string]any{"refresh_token": "[redacted]"}}},
+		},
+		{
+			name:     "key variants and bare keys",
+			body:     `{"apiKey":"a","api-key":"b","API_KEY":"c","token":"t","secret":"s","authorization":"x","private_key":"p","id_token":"i","webhook_secret":"w","signing_secret":"g","client_secret":"c"}`,
+			wantBody: map[string]any{"apiKey": "[redacted]", "api-key": "[redacted]", "API_KEY": "[redacted]", "token": "[redacted]", "secret": "[redacted]", "authorization": "[redacted]", "private_key": "[redacted]", "id_token": "[redacted]", "webhook_secret": "[redacted]", "signing_secret": "[redacted]", "client_secret": "[redacted]"},
+		},
+		{
+			name:     "moyasar nested source token",
+			body:     `{"type":"payment_paid","data":{"id":"p1","source":{"type":"creditcard","token":"token_abc"}}}`,
+			wantBody: map[string]any{"type": "payment_paid", "data": map[string]any{"id": "p1", "source": map[string]any{"type": "creditcard", "token": "[redacted]"}}},
+		},
+		{
+			name:    "huge number does not fail open",
+			headers: map[string]string{"Content-Type": "application/json"},
+			body:    `{"n":1e400,"token":"leak"}`,
+			wantRaw: `{"n":1e400,"token":"[redacted]"}`,
+		},
+		{
+			name:    "unparseable json placeholder",
+			body:    `{"token":"leak",`,
+			wantRaw: "[redacted: unparseable body]",
+		},
+		{
+			name:    "large integer not rounded",
+			body:    `{"id":9007199254740993,"token":"t"}`,
+			wantRaw: `{"id":9007199254740993,"token":"[redacted]"}`,
+		},
+		{
+			name:    "form encoded",
+			headers: map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+			body:    "a=1&token=leak&client-secret=z",
+			wantRaw: "a=1&client-secret=%5Bredacted%5D&token=%5Bredacted%5D",
+		},
+		{
+			name:    "plain text passes through",
+			headers: map[string]string{"Content-Type": "text/plain"},
+			body:    "token=leak",
+			wantRaw: "token=leak",
 		},
 	}
 	for _, tc := range tests {
@@ -79,6 +118,10 @@ func TestWebhookLoggingMiddleware_Redaction(t *testing.T) {
 			assert.Equal(t, tc.body, seen)
 			for k, v := range tc.wantHeader {
 				assert.Equal(t, []string{v}, repo.got.Headers[k], k)
+			}
+			if tc.wantRaw != "" {
+				assert.Equal(t, tc.wantRaw, repo.got.Body)
+				return
 			}
 			var got map[string]any
 			assert.NoError(t, json.Unmarshal([]byte(repo.got.Body), &got))
