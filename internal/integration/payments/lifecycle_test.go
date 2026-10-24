@@ -130,21 +130,70 @@ func (s *PaymentLifecycleSuite) TestInitiatePayment_Success() {
 	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
 }
 
-func (s *PaymentLifecycleSuite) TestInitiatePayment_Idempotent() {
+func (s *PaymentLifecycleSuite) TestInitiatePayment_Idempotency() {
+	tests := []struct {
+		name       string
+		firstKey   string
+		secondKey  string
+		expectSame bool
+	}{
+		{name: "derived key reuses the payment", expectSame: true},
+		{name: "same explicit key reuses the payment", firstKey: "setup_a", secondKey: "setup_a", expectSame: true},
+		{name: "distinct explicit keys create distinct payments", firstKey: "setup_a", secondKey: "setup_b", expectSame: false},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+
+			first := s.authParams()
+			first.IdempotencyKey = tc.firstKey
+			id1, err := s.lifecycle.InitiatePayment(ctx, first)
+			s.Require().NoError(err)
+
+			second := s.authParams()
+			second.IdempotencyKey = tc.secondKey
+			id2, err := s.lifecycle.InitiatePayment(ctx, second)
+			s.Require().NoError(err)
+
+			if tc.expectSame {
+				s.Equal(id1, id2)
+			} else {
+				s.NotEqual(id1, id2)
+			}
+		})
+	}
+}
+
+// A card declined on one attempt must not block a later attempt with its
+// own key from succeeding.
+func (s *PaymentLifecycleSuite) TestInitiatePayment_RetryAfterFailureWithNewKey() {
 	ctx := s.GetContext()
 
-	id1, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
-	s.NoError(err)
-	s.NotEmpty(id1)
+	first := s.authParams()
+	first.IdempotencyKey = "setup_attempt_1"
+	failedID, err := s.lifecycle.InitiatePayment(ctx, first)
+	s.Require().NoError(err)
+	s.Require().NoError(s.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
+		FlexpricePaymentID: failedID,
+		GatewayPaymentID:   "gw_declined",
+		ErrorMessage:       "DECLINED",
+	}))
 
-	// Second call with same params should either return same id or a new one
-	// but must not error; idempotency is keyed on IdempotencyKey when set.
-	// Since InitiatePaymentParams has no explicit IdempotencyKey field, the
-	// service-level idempotency (duplicate key constraint) may not apply here
-	// but we verify no error is returned.
-	id2, err := s.lifecycle.InitiatePayment(ctx, s.authParams())
-	s.NoError(err)
-	s.NotEmpty(id2)
+	retry := s.authParams()
+	retry.IdempotencyKey = "setup_attempt_2"
+	retryID, err := s.lifecycle.InitiatePayment(ctx, retry)
+	s.Require().NoError(err)
+	s.NotEqual(failedID, retryID)
+
+	s.NoError(s.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
+		FlexpricePaymentID: retryID,
+		GatewayPaymentID:   "gw_approved",
+	}))
+	payment, err := s.GetStores().PaymentRepo.Get(ctx, retryID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, payment.PaymentStatus)
 }
 
 func (s *PaymentLifecycleSuite) TestInitiatePayment_ValidationErrors() {
