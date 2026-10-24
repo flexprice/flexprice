@@ -55,6 +55,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
+	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -65,6 +66,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
@@ -152,6 +154,8 @@ type ServiceParams struct {
 	ContractRepo                 contractRepo.Repository
 	POBRepo                      pobRepo.Repository
 	AccountingPeriodRepo         accountingPeriodRepo.Repository
+	JournalRepo                  journalRepo.Repository
+	JournalService               journalsvc.JournalService
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -272,6 +276,8 @@ func NewServiceParams(
 	contractRepo contractRepo.Repository,
 	pobRepo pobRepo.Repository,
 	accountingPeriodRepo accountingPeriodRepo.Repository,
+	journalRepo journalRepo.Repository,
+	journalService journalsvc.JournalService,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -356,5 +362,7 @@ func NewServiceParams(
 		ContractRepo:                 contractRepo,
 		POBRepo:                      pobRepo,
 		AccountingPeriodRepo:         accountingPeriodRepo,
+		JournalRepo:                  journalRepo,
+		JournalService:               journalService,
 	}
 }

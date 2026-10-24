@@ -43,6 +43,8 @@ import (
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/journalentry"
+	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
@@ -2259,6 +2261,130 @@ func scanReturningInvoiceSequence(rows *sql.Rows) ([]*InvoiceSequence, error) {
 	var out []*InvoiceSequence
 	for rows.Next() {
 		node := &InvoiceSequence{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*JournalEntry.
+func (_u *JournalEntryUpdate) SaveReturning(ctx context.Context) ([]*JournalEntry, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *JournalEntryUpdate) sqlSaveReturning(ctx context.Context) ([]*JournalEntry, error) {
+	var out []*JournalEntry
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", journalentry.Table, journalentry.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalEntry(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*JournalEntry.
+func (_d *JournalEntryDelete) ExecReturning(ctx context.Context) ([]*JournalEntry, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *JournalEntryDelete) sqlExecReturning(ctx context.Context) ([]*JournalEntry, error) {
+	var out []*JournalEntry
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", journalentry.Table, journalentry.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalEntry(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningJournalEntry(rows *sql.Rows) ([]*JournalEntry, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*JournalEntry
+	for rows.Next() {
+		node := &JournalEntry{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*JournalLine.
+func (_u *JournalLineUpdate) SaveReturning(ctx context.Context) ([]*JournalLine, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *JournalLineUpdate) sqlSaveReturning(ctx context.Context) ([]*JournalLine, error) {
+	var out []*JournalLine
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", journalline.Table, journalline.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalLine(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*JournalLine.
+func (_d *JournalLineDelete) ExecReturning(ctx context.Context) ([]*JournalLine, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *JournalLineDelete) sqlExecReturning(ctx context.Context) ([]*JournalLine, error) {
+	var out []*JournalLine
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", journalline.Table, journalline.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalLine(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningJournalLine(rows *sql.Rows) ([]*JournalLine, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*JournalLine
+	for rows.Next() {
+		node := &JournalLine{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

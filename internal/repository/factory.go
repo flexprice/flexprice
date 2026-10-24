@@ -64,6 +64,7 @@ import (
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/tracing"
@@ -290,6 +291,10 @@ func NewPerformanceObligationRepository(p RepositoryParams) pobRepo.Repository {
 
 func NewAccountingPeriodRepository(p RepositoryParams) accountingPeriodRepo.Repository {
 	return accountingPeriodRepo.NewRepository(p.EntClient, p.Logger)
+}
+
+func NewJournalRepository(p RepositoryParams) journalRepo.Repository {
+	return journalRepo.NewRepository(p.EntClient, p.Logger)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {

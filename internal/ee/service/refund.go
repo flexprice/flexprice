@@ -564,6 +564,7 @@ func (s *refundService) Settle(ctx context.Context, req *dto.SettleRefundRequest
 	recordRefundTransition(ctx, settled)
 
 	s.publishSystemEvent(ctx, types.WebhookEventRefundSucceeded, req.RefundID)
+	postRefundJournal(ctx, s.ServiceParams, req.RefundID)
 	return nil
 }
 

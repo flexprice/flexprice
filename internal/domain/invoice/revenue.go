@@ -5,27 +5,15 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// LineNets is each line's revenue keyed by line ID: its amount less its line and invoice-level discounts, less its share
-// of the invoice's inclusive tax. The share is pro rata by net, with the rounding residual on the line with the largest
-// absolute net (ties by ID), so the result does not depend on line order; prepaid credits are settlement, not deducted.
+// LineNets is each line's net amount less its pro rata share of the invoice's inclusive tax, keyed by line ID.
 // e.g. lines netting 60 and 40 with 12 inclusive tax → 52.80 and 35.20.
 func (i *Invoice) LineNets(taxes []*taxapplied.TaxApplied) map[string]decimal.Decimal {
-	nets := make(map[string]decimal.Decimal, len(i.LineItems))
-	total := decimal.Zero
-	residualLine := ""
-	for _, li := range i.LineItems {
-		net := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
-		nets[li.ID] = net
-		total = total.Add(net)
-
-		largest := nets[residualLine].Abs()
-		if residualLine == "" || net.Abs().GreaterThan(largest) || (net.Abs().Equal(largest) && li.ID < residualLine) {
-			residualLine = li.ID
-		}
-	}
+	nets := lo.SliceToMap(i.LineItems, func(li *InvoiceLineItem) (string, decimal.Decimal) { return li.ID, li.NetAmount() })
 
 	inclusiveTax := decimal.Zero
 	for _, t := range taxes {
@@ -34,23 +22,17 @@ func (i *Invoice) LineNets(taxes []*taxapplied.TaxApplied) map[string]decimal.De
 			inclusiveTax = inclusiveTax.Add(t.TaxAmount)
 		}
 	}
-	if inclusiveTax.IsZero() || total.IsZero() {
+	if inclusiveTax.IsZero() {
 		return nets
 	}
 
-	// e.g. 12 tax over nets 60 and 40: the 40 line takes round(12 × 40/100) = 4.80, the largest line the remaining 7.20
-	allocated := decimal.Zero
-	for _, li := range i.LineItems {
-		if li.ID == residualLine {
-			continue
-		}
-		share := types.RoundToCurrencyPrecision(inclusiveTax.Mul(nets[li.ID]).Div(total), i.Currency)
-		nets[li.ID] = nets[li.ID].Sub(share)
-		allocated = allocated.Add(share)
-	}
-	nets[residualLine] = nets[residualLine].Sub(inclusiveTax.Sub(allocated))
+	shares := utils.AllocateProRata(nets, inclusiveTax, types.GetCurrencyPrecision(i.Currency))
+	return lo.MapValues(nets, func(net decimal.Decimal, id string) decimal.Decimal { return net.Sub(shares[id]) })
+}
 
-	return nets
+// NetAmount is the line's amount less its line and invoice-level discounts, before tax.
+func (li *InvoiceLineItem) NetAmount() decimal.Decimal {
+	return li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
 }
 
 // RevenueByCustomerRow represents a single row from the revenue aggregation query,

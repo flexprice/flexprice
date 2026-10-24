@@ -33,6 +33,11 @@ type RevRecEntityType string
 const (
 	RevRecEntityTypeSubscription         RevRecEntityType = "subscription"
 	RevRecEntityTypeSubscriptionLineItem RevRecEntityType = "subscription_line_item"
+	RevRecEntityTypeInvoice              RevRecEntityType = "invoice"
+	RevRecEntityTypeCreditNote           RevRecEntityType = "credit_note"
+	RevRecEntityTypePayment              RevRecEntityType = "payment"
+	RevRecEntityTypeRefund               RevRecEntityType = "refund"
+	RevRecEntityTypePOB                  RevRecEntityType = "pob"
 )
 
 // CatchUpMode is where a superseding schedule segment starts.

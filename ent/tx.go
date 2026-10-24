@@ -82,6 +82,10 @@ type Tx struct {
 	InvoiceLineItem *InvoiceLineItemClient
 	// InvoiceSequence is the client for interacting with the InvoiceSequence builders.
 	InvoiceSequence *InvoiceSequenceClient
+	// JournalEntry is the client for interacting with the JournalEntry builders.
+	JournalEntry *JournalEntryClient
+	// JournalLine is the client for interacting with the JournalLine builders.
+	JournalLine *JournalLineClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
 	// Payment is the client for interacting with the Payment builders.
@@ -309,6 +313,8 @@ func (tx *Tx) init() {
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
+	tx.JournalEntry = NewJournalEntryClient(tx.config)
+	tx.JournalLine = NewJournalLineClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)

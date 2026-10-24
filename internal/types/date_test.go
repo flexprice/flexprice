@@ -2886,7 +2886,7 @@ func TestNextBillingDate_FirstPeriodBounds(t *testing.T) {
 	anchorOffsetsDays := []int{0, 5, 17, 40, 100, 200, 300}
 
 	for _, tz := range zones {
-		loc := loadTimezone(tz)
+		loc := LoadTimezone(tz)
 		for _, period := range periods {
 			for unit := 1; unit <= 3; unit++ {
 				for day := 0; day < 730; day += 5 {
@@ -3048,7 +3048,7 @@ func TestNextBillingDate_ReturnsToAnchorDay(t *testing.T) {
 
 // An anchor before the start only sets the schedule; quarterly and half-yearly stay on the anchor's grid.
 func TestNextBillingDate_AnchorBeforeStart(t *testing.T) {
-	ist := loadTimezone("Asia/Kolkata")
+	ist := LoadTimezone("Asia/Kolkata")
 	utc := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 	start := utc(2026, 11, 16)
 	tests := []struct {

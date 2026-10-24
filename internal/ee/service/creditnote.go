@@ -707,6 +707,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 
 	// Publish webhook event after successful transaction
 	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	postCreditNoteJournal(ctx, s.ServiceParams, cn.ID)
 
 	s.Logger.Info(ctx, "credit note voided successfully",
 		"credit_note_id", id,
@@ -863,6 +864,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string, r
 
 	// Publish webhook event after successful transaction
 	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	postCreditNoteJournal(ctx, s.ServiceParams, cn.ID)
 
 	s.Logger.Info(ctx, "credit note processed successfully",
 		"credit_note_id", id,

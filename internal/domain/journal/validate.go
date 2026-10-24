@@ -6,17 +6,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// EntryLine is the part of a journal line ValidateEntry checks.
-type EntryLine interface {
-	Account() types.LedgerAccountKey
-	Direction() types.JournalDirection
-	Amount() decimal.Decimal
-}
-
-// ValidateEntry checks a journal entry balances: known accounts, positive amounts, at least one
-// debit and one credit, and Σ debit = Σ credit.
-// e.g. Dr accounts_receivable 118 / Cr deferred_revenue 100, Cr tax_payable 18 is valid.
-func ValidateEntry[L EntryLine](lines []L) error {
+// ValidateEntry checks known accounts, positive amounts, a debit and a credit, and Σ debit = Σ credit.
+// e.g. Dr AR 118 / Cr deferred 100, Cr tax 18 is valid.
+func ValidateEntry(lines []*Line) error {
 	debit, credit := decimal.Zero, decimal.Zero
 	var debits, credits int
 	for _, l := range lines {

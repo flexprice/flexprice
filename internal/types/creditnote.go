@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -118,6 +120,8 @@ type CreditNoteFilter struct {
 	InvoiceID        string             `json:"invoice_id,omitempty" form:"invoice_id"`
 	CreditNoteStatus []CreditNoteStatus `json:"credit_note_status,omitempty" form:"credit_note_status"`
 	CreditNoteType   CreditNoteType     `json:"credit_note_type,omitempty" form:"credit_note_type"`
+	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
+	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte"`
 }
 
 // NewCreditNoteFilter creates a new credit note filter with default options

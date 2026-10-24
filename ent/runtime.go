@@ -39,6 +39,8 @@ import (
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/journalentry"
+	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
@@ -1658,6 +1660,100 @@ func init() {
 	invoicesequence.DefaultUpdatedAt = invoicesequenceDescUpdatedAt.Default.(func() time.Time)
 	// invoicesequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	invoicesequence.UpdateDefaultUpdatedAt = invoicesequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	journalentryMixin := schema.JournalEntry{}.Mixin()
+	journalentryMixinFields0 := journalentryMixin[0].Fields()
+	_ = journalentryMixinFields0
+	journalentryMixinFields1 := journalentryMixin[1].Fields()
+	_ = journalentryMixinFields1
+	journalentryFields := schema.JournalEntry{}.Fields()
+	_ = journalentryFields
+	// journalentryDescTenantID is the schema descriptor for tenant_id field.
+	journalentryDescTenantID := journalentryMixinFields0[0].Descriptor()
+	// journalentry.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	journalentry.TenantIDValidator = journalentryDescTenantID.Validators[0].(func(string) error)
+	// journalentryDescStatus is the schema descriptor for status field.
+	journalentryDescStatus := journalentryMixinFields0[1].Descriptor()
+	// journalentry.DefaultStatus holds the default value on creation for the status field.
+	journalentry.DefaultStatus = journalentryDescStatus.Default.(string)
+	// journalentryDescCreatedAt is the schema descriptor for created_at field.
+	journalentryDescCreatedAt := journalentryMixinFields0[2].Descriptor()
+	// journalentry.DefaultCreatedAt holds the default value on creation for the created_at field.
+	journalentry.DefaultCreatedAt = journalentryDescCreatedAt.Default.(func() time.Time)
+	// journalentryDescUpdatedAt is the schema descriptor for updated_at field.
+	journalentryDescUpdatedAt := journalentryMixinFields0[3].Descriptor()
+	// journalentry.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	journalentry.DefaultUpdatedAt = journalentryDescUpdatedAt.Default.(func() time.Time)
+	// journalentry.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	journalentry.UpdateDefaultUpdatedAt = journalentryDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// journalentryDescEnvironmentID is the schema descriptor for environment_id field.
+	journalentryDescEnvironmentID := journalentryMixinFields1[0].Descriptor()
+	// journalentry.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	journalentry.DefaultEnvironmentID = journalentryDescEnvironmentID.Default.(string)
+	// journalentryDescEventType is the schema descriptor for event_type field.
+	journalentryDescEventType := journalentryFields[1].Descriptor()
+	// journalentry.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	journalentry.EventTypeValidator = journalentryDescEventType.Validators[0].(func(string) error)
+	// journalentryDescSourceEntityType is the schema descriptor for source_entity_type field.
+	journalentryDescSourceEntityType := journalentryFields[2].Descriptor()
+	// journalentry.SourceEntityTypeValidator is a validator for the "source_entity_type" field. It is called by the builders before save.
+	journalentry.SourceEntityTypeValidator = journalentryDescSourceEntityType.Validators[0].(func(string) error)
+	// journalentryDescSourceEntityID is the schema descriptor for source_entity_id field.
+	journalentryDescSourceEntityID := journalentryFields[3].Descriptor()
+	// journalentry.SourceEntityIDValidator is a validator for the "source_entity_id" field. It is called by the builders before save.
+	journalentry.SourceEntityIDValidator = journalentryDescSourceEntityID.Validators[0].(func(string) error)
+	// journalentryDescAccountingPeriodID is the schema descriptor for accounting_period_id field.
+	journalentryDescAccountingPeriodID := journalentryFields[5].Descriptor()
+	// journalentry.AccountingPeriodIDValidator is a validator for the "accounting_period_id" field. It is called by the builders before save.
+	journalentry.AccountingPeriodIDValidator = journalentryDescAccountingPeriodID.Validators[0].(func(string) error)
+	// journalentryDescCustomerID is the schema descriptor for customer_id field.
+	journalentryDescCustomerID := journalentryFields[7].Descriptor()
+	// journalentry.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	journalentry.CustomerIDValidator = journalentryDescCustomerID.Validators[0].(func(string) error)
+	// journalentryDescCurrency is the schema descriptor for currency field.
+	journalentryDescCurrency := journalentryFields[9].Descriptor()
+	// journalentry.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	journalentry.CurrencyValidator = journalentryDescCurrency.Validators[0].(func(string) error)
+	journallineMixin := schema.JournalLine{}.Mixin()
+	journallineMixinFields0 := journallineMixin[0].Fields()
+	_ = journallineMixinFields0
+	journallineMixinFields1 := journallineMixin[1].Fields()
+	_ = journallineMixinFields1
+	journallineFields := schema.JournalLine{}.Fields()
+	_ = journallineFields
+	// journallineDescTenantID is the schema descriptor for tenant_id field.
+	journallineDescTenantID := journallineMixinFields0[0].Descriptor()
+	// journalline.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	journalline.TenantIDValidator = journallineDescTenantID.Validators[0].(func(string) error)
+	// journallineDescStatus is the schema descriptor for status field.
+	journallineDescStatus := journallineMixinFields0[1].Descriptor()
+	// journalline.DefaultStatus holds the default value on creation for the status field.
+	journalline.DefaultStatus = journallineDescStatus.Default.(string)
+	// journallineDescCreatedAt is the schema descriptor for created_at field.
+	journallineDescCreatedAt := journallineMixinFields0[2].Descriptor()
+	// journalline.DefaultCreatedAt holds the default value on creation for the created_at field.
+	journalline.DefaultCreatedAt = journallineDescCreatedAt.Default.(func() time.Time)
+	// journallineDescUpdatedAt is the schema descriptor for updated_at field.
+	journallineDescUpdatedAt := journallineMixinFields0[3].Descriptor()
+	// journalline.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	journalline.DefaultUpdatedAt = journallineDescUpdatedAt.Default.(func() time.Time)
+	// journalline.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	journalline.UpdateDefaultUpdatedAt = journallineDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// journallineDescEnvironmentID is the schema descriptor for environment_id field.
+	journallineDescEnvironmentID := journallineMixinFields1[0].Descriptor()
+	// journalline.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	journalline.DefaultEnvironmentID = journallineDescEnvironmentID.Default.(string)
+	// journallineDescJournalEntryID is the schema descriptor for journal_entry_id field.
+	journallineDescJournalEntryID := journallineFields[1].Descriptor()
+	// journalline.JournalEntryIDValidator is a validator for the "journal_entry_id" field. It is called by the builders before save.
+	journalline.JournalEntryIDValidator = journallineDescJournalEntryID.Validators[0].(func(string) error)
+	// journallineDescAccount is the schema descriptor for account field.
+	journallineDescAccount := journallineFields[2].Descriptor()
+	// journalline.AccountValidator is a validator for the "account" field. It is called by the builders before save.
+	journalline.AccountValidator = journallineDescAccount.Validators[0].(func(string) error)
+	// journallineDescDirection is the schema descriptor for direction field.
+	journallineDescDirection := journallineFields[3].Descriptor()
+	// journalline.DirectionValidator is a validator for the "direction" field. It is called by the builders before save.
+	journalline.DirectionValidator = journallineDescDirection.Validators[0].(func(string) error)
 	meterMixin := schema.Meter{}.Mixin()
 	meterMixinFields0 := meterMixin[0].Fields()
 	_ = meterMixinFields0

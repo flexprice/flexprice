@@ -21,6 +21,7 @@ func notifyInvoiceFinalized(ctx context.Context, params ServiceParams, invoiceID
 		func(ctx context.Context, rs interfaces.RevenueService) error {
 			return rs.FinalizeSubscriptionPeriod(ctx, invoiceID)
 		})
+	postInvoiceJournal(ctx, params, invoiceID)
 }
 
 // notifyInvoiceVoided is the void-side twin of notifyInvoiceFinalized.
@@ -30,6 +31,51 @@ func notifyInvoiceVoided(ctx context.Context, params ServiceParams, invoiceID st
 		func(ctx context.Context, rs interfaces.RevenueService) error {
 			return rs.RevertInvoiceFacts(ctx, invoiceID)
 		})
+	postInvoiceJournal(ctx, params, invoiceID)
+}
+
+// postInvoiceJournal posts the invoice's journal entries after commit.
+func postInvoiceJournal(ctx context.Context, params ServiceParams, invoiceID string) {
+	asyncRevRecUpdate(ctx, params, "invoice journal", invoiceID, func(ctx context.Context) error {
+		inv, err := params.InvoiceRepo.Get(ctx, invoiceID)
+		if err != nil {
+			return err
+		}
+		return params.JournalService.PostInvoice(ctx, inv)
+	})
+}
+
+// postPaymentJournal posts the payment's journal entries after commit.
+func postPaymentJournal(ctx context.Context, params ServiceParams, paymentID string) {
+	asyncRevRecUpdate(ctx, params, "payment journal", paymentID, func(ctx context.Context) error {
+		p, err := params.PaymentRepo.Get(ctx, paymentID)
+		if err != nil {
+			return err
+		}
+		return params.JournalService.PostPayment(ctx, p)
+	})
+}
+
+// postRefundJournal posts the refund's journal entry after commit.
+func postRefundJournal(ctx context.Context, params ServiceParams, refundID string) {
+	asyncRevRecUpdate(ctx, params, "refund journal", refundID, func(ctx context.Context) error {
+		r, err := params.RefundRepo.Get(ctx, refundID)
+		if err != nil {
+			return err
+		}
+		return params.JournalService.PostRefund(ctx, r)
+	})
+}
+
+// postCreditNoteJournal posts the credit note's journal entries after commit.
+func postCreditNoteJournal(ctx context.Context, params ServiceParams, creditNoteID string) {
+	asyncRevRecUpdate(ctx, params, "credit note journal", creditNoteID, func(ctx context.Context) error {
+		cn, err := params.CreditNoteRepo.Get(ctx, creditNoteID)
+		if err != nil {
+			return err
+		}
+		return params.JournalService.PostCreditNote(ctx, cn)
+	})
 }
 
 // asyncRevenueFactsUpdate runs one revenue_facts update detached from the

@@ -49,6 +49,8 @@ import (
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/journalentry"
+	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
@@ -157,6 +159,10 @@ type Client struct {
 	InvoiceLineItem *InvoiceLineItemClient
 	// InvoiceSequence is the client for interacting with the InvoiceSequence builders.
 	InvoiceSequence *InvoiceSequenceClient
+	// JournalEntry is the client for interacting with the JournalEntry builders.
+	JournalEntry *JournalEntryClient
+	// JournalLine is the client for interacting with the JournalLine builders.
+	JournalLine *JournalLineClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
 	// Payment is the client for interacting with the Payment builders.
@@ -264,6 +270,8 @@ func (c *Client) init() {
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
+	c.JournalEntry = NewJournalEntryClient(c.config)
+	c.JournalLine = NewJournalLineClient(c.config)
 	c.Meter = NewMeterClient(c.config)
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
@@ -421,6 +429,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Invoice:                          NewInvoiceClient(cfg),
 		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
+		JournalEntry:                     NewJournalEntryClient(cfg),
+		JournalLine:                      NewJournalLineClient(cfg),
 		Meter:                            NewMeterClient(cfg),
 		Payment:                          NewPaymentClient(cfg),
 		PaymentAttempt:                   NewPaymentAttemptClient(cfg),
@@ -505,6 +515,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Invoice:                          NewInvoiceClient(cfg),
 		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
+		JournalEntry:                     NewJournalEntryClient(cfg),
+		JournalLine:                      NewJournalLineClient(cfg),
 		Meter:                            NewMeterClient(cfg),
 		Payment:                          NewPaymentClient(cfg),
 		PaymentAttempt:                   NewPaymentAttemptClient(cfg),
@@ -572,8 +584,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
+		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.JournalEntry, c.JournalLine,
+		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
 		c.PerformanceObligationAssociation, c.Plan, c.Price, c.PriceUnit, c.Product,
 		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
@@ -596,8 +608,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken, c.IncomingWebhookEvent,
-		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
+		c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.JournalEntry, c.JournalLine,
+		c.Meter, c.Payment, c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
 		c.PerformanceObligationAssociation, c.Plan, c.Price, c.PriceUnit, c.Product,
 		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
 		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
@@ -680,6 +692,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InvoiceLineItem.mutate(ctx, m)
 	case *InvoiceSequenceMutation:
 		return c.InvoiceSequence.mutate(ctx, m)
+	case *JournalEntryMutation:
+		return c.JournalEntry.mutate(ctx, m)
+	case *JournalLineMutation:
+		return c.JournalLine.mutate(ctx, m)
 	case *MeterMutation:
 		return c.Meter.mutate(ctx, m)
 	case *PaymentMutation:
@@ -5621,6 +5637,272 @@ func (c *InvoiceSequenceClient) mutate(ctx context.Context, m *InvoiceSequenceMu
 	}
 }
 
+// JournalEntryClient is a client for the JournalEntry schema.
+type JournalEntryClient struct {
+	config
+}
+
+// NewJournalEntryClient returns a client for the JournalEntry from the given config.
+func NewJournalEntryClient(c config) *JournalEntryClient {
+	return &JournalEntryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `journalentry.Hooks(f(g(h())))`.
+func (c *JournalEntryClient) Use(hooks ...Hook) {
+	c.hooks.JournalEntry = append(c.hooks.JournalEntry, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `journalentry.Intercept(f(g(h())))`.
+func (c *JournalEntryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.JournalEntry = append(c.inters.JournalEntry, interceptors...)
+}
+
+// Create returns a builder for creating a JournalEntry entity.
+func (c *JournalEntryClient) Create() *JournalEntryCreate {
+	mutation := newJournalEntryMutation(c.config, OpCreate)
+	return &JournalEntryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of JournalEntry entities.
+func (c *JournalEntryClient) CreateBulk(builders ...*JournalEntryCreate) *JournalEntryCreateBulk {
+	return &JournalEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *JournalEntryClient) MapCreateBulk(slice any, setFunc func(*JournalEntryCreate, int)) *JournalEntryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &JournalEntryCreateBulk{err: fmt.Errorf("calling to JournalEntryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*JournalEntryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &JournalEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for JournalEntry.
+func (c *JournalEntryClient) Update() *JournalEntryUpdate {
+	mutation := newJournalEntryMutation(c.config, OpUpdate)
+	return &JournalEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *JournalEntryClient) UpdateOne(_m *JournalEntry) *JournalEntryUpdateOne {
+	mutation := newJournalEntryMutation(c.config, OpUpdateOne, withJournalEntry(_m))
+	return &JournalEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *JournalEntryClient) UpdateOneID(id string) *JournalEntryUpdateOne {
+	mutation := newJournalEntryMutation(c.config, OpUpdateOne, withJournalEntryID(id))
+	return &JournalEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for JournalEntry.
+func (c *JournalEntryClient) Delete() *JournalEntryDelete {
+	mutation := newJournalEntryMutation(c.config, OpDelete)
+	return &JournalEntryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *JournalEntryClient) DeleteOne(_m *JournalEntry) *JournalEntryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *JournalEntryClient) DeleteOneID(id string) *JournalEntryDeleteOne {
+	builder := c.Delete().Where(journalentry.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &JournalEntryDeleteOne{builder}
+}
+
+// Query returns a query builder for JournalEntry.
+func (c *JournalEntryClient) Query() *JournalEntryQuery {
+	return &JournalEntryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeJournalEntry},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a JournalEntry entity by its id.
+func (c *JournalEntryClient) Get(ctx context.Context, id string) (*JournalEntry, error) {
+	return c.Query().Where(journalentry.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *JournalEntryClient) GetX(ctx context.Context, id string) *JournalEntry {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *JournalEntryClient) Hooks() []Hook {
+	return c.hooks.JournalEntry
+}
+
+// Interceptors returns the client interceptors.
+func (c *JournalEntryClient) Interceptors() []Interceptor {
+	return c.inters.JournalEntry
+}
+
+func (c *JournalEntryClient) mutate(ctx context.Context, m *JournalEntryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&JournalEntryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&JournalEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&JournalEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&JournalEntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown JournalEntry mutation op: %q", m.Op())
+	}
+}
+
+// JournalLineClient is a client for the JournalLine schema.
+type JournalLineClient struct {
+	config
+}
+
+// NewJournalLineClient returns a client for the JournalLine from the given config.
+func NewJournalLineClient(c config) *JournalLineClient {
+	return &JournalLineClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `journalline.Hooks(f(g(h())))`.
+func (c *JournalLineClient) Use(hooks ...Hook) {
+	c.hooks.JournalLine = append(c.hooks.JournalLine, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `journalline.Intercept(f(g(h())))`.
+func (c *JournalLineClient) Intercept(interceptors ...Interceptor) {
+	c.inters.JournalLine = append(c.inters.JournalLine, interceptors...)
+}
+
+// Create returns a builder for creating a JournalLine entity.
+func (c *JournalLineClient) Create() *JournalLineCreate {
+	mutation := newJournalLineMutation(c.config, OpCreate)
+	return &JournalLineCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of JournalLine entities.
+func (c *JournalLineClient) CreateBulk(builders ...*JournalLineCreate) *JournalLineCreateBulk {
+	return &JournalLineCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *JournalLineClient) MapCreateBulk(slice any, setFunc func(*JournalLineCreate, int)) *JournalLineCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &JournalLineCreateBulk{err: fmt.Errorf("calling to JournalLineClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*JournalLineCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &JournalLineCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for JournalLine.
+func (c *JournalLineClient) Update() *JournalLineUpdate {
+	mutation := newJournalLineMutation(c.config, OpUpdate)
+	return &JournalLineUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *JournalLineClient) UpdateOne(_m *JournalLine) *JournalLineUpdateOne {
+	mutation := newJournalLineMutation(c.config, OpUpdateOne, withJournalLine(_m))
+	return &JournalLineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *JournalLineClient) UpdateOneID(id string) *JournalLineUpdateOne {
+	mutation := newJournalLineMutation(c.config, OpUpdateOne, withJournalLineID(id))
+	return &JournalLineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for JournalLine.
+func (c *JournalLineClient) Delete() *JournalLineDelete {
+	mutation := newJournalLineMutation(c.config, OpDelete)
+	return &JournalLineDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *JournalLineClient) DeleteOne(_m *JournalLine) *JournalLineDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *JournalLineClient) DeleteOneID(id string) *JournalLineDeleteOne {
+	builder := c.Delete().Where(journalline.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &JournalLineDeleteOne{builder}
+}
+
+// Query returns a query builder for JournalLine.
+func (c *JournalLineClient) Query() *JournalLineQuery {
+	return &JournalLineQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeJournalLine},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a JournalLine entity by its id.
+func (c *JournalLineClient) Get(ctx context.Context, id string) (*JournalLine, error) {
+	return c.Query().Where(journalline.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *JournalLineClient) GetX(ctx context.Context, id string) *JournalLine {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *JournalLineClient) Hooks() []Hook {
+	return c.hooks.JournalLine
+}
+
+// Interceptors returns the client interceptors.
+func (c *JournalLineClient) Interceptors() []Interceptor {
+	return c.inters.JournalLine
+}
+
+func (c *JournalLineClient) mutate(ctx context.Context, m *JournalLineMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&JournalLineCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&JournalLineUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&JournalLineUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&JournalLineDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown JournalLine mutation op: %q", m.Op())
+	}
+}
+
 // MeterClient is a client for the Meter schema.
 type MeterClient struct {
 	config
@@ -10058,12 +10340,12 @@ type (
 		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
 		HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod,
-		PerformanceObligation, PerformanceObligationAssociation, Plan, Price,
-		PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		InvoiceSequence, JournalEntry, JournalLine, Meter, Payment, PaymentAttempt,
+		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
+		Price, PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret,
+		Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -10074,12 +10356,12 @@ type (
 		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, FXRate, Feature, Group,
 		HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, PaymentMethod,
-		PerformanceObligation, PerformanceObligationAssociation, Plan, Price,
-		PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret, Settings,
-		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
-		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
-		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		InvoiceSequence, JournalEntry, JournalLine, Meter, Payment, PaymentAttempt,
+		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
+		Price, PriceUnit, Product, Refund, RevenueFact, ScheduledTask, Secret,
+		Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
+		SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task, TaxApplied,
+		TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

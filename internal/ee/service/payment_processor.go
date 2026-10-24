@@ -183,6 +183,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
+		postPaymentJournal(ctx, p.ServiceParams, paymentObj.ID)
 		if err := p.handlePostProcessing(ctx, paymentObj); err != nil {
 			p.Logger.Error(ctx, "failed to handle post-processing", "error", err, "payment_id", paymentObj.ID)
 			// Note: We don't return this error as the payment itself was successful
