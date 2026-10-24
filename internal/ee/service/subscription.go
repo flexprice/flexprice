@@ -117,6 +117,19 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
+	if len(req.Commitments) > 0 {
+		enabled, enabledErr := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
+		if enabledErr != nil {
+			return nil, enabledErr
+		}
+
+		if !enabled {
+			return nil, ierr.NewError("commitments are not enabled for this environment").
+				WithHint("Enable the commitments_v2 setting").
+				Mark(ierr.ErrInvalidOperation)
+		}
+	}
+
 	// Get and validate customer
 	var customer *customer.Customer
 	var err error
@@ -413,6 +426,13 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 	if len(req.OverrideEntitlements) > 0 {
 		if err = s.ProcessSubscriptionEntitlementOverrides(ctx, sub, req.OverrideEntitlements); err != nil {
+			return nil, err
+		}
+	}
+	commitmentService := &commitmentService{ServiceParams: s.ServiceParams}
+	for _, commitmentReq := range req.Commitments {
+		commitmentReq.SubscriptionID = sub.ID
+		if _, err = commitmentService.createInline(ctx, commitmentReq); err != nil {
 			return nil, err
 		}
 	}

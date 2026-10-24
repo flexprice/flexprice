@@ -1167,6 +1167,145 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/analytics/reports": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "List financial reports",
+        "description": "Returns the catalog of reports with their allowed shapes, dimensions and grains.",
+        "operationId": "listAnalyticsReports",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportCatalogResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Reports not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/analytics/reports/{key}/query": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Run a financial report",
+        "description": "Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.",
+        "operationId": "runAnalyticsReport",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Report key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Report query request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsQueryResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Reports not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Report not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/analytics/revenue": {
       "post": {
         "tags": [
@@ -1238,6 +1377,62 @@
       }
     },
     "/analytics/views": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "List analytics views",
+        "description": "Lists saved views, optionally filtered by family.",
+        "operationId": "listAnalyticsViews",
+        "parameters": [
+          {
+            "name": "family",
+            "in": "query",
+            "description": "Filter by view family",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListViewsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      },
       "post": {
         "tags": [
           "Analytics"
@@ -1294,6 +1489,195 @@
           }
         ],
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/analytics/views/{id}": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get an analytics view",
+        "description": "Returns a saved view by ID.",
+        "operationId": "getAnalyticsView",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "View ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "View not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      },
+      "put": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Update an analytics view",
+        "description": "Replaces the name and definition of a saved view.",
+        "operationId": "updateAnalyticsView",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "View ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "View request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "View not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      },
+      "delete": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Delete an analytics view",
+        "description": "Deletes a saved view by ID.",
+        "operationId": "deleteAnalyticsView",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "View ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "content": {}
+          },
+          "404": {
+            "description": "View not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write"
       }
     },
     "/analytics/views/{id}/query": {
@@ -1616,6 +2000,422 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/commitments": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Create commitment",
+        "description": "Creates a commitment on a subscription: a minimum spend or quantity over a term, with optional committed and overage rates.",
+        "operationId": "createCommitment",
+        "requestBody": {
+          "description": "Commitment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/preview": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Preview commitment",
+        "description": "Validates a commitment and returns its computed value without creating it.",
+        "operationId": "previewCommitment",
+        "requestBody": {
+          "description": "Commitment",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/search": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Query commitments",
+        "description": "Lists commitments with filtering and sorting. Returns a paginated list.",
+        "operationId": "queryCommitment",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/commitment.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCommitmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/commitments/{id}": {
+      "get": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Get commitment",
+        "description": "Loads a single commitment by ID.",
+        "operationId": "getCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Update commitment",
+        "description": "Updates the descriptive fields of a commitment. Economic terms are immutable.",
+        "operationId": "updateCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Commitment update",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCommitmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "commitment"
+      }
+    },
+    "/commitments/{id}/terminate": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Terminate commitment",
+        "description": "Ends a commitment early, effective at the given time or now.",
+        "operationId": "terminateCommitment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Termination request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminateCommitmentRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "delete",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/costs": {
@@ -17289,6 +18089,20 @@
           }
         }
       },
+      "ListCommitmentsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListCouponsResponse": {
         "type": "object",
         "properties": {
@@ -17628,11 +18442,28 @@
         ],
         "type": "object",
         "properties": {
+          "compare": {
+            "type": "string",
+            "enum": [
+              "previous_period",
+              "previous_year"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
           "dimensions": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "display": {
+            "type": "string",
+            "enum": [
+              "chart",
+              "table"
+            ]
           },
           "family": {
             "$ref": "#/components/schemas/types.Family"
@@ -17669,6 +18500,93 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/analytics.Variable"
+            }
+          }
+        }
+      },
+      "commitment.Filter": {
+        "type": "object",
+        "properties": {
+          "active_from": {
+            "type": "string",
+            "description": "ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo)."
+          },
+          "active_to": {
+            "type": "string"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "scope_entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope_entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CommitmentStatus"
+            }
+          },
+          "subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -18707,7 +19625,19 @@
       "AnalyticsQueryMeta": {
         "type": "object",
         "properties": {
+          "from": {
+            "type": "string"
+          },
+          "prev_from": {
+            "type": "string"
+          },
+          "prev_to": {
+            "type": "string"
+          },
           "query_source": {
+            "type": "string"
+          },
+          "to": {
             "type": "string"
           }
         }
@@ -19429,6 +20359,191 @@
           }
         }
       },
+      "CommitmentCancellationFee": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentCancellationFeeType"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitmentResponse": {
+        "type": "object",
+        "properties": {
+          "active_windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ActiveWindow"
+            }
+          },
+          "binding": {
+            "type": "boolean"
+          },
+          "collection_method": {
+            "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
+          },
+          "commitment_status": {
+            "$ref": "#/components/schemas/types.CommitmentStatus"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "committed_price_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "instalment_invoicing": {
+            "type": "string"
+          },
+          "invoice_description": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/types.CommitmentMeasurement"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string"
+          },
+          "on_early_termination": {
+            "$ref": "#/components/schemas/types.CommitmentEarlyTermination"
+          },
+          "overage_price_id": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "scope_entity_id": {
+            "type": "string"
+          },
+          "scope_entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "terminated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "termination_invoice_id": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "total_amount": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitmentScopeInput": {
+        "required": [
+          "entity_id",
+          "entity_type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.CommitmentScopeType"
+          }
+        }
+      },
+      "CommitmentUsageBreakdown": {
+        "type": "object",
+        "properties": {
+          "billed_amount": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "string"
+          },
+          "commitment_id": {
+            "type": "string"
+          },
+          "invoice_label": {
+            "type": "string"
+          },
+          "period_amount": {
+            "type": "string"
+          },
+          "unused": {
+            "type": "string"
+          },
+          "used": {
+            "type": "string"
+          },
+          "value_unused": {
+            "type": "string"
+          },
+          "value_within": {
+            "type": "string"
+          }
+        }
+      },
       "ConfigurationDetails": {
         "type": "object",
         "properties": {
@@ -20032,6 +21147,87 @@
             "$ref": "#/components/schemas/types.CheckoutPaymentProviderConfig"
           },
           "success_url": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateCommitmentRequest": {
+        "required": [
+          "end_date",
+          "measurement",
+          "name",
+          "scope",
+          "start_date",
+          "subscription_id",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "active_windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ActiveWindow"
+            }
+          },
+          "binding": {
+            "type": "boolean",
+            "description": "default false"
+          },
+          "collection_method": {
+            "$ref": "#/components/schemas/types.CommitmentCollectionMethod"
+          },
+          "committed_rate": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "invoice_description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "measurement": {
+            "$ref": "#/components/schemas/types.CommitmentMeasurement"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "overage_rate": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/CommitmentScopeInput"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "value": {
             "type": "string"
           }
         }
@@ -21292,6 +22488,13 @@
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments are created with the subscription; their subscription_id is set server-side.",
+            "items": {
+              "$ref": "#/components/schemas/CreateCommitmentRequest"
+            }
+          },
           "coupons": {
             "type": "array",
             "description": "Deprecated: use SubscriptionCoupons instead.",
@@ -21634,6 +22837,7 @@
             "$ref": "#/components/schemas/analytics.ViewDefinition"
           },
           "name": {
+            "maxLength": 255,
             "type": "string"
           }
         }
@@ -23387,6 +24591,13 @@
             "type": "number",
             "description": "Amount of commitment used"
           },
+          "commitments": {
+            "type": "array",
+            "description": "Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentUsageBreakdown"
+            }
+          },
           "currency": {
             "type": "string"
           },
@@ -23915,6 +25126,10 @@
           },
           "amount": {
             "type": "string"
+          },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -24702,6 +25917,17 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListViewsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViewResponse"
+            }
           }
         }
       },
@@ -25854,6 +27080,198 @@
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "ReportCatalogEntry": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/types.ReportCategory"
+          },
+          "default_shape": {
+            "type": "string",
+            "enum": [
+              "timeseries",
+              "breakdown",
+              "scalar"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportDimension"
+            }
+          },
+          "grains": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ]
+            }
+          },
+          "improvement": {
+            "$ref": "#/components/schemas/types.ImprovementDirection"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/types.ReportKind"
+          },
+          "max_range_days": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shapes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "timeseries",
+                "breakdown",
+                "scalar"
+              ]
+            }
+          },
+          "supports_compare": {
+            "type": "boolean"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/types.ReportValueType"
+          },
+          "variant_label": {
+            "type": "string"
+          },
+          "variant_of": {
+            "type": "string"
+          }
+        }
+      },
+      "ReportCatalogResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportCatalogEntry"
+            }
+          }
+        }
+      },
+      "ReportDimension": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "ReportFilter": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "in"
+            ]
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReportQueryRequest": {
+        "required": [
+          "range",
+          "shape"
+        ],
+        "type": "object",
+        "properties": {
+          "compare": {
+            "type": "string",
+            "enum": [
+              "previous_period",
+              "previous_year"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportFilter"
+            }
+          },
+          "grain": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "range": {
+            "type": "string",
+            "example": "2026-09-01..2026-10-01"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "timeseries",
+              "breakdown",
+              "scalar"
+            ]
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportSort"
+            }
+          }
+        }
+      },
+      "ReportSort": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "field": {
             "type": "string"
           }
         }
@@ -28497,6 +29915,21 @@
           }
         }
       },
+      "TerminateCommitmentRequest": {
+        "type": "object",
+        "properties": {
+          "bill_remaining": {
+            "type": "boolean"
+          },
+          "cancellation_fee": {
+            "$ref": "#/components/schemas/CommitmentCancellationFee"
+          },
+          "effective_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "TopUpCoupon": {
         "required": [
           "coupon_code"
@@ -28659,6 +30092,26 @@
         "properties": {
           "config": {
             "$ref": "#/components/schemas/types.AlertSettings"
+          }
+        }
+      },
+      "UpdateCommitmentRequest": {
+        "type": "object",
+        "properties": {
+          "invoice_description": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "invoice_label": {
+            "maxLength": 255,
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "maxLength": 255,
+            "type": "string"
           }
         }
       },
@@ -29801,6 +31254,13 @@
       "ViewResponse": {
         "type": "object",
         "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
           "definition": {
             "$ref": "#/components/schemas/analytics.ViewDefinition"
           },
@@ -29809,6 +31269,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           },
           "version": {
             "type": "integer"
@@ -30648,6 +32112,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/types.CouponRef"
+            }
+          },
+          "price_overrides": {
+            "type": "array",
+            "description": "Price overrides minted at execute time; completion repoints the line items instead of minting again.",
+            "items": {
+              "$ref": "#/components/schemas/types.AddonPriceOverrideRef"
             }
           },
           "proration_behavior": {
@@ -32374,11 +33845,13 @@
         "type": "string",
         "enum": [
           "usage",
-          "billing"
+          "billing",
+          "report"
         ],
         "x-enum-varnames": [
           "FamilyUsage",
-          "FamilyBilling"
+          "FamilyBilling",
+          "FamilyReport"
         ],
         "x-speakeasy-name-override": "Family"
       },
@@ -33018,12 +34491,36 @@
         "enum": [
           "usage_quantity",
           "event_count",
-          "invoice_total"
+          "events_volume",
+          "invoice_total",
+          "total_receivables",
+          "receivables_aging",
+          "days_to_pay",
+          "arpu",
+          "arpu_paid",
+          "credit_consumption",
+          "credit_topups",
+          "net_billing",
+          "invoice_total_issued",
+          "net_billing_issued",
+          "active_customers"
         ],
         "x-enum-varnames": [
           "MetricUsageQuantity",
           "MetricEventCount",
-          "MetricInvoiceTotal"
+          "MetricEventsVolume",
+          "MetricInvoiceTotal",
+          "MetricTotalReceivables",
+          "MetricReceivablesAging",
+          "MetricDaysToPay",
+          "MetricARPU",
+          "MetricARPUPaid",
+          "MetricCreditConsumption",
+          "MetricCreditTopups",
+          "MetricNetBilling",
+          "MetricInvoiceTotalIssued",
+          "MetricNetBillingIssued",
+          "MetricActiveCustomers"
         ],
         "x-speakeasy-name-override": "Metric"
       },
@@ -35551,6 +37048,10 @@
           "amount": {
             "type": "string"
           },
+          "commitment_id": {
+            "type": "string",
+            "description": "commitment_id links this line item to the commitment it bills."
+          },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
           },
@@ -36214,6 +37715,125 @@
           }
         }
       },
+      "types.ActiveWindow": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          }
+        },
+        "x-speakeasy-name-override": "ActiveWindow"
+      },
+      "types.AddonPriceOverrideRef": {
+        "type": "object",
+        "properties": {
+          "override_price_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "AddonPriceOverrideRef"
+      },
+      "types.CommitmentCancellationFeeType": {
+        "type": "string",
+        "enum": [
+          "flat",
+          "percent_of_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCancellationFeeFlat",
+          "CommitmentCancellationFeePercentOfRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentCancellationFeeType"
+      },
+      "types.CommitmentCollectionMethod": {
+        "type": "string",
+        "enum": [
+          "per_period",
+          "billing_terms"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCollectionPerPeriod",
+          "CommitmentCollectionBillingTerms"
+        ],
+        "x-speakeasy-name-override": "CommitmentCollectionMethod"
+      },
+      "types.CommitmentEarlyTermination": {
+        "type": "string",
+        "enum": [
+          "forfeit",
+          "credit_note",
+          "bill_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentTerminationForfeit",
+          "CommitmentTerminationCreditNote",
+          "CommitmentTerminationBillRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentEarlyTermination"
+      },
+      "types.CommitmentMeasurement": {
+        "type": "string",
+        "enum": [
+          "billing_period",
+          "window"
+        ],
+        "x-enum-varnames": [
+          "CommitmentMeasurementBillingPeriod",
+          "CommitmentMeasurementWindow"
+        ],
+        "x-speakeasy-name-override": "CommitmentMeasurement"
+      },
+      "types.CommitmentScopeType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "group",
+          "meter",
+          "price"
+        ],
+        "x-enum-varnames": [
+          "CommitmentScopeSubscription",
+          "CommitmentScopeGroup",
+          "CommitmentScopeMeter",
+          "CommitmentScopePrice"
+        ],
+        "x-speakeasy-name-override": "CommitmentScopeType"
+      },
+      "types.CommitmentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "ended",
+          "terminated"
+        ],
+        "x-enum-varnames": [
+          "CommitmentStatusActive",
+          "CommitmentStatusEnded",
+          "CommitmentStatusTerminated"
+        ],
+        "x-speakeasy-name-override": "CommitmentStatus"
+      },
+      "types.ImprovementDirection": {
+        "type": "string",
+        "enum": [
+          "higher",
+          "lower"
+        ],
+        "x-enum-varnames": [
+          "ImprovementHigher",
+          "ImprovementLower"
+        ],
+        "x-speakeasy-name-override": "ImprovementDirection"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -36235,6 +37855,52 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.ReportCategory": {
+        "type": "string",
+        "enum": [
+          "billing",
+          "receivables",
+          "customers",
+          "credits",
+          "usage"
+        ],
+        "x-enum-varnames": [
+          "ReportCategoryBilling",
+          "ReportCategoryReceivables",
+          "ReportCategoryCustomers",
+          "ReportCategoryCredits",
+          "ReportCategoryUsage"
+        ],
+        "x-speakeasy-name-override": "ReportCategory"
+      },
+      "types.ReportKind": {
+        "type": "string",
+        "enum": [
+          "flow",
+          "ratio",
+          "snapshot"
+        ],
+        "x-enum-varnames": [
+          "ReportKindFlow",
+          "ReportKindRatio",
+          "ReportKindSnapshot"
+        ],
+        "x-speakeasy-name-override": "ReportKind"
+      },
+      "types.ReportValueType": {
+        "type": "string",
+        "enum": [
+          "money",
+          "count",
+          "days"
+        ],
+        "x-enum-varnames": [
+          "ReportValueTypeMoney",
+          "ReportValueTypeCount",
+          "ReportValueTypeDays"
+        ],
+        "x-speakeasy-name-override": "ReportValueType"
       },
       "types.TenantInternalStatus": {
         "type": "string",
