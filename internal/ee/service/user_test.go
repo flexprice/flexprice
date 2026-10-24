@@ -1564,3 +1564,25 @@ func (s *UserRolesSuite) activeAPIKeys(details map[string]any) map[string]dto.Ac
 	s.Require().NoError(json.Unmarshal(raw, &byEnv))
 	return byEnv
 }
+
+func (s *UserServiceSuite) TestSuperAdminChecksRejectServiceAccounts() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "sa-actor")
+	ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeServiceAccount))
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+	s.Run("update_roles_denied", func() {
+		_, err := s.userService.UpdateUserRoles(ctx, "user-1", &dto.UpdateUserRolesRequest{
+			Roles: []string{types.RoleAllReader.String()},
+		})
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err))
+	})
+
+	s.Run("remove_user_denied", func() {
+		err := s.userService.RemoveUser(ctx, "user-1")
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err))
+	})
+}
