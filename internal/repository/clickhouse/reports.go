@@ -49,6 +49,9 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cach
 		return r, nil
 	}
 	opts := cfg.ClickHouse.GetClientOptions()
+	if r.cfg.Address != "" {
+		opts.Addr = []string{r.cfg.Address}
+	}
 	opts.Auth = clickhouse_go.Auth{
 		Database: r.cfg.Database,
 		Username: r.cfg.Username,

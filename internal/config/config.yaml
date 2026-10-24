@@ -175,6 +175,8 @@ clickhouse:
 
 reports:
   # Empty database or username disables reports.
+  # Empty address falls back to clickhouse.address.
+  address: ""
   # Login must allow setting changes.
   database: ""
   # Empty falls back to database.
