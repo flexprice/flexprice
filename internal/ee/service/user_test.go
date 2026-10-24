@@ -430,9 +430,39 @@ func (s *UserServiceSuite) TestInviteUser_RoleAssignment() {
 
 			s.Error(err, "caller %v must not be able to invite", callerRoles)
 			s.Nil(created)
-			s.Contains(err.Error(), "only super_admin can invite users")
+			s.Contains(err.Error(), "only super_admin users can invite users")
 			s.Zero(authRepo.Count(), "a refused invite must not leave auth material behind")
 		}
+	})
+
+	s.Run("service account with super_admin role cannot invite", func() {
+		ctx := testutil.SetupContext()
+		ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+		ctx = context.WithValue(ctx, types.CtxUserID, "sa-1")
+		ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeServiceAccount))
+		ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+		tenantRepo := testutil.NewInMemoryTenantStore()
+		_ = tenantRepo.Create(ctx, &tenant.Tenant{ID: types.DefaultTenantID, Name: "Test Tenant"})
+		authRepo := testutil.NewInMemoryAuthRepository()
+
+		svc := &userService{
+			userRepo:    testutil.NewInMemoryUserStore(),
+			tenantRepo:  tenantRepo,
+			authRepo:    authRepo,
+			rbacService: rbacSvc,
+		}
+
+		created, _, err := svc.InviteUser(ctx, &dto.CreateUserRequest{
+			Type:  types.UserTypeUser,
+			Email: "invitee@example.com",
+			Roles: []string{types.RoleAllReader.String()},
+		}, "sa-1")
+
+		s.Require().Error(err)
+		s.Nil(created)
+		s.True(ierr.IsPermissionDenied(err))
+		s.Zero(authRepo.Count())
 	})
 
 	for _, tc := range testCases {

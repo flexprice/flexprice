@@ -185,7 +185,7 @@ func NewRouter(
 		user := v1Private.Group("/users")
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
-			user.POST("", write(types.EntityUser, types.ActionWrite), handlers.User.CreateUser)
+			user.POST("", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.CreateUser)
 			user.PUT("/me", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateUser)
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)
 			user.PUT("/:id/roles", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.UpdateUserRoles)

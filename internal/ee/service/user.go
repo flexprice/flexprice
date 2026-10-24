@@ -463,10 +463,9 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 
 	var userID string
 
-	// Admitting someone to the tenant is an administrative act, so it is
-	// restricted to super_admins regardless of which role the invitee is given.
-	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
-		return nil, nil, ierr.NewError("only super_admin can invite users").
+	// Service accounts must not invite.
+	if !types.IsSuperAdminUser(ctx) {
+		return nil, nil, ierr.NewError("only super_admin users can invite users").
 			WithHint("Ask a tenant super_admin to invite this user").
 			Mark(ierr.ErrPermissionDenied)
 	}
