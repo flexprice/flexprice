@@ -39,9 +39,6 @@ type ProcessedEventRepository interface {
 	// Check for duplicate event using unique_hash
 	IsDuplicate(ctx context.Context, subscriptionID, meterID string, periodID uint64, uniqueHash string) (bool, error)
 
-	// Get free and billable quantity to date for a subscription line item
-	GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error)
-
 	// Get usage cost to date for a customer's subscription in a billing period
 	GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error)
 
