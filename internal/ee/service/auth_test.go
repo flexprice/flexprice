@@ -370,3 +370,42 @@ func (s *AuthServiceSuite) TestSignUpProvisionsSelfBillingAfterCommit() {
 		})
 	}
 }
+
+func (s *AuthServiceSuite) TestEmailCaseInsensitive() {
+	ctx := s.GetContext()
+	resp, err := s.authService.SignUp(ctx, &dto.SignUpRequest{Email: "  Alice@Example.com ", Password: "securepassword"})
+	s.Require().NoError(err)
+
+	for _, email := range []string{"alice@example.com", "ALICE@EXAMPLE.COM", "Alice@Example.com"} {
+		found, err := s.userRepo.GetByEmail(ctx, email)
+		s.Require().NoError(err, email)
+		s.Equal(resp.UserID, found.ID, email)
+		s.Equal("alice@example.com", found.Email, email)
+
+		login, err := s.authService.Login(ctx, &dto.LoginRequest{Email: email, Password: "securepassword"})
+		s.Require().NoError(err, email)
+		s.Equal(resp.UserID, login.UserID, email)
+	}
+
+	for _, email := range []string{"alice@example.com", "ALICE@example.com"} {
+		dup, err := s.authService.SignUp(ctx, &dto.SignUpRequest{Email: email, Password: "securepassword"})
+		s.Error(err, email)
+		s.Nil(dup, email)
+	}
+}
+
+func (s *AuthServiceSuite) TestEmailLookupIgnoresArchivedUsers() {
+	ctx := s.GetContext()
+	archived := &user.User{ID: "user-old", Email: "Alice@Example.com"}
+	archived.Status = types.StatusArchived
+	s.Require().NoError(s.userRepo.Create(ctx, archived))
+	active := &user.User{ID: "user-new", Email: "alice@example.com"}
+	active.Status = types.StatusPublished
+	s.Require().NoError(s.userRepo.Create(ctx, active))
+
+	for _, email := range []string{"Alice@Example.com", "alice@example.com"} {
+		found, err := s.userRepo.GetByEmail(ctx, email)
+		s.Require().NoError(err, email)
+		s.Equal("user-new", found.ID, email)
+	}
+}

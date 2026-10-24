@@ -38,6 +38,7 @@ func NewAuthService(
 
 // SignUp creates a new user and returns an auth token
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
+	req.Email = types.NormalizeEmail(req.Email)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -261,7 +262,7 @@ func (s *authService) refusePasswordLoginUnderSSO(ctx context.Context, user *use
 
 // Login authenticates a user and returns an auth token
 func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error) {
-	user, err := s.UserRepo.GetByEmail(ctx, req.Email)
+	user, err := s.UserRepo.GetByEmail(ctx, types.NormalizeEmail(req.Email))
 	if err != nil {
 		// Only normalize the not-found case: an unknown email must return the
 		// same "invalid credentials" response as a valid email with a wrong

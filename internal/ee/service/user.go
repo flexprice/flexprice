@@ -103,6 +103,7 @@ func (s *userService) GetUserInfo(ctx context.Context) (*dto.UserResponse, error
 }
 
 func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error) {
+	req.Email = types.NormalizeEmail(req.Email)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -493,7 +494,7 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		}
 	}
 
-	// Check if user by email already exists
+	req.Email = types.NormalizeEmail(req.Email)
 	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil && !ierr.IsNotFound(err) {
 		return nil, nil, err
