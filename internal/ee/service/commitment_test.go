@@ -1113,3 +1113,50 @@ func (s *CommitmentServiceSuite) TestCreate_RejectsIncompleteSubscription() {
 	_, err = s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.requireValidation(err, "must be active or trialing")
 }
+
+// splitAPILinesAt ends the API-meter lines at at and starts one on a new price with the given bucket size.
+func (s *CommitmentServiceSuite) splitAPILinesAt(at time.Time, bucket types.WindowSize) {
+	ctx := s.GetContext()
+	for _, id := range []string{s.fx.lineAPI.ID, "subs_line_api_only"} {
+		li, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, id)
+		s.Require().NoError(err)
+		li.EndDate = at
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
+	}
+
+	next := *s.fx.priceAPI
+	next.ID, next.GroupID, next.BucketSize = "price_api_succ", "", bucket
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &next))
+
+	line := *s.fx.lineAPI
+	line.ID, line.PriceID, line.StartDate, line.EndDate = "subs_line_api_succ", next.ID, at, time.Time{}
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, &line))
+}
+
+func (s *CommitmentServiceSuite) windowMeterCommitment(priority int, start time.Time) dto.CreateCommitmentRequest {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	req.Measurement = types.CommitmentMeasurementWindow
+	req.Priority, req.StartDate = priority, start
+	return req
+}
+
+func (s *CommitmentServiceSuite) TestValidation_OverlapRejectsBucketSizeMismatch() {
+	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	first, err := s.svc.Create(s.GetContext(), s.windowMeterCommitment(0, s.fx.sub.StartDate))
+	s.Require().NoError(err)
+
+	s.splitAPILinesAt(feb, types.WindowSizeHour)
+	_, err = s.svc.Create(s.GetContext(), s.windowMeterCommitment(1, feb))
+	s.requireValidation(err, first.ID, string(types.WindowSizeHour), string(types.WindowSizeMinute))
+}
+
+func (s *CommitmentServiceSuite) TestValidation_OverlapAcceptsMatchingBucketSize() {
+	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	_, err := s.svc.Create(s.GetContext(), s.windowMeterCommitment(0, s.fx.sub.StartDate))
+	s.Require().NoError(err)
+
+	s.splitAPILinesAt(feb, "")
+	_, err = s.svc.Create(s.GetContext(), s.windowMeterCommitment(1, feb))
+	s.Require().NoError(err)
+}

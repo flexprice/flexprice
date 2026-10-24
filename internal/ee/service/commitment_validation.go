@@ -278,8 +278,9 @@ func invalid(msg string) error {
 		Mark(ierr.ErrValidation)
 }
 
-// validateOverlaps requires active commitments sharing a line item to differ in priority and agree on
-// type, measurement and overage rate.
+// validateOverlaps requires active commitments sharing a line item to differ in priority, and active or
+// terminated ones to agree on type, measurement, bucket size (for windows) and overage rate; a terminated commitment still counts through
+// the end of the billing period it was terminated in, which it bills up to.
 func (s *commitmentService) validateOverlaps(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
@@ -288,8 +289,7 @@ func (s *commitmentService) validateOverlaps(
 ) error {
 	f := commitment.NewNoLimitFilter()
 	f.SubscriptionIDs = []string{cc.Sub.ID}
-	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
-	f.ActiveFrom, f.ActiveTo = &req.StartDate, &req.EndDate
+	f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
 	existing, err := s.CommitmentRepo.List(ctx, f)
 	if err != nil {
 		return err
@@ -299,6 +299,17 @@ func (s *commitmentService) validateOverlaps(
 		return li.ID
 	})
 	for _, other := range existing {
+		spanEnd := other.EndDate
+		if other.TerminatedAt != nil {
+			if spanEnd, err = terminatedSpanEnd(cc.Sub, other); err != nil {
+				return err
+			}
+		}
+
+		if !spanEnd.After(other.StartDate) || !other.StartDate.Before(req.EndDate) || !req.StartDate.Before(spanEnd) {
+			continue
+		}
+
 		otherLines := resolveScopeLines(
 			other.ScopeEntityType,
 			other.ScopeEntityID,
@@ -312,12 +323,24 @@ func (s *commitmentService) validateOverlaps(
 			continue
 		}
 
-		if other.Priority == req.Priority {
+		if other.CommitmentStatus == types.CommitmentStatusActive && other.Priority == req.Priority {
 			return invalidf("priority %d is already used by overlapping commitment %s", req.Priority, other.ID)
 		}
 
 		if other.Type != req.Type || other.Measurement != req.Measurement {
 			return invalidf("overlapping commitment %s has a different type or measurement", other.ID)
+		}
+
+		if req.Measurement == types.CommitmentMeasurementWindow {
+			want := price.ResolveBucketSize(cc.Prices[lines[0].PriceID], cc.Meters[lines[0].MeterID])
+			if got := bucketFor(other, cc); got != "" && got != want {
+				return invalidf(
+					"overlapping commitment %s measures by window with bucket size %q; this commitment has bucket size %q",
+					other.ID,
+					got,
+					want,
+				)
+			}
 		}
 
 		same, err := s.sameOverage(ctx, other, req)
@@ -331,6 +354,37 @@ func (s *commitmentService) validateOverlaps(
 	}
 
 	return nil
+}
+
+// terminatedSpanEnd returns the end of the subscription billing period holding a terminated commitment's
+// effective end; a commitment terminated at or before its start spans nothing.
+func terminatedSpanEnd(sub *subscription.Subscription, c *commitment.Commitment) (time.Time, error) {
+	endedAt := commitmentEffectiveEnd(c)
+	if !endedAt.After(c.StartDate) {
+		return endedAt, nil
+	}
+
+	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
+		InitialPeriodStart: sub.StartDate,
+		EndDate:            &c.EndDate,
+		Anchor:             sub.BillingAnchor,
+		PeriodCount:        sub.BillingPeriodCount,
+		BillingPeriod:      sub.BillingPeriod,
+		Timezone:           sub.Timezone,
+	})
+	if err != nil {
+		return time.Time{}, ierr.WithError(err).
+			WithHint("Failed to compute billing periods for commitment").
+			Mark(ierr.ErrInternal)
+	}
+
+	for _, p := range periods {
+		if !p.End.Before(endedAt) {
+			return p.End, nil
+		}
+	}
+
+	return endedAt, nil
 }
 
 // sameOverage reports whether both sides have no custom overage rate, or the same one.

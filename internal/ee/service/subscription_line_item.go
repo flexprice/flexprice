@@ -402,6 +402,14 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		return resp, nil
 	}
 
+	endDate := now
+	if req.EffectiveFrom != nil {
+		endDate = req.EffectiveFrom.UTC()
+	}
+	if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
+		return nil, err
+	}
+
 	resp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, req)
 	if err != nil {
 		return nil, err
@@ -767,6 +775,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			// locked and the repo's copy can be the same object, so this must be read
 			// before deleteSubscriptionLineItem below overwrites EndDate in place.
 			oldEndDate := locked.EndDate
+			endedLineItem := *locked // price overrides repoint locked, so keep the line as it was
 
 			price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
 			if err != nil {
@@ -868,6 +877,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			}
 			predecessor, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
 			if err != nil {
+				return err
+			}
+			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
 				return err
 			}
 			setSuccessorLineItemID(predecessor, newLineItem.ID)

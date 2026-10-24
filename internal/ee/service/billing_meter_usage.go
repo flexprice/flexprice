@@ -187,6 +187,15 @@ func (s *billingService) CalculateMeterUsageCharges(
 		chargesByLineItemID[charge.SubscriptionLineItemID] = append(chargesByLineItemID[charge.SubscriptionLineItemID], charge)
 	}
 
+	commitments, err := s.newCommitmentLoader(
+		ctx, sub, periodStart, periodEnd, asOf, chargesByLineItemID, meterMap, querySource, false,
+	)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	handledByCommitments := commitments.HandledLineIDs()
+
 	// --- Per-line-item processing ---
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -194,7 +203,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 	totalUsageCost := decimal.Zero
 
 	for _, item := range sub.LineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
+		if item.PriceType != types.PRICE_TYPE_USAGE || handledByCommitments[item.ID] {
 			continue
 		}
 
@@ -416,12 +425,26 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// --- Post-loop: cumulative commitment or non-cumulative true-up ---
+	// --- Post-loop: commitments, cumulative commitment or non-cumulative true-up ---
+
+	var commitmentLines []dto.CreateInvoiceLineItemRequest
+	commitmentTotal := decimal.Zero
+	if len(handledByCommitments) > 0 {
+		commitmentLines, commitmentTotal, err = commitments.InvoiceLines(ctx)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+	}
 
 	if useCumulativePath {
-		return s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
+		lines, total, err := s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
 			commitmentAmount, overageFactor, totalPriorBase, commitmentEnd,
 			periodStart, periodEnd)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+
+		return append(lines, commitmentLines...), total.Add(commitmentTotal), nil
 	}
 
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
@@ -454,7 +477,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	return usageCharges, totalUsageCost, nil
+	return append(usageCharges, commitmentLines...), totalUsageCost.Add(commitmentTotal), nil
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed

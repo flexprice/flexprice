@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -96,4 +98,60 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsLegacyCommitmentInSco
 	stored, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), s.fx.lineAPI.ID)
 	s.Require().NoError(err)
 	s.False(stored.HasAnyCommitment())
+}
+
+func (s *CommitmentServiceSuite) detachCheck(lineItemID string, endDate time.Time) error {
+	li, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), lineItemID)
+	s.Require().NoError(err)
+	return checkLineItemCommitmentDetach(s.GetContext(), s.fullParams(), s.fx.sub, li, endDate)
+}
+
+func (s *CommitmentServiceSuite) TestLineItemDetach_RejectsEmptyingBindingCommitmentScope() {
+	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	err = s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC))
+	s.requireValidation(err, created.ID, "terminate the commitment first")
+}
+
+func (s *CommitmentServiceSuite) TestLineItemDetach_AllowsWhenAnotherScopedLineRemains() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)))
+}
+
+func (s *CommitmentServiceSuite) TestLineItemDetach_AllowsEndDateWithSuccessorOnSamePrice() {
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	successor := *s.fx.lineAPI
+	successor.ID, successor.StartDate = "subs_line_api_successor", feb
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &successor))
+
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, feb))
+}
+
+func (s *CommitmentServiceSuite) TestLineItemDetach_IgnoresNonBindingCommitment() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Binding = lo.ToPtr(false)
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)))
+}
+
+func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsPriceOverrideEmptyingBindingCommitmentScope() {
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	_, err = NewSubscriptionService(s.fullParams()).UpdateSubscriptionLineItem(s.GetContext(), s.fx.lineAPI.ID,
+		dto.UpdateSubscriptionLineItemRequest{
+			Amount:        lo.ToPtr(dec("0.07")),
+			EffectiveFrom: lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
+		})
+	s.requireValidation(err, "terminate the commitment first")
 }

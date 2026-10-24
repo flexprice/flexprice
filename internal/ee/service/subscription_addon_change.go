@@ -593,6 +593,9 @@ func (s *addonChangeService) persistRemovals(ctx context.Context, config *addonC
 
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: lo.ToPtr(detach.getEffectiveDate())}
 		for _, lineItem := range detach.getLineItems() {
+			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
+				return err
+			}
 			if _, err := s.sub.deleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 				return err
 			}
