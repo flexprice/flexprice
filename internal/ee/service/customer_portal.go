@@ -22,7 +22,7 @@ type CustomerPortalService interface {
 	// GetCustomer returns customer info for the portal
 	GetCustomer(ctx context.Context) (*dto.CustomerResponse, error)
 	// UpdateCustomer updates customer info from the portal
-	UpdateCustomer(ctx context.Context, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
+	UpdateCustomer(ctx context.Context, req dto.PortalUpdateCustomerRequest) (*dto.CustomerResponse, error)
 	// GetSubscriptions returns subscriptions for the portal customer
 	GetSubscriptions(ctx context.Context, req dto.PortalPaginatedRequest) (*dto.ListSubscriptionsResponse, error)
 	// GetSubscription returns a specific subscription
@@ -146,13 +146,13 @@ func (s *customerPortalService) GetCustomer(ctx context.Context) (*dto.CustomerR
 }
 
 // UpdateCustomer updates customer info from the portal
-func (s *customerPortalService) UpdateCustomer(ctx context.Context, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
+func (s *customerPortalService) UpdateCustomer(ctx context.Context, req dto.PortalUpdateCustomerRequest) (*dto.CustomerResponse, error) {
 	customerID := types.GetCustomerID(ctx)
 	if customerID == "" {
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	customer, err := s.customerService.UpdateCustomer(ctx, customerID, req)
+	customer, err := s.customerService.UpdateCustomer(ctx, customerID, req.ToUpdateCustomerRequest())
 	if err != nil {
 		return nil, err
 	}
