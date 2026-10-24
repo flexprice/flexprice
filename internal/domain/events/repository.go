@@ -12,7 +12,6 @@ type Repository interface {
 	InsertEvent(ctx context.Context, event *Event) error
 	BulkInsertEvents(ctx context.Context, events []*Event) error
 	GetUsage(ctx context.Context, params *UsageParams) (*AggregationResult, error)
-	GetUsageWithFilters(ctx context.Context, params *UsageWithFiltersParams) ([]*AggregationResult, error)
 	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 	GetEventByID(ctx context.Context, eventID string) (*Event, error)
 	// ListEventsByID returns unmerged events-table rows for the customer's event id with timestamp in window, newest ingested_at first.
@@ -224,25 +223,6 @@ type EventCountPoint struct {
 type EventCountResult struct {
 	TotalCount uint64            `json:"total_count"`
 	Points     []EventCountPoint `json:"points,omitempty"`
-}
-
-// FilterGroup represents a group of filters with priority
-type FilterGroup struct {
-	// ID is the identifier for the filter group. We are using the price ID
-	// as the unique identifier for the filter group as of now
-	ID string `json:"id"`
-
-	// Priority is the priority of the filter group for deduping events matching multiple filter groups
-	Priority int `json:"priority"`
-
-	// Filters are the actual filters where the key is the $properties.key
-	// and the values are all the predefined filter values
-	Filters map[string][]string `json:"filters"`
-}
-
-type UsageWithFiltersParams struct {
-	*UsageParams
-	FilterGroups []FilterGroup // Ordered list of filter groups, from most specific to least specific
 }
 
 // Cost Usage Params

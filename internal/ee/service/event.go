@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,7 +32,6 @@ type EventService interface {
 	BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUsageByMeterRequest) (map[string]*events.AggregationResult, error)
 	// BulkGetUsageByMeterSync fetches each meter sequentially; any failure returns (nil, err) with no partial map.
 	BulkGetUsageByMeterSync(ctx context.Context, req []*dto.GetUsageByMeterRequest) (map[string]*events.AggregationResult, error)
-	GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error)
 	GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error)
 	GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error)
 }
@@ -488,66 +486,6 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 	s.logger.With(
 		"total_meters", len(req),
 	).Debug("completed sequential meter usage processing")
-
-	return results, nil
-}
-
-// GetUsageByMeterWithFilters returns usage for a meter with specific filters on top of the meter as defined in the price
-// TODO : deprecate this flow completely as we now allow only one meter per price without filters
-func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error) {
-	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
-	if err != nil {
-		return nil, err
-	}
-
-	meterFilters := make(map[string][]string)
-	for _, filter := range m.Filters {
-		meterFilters[filter.Key] = filter.Values
-	}
-
-	// Extract and sort priceIDs for stable ordering
-	priceIDs := make([]string, 0, len(filterGroups))
-	for priceID := range filterGroups {
-		priceIDs = append(priceIDs, priceID)
-	}
-	sort.Strings(priceIDs)
-
-	prioritizedGroups := make([]events.FilterGroup, 0, len(filterGroups))
-	// Assign priority deterministically
-	for i, priceID := range priceIDs {
-		priority := len(priceIDs) - i
-		prioritizedGroups = append(prioritizedGroups, events.FilterGroup{
-			ID:       priceID,
-			Priority: priority,
-			Filters:  filterGroups[priceID],
-		})
-	}
-
-	params := &events.UsageWithFiltersParams{
-		UsageParams: &events.UsageParams{
-			EventName:           m.EventName,
-			PropertyName:        m.Aggregation.Field,
-			AggregationType:     m.Aggregation.Type,
-			ExternalCustomerIDs: lo.Uniq(req.ExternalCustomerIDs),
-			CustomerID:          req.CustomerID,
-			StartTime:           req.StartTime,
-			EndTime:             req.EndTime,
-			Filters:             meterFilters,
-		},
-		FilterGroups: prioritizedGroups,
-	}
-
-	results, err := s.eventRepo.GetUsageWithFilters(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(results) == 0 {
-		s.logger.Debug(ctx, "no usage found for meter with filters",
-			"meter_id", m.ID,
-			"filter_groups", len(filterGroups))
-		return results, nil
-	}
 
 	return results, nil
 }
