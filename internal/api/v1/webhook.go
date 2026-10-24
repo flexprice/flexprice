@@ -270,6 +270,13 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	})
 }
 
+const hubspotTimestampToleranceMs = int64(300000)
+
+func hubspotTimestampFresh(timestampMs, nowMs int64) bool {
+	skew := nowMs - timestampMs
+	return skew <= hubspotTimestampToleranceMs && skew >= -hubspotTimestampToleranceMs
+}
+
 func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Always return 200 OK to HubSpot to prevent retries
 	// We log errors internally but don't expose them to HubSpot
@@ -352,9 +359,8 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	}
 
 	currentTime := time.Now().UnixMilli()
-	maxAllowedTimestamp := int64(300000) // 5 minutes in milliseconds
-	if currentTime-timestampInt > maxAllowedTimestamp {
-		h.logger.Info(context.Background(), "timestamp too old, rejecting webhook",
+	if !hubspotTimestampFresh(timestampInt, currentTime) {
+		h.logger.Debug(c.Request.Context(), "timestamp outside tolerance, rejecting webhook",
 			"timestamp", timestampInt,
 			"current_time", currentTime,
 			"age_ms", currentTime-timestampInt)
