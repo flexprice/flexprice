@@ -208,6 +208,12 @@ func (s *commitmentService) validateAgainstSubscription(
 	meters := lo.Uniq(lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string {
 		return li.MeterID
 	}))
+	if meterID, err := s.entitledMeter(ctx, sub, meters); err != nil {
+		return err
+	} else if meterID != "" {
+		return invalidf("meter %s has an active entitlement; a commitment cannot cover entitled usage", meterID)
+	}
+
 	if (req.Type == types.COMMITMENT_TYPE_QUANTITY || req.OverageRate != nil) && len(meters) != 1 {
 		return invalidf(
 			"quantity commitments and custom overage rates need a scope with exactly one meter, found %d",
@@ -413,4 +419,34 @@ func validateBoundary(sub *subscription.Subscription, end time.Time) error {
 	}
 
 	return invalid("end_date must fall on a billing date")
+}
+
+// entitledMeter returns the first of the meters carrying an enabled metered entitlement on the
+// subscription. The engine bills raw usage, so entitled usage in a commitment's scope would be
+// charged instead of staying free; such scopes are rejected.
+func (s *commitmentService) entitledMeter(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	meterIDs []string,
+) (string, error) {
+	agg, err := NewSubscriptionService(s.ServiceParams).GetAggregatedSubscriptionEntitlements(ctx, sub.ID, nil)
+	if err != nil {
+		return "", err
+	}
+
+	entitled := make(map[string]bool, len(agg.Features))
+	for _, f := range agg.Features {
+		if f.Feature != nil && types.FeatureType(f.Feature.Type) == types.FeatureTypeMetered &&
+			f.Feature.MeterID != "" && f.Entitlement != nil && f.Entitlement.IsEnabled {
+			entitled[f.Feature.MeterID] = true
+		}
+	}
+
+	for _, id := range meterIDs {
+		if entitled[id] {
+			return id, nil
+		}
+	}
+
+	return "", nil
 }

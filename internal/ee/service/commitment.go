@@ -776,6 +776,12 @@ func (s *commitmentService) checkPriceAttach(
 		return "", err
 	}
 
+	if meterID, err := s.entitledMeter(ctx, sub, []string{p.MeterID}); err != nil {
+		return "", err
+	} else if meterID != "" {
+		return inScope[0].ID, invalidf("price %s is on meter %s, which has an active entitlement; it cannot join a commitment's scope", p.ID, meterID)
+	}
+
 	if !billsEverySubscriptionPeriod(sub, p.BillingPeriod, p.BillingPeriodCount) {
 		return inScope[0].ID, errScopeCadence(p.ID)
 	}

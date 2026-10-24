@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -27,6 +29,65 @@ func validReq(subID, priceID string) dto.CreateCommitmentRequest {
 		EndDate:        jan.AddDate(1, 0, 0),
 		Binding:        lo.ToPtr(true),
 	}
+}
+
+// entitleMeter gives the subscription's plan an enabled metered entitlement on the meter.
+func (s *CommitmentServiceSuite) entitleMeter(meterID string, isEnabled bool) {
+	ctx := s.GetContext()
+	f := &feature.Feature{
+		ID:        "feat_" + meterID,
+		Name:      "Feature " + meterID,
+		Type:      types.FeatureTypeMetered,
+		MeterID:   meterID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+
+	e := &entitlement.Entitlement{
+		ID:               "ent_" + meterID,
+		EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID:         s.fx.sub.PlanID,
+		FeatureID:        f.ID,
+		FeatureType:      types.FeatureTypeMetered,
+		IsEnabled:        isEnabled,
+		UsageLimit:       lo.ToPtr(int64(100)),
+		UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, e)
+	s.Require().NoError(err)
+}
+
+func (s *CommitmentServiceSuite) TestValidation_RejectsEntitledScopeMeter() {
+	s.entitleMeter(s.fx.meterAPI.ID, true)
+
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().Error(err)
+	s.Require().True(ierr.IsValidation(err))
+	s.Require().Contains(err.Error(), "entitlement")
+
+	// A disabled entitlement does not block the commitment.
+	s.entitleMeter(s.fx.meterStorage.ID, false)
+	storage := validReq(s.fx.sub.ID, s.fx.priceStorage.ID)
+	storage.Type, storage.CommittedRate = types.COMMITMENT_TYPE_AMOUNT, nil
+	_, err = s.svc.Create(s.GetContext(), storage)
+	s.Require().NoError(err)
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsEntitledMeter() {
+	// Subscription-scoped commitment over the API meter; the storage meter gains an
+	// entitlement afterwards, so a storage price may not join the scope.
+	req := validReq(s.fx.sub.ID, s.fx.sub.ID)
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription, EntityID: s.fx.sub.ID}
+	req.Type, req.CommittedRate = types.COMMITMENT_TYPE_AMOUNT, nil
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	s.entitleMeter(s.fx.meterStorage.ID, true)
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceStorage, s.fx.sub.StartDate)
+	s.Require().Error(err)
+	s.Require().True(ierr.IsValidation(err))
+	s.Require().Contains(err.Error(), "entitlement")
 }
 
 func TestCreateCommitmentRequest_Validate(t *testing.T) {
