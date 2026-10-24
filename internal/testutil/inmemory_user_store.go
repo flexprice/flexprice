@@ -146,6 +146,8 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 	return result, int64(len(result)), nil
 }
 
+func (r *InMemoryUserStore) DeleteCache(context.Context, string) {}
+
 // Delete soft-deletes a user by setting status to archived (tenant-scoped, matches prod semantics)
 func (r *InMemoryUserStore) Delete(ctx context.Context, id string) error {
 	r.mu.Lock()

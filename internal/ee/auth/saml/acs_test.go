@@ -217,6 +217,7 @@ func (r *tenantScopedUserRepo) GetByID(context.Context, string) (*user.User, err
 func (r *tenantScopedUserRepo) Update(context.Context, *user.User) error            { return nil }
 func (r *tenantScopedUserRepo) UpdateRoles(context.Context, string, []string) error { return nil }
 func (r *tenantScopedUserRepo) Delete(context.Context, string) error                { return nil }
+func (r *tenantScopedUserRepo) DeleteCache(context.Context, string)                 {}
 func (r *tenantScopedUserRepo) ListByFilter(context.Context, *types.UserFilter) ([]*user.User, int64, error) {
 	return nil, 0, nil
 }
