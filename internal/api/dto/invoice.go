@@ -874,6 +874,9 @@ type CreateInvoiceLineItemRequest struct {
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// CommitmentID links this line item to the commitment it bills; server-set only.
+	CommitmentID *string `json:"-"`
+
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
@@ -988,6 +991,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
+		CommitmentID:                r.CommitmentID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 
