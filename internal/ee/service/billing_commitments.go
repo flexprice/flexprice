@@ -422,7 +422,8 @@ func (l *commitmentLoader) fillWindowStack(ctx context.Context, stack *commitmen
 		loc := sc.C.Location()
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			if !sc.C.IsActiveAt(t) || !sc.C.ActiveWindows.Contains(t, loc) {
+			// A bucket starting before the period belongs to the period that already billed it.
+			if t.Before(l.periodStart) || !sc.C.IsActiveAt(t) || !sc.C.ActiveWindows.Contains(t, loc) {
 				sc.PoolOf[w] = -1
 				continue
 			}
