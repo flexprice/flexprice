@@ -450,6 +450,11 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 	}
 	terminationTotalDuration := time.Since(terminationStartTime)
 
+	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	creationStartTime := time.Now()
 	cursorSubID := ""
 
@@ -531,6 +536,16 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 			}
 
 			lineItem := createPlanLineItem(ctx, sub, price, plan)
+			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+				skip, err := planSyncSkipsPrice(ctx, s.ServiceParams, sub, price, lineItem.StartDate)
+				if err != nil {
+					return nil, err
+				}
+
+				if skip {
+					continue
+				}
+			}
 			lineItemsToCreate = append(lineItemsToCreate, lineItem)
 		}
 
@@ -635,6 +650,11 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		}, nil
 	}
 
+	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Page through stale subs, doing discover → create → terminate → stamp.
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -709,7 +729,18 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 						}).
 						Mark(ierr.ErrDatabase)
 				}
-				lineItems = append(lineItems, createPlanLineItem(ctx, sub, price, plan))
+				lineItem := createPlanLineItem(ctx, sub, price, plan)
+				if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+					skip, err := planSyncSkipsPrice(ctx, s.ServiceParams, sub, price, lineItem.StartDate)
+					if err != nil {
+						return nil, err
+					}
+
+					if skip {
+						continue
+					}
+				}
+				lineItems = append(lineItems, lineItem)
 			}
 
 			// Page size is 4000 subs but each sub can match multiple prices,

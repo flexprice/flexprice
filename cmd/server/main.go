@@ -314,6 +314,7 @@ func main() {
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
 			service.NewCouponService,
+			service.NewCommitmentService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
