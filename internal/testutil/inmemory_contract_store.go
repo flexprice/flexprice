@@ -98,6 +98,9 @@ func (s *InMemoryContractStore) filterFn(ctx context.Context, c *contract.Contra
 	if len(f.ContractStatuses) > 0 && !lo.Contains(f.ContractStatuses, c.ContractStatus()) {
 		return false
 	}
+	if f.EndedAtGTE != nil && (c.EndedAt() == nil || c.EndedAt().Before(*f.EndedAtGTE)) {
+		return false
+	}
 	if len(f.SubscriptionIDs) > 0 {
 		return lo.ContainsBy(f.SubscriptionIDs, func(subID string) bool {
 			a, err := s.associations.Get(ctx, associationKey(types.RevRecEntityTypeSubscription, subID))

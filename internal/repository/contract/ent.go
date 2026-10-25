@@ -363,6 +363,9 @@ func (o queryOptions) applyEntityQueryOptions(ctx context.Context, f *Filter, qu
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscriptionsPredicate(ctx, f.SubscriptionIDs))
 	}
+	if f.EndedAtGTE != nil {
+		query = query.Where(entContract.EndedAtGTE(*f.EndedAtGTE))
+	}
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {
 			query = query.Where(entContract.CreatedAtGTE(*f.StartTime))

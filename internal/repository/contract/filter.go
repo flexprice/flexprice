@@ -1,6 +1,8 @@
 package contract
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -17,6 +19,7 @@ type Filter struct {
 	CustomerIDs      []string               `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
 	SubscriptionIDs  []string               `json:"subscription_ids,omitempty" form:"subscription_ids" validate:"omitempty"`
 	ContractStatuses []types.ContractStatus `json:"contract_statuses,omitempty" form:"contract_statuses" validate:"omitempty"`
+	EndedAtGTE       *time.Time             `json:"ended_at_gte,omitempty" form:"ended_at_gte" validate:"omitempty"`
 }
 
 func NewFilter() *Filter {

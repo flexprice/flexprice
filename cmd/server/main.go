@@ -280,6 +280,7 @@ func main() {
 			adminsvc.NewUserService,
 			adminsvc.NewSettingsService,
 			adminsvc.NewDLQService,
+			adminsvc.NewRevenueRecognitionService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventConsumptionService,
@@ -529,15 +530,17 @@ func provideAdminHandlers(
 	users adminsvc.UserService,
 	settings adminsvc.SettingsService,
 	dlq adminsvc.DLQService,
+	revenueRecognition adminsvc.RevenueRecognitionService,
 ) adminapi.Handlers {
 	return adminapi.Handlers{
-		Health:      adminv1.NewHealthHandler(),
-		Me:          adminv1.NewMeHandler(),
-		Environment: adminv1.NewEnvironmentHandler(environments),
-		Tenant:      adminv1.NewTenantHandler(tenants),
-		User:        adminv1.NewUserHandler(users),
-		Settings:    adminv1.NewSettingsHandler(settings),
-		DLQ:         adminv1.NewDLQHandler(dlq),
+		Health:             adminv1.NewHealthHandler(),
+		Me:                 adminv1.NewMeHandler(),
+		Environment:        adminv1.NewEnvironmentHandler(environments),
+		Tenant:             adminv1.NewTenantHandler(tenants),
+		User:               adminv1.NewUserHandler(users),
+		Settings:           adminv1.NewSettingsHandler(settings),
+		DLQ:                adminv1.NewDLQHandler(dlq),
+		RevenueRecognition: adminv1.NewRevenueRecognitionHandler(revenueRecognition),
 	}
 }
 

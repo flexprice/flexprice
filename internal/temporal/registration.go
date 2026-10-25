@@ -67,6 +67,7 @@ type cronActivityBundle struct {
 	marketplaceReport            *marketplaceActivities.ReportActivities
 	dailyDraftAndCompute         *cronActivities.DailyDraftAndComputeActivities
 	revenueRollup                *cronActivities.RevenueRollupActivities
+	revenueRecognition           *cronActivities.RevenueRecognitionActivities
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
 }
 
@@ -326,6 +327,7 @@ func RegisterWorkflowsAndActivities(
 		marketplaceReport:            marketplaceReportActivities,
 		dailyDraftAndCompute:         cronActivities.NewDailyDraftAndComputeActivities(service.NewInvoiceService(params), subscriptionService, params.Logger),
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
+		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 	}
 
@@ -573,6 +575,8 @@ func buildWorkerConfig(
 			cronWorkflows.MarketplaceUsageReportWorkflow,
 			cronWorkflows.DailyDraftAndComputeWorkflow,
 			cronWorkflows.RevenueRollupWorkflow,
+			cronWorkflows.RevenueRecognitionWorkflow,
+			cronWorkflows.RevenueRecognitionBackfillWorkflow,
 			cronWorkflows.SelfBillingHourlyWorkflow,
 		)
 		activitiesList = append(activitiesList,
@@ -594,6 +598,8 @@ func buildWorkerConfig(
 			cron.dailyDraftAndCompute.DailyDraftAndComputeActivity,
 			cron.revenueRollup.RollupDirtyActivity,
 			cron.revenueRollup.ReconcileBookedInvoicesActivity,
+			cron.revenueRecognition.RecognizeRevenueActivity,
+			cron.revenueRecognition.BackfillRevenueActivity,
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
 		)
 

@@ -32,6 +32,8 @@ const (
 	// ScheduleIDRevenueRollup drives RevenueRollupWorkflow; gated off by default
 	// via analytics.revenue_rollup.enabled (see EnsureSchedules).
 	ScheduleIDRevenueRollup ScheduleID = "revenue-rollup"
+	// ScheduleIDRevenueRecognition drives RevenueRecognitionWorkflow; a no-op unless an environment enables revenue recognition.
+	ScheduleIDRevenueRecognition ScheduleID = "revenue-recognition"
 	// ScheduleIDSelfBillingHourly drives SelfBillingHourlyWorkflow; a no-op unless self-billing is enabled.
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
 )
@@ -60,6 +62,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDDailyDraftAndCompute,
 		ScheduleIDDraftInvoiceFinalization,
 		ScheduleIDRevenueRollup,
+		ScheduleIDRevenueRecognition,
 		ScheduleIDSelfBillingHourly,
 	}
 }

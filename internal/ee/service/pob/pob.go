@@ -23,9 +23,9 @@ import (
 // PerformanceObligationService keeps each subscription line item's performance obligation in step with the subscription.
 type PerformanceObligationService interface {
 	SyncForSubscription(ctx context.Context, sub *subscription.Subscription, c *domainContract.Contract) ([]*domainPOB.PerformanceObligation, error)
-	// EarnedToDate is what each of the contract's POBs earned before asOf's local day, keyed by POB ID, with every
-	// POB of the contract present. It is the one place recognition and reports read earned revenue from.
-	EarnedToDate(ctx context.Context, contractID string, asOf time.Time) (map[string]decimal.Decimal, error)
+	// EarnedToDate is, for each asOf, what each of the contract's POBs earned before asOf's local day, keyed by POB ID,
+	// with every POB of the contract present. It is the one place recognition and reports read earned revenue from.
+	EarnedToDate(ctx context.Context, contractID string, asOfs []time.Time) ([]map[string]decimal.Decimal, error)
 	Reconcile(ctx context.Context, contractID string) error
 	// POBIDForInvoiceLine is the line's POB, empty without a subscription line item; NotFound before the sync.
 	POBIDForInvoiceLine(ctx context.Context, li *invoice.InvoiceLineItem) (string, error)
@@ -197,8 +197,9 @@ func (s *performanceObligationService) GetPerformanceObligations(ctx context.Con
 	}, nil
 }
 
-// EarnedToDate earns every POB of the contract from its subscriptions' invoices and facts, one load per subscription.
-func (s *performanceObligationService) EarnedToDate(ctx context.Context, contractID string, asOf time.Time) (map[string]decimal.Decimal, error) {
+// EarnedToDate earns every POB of the contract from its subscriptions' invoices and facts, one load per subscription
+// for all asOfs.
+func (s *performanceObligationService) EarnedToDate(ctx context.Context, contractID string, asOfs []time.Time) ([]map[string]decimal.Decimal, error) {
 	pobs, err := s.pobRepo.List(ctx, &pobRepo.Filter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		ContractIDs: []string{contractID},
@@ -207,10 +208,12 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 		return nil, err
 	}
 
-	earned := make(map[string]decimal.Decimal, len(pobs))
+	earned := lo.Map(asOfs, func(time.Time, int) map[string]decimal.Decimal {
+		return lo.SliceToMap(pobs, func(p *domainPOB.PerformanceObligation) (string, decimal.Decimal) { return p.ID(), decimal.Zero })
+	})
+
 	lineItemPOBs := make(map[string]*domainPOB.PerformanceObligation)
 	for _, p := range pobs {
-		earned[p.ID()] = decimal.Zero
 		if p.RecognitionMethod() == types.RecognitionMethodAsConsumed {
 			continue
 		}
@@ -223,7 +226,7 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 			lineItemPOBs[a.EntityID()] = p
 		}
 	}
-	if len(lineItemPOBs) == 0 {
+	if len(lineItemPOBs) == 0 || len(asOfs) == 0 {
 		return earned, nil
 	}
 
@@ -240,14 +243,19 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 		if err != nil {
 			return nil, err
 		}
-		inputs, err := s.loadEarningInputs(ctx, sub, asOf)
+
+		inputs, err := s.loadEarningInputs(ctx, sub, lo.Latest(asOfs...))
 		if err != nil {
 			return nil, err
 		}
-		for pobID, amount := range earnedByPOB(lineItemPOBs, inputs, asOf, subscriptionLocation(sub)) {
-			earned[pobID] = earned[pobID].Add(amount)
+
+		for i, asOf := range asOfs {
+			for pobID, amount := range earnedByPOB(lineItemPOBs, inputs, asOf, subscriptionLocation(sub)) {
+				earned[i][pobID] = earned[i][pobID].Add(amount)
+			}
 		}
 	}
+
 	return earned, nil
 }
 

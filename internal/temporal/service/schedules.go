@@ -150,6 +150,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
+			// Always declared; a no-op unless an environment enables revenue recognition.
+			ID:        types.ScheduleIDRevenueRecognition,
+			Interval:  24 * time.Hour,
+			Offset:    4 * time.Hour, // daily at 04:00 UTC, after the revenue rollup's FINAL facts
+			Workflow:  cronWorkflows.RevenueRecognitionWorkflow,
+			Input:     models.RevenueRecognitionInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			// Always declared; RunHourly is a no-op unless self-billing is enabled.
 			ID:        types.ScheduleIDSelfBillingHourly,
 			Interval:  1 * time.Hour,

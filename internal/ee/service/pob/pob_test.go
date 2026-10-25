@@ -356,8 +356,10 @@ func TestEarnedToDate(t *testing.T) {
 		NetAmount: decimal.NewFromInt(5), Day: at(5, 2), PeriodStart: at(5, 1), PeriodEnd: at(5, 31), DecompositionMode: types.Marginal,
 	}}))
 
-	earned, err := service.EarnedToDate(ctx, c.ID(), at(5, 3))
+	byDate, err := service.EarnedToDate(ctx, c.ID(), []time.Time{at(4, 16), at(5, 3)})
 	require.NoError(t, err)
+	require.Len(t, byDate, 2, "one map per asOf")
+	midApril, earned := byDate[0], byDate[1]
 
 	seats, err := pobs.GetByLineItemID(ctx, "sli_seats")
 	require.NoError(t, err)
@@ -366,6 +368,7 @@ func TestEarnedToDate(t *testing.T) {
 	require.Len(t, earned, 2, "every POB of the contract is present")
 	require.Equal(t, "95", earned[seats.ID()].String(), "April invoice plus the May 2 accrual; the voided invoice never earns")
 	require.True(t, earned[usage.ID()].IsZero(), "as_consumed earns nothing until 8.15")
+	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days; the May fact is not yet earned")
 }
 
 func TestReconcileAndRead(t *testing.T) {
