@@ -2,7 +2,11 @@ package journal
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
 
@@ -20,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type repository struct {
@@ -262,6 +267,107 @@ func (r *repository) Count(ctx context.Context, filter *Filter) (int, error) {
 
 	entRepo.SetSpanSuccess(span)
 	return count, nil
+}
+
+// SumLines nets lines per period, account, event type and the requested group keys; earlier periods fold into one opening row.
+// e.g. Feb deferred → (opening, 1,100), (Feb, invoice_finalized, +100), (Feb, revenue_offset, −200).
+func (r *repository) SumLines(ctx context.Context, f *SumFilter) ([]*LineSum, error) {
+	span := entRepo.StartRepositorySpan(ctx, "journal_line", "sum", map[string]interface{}{
+		"filter": f,
+	})
+	defer entRepo.FinishSpan(span)
+
+	args := []any{
+		types.GetTenantID(ctx), types.GetEnvironmentID(ctx), string(types.StatusPublished), f.Currency,
+		f.PeriodStart.Format(time.DateOnly), f.PeriodEnd.Format(time.DateOnly), string(types.JournalDirectionCredit),
+	}
+	arg := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+	where := []string{
+		"l.tenant_id = $1", "l.environment_id = $2", "e.status = $3", "e.currency = $4", "p.period_start <= $6::date",
+	}
+	if len(f.Accounts) > 0 {
+		where = append(where, "l.account = ANY("+arg(pq.Array(lo.Map(f.Accounts, func(a types.LedgerAccountKey, _ int) string {
+			return string(a)
+		})))+")")
+	}
+	if len(f.CustomerIDs) > 0 {
+		where = append(where, "e.customer_id = ANY("+arg(pq.Array(f.CustomerIDs))+")")
+	}
+	if len(f.ContractIDs) > 0 {
+		where = append(where, "e.contract_id = ANY("+arg(pq.Array(f.ContractIDs))+")")
+	}
+	if len(f.POBIDs) > 0 {
+		where = append(where, "l.pob_id = ANY("+arg(pq.Array(f.POBIDs))+")")
+	}
+	if f.CreatedAtLTE != nil {
+		where = append(where, "e.created_at <= "+arg(*f.CreatedAtLTE))
+	}
+	// An ungrouped key selects NULL, so it adds no split.
+	groupColumn := func(key types.RevenueReportGroupBy, column string) string {
+		return lo.Ternary(lo.Contains(f.GroupBy, key), column, "NULL::varchar")
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			CASE WHEN p.period_start < $5::date THEN NULL ELSE p.period_start END,
+			l.account,
+			CASE WHEN p.period_start < $5::date THEN NULL ELSE e.event_type END,
+			%s, %s, %s,
+			SUM(CASE WHEN l.direction = $7 THEN l.amount ELSE -l.amount END)
+		FROM journal_lines l
+		JOIN journal_entries e
+			ON e.id = l.journal_entry_id AND e.tenant_id = l.tenant_id AND e.environment_id = l.environment_id
+		JOIN accounting_periods p
+			ON p.id = e.accounting_period_id AND p.tenant_id = e.tenant_id AND p.environment_id = e.environment_id
+		WHERE %s
+		GROUP BY 1, 2, 3, 4, 5, 6
+		ORDER BY 1 NULLS FIRST, 2, 3, 4, 5, 6`,
+		groupColumn(types.RevenueReportGroupByCustomer, "e.customer_id"),
+		groupColumn(types.RevenueReportGroupByContract, "e.contract_id"),
+		groupColumn(types.RevenueReportGroupByPOB, "l.pob_id"),
+		strings.Join(where, " AND "),
+	)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		entRepo.SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to sum journal lines").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var sums []*LineSum
+	for rows.Next() {
+		var (
+			periodStart                   sql.NullTime
+			account                       string
+			eventType                     sql.NullString
+			customerID, contractID, pobID sql.NullString
+			net                           decimal.Decimal
+		)
+		if err := rows.Scan(&periodStart, &account, &eventType, &customerID, &contractID, &pobID, &net); err != nil {
+			entRepo.SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("Failed to scan journal line sum").Mark(ierr.ErrDatabase)
+		}
+		sums = append(sums, &LineSum{
+			PeriodStart: lo.Ternary(periodStart.Valid, &periodStart.Time, nil),
+			Account:     types.LedgerAccountKey(account),
+			EventType:   types.JournalEventType(eventType.String),
+			CustomerID:  lo.Ternary(customerID.Valid, &customerID.String, nil),
+			ContractID:  lo.Ternary(contractID.Valid, &contractID.String, nil),
+			POBID:       lo.Ternary(pobID.Valid, &pobID.String, nil),
+			Net:         net,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		entRepo.SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to read journal line sums").Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return sums, nil
 }
 
 type journalEntryQuery = *ent.JournalEntryQuery

@@ -1738,6 +1738,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{JournalEntriesColumns[1], JournalEntriesColumns[7], JournalEntriesColumns[12]},
 			},
+			{
+				Name:    "idx_journal_entry_customer",
+				Unique:  false,
+				Columns: []*schema.Column{JournalEntriesColumns[1], JournalEntriesColumns[7], JournalEntriesColumns[14]},
+			},
 		},
 	}
 	// JournalLinesColumns holds the columns for the "journal_lines" table.

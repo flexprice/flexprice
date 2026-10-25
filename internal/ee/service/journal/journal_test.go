@@ -66,8 +66,9 @@ func TestPost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := testutil.NewInMemoryJournalStore()
-			periods := accountingperiodsvc.NewAccountingPeriodService(testutil.NewInMemoryAccountingPeriodStore())
+			periodStore := testutil.NewInMemoryAccountingPeriodStore()
+			store := testutil.NewInMemoryJournalStore(periodStore)
+			periods := accountingperiodsvc.NewAccountingPeriodService(periodStore)
 			svc := &journalService{journalRepo: store, periodService: periods}
 
 			var ids []string
@@ -96,9 +97,10 @@ func TestPost(t *testing.T) {
 	}
 
 	t.Run("unbalanced entry is rejected", func(t *testing.T) {
+		periodStore := testutil.NewInMemoryAccountingPeriodStore()
 		svc := &journalService{
-			journalRepo:   testutil.NewInMemoryJournalStore(),
-			periodService: accountingperiodsvc.NewAccountingPeriodService(testutil.NewInMemoryAccountingPeriodStore()),
+			journalRepo:   testutil.NewInMemoryJournalStore(periodStore),
+			periodService: accountingperiodsvc.NewAccountingPeriodService(periodStore),
 		}
 		e := domainJournal.NewBuilder(invoice("inv_2")).
 			WithLines([]*domainJournal.Line{line(types.LedgerAccountReceivable, types.JournalDirectionDebit)}).
@@ -594,8 +596,9 @@ type testSources struct {
 // newTestService seeds subs_1 and cust_1 (IST), contract_1 (active, usd), sli_1 under pob_1 (active, straight line, period
 // even, from Jan 1 2026), and the given sources.
 func newTestService(t *testing.T, ctx context.Context, src testSources) (JournalService, *testutil.InMemoryJournalStore) {
-	store := testutil.NewInMemoryJournalStore()
-	periods := accountingperiodsvc.NewAccountingPeriodService(testutil.NewInMemoryAccountingPeriodStore())
+	periodStore := testutil.NewInMemoryAccountingPeriodStore()
+	store := testutil.NewInMemoryJournalStore(periodStore)
+	periods := accountingperiodsvc.NewAccountingPeriodService(periodStore)
 	contracts := testutil.NewInMemoryContractStore()
 	pobs := testutil.NewInMemoryPOBStore(contracts)
 	subs := testutil.NewInMemorySubscriptionStore()
@@ -758,7 +761,8 @@ func TestRecognizeExample1(t *testing.T) {
 	require.NoError(t, svc.PostInvoice(ctx, annual))
 
 	recognize := func(m time.Month, day int) []*domainJournal.Entry {
-		require.NoError(t, svc.Recognize(ctx, "contract_1", inIST(m, day).Add(2*time.Hour)))
+		_, err := svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: inIST(m, day).Add(2 * time.Hour)})
+		require.NoError(t, err)
 		saved, err := store.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(),
 			EventTypes: []types.JournalEventType{types.JournalEventRevenueEarned, types.JournalEventRevenueOffset}})
 		require.NoError(t, err)
@@ -804,6 +808,64 @@ func TestRecognizeExample1(t *testing.T) {
 	})
 }
 
+// TestRecognizeDryRun previews ERD Example 1: the missing ended months plus the open month up to AsOf, saving nothing.
+func TestRecognizeDryRun(t *testing.T) {
+	tests := []struct {
+		name       string
+		recognized *time.Time // a real run before the preview
+		previewAt  time.Time
+		want       []string
+	}{
+		{
+			name:      "nothing posted: January and February to date",
+			previewAt: inIST(time.February, 15),
+			want: []string{
+				"2026-01-31 revenue_earned 100", "2026-01-31 revenue_offset 100",
+				"2026-02-14 revenue_earned 50", "2026-02-14 revenue_offset 50",
+			},
+		},
+		{
+			name:       "January posted: February to date only",
+			recognized: lo.ToPtr(inIST(time.February, 1)),
+			previewAt:  inIST(time.February, 15),
+			want:       []string{"2026-02-14 revenue_earned 50", "2026-02-14 revenue_offset 50"},
+		},
+		{
+			name:      "on the 1st the open month has no days",
+			previewAt: inIST(time.March, 1),
+			want: []string{
+				"2026-01-31 revenue_earned 100", "2026-01-31 revenue_offset 100",
+				"2026-02-28 revenue_earned 100", "2026-02-28 revenue_offset 100",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutil.SetupContext()
+			annual := subscriptionInvoice(ctx, "inv_annual", types.InvoiceTypeSubscription, 1200, inIST(time.January, 1), inIST(time.January, 1), inIST(time.January, 1).AddDate(1, 0, 0))
+			svc, store := newTestService(t, ctx, testSources{invoices: []*invoice.Invoice{annual}})
+			require.NoError(t, svc.PostInvoice(ctx, annual))
+			if tt.recognized != nil {
+				_, err := svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: tt.recognized.Add(2 * time.Hour)})
+				require.NoError(t, err)
+			}
+			before, err := store.Count(ctx, journalRepo.NewFilter())
+			require.NoError(t, err)
+
+			preview, err := svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: tt.previewAt.Add(2 * time.Hour), DryRun: true})
+			require.NoError(t, err)
+
+			// e.g. "2026-02-14 revenue_earned 50": both lines of an entry carry the same amount.
+			require.ElementsMatch(t, tt.want, lo.Map(preview, func(e *domainJournal.Entry, _ int) string {
+				return fmt.Sprintf("%s %s %s", e.BusinessDate().Format(time.DateOnly), e.EventType(), e.Lines()[0].Amount())
+			}))
+			after, err := store.Count(ctx, journalRepo.NewFilter())
+			require.NoError(t, err)
+			require.Equal(t, before, after, "a dry run saves nothing")
+		})
+	}
+}
+
 // TestRecognizeExample2 is ERD Example 2: arrears billing, January 300 invoiced Feb 1 and February 250 invoiced Mar 1,
 // with the invoices posted before or after the runs.
 func TestRecognizeExample2(t *testing.T) {
@@ -821,11 +883,14 @@ func TestRecognizeExample2(t *testing.T) {
 			if invoicesFirst {
 				postInvoices()
 			}
-			require.NoError(t, svc.Recognize(ctx, "contract_1", inIST(time.February, 1).Add(2*time.Hour)))
-			require.NoError(t, svc.Recognize(ctx, "contract_1", inIST(time.March, 1).Add(2*time.Hour)))
+			_, err := svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: inIST(time.February, 1).Add(2 * time.Hour)})
+			require.NoError(t, err)
+			_, err = svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: inIST(time.March, 1).Add(2 * time.Hour)})
+			require.NoError(t, err)
 			if !invoicesFirst {
 				postInvoices()
-				require.NoError(t, svc.Recognize(ctx, "contract_1", inIST(time.March, 2).Add(2*time.Hour)))
+				_, err := svc.Recognize(ctx, RecognizeRequest{ContractID: "contract_1", AsOf: inIST(time.March, 2).Add(2 * time.Hour)})
+				require.NoError(t, err)
 			}
 
 			require.Equal(t, map[types.LedgerAccountKey]string{types.LedgerAccountDeferredRevenue: "0", types.LedgerAccountUnbilledReceivable: "300", types.LedgerAccountRevenue: "300"},

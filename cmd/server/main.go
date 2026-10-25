@@ -27,6 +27,7 @@ import (
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
+	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -331,6 +332,7 @@ func main() {
 			pobsvc.NewPerformanceObligationService,
 			accountingperiodsvc.NewAccountingPeriodService,
 			journalsvc.NewJournalService,
+			revenuereportsvc.NewRevenueReportService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewSubscriptionModificationService,
@@ -429,6 +431,7 @@ func provideHandlers(
 	pobService pobsvc.PerformanceObligationService,
 	accountingPeriodService accountingperiodsvc.AccountingPeriodService,
 	journalService journalsvc.JournalService,
+	revenueReportService revenuereportsvc.RevenueReportService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
@@ -504,6 +507,7 @@ func provideHandlers(
 		PerformanceObligation:    v1.NewPerformanceObligationHandler(pobService, logger),
 		AccountingPeriod:         v1.NewAccountingPeriodHandler(accountingPeriodService, logger),
 		JournalEntry:             v1.NewJournalEntryHandler(journalService, logger),
+		RevenueReport:            v1.NewRevenueReportHandler(revenueReportService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),

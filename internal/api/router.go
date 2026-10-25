@@ -60,6 +60,7 @@ type Handlers struct {
 	PerformanceObligation    *v1.PerformanceObligationHandler
 	AccountingPeriod         *v1.AccountingPeriodHandler
 	JournalEntry             *v1.JournalEntryHandler
+	RevenueReport            *v1.RevenueReportHandler
 	Integration              *v1.IntegrationHandler
 	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
@@ -392,6 +393,12 @@ func NewRouter(
 		{
 			journalEntry.POST("/search", handlers.JournalEntry.QueryJournalEntries)
 			journalEntry.GET("/:id", handlers.JournalEntry.GetJournalEntry)
+		}
+
+		revenueReport := v1Private.Group("/revenue_reports")
+		{
+			revenueReport.POST("/rollforward", handlers.RevenueReport.GetRollforward)
+			revenueReport.POST("/waterfall", handlers.RevenueReport.GetWaterfall)
 		}
 
 		group := v1Private.Group("/groups")

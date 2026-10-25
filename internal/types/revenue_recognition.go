@@ -144,3 +144,23 @@ const (
 	JournalEventRevenueEarned       JournalEventType = "revenue_earned"
 	JournalEventRevenueOffset       JournalEventType = "revenue_offset"
 )
+
+// RevenueReportGroupBy is a key a revenue report can group journal lines by.
+type RevenueReportGroupBy string
+
+const (
+	RevenueReportGroupByCustomer RevenueReportGroupBy = "customer_id"
+	RevenueReportGroupByContract RevenueReportGroupBy = "contract_id"
+	RevenueReportGroupByPOB      RevenueReportGroupBy = "pob_id"
+)
+
+// MovementCategory groups a rollforward's movements by what changed the balance.
+type MovementCategory string
+
+const (
+	MovementCategoryInvoiced    MovementCategory = "invoiced"
+	MovementCategoryEarned      MovementCategory = "earned"
+	MovementCategoryAdjustments MovementCategory = "adjustments"
+	MovementCategoryPayments    MovementCategory = "payments"
+	MovementCategoryRefunds     MovementCategory = "refunds"
+)

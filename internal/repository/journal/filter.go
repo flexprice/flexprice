@@ -1,6 +1,8 @@
 package journal
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -63,3 +65,16 @@ func (f *Filter) GetOrder() string        { return f.queryFilter().GetOrder() }
 func (f *Filter) GetStatus() string       { return f.queryFilter().GetStatus() }
 func (f *Filter) GetExpand() types.Expand { return f.queryFilter().GetExpand() }
 func (f *Filter) IsUnlimited() bool       { return f.queryFilter().IsUnlimited() }
+
+// SumFilter selects lines for SumLines. Lines in periods before PeriodStart fold into one opening row per group.
+type SumFilter struct {
+	Currency     string
+	PeriodStart  time.Time // first reported month
+	PeriodEnd    time.Time // last reported month, inclusive
+	Accounts     []types.LedgerAccountKey
+	CustomerIDs  []string
+	ContractIDs  []string
+	POBIDs       []string
+	CreatedAtLTE *time.Time // only entries created at or before it
+	GroupBy      []types.RevenueReportGroupBy
+}

@@ -122,5 +122,7 @@ func (JournalEntry) Indexes() []ent.Index {
 			StorageKey("idx_journal_entry_source"),
 		index.Fields("tenant_id", "environment_id", "accounting_period_id").
 			StorageKey("idx_journal_entry_period"),
+		index.Fields("tenant_id", "environment_id", "customer_id").
+			StorageKey("idx_journal_entry_customer"),
 	}
 }
