@@ -215,12 +215,12 @@ type ContractService interface {
 
 A POB is a continuing promise inside a contract, made of one or more subscription line items. Phase 1 earns on a **billing basis**, derived on read: billed amounts are the finalized invoice lines, each spread over its own service period; nothing about earning is persisted. A contract basis (booked amounts, SSP allocation, a persisted revenue schedule) is a later, per-POB alternative behind the same `EarnedToDate`.
 
-Four reporting categories, one engine:
+Three reporting categories, one engine (a fourth, extrapolated, is deferred):
 
 - **Actual** — posted recognition journals (Step 6).
 - **Pending** — earned but not yet posted: the open month to date, and ended months the daily run has not posted.
 - **Scheduled** — invoiced but not yet earned (the deferred part of finalized invoice lines).
-- **Extrapolated** — recurring fixed POBs with no end date only, after the last invoiced period, valued on read by the billing engine. Never persisted.
+- **Extrapolated** (deferred) — recurring fixed POBs with no end date only, after the last invoiced period, valued on read by the billing engine. Never persisted.
 
 
 
@@ -348,7 +348,7 @@ Read-only: POBs are derived from subscriptions.
 ```go
 type PerformanceObligationService interface {
     SyncForSubscription(ctx context.Context, sub *subscription.Subscription, c *contract.Contract) ([]*pob.PerformanceObligation, error)
-    EarnedToDate(ctx context.Context, contractID string, asOf time.Time) (map[string]decimal.Decimal, error) // per POB
+    EarnedToDate(ctx context.Context, contractID string, asOfs []time.Time) ([]map[string]decimal.Decimal, error) // per asOf, per POB; one load for all dates
     Reconcile(ctx context.Context, contractID string) error // repair job
     GetPerformanceObligation(ctx context.Context, id string) (*dto.PerformanceObligationResponse, error)
     GetPerformanceObligations(ctx context.Context, filter *pob.Filter) (*dto.ListPerformanceObligationsResponse, error)
@@ -537,15 +537,17 @@ CREATE TABLE journal_entries (                     -- immutable
     source_entity_type varchar(50)  NOT NULL,      -- invoice | credit_note | payment | refund | pob
     source_entity_id   varchar(50)  NOT NULL,
     idempotency_key    varchar(255),               -- billing entries only; recognition relies on the POB lock
-    period_id          varchar(50)  NOT NULL,
+    accounting_period_id varchar(50) NOT NULL,
     business_date      date         NOT NULL,      -- local date of the activity
     customer_id        varchar(50)  NOT NULL,
     contract_id        varchar(50),                -- null for standalone one-off invoices (no subscription) and their payments
-    currency           varchar(3)   NOT NULL,
+    currency           varchar(10)  NOT NULL,      -- as invoices
     reversal_of        varchar(50),
     status             varchar(50)  NOT NULL DEFAULT 'published',
     created_at         timestamptz  NOT NULL,
-    created_by         varchar(50)
+    updated_at         timestamptz  NOT NULL,
+    created_by         varchar(50),
+    updated_by         varchar(50)
 );
 
 -- exactly-once posting per billing event
@@ -554,7 +556,9 @@ CREATE UNIQUE INDEX ON journal_entries (tenant_id, environment_id, idempotency_k
 -- entries of a source (drill-down, reconcile)
 CREATE INDEX ON journal_entries (tenant_id, environment_id, source_entity_type, source_entity_id);
 -- rollforward by period
-CREATE INDEX ON journal_entries (tenant_id, environment_id, period_id);
+CREATE INDEX ON journal_entries (tenant_id, environment_id, accounting_period_id);
+-- reports filtered by customer
+CREATE INDEX ON journal_entries (tenant_id, environment_id, customer_id);
 
 CREATE TABLE journal_lines (                       -- immutable
     id               varchar(50)   PRIMARY KEY,    -- prefix "jl"
@@ -564,7 +568,12 @@ CREATE TABLE journal_lines (                       -- immutable
     account          varchar(50)   NOT NULL,       -- LedgerAccountKey
     direction        varchar(10)   NOT NULL,       -- debit | credit
     amount           numeric(20,8) NOT NULL,       -- > 0
-    pob_id           varchar(50)
+    pob_id           varchar(50),
+    status           varchar(50)   NOT NULL DEFAULT 'published',
+    created_at       timestamptz   NOT NULL,
+    updated_at       timestamptz   NOT NULL,
+    created_by       varchar(50),
+    updated_by       varchar(50)
 );
 
 -- lines of an entry
@@ -595,13 +604,13 @@ Billed means invoiced by `P_end` (the invoice's date), not the service period it
 | Payment succeeded (`succeeded_at`)                            | Dr `cash` / Cr AR; method `CREDITS`: Dr `customer_credit` / Cr AR                                                                                                                                                                                 |
 | Payment reversed                                              | Inverse of the payment entry, `reversal_of` set                                                                                                                                                                                                   |
 | Refund succeeded (`succeeded_at`)                             | Dr AR / Cr `cash` (`GATEWAY`, `OUT_OF_BAND`) or Cr `customer_credit` (`WALLET`)                                                                                                                                                                   |
-| Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − round(earned(P_start)) − posted(P)`. Positive `δ`: Dr `unbilled_receivable` / Cr `revenue`; negative mirrors it |
+| Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − posted(≤ P)`. Positive `δ`: Dr `unbilled_receivable` / Cr `revenue`; negative mirrors it |
 | Offset (last day of the period)                               | Per POB and ended month `P`, in the same transaction as its recognition: Dr `deferred_revenue` / Cr `unbilled_receivable` by `offset(P) −` offsets posted up to `P`; negative mirrors it |
 
 
 Credits and voids: an invoice of 100 with 20 credits applied, paid 80, then voided. Finalize Dr AR 80, Dr `customer_credit` 20; payment Cr AR 80; void Cr AR 100 (gross including credits); the void's wallet refund (`refund_succeeded`, `WALLET`) Dr AR 100 / Cr `customer_credit` 100. AR nets to 0, and `customer_credit` holds 80: the paid cash moved to the wallet, with the 20 credits restored.
 
-`posted(P)` is Σ(credit − debit) on the POB's `revenue` lines in recognition entries of `P`: what is already in the journal for that month, so a run posts only the gap. Recognition entries are per POB and every line carries `pob_id`; `pob_id` is null only on billing lines that belong to no POB (AR, tax, cash, customer credit, standalone one-off revenue).
+`posted(≤ P)` is Σ(credit − debit) on the POB's `revenue` lines in entries dated up to `P_end`: what the journal already holds, so a run posts only the gap. Walking months in order this equals the per-month `round(earned(P_end)) − round(earned(P_start)) − posted(P)`, and it also posts revenue earned before the first month (e.g. an advance one-time line). Recognition entries are per POB and every line carries `pob_id`; `pob_id` is null only on billing lines that belong to no POB (AR, tax, cash, customer credit, standalone one-off revenue).
 
 Example 1, prepaid: $1,200 annual from Jan 1, `period_even`, invoiced Jan 1 (Dr AR 1,200 / Cr `deferred_revenue` 1,200).
 
@@ -647,17 +656,17 @@ Read-only: the journal is derived from billing and schedules.
 - Entries are immutable. Each has at least one debit and one credit line, positive amounts, Σ debits = Σ credits, one currency (the invoice's), one period. Corrections are deltas or inverses linked by `reversal_of`.
 - Billing entries carry the idempotency key `{event_type}:{source_entity_id}`: one entry per event per source. A corrected invoice is a void (`invoice_voided`, same source) plus a new invoice (new source), never a re-post under the same key. Recognition entries carry none: a run computes `δ` under the POB lock, so a rerun computes `δ = 0` and posts nothing.
 - Billing entries post async after the source commits (post-commit hook, like `revenue_facts`), each in its own transaction. A failure is logged and never fails the source write; `Reconcile` re-posts anything missing.
-- Recognition and offset post only from the daily job (and the backfill on enable), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. A billing entry dated in an ended month makes the next run recompute that month's offset and every later one. Each run re-evaluates the last ended month and any earlier month a newly finalized or voided invoice or a changed usage fact touched; an unchanged period computes `δ = 0` and posts nothing. The current month's earned-to-date is computed on read, never posted.
+- Recognition and offset post only from the daily job (and the operator-triggered backfill), under a per-POB advisory lock, for ended periods only; a POB's recognition and offset for a month post in one transaction. Billing never reads a balance. Each run recomputes every ended month from the POB's start with running totals, so a billing entry dated in an ended month is picked up by the next run; an unchanged month computes `δ = 0` and posts nothing. No last-run cursor is stored. The current month's earned-to-date is computed on read (a dry run, Step 7), never posted.
 - Business dates are local dates in the subscription's timezone (the customer's without a subscription); the entry posts to that date's period (Step 4).
 - Billing entries post for `draft` contracts too; recognition only for `active` and `satisfied` POBs, catching up on the first run.
-- Enabling revenue recognition replays every contract from its start: contracts and POBs, then billing entries in business-date order, then recognition. No opening-balance entries.
+- A backfill (admin API, operator-triggered, safe to rerun) replays an environment from its start: contracts and POBs for every subscription, then all billing, then recognition of every contract. It only adds what is missing or wrong. No opening-balance entries. Enabling the setting does not start it by itself.
 - Nothing is written unless the environment has revenue recognition enabled.
 
 
 
 #### Services
 
-`JournalService` (new) — builds, balances and posts entries; owns the recognition run and the backfill. A new daily Temporal schedule `revenue_recognition` fans out over enabled environments like `RevenueRollupWorkflow`; each run calls `Reconcile`, then per contract `PerformanceObligationService.Reconcile` (Step 3 repair) and `Recognize`.
+`JournalService` (new) — builds, balances and posts entries; owns the recognition run and the backfill. A daily Temporal schedule `revenue-recognition` (04:00 UTC) fans out over enabled environments like `RevenueRollupWorkflow`; per environment it repairs POBs (`PerformanceObligationService.Reconcile`), calls `Reconcile` with a 7-day billing window (so a failed post is retried by later runs), then `Recognize` per selected contract. Selected: active contracts, contracts ended within two months, and contracts with an invoice changed in the window.
 
 ```go
 type JournalService interface {
@@ -665,12 +674,12 @@ type JournalService interface {
     PostCreditNote(ctx context.Context, cn *creditnote.CreditNote) error // finalized and voided
     PostPayment(ctx context.Context, p *payment.Payment) error           // succeeded and reversed
     PostRefund(ctx context.Context, r *refund.Refund) error
-    Recognize(ctx context.Context, contractID string, asOf time.Time) error
-    Backfill(ctx context.Context) error                                  // replay on enable
-    Reconcile(ctx context.Context, since time.Time) error                // re-posts billing entries missing since `since`
-    PreviewRecognition(ctx context.Context, contractID string, asOf time.Time) ([]*journal.JournalEntry, error) // unsaved dry run of Recognize; feeds waterfall pending
+    Recognize(ctx context.Context, req RecognizeRequest) ([]*journal.Entry, error) // returns the entries posted; DryRun posts nothing and also counts the open month up to AsOf
+    RunRecognition(ctx context.Context, req RecognitionRunRequest) error              // the daily run, resumable per environment and contract
+    Backfill(ctx context.Context, req BackfillRequest) error                          // operator-triggered replay of the ctx environment
+    Reconcile(ctx context.Context, since time.Time) error                             // re-posts billing entries missing since `since`
     GetJournalEntry(ctx context.Context, id string) (*dto.JournalEntryResponse, error)
-    GetJournalEntries(ctx context.Context, filter *types.JournalEntryFilter) (*dto.ListJournalEntriesResponse, error)
+    GetJournalEntries(ctx context.Context, filter *journal.Filter) (*dto.ListJournalEntriesResponse, error)
 }
 ```
 
@@ -703,7 +712,7 @@ Reports are queries over the journal and POB earned-to-date; nothing is persiste
 | Endpoint                               | Role                                                                      |
 | -------------------------------------- | ------------------------------------------------------------------------- |
 | `POST /v1/revenue_reports/rollforward` | Opening, movements by category and closing per ended period and account   |
-| `POST /v1/revenue_reports/waterfall`   | Revenue per group and month: actual, pending, scheduled, extrapolated     |
+| `POST /v1/revenue_reports/waterfall`   | Revenue per group and month: actual, pending, scheduled                   |
 | `POST /v1/journal_entries/search`      | Drill-down to lines (Step 6), by period, account, customer, contract, POB |
 
 
@@ -717,7 +726,7 @@ type RollforwardRequest struct {
     PeriodEnd   string                   `json:"period_end"`                       // YYYY-MM; default period_start; an ended month
     Currency    string                   `json:"currency" validate:"required"`
     Accounts    []types.LedgerAccountKey `json:"accounts"`                         // default [deferred_revenue]
-    GroupBy     []string                 `json:"group_by"`                         // customer_id | contract_id | pob_id
+    GroupBy     []types.RevenueReportGroupBy `json:"group_by"`                     // customer_id | contract_id | pob_id
     CustomerIDs []string                 `json:"customer_ids"`
     ContractIDs []string                 `json:"contract_ids"`
     POBIDs      []string                 `json:"pob_ids"`
@@ -728,7 +737,7 @@ type RollforwardRequest struct {
 
 type RollforwardResponse struct {
     Totals     []*RollforwardRow         `json:"totals"` // per period and account, all groups
-    Items      []*RollforwardRow         `json:"items"`  // per period, account and group
+    Items      []*RollforwardRow         `json:"items"`  // per period, account and group; empty without group_by
     Pagination *types.PaginationResponse `json:"pagination"`
 }
 
@@ -764,13 +773,12 @@ type WaterfallRequest struct {
     PeriodStart string                 `json:"period_start" validate:"required"` // YYYY-MM
     PeriodEnd   string                 `json:"period_end" validate:"required"`   // at most 36 months after period_start
     Currency    string                 `json:"currency" validate:"required"`
-    GroupBy     string                 `json:"group_by"`                         // customer_id (default) | contract_id | pob_id
+    GroupBy     types.RevenueReportGroupBy `json:"group_by"`                     // customer_id (default) | contract_id | pob_id
     CustomerIDs []string               `json:"customer_ids"`
     ContractIDs []string               `json:"contract_ids"`
     POBIDs      []string               `json:"pob_ids"`
-    Extrapolate bool                   `json:"extrapolate"`                      // default false
     Details     bool                   `json:"details"`                          // month-end deferred and unbilled balances
-    Sort        []*types.SortCondition `json:"sort"`                             // field: customer name or a period
+    AsOf        *time.Time             `json:"as_of"`                            // report date: pending and scheduled split here; default now
     Limit       int                    `json:"limit"`
     Offset      int                    `json:"offset"`
 }
@@ -796,11 +804,10 @@ type WaterfallCell struct {
 }
 
 type RevenueBreakdown struct {
-    Total        decimal.Decimal `json:"total"` // actual + pending + scheduled + extrapolated
-    Actual       decimal.Decimal `json:"actual"`
-    Pending      decimal.Decimal `json:"pending"`
-    Scheduled    decimal.Decimal `json:"scheduled"`
-    Extrapolated decimal.Decimal `json:"extrapolated"`
+    Total     decimal.Decimal `json:"total"` // actual + pending + scheduled
+    Actual    decimal.Decimal `json:"actual"`
+    Pending   decimal.Decimal `json:"pending"`
+    Scheduled decimal.Decimal `json:"scheduled"`
 }
 ```
 
@@ -840,11 +847,10 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 **Waterfall cells**, per POB and month `P`, summed to the requested group:
 
 - `actual` — posted `revenue` lines of `P` (credit − debit). `ONE_OFF` lines with no POB count here at finalize; they group under their contract when subscription-linked, and under a row with null keys otherwise (and always under a null `pob_id`), so rows always add up to `totals`. Credit notes are in `contra_revenue`, not in the waterfall.
-- `pending` — earned but not yet posted: `PreviewRecognition` at `now`, with the open month treated as ended at `now`. It covers the open month to date and any ended month the daily run has not posted.
-- `scheduled` — invoiced but not yet earned: `round(earned(P_end)) − round(earned(max(P_start, now)))` over finalized invoice lines, for the open and future months. Recurring POBs with no end date schedule only to the end of their last invoiced period.
-- `extrapolated` — only with `extrapolate`, only for recurring fixed POBs with no `service_end`, after the last invoiced period: each future billing period is valued by the billing engine as a full period, amortized with the POB's method, and stops at the subscription's end or cancellation date. Never posted.
-- Usage (`as_consumed`) is never scheduled or extrapolated; it appears as actual and pending only.
-- `deferred` / `unbilled` — the group's closing balances of those accounts for ended months, from the journal as in the rollforward.
+- `pending` — earned but not yet posted: a `Recognize` dry run at `as_of` (default now), with the open month counted up to `as_of`. It covers the open month to date and any ended month the daily run has not posted.
+- `scheduled` — invoiced but not yet earned: `round(earned(P_end)) − round(earned(max(P_start, as_of)))` over finalized invoice lines, for the open and future months. Computed as a second dry run at the first day after `period_end` minus the pending dry run, so it uses the same running totals that later post. Recurring POBs with no end date schedule only to the end of their last invoiced period.
+- Usage (`as_consumed`) is never scheduled; it appears as actual and pending only.
+- `deferred` / `unbilled` — the group's closing balances of those accounts for months ended by `as_of`, computed by the rollforward; 0 when the group has none, empty for later months.
 
 Example: $1,200 annual prepaid and $100/month recurring (in advance, no end date), both `period_even` from Jan 1; reported on Mar 15.
 
@@ -853,7 +859,7 @@ Example: $1,200 annual prepaid and $100/month recurring (in advance, no end date
 | -------------------- | --------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
 | Deferred rollforward | 0 + 1,300 invoiced − 200 earned = 1,100 | 1,100 + 100 invoiced − 200 earned = 1,000 | Not available until March ends                                         |
 | Waterfall, annual    | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec 100 scheduled                 |
-| Waterfall, recurring | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec 100 extrapolated if requested |
+| Waterfall, recurring | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec nothing (no invoice yet)      |
 
 
 Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
@@ -866,13 +872,13 @@ Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
 - `totals` cover every row matching the filters, not only the page.
 - Currencies are never combined.
 - `group_by` / filter by POB applies only to accounts whose lines carry `pob_id` (`deferred_revenue`, `unbilled_receivable`, `revenue`); AR is grouped by customer or contract only.
-- Pending, scheduled and extrapolated are never posted, and never mix.
+- Pending and scheduled are never posted, and never mix.
 
 
 
 #### Services
 
-`RevenueReportService` (new) — builds the rollforward and the waterfall from journal lines, `PreviewRecognition` and POB earned-to-date.
+`RevenueReportService` (new) — builds the rollforward and the waterfall from one journal aggregate (`SumLines`: net per period × account × event type × group, earlier periods folded into one opening row) and `Recognize` dry runs.
 
 ```go
 type RevenueReportService interface {
@@ -885,6 +891,6 @@ type RevenueReportService interface {
 
 #### Related changes
 
-- Step 6: `journal_entries/search` gains an `account` filter; `JournalService` gains `PreviewRecognition`, the unsaved dry run of `Recognize`.
+- Step 6: `journal_entries/search` gains an `account` filter; `Recognize` gains a dry run (`RecognizeRequest.DryRun`); the journal repository gains `SumLines`; `journal_entries` gains a customer index.
 
-Deferred: projected deferred waterfall (needs billing projections), ARR waterfall (needs ARR rules and overrides), revenue split by product (needs a product on the POB), booking-month waterfall rows, CSV export. Credit notes stay in `contra_revenue` (Step 5), so the deferred rollforward's `adjustments` is zero in Phase 1.
+Deferred: extrapolated revenue and waterfall sort (customer name or a period); closing-balance snapshots and precomputed pending / scheduled for large environments (a full-environment rollforward reads every journal line, and the waterfall dry-runs every contract in scope); projected deferred waterfall (needs billing projections), ARR waterfall (needs ARR rules and overrides), revenue split by product (needs a product on the POB), booking-month waterfall rows, CSV export. Credit notes stay in `contra_revenue` (Step 5), so the deferred rollforward's `adjustments` is zero in Phase 1.

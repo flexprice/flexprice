@@ -1,5 +1,14 @@
 basePath: /v1
 definitions:
+  ListAccountingPeriodsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/AccountingPeriodResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListAddonAssociationsResponse:
     properties:
       items:
@@ -23,6 +32,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/AlertSettingsResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListContractsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ContractResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -100,6 +118,24 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListJournalEntriesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/JournalEntryResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPerformanceObligationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PerformanceObligationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListPlansResponse:
     properties:
       items:
@@ -123,6 +159,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/PriceResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListProductsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ProductResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -199,6 +244,45 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  accountingperiod.Filter:
+    properties:
+      accounting_period_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      period_statuses:
+        items:
+          $ref: '#/definitions/types.AccountingPeriodStatus'
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   analytics.Filter:
     properties:
       field:
@@ -255,16 +339,29 @@ definitions:
     type: object
   analytics.ViewDefinition:
     properties:
+      compare:
+        enum:
+        - previous_period
+        - previous_year
+        type: string
+      currency:
+        type: string
       dimensions:
         items:
           type: string
         type: array
+      display:
+        enum:
+        - chart
+        - table
+        type: string
       family:
         allOf:
         - $ref: '#/definitions/types.Family'
         enum:
         - usage
         - billing
+        - report
       filters:
         items:
           $ref: '#/definitions/analytics.Filter'
@@ -304,6 +401,55 @@ definitions:
     required:
     - metrics
     - shape
+    type: object
+  contract.Filter:
+    properties:
+      contract_ids:
+        items:
+          type: string
+        type: array
+      contract_statuses:
+        items:
+          $ref: '#/definitions/types.ContractStatus'
+        type: array
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      ended_at_gte:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        items:
+          type: string
+        type: array
     type: object
   costsheet.Filter:
     properties:
@@ -521,6 +667,23 @@ definitions:
     - dimension
     - license_arn
     - product_code
+    type: object
+  AccountingPeriodResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      period_end:
+        type: string
+      period_start:
+        type: string
+      period_status:
+        $ref: '#/definitions/types.AccountingPeriodStatus'
+      status:
+        $ref: '#/definitions/types.Status'
+      updated_at:
+        type: string
     type: object
   ActivateDraftSubscriptionRequest:
     properties:
@@ -1012,7 +1175,15 @@ definitions:
     type: object
   AnalyticsQueryMeta:
     properties:
+      from:
+        type: string
+      prev_from:
+        type: string
+      prev_to:
+        type: string
       query_source:
+        type: string
+      to:
         type: string
     type: object
   AnalyticsQueryRequest:
@@ -1582,6 +1753,44 @@ definitions:
     properties:
       plan_change:
         $ref: '#/definitions/PlanChangeScheduleDetails'
+    type: object
+  ContractAssociationResponse:
+    properties:
+      created_at:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.RevRecEntityType'
+      id:
+        type: string
+    type: object
+  ContractResponse:
+    properties:
+      associations:
+        items:
+          $ref: '#/definitions/ContractAssociationResponse'
+        type: array
+      contract_status:
+        $ref: '#/definitions/types.ContractStatus'
+      created_at:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      ended_at:
+        type: string
+      id:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      term_end:
+        type: string
+      term_start:
+        type: string
+      updated_at:
+        type: string
     type: object
   CostAnalyticItem:
     properties:
@@ -2823,6 +3032,8 @@ definitions:
         $ref: '#/definitions/PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      product_id:
+        type: string
       start_date:
         type: string
       tier_mode:
@@ -2936,6 +3147,18 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  CreateProductRequest:
+    properties:
+      description:
+        type: string
+      lookup_key:
+        type: string
+      name:
+        type: string
+    required:
+    - lookup_key
+    - name
     type: object
   CreateScheduledTaskRequest:
     properties:
@@ -3331,6 +3554,7 @@ definitions:
       definition:
         $ref: '#/definitions/analytics.ViewDefinition'
       name:
+        maxLength: 255
         type: string
     required:
     - definition
@@ -5290,8 +5514,8 @@ definitions:
         description: fx_conversion is the frozen fiat→fiat conversion applied at finalize;
           nil when the invoice was never converted.
       hosted_invoice_url:
-        description: hosted_invoice_url is the page where the customer can view,
-          download and pay this invoice
+        description: hosted_invoice_url is the page where the customer can view, download
+          and pay this invoice
         type: string
       id:
         description: id is the unique identifier for this invoice
@@ -5436,6 +5660,48 @@ definitions:
         type: integer
       voided_at:
         description: voided_at is the timestamp when this invoice was voided or cancelled
+        type: string
+    type: object
+  JournalEntryResponse:
+    properties:
+      accounting_period_id:
+        type: string
+      business_date:
+        type: string
+      contract_id:
+        type: string
+      created_at:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.JournalEventType'
+      id:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/JournalLineResponse'
+        type: array
+      reversal_of:
+        type: string
+      source_entity_id:
+        type: string
+      source_entity_type:
+        $ref: '#/definitions/types.RevRecEntityType'
+    type: object
+  JournalLineResponse:
+    properties:
+      account:
+        $ref: '#/definitions/types.LedgerAccountKey'
+      amount:
+        type: string
+      direction:
+        $ref: '#/definitions/types.JournalDirection'
+      id:
+        type: string
+      pob_id:
         type: string
     type: object
   LineItemChange:
@@ -5660,6 +5926,13 @@ definitions:
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListViewsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ViewResponse'
+        type: array
     type: object
   MatchedMeter:
     properties:
@@ -5962,6 +6235,46 @@ definitions:
       voided_at:
         type: string
     type: object
+  PerformanceObligationAssociationResponse:
+    properties:
+      created_at:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.RevRecEntityType'
+      id:
+        type: string
+    type: object
+  PerformanceObligationResponse:
+    properties:
+      amortization_method:
+        $ref: '#/definitions/types.AmortizationMethod'
+      associations:
+        items:
+          $ref: '#/definitions/PerformanceObligationAssociationResponse'
+        type: array
+      contract_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      pob_status:
+        $ref: '#/definitions/types.PerformanceObligationStatus'
+      recognition_method:
+        $ref: '#/definitions/types.RecognitionMethod'
+      service_end:
+        type: string
+      service_start:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      updated_at:
+        type: string
+    type: object
   PlanChangeScheduleDetails:
     properties:
       billing_period_behaviour:
@@ -6214,6 +6527,8 @@ definitions:
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
         $ref: '#/definitions/PriceUnitResponse'
+      product_id:
+        type: string
       sequence:
         description: |-
           Sequence is the monotonic stamp bumped on every state change that
@@ -6290,6 +6605,23 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+    type: object
+  ProductResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      updated_at:
         type: string
     type: object
   ProrationDetail:
@@ -6492,6 +6824,158 @@ definitions:
     required:
     - addon_association_id
     type: object
+  ReportCatalogEntry:
+    properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/types.ReportCategory'
+        enum:
+        - billing
+        - receivables
+        - customers
+        - credits
+        - usage
+      default_shape:
+        enum:
+        - timeseries
+        - breakdown
+        - scalar
+        type: string
+      description:
+        type: string
+      dimensions:
+        items:
+          $ref: '#/definitions/ReportDimension'
+        type: array
+      grains:
+        items:
+          enum:
+          - day
+          - week
+          - month
+          type: string
+        type: array
+      improvement:
+        allOf:
+        - $ref: '#/definitions/types.ImprovementDirection'
+        enum:
+        - higher
+        - lower
+      key:
+        type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/types.ReportKind'
+        enum:
+        - flow
+        - ratio
+        - snapshot
+      max_range_days:
+        type: integer
+      name:
+        type: string
+      shapes:
+        items:
+          enum:
+          - timeseries
+          - breakdown
+          - scalar
+          type: string
+        type: array
+      supports_compare:
+        type: boolean
+      value_type:
+        allOf:
+        - $ref: '#/definitions/types.ReportValueType'
+        enum:
+        - money
+        - count
+        - days
+      variant_label:
+        type: string
+      variant_of:
+        type: string
+    type: object
+  ReportCatalogResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ReportCatalogEntry'
+        type: array
+    type: object
+  ReportDimension:
+    properties:
+      key:
+        type: string
+      label:
+        type: string
+    type: object
+  ReportFilter:
+    properties:
+      field:
+        type: string
+      op:
+        enum:
+        - eq
+        - in
+        type: string
+      value:
+        items:
+          type: string
+        type: array
+    type: object
+  ReportQueryRequest:
+    properties:
+      compare:
+        enum:
+        - previous_period
+        - previous_year
+        type: string
+      currency:
+        type: string
+      dimensions:
+        items:
+          type: string
+        type: array
+      filters:
+        items:
+          $ref: '#/definitions/ReportFilter'
+        type: array
+      grain:
+        enum:
+        - day
+        - week
+        - month
+        type: string
+      limit:
+        type: integer
+      range:
+        example: 2026-09-01..2026-10-01
+        type: string
+      shape:
+        enum:
+        - timeseries
+        - breakdown
+        - scalar
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/ReportSort'
+        type: array
+    required:
+    - range
+    - shape
+    type: object
+  ReportSort:
+    properties:
+      dir:
+        enum:
+        - asc
+        - desc
+        type: string
+      field:
+        type: string
+    type: object
   ResumeSubscriptionRequest:
     description: Resumes a paused subscription now. The billing anchor is kept, so
       the first period runs from the resume time to the next billing date.
@@ -6651,6 +7135,102 @@ definitions:
         type: number
       usage_at_list_rate:
         type: number
+    type: object
+  RevenueBreakdown:
+    properties:
+      actual:
+        type: string
+      pending:
+        type: string
+      scheduled:
+        type: string
+      total:
+        description: actual + pending + scheduled
+        type: string
+    type: object
+  RollforwardRequest:
+    properties:
+      accounts:
+        description: defaults to [deferred_revenue]
+        items:
+          $ref: '#/definitions/types.LedgerAccountKey'
+        type: array
+      as_of:
+        description: only entries created at or before it
+        type: string
+      contract_ids:
+        items:
+          type: string
+        type: array
+      currency:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      group_by:
+        items:
+          $ref: '#/definitions/types.RevenueReportGroupBy'
+        type: array
+      limit:
+        description: item rows per page; totals are never paged
+        maximum: 1000
+        minimum: 0
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      period_end:
+        description: YYYY-MM, an ended month; defaults to period_start
+        type: string
+      period_start:
+        description: YYYY-MM
+        type: string
+      pob_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - currency
+    - period_start
+    type: object
+  RollforwardResponse:
+    properties:
+      items:
+        description: per period, account and group; empty without group_by
+        items:
+          $ref: '#/definitions/RollforwardRow'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+      totals:
+        description: per period and account, all groups
+        items:
+          $ref: '#/definitions/RollforwardRow'
+        type: array
+    type: object
+  RollforwardRow:
+    properties:
+      account:
+        $ref: '#/definitions/types.LedgerAccountKey'
+      closing:
+        type: string
+      contract_id:
+        type: string
+      customer_id:
+        type: string
+      movements:
+        additionalProperties:
+          type: string
+        description: a missing category is 0
+        type: object
+      opening:
+        type: string
+      period:
+        description: YYYY-MM
+        type: string
+      pob_id:
+        type: string
     type: object
   SavedCardDetails:
     properties:
@@ -9026,6 +9606,10 @@ definitions:
         items:
           $ref: '#/definitions/CreatePriceTier'
         type: array
+      product_id:
+        description: ProductID sets the price's product while it has none; once set
+          it never changes.
+        type: string
       tier_mode:
         allOf:
         - $ref: '#/definitions/types.BillingTier'
@@ -9045,6 +9629,13 @@ definitions:
     properties:
       metadata:
         $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+    type: object
+  UpdateProductRequest:
+    properties:
+      description:
+        type: string
       name:
         type: string
     type: object
@@ -9565,11 +10156,17 @@ definitions:
     type: object
   ViewResponse:
     properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
       definition:
         $ref: '#/definitions/analytics.ViewDefinition'
       id:
         type: string
       name:
+        type: string
+      updated_at:
         type: string
       version:
         type: integer
@@ -9803,6 +10400,93 @@ definitions:
       wallet:
         $ref: '#/definitions/WalletResponse'
       wallet_id:
+        type: string
+    type: object
+  WaterfallCell:
+    properties:
+      deferred:
+        description: 'details: closing deferred_revenue, ended months only'
+        type: string
+      period:
+        description: YYYY-MM
+        type: string
+      revenue:
+        $ref: '#/definitions/RevenueBreakdown'
+      unbilled:
+        description: 'details: closing unbilled_receivable, ended months only'
+        type: string
+    type: object
+  WaterfallRequest:
+    properties:
+      as_of:
+        description: 'report date: pending and scheduled split here; defaults to now'
+        type: string
+      contract_ids:
+        items:
+          type: string
+        type: array
+      currency:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      details:
+        description: month-end deferred and unbilled balances
+        type: boolean
+      group_by:
+        allOf:
+        - $ref: '#/definitions/types.RevenueReportGroupBy'
+        description: defaults to customer_id
+      limit:
+        description: rows per page; totals are never paged
+        maximum: 1000
+        minimum: 0
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      period_end:
+        description: YYYY-MM, at most 36 months from period_start
+        type: string
+      period_start:
+        description: YYYY-MM
+        type: string
+      pob_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - currency
+    - period_end
+    - period_start
+    type: object
+  WaterfallResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/WaterfallRow'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+      totals:
+        description: per period over all rows, never paged
+        items:
+          $ref: '#/definitions/WaterfallCell'
+        type: array
+    type: object
+  WaterfallRow:
+    properties:
+      cells:
+        description: one per requested period, in order
+        items:
+          $ref: '#/definitions/WaterfallCell'
+        type: array
+      contract_id:
+        type: string
+      customer_id:
+        type: string
+      pob_id:
         type: string
     type: object
   WorkflowExecutionDTO:
@@ -10181,6 +10865,12 @@ definitions:
       coupons:
         items:
           $ref: '#/definitions/types.CouponRef'
+        type: array
+      price_overrides:
+        description: Price overrides minted at execute time; completion repoints the
+          line items instead of minting again.
+        items:
+          $ref: '#/definitions/types.AddonPriceOverrideRef'
         type: array
       proration_behavior:
         allOf:
@@ -11396,10 +12086,12 @@ definitions:
     enum:
     - usage
     - billing
+    - report
     type: string
     x-enum-varnames:
     - FamilyUsage
     - FamilyBilling
+    - FamilyReport
   types.FeatureFilter:
     properties:
       end_time:
@@ -11791,6 +12483,10 @@ definitions:
           subscription_id filters invoices generated for a specific subscription
           Only returns invoices that were created as part of the specified subscription's billing
         type: string
+      updated_at_gte:
+        description: updated_at_gte filters invoices updated at or after the given
+          instant
+        type: string
       voided_at_gte:
         description: voided_at_gte filters invoices voided at or after the given instant
         type: string
@@ -11894,12 +12590,36 @@ definitions:
     enum:
     - usage_quantity
     - event_count
+    - events_volume
     - invoice_total
+    - total_receivables
+    - receivables_aging
+    - days_to_pay
+    - arpu
+    - arpu_paid
+    - credit_consumption
+    - credit_topups
+    - net_billing
+    - invoice_total_issued
+    - net_billing_issued
+    - active_customers
     type: string
     x-enum-varnames:
     - MetricUsageQuantity
     - MetricEventCount
+    - MetricEventsVolume
     - MetricInvoiceTotal
+    - MetricTotalReceivables
+    - MetricReceivablesAging
+    - MetricDaysToPay
+    - MetricARPU
+    - MetricARPUPaid
+    - MetricCreditConsumption
+    - MetricCreditTopups
+    - MetricNetBilling
+    - MetricInvoiceTotalIssued
+    - MetricNetBillingIssued
+    - MetricActiveCustomers
   types.ModifySubscriptionLineItem:
     properties:
       amount:
@@ -12221,6 +12941,10 @@ definitions:
           type: string
         type: array
       price_ids:
+        items:
+          type: string
+        type: array
+      product_ids:
         items:
           type: string
         type: array
@@ -13853,6 +14577,71 @@ definitions:
       updated_by:
         type: string
     type: object
+  journal.Filter:
+    properties:
+      accounting_period_ids:
+        items:
+          type: string
+        type: array
+      accounts:
+        items:
+          $ref: '#/definitions/types.LedgerAccountKey'
+        type: array
+      contract_ids:
+        items:
+          type: string
+        type: array
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      event_types:
+        items:
+          $ref: '#/definitions/types.JournalEventType'
+        type: array
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      journal_entry_ids:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      pob_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      source_entity_ids:
+        items:
+          type: string
+        type: array
+      source_entity_type:
+        $ref: '#/definitions/types.RevRecEntityType'
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   meter.Aggregation:
     properties:
       bucket_size:
@@ -13920,6 +14709,57 @@ definitions:
         type: string
       workflow_id:
         type: string
+    type: object
+  pob.Filter:
+    properties:
+      contract_ids:
+        items:
+          type: string
+        type: array
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      performance_obligation_ids:
+        items:
+          type: string
+        type: array
+      pob_statuses:
+        items:
+          $ref: '#/definitions/types.PerformanceObligationStatus'
+        type: array
+      recognition_methods:
+        items:
+          $ref: '#/definitions/types.RecognitionMethod'
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
     type: object
   price.JSONBFilters:
     additionalProperties:
@@ -14049,6 +14889,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+      product_id:
+        type: string
       sequence:
         description: |-
           Sequence is the monotonic stamp bumped on every state change that
@@ -14115,6 +14957,45 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.RoundType'
         description: up or down
+    type: object
+  product.Filter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_keys:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      product_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
     type: object
   subscription.SubscriptionLineItem:
     properties:
@@ -14297,6 +15178,105 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.AccountingPeriodStatus:
+    enum:
+    - open
+    - closed
+    type: string
+    x-enum-comments:
+      AccountingPeriodStatusClosed: reserved; close is deferred
+    x-enum-varnames:
+    - AccountingPeriodStatusOpen
+    - AccountingPeriodStatusClosed
+  types.AddonPriceOverrideRef:
+    properties:
+      override_price_id:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: string
+    type: object
+  types.AmortizationMethod:
+    enum:
+    - daily
+    - period_even
+    - period_even_prorated
+    type: string
+    x-enum-varnames:
+    - AmortizationDaily
+    - AmortizationPeriodEven
+    - AmortizationPeriodEvenProrated
+  types.ContractStatus:
+    enum:
+    - draft
+    - active
+    - ended
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ContractStatusDraft
+    - ContractStatusActive
+    - ContractStatusEnded
+    - ContractStatusCancelled
+  types.ImprovementDirection:
+    enum:
+    - higher
+    - lower
+    type: string
+    x-enum-varnames:
+    - ImprovementHigher
+    - ImprovementLower
+  types.JournalDirection:
+    enum:
+    - debit
+    - credit
+    type: string
+    x-enum-varnames:
+    - JournalDirectionDebit
+    - JournalDirectionCredit
+  types.JournalEventType:
+    enum:
+    - invoice_finalized
+    - invoice_voided
+    - credit_note_finalized
+    - credit_note_voided
+    - payment_succeeded
+    - payment_reversed
+    - refund_succeeded
+    - revenue_earned
+    - revenue_offset
+    type: string
+    x-enum-varnames:
+    - JournalEventInvoiceFinalized
+    - JournalEventInvoiceVoided
+    - JournalEventCreditNoteFinalized
+    - JournalEventCreditNoteVoided
+    - JournalEventPaymentSucceeded
+    - JournalEventPaymentReversed
+    - JournalEventRefundSucceeded
+    - JournalEventRevenueEarned
+    - JournalEventRevenueOffset
+  types.LedgerAccountKey:
+    enum:
+    - cash
+    - accounts_receivable
+    - unbilled_receivable
+    - deferred_revenue
+    - customer_credit
+    - tax_payable
+    - revenue
+    - contra_revenue
+    type: string
+    x-enum-varnames:
+    - LedgerAccountCash
+    - LedgerAccountReceivable
+    - LedgerAccountUnbilledReceivable
+    - LedgerAccountDeferredRevenue
+    - LedgerAccountCustomerCredit
+    - LedgerAccountTaxPayable
+    - LedgerAccountRevenue
+    - LedgerAccountContraRevenue
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -14310,6 +15290,90 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.PerformanceObligationStatus:
+    enum:
+    - draft
+    - active
+    - satisfied
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - PerformanceObligationStatusDraft
+    - PerformanceObligationStatusActive
+    - PerformanceObligationStatusSatisfied
+    - PerformanceObligationStatusCancelled
+  types.RecognitionMethod:
+    enum:
+    - point_in_time
+    - straight_line
+    - as_consumed
+    type: string
+    x-enum-varnames:
+    - RecognitionMethodPointInTime
+    - RecognitionMethodStraightLine
+    - RecognitionMethodAsConsumed
+  types.ReportCategory:
+    enum:
+    - billing
+    - receivables
+    - customers
+    - credits
+    - usage
+    type: string
+    x-enum-varnames:
+    - ReportCategoryBilling
+    - ReportCategoryReceivables
+    - ReportCategoryCustomers
+    - ReportCategoryCredits
+    - ReportCategoryUsage
+  types.ReportKind:
+    enum:
+    - flow
+    - ratio
+    - snapshot
+    type: string
+    x-enum-varnames:
+    - ReportKindFlow
+    - ReportKindRatio
+    - ReportKindSnapshot
+  types.ReportValueType:
+    enum:
+    - money
+    - count
+    - days
+    type: string
+    x-enum-varnames:
+    - ReportValueTypeMoney
+    - ReportValueTypeCount
+    - ReportValueTypeDays
+  types.RevRecEntityType:
+    enum:
+    - subscription
+    - subscription_line_item
+    - invoice
+    - credit_note
+    - payment
+    - refund
+    - pob
+    type: string
+    x-enum-varnames:
+    - RevRecEntityTypeSubscription
+    - RevRecEntityTypeSubscriptionLineItem
+    - RevRecEntityTypeInvoice
+    - RevRecEntityTypeCreditNote
+    - RevRecEntityTypePayment
+    - RevRecEntityTypeRefund
+    - RevRecEntityTypePOB
+  types.RevenueReportGroupBy:
+    enum:
+    - customer_id
+    - contract_id
+    - pob_id
+    type: string
+    x-enum-varnames:
+    - RevenueReportGroupByCustomer
+    - RevenueReportGroupByContract
+    - RevenueReportGroupByPOB
   types.TenantInternalStatus:
     enum:
     - trialing
@@ -15255,6 +16319,41 @@ info:
   title: Flexprice API
   version: "1.0"
 paths:
+  /accounting_periods/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when listing the monthly accounting periods revenue recognition
+        posts to, by period status or a period start range. Returns a paginated list.
+      operationId: queryAccountingPeriod
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/accountingperiod.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListAccountingPeriodsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query accounting periods
+      tags:
+      - Accounting Periods
+      x-scope: read
   /activity:
     post:
       consumes:
@@ -15883,6 +16982,80 @@ paths:
       tags:
       - Analytics
       x-scope: read
+  /analytics/reports:
+    get:
+      description: Returns the catalog of reports with their allowed shapes, dimensions
+        and grains.
+      operationId: listAnalyticsReports
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ReportCatalogResponse'
+        "403":
+          description: Reports not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List financial reports
+      tags:
+      - Analytics
+      x-scope: read
+  /analytics/reports/{key}/query:
+    post:
+      consumes:
+      - application/json
+      description: Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD
+        (end exclusive) or last_N_days. compare is previous_period or previous_year.
+      operationId: runAnalyticsReport
+      parameters:
+      - description: Report key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Report query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ReportQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/AnalyticsQueryResult'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Reports not enabled
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Report not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Run a financial report
+      tags:
+      - Analytics
+      x-scope: read
   /analytics/revenue:
     post:
       consumes:
@@ -15926,6 +17099,37 @@ paths:
       - Analytics
       x-scope: read
   /analytics/views:
+    get:
+      consumes:
+      - application/json
+      description: Lists saved views, optionally filtered by family.
+      operationId: listAnalyticsViews
+      parameters:
+      - description: Filter by view family
+        in: query
+        name: family
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListViewsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List analytics views
+      tags:
+      - Analytics
+      x-scope: read
     post:
       consumes:
       - application/json
@@ -15958,6 +17162,111 @@ paths:
       summary: Create an analytics view
       tags:
       - Analytics
+  /analytics/views/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a saved view by ID.
+      operationId: deleteAnalyticsView
+      parameters:
+      - description: View ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: View not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an analytics view
+      tags:
+      - Analytics
+      x-scope: write
+    get:
+      consumes:
+      - application/json
+      description: Returns a saved view by ID.
+      operationId: getAnalyticsView
+      parameters:
+      - description: View ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ViewResponse'
+        "404":
+          description: View not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an analytics view
+      tags:
+      - Analytics
+      x-scope: read
+    put:
+      consumes:
+      - application/json
+      description: Replaces the name and definition of a saved view.
+      operationId: updateAnalyticsView
+      parameters:
+      - description: View ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: View request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreateViewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ViewResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: View not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update an analytics view
+      tags:
+      - Analytics
+      x-scope: write
   /analytics/views/{id}/query:
     post:
       consumes:
@@ -16126,6 +17435,78 @@ paths:
       summary: Cancel checkout session
       tags:
       - Checkout
+  /contracts/{id}:
+    get:
+      description: Use when you need to load a single revenue recognition contract
+        with the subscriptions it covers. Contracts are derived from subscriptions
+        and are read-only.
+      operationId: getContract
+      parameters:
+      - description: Contract ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ContractResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get contract
+      tags:
+      - Contracts
+      x-scope: read
+  /contracts/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when searching revenue recognition contracts by customer, subscription
+        or contract status. Returns a paginated list.
+      operationId: queryContract
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/contract.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListContractsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query contracts
+      tags:
+      - Contracts
+      x-scope: read
   /costs:
     post:
       consumes:
@@ -19352,6 +20733,79 @@ paths:
       summary: Query invoices
       tags:
       - Invoices
+  /journal_entries/{id}:
+    get:
+      description: Use when you need one revenue recognition journal entry with its
+        debit and credit lines. The journal is derived from billing and recognition
+        and is read-only.
+      operationId: getJournalEntry
+      parameters:
+      - description: Journal entry ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/JournalEntryResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get journal entry
+      tags:
+      - Journal Entries
+      x-scope: read
+  /journal_entries/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when listing journal entries by period, event type, account,
+        customer, contract, performance obligation or source. Returns a paginated
+        list with lines.
+      operationId: queryJournalEntry
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/journal.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListJournalEntriesResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query journal entries
+      tags:
+      - Journal Entries
+      x-scope: read
   /marketplace/agreements:
     post:
       consumes:
@@ -19454,6 +20908,11 @@ paths:
         - StatusPublished
         - StatusDeleted
         - StatusArchived
+      - description: UpdatedAtGTE bounds updated_at, which every lifecycle change
+          bumps.
+        in: query
+        name: updated_at_gte
+        type: string
       produces:
       - application/json
       responses:
@@ -19655,6 +21114,78 @@ paths:
       summary: Process payment
       tags:
       - Payments
+  /performance_obligations/{id}:
+    get:
+      description: Use when you need to load a single performance obligation with
+        the subscription line items it covers. Performance obligations are derived
+        from subscriptions and are read-only.
+      operationId: getPerformanceObligation
+      parameters:
+      - description: Performance obligation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PerformanceObligationResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get performance obligation
+      tags:
+      - Performance Obligations
+      x-scope: read
+  /performance_obligations/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when searching performance obligations by contract, customer,
+        status or recognition method. Returns a paginated list.
+      operationId: queryPerformanceObligation
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/pob.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPerformanceObligationsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query performance obligations
+      tags:
+      - Performance Obligations
+      x-scope: read
   /plans:
     post:
       consumes:
@@ -20681,6 +22212,256 @@ paths:
       summary: Query price units
       tags:
       - Price Units
+  /products:
+    get:
+      description: Use when listing products. Returns a paginated list.
+      operationId: listProducts
+      parameters:
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: lookup_keys
+        type: array
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: product_ids
+        type: array
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListProductsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List products
+      tags:
+      - Products
+    post:
+      consumes:
+      - application/json
+      description: Use when defining a reusable commercial identity for what you sell.
+        Prices can reference it through product_id.
+      operationId: createProduct
+      parameters:
+      - description: Product Request
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create product
+      tags:
+      - Products
+  /products/{id}:
+    delete:
+      description: Use when retiring a product. Fails while any published price references
+        it.
+      operationId: deleteProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete product
+      tags:
+      - Products
+    get:
+      description: Use when you need to load a single product.
+      operationId: getProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get product
+      tags:
+      - Products
+    put:
+      consumes:
+      - application/json
+      description: Use when changing a product's name or description. The lookup key
+        never changes.
+      operationId: updateProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update Product Request
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update product
+      tags:
+      - Products
+  /products/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when searching products by ids, lookup keys, filters and sorts.
+        Returns a paginated list.
+      operationId: queryProduct
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/product.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListProductsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query products
+      tags:
+      - Products
+      x-scope: read
   /rbac/roles:
     get:
       consumes:
@@ -20910,6 +22691,80 @@ paths:
       tags:
       - Refunds
       x-scope: write
+  /revenue_reports/rollforward:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when explaining how deferred revenue, unbilled receivable
+        or another ledger account moved in ended months: opening balance, movements
+        by category (invoiced, earned, adjustments, payments, refunds) and closing
+        balance, optionally per customer, contract or performance obligation.'
+      operationId: getRevenueRollforward
+      parameters:
+      - description: Rollforward request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RollforwardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/RollforwardResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get revenue rollforward
+      tags:
+      - Revenue Reports
+      x-scope: read
+  /revenue_reports/waterfall:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when showing revenue per customer, contract or performance
+        obligation and month: actual (posted), pending (earned, not yet posted) and
+        scheduled (invoiced, not yet earned), with optional month-end deferred and
+        unbilled balances. Covers at most 36 months.'
+      operationId: getRevenueWaterfall
+      parameters:
+      - description: Waterfall request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/WaterfallRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/WaterfallResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get revenue waterfall
+      tags:
+      - Revenue Reports
+      x-scope: read
   /secrets/api/keys:
     get:
       consumes:

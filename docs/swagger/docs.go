@@ -22,6 +22,59 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/accounting_periods/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing the monthly accounting periods revenue recognition posts to, by period status or a period start range. Returns a paginated list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounting Periods"
+                ],
+                "summary": "Query accounting periods",
+                "operationId": "queryAccountingPeriod",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/accountingperiod.Filter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListAccountingPeriodsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/activity": {
             "post": {
                 "security": [
@@ -976,6 +1029,117 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/analytics/reports": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the catalog of reports with their allowed shapes, dimensions and grains.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "List financial reports",
+                "operationId": "listAnalyticsReports",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ReportCatalogResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/analytics/reports/{key}/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Run a financial report",
+                "operationId": "runAnalyticsReport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Report key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Report query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReportQueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/AnalyticsQueryResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Reports not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Report not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/analytics/revenue": {
             "post": {
                 "security": [
@@ -1036,6 +1200,54 @@ const docTemplate = `{
             }
         },
         "/analytics/views": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists saved views, optionally filtered by family.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "List analytics views",
+                "operationId": "listAnalyticsViews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by view family",
+                        "name": "family",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListViewsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
             "post": {
                 "security": [
                     {
@@ -1085,6 +1297,167 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/analytics/views/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns a saved view by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Get an analytics view",
+                "operationId": "getAnalyticsView",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "View ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ViewResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "View not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Replaces the name and definition of a saved view.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Update an analytics view",
+                "operationId": "updateAnalyticsView",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "View ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "View request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateViewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ViewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "View not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Deletes a saved view by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Delete an analytics view",
+                "operationId": "deleteAnalyticsView",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "View ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "View not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/analytics/views/{id}/query": {
@@ -1347,6 +1720,113 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/contracts/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when searching revenue recognition contracts by customer, subscription or contract status. Returns a paginated list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Query contracts",
+                "operationId": "queryContract",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/contract.Filter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListContractsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/contracts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need to load a single revenue recognition contract with the subscriptions it covers. Contracts are derived from subscriptions and are read-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contracts"
+                ],
+                "summary": "Get contract",
+                "operationId": "getContract",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Contract ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ContractResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/costs": {
@@ -6193,6 +6673,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/journal_entries/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing journal entries by period, event type, account, customer, contract, performance obligation or source. Returns a paginated list with lines.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal Entries"
+                ],
+                "summary": "Query journal entries",
+                "operationId": "queryJournalEntry",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/journal.Filter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListJournalEntriesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/journal_entries/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need one revenue recognition journal entry with its debit and credit lines. The journal is derived from billing and recognition and is read-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal Entries"
+                ],
+                "summary": "Get journal entry",
+                "operationId": "getJournalEntry",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Journal entry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/JournalEntryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/marketplace/agreements": {
             "post": {
                 "description": "Registers an AWS Marketplace buyer agreement against an existing Flexprice subscription, upserting plan/subscription/customer integration mappings in one call.",
@@ -6352,6 +6939,12 @@ const docTemplate = `{
                             "StatusArchived"
                         ],
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.",
+                        "name": "updated_at_gte",
                         "in": "query"
                     }
                 ],
@@ -6648,6 +7241,113 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/performance_obligations/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when searching performance obligations by contract, customer, status or recognition method. Returns a paginated list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Performance Obligations"
+                ],
+                "summary": "Query performance obligations",
+                "operationId": "queryPerformanceObligation",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/pob.Filter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPerformanceObligationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/performance_obligations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need to load a single performance obligation with the subscription line items it covers. Performance obligations are derived from subscriptions and are read-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Performance Obligations"
+                ],
+                "summary": "Get performance obligation",
+                "operationId": "getPerformanceObligation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Performance obligation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PerformanceObligationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/plans": {
@@ -8201,6 +8901,386 @@ const docTemplate = `{
                 }
             }
         },
+        "/products": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing products. Returns a paginated list.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "List products",
+                "operationId": "listProducts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "lookup_keys",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "product_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListProductsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when defining a reusable commercial identity for what you sell. Prices can reference it through product_id.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Create product",
+                "operationId": "createProduct",
+                "parameters": [
+                    {
+                        "description": "Product Request",
+                        "name": "product",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/ProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when searching products by ids, lookup keys, filters and sorts. Returns a paginated list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Query products",
+                "operationId": "queryProduct",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/product.Filter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListProductsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/products/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need to load a single product.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Get product",
+                "operationId": "getProduct",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when changing a product's name or description. The lookup key never changes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Update product",
+                "operationId": "updateProduct",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update Product Request",
+                        "name": "product",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateProductRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when retiring a product. Fails while any published price references it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Delete product",
+                "operationId": "deleteProduct",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/rbac/roles": {
             "get": {
                 "security": [
@@ -8539,6 +9619,112 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "write"
+            }
+        },
+        "/revenue_reports/rollforward": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when explaining how deferred revenue, unbilled receivable or another ledger account moved in ended months: opening balance, movements by category (invoiced, earned, adjustments, payments, refunds) and closing balance, optionally per customer, contract or performance obligation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Revenue Reports"
+                ],
+                "summary": "Get revenue rollforward",
+                "operationId": "getRevenueRollforward",
+                "parameters": [
+                    {
+                        "description": "Rollforward request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/RollforwardRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RollforwardResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/revenue_reports/waterfall": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when showing revenue per customer, contract or performance obligation and month: actual (posted), pending (earned, not yet posted) and scheduled (invoiced, not yet earned), with optional month-end deferred and unbilled balances. Covers at most 36 months.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Revenue Reports"
+                ],
+                "summary": "Get revenue waterfall",
+                "operationId": "getRevenueWaterfall",
+                "parameters": [
+                    {
+                        "description": "Waterfall request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/WaterfallRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/WaterfallResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/secrets/api/keys": {
@@ -14634,6 +15820,20 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "ListAccountingPeriodsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/AccountingPeriodResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListAddonAssociationsResponse": {
             "type": "object",
             "properties": {
@@ -14669,6 +15869,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/AlertSettingsResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListContractsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ContractResponse"
                     }
                 },
                 "pagination": {
@@ -14789,6 +16003,34 @@ const docTemplate = `{
                 }
             }
         },
+        "ListJournalEntriesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/JournalEntryResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListPerformanceObligationsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PerformanceObligationResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListPlansResponse": {
             "type": "object",
             "properties": {
@@ -14824,6 +16066,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/PriceResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListProductsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ProductResponse"
                     }
                 },
                 "pagination": {
@@ -14943,6 +16199,63 @@ const docTemplate = `{
                 }
             }
         },
+        "accountingperiod.Filter": {
+            "type": "object",
+            "properties": {
+                "accounting_period_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "period_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.AccountingPeriodStatus"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "analytics.Filter": {
             "type": "object",
             "properties": {
@@ -15035,16 +16348,34 @@ const docTemplate = `{
                 "shape"
             ],
             "properties": {
+                "compare": {
+                    "type": "string",
+                    "enum": [
+                        "previous_period",
+                        "previous_year"
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
                 "dimensions": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
+                "display": {
+                    "type": "string",
+                    "enum": [
+                        "chart",
+                        "table"
+                    ]
+                },
                 "family": {
                     "enum": [
                         "usage",
-                        "billing"
+                        "billing",
+                        "report"
                     ],
                     "allOf": [
                         {
@@ -15103,6 +16434,78 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/analytics.Variable"
+                    }
+                }
+            }
+        },
+        "contract.Filter": {
+            "type": "object",
+            "properties": {
+                "contract_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contract_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ContractStatus"
+                    }
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "ended_at_gte": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
                     }
                 }
             }
@@ -15423,6 +16826,32 @@ const docTemplate = `{
                 },
                 "product_code": {
                     "description": "-\u003e BatchMeterUsage's ProductCode (omitted when ConcurrentAgreements)",
+                    "type": "string"
+                }
+            }
+        },
+        "AccountingPeriodResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "period_status": {
+                    "$ref": "#/definitions/types.AccountingPeriodStatus"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -16142,7 +17571,19 @@ const docTemplate = `{
         "AnalyticsQueryMeta": {
             "type": "object",
             "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "prev_from": {
+                    "type": "string"
+                },
+                "prev_to": {
+                    "type": "string"
+                },
                 "query_source": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }
@@ -16965,6 +18406,64 @@ const docTemplate = `{
             "properties": {
                 "plan_change": {
                     "$ref": "#/definitions/PlanChangeScheduleDetails"
+                }
+            }
+        },
+        "ContractAssociationResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.RevRecEntityType"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "ContractResponse": {
+            "type": "object",
+            "properties": {
+                "associations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ContractAssociationResponse"
+                    }
+                },
+                "contract_status": {
+                    "$ref": "#/definitions/types.ContractStatus"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "term_end": {
+                    "type": "string"
+                },
+                "term_start": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -18660,6 +20159,9 @@ const docTemplate = `{
                 "price_unit_type": {
                     "$ref": "#/definitions/types.PriceUnitType"
                 },
+                "product_id": {
+                    "type": "string"
+                },
                 "start_date": {
                     "type": "string"
                 },
@@ -18786,6 +20288,24 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "CreateProductRequest": {
+            "type": "object",
+            "required": [
+                "lookup_key",
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 }
             }
@@ -19331,7 +20851,8 @@ const docTemplate = `{
                     "$ref": "#/definitions/analytics.ViewDefinition"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 }
             }
         },
@@ -22155,6 +23676,70 @@ const docTemplate = `{
                 }
             }
         },
+        "JournalEntryResponse": {
+            "type": "object",
+            "properties": {
+                "accounting_period_id": {
+                    "type": "string"
+                },
+                "business_date": {
+                    "type": "string"
+                },
+                "contract_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.JournalEventType"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/JournalLineResponse"
+                    }
+                },
+                "reversal_of": {
+                    "type": "string"
+                },
+                "source_entity_id": {
+                    "type": "string"
+                },
+                "source_entity_type": {
+                    "$ref": "#/definitions/types.RevRecEntityType"
+                }
+            }
+        },
+        "JournalLineResponse": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/types.LedgerAccountKey"
+                },
+                "amount": {
+                    "type": "string"
+                },
+                "direction": {
+                    "$ref": "#/definitions/types.JournalDirection"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "pob_id": {
+                    "type": "string"
+                }
+            }
+        },
         "LineItemChange": {
             "type": "object",
             "required": [
@@ -22481,6 +24066,17 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListViewsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ViewResponse"
+                    }
                 }
             }
         },
@@ -22914,6 +24510,67 @@ const docTemplate = `{
                 }
             }
         },
+        "PerformanceObligationAssociationResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.RevRecEntityType"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "PerformanceObligationResponse": {
+            "type": "object",
+            "properties": {
+                "amortization_method": {
+                    "$ref": "#/definitions/types.AmortizationMethod"
+                },
+                "associations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PerformanceObligationAssociationResponse"
+                    }
+                },
+                "contract_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "pob_status": {
+                    "$ref": "#/definitions/types.PerformanceObligationStatus"
+                },
+                "recognition_method": {
+                    "$ref": "#/definitions/types.RecognitionMethod"
+                },
+                "service_end": {
+                    "type": "string"
+                },
+                "service_start": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "PlanChangeScheduleDetails": {
             "type": "object",
             "properties": {
@@ -23263,6 +24920,9 @@ const docTemplate = `{
                 "pricing_unit": {
                     "$ref": "#/definitions/PriceUnitResponse"
                 },
+                "product_id": {
+                    "type": "string"
+                },
                 "sequence": {
                     "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits.",
                     "type": "integer"
@@ -23367,6 +25027,32 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "ProductResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -23671,6 +25357,235 @@ const docTemplate = `{
                 }
             }
         },
+        "ReportCatalogEntry": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "enum": [
+                        "billing",
+                        "receivables",
+                        "customers",
+                        "credits",
+                        "usage"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportCategory"
+                        }
+                    ]
+                },
+                "default_shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportDimension"
+                    }
+                },
+                "grains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "day",
+                            "week",
+                            "month"
+                        ]
+                    }
+                },
+                "improvement": {
+                    "enum": [
+                        "higher",
+                        "lower"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ImprovementDirection"
+                        }
+                    ]
+                },
+                "key": {
+                    "type": "string"
+                },
+                "kind": {
+                    "enum": [
+                        "flow",
+                        "ratio",
+                        "snapshot"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportKind"
+                        }
+                    ]
+                },
+                "max_range_days": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "shapes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "timeseries",
+                            "breakdown",
+                            "scalar"
+                        ]
+                    }
+                },
+                "supports_compare": {
+                    "type": "boolean"
+                },
+                "value_type": {
+                    "enum": [
+                        "money",
+                        "count",
+                        "days"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportValueType"
+                        }
+                    ]
+                },
+                "variant_label": {
+                    "type": "string"
+                },
+                "variant_of": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReportCatalogResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportCatalogEntry"
+                    }
+                }
+            }
+        },
+        "ReportDimension": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReportFilter": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "in"
+                    ]
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "ReportQueryRequest": {
+            "type": "object",
+            "required": [
+                "range",
+                "shape"
+            ],
+            "properties": {
+                "compare": {
+                    "type": "string",
+                    "enum": [
+                        "previous_period",
+                        "previous_year"
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportFilter"
+                    }
+                },
+                "grain": {
+                    "type": "string",
+                    "enum": [
+                        "day",
+                        "week",
+                        "month"
+                    ]
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "range": {
+                    "type": "string",
+                    "example": "2026-09-01..2026-10-01"
+                },
+                "shape": {
+                    "type": "string",
+                    "enum": [
+                        "timeseries",
+                        "breakdown",
+                        "scalar"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ReportSort"
+                    }
+                }
+            }
+        },
+        "ReportSort": {
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "field": {
+                    "type": "string"
+                }
+            }
+        },
         "ResumeSubscriptionRequest": {
             "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date.",
             "type": "object",
@@ -23860,6 +25775,145 @@ const docTemplate = `{
                 },
                 "usage_at_list_rate": {
                     "type": "number"
+                }
+            }
+        },
+        "RevenueBreakdown": {
+            "type": "object",
+            "properties": {
+                "actual": {
+                    "type": "string"
+                },
+                "pending": {
+                    "type": "string"
+                },
+                "scheduled": {
+                    "type": "string"
+                },
+                "total": {
+                    "description": "actual + pending + scheduled",
+                    "type": "string"
+                }
+            }
+        },
+        "RollforwardRequest": {
+            "type": "object",
+            "required": [
+                "currency",
+                "period_start"
+            ],
+            "properties": {
+                "accounts": {
+                    "description": "defaults to [deferred_revenue]",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.LedgerAccountKey"
+                    }
+                },
+                "as_of": {
+                    "description": "only entries created at or before it",
+                    "type": "string"
+                },
+                "contract_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "group_by": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RevenueReportGroupBy"
+                    }
+                },
+                "limit": {
+                    "description": "item rows per page; totals are never paged",
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 0
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "period_end": {
+                    "description": "YYYY-MM, an ended month; defaults to period_start",
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "YYYY-MM",
+                    "type": "string"
+                },
+                "pob_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "RollforwardResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "per period, account and group; empty without group_by",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RollforwardRow"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                },
+                "totals": {
+                    "description": "per period and account, all groups",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RollforwardRow"
+                    }
+                }
+            }
+        },
+        "RollforwardRow": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/types.LedgerAccountKey"
+                },
+                "closing": {
+                    "type": "string"
+                },
+                "contract_id": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "movements": {
+                    "description": "a missing category is 0",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "opening": {
+                    "type": "string"
+                },
+                "period": {
+                    "description": "YYYY-MM",
+                    "type": "string"
+                },
+                "pob_id": {
+                    "type": "string"
                 }
             }
         },
@@ -27143,6 +29197,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/CreatePriceTier"
                     }
                 },
+                "product_id": {
+                    "description": "ProductID sets the price's product while it has none; once set it never changes.",
+                    "type": "string"
+                },
                 "tier_mode": {
                     "description": "TierMode determines how to calculate the price for a given quantity",
                     "allOf": [
@@ -27173,6 +29231,17 @@ const docTemplate = `{
             "properties": {
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "UpdateProductRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -27932,6 +30001,12 @@ const docTemplate = `{
         "ViewResponse": {
             "type": "object",
             "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
                 "definition": {
                     "$ref": "#/definitions/analytics.ViewDefinition"
                 },
@@ -27939,6 +30014,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "version": {
@@ -28247,6 +30325,133 @@ const docTemplate = `{
                     "$ref": "#/definitions/WalletResponse"
                 },
                 "wallet_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "WaterfallCell": {
+            "type": "object",
+            "properties": {
+                "deferred": {
+                    "description": "details: closing deferred_revenue, ended months only",
+                    "type": "string"
+                },
+                "period": {
+                    "description": "YYYY-MM",
+                    "type": "string"
+                },
+                "revenue": {
+                    "$ref": "#/definitions/RevenueBreakdown"
+                },
+                "unbilled": {
+                    "description": "details: closing unbilled_receivable, ended months only",
+                    "type": "string"
+                }
+            }
+        },
+        "WaterfallRequest": {
+            "type": "object",
+            "required": [
+                "currency",
+                "period_end",
+                "period_start"
+            ],
+            "properties": {
+                "as_of": {
+                    "description": "report date: pending and scheduled split here; defaults to now",
+                    "type": "string"
+                },
+                "contract_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "details": {
+                    "description": "month-end deferred and unbilled balances",
+                    "type": "boolean"
+                },
+                "group_by": {
+                    "description": "defaults to customer_id",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RevenueReportGroupBy"
+                        }
+                    ]
+                },
+                "limit": {
+                    "description": "rows per page; totals are never paged",
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 0
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "period_end": {
+                    "description": "YYYY-MM, at most 36 months from period_start",
+                    "type": "string"
+                },
+                "period_start": {
+                    "description": "YYYY-MM",
+                    "type": "string"
+                },
+                "pob_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "WaterfallResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/WaterfallRow"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                },
+                "totals": {
+                    "description": "per period over all rows, never paged",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/WaterfallCell"
+                    }
+                }
+            }
+        },
+        "WaterfallRow": {
+            "type": "object",
+            "properties": {
+                "cells": {
+                    "description": "one per requested period, in order",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/WaterfallCell"
+                    }
+                },
+                "contract_id": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "pob_id": {
                     "type": "string"
                 }
             }
@@ -28778,6 +30983,13 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/types.CouponRef"
+                    }
+                },
+                "price_overrides": {
+                    "description": "Price overrides minted at execute time; completion repoints the line items instead of minting again.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.AddonPriceOverrideRef"
                     }
                 },
                 "proration_behavior": {
@@ -30423,11 +32635,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "usage",
-                "billing"
+                "billing",
+                "report"
             ],
             "x-enum-varnames": [
                 "FamilyUsage",
-                "FamilyBilling"
+                "FamilyBilling",
+                "FamilyReport"
             ]
         },
         "types.FeatureFilter": {
@@ -30934,6 +33148,10 @@ const docTemplate = `{
                     "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing",
                     "type": "string"
                 },
+                "updated_at_gte": {
+                    "description": "updated_at_gte filters invoices updated at or after the given instant",
+                    "type": "string"
+                },
                 "voided_at_gte": {
                     "description": "voided_at_gte filters invoices voided at or after the given instant",
                     "type": "string"
@@ -31065,12 +33283,36 @@ const docTemplate = `{
             "enum": [
                 "usage_quantity",
                 "event_count",
-                "invoice_total"
+                "events_volume",
+                "invoice_total",
+                "total_receivables",
+                "receivables_aging",
+                "days_to_pay",
+                "arpu",
+                "arpu_paid",
+                "credit_consumption",
+                "credit_topups",
+                "net_billing",
+                "invoice_total_issued",
+                "net_billing_issued",
+                "active_customers"
             ],
             "x-enum-varnames": [
                 "MetricUsageQuantity",
                 "MetricEventCount",
-                "MetricInvoiceTotal"
+                "MetricEventsVolume",
+                "MetricInvoiceTotal",
+                "MetricTotalReceivables",
+                "MetricReceivablesAging",
+                "MetricDaysToPay",
+                "MetricARPU",
+                "MetricARPUPaid",
+                "MetricCreditConsumption",
+                "MetricCreditTopups",
+                "MetricNetBilling",
+                "MetricInvoiceTotalIssued",
+                "MetricNetBillingIssued",
+                "MetricActiveCustomers"
             ]
         },
         "types.ModifySubscriptionLineItem": {
@@ -31502,6 +33744,12 @@ const docTemplate = `{
                     }
                 },
                 "price_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "product_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -33655,6 +35903,102 @@ const docTemplate = `{
                 }
             }
         },
+        "journal.Filter": {
+            "type": "object",
+            "properties": {
+                "accounting_period_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.LedgerAccountKey"
+                    }
+                },
+                "contract_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "event_types": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.JournalEventType"
+                    }
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "journal_entry_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "pob_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "source_entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "source_entity_type": {
+                    "$ref": "#/definitions/types.RevRecEntityType"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "meter.Aggregation": {
             "type": "object",
             "properties": {
@@ -33715,6 +36059,81 @@ const docTemplate = `{
                 },
                 "workflow_id": {
                     "type": "string"
+                }
+            }
+        },
+        "pob.Filter": {
+            "type": "object",
+            "properties": {
+                "contract_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "performance_obligation_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "pob_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PerformanceObligationStatus"
+                    }
+                },
+                "recognition_methods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.RecognitionMethod"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
                 }
             }
         },
@@ -33887,6 +36306,9 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "product_id": {
+                    "type": "string"
+                },
                 "sequence": {
                     "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits.",
                     "type": "integer"
@@ -33967,6 +36389,63 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.RoundType"
                         }
                     ]
+                }
+            }
+        },
+        "product.Filter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "lookup_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "product_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
                 }
             }
         },
@@ -34230,6 +36709,132 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AccountingPeriodStatus": {
+            "type": "string",
+            "enum": [
+                "open",
+                "closed"
+            ],
+            "x-enum-comments": {
+                "AccountingPeriodStatusClosed": "reserved; close is deferred"
+            },
+            "x-enum-varnames": [
+                "AccountingPeriodStatusOpen",
+                "AccountingPeriodStatusClosed"
+            ]
+        },
+        "types.AddonPriceOverrideRef": {
+            "type": "object",
+            "properties": {
+                "override_price_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.AmortizationMethod": {
+            "type": "string",
+            "enum": [
+                "daily",
+                "period_even",
+                "period_even_prorated"
+            ],
+            "x-enum-varnames": [
+                "AmortizationDaily",
+                "AmortizationPeriodEven",
+                "AmortizationPeriodEvenProrated"
+            ]
+        },
+        "types.ContractStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "active",
+                "ended",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ContractStatusDraft",
+                "ContractStatusActive",
+                "ContractStatusEnded",
+                "ContractStatusCancelled"
+            ]
+        },
+        "types.ImprovementDirection": {
+            "type": "string",
+            "enum": [
+                "higher",
+                "lower"
+            ],
+            "x-enum-varnames": [
+                "ImprovementHigher",
+                "ImprovementLower"
+            ]
+        },
+        "types.JournalDirection": {
+            "type": "string",
+            "enum": [
+                "debit",
+                "credit"
+            ],
+            "x-enum-varnames": [
+                "JournalDirectionDebit",
+                "JournalDirectionCredit"
+            ]
+        },
+        "types.JournalEventType": {
+            "type": "string",
+            "enum": [
+                "invoice_finalized",
+                "invoice_voided",
+                "credit_note_finalized",
+                "credit_note_voided",
+                "payment_succeeded",
+                "payment_reversed",
+                "refund_succeeded",
+                "revenue_earned",
+                "revenue_offset"
+            ],
+            "x-enum-varnames": [
+                "JournalEventInvoiceFinalized",
+                "JournalEventInvoiceVoided",
+                "JournalEventCreditNoteFinalized",
+                "JournalEventCreditNoteVoided",
+                "JournalEventPaymentSucceeded",
+                "JournalEventPaymentReversed",
+                "JournalEventRefundSucceeded",
+                "JournalEventRevenueEarned",
+                "JournalEventRevenueOffset"
+            ]
+        },
+        "types.LedgerAccountKey": {
+            "type": "string",
+            "enum": [
+                "cash",
+                "accounts_receivable",
+                "unbilled_receivable",
+                "deferred_revenue",
+                "customer_credit",
+                "tax_payable",
+                "revenue",
+                "contra_revenue"
+            ],
+            "x-enum-varnames": [
+                "LedgerAccountCash",
+                "LedgerAccountReceivable",
+                "LedgerAccountUnbilledReceivable",
+                "LedgerAccountDeferredRevenue",
+                "LedgerAccountCustomerCredit",
+                "LedgerAccountTaxPayable",
+                "LedgerAccountRevenue",
+                "LedgerAccountContraRevenue"
+            ]
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -34249,6 +36854,111 @@ const docTemplate = `{
             "additionalProperties": {
                 "type": "string"
             }
+        },
+        "types.PerformanceObligationStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "active",
+                "satisfied",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "PerformanceObligationStatusDraft",
+                "PerformanceObligationStatusActive",
+                "PerformanceObligationStatusSatisfied",
+                "PerformanceObligationStatusCancelled"
+            ]
+        },
+        "types.RecognitionMethod": {
+            "type": "string",
+            "enum": [
+                "point_in_time",
+                "straight_line",
+                "as_consumed"
+            ],
+            "x-enum-varnames": [
+                "RecognitionMethodPointInTime",
+                "RecognitionMethodStraightLine",
+                "RecognitionMethodAsConsumed"
+            ]
+        },
+        "types.ReportCategory": {
+            "type": "string",
+            "enum": [
+                "billing",
+                "receivables",
+                "customers",
+                "credits",
+                "usage"
+            ],
+            "x-enum-varnames": [
+                "ReportCategoryBilling",
+                "ReportCategoryReceivables",
+                "ReportCategoryCustomers",
+                "ReportCategoryCredits",
+                "ReportCategoryUsage"
+            ]
+        },
+        "types.ReportKind": {
+            "type": "string",
+            "enum": [
+                "flow",
+                "ratio",
+                "snapshot"
+            ],
+            "x-enum-varnames": [
+                "ReportKindFlow",
+                "ReportKindRatio",
+                "ReportKindSnapshot"
+            ]
+        },
+        "types.ReportValueType": {
+            "type": "string",
+            "enum": [
+                "money",
+                "count",
+                "days"
+            ],
+            "x-enum-varnames": [
+                "ReportValueTypeMoney",
+                "ReportValueTypeCount",
+                "ReportValueTypeDays"
+            ]
+        },
+        "types.RevRecEntityType": {
+            "type": "string",
+            "enum": [
+                "subscription",
+                "subscription_line_item",
+                "invoice",
+                "credit_note",
+                "payment",
+                "refund",
+                "pob"
+            ],
+            "x-enum-varnames": [
+                "RevRecEntityTypeSubscription",
+                "RevRecEntityTypeSubscriptionLineItem",
+                "RevRecEntityTypeInvoice",
+                "RevRecEntityTypeCreditNote",
+                "RevRecEntityTypePayment",
+                "RevRecEntityTypeRefund",
+                "RevRecEntityTypePOB"
+            ]
+        },
+        "types.RevenueReportGroupBy": {
+            "type": "string",
+            "enum": [
+                "customer_id",
+                "contract_id",
+                "pob_id"
+            ],
+            "x-enum-varnames": [
+                "RevenueReportGroupByCustomer",
+                "RevenueReportGroupByContract",
+                "RevenueReportGroupByPOB"
+            ]
         },
         "types.TenantInternalStatus": {
             "type": "string",
