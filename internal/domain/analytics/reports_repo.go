@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -19,9 +20,18 @@ type ReportResult struct {
 	Rows    [][]string
 }
 
-// ReportsRepository runs billing-family views.
+// DatasetQuery is a validated dataset request.
+type DatasetQuery struct {
+	Def     *ViewDefinition
+	From    time.Time
+	To      time.Time
+	Compare string
+}
+
+// ReportsRepository runs billing-family and dataset views.
 type ReportsRepository interface {
 	Enabled() bool
 	MaxRows() int
 	RunReport(ctx context.Context, rv *ResolvedView, tenantID, environmentID string) (*ReportResult, error)
+	RunDataset(ctx context.Context, q *DatasetQuery, tenantID, environmentID string) (*ReportResult, error)
 }

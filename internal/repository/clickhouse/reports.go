@@ -97,6 +97,27 @@ func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.Resolve
 	return reportResult(q, rows, r.cfg.MaxResultRows)
 }
 
+func (r *ReportsRepository) RunDataset(ctx context.Context, dq *analytics.DatasetQuery, tenantID, environmentID string) (*analytics.ReportResult, error) {
+	if r.conn == nil {
+		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
+	}
+	if dq == nil || dq.Def == nil {
+		return nil, ierr.NewError("dataset query is required").Mark(ierr.ErrValidation)
+	}
+	w := *dq
+	w.From = r.stableTime(dq.From)
+	w.To = r.stableTime(dq.To)
+	q, err := buildDatasetQuery(&w, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.run(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return reportResult(q, rows, r.cfg.MaxResultRows)
+}
+
 func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, environmentID string) (*reportQuery, error) {
 	if rv == nil {
 		return buildBillingQueryWithUsage(rv, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
