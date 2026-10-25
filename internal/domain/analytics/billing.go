@@ -75,6 +75,12 @@ var billingMetrics = map[types.Metric]*BillingMetric{
 	types.MetricNetBilling:         currencyMetric(types.MetricNetBilling, types.ShapeScalar, types.ShapeTimeseries),
 	types.MetricNetBillingIssued:   currencyMetric(types.MetricNetBillingIssued, types.ShapeScalar, types.ShapeTimeseries),
 	types.MetricActiveCustomers:    currencyMetric(types.MetricActiveCustomers, types.ShapeScalar),
+	types.MetricMACConsumption: {
+		Metric:     types.MetricMACConsumption,
+		Dimensions: []string{"component", "customer_id", "currency"},
+		Shapes:     []types.Shape{types.ShapeBreakdown},
+		Currency:   true,
+	},
 	types.MetricEventsVolume: {
 		Metric:       types.MetricEventsVolume,
 		Dimensions:   []string{"meter_id"},

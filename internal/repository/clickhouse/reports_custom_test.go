@@ -143,3 +143,20 @@ func TestBuildActiveCustomers(t *testing.T) {
 		assert.True(t, ierr.IsValidation(err))
 	}
 }
+
+func TestBuildMACConsumption(t *testing.T) {
+	rv := customRV(types.MetricMACConsumption, types.ShapeBreakdown)
+	rv.Dimensions = []string{"customer_id", "component"}
+	q, err := buildBillingQuery(rv, "reports_db", "t", "e", 100)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(q.SQL, "SELECT "))
+	assert.Contains(t, q.SQL, "reports_db.invoice_line_items AS il")
+	assert.Contains(t, q.SQL, "i.invoice_status = 'FINALIZED'")
+	assert.Contains(t, q.SQL, "il.period_start >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "GROUP BY d_customer_id, d_currency, d_component")
+	require.Len(t, q.Columns, 4)
+	assert.Equal(t, "mac_consumption", q.Columns[3].Name)
+
+	_, err = buildBillingQuery(customRV(types.MetricMACConsumption, types.ShapeScalar), "reports_db", "t", "e", 0)
+	require.Error(t, err)
+}

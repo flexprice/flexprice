@@ -153,5 +153,6 @@ var billingSQLs = map[types.Metric]*billingSQL{
 	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceFinalizedTime),
 	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceFinalizedTime),
 	types.MetricActiveCustomers:    {Build: buildActiveCustomers},
+	types.MetricMACConsumption:     {Build: buildMACConsumption},
 	types.MetricEventsVolume:       {Build: buildEventsVolume},
 }

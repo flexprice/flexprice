@@ -120,6 +120,7 @@ const (
 	MetricInvoiceTotalIssued Metric = "invoice_total_issued"
 	MetricNetBillingIssued   Metric = "net_billing_issued"
 	MetricActiveCustomers    Metric = "active_customers"
+	MetricMACConsumption     Metric = "mac_consumption"
 )
 
 func (m Metric) Validate() error {

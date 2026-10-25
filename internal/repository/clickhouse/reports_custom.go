@@ -220,3 +220,85 @@ func buildActiveCustomers(in buildInput) (*reportQuery, error) {
 		{Name: string(types.MetricActiveCustomers), Type: types.ColumnTypeDecimal, Role: types.ColumnRoleMetric},
 	}}, nil
 }
+
+var macComponents = []string{"committed", "consumed", "overage", "true_up"}
+
+func macDecimal(field string) string {
+	return "toDecimal128OrZero(JSONExtractString(il.commitment_info, '" + field + "'), 9)"
+}
+
+// Per-customer commitment amounts from invoice line items.
+func buildMACConsumption(in buildInput) (*reportQuery, error) {
+	if err := rejectCustomDims(in, types.MetricMACConsumption, []string{"component", "customer_id", "currency"}, types.ShapeBreakdown); err != nil {
+		return nil, err
+	}
+	filterConds, err := macFilters(in)
+	if err != nil {
+		return nil, err
+	}
+
+	var b strings.Builder
+	b.WriteString("SELECT ifNull(toString(customer_id), '') AS d_customer_id, ifNull(toString(currency), '') AS d_currency, comp.1 AS d_component, ifNull(toString(sum(comp.2)), '') AS m_value FROM (")
+	b.WriteString("SELECT il.customer_id AS customer_id, il.currency AS currency, ")
+	b.WriteString(macDecimal("computed_commitment_utilized_amount") + " AS utilized, ")
+	b.WriteString(macDecimal("computed_overage_amount") + " AS overage_amount, ")
+	b.WriteString(macDecimal("computed_true_up_amount") + " AS true_up_amount, ")
+	b.WriteString("if(JSONExtractString(il.commitment_info, 'type') = 'amount' AND " + macDecimal("amount") + " > 0, " + macDecimal("amount") + ", utilized + true_up_amount) AS committed_amount")
+	b.WriteString(" FROM " + in.DB + ".invoice_line_items AS il INNER JOIN (SELECT id FROM " + in.DB + ".invoices AS i WHERE " + in.Scope("i"))
+	b.WriteString(" AND i.invoice_status = '" + string(types.InvoiceStatusFinalized) + "') AS inv ON inv.id = il.invoice_id")
+	b.WriteString(" WHERE " + in.Scope("il") + " AND il.commitment_info IS NOT NULL AND il.commitment_info NOT IN ('', 'null')")
+	b.WriteString(" AND " + in.TimeCond("il.period_start"))
+	b.WriteString(") ARRAY JOIN [('committed', committed_amount), ('consumed', utilized), ('overage', overage_amount), ('true_up', true_up_amount)] AS comp")
+	if len(filterConds) > 0 {
+		b.WriteString(" WHERE " + strings.Join(filterConds, " AND "))
+	}
+	b.WriteString(" GROUP BY d_customer_id, d_currency, d_component ORDER BY d_customer_id, d_currency, d_component" + limitClause(in.MaxRows))
+
+	return &reportQuery{SQL: b.String(), Params: in.Params, Columns: []analytics.ReportColumn{
+		{Name: "customer_id", Type: types.ColumnTypeString, Role: types.ColumnRoleDimension},
+		{Name: "currency", Type: types.ColumnTypeString, Role: types.ColumnRoleDimension},
+		{Name: "component", Type: types.ColumnTypeString, Role: types.ColumnRoleDimension},
+		{Name: string(types.MetricMACConsumption), Type: types.ColumnTypeDecimal, Role: types.ColumnRoleMetric},
+	}}, nil
+}
+
+func rejectCustomDims(in buildInput, metric types.Metric, dims []string, shape types.Shape) error {
+	rv := in.RV
+	if rv.Compare != "" {
+		return ierr.NewErrorf("metric %q does not support compare", metric).Mark(ierr.ErrValidation)
+	}
+	if rv.Shape != shape {
+		return ierr.NewErrorf("shape %q not supported for metric %q", rv.Shape, metric).Mark(ierr.ErrValidation)
+	}
+	for _, d := range rv.Dimensions {
+		if !slices.Contains(dims, d) {
+			return ierr.NewErrorf("illegal dimension %q for metric %q", d, metric).Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+func macFilters(in buildInput) ([]string, error) {
+	var conds []string
+	for i, f := range in.RV.Filters {
+		if f == nil {
+			continue
+		}
+		if f.Field != "customer_id" && f.Field != "currency" && f.Field != "component" {
+			return nil, ierr.NewErrorf("illegal filter field %q for mac consumption", f.Field).Mark(ierr.ErrValidation)
+		}
+		if len(f.Value) == 0 {
+			conds = append(conds, "1 = 0")
+			continue
+		}
+		ph := make([]string, len(f.Value))
+		for j, v := range f.Value {
+			name := "f" + strconv.Itoa(i) + "_" + strconv.Itoa(j)
+			in.Params[name] = v
+			ph[j] = "{" + name + ":String}"
+		}
+		field := map[string]string{"customer_id": "customer_id", "currency": "currency", "component": "comp.1"}[f.Field]
+		conds = append(conds, field+" IN ("+strings.Join(ph, ", ")+")")
+	}
+	return conds, nil
+}

@@ -115,6 +115,15 @@ var reportCatalog = []ReportCatalogEntry{
 		VariantLabel:    "Paid",
 	},
 	{
+		Key:          types.MetricMACConsumption,
+		Name:         "MAC consumption",
+		Description:  "Committed, consumed, overage and true-up amounts per customer on finalized invoices",
+		Category:     types.ReportCategoryCustomers,
+		Kind:         types.ReportKindFlow,
+		ValueType:    types.ReportValueTypeMoney,
+		DefaultShape: types.ShapeBreakdown,
+	},
+	{
 		Key:             types.MetricCreditConsumption,
 		Name:            "Credit consumption",
 		Description:     "Invoice debits split by free and paid source credits, valued at the debit conversion rate",
