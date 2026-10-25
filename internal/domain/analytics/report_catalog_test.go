@@ -61,3 +61,10 @@ func TestReportCatalog_UnknownAndCopy(t *testing.T) {
 	b := ReportCatalog()
 	assert.NotEqual(t, "mutated", b[0].Name)
 }
+
+func TestMACConsumptionAcceptsComponentDimension(t *testing.T) {
+	e, ok := LookupReport(string(types.MetricMACConsumption))
+	require.True(t, ok)
+	req := &ReportQuery{Shape: string(types.ShapeBreakdown), Dimensions: []string{"customer_id", "component"}}
+	require.NoError(t, req.ValidateAgainst(e, 0))
+}

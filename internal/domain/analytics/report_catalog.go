@@ -201,6 +201,7 @@ var dimensionLabels = map[string]string{
 	"transaction_reason": "Reason",
 	"meter_id":           "Meter",
 	"credit_type":        "Credit type",
+	"component":          "Component",
 }
 
 // Shapes and dimensions come from the billing metric.
