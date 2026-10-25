@@ -68,3 +68,30 @@ func TestBuildInvoiceItemParams_AmountFallbackWhenFeatureOff(t *testing.T) {
 	require.Nil(t, params.PriceData)
 	require.Equal(t, int64(250), *params.Amount)
 }
+
+func TestBuildInvoiceItemParams_SmallestUnit(t *testing.T) {
+	cases := []struct {
+		name     string
+		amount   decimal.Decimal
+		currency string
+		want     int64
+	}{
+		{"USD control", decimal.RequireFromString("12.34"), "USD", 1234},
+		{"JPY zero-decimal", decimal.NewFromInt(12000), "JPY", 12000},
+		{"KRW zero-decimal", decimal.NewFromInt(50000), "KRW", 50000},
+		{"KWD three-decimal", decimal.RequireFromString("12.345"), "KWD", 12345},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+"/amount fallback", func(t *testing.T) {
+			li := &invoice.InvoiceLineItem{ID: "li_1", Amount: tc.amount, Quantity: decimal.NewFromInt(1), Currency: tc.currency}
+			params := buildInvoiceItemParams(li, "cus_1", "in_1", nil)
+			require.Equal(t, tc.want, *params.Amount)
+		})
+		t.Run(tc.name+"/price_data", func(t *testing.T) {
+			li := &invoice.InvoiceLineItem{ID: "li_1", PriceID: lo.ToPtr("price_1"), Amount: tc.amount, Quantity: decimal.NewFromInt(1), Currency: tc.currency}
+			params := buildInvoiceItemParams(li, "cus_1", "in_1", map[string]string{"price_1": "prod_1"})
+			require.Equal(t, tc.want, *params.PriceData.UnitAmount)
+		})
+	}
+}
+
