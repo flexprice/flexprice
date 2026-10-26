@@ -79,11 +79,15 @@ func (a amortizedAmount) weightBefore(day time.Time) decimal.Decimal {
 }
 
 // wholeMonths snaps a term to N whole calendar months from its start month: N is its length in months, a partial
-// month counting as one, and at least 1.
-// e.g. [Apr 22, May 22) → [Apr 1, May 1); [Apr 22 2026, Apr 22 2027) → [Apr 1 2026, Apr 1 2027); [Sep 7, Oct 1) → [Sep 1, Oct 1)
+// month counting as one, and at least 1. A start on a month's last day is matched by an end on a month's last day.
+// e.g. [Apr 22, May 22) → [Apr 1, May 1); [Sep 7, Oct 1) → [Sep 1, Oct 1); [Sep 30, Dec 31) → [Sep 1, Dec 1)
 func wholeMonths(term dayRange) dayRange {
 	months := (term.end.Year()-term.start.Year())*12 + int(term.end.Month()-term.start.Month())
-	if term.end.Day() > term.start.Day() {
+	startDay := term.start.Day()
+	if term.start.AddDate(0, 0, 1).Day() == 1 {
+		startDay = int(monthContaining(term.end).days())
+	}
+	if term.end.Day() > startDay {
 		months++
 	}
 	start := monthContaining(term.start).start

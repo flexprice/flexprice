@@ -158,6 +158,10 @@ func TestWholeMonths(t *testing.T) {
 		{"a few days is one month", date(2026, 1, 1), date(2026, 1, 15), dayRange{date(2026, 1, 1), date(2026, 2, 1)}},
 		{"a partial extra month counts as one", date(2026, 1, 10), date(2026, 3, 20), dayRange{date(2026, 1, 1), date(2026, 4, 1)}},
 		{"from the 31st into a short month", date(2026, 1, 31), date(2026, 2, 28), dayRange{date(2026, 1, 1), date(2026, 2, 1)}},
+		{"month end to a longer month's end", date(2026, 9, 30), date(2026, 12, 31), dayRange{date(2026, 9, 1), date(2026, 12, 1)}},
+		{"month end to the same day", date(2026, 6, 30), date(2026, 9, 30), dayRange{date(2026, 6, 1), date(2026, 9, 1)}},
+		{"February's end to March's end", date(2026, 2, 28), date(2026, 3, 31), dayRange{date(2026, 2, 1), date(2026, 3, 1)}},
+		{"a day past a month end counts", date(2026, 9, 30), date(2027, 1, 1), dayRange{date(2026, 9, 1), date(2027, 1, 1)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
