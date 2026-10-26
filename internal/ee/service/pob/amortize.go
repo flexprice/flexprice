@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/shopspring/decimal"
 )
 
@@ -11,7 +12,7 @@ import (
 // Amounts are additive: a POB earns the sum of Earned over its billed lines, each on its own period.
 // e.g. $300 over [Jan 15, Apr 15), prorated: before Mar 10 → 182.95; a $40 proration line over [Apr 1, Apr 15) adds 40 by Apr 15.
 func Earned(amount decimal.Decimal, start, end time.Time, recognition types.RecognitionMethod, amortization types.AmortizationMethod, asOf time.Time, loc *time.Location) decimal.Decimal {
-	return newAmortizedAmount(amount, start, end, recognition, amortization, loc).earnedBefore(dayOf(asOf, loc))
+	return newAmortizedAmount(amount, start, end, recognition, amortization, loc).earnedBefore(utils.LocalDay(asOf, loc))
 }
 
 // amortizedAmount is an amount with its covered local days and their total weight resolved once.
@@ -26,7 +27,7 @@ type amortizedAmount struct {
 // e.g. a point_in_time charge on Feb 10 covers [Feb 10, Feb 11).
 func newAmortizedAmount(amount decimal.Decimal, start, end time.Time, recognition types.RecognitionMethod, amortization types.AmortizationMethod, loc *time.Location) amortizedAmount {
 	// e.g. Jan 15 00:00 → Apr 15 00:00 local gives [Jan 15, Apr 15)
-	term := dayRange{start: dayOf(start, loc), end: dayOf(end, loc)}
+	term := dayRange{start: utils.LocalDay(start, loc), end: utils.LocalDay(end, loc)}
 
 	// e.g. a point_in_time charge on Feb 10, or a Feb 10 10:00 → 15:00 period, becomes [Feb 10, Feb 11)
 	if recognition == types.RecognitionMethodPointInTime || term.days() == 0 {
@@ -74,7 +75,7 @@ func (a amortizedAmount) weightBefore(day time.Time) decimal.Decimal {
 	return total
 }
 
-// dayRange is the local days [start, end), each stamped as UTC midnight by dayOf.
+// dayRange is the local days [start, end), each stamped as UTC midnight by utils.LocalDay.
 type dayRange struct {
 	start time.Time
 	end   time.Time
@@ -112,17 +113,6 @@ func monthContaining(day time.Time) dayRange {
 	start := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	return dayRange{start: start, end: start.AddDate(0, 1, 0)}
-}
-
-// dayOf is t's calendar day in loc, stamped as UTC midnight; the same as revenue's dayOf, which is unexported.
-// e.g. Feb 1 00:00 Asia/Kolkata (Jan 31 18:30 UTC) → Feb 1.
-func dayOf(t time.Time, loc *time.Location) time.Time {
-	if loc == nil {
-		loc = time.UTC
-	}
-	l := t.In(loc)
-
-	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func laterOf(a, b time.Time) time.Time {

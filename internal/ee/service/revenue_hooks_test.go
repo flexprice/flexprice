@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -217,11 +219,12 @@ func TestNotifySubscriptionChanged_WritesOnlyWhenRevRecEnabled(t *testing.T) {
 			contractRepo := testutil.NewInMemoryContractStore()
 			pobRepo := testutil.NewInMemoryPOBStore(contractRepo)
 			params := ServiceParams{
-				Logger:       logger.NewNoopLogger(),
-				SubRepo:      subRepo,
-				SettingsRepo: settingsRepo,
-				ContractRepo: contractRepo,
-				POBRepo:      pobRepo,
+				Logger:          logger.NewNoopLogger(),
+				SubRepo:         subRepo,
+				SettingsRepo:    settingsRepo,
+				ContractService: contractsvc.NewContractService(contractRepo),
+				POBService: pobsvc.NewPerformanceObligationService(pobRepo, contractRepo, subRepo, testutil.NewInMemoryInvoiceStore(),
+					testutil.NewInMemoryTaxAppliedStore(), testutil.NewInMemoryRevenueFactStore()),
 			}
 			NotifySubscriptionChanged(ctx, params, sub.ID)
 

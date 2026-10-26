@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainJournal "github.com/flexprice/flexprice/internal/domain/journal"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -63,6 +64,7 @@ type journalService struct {
 	journalRepo     journalRepo.Repository
 	periodService   accountingperiodsvc.AccountingPeriodService
 	pobService      pobsvc.PerformanceObligationService
+	pobRepo         pobRepo.Repository
 	contractService contractsvc.ContractService
 	contractRepo    contractRepo.Repository
 	subRepo         subscription.Repository
@@ -110,6 +112,7 @@ func NewJournalService(
 	journalRepo journalRepo.Repository,
 	periodService accountingperiodsvc.AccountingPeriodService,
 	pobService pobsvc.PerformanceObligationService,
+	pobRepo pobRepo.Repository,
 	contractService contractsvc.ContractService,
 	contractRepo contractRepo.Repository,
 	subRepo subscription.Repository,
@@ -126,6 +129,7 @@ func NewJournalService(
 		journalRepo:     journalRepo,
 		periodService:   periodService,
 		pobService:      pobService,
+		pobRepo:         pobRepo,
 		contractService: contractService,
 		contractRepo:    contractRepo,
 		subRepo:         subRepo,
@@ -167,7 +171,7 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypeInvoice, inv.ID).
 			WithReversalOf(reversalOf).
-			WithBusinessDate(localDate(at, loc)).
+			WithBusinessDate(utils.LocalDay(at, loc)).
 			WithCustomerID(inv.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(inv.Currency).
@@ -263,7 +267,7 @@ func (s *journalService) PostCreditNote(ctx context.Context, cn *creditnote.Cred
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypeCreditNote, cn.ID).
 			WithReversalOf(reversalOf).
-			WithBusinessDate(localDate(at, loc)).
+			WithBusinessDate(utils.LocalDay(at, loc)).
 			WithCustomerID(cn.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(cn.Currency).
@@ -333,7 +337,7 @@ func (s *journalService) PostPayment(ctx context.Context, p *payment.Payment) er
 			WithEventType(eventType).
 			WithSource(types.RevRecEntityTypePayment, p.ID).
 			WithReversalOf(reversalOf).
-			WithBusinessDate(localDate(at, loc)).
+			WithBusinessDate(utils.LocalDay(at, loc)).
 			WithCustomerID(inv.CustomerID).
 			WithContractID(contractID).
 			WithCurrency(p.Currency).
@@ -385,7 +389,7 @@ func (s *journalService) PostRefund(ctx context.Context, r *refund.Refund) error
 	_, err = s.post(ctx, domainJournal.NewBuilder(nil).
 		WithEventType(types.JournalEventRefundSucceeded).
 		WithSource(types.RevRecEntityTypeRefund, r.ID).
-		WithBusinessDate(localDate(*r.SucceededAt, loc)).
+		WithBusinessDate(utils.LocalDay(*r.SucceededAt, loc)).
 		WithCustomerID(inv.CustomerID).
 		WithContractID(contractID).
 		WithCurrency(r.Currency).
@@ -402,7 +406,7 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 	if err != nil {
 		return nil, err
 	}
-	pobs, err := s.pobService.GetPerformanceObligations(ctx, &pobRepo.Filter{
+	pobs, err := s.pobRepo.List(ctx, &pobRepo.Filter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		ContractIDs: []string{contractID},
 		POBStatuses: []types.PerformanceObligationStatus{types.PerformanceObligationStatusActive, types.PerformanceObligationStatusSatisfied},
@@ -410,7 +414,7 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 	if err != nil {
 		return nil, err
 	}
-	if len(pobs.Items) == 0 {
+	if len(pobs) == 0 {
 		return nil, nil
 	}
 
@@ -425,12 +429,10 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 	}
 
 	// e.g. a POB from Jan 15 run on Apr 2 → Feb 1, Mar 1, Apr 1: the ends of January, February and March
-	first := localDate(lo.Earliest(lo.Map(pobs.Items, func(p *dto.PerformanceObligationResponse, _ int) time.Time { return p.ServiceStart })...), loc)
-	today := localDate(req.AsOf, loc)
-	var monthEnds []time.Time
-	for m := time.Date(first.Year(), first.Month()+1, 1, 0, 0, 0, 0, time.UTC); !m.After(today); m = m.AddDate(0, 1, 0) {
-		monthEnds = append(monthEnds, m)
-	}
+	first := utils.LocalDay(lo.Earliest(lo.Map(pobs, func(p *domainPOB.PerformanceObligation, _ int) time.Time { return p.ServiceStart() })...), loc)
+	today := utils.LocalDay(req.AsOf, loc)
+	// Months ended in the customer's local time, not UTC: each month's start is the previous month's end.
+	monthEnds := lo.Drop(utils.Months(first, today), 1)
 
 	// A dry run ends the open month at today, e.g. Feb 15 → Feb 1–14; on the 1st the open month has no days yet.
 	if req.DryRun && today.Day() != 1 && today.After(first) {
@@ -451,9 +453,9 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 	precision := types.GetCurrencyPrecision(c.Currency())
 	var recognized []*domainJournal.Entry
 	var errs []error
-	for _, p := range pobs.Items {
+	for _, p := range pobs {
 		recognizePOB := func(ctx context.Context) error {
-			entries, err := s.journalRepo.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), POBIDs: []string{p.ID}})
+			entries, err := s.journalRepo.List(ctx, &journalRepo.Filter{QueryFilter: types.NewNoLimitQueryFilter(), POBIDs: []string{p.ID()}})
 			if err != nil {
 				return err
 			}
@@ -461,7 +463,7 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 			entry := func(eventType types.JournalEventType, lastDay time.Time, postings []posting) *domainJournal.Entry {
 				return domainJournal.NewBuilder(nil).
 					WithEventType(eventType).
-					WithSource(types.RevRecEntityTypePOB, p.ID).
+					WithSource(types.RevRecEntityTypePOB, p.ID()).
 					WithBusinessDate(lastDay).
 					WithCustomerID(c.CustomerID()).
 					WithContractID(c.ID()).
@@ -472,19 +474,30 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 
 			for i, monthEnd := range monthEnds {
 				lastDay := monthEnd.AddDate(0, 0, -1)
-				toRecognize, toOffset := computeMonth(positionAt(entries, p.ID, lastDay), earned[i][p.ID].Round(precision))
+				pos := positionAt(entries, p.ID(), lastDay)
+				toRecognize, toOffset := computeMonth(pos, earned[i][p.ID()].Round(precision))
 
 				// Zero amounts leave no lines, so post skips them; posted entries join the in-memory totals.
-				// e.g. Jan 31: [revenue_earned 100, revenue_offset 100]
+				// e.g. arrears Feb 28: [revenue_earned Dr unbilled 250, revenue_offset Dr deferred 300 / Cr unbilled 300]
 				month := []*domainJournal.Entry{
 					entry(types.JournalEventRevenueEarned, lastDay, []posting{
-						{account: types.LedgerAccountUnbilledReceivable, amount: toRecognize.Neg(), pobID: p.ID},
-						{account: types.LedgerAccountRevenue, amount: toRecognize, pobID: p.ID},
+						{account: types.LedgerAccountUnbilledReceivable, amount: toRecognize.Neg(), pobID: p.ID()},
+						{account: types.LedgerAccountRevenue, amount: toRecognize, pobID: p.ID()},
 					}),
 					entry(types.JournalEventRevenueOffset, lastDay, []posting{
-						{account: types.LedgerAccountDeferredRevenue, amount: toOffset.Neg(), pobID: p.ID},
-						{account: types.LedgerAccountUnbilledReceivable, amount: toOffset, pobID: p.ID},
+						{account: types.LedgerAccountDeferredRevenue, amount: toOffset.Neg(), pobID: p.ID()},
+						{account: types.LedgerAccountUnbilledReceivable, amount: toOffset, pobID: p.ID()},
 					}),
+				}
+				// Billed ahead and fully earned with nothing in unbilled: unbilled would rise and fall by the same amount, so
+				// post one entry instead. e.g. prepaid Jan 31: revenue_earned Dr deferred 100 / Cr revenue 100
+				if toOffset.Equal(toRecognize) && pos.revenue.Equal(pos.offset) {
+					month = []*domainJournal.Entry{
+						entry(types.JournalEventRevenueEarned, lastDay, []posting{
+							{account: types.LedgerAccountDeferredRevenue, amount: toRecognize.Neg(), pobID: p.ID()},
+							{account: types.LedgerAccountRevenue, amount: toRecognize, pobID: p.ID()},
+						}),
+					}
 				}
 
 				if !req.DryRun {
@@ -501,17 +514,17 @@ func (s *journalService) Recognize(ctx context.Context, req RecognizeRequest) ([
 		}
 
 		if req.DryRun {
-			errs = append(errs, sourceError("pob", p.ID, recognizePOB(ctx)))
+			errs = append(errs, sourceError("pob", p.ID(), recognizePOB(ctx)))
 			continue
 		}
 
 		err := s.db.WithTx(ctx, func(txCtx context.Context) error {
-			if err := s.db.LockWithWait(txCtx, postgres.LockRequest{Key: "revrec:pob:" + p.ID}); err != nil {
+			if err := s.db.LockWithWait(txCtx, postgres.LockRequest{Key: "revrec:pob:" + p.ID()}); err != nil {
 				return err
 			}
 			return recognizePOB(txCtx)
 		})
-		errs = append(errs, sourceError("pob", p.ID, err))
+		errs = append(errs, sourceError("pob", p.ID(), err))
 	}
 
 	return recognized, errors.Join(errs...)
@@ -813,7 +826,7 @@ func (s *journalService) post(ctx context.Context, e *domainJournal.Entry) (stri
 type pobPosition struct {
 	billed  decimal.Decimal // deferred credits − debits on billing entries
 	revenue decimal.Decimal // revenue credits − debits on revenue_earned entries
-	offset  decimal.Decimal // deferred debits − credits on revenue_offset entries
+	offset  decimal.Decimal // deferred debits − credits on recognition entries (offsets and prepaid single entries)
 }
 
 // positionAt sums the POB's lines on entries dated on or before monthEnd.
@@ -831,14 +844,14 @@ func positionAt(entries []*domainJournal.Entry, pobID string, monthEnd time.Time
 				continue
 			}
 
-			credit := lo.Ternary(l.Direction() == types.JournalDirectionCredit, l.Amount(), l.Amount().Neg())
+			credit := l.Net()
 			switch {
-			case e.EventType() == types.JournalEventRevenueEarned:
-				if l.Account() == types.LedgerAccountRevenue {
+			case e.EventType() == types.JournalEventRevenueEarned || e.EventType() == types.JournalEventRevenueOffset:
+				// A prepaid month's single entry debits deferred directly, so it counts as offset too.
+				switch l.Account() {
+				case types.LedgerAccountRevenue:
 					pos.revenue = pos.revenue.Add(credit)
-				}
-			case e.EventType() == types.JournalEventRevenueOffset:
-				if l.Account() == types.LedgerAccountDeferredRevenue {
+				case types.LedgerAccountDeferredRevenue:
 					pos.offset = pos.offset.Sub(credit)
 				}
 			case l.Account() == types.LedgerAccountDeferredRevenue:
@@ -887,10 +900,4 @@ func toLines(postings []posting) []*domainJournal.Line {
 	}
 
 	return lines
-}
-
-// localDate is t's date in loc at midnight UTC.
-func localDate(t time.Time, loc *time.Location) time.Time {
-	y, m, d := t.In(loc).Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
-	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
@@ -129,12 +127,12 @@ func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscr
 			return err
 		}
 
-		c, err := contractsvc.NewContractService(params.ContractRepo).SyncForSubscription(ctx, sub)
+		c, err := params.ContractService.SyncForSubscription(ctx, sub)
 		if err != nil {
 			return err
 		}
 
-		_, err = pobsvc.NewPerformanceObligationService(params.POBRepo, params.ContractRepo, params.SubRepo, params.InvoiceRepo, params.TaxAppliedRepo, params.RevenueFactRepo).SyncForSubscription(ctx, sub, c)
+		_, err = params.POBService.SyncForSubscription(ctx, sub, c)
 		return err
 	})
 }
@@ -142,7 +140,7 @@ func NotifySubscriptionChanged(ctx context.Context, params ServiceParams, subscr
 // notifySubscriptionArchived archives the revenue recognition records of an abandoned draft subscription.
 func notifySubscriptionArchived(ctx context.Context, params ServiceParams, subscriptionID string) {
 	asyncRevRecUpdate(ctx, params, "subscription archive", subscriptionID, func(ctx context.Context) error {
-		return contractsvc.NewContractService(params.ContractRepo).ArchiveForSubscription(ctx, subscriptionID)
+		return params.ContractService.ArchiveForSubscription(ctx, subscriptionID)
 	})
 }
 

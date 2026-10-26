@@ -7155,9 +7155,6 @@ definitions:
         items:
           $ref: '#/definitions/types.LedgerAccountKey'
         type: array
-      as_of:
-        description: only entries created at or before it
-        type: string
       contract_ids:
         items:
           type: string
@@ -7190,6 +7187,10 @@ definitions:
         items:
           type: string
         type: array
+      posted_by:
+        description: 'only entries posted at or before it: the books as they were
+          then'
+        type: string
     required:
     - currency
     - period_start

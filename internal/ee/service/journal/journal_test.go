@@ -490,7 +490,7 @@ func TestBillingLifecycleBalances(t *testing.T) {
 	balances := map[types.LedgerAccountKey]decimal.Decimal{}
 	for _, e := range saved {
 		for _, l := range e.Lines() {
-			balances[l.Account()] = balances[l.Account()].Add(lo.Ternary(l.Direction() == l.Account().NormalSide(), l.Amount(), l.Amount().Neg()))
+			balances[l.Account()] = balances[l.Account()].Add(l.Account().NormalBalance(l.Net()))
 		}
 	}
 	require.True(t, balances[types.LedgerAccountReceivable].IsZero(), "AR nets to zero, got %s", balances[types.LedgerAccountReceivable])
@@ -638,7 +638,7 @@ func newTestService(t *testing.T, ctx context.Context, src testSources) (Journal
 	}
 
 	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
-	return NewJournalService(testutil.NewMockPostgresClient(nil), store, periods, pobService, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, creditNotes, payments, refunds, taxes, testutil.NewInMemorySettingsStore()), store
+	return NewJournalService(testutil.NewMockPostgresClient(nil), store, periods, pobService, pobs, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, creditNotes, payments, refunds, taxes, testutil.NewInMemorySettingsStore()), store
 }
 
 func lineSummary(e *domainJournal.Entry) []string {
@@ -737,7 +737,7 @@ func pobBalances(t *testing.T, ctx context.Context, store *testutil.InMemoryJour
 		}
 		for _, l := range e.Lines() {
 			if l.POBID() == "pob_1" {
-				balances[l.Account()] = balances[l.Account()].Add(lo.Ternary(l.Direction() == l.Account().NormalSide(), l.Amount(), l.Amount().Neg()))
+				balances[l.Account()] = balances[l.Account()].Add(l.Account().NormalBalance(l.Net()))
 			}
 		}
 	}
@@ -771,38 +771,33 @@ func TestRecognizeExample1(t *testing.T) {
 
 	require.Empty(t, recognize(time.January, 20), "January has not ended")
 
+	// Billed ahead with nothing in unbilled, so each month is one entry straight out of deferred.
 	saved := recognize(time.February, 1)
-	require.Len(t, saved, 2)
-	for _, e := range saved {
-		require.Equal(t, "2026-01-31", e.BusinessDate().Format(time.DateOnly))
-		require.Equal(t, types.RevRecEntityTypePOB, e.SourceEntityType())
-		require.Empty(t, e.IdempotencyKey())
-	}
-	byType := lo.KeyBy(saved, func(e *domainJournal.Entry) types.JournalEventType { return e.EventType() })
-	require.ElementsMatch(t, []string{"debit unbilled_receivable 100 pob_1", "credit revenue 100 pob_1"}, lineSummary(byType[types.JournalEventRevenueEarned]))
-	require.ElementsMatch(t, []string{"debit deferred_revenue 100 pob_1", "credit unbilled_receivable 100 pob_1"}, lineSummary(byType[types.JournalEventRevenueOffset]))
+	require.Len(t, saved, 1)
+	require.Equal(t, types.JournalEventRevenueEarned, saved[0].EventType())
+	require.Equal(t, "2026-01-31", saved[0].BusinessDate().Format(time.DateOnly))
+	require.Equal(t, types.RevRecEntityTypePOB, saved[0].SourceEntityType())
+	require.Empty(t, saved[0].IdempotencyKey())
+	require.ElementsMatch(t, []string{"debit deferred_revenue 100 pob_1", "credit revenue 100 pob_1"}, lineSummary(saved[0]))
 
-	require.Len(t, recognize(time.February, 2), 2, "a rerun posts nothing")
-	require.Len(t, recognize(time.March, 1), 4, "February posts its pair")
+	require.Len(t, recognize(time.February, 2), 1, "a rerun posts nothing")
+	require.Len(t, recognize(time.March, 1), 2, "February posts its entry")
 
 	require.Equal(t, map[types.LedgerAccountKey]string{types.LedgerAccountDeferredRevenue: "1100", types.LedgerAccountUnbilledReceivable: "0", types.LedgerAccountRevenue: "100"},
 		pobBalances(t, ctx, store, time.January, 31))
 	require.Equal(t, map[types.LedgerAccountKey]string{types.LedgerAccountDeferredRevenue: "1000", types.LedgerAccountUnbilledReceivable: "0", types.LedgerAccountRevenue: "200"},
 		pobBalances(t, ctx, store, time.February, 28))
 
-	t.Run("a backdated cut of January to 90 posts −10 and −10 to January", func(t *testing.T) {
+	t.Run("a backdated cut of January to 90 posts −10 back into deferred, dated January", func(t *testing.T) {
 		cut := subscriptionInvoice(ctx, "inv_cut", types.InvoiceTypeOneOff, -10, inIST(time.March, 1), inIST(time.January, 1), inIST(time.February, 1))
 		require.NoError(t, svc.(*journalService).invoiceRepo.CreateWithLineItems(ctx, cut))
 
 		saved := recognize(time.March, 2)
-		require.Len(t, saved, 6)
-		corrections := lo.Filter(saved, func(e *domainJournal.Entry, _ int) bool {
-			return lo.Contains(lineSummary(e), "debit revenue 10 pob_1") || lo.Contains(lineSummary(e), "debit unbilled_receivable 10 pob_1")
-		})
-		require.Len(t, corrections, 2)
-		for _, e := range corrections {
-			require.Equal(t, "2026-01-31", e.BusinessDate().Format(time.DateOnly))
-		}
+		require.Len(t, saved, 3)
+		corrections := lo.Filter(saved, func(e *domainJournal.Entry, _ int) bool { return lo.Contains(lineSummary(e), "debit revenue 10 pob_1") })
+		require.Len(t, corrections, 1)
+		require.Equal(t, "2026-01-31", corrections[0].BusinessDate().Format(time.DateOnly))
+		require.ElementsMatch(t, []string{"debit revenue 10 pob_1", "credit deferred_revenue 10 pob_1"}, lineSummary(corrections[0]))
 		require.Equal(t, "1010", pobBalances(t, ctx, store, time.March, 1)[types.LedgerAccountDeferredRevenue])
 		require.Equal(t, "0", pobBalances(t, ctx, store, time.March, 1)[types.LedgerAccountUnbilledReceivable])
 	})
@@ -820,22 +815,20 @@ func TestRecognizeDryRun(t *testing.T) {
 			name:      "nothing posted: January and February to date",
 			previewAt: inIST(time.February, 15),
 			want: []string{
-				"2026-01-31 revenue_earned 100", "2026-01-31 revenue_offset 100",
-				"2026-02-14 revenue_earned 50", "2026-02-14 revenue_offset 50",
+				"2026-01-31 revenue_earned 100", "2026-02-14 revenue_earned 50",
 			},
 		},
 		{
 			name:       "January posted: February to date only",
 			recognized: lo.ToPtr(inIST(time.February, 1)),
 			previewAt:  inIST(time.February, 15),
-			want:       []string{"2026-02-14 revenue_earned 50", "2026-02-14 revenue_offset 50"},
+			want:       []string{"2026-02-14 revenue_earned 50"},
 		},
 		{
 			name:      "on the 1st the open month has no days",
 			previewAt: inIST(time.March, 1),
 			want: []string{
-				"2026-01-31 revenue_earned 100", "2026-01-31 revenue_offset 100",
-				"2026-02-28 revenue_earned 100", "2026-02-28 revenue_offset 100",
+				"2026-01-31 revenue_earned 100", "2026-02-28 revenue_earned 100",
 			},
 		},
 	}
@@ -1016,7 +1009,7 @@ func TestBackfill(t *testing.T) {
 		require.True(t, e.ContractID() == c.ID() || e.ContractID() == "contract_1")
 		for _, l := range e.Lines() {
 			if l.POBID() == p && !e.BusinessDate().After(time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)) {
-				balances[l.Account()] = balances[l.Account()].Add(lo.Ternary(l.Direction() == l.Account().NormalSide(), l.Amount(), l.Amount().Neg()))
+				balances[l.Account()] = balances[l.Account()].Add(l.Account().NormalBalance(l.Net()))
 			}
 		}
 	}

@@ -28203,10 +28203,6 @@
               "$ref": "#/components/schemas/types.LedgerAccountKey"
             }
           },
-          "as_of": {
-            "type": "string",
-            "description": "only entries created at or before it"
-          },
           "contract_ids": {
             "type": "array",
             "items": {
@@ -28253,6 +28249,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "posted_by": {
+            "type": "string",
+            "description": "only entries posted at or before it: the books as they were then"
           }
         }
       },

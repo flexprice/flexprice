@@ -252,6 +252,14 @@ func TestSumLines(t *testing.T) {
 			},
 		},
 		{
+			name:   "exclude opening: only the requested months",
+			filter: febDeferred(func(f *SumFilter) { f.ExcludeOpening = true }),
+			want: []string{
+				"2026-02|deferred_revenue|invoice_finalized||||100",
+				"2026-02|deferred_revenue|revenue_offset||||-200",
+			},
+		},
+		{
 			name:   "without as_of, later entries count",
 			filter: febDeferred(func(f *SumFilter) { f.CreatedAtLTE = nil }),
 			want: []string{

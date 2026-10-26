@@ -242,6 +242,15 @@ func (l *Line) POBID() string {
 	return l.pobID
 }
 
+// Net is the line's amount signed credit-positive.
+// e.g. Dr unbilled 100 → −100; Cr revenue 100 → +100.
+func (l *Line) Net() decimal.Decimal {
+	if l.Direction() == types.JournalDirectionCredit {
+		return l.Amount()
+	}
+	return l.Amount().Neg()
+}
+
 // LineBuilder updates a copy of a line.
 type LineBuilder struct {
 	line Line

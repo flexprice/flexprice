@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	domainJournal "github.com/flexprice/flexprice/internal/domain/journal"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -67,7 +69,7 @@ func (s *revenueReportService) GetRollforward(ctx context.Context, req *dto.Roll
 		CustomerIDs:  req.CustomerIDs,
 		ContractIDs:  req.ContractIDs,
 		POBIDs:       req.POBIDs,
-		CreatedAtLTE: req.AsOf,
+		CreatedAtLTE: req.PostedBy,
 		GroupBy:      req.GroupBy,
 	})
 	if err != nil {
@@ -128,15 +130,12 @@ func (s *revenueReportService) rollforwardRows(ctx context.Context, f *journalRe
 // balance and no movement are skipped.
 // e.g. unbilled with Dr 100 revenue_earned in Feb → Feb row: opening 0, earned +100, closing 100.
 func rollGroup(key groupKey, sums []*journalRepo.LineSum, start, end time.Time) []*dto.RollforwardRow {
-	// e.g. −1 for unbilled (debit-normal): SumLines' credit − debit of −100 becomes +100.
-	sign := lo.Ternary(key.account.NormalSide() == types.JournalDirectionDebit, decimal.NewFromInt(-1), decimal.NewFromInt(1))
-
 	// e.g. openings [opening 1100], moves [Feb revenue_offset −100]
 	openings, moves := lo.FilterReject(sums, func(sum *journalRepo.LineSum, _ int) bool { return sum.PeriodStart == nil })
 
 	opening := decimal.Zero
 	for _, sum := range openings {
-		opening = opening.Add(sum.Net.Mul(sign))
+		opening = opening.Add(key.account.NormalBalance(sum.Net))
 	}
 
 	// Keyed by YYYY-MM, not time, so a database time zone cannot split a month.
@@ -144,14 +143,14 @@ func rollGroup(key groupKey, sums []*journalRepo.LineSum, start, end time.Time) 
 	byPeriod := lo.GroupBy(moves, func(sum *journalRepo.LineSum) string { return sum.PeriodStart.Format(periodLayout) })
 
 	var rows []*dto.RollforwardRow
-	for month := start; !month.After(end); month = month.AddDate(0, 1, 0) {
+	for _, month := range utils.Months(start, end) {
 		period := month.Format(periodLayout)
 
 		// e.g. deferred in Feb: {invoiced: 100, earned: −200}
 		movements := map[types.MovementCategory]decimal.Decimal{}
 		for _, sum := range byPeriod[period] {
 			category := movementCategory(sum.EventType, key.account)
-			movements[category] = movements[category].Add(sum.Net.Mul(sign))
+			movements[category] = movements[category].Add(key.account.NormalBalance(sum.Net))
 		}
 
 		if opening.IsZero() && len(movements) == 0 {
@@ -227,9 +226,22 @@ func movementCategory(eventType types.JournalEventType, account types.LedgerAcco
 	}
 }
 
-// GetWaterfall fills each group's monthly cells; revenue lines without the grouped key collect under a null-key row, so
-// rows add up to totals.
-// e.g. by customer, Jan–Feb: acme [Jan actual 200, Feb actual 100], beta [Jan 0, Feb actual 100].
+// cellKey is one waterfall cell: the group (customer, contract or POB; "" when the line has none) and a YYYY-MM month.
+type cellKey struct {
+	group  string
+	period string
+}
+
+// balance is a group's closing deferred and unbilled at a month end.
+type balance struct {
+	deferred decimal.Decimal
+	unbilled decimal.Decimal
+}
+
+// GetWaterfall builds each cell from four sources: actual from the journal, pending and scheduled from recognition dry
+// runs, and month-end balances from the rollforward. Lines without the grouped key collect under a null-key row, so rows
+// add up to totals.
+// e.g. by customer on Mar 15, Jan–Apr: acme [Jan actual 200, Feb actual 200, Mar pending 90.32 + scheduled 109.68, Apr scheduled 100].
 func (s *revenueReportService) GetWaterfall(ctx context.Context, req *dto.WaterfallRequest) (*dto.WaterfallResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -239,122 +251,25 @@ func (s *revenueReportService) GetWaterfall(ctx context.Context, req *dto.Waterf
 		return nil, err
 	}
 	groupBy := req.ReportGroupBy()
+	now := lo.FromPtrOr(req.AsOf, time.Now()).UTC()
 
 	// e.g. ["2026-01", "2026-02"]
-	var periods []string
-	for month := start; !month.After(end); month = month.AddDate(0, 1, 0) {
-		periods = append(periods, month.Format(periodLayout))
-	}
+	periods := lo.Map(utils.Months(start, end), func(month time.Time, _ int) string { return month.Format(periodLayout) })
 
-	// e.g. {"cust_acme": {"2026-01": cell}}; "" is the null-key row.
-	cells := map[string]map[string]*dto.WaterfallCell{}
-	cell := func(groupID, period string) *dto.WaterfallCell {
-		if cells[groupID] == nil {
-			cells[groupID] = map[string]*dto.WaterfallCell{}
-		}
-		if cells[groupID][period] == nil {
-			cells[groupID][period] = &dto.WaterfallCell{Period: period}
-		}
-		return cells[groupID][period]
-	}
-
-	// Actual: posted revenue per month; the opening row (before the range) is not a waterfall cell.
-	// e.g. [{Jan, revenue_earned, acme, 200}, {Feb, revenue_earned, acme, 100}]
-	sums, err := s.journalRepo.SumLines(ctx, &journalRepo.SumFilter{
-		Currency:    req.Currency,
-		PeriodStart: start,
-		PeriodEnd:   end,
-		Accounts:    []types.LedgerAccountKey{types.LedgerAccountRevenue},
-		CustomerIDs: req.CustomerIDs,
-		ContractIDs: req.ContractIDs,
-		POBIDs:      req.POBIDs,
-		GroupBy:     []types.RevenueReportGroupBy{groupBy},
-	})
+	actual, err := s.actualRevenue(ctx, req, groupBy, start, end)
 	if err != nil {
 		return nil, err
 	}
-	for _, sum := range sums {
-		if sum.PeriodStart == nil {
-			continue
-		}
-		c := cell(groupValue(groupBy, sum.CustomerID, sum.ContractID, sum.POBID), sum.PeriodStart.Format(periodLayout))
-		c.Revenue.Actual = c.Revenue.Actual.Add(sum.Net)
-	}
-
-	// addRevenue adds, times sign, the in-range revenue lines of earned entries to the breakdown field it picks.
-	// e.g. a Mar 14 entry crediting revenue 45.16 for acme → acme's March field += 45.16 × sign
-	addRevenue := func(entries []*domainJournal.Entry, sign decimal.Decimal, field func(*dto.RevenueBreakdown) *decimal.Decimal) {
-		for _, e := range entries {
-			period := e.BusinessDate().Format(periodLayout)
-			if e.EventType() != types.JournalEventRevenueEarned || period < periods[0] || period > periods[len(periods)-1] {
-				continue
-			}
-			for _, l := range e.Lines() {
-				if l.Account() != types.LedgerAccountRevenue || (len(req.POBIDs) > 0 && !lo.Contains(req.POBIDs, l.POBID())) {
-					continue
-				}
-				c := cell(groupValue(groupBy, lo.ToPtr(e.CustomerID()), lo.EmptyableToPtr(e.ContractID()), lo.EmptyableToPtr(l.POBID())), period)
-				amount := lo.Ternary(l.Direction() == types.JournalDirectionCredit, l.Amount(), l.Amount().Neg())
-				*field(&c.Revenue) = field(&c.Revenue).Add(amount.Mul(sign))
-			}
-		}
-	}
-
-	// Pending is what a recognition run would post now: the open month to date and ended months not posted yet.
-	// Scheduled is what a run at the range's end would add on top: invoiced revenue not yet earned, open and future
-	// months only. The run is skipped when the range has no open month.
-	// e.g. on Mar 15, annual 1,200 from Jan 1: now → Mar 45.16; Jan 1 next year → Mar–Dec 100 each; scheduled Mar 54.84.
-	now := lo.FromPtrOr(req.AsOf, time.Now()).UTC()
-	asOfs := []time.Time{now}
-	if !end.Before(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)) {
-		// Noon UTC on the 1st after the range is the 1st in every timezone, so no partial month is added.
-		asOfs = append(asOfs, end.AddDate(0, 1, 0).Add(12*time.Hour))
-	}
-	previews, err := s.previewRecognition(ctx, req, asOfs...)
+	pending, scheduled, err := s.forecastRevenue(ctx, req, groupBy, periods, end, now)
 	if err != nil {
 		return nil, err
 	}
-	pending := func(b *dto.RevenueBreakdown) *decimal.Decimal { return &b.Pending }
-	scheduled := func(b *dto.RevenueBreakdown) *decimal.Decimal { return &b.Scheduled }
-	addRevenue(previews[0], decimal.NewFromInt(1), pending)
-	if len(previews) > 1 {
-		addRevenue(previews[1], decimal.NewFromInt(1), scheduled)
-		addRevenue(previews[0], decimal.NewFromInt(-1), scheduled)
+	balances, detailsThrough, err := s.monthEndBalances(ctx, req, groupBy, start, end, now)
+	if err != nil {
+		return nil, err
 	}
 
-	// Details: each group's closing deferred and unbilled for the ended months in range.
-	detailsThrough := ""
-	lastEnded := now.AddDate(0, -1, 0)
-	lastEnded = time.Date(lastEnded.Year(), lastEnded.Month(), 1, 0, 0, 0, 0, time.UTC)
-
-	if req.Details && !start.After(lastEnded) {
-		detailsEnd := lo.Ternary(end.After(lastEnded), lastEnded, end)
-		detailsThrough = detailsEnd.Format(periodLayout)
-		// e.g. [{Jan, deferred, acme, closing 1100}, {Feb, deferred, acme, closing 1000}, {Feb, unbilled, beta, closing 0}]
-		balances, err := s.rollforwardRows(ctx, &journalRepo.SumFilter{
-			Currency:    req.Currency,
-			PeriodStart: start,
-			PeriodEnd:   detailsEnd,
-			Accounts:    []types.LedgerAccountKey{types.LedgerAccountDeferredRevenue, types.LedgerAccountUnbilledReceivable},
-			CustomerIDs: req.CustomerIDs,
-			ContractIDs: req.ContractIDs,
-			POBIDs:      req.POBIDs,
-			GroupBy:     []types.RevenueReportGroupBy{groupBy},
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, balance := range balances {
-			c := cell(groupValue(groupBy, balance.CustomerID, balance.ContractID, balance.POBID), balance.Period)
-			if balance.Account == types.LedgerAccountDeferredRevenue {
-				c.Deferred = lo.ToPtr(balance.Closing)
-			} else {
-				c.Unbilled = lo.ToPtr(balance.Closing)
-			}
-		}
-	}
-
-	rows := waterfallRows(groupBy, periods, cells, detailsThrough)
+	rows := waterfallRows(groupBy, periods, actual, pending, scheduled, balances, detailsThrough)
 	limit := lo.Ternary(req.Limit > 0, req.Limit, defaultLimit)
 	return &dto.WaterfallResponse{
 		Totals:     waterfallTotals(periods, rows, detailsThrough),
@@ -363,9 +278,105 @@ func (s *revenueReportService) GetWaterfall(ctx context.Context, req *dto.Waterf
 	}, nil
 }
 
-// previewRecognition dry-runs recognition at each asOf for the request's active and ended contracts in its currency,
-// returning one entry list per asOf.
-func (s *revenueReportService) previewRecognition(ctx context.Context, req *dto.WaterfallRequest, asOfs ...time.Time) ([][]*domainJournal.Entry, error) {
+// actualRevenue is the revenue posted in each month of the range, per group.
+// e.g. {acme, 2026-01}: 200, {acme, 2026-02}: 200
+func (s *revenueReportService) actualRevenue(ctx context.Context, req *dto.WaterfallRequest, groupBy types.RevenueReportGroupBy, start, end time.Time) (map[cellKey]decimal.Decimal, error) {
+	sums, err := s.journalRepo.SumLines(ctx, &journalRepo.SumFilter{
+		Currency:       req.Currency,
+		PeriodStart:    start,
+		PeriodEnd:      end,
+		Accounts:       []types.LedgerAccountKey{types.LedgerAccountRevenue},
+		CustomerIDs:    req.CustomerIDs,
+		ContractIDs:    req.ContractIDs,
+		POBIDs:         req.POBIDs,
+		GroupBy:        []types.RevenueReportGroupBy{groupBy},
+		ExcludeOpening: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	actual := map[cellKey]decimal.Decimal{}
+	for _, sum := range sums {
+		key := cellKey{group: groupValue(groupBy, sum.CustomerID, sum.ContractID, sum.POBID), period: sum.PeriodStart.Format(periodLayout)}
+		actual[key] = actual[key].Add(sum.Net)
+	}
+	return actual, nil
+}
+
+// forecastRevenue is pending, what a recognition run would post now (the open month to date and ended months not posted
+// yet), and scheduled, what a run at the range's end would add on top (invoiced but not yet earned). Scheduled is empty
+// when the range has no open month.
+// e.g. on Mar 15, annual 1,200 from Jan 1: now → Mar 45.16; at the range end → Mar–Dec 100 each; scheduled Mar 54.84.
+func (s *revenueReportService) forecastRevenue(ctx context.Context, req *dto.WaterfallRequest, groupBy types.RevenueReportGroupBy, periods []string, end, now time.Time) (pending, scheduled map[cellKey]decimal.Decimal, err error) {
+	contracts, err := s.waterfallContracts(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nowEntries, err := s.dryRun(ctx, contracts, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	pending = revenueByCell(nowEntries, groupBy, periods, req.POBIDs)
+
+	scheduled = map[cellKey]decimal.Decimal{}
+	if !end.After(utils.LastEndedMonth(now)) {
+		return pending, scheduled, nil
+	}
+
+	// Noon UTC on the 1st after the range is the 1st in every timezone, so no partial month is added.
+	endEntries, err := s.dryRun(ctx, contracts, end.AddDate(0, 1, 0).Add(12*time.Hour))
+	if err != nil {
+		return nil, nil, err
+	}
+	scheduled = revenueByCell(endEntries, groupBy, periods, req.POBIDs)
+	for key, amount := range pending {
+		scheduled[key] = scheduled[key].Sub(amount)
+	}
+	return pending, scheduled, nil
+}
+
+// monthEndBalances is each group's closing deferred and unbilled for the months in range ended by now, with the last
+// such month; empty without details or when no month in range has ended.
+// e.g. {acme, 2026-01}: {deferred 1100, unbilled 0}, {acme, 2026-02}: {deferred 1000, unbilled 0}; through "2026-02"
+func (s *revenueReportService) monthEndBalances(ctx context.Context, req *dto.WaterfallRequest, groupBy types.RevenueReportGroupBy, start, end, now time.Time) (map[cellKey]balance, string, error) {
+	lastEnded := utils.LastEndedMonth(now)
+	if !req.Details || start.After(lastEnded) {
+		return nil, "", nil
+	}
+	detailsEnd := lo.Ternary(end.After(lastEnded), lastEnded, end)
+
+	rows, err := s.rollforwardRows(ctx, &journalRepo.SumFilter{
+		Currency:    req.Currency,
+		PeriodStart: start,
+		PeriodEnd:   detailsEnd,
+		Accounts:    []types.LedgerAccountKey{types.LedgerAccountDeferredRevenue, types.LedgerAccountUnbilledReceivable},
+		CustomerIDs: req.CustomerIDs,
+		ContractIDs: req.ContractIDs,
+		POBIDs:      req.POBIDs,
+		GroupBy:     []types.RevenueReportGroupBy{groupBy},
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	balances := map[cellKey]balance{}
+	for _, row := range rows {
+		key := cellKey{group: groupValue(groupBy, row.CustomerID, row.ContractID, row.POBID), period: row.Period}
+		b := balances[key]
+		if row.Account == types.LedgerAccountDeferredRevenue {
+			b.deferred = row.Closing
+		} else {
+			b.unbilled = row.Closing
+		}
+		balances[key] = b
+	}
+	return balances, detailsEnd.Format(periodLayout), nil
+}
+
+// waterfallContracts is the request's active and ended contracts in its currency, the ones a dry run can recognize.
+func (s *revenueReportService) waterfallContracts(ctx context.Context, req *dto.WaterfallRequest) ([]string, error) {
 	contracts, err := s.contractRepo.List(ctx, &contractRepo.Filter{
 		QueryFilter:      types.NewNoLimitQueryFilter(),
 		ContractIDs:      req.ContractIDs,
@@ -375,21 +386,42 @@ func (s *revenueReportService) previewRecognition(ctx context.Context, req *dto.
 	if err != nil {
 		return nil, err
 	}
+	return lo.FilterMap(contracts, func(c *domainContract.Contract, _ int) (string, bool) {
+		return c.ID(), c.Currency() == req.Currency
+	}), nil
+}
 
-	previews := make([][]*domainJournal.Entry, len(asOfs))
-	for _, c := range contracts {
-		if c.Currency() != req.Currency {
+// dryRun is what recognition would post for the contracts as of asOf, without saving anything.
+func (s *revenueReportService) dryRun(ctx context.Context, contractIDs []string, asOf time.Time) ([]*domainJournal.Entry, error) {
+	var entries []*domainJournal.Entry
+	for _, id := range contractIDs {
+		recognized, err := s.journalService.Recognize(ctx, journalsvc.RecognizeRequest{ContractID: id, AsOf: asOf, DryRun: true})
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, recognized...)
+	}
+	return entries, nil
+}
+
+// revenueByCell sums the revenue lines of earned entries per cell, for months in range and the POB filter.
+// e.g. a Mar 14 revenue_earned entry crediting revenue 45.16 for acme → {acme, 2026-03}: 45.16
+func revenueByCell(entries []*domainJournal.Entry, groupBy types.RevenueReportGroupBy, periods []string, pobIDs []string) map[cellKey]decimal.Decimal {
+	revenue := map[cellKey]decimal.Decimal{}
+	for _, e := range entries {
+		period := e.BusinessDate().Format(periodLayout)
+		if e.EventType() != types.JournalEventRevenueEarned || period < periods[0] || period > periods[len(periods)-1] {
 			continue
 		}
-		for i, asOf := range asOfs {
-			entries, err := s.journalService.Recognize(ctx, journalsvc.RecognizeRequest{ContractID: c.ID(), AsOf: asOf, DryRun: true})
-			if err != nil {
-				return nil, err
+		for _, l := range e.Lines() {
+			if l.Account() != types.LedgerAccountRevenue || (len(pobIDs) > 0 && !lo.Contains(pobIDs, l.POBID())) {
+				continue
 			}
-			previews[i] = append(previews[i], entries...)
+			key := cellKey{group: groupValue(groupBy, lo.ToPtr(e.CustomerID()), lo.EmptyableToPtr(e.ContractID()), lo.EmptyableToPtr(l.POBID())), period: period}
+			revenue[key] = revenue[key].Add(l.Net())
 		}
 	}
-	return previews, nil
+	return revenue
 }
 
 // groupValue picks the grouped key of a line sum; empty when the line has none.
@@ -404,17 +436,18 @@ func groupValue(groupBy types.RevenueReportGroupBy, customerID, contractID, pobI
 	}
 }
 
-// waterfallRows gives each group with any amount one cell per period, totals filled, ordered by group ID with the
-// null-key row first; balances through detailsThrough default to zero, later ones stay empty.
-// e.g. {"cust_beta": {"2026-02": actual 100}} → [{customer_id: cust_beta, cells: [Jan 0, Feb actual 100 total 100]}]
-func waterfallRows(groupBy types.RevenueReportGroupBy, periods []string, cells map[string]map[string]*dto.WaterfallCell, detailsThrough string) []*dto.WaterfallRow {
-	groupIDs := lo.Keys(cells)
-	sort.Strings(groupIDs)
+// waterfallRows gives each group with any amount one cell per period, ordered by group with the null-key row first;
+// balances through detailsThrough default to zero, later ones stay empty.
+// e.g. actual {beta, 2026-02}: 100 → [{customer_id: cust_beta, cells: [Jan 0, Feb actual 100 total 100]}]
+func waterfallRows(groupBy types.RevenueReportGroupBy, periods []string, actual, pending, scheduled map[cellKey]decimal.Decimal, balances map[cellKey]balance, detailsThrough string) []*dto.WaterfallRow {
+	keys := append(append(append(lo.Keys(actual), lo.Keys(pending)...), lo.Keys(scheduled)...), lo.Keys(balances)...)
+	groups := lo.Uniq(lo.Map(keys, func(k cellKey, _ int) string { return k.group }))
+	sort.Strings(groups)
 
 	rows := []*dto.WaterfallRow{}
-	for _, groupID := range groupIDs {
+	for _, group := range groups {
 		row := &dto.WaterfallRow{}
-		groupPtr := lo.EmptyableToPtr(groupID)
+		groupPtr := lo.EmptyableToPtr(group)
 		switch groupBy {
 		case types.RevenueReportGroupByContract:
 			row.ContractID = groupPtr
@@ -426,14 +459,18 @@ func waterfallRows(groupBy types.RevenueReportGroupBy, periods []string, cells m
 
 		empty := true
 		for _, period := range periods {
-			c := lo.FromPtrOr(cells[groupID][period], dto.WaterfallCell{Period: period})
+			key := cellKey{group: group, period: period}
+			c := &dto.WaterfallCell{Period: period, Revenue: dto.RevenueBreakdown{
+				Actual:    actual[key],
+				Pending:   pending[key],
+				Scheduled: scheduled[key],
+			}}
 			c.Revenue.Total = c.Revenue.Actual.Add(c.Revenue.Pending).Add(c.Revenue.Scheduled)
 			if period <= detailsThrough {
-				c.Deferred = lo.CoalesceOrEmpty(c.Deferred, lo.ToPtr(decimal.Zero))
-				c.Unbilled = lo.CoalesceOrEmpty(c.Unbilled, lo.ToPtr(decimal.Zero))
+				c.Deferred, c.Unbilled = lo.ToPtr(balances[key].deferred), lo.ToPtr(balances[key].unbilled)
 			}
 			empty = empty && c.Revenue.Total.IsZero() && lo.FromPtr(c.Deferred).IsZero() && lo.FromPtr(c.Unbilled).IsZero()
-			row.Cells = append(row.Cells, &c)
+			row.Cells = append(row.Cells, c)
 		}
 		if !empty {
 			rows = append(rows, row)

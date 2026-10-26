@@ -730,7 +730,7 @@ type RollforwardRequest struct {
     CustomerIDs []string                 `json:"customer_ids"`
     ContractIDs []string                 `json:"contract_ids"`
     POBIDs      []string                 `json:"pob_ids"`
-    AsOf        *time.Time               `json:"as_of"`                            // only entries created at or before it
+    PostedBy    *time.Time               `json:"posted_by"`                        // only entries posted at or before it
     Limit       int                      `json:"limit"`                            // rows per page; totals are never paged
     Offset      int                      `json:"offset"`
 }
@@ -842,7 +842,7 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 | `refunds`     | `refund_succeeded`                            |
 
 
-**Rollforward** is journal only. `opening(P)` = signed lines of entries in periods before `P`; movements are the lines of entries in `P`; `closing = opening + Σ movements`. Only ended months can be requested: the open month is not reported until it ends. With `as_of`, only entries created at or before it count, which reproduces a report as it was then. Without close, a recognition correction posts to its original month (Step 6), so ended months can change; `as_of` shows what changed.
+**Rollforward** is journal only. `opening(P)` = signed lines of entries in periods before `P`; movements are the lines of entries in `P`; `closing = opening + Σ movements`. Only ended months can be requested: the open month is not reported until it ends. With `posted_by`, only entries posted at or before it count, which reproduces a report as it was then. Without close, a recognition correction posts to its original month (Step 6), so ended months can change; `posted_by` shows what changed. (The waterfall's `as_of` is different: the report date.)
 
 **Waterfall cells**, per POB and month `P`, summed to the requested group:
 
@@ -871,7 +871,7 @@ Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
 - Waterfall: Σ `actual` over all periods equals the `revenue` balance.
 - `totals` cover every row matching the filters, not only the page.
 - Currencies are never combined.
-- `group_by` / filter by POB applies only to accounts whose lines carry `pob_id` (`deferred_revenue`, `unbilled_receivable`, `revenue`); AR is grouped by customer or contract only.
+- `group_by` / filter by POB applies only to accounts whose lines carry `pob_id` (`deferred_revenue`, `unbilled_receivable`, `revenue`, and `contra_revenue`, where a credit note line carries the credited invoice line's POB); AR is grouped by customer or contract only.
 - Pending and scheduled are never posted, and never mix.
 
 

@@ -52,7 +52,8 @@ func (f *fakeRecognizer) Recognize(_ context.Context, req journalsvc.RecognizeRe
 }
 
 // newTestService posts the ERD example: acme invoices 1,300 in Jan and earns 200 (100 per POB); in Feb beta invoices 100,
-// acme and beta each earn 100, and acme pays 1,300. Gamma buys a 30 one-off in Jan, with no contract or POB.
+// acme and beta each earn 100, acme pays 1,300, and beta gets a 10 credit note on its POB. Gamma buys a 30 one-off in Jan,
+// with no contract or POB.
 func newTestService(t *testing.T, ctx context.Context) (RevenueReportService, *fakeRecognizer, *testutil.InMemoryContractStore) {
 	periods := testutil.NewInMemoryAccountingPeriodStore()
 	store := testutil.NewInMemoryJournalStore(periods)
@@ -106,6 +107,7 @@ func newTestService(t *testing.T, ctx context.Context) (RevenueReportService, *f
 	earn(feb, "cust_beta", "contract_2", "pob_beta", 100)
 	post(types.JournalEventPaymentSucceeded, feb, "cust_acme", "contract_1", debit(types.LedgerAccountCash, 1300, ""), credit(ar, 1300, ""))
 	post(types.JournalEventInvoiceFinalized, jan, "cust_gamma", "", debit(ar, 30, ""), credit(revenue, 30, ""))
+	post(types.JournalEventCreditNoteFinalized, feb, "cust_beta", "contract_2", debit(types.LedgerAccountContraRevenue, 10, "pob_beta"), credit(ar, 10, ""))
 
 	recognizer := &fakeRecognizer{previews: map[string][]*domainJournal.Entry{}, schedules: map[string][]*domainJournal.Entry{}}
 	contracts := testutil.NewInMemoryContractStore()
@@ -159,8 +161,19 @@ func TestGetRollforward(t *testing.T) {
 				PeriodStart: "2026-02", Currency: "usd",
 				Accounts: []types.LedgerAccountKey{types.LedgerAccountReceivable},
 			},
-			wantTotals: []string{"2026-02|accounts_receivable||||1330|invoiced:100,payments:-1300|130"},
+			wantTotals: []string{"2026-02|accounts_receivable||||1330|adjustments:-10,invoiced:100,payments:-1300|120"},
 			wantItems:  []string{},
+		},
+		{
+			name: "contra revenue by POB: credit note lines carry the credited line's POB",
+			req: &dto.RollforwardRequest{
+				PeriodStart: "2026-02", Currency: "usd",
+				Accounts: []types.LedgerAccountKey{types.LedgerAccountContraRevenue},
+				GroupBy:  []types.RevenueReportGroupBy{types.RevenueReportGroupByPOB},
+			},
+			wantTotals: []string{"2026-02|contra_revenue||||0|adjustments:10|10"},
+			wantItems:  []string{"2026-02|contra_revenue|||pob_beta|0|adjustments:10|10"},
+			wantTotal:  1,
 		},
 		{
 			name: "revenue by POB",
@@ -187,6 +200,12 @@ func TestGetRollforward(t *testing.T) {
 			wantTotals: []string{"2026-02|deferred_revenue||||1100|earned:-200,invoiced:100|1000"},
 			wantItems:  []string{"2026-02|deferred_revenue|cust_beta|||0|earned:-100,invoiced:100|0"},
 			wantTotal:  2,
+		},
+		{
+			name:       "posted_by before anything was posted: the books were empty then",
+			req:        &dto.RollforwardRequest{PeriodStart: "2026-02", Currency: "usd", PostedBy: lo.ToPtr(time.Now().Add(-time.Hour))},
+			wantTotals: []string{},
+			wantItems:  []string{},
 		},
 		{
 			name:       "other currency has nothing",
@@ -594,7 +613,7 @@ func newE2EStack(t *testing.T, pobs ...e2ePOB) *e2eStack {
 
 	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
 	journal := journalsvc.NewJournalService(testutil.NewMockPostgresClient(nil), store, accountingperiodsvc.NewAccountingPeriodService(periodStore),
-		pobService, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
+		pobService, pobStore, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
 		testutil.NewInMemoryPaymentStore(), testutil.NewInMemoryRefundStore(), taxes, testutil.NewInMemorySettingsStore())
 	return &e2eStack{t: t, ctx: ctx, journal: journal, reports: NewRevenueReportService(store, journal, contracts),
 		store: store, invoices: invoices, taxes: taxes}

@@ -25810,10 +25810,6 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.LedgerAccountKey"
                     }
                 },
-                "as_of": {
-                    "description": "only entries created at or before it",
-                    "type": "string"
-                },
                 "contract_ids": {
                     "type": "array",
                     "items": {
@@ -25858,6 +25854,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "posted_by": {
+                    "description": "only entries posted at or before it: the books as they were then",
+                    "type": "string"
                 }
             }
         },

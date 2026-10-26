@@ -1,5 +1,7 @@
 package types
 
+import "github.com/shopspring/decimal"
+
 // AmortizationMethod weights the days of a revenue schedule segment.
 type AmortizationMethod string
 
@@ -78,13 +80,6 @@ const (
 	AccountClassContraRevenue AccountClass = "contra_revenue"
 )
 
-type StatementType string
-
-const (
-	StatementTypeBalanceSheet    StatementType = "balance_sheet"
-	StatementTypeIncomeStatement StatementType = "income_statement"
-)
-
 // Class returns the account's class, or "" for an unknown key.
 func (k LedgerAccountKey) Class() AccountClass {
 	switch k {
@@ -113,15 +108,23 @@ func (k LedgerAccountKey) NormalSide() JournalDirection {
 	}
 }
 
-func (k LedgerAccountKey) Statement() StatementType {
-	switch k.Class() {
-	case AccountClassRevenue, AccountClassContraRevenue:
-		return StatementTypeIncomeStatement
-	case AccountClassAsset, AccountClassLiability:
-		return StatementTypeBalanceSheet
+// CarriesPOB is true for accounts whose lines carry the POB they belong to.
+func (k LedgerAccountKey) CarriesPOB() bool {
+	switch k {
+	case LedgerAccountDeferredRevenue, LedgerAccountUnbilledReceivable, LedgerAccountRevenue, LedgerAccountContraRevenue:
+		return true
 	default:
-		return ""
+		return false
 	}
+}
+
+// NormalBalance turns a credit − debit net into the account's normal direction; debit-normal accounts flip.
+// e.g. unbilled −100 → +100; deferred +100 → +100.
+func (k LedgerAccountKey) NormalBalance(net decimal.Decimal) decimal.Decimal {
+	if k.NormalSide() == JournalDirectionDebit {
+		return net.Neg()
+	}
+	return net
 }
 
 type JournalDirection string

@@ -108,6 +108,9 @@ func (s *InMemoryJournalStore) SumLines(ctx context.Context, f *journalRepo.SumF
 			continue
 		}
 		opening := start.Before(f.PeriodStart)
+		if opening && f.ExcludeOpening {
+			continue
+		}
 		for _, l := range e.Lines() {
 			if (len(f.Accounts) > 0 && !lo.Contains(f.Accounts, l.Account())) || !matches(f.POBIDs, l.POBID()) {
 				continue
@@ -120,7 +123,7 @@ func (s *InMemoryJournalStore) SumLines(ctx context.Context, f *journalRepo.SumF
 				contractID:  grouped(types.RevenueReportGroupByContract, e.ContractID()),
 				pobID:       grouped(types.RevenueReportGroupByPOB, l.POBID()),
 			}
-			nets[key] = nets[key].Add(lo.Ternary(l.Direction() == types.JournalDirectionCredit, l.Amount(), l.Amount().Neg()))
+			nets[key] = nets[key].Add(l.Net())
 		}
 	}
 

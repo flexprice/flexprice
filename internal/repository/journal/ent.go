@@ -305,6 +305,9 @@ func (r *repository) SumLines(ctx context.Context, f *SumFilter) ([]*LineSum, er
 	if f.CreatedAtLTE != nil {
 		where = append(where, "e.created_at <= "+arg(*f.CreatedAtLTE))
 	}
+	if f.ExcludeOpening {
+		where = append(where, "p.period_start >= $5::date")
+	}
 	// An ungrouped key selects NULL, so it adds no split.
 	groupColumn := func(key types.RevenueReportGroupBy, column string) string {
 		return lo.Ternary(lo.Contains(f.GroupBy, key), column, "NULL::varchar")

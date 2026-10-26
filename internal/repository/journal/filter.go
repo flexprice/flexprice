@@ -77,4 +77,6 @@ type SumFilter struct {
 	POBIDs       []string
 	CreatedAtLTE *time.Time // only entries created at or before it
 	GroupBy      []types.RevenueReportGroupBy
+	// ExcludeOpening keeps only periods from PeriodStart: no opening row, nothing before the range summed.
+	ExcludeOpening bool
 }

@@ -52,9 +52,10 @@ func TestReportsAtScale(t *testing.T) {
 	invoices := entRepo.NewInvoiceRepository(client, log)
 	taxes := entRepo.NewTaxAppliedRepository(client, log, redis)
 	journals := journalRepo.NewRepository(client, log)
-	pobService := pobsvc.NewPerformanceObligationService(pobRepo.NewRepository(client, log), contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log))
+	pobs := pobRepo.NewRepository(client, log)
+	pobService := pobsvc.NewPerformanceObligationService(pobs, contracts, subs, invoices, taxes, entRepo.NewRevenueFactRepository(client, log))
 	journal := journalsvc.NewJournalService(client, journals, accountingperiodsvc.NewAccountingPeriodService(accountingPeriodRepo.NewRepository(client, log)),
-		pobService, contractsvc.NewContractService(contracts), contracts, subs, entRepo.NewCustomerRepository(client, log, redis), invoices,
+		pobService, pobs, contractsvc.NewContractService(contracts), contracts, subs, entRepo.NewCustomerRepository(client, log, redis), invoices,
 		entRepo.NewCreditNoteRepository(client, log, redis), entRepo.NewPaymentRepository(client, log, redis), entRepo.NewRefundRepository(client, log),
 		taxes, entRepo.NewSettingsRepository(client, log, cache.NewInMemoryCache()))
 	reports := NewRevenueReportService(journals, journal, contracts)
@@ -148,7 +149,7 @@ func TestReportsAtScale(t *testing.T) {
 			for i := 1; i <= contractsTimed; i++ {
 				entries, err := journal.Recognize(ctx, journalsvc.RecognizeRequest{ContractID: fmt.Sprintf("bk_%d", i), AsOf: asOf, DryRun: true})
 				require.NoError(t, err)
-				require.Len(t, entries, 4, "October's earned and offset for each POB")
+				require.Len(t, entries, 2, "one October entry per POB: both are billed ahead")
 			}
 		})
 	})

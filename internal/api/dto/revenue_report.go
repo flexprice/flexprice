@@ -5,6 +5,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -23,7 +24,7 @@ type RollforwardRequest struct {
 	CustomerIDs []string                     `json:"customer_ids,omitempty"`
 	ContractIDs []string                     `json:"contract_ids,omitempty"`
 	POBIDs      []string                     `json:"pob_ids,omitempty"`
-	AsOf        *time.Time                   `json:"as_of,omitempty"`                                     // only entries created at or before it
+	PostedBy    *time.Time                   `json:"posted_by,omitempty"`                                 // only entries posted at or before it: the books as they were then
 	Limit       int                          `json:"limit,omitempty" validate:"omitempty,min=0,max=1000"` // item rows per page; totals are never paged
 	Offset      int                          `json:"offset,omitempty" validate:"omitempty,min=0"`
 }
@@ -36,8 +37,7 @@ func (r *RollforwardRequest) Validate() error {
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	if !end.Before(time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)) {
+	if end.After(utils.LastEndedMonth(time.Now())) {
 		return ierr.NewError("period_end must be an ended month").
 			WithHint("Only ended months can be reported").
 			Mark(ierr.ErrValidation)
@@ -52,13 +52,10 @@ func (r *RollforwardRequest) Validate() error {
 	if err := validateGroupBy(r.GroupBy...); err != nil {
 		return err
 	}
-	// Only deferred, unbilled and revenue lines carry a POB.
 	byPOB := len(r.POBIDs) > 0 || lo.Contains(r.GroupBy, types.RevenueReportGroupByPOB)
-	if byPOB && lo.SomeBy(r.ReportAccounts(), func(a types.LedgerAccountKey) bool {
-		return !lo.Contains([]types.LedgerAccountKey{types.LedgerAccountDeferredRevenue, types.LedgerAccountUnbilledReceivable, types.LedgerAccountRevenue}, a)
-	}) {
-		return ierr.NewError("pob_id applies only to deferred_revenue, unbilled_receivable and revenue").
-			WithHint("Group or filter by POB only for deferred_revenue, unbilled_receivable and revenue").
+	if byPOB && lo.SomeBy(r.ReportAccounts(), func(a types.LedgerAccountKey) bool { return !a.CarriesPOB() }) {
+		return ierr.NewError("pob_id applies only to deferred_revenue, unbilled_receivable, revenue and contra_revenue").
+			WithHint("Group or filter by POB only for deferred_revenue, unbilled_receivable, revenue and contra_revenue").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

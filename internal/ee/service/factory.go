@@ -55,7 +55,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -65,9 +67,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	accountingPeriodRepo "github.com/flexprice/flexprice/internal/repository/accountingperiod"
-	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
-	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/storage"
@@ -151,8 +151,8 @@ type ServiceParams struct {
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
 	ProductRepo                  productRepo.Repository
-	ContractRepo                 contractRepo.Repository
-	POBRepo                      pobRepo.Repository
+	ContractService              contractsvc.ContractService
+	POBService                   pobsvc.PerformanceObligationService
 	AccountingPeriodRepo         accountingPeriodRepo.Repository
 	JournalRepo                  journalRepo.Repository
 	JournalService               journalsvc.JournalService
@@ -273,8 +273,8 @@ func NewServiceParams(
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
 	productRepo productRepo.Repository,
-	contractRepo contractRepo.Repository,
-	pobRepo pobRepo.Repository,
+	contractService contractsvc.ContractService,
+	pobService pobsvc.PerformanceObligationService,
 	accountingPeriodRepo accountingPeriodRepo.Repository,
 	journalRepo journalRepo.Repository,
 	journalService journalsvc.JournalService,
@@ -359,8 +359,8 @@ func NewServiceParams(
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
 		ProductRepo:                  productRepo,
-		ContractRepo:                 contractRepo,
-		POBRepo:                      pobRepo,
+		ContractService:              contractService,
+		POBService:                   pobService,
 		AccountingPeriodRepo:         accountingPeriodRepo,
 		JournalRepo:                  journalRepo,
 		JournalService:               journalService,

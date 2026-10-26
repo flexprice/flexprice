@@ -16,6 +16,7 @@ import (
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -250,7 +251,7 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 		}
 
 		for i, asOf := range asOfs {
-			for pobID, amount := range earnedByPOB(lineItemPOBs, inputs, asOf, subscriptionLocation(sub)) {
+			for pobID, amount := range earnedByPOB(lineItemPOBs, inputs, asOf, types.LoadTimezone(sub.Timezone)) {
 				earned[i][pobID] = earned[i][pobID].Add(amount)
 			}
 		}
@@ -290,7 +291,7 @@ func (s *performanceObligationService) loadEarningInputs(ctx context.Context, su
 	}
 
 	facts, err := s.revenueFactRepo.ListFacts(ctx, revenuefact.FactsFilter{
-		DayEnd:          dayOf(asOf, subscriptionLocation(sub)),
+		DayEnd:          utils.LocalDay(asOf, types.LoadTimezone(sub.Timezone)),
 		Status:          types.FactProvisional,
 		SubscriptionIDs: []string{sub.ID},
 	})
@@ -326,13 +327,13 @@ func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, input
 
 			if inv.InvoiceType == types.InvoiceTypeSubscription {
 				lineItemID := lo.FromPtr(line.SubscriptionLineItemID)
-				invoiced[lineItemID] = append(invoiced[lineItemID], dayRange{start: dayOf(start, loc), end: dayOf(end, loc)})
+				invoiced[lineItemID] = append(invoiced[lineItemID], dayRange{start: utils.LocalDay(start, loc), end: utils.LocalDay(end, loc)})
 			}
 		}
 	}
 
 	// Fact days are already local dates stamped as UTC midnight.
-	asOfDay := dayOf(asOf, loc)
+	asOfDay := utils.LocalDay(asOf, loc)
 	for _, fact := range inputs.facts {
 		lineItemID := lo.FromPtr(fact.SubLineItemID)
 		p, ok := lineItemPOBs[lineItemID]
@@ -360,15 +361,6 @@ func (s *performanceObligationService) POBIDForInvoiceLine(ctx context.Context, 
 		return "", err
 	}
 	return p.ID(), nil
-}
-
-// subscriptionLocation is the subscription's timezone, or UTC when it is empty or unknown.
-func subscriptionLocation(sub *subscription.Subscription) *time.Location {
-	if loc, err := time.LoadLocation(sub.Timezone); err == nil && sub.Timezone != "" {
-		return loc
-	}
-
-	return time.UTC
 }
 
 // resolveForLineItem returns the line item's POB: its own, else its predecessor's when the method matches, else a new one.
