@@ -216,6 +216,40 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 	return domain.FromEnt(row), nil
 }
 
+func (r *commitmentRepository) Delete(ctx context.Context, id string) error {
+	span := StartRepositorySpan(ctx, "commitment", "delete", map[string]interface{}{
+		"commitment_id": id,
+	})
+	defer FinishSpan(span)
+
+	_, err := r.client.Writer(ctx).Commitment.UpdateOneID(id).
+		Where(
+			entcommitment.TenantID(types.GetTenantID(ctx)),
+			entcommitment.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entcommitment.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Commitment %s not found", id).
+				Mark(ierr.ErrNotFound)
+		}
+
+		return ierr.WithError(err).
+			WithHint("Failed to delete commitment").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
 func (r *commitmentRepository) List(ctx context.Context, filter *domain.Filter) ([]*domain.Commitment, error) {
 	if filter == nil {
 		filter = domain.NewNoLimitFilter()

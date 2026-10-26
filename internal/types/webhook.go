@@ -128,6 +128,13 @@ const (
 	WebhookEventEntitlementDeleted WebhookEventName = "entitlement.deleted"
 )
 
+// commitment event names
+const (
+	WebhookEventCommitmentCreated    WebhookEventName = "commitment.created"
+	WebhookEventCommitmentUpdated    WebhookEventName = "commitment.updated"
+	WebhookEventCommitmentTerminated WebhookEventName = "commitment.terminated"
+)
+
 // wallet event names
 const (
 	WebhookEventWalletCreated            WebhookEventName = "wallet.created"

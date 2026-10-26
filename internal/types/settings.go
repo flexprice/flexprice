@@ -317,11 +317,26 @@ type CustomerPortalConfig struct {
 
 	// Sections defines the ordered list of navigation sections shown in the portal
 	Sections []CustomerPortalSection `json:"sections,omitempty" validate:"omitempty,dive"`
+
+	AnalyticsConfig *CustomerPortalAnalyticsConfig `json:"analytics_config,omitempty"`
 }
 
 // Validate implements SettingConfig interface
 func (c CustomerPortalConfig) Validate() error {
 	return validator.ValidateRequest(c)
+}
+
+// CustomerPortalAnalyticsConfig holds analytics settings for the portal
+type CustomerPortalAnalyticsConfig struct {
+	UsageProperties *CustomerPortalUsageProperties `json:"usage_properties,omitempty"`
+}
+
+// CustomerPortalUsageProperties controls which event property keys portal users can group and filter by.
+// Off unless Enabled. When AllowedKeys is set, only those keys are visible; HiddenKeys are always hidden.
+type CustomerPortalUsageProperties struct {
+	Enabled     bool     `json:"enabled"`
+	AllowedKeys []string `json:"allowed_keys,omitempty"`
+	HiddenKeys  []string `json:"hidden_keys,omitempty"`
 }
 
 // CustomerPortalTheme holds brand colour tokens used by the portal UI

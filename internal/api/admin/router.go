@@ -48,6 +48,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 	{
 		group.GET("/me", handlers.Me.Me)
 		group.POST("/dlq/replay", handlers.DLQ.Replay)
+		group.GET("/dlq/replay/runs/:workflow_id", handlers.DLQ.GetReplay)
 
 		environment := group.Group("/environments")
 		{

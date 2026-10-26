@@ -430,9 +430,39 @@ func (s *UserServiceSuite) TestInviteUser_RoleAssignment() {
 
 			s.Error(err, "caller %v must not be able to invite", callerRoles)
 			s.Nil(created)
-			s.Contains(err.Error(), "only super_admin can invite users")
+			s.Contains(err.Error(), "only super_admin users can invite users")
 			s.Zero(authRepo.Count(), "a refused invite must not leave auth material behind")
 		}
+	})
+
+	s.Run("service account with super_admin role cannot invite", func() {
+		ctx := testutil.SetupContext()
+		ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+		ctx = context.WithValue(ctx, types.CtxUserID, "sa-1")
+		ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeServiceAccount))
+		ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+		tenantRepo := testutil.NewInMemoryTenantStore()
+		_ = tenantRepo.Create(ctx, &tenant.Tenant{ID: types.DefaultTenantID, Name: "Test Tenant"})
+		authRepo := testutil.NewInMemoryAuthRepository()
+
+		svc := &userService{
+			userRepo:    testutil.NewInMemoryUserStore(),
+			tenantRepo:  tenantRepo,
+			authRepo:    authRepo,
+			rbacService: rbacSvc,
+		}
+
+		created, _, err := svc.InviteUser(ctx, &dto.CreateUserRequest{
+			Type:  types.UserTypeUser,
+			Email: "invitee@example.com",
+			Roles: []string{types.RoleAllReader.String()},
+		}, "sa-1")
+
+		s.Require().Error(err)
+		s.Nil(created)
+		s.True(ierr.IsPermissionDenied(err))
+		s.Zero(authRepo.Count())
 	})
 
 	for _, tc := range testCases {
@@ -1563,4 +1593,26 @@ func (s *UserRolesSuite) activeAPIKeys(details map[string]any) map[string]dto.Ac
 	var byEnv map[string]dto.ActiveEnvironmentAPIKeys
 	s.Require().NoError(json.Unmarshal(raw, &byEnv))
 	return byEnv
+}
+
+func (s *UserServiceSuite) TestSuperAdminChecksRejectServiceAccounts() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "sa-actor")
+	ctx = context.WithValue(ctx, types.CtxUserType, string(types.UserTypeServiceAccount))
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+	s.Run("update_roles_denied", func() {
+		_, err := s.userService.UpdateUserRoles(ctx, "user-1", &dto.UpdateUserRolesRequest{
+			Roles: []string{types.RoleAllReader.String()},
+		})
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err))
+	})
+
+	s.Run("remove_user_denied", func() {
+		err := s.userService.RemoveUser(ctx, "user-1")
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err))
+	})
 }

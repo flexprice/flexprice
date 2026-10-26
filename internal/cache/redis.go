@@ -93,7 +93,7 @@ func (c *redisCacheImpl) GetRedisKey(key string) string {
 }
 
 func (c *redisCacheImpl) IsEnabled() bool {
-	return c.config.Cache.Enabled && c.config.Cache.Redis.Enabled
+	return c != nil && c.config.Cache.Enabled && c.config.Cache.Redis.Enabled
 }
 
 func (c *redisCacheImpl) IsRedisCache() bool {

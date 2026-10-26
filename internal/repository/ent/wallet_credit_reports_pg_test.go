@@ -70,6 +70,24 @@ func TestWalletCreditReports(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	// The October usage invoice the debit pays.
+	periodStart := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	_, err = client.Writer(ctx).Invoice.Create().
+		SetID("inv_usage_" + runID).
+		SetTenantID(tenantID).
+		SetEnvironmentID(envID).
+		SetCustomerID(cust.ID).
+		SetInvoiceType(types.InvoiceTypeSubscription).
+		SetInvoiceStatus(types.InvoiceStatusFinalized).
+		SetCurrency("usd").
+		SetPeriodStart(periodStart).
+		SetPeriodEnd(periodEnd).
+		SetCreatedBy(base.CreatedBy).
+		SetUpdatedBy(base.UpdatedBy).
+		Save(ctx)
+	require.NoError(t, err)
+
 	w := &walletdomain.Wallet{
 		ID:                  "wallet_" + runID,
 		CustomerID:          cust.ID,
@@ -137,6 +155,8 @@ func TestWalletCreditReports(t *testing.T) {
 		}
 
 		require.Equal(t, inv.ID, byID[purchase.ID].InvoiceID)
+		require.Nil(t, byID[purchase.ID].InvoicePeriodStart, "a one-off top-up invoice has no period")
+		require.Nil(t, byID[purchase.ID].InvoicePeriodEnd)
 		require.NotNil(t, byID[purchase.ID].AmountPaid)
 		require.True(t, decimal.NewFromInt(450).Equal(*byID[purchase.ID].AmountPaid), "after discount, before tax")
 		require.True(t, decimal.NewFromInt(500).Equal(byID[purchase.ID].Credits))
@@ -157,8 +177,11 @@ func TestWalletCreditReports(t *testing.T) {
 		for _, r := range rows[:3] {
 			require.Equal(t, debit.ID, r.DebitID)
 			require.Equal(t, "inv_usage_"+runID, r.InvoiceID)
+			require.True(t, periodStart.Equal(*r.InvoicePeriodStart), "the paid invoice's period")
+			require.True(t, periodEnd.Equal(*r.InvoicePeriodEnd))
 			require.Equal(t, "ext_"+runID, r.ExternalID)
 		}
+		require.Nil(t, rows[3].InvoicePeriodStart, "no invoice, no period")
 		require.Equal(t, purchase.ID, rows[0].CreditTransactionID)
 		require.True(t, decimal.NewFromInt(200).Equal(rows[0].Credits))
 		require.True(t, decimal.NewFromInt(500).Equal(*rows[0].WalletTxnCredits))

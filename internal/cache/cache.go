@@ -117,6 +117,7 @@ const (
 	PrefixCheckoutPollLock     = "checkout:poll:"
 	PrefixPublishedConnections = "published_connections:"
 	PrefixMeterFeature         = "meter:feature:v1:"
+	PrefixReportResult         = "report_result:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters
@@ -127,8 +128,11 @@ func GenerateKey(ctx context.Context, prefix string, params ...any) string {
 	if ctx != nil {
 		tenantId := types.GetTenantID(ctx)
 		environmentId := types.GetEnvironmentID(ctx)
-		if tenantId != "" && environmentId != "" {
-			parts = append(parts, tenantId, environmentId)
+		if tenantId != "" {
+			parts = append(parts, tenantId)
+			if environmentId != "" {
+				parts = append(parts, environmentId)
+			}
 		}
 	}
 

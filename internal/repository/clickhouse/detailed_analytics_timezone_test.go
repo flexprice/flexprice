@@ -28,13 +28,12 @@ func detailedTZParams(tz string) *events.MeterUsageDetailedAnalyticsParams {
 // tz must bucket in UTC.
 func TestBuildDetailedPointsQuery_Timezone(t *testing.T) {
 	qb := NewMeterUsageQueryBuilder()
-	result := &events.MeterUsageDetailedResult{}
 
-	ist, _ := qb.BuildDetailedPointsQuery(detailedTZParams("Asia/Kolkata"), result, nil)
+	ist, _ := qb.BuildDetailedPointsQuery(detailedTZParams("Asia/Kolkata"), nil)
 	assert.Contains(t, ist, "toStartOfDay(timestamp, 'Asia/Kolkata')",
 		"non-UTC customer timezone must localize the day bucket")
 
-	utc, _ := qb.BuildDetailedPointsQuery(detailedTZParams(""), result, nil)
+	utc, _ := qb.BuildDetailedPointsQuery(detailedTZParams(""), nil)
 	assert.NotContains(t, utc, "Asia/Kolkata", "empty tz must not localize")
 	assert.True(t, strings.Contains(utc, "toStartOfDay"), "empty tz must still bucket by day (UTC)")
 }

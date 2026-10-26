@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -115,6 +116,28 @@ func TestGenerateSessionTokenTimeoutBoundaries(t *testing.T) {
 			claims, err := a.ValidateSessionToken(ctx, token)
 			require.NoError(t, err, "a freshly issued session token must validate")
 			assert.Equal(t, "cust_1", claims.CustomerID)
+		})
+	}
+}
+
+func TestValidateToken_RejectsMissingTenant(t *testing.T) {
+	a := newTestAuth()
+
+	for name, tenantID := range map[string]string{"empty": "", "whitespace": "   ", "absent": "-"} {
+		t.Run(name, func(t *testing.T) {
+			claims := jwt.MapClaims{
+				"user_id": "usr_abc",
+				"exp":     time.Now().Add(time.Hour).Unix(),
+			}
+			if tenantID != "-" {
+				claims["tenant_id"] = tenantID
+			}
+			token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(a.AuthConfig.Secret))
+			require.NoError(t, err)
+
+			got, err := a.ValidateToken(context.Background(), token)
+			require.Error(t, err)
+			assert.Nil(t, got)
 		})
 	}
 }

@@ -486,9 +486,11 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 	// Only the attaches wrote anything: a gated removal leaves its association active and
 	// billable until payment lands, so an abandoned checkout has nothing to undo for it.
 	var ids []string
+	priceIDsByAssociation := map[string][]string{}
 	for _, params := range cfg.AddAddonEntries() {
 		for _, ref := range params.Addons {
 			ids = append(ids, ref.AssociationID)
+			priceIDsByAssociation[ref.AssociationID] = ref.OverridePriceIDs()
 		}
 	}
 	if len(ids) > 0 {
@@ -507,6 +509,16 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 			if err := s.AddonAssociationRepo.DeleteBulk(ctx, pending); err != nil {
 				s.Logger.Error(ctx, "failed to archive pending addon associations",
 					"association_ids", pending, "error", err)
+				return err
+			}
+		}
+
+		// Override prices of attaches that never activated are referenced by nothing.
+		priceIDs := lo.FlatMap(pending, func(id string, _ int) []string { return priceIDsByAssociation[id] })
+		if len(priceIDs) > 0 {
+			if err := s.PriceRepo.DeleteBulk(ctx, priceIDs); err != nil {
+				s.Logger.Error(ctx, "failed to delete override prices of pending addon associations",
+					"price_ids", priceIDs, "error", err)
 				return err
 			}
 		}

@@ -17,6 +17,18 @@
             "description": "A Checkout Session was created and a payment URL was returned to the customer."
         },
         {
+            "name": "commitment.created",
+            "description": "Fired when a commitment is created on a subscription"
+        },
+        {
+            "name": "commitment.terminated",
+            "description": "Fired when a commitment is terminated"
+        },
+        {
+            "name": "commitment.updated",
+            "description": "Fired when a commitment's descriptive fields are updated"
+        },
+        {
             "name": "credit_note.created",
             "description": "Fired when a credit note is created"
         },

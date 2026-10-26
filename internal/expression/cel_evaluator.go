@@ -156,6 +156,15 @@ func (e *CELEvaluator) Validate(expr string) error {
 	return err
 }
 
+// Identifiers returns the event property names the expression reads.
+func (e *CELEvaluator) Identifiers(expr string) ([]string, error) {
+	entry, err := e.getOrCompile(expr)
+	if err != nil {
+		return nil, err
+	}
+	return entry.identifiers, nil
+}
+
 // getOrCompile returns a cached entry or compiles and caches the expression.
 func (e *CELEvaluator) getOrCompile(expr string) (*cacheEntry, error) {
 	if cached, ok := e.cache.Load(expr); ok {

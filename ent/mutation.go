@@ -68766,6 +68766,8 @@ type SubscriptionLineItemMutation struct {
 	end_date                      *time.Time
 	subscription_phase_id         *string
 	addon_association_id          *string
+	predecessor_line_item_id      *string
+	successor_line_item_id        *string
 	metadata                      *map[string]string
 	commitment_amount             *decimal.Decimal
 	commitment_quantity           *decimal.Decimal
@@ -70127,6 +70129,104 @@ func (m *SubscriptionLineItemMutation) ResetAddonAssociationID() {
 	delete(m.clearedFields, subscriptionlineitem.FieldAddonAssociationID)
 }
 
+// SetPredecessorLineItemID sets the "predecessor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) SetPredecessorLineItemID(s string) {
+	m.predecessor_line_item_id = &s
+}
+
+// PredecessorLineItemID returns the value of the "predecessor_line_item_id" field in the mutation.
+func (m *SubscriptionLineItemMutation) PredecessorLineItemID() (r string, exists bool) {
+	v := m.predecessor_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPredecessorLineItemID returns the old "predecessor_line_item_id" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldPredecessorLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPredecessorLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPredecessorLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPredecessorLineItemID: %w", err)
+	}
+	return oldValue.PredecessorLineItemID, nil
+}
+
+// ClearPredecessorLineItemID clears the value of the "predecessor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) ClearPredecessorLineItemID() {
+	m.predecessor_line_item_id = nil
+	m.clearedFields[subscriptionlineitem.FieldPredecessorLineItemID] = struct{}{}
+}
+
+// PredecessorLineItemIDCleared returns if the "predecessor_line_item_id" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) PredecessorLineItemIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldPredecessorLineItemID]
+	return ok
+}
+
+// ResetPredecessorLineItemID resets all changes to the "predecessor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) ResetPredecessorLineItemID() {
+	m.predecessor_line_item_id = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldPredecessorLineItemID)
+}
+
+// SetSuccessorLineItemID sets the "successor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) SetSuccessorLineItemID(s string) {
+	m.successor_line_item_id = &s
+}
+
+// SuccessorLineItemID returns the value of the "successor_line_item_id" field in the mutation.
+func (m *SubscriptionLineItemMutation) SuccessorLineItemID() (r string, exists bool) {
+	v := m.successor_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuccessorLineItemID returns the old "successor_line_item_id" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldSuccessorLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuccessorLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuccessorLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuccessorLineItemID: %w", err)
+	}
+	return oldValue.SuccessorLineItemID, nil
+}
+
+// ClearSuccessorLineItemID clears the value of the "successor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) ClearSuccessorLineItemID() {
+	m.successor_line_item_id = nil
+	m.clearedFields[subscriptionlineitem.FieldSuccessorLineItemID] = struct{}{}
+}
+
+// SuccessorLineItemIDCleared returns if the "successor_line_item_id" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) SuccessorLineItemIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldSuccessorLineItemID]
+	return ok
+}
+
+// ResetSuccessorLineItemID resets all changes to the "successor_line_item_id" field.
+func (m *SubscriptionLineItemMutation) ResetSuccessorLineItemID() {
+	m.successor_line_item_id = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldSuccessorLineItemID)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *SubscriptionLineItemMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -70673,7 +70773,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 39)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -70757,6 +70857,12 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.addon_association_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldAddonAssociationID)
+	}
+	if m.predecessor_line_item_id != nil {
+		fields = append(fields, subscriptionlineitem.FieldPredecessorLineItemID)
+	}
+	if m.successor_line_item_id != nil {
+		fields = append(fields, subscriptionlineitem.FieldSuccessorLineItemID)
 	}
 	if m.metadata != nil {
 		fields = append(fields, subscriptionlineitem.FieldMetadata)
@@ -70849,6 +70955,10 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionPhaseID()
 	case subscriptionlineitem.FieldAddonAssociationID:
 		return m.AddonAssociationID()
+	case subscriptionlineitem.FieldPredecessorLineItemID:
+		return m.PredecessorLineItemID()
+	case subscriptionlineitem.FieldSuccessorLineItemID:
+		return m.SuccessorLineItemID()
 	case subscriptionlineitem.FieldMetadata:
 		return m.Metadata()
 	case subscriptionlineitem.FieldCommitmentAmount:
@@ -70932,6 +71042,10 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldSubscriptionPhaseID(ctx)
 	case subscriptionlineitem.FieldAddonAssociationID:
 		return m.OldAddonAssociationID(ctx)
+	case subscriptionlineitem.FieldPredecessorLineItemID:
+		return m.OldPredecessorLineItemID(ctx)
+	case subscriptionlineitem.FieldSuccessorLineItemID:
+		return m.OldSuccessorLineItemID(ctx)
 	case subscriptionlineitem.FieldMetadata:
 		return m.OldMetadata(ctx)
 	case subscriptionlineitem.FieldCommitmentAmount:
@@ -71155,6 +71269,20 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetAddonAssociationID(v)
 		return nil
+	case subscriptionlineitem.FieldPredecessorLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPredecessorLineItemID(v)
+		return nil
+	case subscriptionlineitem.FieldSuccessorLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuccessorLineItemID(v)
+		return nil
 	case subscriptionlineitem.FieldMetadata:
 		v, ok := value.(map[string]string)
 		if !ok {
@@ -71311,6 +71439,12 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldAddonAssociationID) {
 		fields = append(fields, subscriptionlineitem.FieldAddonAssociationID)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldPredecessorLineItemID) {
+		fields = append(fields, subscriptionlineitem.FieldPredecessorLineItemID)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldSuccessorLineItemID) {
+		fields = append(fields, subscriptionlineitem.FieldSuccessorLineItemID)
+	}
 	if m.FieldCleared(subscriptionlineitem.FieldMetadata) {
 		fields = append(fields, subscriptionlineitem.FieldMetadata)
 	}
@@ -71393,6 +71527,12 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldAddonAssociationID:
 		m.ClearAddonAssociationID()
+		return nil
+	case subscriptionlineitem.FieldPredecessorLineItemID:
+		m.ClearPredecessorLineItemID()
+		return nil
+	case subscriptionlineitem.FieldSuccessorLineItemID:
+		m.ClearSuccessorLineItemID()
 		return nil
 	case subscriptionlineitem.FieldMetadata:
 		m.ClearMetadata()
@@ -71506,6 +71646,12 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldAddonAssociationID:
 		m.ResetAddonAssociationID()
+		return nil
+	case subscriptionlineitem.FieldPredecessorLineItemID:
+		m.ResetPredecessorLineItemID()
+		return nil
+	case subscriptionlineitem.FieldSuccessorLineItemID:
+		m.ResetSuccessorLineItemID()
 		return nil
 	case subscriptionlineitem.FieldMetadata:
 		m.ResetMetadata()

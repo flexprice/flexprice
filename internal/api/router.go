@@ -53,6 +53,7 @@ type Handlers struct {
 	Tax                      *v1.TaxHandler
 	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
+	Commitment               *v1.CommitmentHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	Integration              *v1.IntegrationHandler
@@ -189,7 +190,7 @@ func NewRouter(
 		user := v1Private.Group("/users")
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
-			user.POST("", write(types.EntityUser, types.ActionWrite), handlers.User.CreateUser)
+			user.POST("", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.CreateUser)
 			user.PUT("/me", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateUser)
 			user.PUT("/:id", write(types.EntityUser, types.ActionWrite), handlers.User.UpdateServiceAccount)
 			user.PUT("/:id/roles", write(types.EntityUser, types.ActionWrite, superAdminOnly), handlers.User.UpdateUserRoles)
@@ -238,6 +239,8 @@ func NewRouter(
 			meterUsage.POST("/query", observe(types.EntityEvent), handlers.MeterUsage.QueryUsage)
 			meterUsage.POST("/analytics", observe(types.EntityEvent), handlers.MeterUsage.GetAnalytics)
 			meterUsage.POST("/detailed-analytics", observe(types.EntityEvent), handlers.MeterUsage.GetDetailedAnalytics)
+			meterUsage.POST("/properties", observe(types.EntityEvent), handlers.MeterUsage.GetPropertyKeys)
+			meterUsage.POST("/properties/values", observe(types.EntityEvent), handlers.MeterUsage.GetPropertyValues)
 		}
 
 		// Analytics query + view endpoints
@@ -665,6 +668,16 @@ func NewRouter(
 			// }
 		}
 
+		commitments := v1Private.Group("/commitments")
+		{
+			commitments.POST("", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.CreateCommitment)
+			commitments.POST("/preview", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.PreviewCommitment)
+			commitments.POST("/search", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.QueryCommitments)
+			commitments.GET("/:id", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.GetCommitment)
+			commitments.PUT("/:id", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.UpdateCommitment)
+			commitments.POST("/:id/terminate", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TerminateCommitment)
+		}
+
 		// Coupon routes
 		coupon := v1Private.Group("/coupons")
 		{
@@ -790,6 +803,8 @@ func NewRouter(
 
 		// Analytics
 		customerPortalAPI.POST("/analytics/revenue", handlers.CustomerPortal.GetAnalytics)
+		customerPortalAPI.POST("/analytics/properties", handlers.CustomerPortal.GetPropertyKeys)
+		customerPortalAPI.POST("/analytics/properties/values", handlers.CustomerPortal.GetPropertyValues)
 
 		// Cost Analytics
 		customerPortalAPI.POST("/analytics/cost", handlers.CustomerPortal.GetCostAnalytics)

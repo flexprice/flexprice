@@ -78,6 +78,9 @@ type CreatePriceTier struct {
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
 	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
+
+	// transform_quantity bills unit_amount per package of divide_by units; round defaults to up
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 type UpdatePriceRequest struct {
@@ -190,6 +193,10 @@ func (t *CreatePriceTier) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := t.TransformQuantity.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -283,6 +290,16 @@ func (r *CreatePriceRequest) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	hasPriceUnitTiers := r.PriceUnitConfig != nil && len(r.PriceUnitConfig.PriceUnitTiers) > 0
+	if r.BillingModel != types.BILLING_MODEL_TIERED && (len(r.Tiers) > 0 || hasPriceUnitTiers) {
+		return ierr.NewError("tiers can only be set on a TIERED price").
+			WithHint("Set billing_model to TIERED with tier_mode SLAB or VOLUME to apply tiers").
+			WithReportableDetails(map[string]interface{}{
+				"billing_model": r.BillingModel,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// 6. Validate billing model specific requirements
@@ -546,6 +563,13 @@ func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.
 			UnitAmount: tier.UnitAmount,
 			FlatAmount: tier.FlatAmount,
 		}
+		if tier.TransformQuantity != nil {
+			transformQuantity := *tier.TransformQuantity
+			if transformQuantity.Round == "" {
+				transformQuantity.Round = types.ROUND_UP
+			}
+			priceTiers[i].TransformQuantity = &transformQuantity
+		}
 	}
 
 	return priceDomain.JSONBTiers(priceTiers), nil
@@ -754,8 +778,9 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 				priceUnitConfig.PriceUnitTiers = make([]CreatePriceTier, len(existingPrice.PriceUnitTiers))
 				for i, tier := range existingPrice.PriceUnitTiers {
 					priceUnitConfig.PriceUnitTiers[i] = CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -769,8 +794,9 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 				createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
 				for i, tier := range existingPrice.Tiers {
 					createReq.Tiers[i] = CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					createReq.Tiers[i].FlatAmount = tier.FlatAmount
 				}

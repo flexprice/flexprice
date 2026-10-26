@@ -74,3 +74,80 @@ func TestValidateSecrets(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCriticalSecrets(t *testing.T) {
+	base := func() Configuration {
+		c := Configuration{}
+		c.Deployment.Mode = types.ModeAPI
+		c.Auth.Provider = types.AuthProviderFlexprice
+		c.Auth.Secret = "a-real-32-byte-production-secret-value"
+		c.Auth.APIKey.Keys = map[string]APIKeyDetails{"custom-hash": {IsActive: true}}
+		return c
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*Configuration)
+		wantErr string
+	}{
+		{"custom values", func(c *Configuration) {}, ""},
+		{"super_secret", func(c *Configuration) { c.Auth.Secret = "super_secret" }, "auth.secret"},
+		{"empty secret", func(c *Configuration) { c.Auth.Secret = " " }, "auth.secret"},
+		{"supabase with super_secret", func(c *Configuration) {
+			c.Auth.Provider = types.AuthProviderSupabase
+			c.Auth.Secret = "super_secret"
+		}, "auth.secret"},
+		{"dev api key present", func(c *Configuration) {
+			c.Auth.APIKey.Keys[devAPIKeyHash] = APIKeyDetails{IsActive: true}
+		}, "dev key"},
+		{"nil api keys", func(c *Configuration) { c.Auth.APIKey.Keys = nil }, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := base()
+			tc.mutate(&c)
+			err := c.validateCriticalSecrets()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestNewValidatedConfigLocalAllowsDefaults(t *testing.T) {
+	t.Setenv("FLEXPRICE_DEPLOYMENT_MODE", "local")
+	if _, err := NewValidatedConfig(); err != nil {
+		t.Fatalf("local mode with defaults must boot: %v", err)
+	}
+}
+
+func TestValidateCriticalSecretsInsecureOptOut(t *testing.T) {
+	c := Configuration{}
+	c.Deployment.Mode = types.ModeAPI
+	c.Auth.Secret = "super_secret"
+	c.Auth.APIKey.Keys = map[string]APIKeyDetails{devAPIKeyHash: {IsActive: true}}
+
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "")
+	if err := c.validateCriticalSecrets(); err == nil {
+		t.Fatal("defaults without opt-out must fail")
+	}
+	t.Setenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS", "true")
+	if err := c.validateCriticalSecrets(); err != nil {
+		t.Fatalf("opt-out must allow defaults: %v", err)
+	}
+}
+
+func TestNewValidatedConfigNonLocalRejectsDefaults(t *testing.T) {
+	t.Setenv("FLEXPRICE_DEPLOYMENT_MODE", "api")
+	t.Setenv("FLEXPRICE_AUTH_SECRET", "")
+	if _, err := NewValidatedConfig(); err == nil {
+		t.Fatal("non-local mode with default secrets must fail")
+	}
+}

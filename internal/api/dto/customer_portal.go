@@ -43,6 +43,8 @@ type PortalCostAnalyticsRequest struct {
 	EndTime    time.Time `json:"end_time" binding:"required" example:"2024-01-31T23:59:59Z"`
 	// Expand specifies which related entities to include. Supported values: "meter", "price"
 	Expand []string `json:"expand,omitempty" example:"meter,price"`
+	// PropertyFilters filters usage events by property key and values, e.g. {"region": ["us-east-1"]}
+	PropertyFilters map[string][]string `json:"property_filters,omitempty"`
 }
 
 // ToInternalRequest converts the portal cost analytics request to an internal GetCostAnalyticsRequest
@@ -54,7 +56,23 @@ func (r *PortalCostAnalyticsRequest) ToInternalRequest(externalCustomerID string
 		StartTime:          r.StartTime,
 		EndTime:            r.EndTime,
 		Expand:             r.Expand,
+		PropertyFilters:    r.PropertyFilters,
 	}
+}
+
+// PortalPropertyKeysRequest asks for the property keys in the portal customer's usage
+type PortalPropertyKeysRequest struct {
+	FeatureIDs []string  `json:"feature_ids,omitempty" example:"feat_123,feat_456"`
+	StartTime  time.Time `json:"start_time" binding:"required" example:"2024-01-01T00:00:00Z"`
+	EndTime    time.Time `json:"end_time" binding:"required" example:"2024-01-31T23:59:59Z"`
+}
+
+// PortalPropertyValuesRequest asks for one property key's values in the portal customer's usage
+type PortalPropertyValuesRequest struct {
+	PortalPropertyKeysRequest
+	Key    string `json:"key" binding:"required" example:"region"`
+	Prefix string `json:"prefix,omitempty" example:"us-"`
+	Limit  int    `json:"limit,omitempty" binding:"omitempty,min=1,max=200" example:"50"`
 }
 
 // PortalPaginatedRequest represents a paginated request from the customer portal

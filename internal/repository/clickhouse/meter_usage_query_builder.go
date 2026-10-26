@@ -598,10 +598,10 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedGroupByColumns(params *events.Met
 	return result, nil
 }
 
-// BuildDetailedPointsQuery constructs a time-series sub-query for a single group's analytics points.
+// BuildDetailedPointsQuery constructs one time-series query for every group's analytics points,
+// selecting the group-by columns ahead of window_start.
 func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 	params *events.MeterUsageDetailedAnalyticsParams,
-	result *events.MeterUsageDetailedResult,
 	groupByResult *DetailedGroupByResult,
 ) (string, []interface{}) {
 	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.Timezone)
@@ -611,52 +611,26 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 
 	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
-
-	// Start with the base WHERE from the detailed params
 	where, args := qb.BuildDetailedWhereClause(params)
 
-	// Narrow to this specific group. A structural dimension is constrained
-	// whenever it was in the aggregate query's GROUP BY (keyed off
-	// groupByResult, not result.X != ""), so a group whose value is empty —
-	// e.g. events with no external_customer_id — still gets its predicate. Using
-	// result.X != "" would drop the predicate for an empty group, letting the
-	// points query sum every value while the aggregate row holds only the empty
-	// group.
-	grouped := func(field string) bool {
-		if groupByResult == nil {
-			return false
-		}
-		_, ok := groupByResult.FieldMapping[field]
-		return ok
+	var selectCols, groupCols []string
+	if groupByResult != nil {
+		selectCols = append(selectCols, groupByResult.Aliases...)
+		groupCols = append(groupCols, groupByResult.Columns...)
 	}
-	if grouped("meter_id") {
-		where += " AND meter_id = ?"
-		args = append(args, result.MeterID)
-	}
-	if grouped("source") {
-		where += " AND source = ?"
-		args = append(args, result.Source)
-	}
-	if grouped("external_customer_id") {
-		where += " AND external_customer_id = ?"
-		args = append(args, result.ExternalCustomerID)
-	}
-	for propName, propValue := range result.Properties {
-		where += " AND JSONExtractString(properties, ?) = ?"
-		args = append(args, propName, propValue)
-	}
-
-	selectCols := append([]string{fmt.Sprintf("%s AS window_start", windowExpr)}, aggColumns...)
+	selectCols = append(selectCols, fmt.Sprintf("%s AS window_start", windowExpr))
+	selectCols = append(selectCols, aggColumns...)
+	groupCols = append(groupCols, "window_start")
 
 	query := fmt.Sprintf(`
 		SELECT
 			%s
 		FROM meter_usage %s
 		WHERE %s
-		GROUP BY window_start
+		GROUP BY %s
 		ORDER BY window_start ASC
 		%s
-	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, settings)
+	`, strings.Join(selectCols, ",\n\t\t\t"), finalClause, where, strings.Join(groupCols, ", "), settings)
 
 	return query, args
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -13,6 +15,19 @@ import (
 func newObserved(level zapcore.Level) (*Logger, *observer.ObservedLogs) {
 	core, logs := observer.New(level)
 	return NewFromSugared(zap.New(core).Sugar()), logs
+}
+
+func TestLogResourceAttrsCarryBothEnvironmentKeys(t *testing.T) {
+	cfg := &config.Configuration{}
+	cfg.Logging.Environment = "production"
+
+	got := map[attribute.Key]string{}
+	for _, kv := range logResourceAttrs(cfg) {
+		got[kv.Key] = kv.Value.Emit()
+	}
+
+	assert.Equal(t, "production", got["deployment.environment"])
+	assert.Equal(t, "production", got["deployment.environment.name"])
 }
 
 func TestLoggerLevelGate(t *testing.T) {

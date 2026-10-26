@@ -117,6 +117,13 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
+	commitmentSvc := newCommitmentService(s.ServiceParams)
+	if len(req.Commitments) > 0 {
+		if err := commitmentSvc.requireEnabled(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get and validate customer
 	var customer *customer.Customer
 	var err error
@@ -416,7 +423,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 	}
-
 	// Prepare credit grants
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	var creditGrantRequests []dto.CreateCreditGrantRequest
@@ -511,6 +517,29 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 					}
 				}
 			}
+		}
+	}
+
+	// Inline commitments run once every line item exists, so they can scope overridden and phase-one prices.
+	for _, commitmentReq := range req.Commitments {
+		commitmentReq.SubscriptionID = sub.ID
+		switch commitmentReq.Scope.EntityType {
+		case types.CommitmentScopeSubscription:
+			commitmentReq.Scope.EntityID = lo.CoalesceOrEmpty(commitmentReq.Scope.EntityID, sub.ID)
+		case types.CommitmentScopePrice:
+			// An overridden plan price is billed through its subscription-scoped replacement.
+			if lineItemID, ok := originalPriceToLineItemMap[commitmentReq.Scope.EntityID]; ok {
+				lineItem, found := lo.Find(sub.LineItems, func(li *subscription.SubscriptionLineItem) bool {
+					return li.ID == lineItemID
+				})
+				if found {
+					commitmentReq.Scope.EntityID = lineItem.PriceID
+				}
+			}
+		}
+
+		if _, err = commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true}); err != nil {
+			return nil, err
 		}
 	}
 
@@ -1560,8 +1589,9 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 				priceUnitConfig.PriceUnitTiers = make([]dto.CreatePriceTier, len(originalPrice.PriceUnitTiers))
 				for i, tier := range originalPrice.PriceUnitTiers {
 					priceUnitConfig.PriceUnitTiers[i] = dto.CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -1575,8 +1605,9 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 				createPriceReq.Tiers = make([]dto.CreatePriceTier, len(originalPrice.Tiers))
 				for i, tier := range originalPrice.Tiers {
 					createPriceReq.Tiers[i] = dto.CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					createPriceReq.Tiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -2188,6 +2219,12 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
+		// Commitments end before the final invoice is built, so it carries their prorated true-up and settlement.
+		if req.CancellationType == types.CancellationTypeImmediate {
+			if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+				return err
+			}
+		}
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		// A cancel that ends the period early would leave its open draft behind, so the draft becomes
 		// the cancel invoice, is voided (refunding its applied credits), or moves to the cancel date.
@@ -3201,6 +3238,14 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
+
+	if !req.LifetimeUsage {
+		billingSvc := &billingService{ServiceParams: s.ServiceParams}
+		response.Commitments, err = billingSvc.commitmentUsageBreakdown(ctx, subscription, response, usageStartTime, usageEndTime)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return response, nil
 }
 
@@ -5115,6 +5160,10 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		SubscriptionID: req.SubscriptionID,
 		EffectiveDate:  &req.EffectiveDate,
 	}); err != nil {
+		return err
+	}
+
+	if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
 		return err
 	}
 

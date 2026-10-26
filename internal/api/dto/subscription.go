@@ -666,6 +666,10 @@ type CreateSubscriptionRequest struct {
 
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
+	// Commitments are created with the subscription. subscription_id, and entity_id on a subscription scope,
+	// are set server-side.
+	Commitments []CreateCommitmentRequest `json:"commitments,omitempty"`
+
 	SubscriptionCreationConfig
 }
 
@@ -689,12 +693,6 @@ func (r *AddAddonRequest) Validate() error {
 	}
 
 	if r.Checkout != nil {
-		if len(r.OverrideLineItems) > 0 {
-			return ierr.NewError("override_line_items is not supported with checkout").
-				WithHint("Remove checkout to use override_line_items, or remove override_line_items to gate this addon behind payment").
-				Mark(ierr.ErrValidation)
-		}
-
 		if len(r.LineItemCommitments) > 0 {
 			return ierr.NewError("line_item_commitments is not supported with checkout").
 				WithHint("Remove checkout to use line_item_commitments, or remove line_item_commitments to gate this addon behind payment").
@@ -1035,6 +1033,36 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 	return nil
 }
 
+// validateCommitments checks each inline commitment's shape on a copy, so no write happens for a bad request.
+// The subscription ID, unknown until create, stands in as "pending".
+func (r *CreateSubscriptionRequest) validateCommitments() error {
+	idempotencyKeys := make(map[string]bool, len(r.Commitments))
+	for i := range r.Commitments {
+		c := r.Commitments[i]
+		c.SubscriptionID = "pending"
+		if c.Scope.EntityType == types.CommitmentScopeSubscription && c.Scope.EntityID == "" {
+			c.Scope.EntityID = "pending"
+		}
+
+		c.ApplyDefaults(lo.CoalesceOrEmpty(r.Timezone, types.DefaultTimezone))
+		if err := c.Validate(); err != nil {
+			return err
+		}
+
+		if c.IdempotencyKey == nil {
+			continue
+		}
+
+		if idempotencyKeys[*c.IdempotencyKey] {
+			return ierr.Validationf("commitments carry the idempotency_key %s more than once", *c.IdempotencyKey)
+		}
+
+		idempotencyKeys[*c.IdempotencyKey] = true
+	}
+
+	return nil
+}
+
 func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
@@ -1064,6 +1092,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := r.validateCommitments(); err != nil {
+		return err
 	}
 
 	if r.IncludePriceIDs != nil {
@@ -2077,6 +2109,21 @@ type GetUsageBySubscriptionResponse struct {
 	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
 	OverageAmount      float64                              `json:"overage_amount,omitempty"`      // Amount charged at overage rate
 	HasOverage         bool                                 `json:"has_overage"`                   // Whether any usage exceeded commitment
+	// Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.
+	Commitments []*CommitmentUsageBreakdown `json:"commitments,omitempty"`
+}
+
+// CommitmentUsageBreakdown is one commitment's usage value and billed amount for the usage window.
+type CommitmentUsageBreakdown struct {
+	CommitmentID string          `json:"commitment_id"`
+	InvoiceLabel string          `json:"invoice_label"`
+	PeriodAmount decimal.Decimal `json:"period_amount" swaggertype:"string"`
+	Capacity     decimal.Decimal `json:"capacity" swaggertype:"string"`
+	Used         decimal.Decimal `json:"used" swaggertype:"string"`
+	Unused       decimal.Decimal `json:"unused" swaggertype:"string"`
+	ValueWithin  decimal.Decimal `json:"value_within" swaggertype:"string"`
+	ValueUnused  decimal.Decimal `json:"value_unused" swaggertype:"string"`
+	BilledAmount decimal.Decimal `json:"billed_amount" swaggertype:"string"`
 }
 
 type SubscriptionUsageByMetersResponse struct {

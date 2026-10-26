@@ -132,7 +132,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 		unitPrice = priceToSync.Amount
 	} else if priceToSync.BillingModel == types.BILLING_MODEL_TIERED && len(priceToSync.Tiers) > 0 {
 		// Tiered pricing: use first tier's unit amount as default
-		unitPrice = priceToSync.Tiers[0].UnitAmount
+		unitPrice = priceToSync.Tiers[0].GetPerUnitCost()
 		s.Logger.Info(ctx, "using first tier unit amount for tiered price", "unit_price", unitPrice)
 	} else {
 		// Recurring/flat fee: use the fixed amount

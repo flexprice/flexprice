@@ -338,7 +338,7 @@ func (s *userService) UpdateUserRoles(ctx context.Context, id string, req *dto.U
 			Mark(ierr.ErrValidation)
 	}
 
-	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
+	if !types.IsSuperAdminUser(ctx) {
 		return nil, ierr.NewError("only super_admin can update roles").
 			WithHint("Ask a tenant super_admin to update roles").
 			Mark(ierr.ErrPermissionDenied)
@@ -463,10 +463,9 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 
 	var userID string
 
-	// Admitting someone to the tenant is an administrative act, so it is
-	// restricted to super_admins regardless of which role the invitee is given.
-	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
-		return nil, nil, ierr.NewError("only super_admin can invite users").
+	// Service accounts must not invite.
+	if !types.IsSuperAdminUser(ctx) {
+		return nil, nil, ierr.NewError("only super_admin users can invite users").
 			WithHint("Ask a tenant super_admin to invite this user").
 			Mark(ierr.ErrPermissionDenied)
 	}
@@ -666,7 +665,7 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
+	if !types.IsSuperAdminUser(ctx) {
 		return ierr.NewError("only super_admin can remove users").
 			WithHint("Ask a tenant super_admin to remove this user").
 			Mark(ierr.ErrPermissionDenied)

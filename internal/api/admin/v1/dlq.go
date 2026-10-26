@@ -15,17 +15,36 @@ type DLQHandler struct{ service adminsvc.DLQService }
 // NewDLQHandler constructs the admin replay handler.
 func NewDLQHandler(service adminsvc.DLQService) *DLQHandler { return &DLQHandler{service: service} }
 
-// Replay waits for a bounded replay and returns its summary.
+// Replay returns a dry-run summary, or starts a background replay and returns its workflow.
 func (h *DLQHandler) Replay(c *gin.Context) {
 	var req admin.ReplayDLQRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).WithHint("Please check the request payload").Mark(ierr.ErrValidation))
 		return
 	}
-	resp, err := h.service.Replay(c.Request.Context(), req)
+	if !req.DryRun {
+		run, err := h.service.StartReplay(c.Request.Context(), req)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+		c.JSON(http.StatusAccepted, run)
+		return
+	}
+	resp, err := h.service.Preview(c.Request.Context(), req)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// GetReplay reports a background replay's state.
+func (h *DLQHandler) GetReplay(c *gin.Context) {
+	run, err := h.service.GetReplay(c.Request.Context(), c.Param("workflow_id"), c.Query("run_id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, run)
 }

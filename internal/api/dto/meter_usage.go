@@ -258,3 +258,51 @@ func ToMeterUsageDetailedAnalyticsResponse(results []*events.MeterUsageDetailedR
 	}
 	return &MeterUsageDetailedAnalyticsResponse{Items: items}
 }
+
+// MeterUsagePropertyKeysRequest is the request for POST /v1/meter-usage/properties.
+// Without external_customer_id, it looks across the whole environment.
+type MeterUsagePropertyKeysRequest struct {
+	ExternalCustomerID string    `json:"external_customer_id,omitempty" example:"cust_123"`
+	FeatureIDs         []string  `json:"feature_ids,omitempty" example:"feat_abc,feat_def"`
+	StartTime          time.Time `json:"start_time" validate:"required" binding:"required" example:"2024-01-01T00:00:00Z"`
+	EndTime            time.Time `json:"end_time" validate:"required" binding:"required" example:"2024-02-01T00:00:00Z"`
+}
+
+// ToParams converts the DTO to domain property lookup params
+func (r *MeterUsagePropertyKeysRequest) ToParams(tenantID, environmentID string) *events.PropertyLookupParams {
+	return &events.PropertyLookupParams{
+		TenantID:           tenantID,
+		EnvironmentID:      environmentID,
+		ExternalCustomerID: r.ExternalCustomerID,
+		FeatureIDs:         r.FeatureIDs,
+		StartTime:          r.StartTime,
+		EndTime:            r.EndTime,
+	}
+}
+
+// MeterUsagePropertyValuesRequest is the request for POST /v1/meter-usage/properties/values
+type MeterUsagePropertyValuesRequest struct {
+	MeterUsagePropertyKeysRequest
+	Key    string `json:"key" validate:"required" binding:"required" example:"region"`
+	Prefix string `json:"prefix,omitempty" example:"us-"`
+	Limit  int    `json:"limit,omitempty" validate:"omitempty,min=1,max=200" binding:"omitempty,min=1,max=200" example:"50"`
+}
+
+// ToParams converts the DTO to domain property lookup params
+func (r *MeterUsagePropertyValuesRequest) ToParams(tenantID, environmentID string) *events.PropertyLookupParams {
+	params := r.MeterUsagePropertyKeysRequest.ToParams(tenantID, environmentID)
+	params.Key = r.Key
+	params.Prefix = r.Prefix
+	params.Limit = r.Limit
+	return params
+}
+
+// PropertyKeysResponse lists property keys, most seen first.
+type PropertyKeysResponse struct {
+	Keys []string `json:"keys"`
+}
+
+// PropertyValuesResponse lists a property key's values, most seen first.
+type PropertyValuesResponse struct {
+	Values []string `json:"values"`
+}

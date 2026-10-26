@@ -109,6 +109,8 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 		SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 		SetNillableAddonAssociationID(item.AddonAssociationID).
+		SetNillablePredecessorLineItemID(item.PredecessorLineItemID).
+		SetNillableSuccessorLineItemID(item.SuccessorLineItemID).
 		SetInvoiceCadence(item.InvoiceCadence).
 		SetMetadata(item.Metadata).
 		// Commitment fields
@@ -334,6 +336,11 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	} else {
 		builder.SetEndDate(item.EndDate)
 	}
+	if item.SuccessorLineItemID == nil {
+		builder.ClearSuccessorLineItemID()
+	} else {
+		builder.SetSuccessorLineItemID(*item.SuccessorLineItemID)
+	}
 	_, err := builder.Save(ctx)
 
 	if err != nil {
@@ -488,6 +495,8 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetNillableAddonAssociationID(item.AddonAssociationID).
+			SetNillablePredecessorLineItemID(item.PredecessorLineItemID).
+			SetNillableSuccessorLineItemID(item.SuccessorLineItemID).
 			SetMetadata(item.Metadata).
 			SetNillableCommitmentAmount(item.CommitmentAmount).
 			SetNillableCommitmentQuantity(item.CommitmentQuantity).

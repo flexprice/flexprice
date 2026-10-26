@@ -617,14 +617,16 @@ type ClickHouseConfig struct {
 
 // ReportsConfig is the reports ClickHouse login.
 type ReportsConfig struct {
-	Database             string `mapstructure:"database"`
-	UsageDatabase        string `mapstructure:"usage_database"`
-	Username             string `mapstructure:"username"`
-	Password             string `mapstructure:"password"`
-	MaxExecutionSeconds  int    `mapstructure:"max_execution_seconds"`
-	MaxResultRows        int    `mapstructure:"max_result_rows"`
-	MaxRowsToRead        int64  `mapstructure:"max_rows_to_read"`
-	QueryCacheTTLSeconds int    `mapstructure:"query_cache_ttl_seconds"`
+	Address                 string `mapstructure:"address"`
+	Database                string `mapstructure:"database"`
+	UsageDatabase           string `mapstructure:"usage_database"`
+	UsageOnEventsClickHouse bool   `mapstructure:"usage_on_events_clickhouse"`
+	Username                string `mapstructure:"username"`
+	Password                string `mapstructure:"password"`
+	MaxExecutionSeconds     int    `mapstructure:"max_execution_seconds"`
+	MaxResultRows           int    `mapstructure:"max_result_rows"`
+	MaxRowsToRead           int64  `mapstructure:"max_rows_to_read"`
+	QueryCacheTTLSeconds    int    `mapstructure:"query_cache_ttl_seconds"`
 }
 
 func (c ReportsConfig) Enabled() bool {
@@ -1386,6 +1388,9 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+// devAPIKeyHash is the hash of the public dev API key in config.yaml.
+const devAPIKeyHash = "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c"
+
 const (
 	defaultClickHouseDialTimeout = 10 * time.Second
 	defaultClickHouseReadTimeout = 30 * time.Second
@@ -1396,6 +1401,7 @@ const (
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
 	"": true, // unset
+	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
 	"svix_auth_token":                                          true,
@@ -1414,6 +1420,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	}
 	if cfg.Deployment.Mode == types.ModeLocal {
 		return cfg, nil
+	}
+	if err := cfg.validateCriticalSecrets(); err != nil {
+		return nil, err
 	}
 	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
 	// Many fields carry dormant `validate:"required"` tags that were never enforced
@@ -1449,6 +1458,25 @@ func NewValidatedConfig() (*Configuration, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateCriticalSecrets rejects secrets that sign tokens or grant access.
+func (c Configuration) validateCriticalSecrets() error {
+	allowInsecure := os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true"
+	fail := func(err error) error {
+		if !allowInsecure {
+			return err
+		}
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed critical secret check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	if placeholderSecrets[strings.TrimSpace(c.Auth.Secret)] {
+		return fail(fmt.Errorf("auth.secret (FLEXPRICE_AUTH_SECRET) is empty or a placeholder (mode %q)", c.Deployment.Mode))
+	}
+	if _, ok := c.Auth.APIKey.Keys[devAPIKeyHash]; ok {
+		return fail(fmt.Errorf("auth.api_key.keys contains the public dev key (mode %q): set FLEXPRICE_AUTH_API_KEY_KEYS", c.Deployment.Mode))
+	}
+	return nil
 }
 
 // validateSecrets flags placeholder/dev secret values for features that are actually

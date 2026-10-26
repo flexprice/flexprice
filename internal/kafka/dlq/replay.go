@@ -70,6 +70,9 @@ func Replay(ctx context.Context, cfg *config.Configuration, log *logger.Logger, 
 	if err != nil {
 		return sum, fmt.Errorf("build sarama config: %w", err)
 	}
+	// Closing a partition offset manager waits for the next autocommit tick; the shared
+	// 5s interval made every partition cost 5s even when there was nothing to replay.
+	saramaCfg.Consumer.Offsets.AutoCommit.Interval = 200 * time.Millisecond
 
 	client, err := sarama.NewClient(cfg.Kafka.Brokers, saramaCfg)
 	if err != nil {

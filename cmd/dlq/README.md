@@ -118,17 +118,31 @@ curl "$ADMIN_URL/v1/dlq/replay" \
   -d '{"source_topic":"production_event_processing_dlq","dry_run":true}'
 ```
 
-The request runs synchronously with a ten-minute timeout and stops when the
-client disconnects. Configure the client and proxy timeouts accordingly; use
-`max` to split large replays into batches. A successful response contains
-`scanned`, `replayed`, `skipped`, `quarantined`, `by_target`, and `by_reason`.
-On failure, committed offsets retain progress for the next request.
+With `"dry_run": true` the request is a preview: it runs synchronously (ten-minute
+timeout), publishes nothing, saves no progress, and returns `scanned`, `replayed`,
+`skipped`, `quarantined`, `by_target`, and `by_reason`.
+
+With `"dry_run": false` the request starts `ReplayDLQWorkflow` on the Temporal
+worker (task queue `events`) and returns `202` with `workflow_id` and `run_id`.
+The admin server does no Kafka work for a real run, so the **worker** in that region
+needs Kafka credentials. Poll the run with the returned `run_id`; without it you get the
+latest run for that workflow ID, which may be a newer replay:
+
+```bash
+curl "$ADMIN_URL/v1/dlq/replay/runs/$WORKFLOW_ID?run_id=$RUN_ID" -H "X-Admin-Secret: $FLEXPRICE_ADMIN_SECRET"
+```
+
+`status` is `queued` until a worker starts the activity (a run stuck there means no
+worker polls `events` in that region), then `running`, then `completed` with
+`summary` or `failed` with `last_error`. Committed offsets keep progress across
+activity retries and failed runs. Runs with `max`, `since` or `from_start` are not
+retried, since a retry would recount or republish messages.
+
+The workflow ID is `dlq-replay-<source_topic>:<group>`, so a second replay for the
+same topic and group returns `409` while one is running. That guard does not cover
+the CLI: never run the CLI against a topic/group the admin portal is replaying.
 
 Other request fields: `target_override`, `group`, `since` (RFC3339), `from_start`,
-`max`, and `max_replays`. Defaults match the CLI. Set `dry_run` to false for a
-real replay after reviewing the preview. Never run concurrent replays against
-the same topic/group, including CLI runs and other admin replicas: the engine
-uses an offset manager, which does not coordinate concurrent consumers.
+`max`, and `max_replays`. Defaults match the CLI.
 
-The route is available only on the internal admin server, not the public API.
-There is no DLQ Temporal workflow.
+The routes are available only on the internal admin server, not the public API.

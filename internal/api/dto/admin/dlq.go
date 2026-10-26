@@ -52,3 +52,26 @@ type ReplayDLQResponse struct {
 	ByTarget    map[string]int `json:"by_target"`
 	ByReason    map[string]int `json:"by_reason"`
 }
+
+// ReplayStatus is the lifecycle state of a background replay.
+type ReplayStatus string
+
+const (
+	// ReplayStatusQueued means no worker has picked the replay up yet.
+	ReplayStatusQueued    ReplayStatus = "queued"
+	ReplayStatusRunning   ReplayStatus = "running"
+	ReplayStatusCompleted ReplayStatus = "completed"
+	ReplayStatusFailed    ReplayStatus = "failed"
+)
+
+// ReplayDLQRun reports a background replay; Summary is set once it completes.
+type ReplayDLQRun struct {
+	WorkflowID string             `json:"workflow_id"`
+	RunID      string             `json:"run_id"`
+	Status     ReplayStatus       `json:"status"`
+	Attempt    int32              `json:"attempt,omitempty"`
+	LastError  string             `json:"last_error,omitempty"`
+	StartedAt  *time.Time         `json:"started_at,omitempty"`
+	ClosedAt   *time.Time         `json:"closed_at,omitempty"`
+	Summary    *ReplayDLQResponse `json:"summary,omitempty"`
+}
