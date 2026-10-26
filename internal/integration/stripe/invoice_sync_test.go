@@ -80,6 +80,7 @@ func TestBuildInvoiceItemParams_SmallestUnit(t *testing.T) {
 		{"JPY zero-decimal", decimal.NewFromInt(12000), "JPY", 12000},
 		{"KRW zero-decimal", decimal.NewFromInt(50000), "KRW", 50000},
 		{"KWD three-decimal", decimal.RequireFromString("12.345"), "KWD", 12345},
+		{"USD credit line", decimal.RequireFromString("-20.00"), "USD", -2000},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name+"/amount fallback", func(t *testing.T) {

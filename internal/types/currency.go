@@ -112,6 +112,12 @@ func ToSmallestUnit(amount decimal.Decimal, currency string) int64 {
 	return result
 }
 
+func ToSignedSmallestUnit(amount decimal.Decimal, currency string) int64 {
+	precision := GetCurrencyPrecision(currency)
+	multiplier := decimal.New(1, precision)
+	return amount.Mul(multiplier).IntPart()
+}
+
 // FromSmallestUnit converts an integer amount in the currency's smallest unit (e.g. cents for
 // USD, fils for KWD, yen for JPY — JPY's smallest unit is 1 yen since it has zero decimal
 // places) back to a decimal amount. Inverse of ToSmallestUnit.

@@ -525,6 +525,11 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *Char
 
 	// Create PaymentIntent with saved payment method
 	amountInCents := types.ToSmallestUnit(req.Amount, req.Currency)
+	if !types.FromSmallestUnit(amountInCents, req.Currency).Equal(req.Amount) {
+		return nil, ierr.NewError("amount is not representable in the currency's smallest unit").
+			WithHint("Amount must be a whole multiple of the currency's smallest unit").
+			Mark(ierr.ErrValidation)
+	}
 	params := &stripe.PaymentIntentCreateParams{
 		Amount:        stripe.Int64(amountInCents),
 		Currency:      stripe.String(req.Currency),
