@@ -209,9 +209,9 @@ func TestCreatePriceRequest_ToPrice_DefaultStartDate(t *testing.T) {
 		wantFixedDate bool
 	}{
 		{name: "recurring fixed defaults to fixed past date", mutate: func(r *dto.CreatePriceRequest) {}, wantFixedDate: true},
-		{name: "onetime fixed defaults to now", mutate: func(r *dto.CreatePriceRequest) {
+		{name: "onetime fixed defaults to fixed past date", mutate: func(r *dto.CreatePriceRequest) {
 			r.BillingPeriod = types.BILLING_PERIOD_ONETIME
-		}},
+		}, wantFixedDate: true},
 		{name: "usage defaults to now", mutate: func(r *dto.CreatePriceRequest) {
 			r.Type = types.PRICE_TYPE_USAGE
 			r.MeterID = "meter_test_123"
@@ -229,9 +229,11 @@ func TestCreatePriceRequest_ToPrice_DefaultStartDate(t *testing.T) {
 			require.NotNil(t, p.StartDate)
 			if tt.wantFixedDate {
 				assert.True(t, p.StartDate.Equal(price.DefaultFixedPriceStartDate))
+				assert.Len(t, req.StartDateWarnings(), 1)
 				return
 			}
 			assert.False(t, p.StartDate.Before(before))
+			assert.Empty(t, req.StartDateWarnings())
 		})
 	}
 }
@@ -244,4 +246,5 @@ func TestCreatePriceRequest_ToPrice_ExplicitStartDateKept(t *testing.T) {
 	p, err := req.ToPrice(context.Background())
 	require.NoError(t, err)
 	assert.True(t, p.StartDate.Equal(start))
+	assert.Empty(t, req.StartDateWarnings())
 }
