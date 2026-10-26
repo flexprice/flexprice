@@ -302,8 +302,8 @@ func sameOveragePrice(a, b *price.Price) bool {
 		a.Amount.Equal(b.Amount)
 }
 
-// UsageBreakdown reports each commitment's capacity, usage and billed amount for the loaded window.
-// When usage exceeds capacity, ValueWithin reaches PeriodAmount and ValueUnused is 0.
+// UsageBreakdown reports each commitment's committed, used and unused capacity with their money
+// values for the loaded window, one entry per commitment summed across its sub-window stacks.
 func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.CommitmentUsageBreakdown, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
@@ -315,43 +315,58 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 	}
 	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 
+	byID := map[string]*dto.CommitmentUsageBreakdown{}
 	var out []*dto.CommitmentUsageBreakdown
 	for si, stack := range stacks {
 		for ci, sc := range stack.Commitments {
 			used := allocs[si].Commitments[ci]
-			b := &dto.CommitmentUsageBreakdown{
-				CommitmentID: sc.C.ID,
-				InvoiceLabel: sc.C.InvoiceLabel,
-				PeriodAmount: types.RoundToCurrencyPrecision(sc.Period.Amount, l.sub.Currency),
-				Capacity:     used.Capacity,
-				Used:         used.Used,
-				Unused:       used.Unused,
+			b := byID[sc.C.ID]
+			if b == nil {
+				b = &dto.CommitmentUsageBreakdown{
+					CommitmentID: sc.C.ID,
+					InvoiceLabel: sc.C.InvoiceLabel,
+					Type:         sc.C.Type,
+					Measurement:  sc.C.Measurement,
+					Binding:      sc.C.Binding,
+					Currency:     l.sub.Currency,
+					InForceFrom:  maxTime(l.periodStart, sc.C.StartDate),
+					InForceTo:    minTime(l.periodEnd, sc.C.EffectiveEnd()),
+				}
+				byID[sc.C.ID] = b
+				out = append(out, b)
 			}
 
-			trueUp := decimal.Zero
-			for _, line := range lines {
-				if lo.FromPtr(line.CommitmentID) != sc.C.ID {
-					continue
-				}
-
-				switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
-				case types.CommitmentLineWithin:
-					b.ValueWithin = b.ValueWithin.Add(line.Amount)
-				case types.CommitmentLineTrueUp:
-					trueUp = trueUp.Add(line.Amount)
-				}
-			}
-
-			b.ValueUnused = decimal.Max(b.PeriodAmount.Sub(b.ValueWithin), decimal.Zero)
-			b.BilledAmount = b.ValueWithin.Add(trueUp)
-			out = append(out, b)
+			b.Committed.Quantity = b.Committed.Quantity.Add(used.Capacity)
+			b.Committed.Amount = b.Committed.Amount.Add(types.RoundToCurrencyPrecision(sc.Period.Amount, l.sub.Currency))
+			b.Used.Quantity = b.Used.Quantity.Add(used.Used)
+			b.Unused.Quantity = b.Unused.Quantity.Add(used.Unused)
 		}
+	}
+
+	for _, line := range lines {
+		b := byID[lo.FromPtr(line.CommitmentID)]
+		if b == nil {
+			continue
+		}
+
+		switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
+		case types.CommitmentLineWithin:
+			b.Used.Amount = b.Used.Amount.Add(line.Amount)
+			b.BilledAmount = b.BilledAmount.Add(line.Amount)
+		case types.CommitmentLineTrueUp:
+			b.BilledAmount = b.BilledAmount.Add(line.Amount)
+		}
+	}
+
+	for _, b := range out {
+		b.Unused.Amount = decimal.Max(b.Committed.Amount.Sub(b.Used.Amount), decimal.Zero)
 	}
 
 	return out, nil
 }
 
 // commitmentUsageBreakdown reports each commitment's usage for the window from the usage response's charges; nil when none applies.
+// The loader projects to the window's end (asOf = end) so window capacities agree with the floor the invoice bills.
 func (s *billingService) commitmentUsageBreakdown(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -359,7 +374,7 @@ func (s *billingService) commitmentUsageBreakdown(
 	start, end time.Time,
 ) ([]*dto.CommitmentUsageBreakdown, error) {
 	loader, err := s.newCommitmentLoader(
-		ctx, sub, start, end, time.Now().UTC(), rawChargesByLine(sub, usage), nil, "",
+		ctx, sub, start, end, end, rawChargesByLine(sub, usage), nil, "",
 	)
 	if err != nil || len(loader.commitments) == 0 {
 		return nil, err

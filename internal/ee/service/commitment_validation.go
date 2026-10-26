@@ -762,11 +762,13 @@ func checkLineItemCommitmentDetach(
 			op := cc.Prices[other.PriceID]
 			return other.ID != li.ID && other.PriceType == types.PRICE_TYPE_USAGE && op != nil && commitmentCoversLine(c, other, op)
 		})
-		if !coversContinuously(remaining, from, end) {
+		if gap, uncovered := coverageGap(remaining, from, end); uncovered {
 			return ierr.Validationf(
-				"line item %s is the last line in scope of binding commitment %s for part of its term; terminate the commitment first",
+				"ending line item %s leaves binding commitment %s without a covered line from %s to its term end %s; keep a covering line through that stretch or terminate the commitment first",
 				li.ID,
 				c.ID,
+				gap.Format(time.RFC3339),
+				end.Format(time.RFC3339),
 			)
 		}
 	}
@@ -774,27 +776,31 @@ func checkLineItemCommitmentDetach(
 	return nil
 }
 
-// coversContinuously reports whether the lines together run through all of [from, to) without a gap.
-func coversContinuously(lines []*subscription.SubscriptionLineItem, from, to time.Time) bool {
+// coverageGap returns the first instant of [from, to) the lines leave uncovered, and whether one exists.
+func coverageGap(lines []*subscription.SubscriptionLineItem, from, to time.Time) (time.Time, bool) {
 	sorted := append([]*subscription.SubscriptionLineItem(nil), lines...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].StartDate.Before(sorted[j].StartDate) })
 
 	covered := from
 	for _, li := range sorted {
 		if !covered.Before(to) {
-			return true
+			return time.Time{}, false
 		}
 
 		if li.StartDate.After(covered) {
-			return false
+			return covered, true
 		}
 
 		if li.EndDate.IsZero() {
-			return true
+			return time.Time{}, false
 		}
 
 		covered = maxTime(covered, li.EndDate)
 	}
 
-	return !covered.Before(to)
+	if covered.Before(to) {
+		return covered, true
+	}
+
+	return time.Time{}, false
 }

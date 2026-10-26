@@ -1775,22 +1775,49 @@ definitions:
   CommitmentUsageBreakdown:
     properties:
       billed_amount:
+        description: 'BilledAmount is what the stretch bills for this commitment:
+          used plus, when binding, the true-up.'
         type: string
-      capacity:
-        type: string
+      binding:
+        type: boolean
       commitment_id:
+        type: string
+      committed:
+        allOf:
+        - $ref: '#/definitions/CommitmentUsageValue'
+        description: Committed is the full capacity for the stretch; its amount is
+          the floor a binding commitment owes.
+      currency:
+        type: string
+      in_force_from:
+        description: |-
+          InForceFrom/To is the stretch of the queried window the commitment covers; usage outside it
+          bills on demand and is not counted here.
+        type: string
+      in_force_to:
         type: string
       invoice_label:
         type: string
-      period_amount:
-        type: string
+      measurement:
+        $ref: '#/definitions/types.CommitmentMeasurement'
+      type:
+        $ref: '#/definitions/types.CommitmentType'
       unused:
-        type: string
+        allOf:
+        - $ref: '#/definitions/CommitmentUsageValue'
+        description: Unused is the remaining capacity; for a binding commitment its
+          amount is the true-up still owed.
       used:
+        allOf:
+        - $ref: '#/definitions/CommitmentUsageValue'
+        description: Used is the capacity consumed so far and the value those units
+          bill within the commitment.
+    type: object
+  CommitmentUsageValue:
+    properties:
+      amount:
         type: string
-      value_unused:
-        type: string
-      value_within:
+      quantity:
         type: string
     type: object
   ConfigurationDetails:
