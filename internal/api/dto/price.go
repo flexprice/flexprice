@@ -460,7 +460,7 @@ func (r *CreatePriceRequest) StartDateWarnings() []string {
 		return nil
 	}
 	return []string{fmt.Sprintf("start_date not set; defaulted to %s. Set start_date to control when the price takes effect.",
-		priceDomain.DefaultFixedPriceStartDate.Format(time.RFC3339))}
+		priceDomain.DefaultFixedPriceStartDate().Format(time.RFC3339))}
 }
 
 // ToPrice converts the request to a Price domain object
@@ -476,7 +476,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		// Usage keeps now so plan/addon price sync doesn't bill usage from before the price existed.
 		def := time.Now().UTC()
 		if r.usesDefaultFixedStartDate() {
-			def = priceDomain.DefaultFixedPriceStartDate
+			def = priceDomain.DefaultFixedPriceStartDate()
 		}
 		startDate = &def
 	}

@@ -19,9 +19,11 @@ import (
 // max active prices per entity is 3000
 const MAX_ACTIVE_PRICES = 5000
 
-// DefaultFixedPriceStartDate is the start date given to recurring fixed prices created without one,
+// DefaultFixedPriceStartDate returns the start date given to fixed prices created without one,
 // so they are effective for any backdated subscription start.
-var DefaultFixedPriceStartDate = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+func DefaultFixedPriceStartDate() time.Time {
+	return time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+}
 
 // JSONB types for complex fields
 // JSONBTiers are the tiers for the price when BillingModel is TIERED

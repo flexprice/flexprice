@@ -228,7 +228,7 @@ func TestCreatePriceRequest_ToPrice_DefaultStartDate(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, p.StartDate)
 			if tt.wantFixedDate {
-				assert.True(t, p.StartDate.Equal(price.DefaultFixedPriceStartDate))
+				assert.True(t, p.StartDate.Equal(price.DefaultFixedPriceStartDate()))
 				assert.Len(t, req.StartDateWarnings(), 1)
 				return
 			}

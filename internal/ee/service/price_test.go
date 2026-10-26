@@ -3397,7 +3397,7 @@ func (s *PriceServiceSuite) TestCreatePrice_FixedWithoutStartDateReturnsWarning(
 
 	resp, err := s.priceService.CreatePrice(s.ctx, req)
 	s.Require().NoError(err)
-	s.True(resp.Price.StartDate.Equal(price.DefaultFixedPriceStartDate))
+	s.True(resp.Price.StartDate.Equal(price.DefaultFixedPriceStartDate()))
 	s.Len(resp.Warnings, 1)
 
 	start := time.Date(2026, time.October, 21, 18, 30, 0, 0, time.UTC)

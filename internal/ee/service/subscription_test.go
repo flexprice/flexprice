@@ -11200,8 +11200,11 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_SameDayFixedPriceStart
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
 	})
 	s.Require().NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+	s.True(amount.Equal(resp.LatestInvoice.Total), "opening invoice total %s, want %s", resp.LatestInvoice.Total, amount)
 
 	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
 	s.Require().NoError(err)
