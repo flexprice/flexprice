@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	eventsDomain "github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -15,7 +16,9 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 // -----------------------------------------------------------------------------
@@ -463,4 +466,267 @@ func TestAdjustMeterUsageGrants_AllUnderQuota_ZerosBillable(t *testing.T) {
 	if c.Amount != 0 || c.Quantity != 0 {
 		t.Fatalf("under-quota grants should zero the charge, got amount=%v qty=%v", c.Amount, c.Quantity)
 	}
+}
+
+func decs(vals ...string) []decimal.Decimal {
+	return lo.Map(vals, func(v string, _ int) decimal.Decimal { return decimal.RequireFromString(v) })
+}
+
+func TestSplitByShare(t *testing.T) {
+	tests := []struct {
+		name   string
+		gross  []decimal.Decimal
+		charge string
+		want   []decimal.Decimal
+	}{
+		{"prd example", decs("70", "50"), "90", decs("52.5", "37.5")},
+		{"daily windows example", decs("30", "10"), "20", decs("15", "5")},
+		{"nothing over quota", decs("70", "50"), "0", decs("0", "0")},
+		{"charge above gross bills gross", decs("70", "50"), "150", decs("70", "50")},
+		{"exact split", decs("10", "10", "20"), "10", decs("2.5", "2.5", "5")},
+		{"thirds add up to the charge", decs("10", "10", "10.01"), "10", decs("3.33", "3.33", "3.34")},
+		{"zero and negative lines get nothing", decs("0", "-5", "40"), "10", decs("0", "0", "10")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitByShare(tt.gross, decimal.RequireFromString(tt.charge), 2)
+			require.Len(t, got, len(tt.want))
+			for i := range tt.want {
+				require.True(t, tt.want[i].Equal(got[i]), "line %d: want %s, got %s", i, tt.want[i], got[i])
+			}
+		})
+	}
+}
+
+func (s *EntitlementGrantSuite) subGrantBilling() *billingService {
+	return &billingService{ServiceParams: s.buildServiceParams()}
+}
+
+// seedSubGrantWindow stores a subscription grant window with its evaluated usage.
+func (s *EntitlementGrantSuite) seedSubGrantWindow(id string, fx subGrantFixture, from, to time.Time, quota, usage int64, crossedAt *time.Time) *entitlementgrant.EntitlementGrant {
+	g := &entitlementgrant.EntitlementGrant{
+		ID:                  id,
+		EntitlementConfigID: "ec_" + id,
+		CustomerID:          fx.sub.CustomerID,
+		SubscriptionID:      fx.sub.ID,
+		ScopeEntityType:     types.EntitlementGrantScopeSubscription,
+		ScopeEntityID:       fx.sub.ID,
+		Measure:             types.EntitlementGrantMeasureAmount,
+		Quota:               decimal.NewFromInt(quota),
+		Usage:               decimal.NewFromInt(usage),
+		QuotaCrossedAt:      crossedAt,
+		ValidFrom:           from,
+		ValidTo:             to,
+		GrantStatus:         types.EntitlementGrantStatusActive,
+		EnvironmentID:       types.GetEnvironmentID(s.GetContext()),
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	_, err := s.GetStores().EntitlementGrantRepo.Create(s.GetContext(), g)
+	s.Require().NoError(err)
+	return g
+}
+
+// subGrantBlockers are the billing inputs that can stop subscription grants from applying.
+type subGrantBlockers struct {
+	featureGrants     map[string][]*entitlementgrant.EntitlementGrant
+	commitmentLineIDs map[string]bool
+}
+
+// invoiceLines builds one invoice line per usage line with the given gross amounts.
+func invoiceLines(fx subGrantFixture, calls, store string) []dto.CreateInvoiceLineItemRequest {
+	return []dto.CreateInvoiceLineItemRequest{
+		{SubscriptionLineItemID: lo.ToPtr(fx.callsLine), Amount: decimal.RequireFromString(calls), Quantity: decimal.NewFromInt(1)},
+		{SubscriptionLineItemID: lo.ToPtr(fx.storeLine), Amount: decimal.RequireFromString(store), Quantity: decimal.NewFromInt(1)},
+	}
+}
+
+func (s *EntitlementGrantSuite) applySubGrants(fx subGrantFixture, lines []dto.CreateInvoiceLineItemRequest, blockers subGrantBlockers) decimal.Decimal {
+	b := s.subGrantBilling()
+	start, end := fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd
+	grants, err := b.loadSubscriptionGrants(s.GetContext(), fx.sub, blockers.featureGrants, nil, blockers.commitmentLineIDs, nil, start, end)
+	s.Require().NoError(err)
+	reduction, err := b.applySubscriptionGrants(s.GetContext(), fx.sub, grants, lines, start, end)
+	s.Require().NoError(err)
+	return reduction
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_SplitsChargeByShare() {
+	fx := s.newSubGrantFixture("bill-share", dailySubscriptionGrant(30, types.EntitlementGrantAllocationBehaviorFirstUsage))
+	start := fx.sub.CurrentPeriodStart
+	s.seedSubGrantWindow("eg-share", fx, start, fx.sub.CurrentPeriodEnd, 30, 120, nil)
+
+	lines := invoiceLines(fx, "70", "50")
+	reduction := s.applySubGrants(fx, lines, subGrantBlockers{})
+
+	s.True(decimal.NewFromInt(30).Equal(reduction), "got %s", reduction)
+	s.True(decimal.RequireFromString("52.5").Equal(lines[0].Amount), "calls: got %s", lines[0].Amount)
+	s.True(decimal.RequireFromString("37.5").Equal(lines[1].Amount), "storage: got %s", lines[1].Amount)
+	s.Equal("17.5", lines[0].Metadata[metadataKeySubscriptionGrantAllowance])
+	s.Equal("12.5", lines[1].Metadata[metadataKeySubscriptionGrantAllowance])
+	s.True(decimal.NewFromInt(1).Equal(lines[0].Quantity), "quantity keeps the real usage")
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_DisjointWindowsAddUp() {
+	fx := s.newSubGrantFixture("bill-days", dailySubscriptionGrant(10, types.EntitlementGrantAllocationBehaviorFirstUsage))
+	day := fx.sub.CurrentPeriodStart
+	// Day 1: X $30 against $10 (over by $20). Day 2: Y $10, fully free.
+	s.seedSubGrantWindow("eg-day1", fx, day, day.Add(24*time.Hour), 10, 30, nil)
+	s.seedSubGrantWindow("eg-day2", fx, day.Add(24*time.Hour), day.Add(48*time.Hour), 10, 10, nil)
+
+	lines := invoiceLines(fx, "30", "10")
+	reduction := s.applySubGrants(fx, lines, subGrantBlockers{})
+
+	s.True(decimal.NewFromInt(20).Equal(reduction), "got %s", reduction)
+	s.True(decimal.NewFromInt(15).Equal(lines[0].Amount), "calls: got %s", lines[0].Amount)
+	s.True(decimal.NewFromInt(5).Equal(lines[1].Amount), "storage: got %s", lines[1].Amount)
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_ParallelBillsOwnSpendAfterCrossing() {
+	fx := s.newSubGrantFixture("bill-par", dailySubscriptionGrant(10, types.EntitlementGrantAllocationBehaviorFirstUsage))
+	start := fx.sub.CurrentPeriodStart
+	crossed := start.Add(2 * time.Hour)
+	// Before the crossing: calls $10. After: calls $3, storage $4.
+	s.seedMeterUsage(fx.extID, fx.callsMeter, start.Add(time.Hour), 100)
+	s.seedMeterUsage(fx.extID, fx.callsMeter, crossed.Add(time.Hour), 30)
+	s.seedMeterUsage(fx.extID, fx.storeMeter, crossed.Add(2*time.Hour), 4)
+	// Two parallel windows over the same span, both crossed at the same evaluation.
+	end := start.Add(24 * time.Hour)
+	s.seedSubGrantWindow("eg-par-a", fx, start, end, 10, 17, lo.ToPtr(crossed))
+	s.seedSubGrantWindow("eg-par-b", fx, start, end, 8, 17, lo.ToPtr(crossed))
+
+	lines := invoiceLines(fx, "13", "4")
+	reduction := s.applySubGrants(fx, lines, subGrantBlockers{})
+
+	s.True(decimal.NewFromInt(3).Equal(lines[0].Amount), "calls bills its spend after the crossing, got %s", lines[0].Amount)
+	s.True(decimal.NewFromInt(4).Equal(lines[1].Amount), "storage bills its spend after the crossing, got %s", lines[1].Amount)
+	s.True(decimal.NewFromInt(10).Equal(reduction), "got %s", reduction)
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_RejectedSubscriptionsBillInFull() {
+	tests := []struct {
+		name  string
+		setup func(fx subGrantFixture) subGrantBlockers
+	}{
+		{"minimum spend", func(fx subGrantFixture) subGrantBlockers {
+			fx.sub.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(100))
+			return subGrantBlockers{}
+		}},
+		{"line priced by a commitment", func(fx subGrantFixture) subGrantBlockers {
+			return subGrantBlockers{commitmentLineIDs: map[string]bool{fx.storeLine: true}}
+		}},
+		{"line on another cadence", func(fx subGrantFixture) subGrantBlockers {
+			item, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), fx.storeLine)
+			s.Require().NoError(err)
+			item.BillingPeriod = types.BILLING_PERIOD_WEEKLY
+			s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(s.GetContext(), item))
+			return subGrantBlockers{}
+		}},
+		{"feature grants on the subscription", func(fx subGrantFixture) subGrantBlockers {
+			return subGrantBlockers{featureGrants: map[string][]*entitlementgrant.EntitlementGrant{fx.callsMeter: {{ID: "eg-feature"}}}}
+		}},
+	}
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			fx := s.newSubGrantFixture("bill-reject-"+string(rune('a'+i)), dailySubscriptionGrant(30, types.EntitlementGrantAllocationBehaviorFirstUsage))
+			s.seedSubGrantWindow("eg-reject-"+string(rune('a'+i)), fx, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd, 30, 120, nil)
+			blockers := tt.setup(fx)
+
+			lines := invoiceLines(fx, "70", "50")
+			reduction := s.applySubGrants(fx, lines, blockers)
+
+			s.True(reduction.IsZero(), "got %s", reduction)
+			s.True(decimal.NewFromInt(70).Equal(lines[0].Amount))
+			s.True(decimal.NewFromInt(50).Equal(lines[1].Amount))
+		})
+	}
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_InvoiceLinesThroughMeterCharges() {
+	fx := s.newSubGrantFixture("bill-e2e", dailySubscriptionGrant(30, types.EntitlementGrantAllocationBehaviorFirstUsage))
+	start := fx.sub.CurrentPeriodStart
+	s.seedMeterUsage(fx.extID, fx.callsMeter, start.Add(time.Hour), 700)  // $70
+	s.seedMeterUsage(fx.extID, fx.storeMeter, start.Add(2*time.Hour), 50) // $50
+	s.seedSubGrantWindow("eg-e2e", fx, start, fx.sub.CurrentPeriodEnd, 30, 120, nil)
+
+	ctx := s.GetContext()
+	params := s.buildServiceParams()
+	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, fx.sub)
+	s.Require().NoError(err)
+	fx.sub.LineItems = items
+	usage, err := NewSubscriptionService(params).GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: fx.sub.ID,
+		StartTime:      start,
+		EndTime:        fx.sub.CurrentPeriodEnd,
+		Source:         string(types.UsageSourceInvoiceCreation),
+	})
+	s.Require().NoError(err)
+
+	asOf := fx.sub.CurrentPeriodEnd
+	lines, total, err := s.subGrantBilling().CalculateMeterUsageCharges(ctx, fx.sub, usage,
+		start, fx.sub.CurrentPeriodEnd, types.UsageSourceInvoiceCreation, &asOf)
+	s.Require().NoError(err)
+
+	byLine := make(map[string]decimal.Decimal)
+	for _, l := range lines {
+		byLine[lo.FromPtr(l.SubscriptionLineItemID)] = l.Amount
+	}
+	s.True(decimal.RequireFromString("52.5").Equal(byLine[fx.callsLine]), "calls: got %s", byLine[fx.callsLine])
+	s.True(decimal.RequireFromString("37.5").Equal(byLine[fx.storeLine]), "storage: got %s", byLine[fx.storeLine])
+	s.True(decimal.NewFromInt(90).Equal(total), "total: got %s", total)
+}
+
+// A $50 monthly grant with a $15 auto invoice threshold: two threshold invoices and the month-end
+// invoice bill $16, $16 and $18, which is the $100 spent less the $50 grant.
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_MonthlyGrantAcrossThresholdInvoices() {
+	fx := s.newSubGrantFixture("bill-threshold", &entitlement.Entitlement{
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		GrantQuota:        lo.ToPtr(decimal.NewFromInt(50)),
+	})
+	ctx := s.GetContext()
+	items, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(ctx, fx.sub)
+	s.Require().NoError(err)
+	fx.sub.LineItems = items
+	periodEnd := fx.sub.CurrentPeriodEnd
+	day := func(n int) time.Time { return fx.sub.StartDate.Add(time.Duration(n) * 24 * time.Hour) }
+
+	// billedSince refreshes the grant at `at` and prices usage since `from`, as the threshold job does.
+	billedSince := func(from, at time.Time) decimal.Decimal {
+		grants, meta, err := s.grantService.EnsureGrantsForSubscriptions(ctx, s.customerOf(fx.sub), []*subscription.Subscription{fx.sub}, at)
+		s.Require().NoError(err)
+		s.Require().Len(grants, 1, "the threshold invoice must not open a second monthly window")
+		s.Require().NoError(s.evalAlertService().evaluateEntitlementGrantsForCustomer(ctx, s.customerOf(fx.sub), meta, grants, at))
+		// The threshold check's calculation, with the clock at `at` (the fixture subscription starts now).
+		result, err := s.subGrantBilling().calculateMeterUsageCharges(ctx, fx.sub, fx.sub.LineItems, from, at, true, &at)
+		s.Require().NoError(err)
+		return result.TotalAmount
+	}
+	// invoice is a threshold invoice at `at`: the period restarts there.
+	invoice := func(at time.Time) decimal.Decimal {
+		amount := billedSince(fx.sub.CurrentPeriodStart, at)
+		fx.sub.CurrentPeriodStart = at
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, fx.sub))
+		return amount
+	}
+
+	s.seedMeterUsage(fx.extID, fx.callsMeter, day(10).Add(time.Hour), 400) // $40, month $40
+	s.True(billedSince(fx.sub.CurrentPeriodStart, day(10).Add(2*time.Hour)).IsZero(), "inside the grant")
+
+	s.seedMeterUsage(fx.extID, fx.storeMeter, day(13).Add(time.Hour), 20) // $20, month $60
+	s.True(decimal.NewFromInt(10).Equal(billedSince(fx.sub.CurrentPeriodStart, day(13).Add(2*time.Hour))), "below the threshold")
+
+	s.seedMeterUsage(fx.extID, fx.callsMeter, day(14).Add(time.Hour), 60) // $6, month $66
+	first := invoice(day(14).Add(2 * time.Hour))
+	s.True(decimal.NewFromInt(16).Equal(first), "first threshold invoice: got %s", first)
+
+	s.seedMeterUsage(fx.extID, fx.storeMeter, day(18).Add(time.Hour), 10) // $10, month $76
+	s.True(decimal.NewFromInt(10).Equal(billedSince(fx.sub.CurrentPeriodStart, day(18).Add(2*time.Hour))), "only spend since the cut")
+
+	s.seedMeterUsage(fx.extID, fx.callsMeter, day(21).Add(time.Hour), 60) // $6, month $82
+	second := invoice(day(21).Add(2 * time.Hour))
+	s.True(decimal.NewFromInt(16).Equal(second), "second threshold invoice: got %s", second)
+
+	s.seedMeterUsage(fx.extID, fx.storeMeter, day(28).Add(time.Hour), 18) // $18, month $100
+	last := billedSince(fx.sub.CurrentPeriodStart, periodEnd)
+	s.True(decimal.NewFromInt(18).Equal(last), "month-end invoice: got %s", last)
+	s.True(decimal.NewFromInt(50).Equal(first.Add(second).Add(last)), "$100 spent less the $50 grant")
 }

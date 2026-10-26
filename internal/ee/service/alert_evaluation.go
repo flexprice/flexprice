@@ -432,37 +432,7 @@ func (s *alertService) refreshSubscriptionGrantUsage(
 	if end.After(g.ValidTo) {
 		end = g.ValidTo
 	}
-	lineUsage := make(map[string]decimal.Decimal)
-	if !end.After(g.ValidFrom) {
-		return decimal.Zero, lineUsage, nil
-	}
-
-	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
-	subUsage, err := meterUsageSvc.GetSubscriptionMeterUsageWithSub(ctx, sub, &GetSubscriptionMeterUsageRequest{
-		SubscriptionID:  sub.ID,
-		StartTime:       g.ValidFrom,
-		EndTime:         end,
-		UseFinal:        true,
-		IncludeChildren: true,
-	})
-	if err != nil {
-		return decimal.Zero, nil, err
-	}
-	charges, _, err := meterUsageSvc.ConvertToBillingCharges(ctx, subUsage)
-	if err != nil {
-		return decimal.Zero, nil, err
-	}
-
-	total := decimal.Zero
-	for _, c := range charges {
-		if c == nil {
-			continue
-		}
-		amount := decimal.NewFromFloat(c.Amount)
-		total = total.Add(amount)
-		lineUsage[c.SubscriptionLineItemID] = lineUsage[c.SubscriptionLineItemID].Add(amount)
-	}
-	return total, lineUsage, nil
+	return subscriptionLineSpend(ctx, s.ServiceParams, sub, g.ValidFrom, end)
 }
 
 // withLineUsage replaces the per-line usage entries in metadata, keeping every other key.
