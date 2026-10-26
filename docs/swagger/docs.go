@@ -24463,6 +24463,13 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -25028,8 +25035,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "offset": {
-                    "minimum": 0,
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "range": {
                     "type": "string",
