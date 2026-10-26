@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -259,35 +260,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		return nil
 	}
 
-	featureGrants := make([]*entitlementgrant.EntitlementGrant, 0, len(grants))
-	for _, g := range grants {
-		if g.IsFeatureScoped() {
-			featureGrants = append(featureGrants, g)
-			continue
-		}
-		s.Logger.Debug(ctx, "entitlement grant evaluation: skipping non-feature scope",
-			"grant_id", g.ID,
-			"scope_entity_type", g.ScopeEntityType,
-		)
-	}
-	if len(featureGrants) == 0 {
-		return nil
-	}
-
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
 
 	var errs []error
-	for _, g := range featureGrants {
-		f, ok := meta.featureByID[g.ScopeEntityID]
-		if !ok || f.MeterID == "" {
-			s.Logger.Debug(ctx, "entitlement grant evaluation: feature or meter missing", "grant_id", g.ID)
-			continue
-		}
-		m, ok := meta.meterByID[f.MeterID]
-		if !ok {
-			s.Logger.Debug(ctx, "entitlement grant evaluation: meter missing", "grant_id", g.ID, "meter_id", f.MeterID)
-			continue
-		}
+	for _, g := range grants {
 		sub, ok := meta.subsByID[g.SubscriptionID]
 		if !ok {
 			s.Logger.Debug(ctx, "entitlement grant evaluation: subscription missing", "grant_id", g.ID)
@@ -304,15 +280,38 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
-		extIDs, err := meta.externalIDs(ctx, sub)
-		if err != nil {
-			s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
-				"grant_id", g.ID, "subscription_id", sub.ID, "error", err)
-			errs = append(errs, err)
+		var usage decimal.Decimal
+		var lineUsage map[string]decimal.Decimal
+		var err error
+		switch g.ScopeEntityType {
+		case types.EntitlementGrantScopeSubscription:
+			usage, lineUsage, err = s.refreshSubscriptionGrantUsage(ctx, g, sub, at)
+		case types.EntitlementGrantScopeFeature:
+			f, ok := meta.featureByID[g.ScopeEntityID]
+			if !ok || f.MeterID == "" {
+				s.Logger.Debug(ctx, "entitlement grant evaluation: feature or meter missing", "grant_id", g.ID)
+				continue
+			}
+			m, ok := meta.meterByID[f.MeterID]
+			if !ok {
+				s.Logger.Debug(ctx, "entitlement grant evaluation: meter missing", "grant_id", g.ID, "meter_id", f.MeterID)
+				continue
+			}
+			extIDs, extErr := meta.externalIDs(ctx, sub)
+			if extErr != nil {
+				s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
+					"grant_id", g.ID, "subscription_id", sub.ID, "error", extErr)
+				errs = append(errs, extErr)
+				continue
+			}
+			usage, err = s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
+		default:
+			s.Logger.Debug(ctx, "entitlement grant evaluation: skipping unsupported scope",
+				"grant_id", g.ID,
+				"scope_entity_type", g.ScopeEntityType,
+			)
 			continue
 		}
-
-		usage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
 		if err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: usage refresh failed",
 				"grant_id", g.ID, "error", err)
@@ -348,6 +347,9 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			WithQuotaCrossedAt(cross)
 		if g.IsExhausted(usage) && g.GrantStatus == types.EntitlementGrantStatusActive {
 			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
+		}
+		if lineUsage != nil {
+			builder = builder.WithMetadata(withLineUsage(g.Metadata, lineUsage))
 		}
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
@@ -412,6 +414,69 @@ func (s *alertService) refreshEntitlementGrantUsage(
 		"grant_id", g.ID, "usage", total,
 	)
 	return total, nil
+}
+
+// lineUsageKeyPrefix marks a subscription grant's per-line usage in its metadata, kept
+// to trace and reproduce the grant's numbers.
+const lineUsageKeyPrefix = "line_usage:"
+
+// refreshSubscriptionGrantUsage prices every usage line on the subscription over
+// [valid_from, min(at, valid_to)): the total is the grant's usage, keyed per line too.
+func (s *alertService) refreshSubscriptionGrantUsage(
+	ctx context.Context,
+	g *entitlementgrant.EntitlementGrant,
+	sub *subscription.Subscription,
+	at time.Time,
+) (decimal.Decimal, map[string]decimal.Decimal, error) {
+	end := at
+	if end.After(g.ValidTo) {
+		end = g.ValidTo
+	}
+	lineUsage := make(map[string]decimal.Decimal)
+	if !end.After(g.ValidFrom) {
+		return decimal.Zero, lineUsage, nil
+	}
+
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	subUsage, err := meterUsageSvc.GetSubscriptionMeterUsageWithSub(ctx, sub, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  sub.ID,
+		StartTime:       g.ValidFrom,
+		EndTime:         end,
+		UseFinal:        true,
+		IncludeChildren: true,
+	})
+	if err != nil {
+		return decimal.Zero, nil, err
+	}
+	charges, _, err := meterUsageSvc.ConvertToBillingCharges(ctx, subUsage)
+	if err != nil {
+		return decimal.Zero, nil, err
+	}
+
+	total := decimal.Zero
+	for _, c := range charges {
+		if c == nil {
+			continue
+		}
+		amount := decimal.NewFromFloat(c.Amount)
+		total = total.Add(amount)
+		lineUsage[c.SubscriptionLineItemID] = lineUsage[c.SubscriptionLineItemID].Add(amount)
+	}
+	return total, lineUsage, nil
+}
+
+// withLineUsage replaces the per-line usage entries in metadata, keeping every other key.
+func withLineUsage(metadata types.Metadata, lineUsage map[string]decimal.Decimal) types.Metadata {
+	out := make(types.Metadata, len(metadata)+len(lineUsage))
+	for k, v := range metadata {
+		if !strings.HasPrefix(k, lineUsageKeyPrefix) {
+			out[k] = v
+		}
+	}
+	for lineID, amount := range lineUsage {
+		out[lineUsageKeyPrefix+lineID] = amount.String()
+	}
+	return out
 }
 
 // transitionEntitlementGrantAlert emits an alert-log row on state change.

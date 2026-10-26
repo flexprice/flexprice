@@ -530,20 +530,20 @@ func (s *EntitlementGrantSuite) TestGrantCandidatesForFeature_AdditiveStartDate(
 	lateEC := &entitlement.Entitlement{ID: "ent_c", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(300)), StartDate: &day20}
 
 	// One contributor runs the whole cycle → the pool is unconstrained.
-	got := grantCandidatesForFeature([]*entitlement.Entitlement{planEC, addonEC})
+	got := grantCandidates([]*entitlement.Entitlement{planEC, addonEC})
 	s.Require().Len(got, 1)
 	s.True(got[0].startDate.IsZero(), "a whole-cycle contributor leaves the pool unconstrained, got %s", got[0].startDate)
 	s.True(got[0].quota.Equal(decimal.NewFromInt(1600)))
 
 	// Every contributor starts late → the pool opens at the earliest of them.
-	got = grantCandidatesForFeature([]*entitlement.Entitlement{lateEC, addonEC})
+	got = grantCandidates([]*entitlement.Entitlement{lateEC, addonEC})
 	s.Require().Len(got, 1)
 	s.True(got[0].startDate.Equal(day10), "expected the earliest start %s, got %s", day10, got[0].startDate)
 
 	// Parallel: each EC carries its own start.
 	parPlan := &entitlement.Entitlement{ID: "ent_p1", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(500)), AggregationMode: types.EntitlementAggregationModeParallel}
 	parAddon := &entitlement.Entitlement{ID: "ent_p2", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(400)), AggregationMode: types.EntitlementAggregationModeParallel, StartDate: &day10}
-	got = grantCandidatesForFeature([]*entitlement.Entitlement{parPlan, parAddon})
+	got = grantCandidates([]*entitlement.Entitlement{parPlan, parAddon})
 	s.Require().Len(got, 2)
 	s.True(got[0].startDate.IsZero())
 	s.True(got[1].startDate.Equal(day10))
@@ -2092,7 +2092,7 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_AllowsMixingUnlimitedAndBo
 	bounded, err := s.entService.CreateEntitlement(ctx, addonReq)
 	s.Require().NoError(err, "a bounded sibling may join an unlimited pool")
 
-	candidates := grantCandidatesForFeature([]*entitlement.Entitlement{
+	candidates := grantCandidates([]*entitlement.Entitlement{
 		unlimited.Entitlement, bounded.Entitlement,
 	})
 	s.Require().Len(candidates, 1, "additive pools into one window")
@@ -2508,7 +2508,7 @@ func (s *EntitlementGrantSuite) TestRemoveUnlimitedEC_SuccessorHoldsSlotAtZero()
 	survivor := s.newTimeBoxedEC("ec-unl-survivor", fx.ec.FeatureID, 5,
 		types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(100))
 
-	// The live pooled window as grantCandidatesForFeature builds it: unlimited from
+	// The live pooled window as grantCandidates builds it: unlimited from
 	// fx.ec, and zero quota, since a pool with no ceiling has none to record.
 	closed := s.seedLiveWindow(fx, "eg-unl-fallback", decimal.Zero, decimal.NewFromInt(40), nil)
 	closed.Unlimited = true

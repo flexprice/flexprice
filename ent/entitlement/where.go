@@ -203,6 +203,12 @@ func AggregationMode(v types.EntitlementAggregationMode) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldAggregationMode, vc))
 }
 
+// GrantScope applies equality check predicate on the "grant_scope" field. It's identical to GrantScopeEQ.
+func GrantScope(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantScope, vc))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldTenantID, v))
@@ -862,6 +868,16 @@ func FeatureIDHasSuffix(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldHasSuffix(FieldFeatureID, v))
 }
 
+// FeatureIDIsNil applies the IsNil predicate on the "feature_id" field.
+func FeatureIDIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldFeatureID))
+}
+
+// FeatureIDNotNil applies the NotNil predicate on the "feature_id" field.
+func FeatureIDNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldFeatureID))
+}
+
 // FeatureIDEqualFold applies the EqualFold predicate on the "feature_id" field.
 func FeatureIDEqualFold(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEqualFold(FieldFeatureID, v))
@@ -942,6 +958,16 @@ func FeatureTypeHasPrefix(v types.FeatureType) predicate.Entitlement {
 func FeatureTypeHasSuffix(v types.FeatureType) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldHasSuffix(FieldFeatureType, vc))
+}
+
+// FeatureTypeIsNil applies the IsNil predicate on the "feature_type" field.
+func FeatureTypeIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldFeatureType))
+}
+
+// FeatureTypeNotNil applies the NotNil predicate on the "feature_type" field.
+func FeatureTypeNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldFeatureType))
 }
 
 // FeatureTypeEqualFold applies the EqualFold predicate on the "feature_type" field.
@@ -1884,6 +1910,90 @@ func AggregationModeEqualFold(v types.EntitlementAggregationMode) predicate.Enti
 func AggregationModeContainsFold(v types.EntitlementAggregationMode) predicate.Entitlement {
 	vc := string(v)
 	return predicate.Entitlement(sql.FieldContainsFold(FieldAggregationMode, vc))
+}
+
+// GrantScopeEQ applies the EQ predicate on the "grant_scope" field.
+func GrantScopeEQ(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldGrantScope, vc))
+}
+
+// GrantScopeNEQ applies the NEQ predicate on the "grant_scope" field.
+func GrantScopeNEQ(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldGrantScope, vc))
+}
+
+// GrantScopeIn applies the In predicate on the "grant_scope" field.
+func GrantScopeIn(vs ...types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldGrantScope, v...))
+}
+
+// GrantScopeNotIn applies the NotIn predicate on the "grant_scope" field.
+func GrantScopeNotIn(vs ...types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldGrantScope, v...))
+}
+
+// GrantScopeGT applies the GT predicate on the "grant_scope" field.
+func GrantScopeGT(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldGrantScope, vc))
+}
+
+// GrantScopeGTE applies the GTE predicate on the "grant_scope" field.
+func GrantScopeGTE(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldGrantScope, vc))
+}
+
+// GrantScopeLT applies the LT predicate on the "grant_scope" field.
+func GrantScopeLT(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldGrantScope, vc))
+}
+
+// GrantScopeLTE applies the LTE predicate on the "grant_scope" field.
+func GrantScopeLTE(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldGrantScope, vc))
+}
+
+// GrantScopeContains applies the Contains predicate on the "grant_scope" field.
+func GrantScopeContains(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldGrantScope, vc))
+}
+
+// GrantScopeHasPrefix applies the HasPrefix predicate on the "grant_scope" field.
+func GrantScopeHasPrefix(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldGrantScope, vc))
+}
+
+// GrantScopeHasSuffix applies the HasSuffix predicate on the "grant_scope" field.
+func GrantScopeHasSuffix(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldGrantScope, vc))
+}
+
+// GrantScopeEqualFold applies the EqualFold predicate on the "grant_scope" field.
+func GrantScopeEqualFold(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldGrantScope, vc))
+}
+
+// GrantScopeContainsFold applies the ContainsFold predicate on the "grant_scope" field.
+func GrantScopeContainsFold(v types.EntitlementGrantScopeEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldGrantScope, vc))
 }
 
 // And groups predicates with the AND operator between them.

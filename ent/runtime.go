@@ -1007,6 +1007,10 @@ func init() {
 	entitlementDescAggregationMode := entitlementFields[20].Descriptor()
 	// entitlement.DefaultAggregationMode holds the default value on creation for the aggregation_mode field.
 	entitlement.DefaultAggregationMode = types.EntitlementAggregationMode(entitlementDescAggregationMode.Default.(string))
+	// entitlementDescGrantScope is the schema descriptor for grant_scope field.
+	entitlementDescGrantScope := entitlementFields[21].Descriptor()
+	// entitlement.DefaultGrantScope holds the default value on creation for the grant_scope field.
+	entitlement.DefaultGrantScope = types.EntitlementGrantScopeEntityType(entitlementDescGrantScope.Default.(string))
 	// entitlementDescID is the schema descriptor for id field.
 	entitlementDescID := entitlementFields[0].Descriptor()
 	// entitlement.IDValidator is a validator for the "id" field. It is called by the builders before save.

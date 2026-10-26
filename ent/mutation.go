@@ -27302,6 +27302,7 @@ type EntitlementMutation struct {
 	grant_allocation_behavior *types.EntitlementGrantAllocationBehavior
 	grant_quota               *decimal.Decimal
 	aggregation_mode          *types.EntitlementAggregationMode
+	grant_scope               *types.EntitlementGrantScopeEntityType
 	clearedFields             map[string]struct{}
 	done                      bool
 	oldValue                  func(context.Context) (*Entitlement, error)
@@ -27818,7 +27819,7 @@ func (m *EntitlementMutation) FeatureID() (r string, exists bool) {
 // OldFeatureID returns the old "feature_id" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldFeatureID(ctx context.Context) (v string, err error) {
+func (m *EntitlementMutation) OldFeatureID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldFeatureID is only allowed on UpdateOne operations")
 	}
@@ -27832,9 +27833,22 @@ func (m *EntitlementMutation) OldFeatureID(ctx context.Context) (v string, err e
 	return oldValue.FeatureID, nil
 }
 
+// ClearFeatureID clears the value of the "feature_id" field.
+func (m *EntitlementMutation) ClearFeatureID() {
+	m.feature_id = nil
+	m.clearedFields[entitlement.FieldFeatureID] = struct{}{}
+}
+
+// FeatureIDCleared returns if the "feature_id" field was cleared in this mutation.
+func (m *EntitlementMutation) FeatureIDCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldFeatureID]
+	return ok
+}
+
 // ResetFeatureID resets all changes to the "feature_id" field.
 func (m *EntitlementMutation) ResetFeatureID() {
 	m.feature_id = nil
+	delete(m.clearedFields, entitlement.FieldFeatureID)
 }
 
 // SetFeatureType sets the "feature_type" field.
@@ -27854,7 +27868,7 @@ func (m *EntitlementMutation) FeatureType() (r types.FeatureType, exists bool) {
 // OldFeatureType returns the old "feature_type" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldFeatureType(ctx context.Context) (v types.FeatureType, err error) {
+func (m *EntitlementMutation) OldFeatureType(ctx context.Context) (v *types.FeatureType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldFeatureType is only allowed on UpdateOne operations")
 	}
@@ -27868,9 +27882,22 @@ func (m *EntitlementMutation) OldFeatureType(ctx context.Context) (v types.Featu
 	return oldValue.FeatureType, nil
 }
 
+// ClearFeatureType clears the value of the "feature_type" field.
+func (m *EntitlementMutation) ClearFeatureType() {
+	m.feature_type = nil
+	m.clearedFields[entitlement.FieldFeatureType] = struct{}{}
+}
+
+// FeatureTypeCleared returns if the "feature_type" field was cleared in this mutation.
+func (m *EntitlementMutation) FeatureTypeCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldFeatureType]
+	return ok
+}
+
 // ResetFeatureType resets all changes to the "feature_type" field.
 func (m *EntitlementMutation) ResetFeatureType() {
 	m.feature_type = nil
+	delete(m.clearedFields, entitlement.FieldFeatureType)
 }
 
 // SetIsEnabled sets the "is_enabled" field.
@@ -28667,6 +28694,42 @@ func (m *EntitlementMutation) ResetAggregationMode() {
 	m.aggregation_mode = nil
 }
 
+// SetGrantScope sets the "grant_scope" field.
+func (m *EntitlementMutation) SetGrantScope(tgset types.EntitlementGrantScopeEntityType) {
+	m.grant_scope = &tgset
+}
+
+// GrantScope returns the value of the "grant_scope" field in the mutation.
+func (m *EntitlementMutation) GrantScope() (r types.EntitlementGrantScopeEntityType, exists bool) {
+	v := m.grant_scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrantScope returns the old "grant_scope" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldGrantScope(ctx context.Context) (v types.EntitlementGrantScopeEntityType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrantScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrantScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrantScope: %w", err)
+	}
+	return oldValue.GrantScope, nil
+}
+
+// ResetGrantScope resets all changes to the "grant_scope" field.
+func (m *EntitlementMutation) ResetGrantScope() {
+	m.grant_scope = nil
+}
+
 // Where appends a list predicates to the EntitlementMutation builder.
 func (m *EntitlementMutation) Where(ps ...predicate.Entitlement) {
 	m.predicates = append(m.predicates, ps...)
@@ -28701,7 +28764,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -28783,6 +28846,9 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.aggregation_mode != nil {
 		fields = append(fields, entitlement.FieldAggregationMode)
 	}
+	if m.grant_scope != nil {
+		fields = append(fields, entitlement.FieldGrantScope)
+	}
 	return fields
 }
 
@@ -28845,6 +28911,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.GrantQuota()
 	case entitlement.FieldAggregationMode:
 		return m.AggregationMode()
+	case entitlement.FieldGrantScope:
+		return m.GrantScope()
 	}
 	return nil, false
 }
@@ -28908,6 +28976,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldGrantQuota(ctx)
 	case entitlement.FieldAggregationMode:
 		return m.OldAggregationMode(ctx)
+	case entitlement.FieldGrantScope:
+		return m.OldGrantScope(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -29106,6 +29176,13 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAggregationMode(v)
 		return nil
+	case entitlement.FieldGrantScope:
+		v, ok := value.(types.EntitlementGrantScopeEntityType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrantScope(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -29190,6 +29267,12 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldEntityID) {
 		fields = append(fields, entitlement.FieldEntityID)
 	}
+	if m.FieldCleared(entitlement.FieldFeatureID) {
+		fields = append(fields, entitlement.FieldFeatureID)
+	}
+	if m.FieldCleared(entitlement.FieldFeatureType) {
+		fields = append(fields, entitlement.FieldFeatureType)
+	}
 	if m.FieldCleared(entitlement.FieldUsageLimit) {
 		fields = append(fields, entitlement.FieldUsageLimit)
 	}
@@ -29254,6 +29337,12 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldEntityID:
 		m.ClearEntityID()
+		return nil
+	case entitlement.FieldFeatureID:
+		m.ClearFeatureID()
+		return nil
+	case entitlement.FieldFeatureType:
+		m.ClearFeatureType()
 		return nil
 	case entitlement.FieldUsageLimit:
 		m.ClearUsageLimit()
@@ -29379,6 +29468,9 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldAggregationMode:
 		m.ResetAggregationMode()
+		return nil
+	case entitlement.FieldGrantScope:
+		m.ResetGrantScope()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)

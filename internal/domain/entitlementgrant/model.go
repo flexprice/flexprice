@@ -36,6 +36,11 @@ type EntitlementGrant struct {
 	types.BaseModel
 }
 
+// IsSubscriptionScoped reports whether the grant covers every usage line on its subscription.
+func (g *EntitlementGrant) IsSubscriptionScoped() bool {
+	return g != nil && g.ScopeEntityType == types.EntitlementGrantScopeSubscription
+}
+
 func (g *EntitlementGrant) IsFeatureScoped() bool {
 	if g == nil {
 		return false

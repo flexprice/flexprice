@@ -967,8 +967,8 @@ var (
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, Nullable: true, Default: "PLAN", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "feature_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "feature_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "feature_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "feature_type", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "is_enabled", Type: field.TypeBool, Default: false},
 		{Name: "usage_limit", Type: field.TypeInt64, Nullable: true},
 		{Name: "usage_reset_period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -985,6 +985,7 @@ var (
 		{Name: "grant_allocation_behavior", Type: field.TypeString, Nullable: true, Default: "first_usage", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "grant_quota", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(34,15)"}},
 		{Name: "aggregation_mode", Type: field.TypeString, Default: "additive", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "grant_scope", Type: field.TypeString, Default: "feature", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -995,7 +996,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[28]},
+				Columns:    []*schema.Column{EntitlementsColumns[29]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

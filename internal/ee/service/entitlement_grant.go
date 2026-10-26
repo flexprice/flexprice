@@ -252,7 +252,7 @@ func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
 			continue
 		}
 
-		candidate := grantCandidatesForFeature(featureECs)[0]
+		candidate := grantCandidates(featureECs)[0]
 		slotECID := candidate.ec.ID
 		validFrom := req.New.ValidFrom
 		quota := req.New.Quota
@@ -460,7 +460,12 @@ func (s *entitlementGrantService) EnsureGrantsForSubscriptions(
 		return nil, nil, err
 	}
 
-	opened, err := s.openMissingGrants(ctx, subs, ecsBySub, latestEndBySlot, meta, at)
+	subGrantECsBySub, err := s.subscriptionGrantConfigs(ctx, subs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	opened, err := s.openMissingGrants(ctx, subs, ecsBySub, subGrantECsBySub, latestEndBySlot, meta, at)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -563,19 +568,27 @@ type grantCandidate struct {
 }
 
 // openMissingGrants: parallel = one grant per EC, additive = one on the primary EC with
-// the quotas summed. A config change only lands when the open window ends.
+// the quotas summed. A config change only lands when the open window ends. A
+// subscription's own grants form one more group, pooled or parallel the same way.
 func (s *entitlementGrantService) openMissingGrants(
 	ctx context.Context,
 	subs []*subscription.Subscription,
 	ecsBySub map[string][]*entitlement.Entitlement,
+	subGrantECsBySub map[string][]*entitlement.Entitlement,
 	latestEndBySlot map[string]time.Time,
 	meta *grantEvalMeta,
 	at time.Time,
 ) ([]*entitlementgrant.EntitlementGrant, error) {
 	opened := make([]*entitlementgrant.EntitlementGrant, 0)
 	for _, sub := range subs {
-		for _, featureECs := range s.eligibleGrantConfigsByFeature(ctx, sub, ecsBySub[sub.ID]) {
-			for _, candidate := range grantCandidatesForFeature(featureECs) {
+		// Each group is the entitlements that share one set of windows: one group
+		// per feature, plus one for all of the subscription's grants.
+		ecGroups := lo.Values(s.eligibleGrantConfigsByFeature(ctx, sub, ecsBySub[sub.ID]))
+		if subGrantECs := lo.Flatten(lo.Values(s.eligibleGrantConfigsByFeature(ctx, sub, subGrantECsBySub[sub.ID]))); len(subGrantECs) > 0 {
+			ecGroups = append(ecGroups, subGrantECs)
+		}
+		for _, groupECs := range ecGroups {
+			for _, candidate := range grantCandidates(groupECs) {
 				slotOpened, err := s.openIfSlotFree(ctx, sub, candidate, latestEndBySlot, meta, at)
 				if err != nil {
 					return nil, err
@@ -620,9 +633,9 @@ func (s *entitlementGrantService) eligibleGrantConfigsByFeature(
 	return byFeature
 }
 
-// grantCandidatesForFeature: parallel → one candidate per EC; additive → one
+// grantCandidates: parallel → one candidate per EC; additive → one
 // candidate on the primary (lowest-ID) EC with the summed quota.
-func grantCandidatesForFeature(featureECs []*entitlement.Entitlement) []grantCandidate {
+func grantCandidates(featureECs []*entitlement.Entitlement) []grantCandidate {
 	if hasParallelECs(featureECs) {
 		return lo.Map(featureECs, func(ec *entitlement.Entitlement, _ int) grantCandidate {
 			return grantCandidate{
@@ -697,6 +710,14 @@ func (s *entitlementGrantService) openIfSlotFree(
 	}
 }
 
+// grantScopeOf is what a grant opened from ec meters: its feature, or the whole subscription.
+func grantScopeOf(ec *entitlement.Entitlement, sub *subscription.Subscription) (types.EntitlementGrantScopeEntityType, string) {
+	if ec.IsSubscriptionScoped() {
+		return types.EntitlementGrantScopeSubscription, sub.ID
+	}
+	return types.EntitlementGrantScopeFeature, ec.FeatureID
+}
+
 // openOneGrant inserts the slot's next grant. On INSERT conflict — valid_from
 // is deterministic, so two racers collide on the unique (slot, valid_from)
 // index — it re-reads the winner. Returns nil when there is no window to open.
@@ -733,7 +754,7 @@ func (s *entitlementGrantService) openOneGrant(
 		WithEntitlementConfigID(ec.ID).
 		WithCustomerID(sub.CustomerID).
 		WithSubscriptionID(sub.ID).
-		WithScope(types.EntitlementGrantScopeFeature, ec.FeatureID).
+		WithScope(grantScopeOf(ec, sub)).
 		WithMeasure(ec.GrantMeasure).
 		WithQuota(quota).
 		WithUnlimited(candidate.unlimited).
@@ -868,13 +889,37 @@ func (s *entitlementGrantService) earliestUncoveredUsage(
 	ec *entitlement.Entitlement,
 	coveredUntil, until time.Time,
 ) (*time.Time, error) {
-	f := meta.featureByID[ec.FeatureID]
-	if f == nil || f.MeterID == "" {
-		s.Logger.Debug(ctx, "computing grant window: no meter found for feature",
-			"feature_id", ec.FeatureID,
-			"subscription_id", sub.ID,
-			"customer_id", sub.CustomerID,
-		)
+	params := &events.MeterUsageQueryParams{
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		StartTime:     coveredUntil,
+		EndTime:       until,
+	}
+	switch ec.GrantScope {
+	case types.EntitlementGrantScopeSubscription:
+		meterIDs, err := s.subscriptionUsageMeterIDs(ctx, sub)
+		if err != nil {
+			return nil, err
+		}
+		if len(meterIDs) == 0 {
+			return nil, nil
+		}
+		params.MeterIDs = meterIDs
+	case types.EntitlementGrantScopeFeature, "":
+		// Empty is a feature grant built in memory before the scope column existed.
+		f := meta.featureByID[ec.FeatureID]
+		if f == nil || f.MeterID == "" {
+			s.Logger.Debug(ctx, "computing grant window: no meter found for feature",
+				"feature_id", ec.FeatureID,
+				"subscription_id", sub.ID,
+				"customer_id", sub.CustomerID,
+			)
+			return nil, nil
+		}
+		params.MeterID = f.MeterID
+	default:
+		s.Logger.Debug(ctx, "computing grant window: unsupported grant scope",
+			"entitlement_id", ec.ID, "grant_scope", ec.GrantScope)
 		return nil, nil
 	}
 
@@ -882,14 +927,8 @@ func (s *entitlementGrantService) earliestUncoveredUsage(
 	if err != nil {
 		return nil, err
 	}
-	timestamp, err := s.MeterUsageRepo.GetEarliestUsageTimestamp(ctx, &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: extIDs,
-		MeterID:             f.MeterID,
-		StartTime:           coveredUntil,
-		EndTime:             until,
-	})
+	params.ExternalCustomerIDs = extIDs
+	timestamp, err := s.MeterUsageRepo.GetEarliestUsageTimestamp(ctx, params)
 	if err != nil {
 		s.Logger.Error(ctx, "computing grant window: error getting earliest usage timestamp", "error", err)
 		return nil, err
@@ -897,6 +936,35 @@ func (s *entitlementGrantService) earliestUncoveredUsage(
 
 	s.Logger.Debug(ctx, "computing grant window: earliest un-covered usage timestamp", "timestamp", timestamp)
 	return timestamp, nil
+}
+
+// subscriptionUsageMeterIDs is the meters of the subscription's usage lines, the
+// usage a subscription grant covers.
+func (s *entitlementGrantService) subscriptionUsageMeterIDs(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	items, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	return lo.Uniq(lo.FilterMap(items, func(item *subscription.SubscriptionLineItem, _ int) (string, bool) {
+		return item.MeterID, item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != ""
+	})), nil
+}
+
+// subscriptionGrantConfigs is the published subscription grants of each subscription.
+func (s *entitlementGrantService) subscriptionGrantConfigs(
+	ctx context.Context,
+	subs []*subscription.Subscription,
+) (map[string][]*entitlement.Entitlement, error) {
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.EntityType = lo.ToPtr(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION)
+	filter.EntityIDs = lo.Map(subs, func(sub *subscription.Subscription, _ int) string { return sub.ID })
+	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{types.EntitlementGrantScopeSubscription}
+	filter.WithStatus(types.StatusPublished)
+	ecs, err := s.EntitlementRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return lo.GroupBy(ecs, func(ec *entitlement.Entitlement) string { return ec.EntityID }), nil
 }
 
 // validateEntitlementGrantShape enforces the rules that need the meter, its prices and
