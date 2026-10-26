@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,7 +50,7 @@ func TestEarned_ERDExamples(t *testing.T) {
 	}{
 		// The ERD prints Feb as 99.50; 99.51 is exact and makes the months sum to 300.
 		{"period_even_prorated", types.AmortizationPeriodEvenProrated, []string{"54.56", "99.51", "99.50", "46.43"}},
-		{"period_even", types.AmortizationPeriodEven, []string{"75.00", "75.00", "75.00", "75.00"}},
+		{"period_even: three whole months from January", types.AmortizationPeriodEven, []string{"100.00", "100.00", "100.00", "0.00"}},
 		{"daily", types.AmortizationDaily, []string{"56.67", "93.33", "103.33", "46.67"}},
 	}
 	for _, tt := range tests {
@@ -114,4 +115,53 @@ func TestEarned_LocalDays(t *testing.T) {
 
 	earned := earnedBy(lines, types.RecognitionMethodStraightLine, types.AmortizationDaily, time.Date(2026, 2, 2, 0, 0, 0, 0, loc), loc)
 	assert.Equal(t, "10.00", earned.StringFixed(2))
+}
+
+// TestEarned_PeriodEven: a term of N months is N whole calendar months from its start month, so a mid-month start puts a
+// full month in the start month and nothing in the last.
+func TestEarned_PeriodEven(t *testing.T) {
+	var monthly []billedLine
+	for start := date(2026, 4, 22); start.Before(date(2027, 4, 22)); start = start.AddDate(0, 1, 0) {
+		monthly = append(monthly, billedLine{"1000", start, start.AddDate(0, 1, 0)})
+	}
+	twelveThousand := append(lo.Times(12, func(int) string { return "1000.00" }), "0.00")
+
+	tests := []struct {
+		name     string
+		lines    []billedLine
+		from, to time.Time
+		want     []string
+	}{
+		{name: "monthly lines from Apr 22 → 1,000 Apr–Mar, 0 in April 2027", lines: monthly,
+			from: date(2026, 4, 1), to: date(2027, 5, 1), want: twelveThousand},
+		{name: "the same amount as one annual line", lines: []billedLine{{"12000", date(2026, 4, 22), date(2027, 4, 22)}},
+			from: date(2026, 4, 1), to: date(2027, 5, 1), want: twelveThousand},
+		{name: "a line for Sep 7–30 all in September", lines: []billedLine{{"49773.75", date(2026, 9, 7), date(2026, 10, 1)}},
+			from: date(2026, 9, 1), to: date(2026, 11, 1), want: []string{"49773.75", "0.00"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, monthAmounts(tt.lines, types.RecognitionMethodStraightLine, types.AmortizationPeriodEven, tt.from, tt.to))
+		})
+	}
+}
+
+func TestWholeMonths(t *testing.T) {
+	tests := []struct {
+		name       string
+		start, end time.Time
+		want       dayRange
+	}{
+		{"one month from mid-month", date(2026, 4, 22), date(2026, 5, 22), dayRange{date(2026, 4, 1), date(2026, 5, 1)}},
+		{"twelve months", date(2026, 4, 22), date(2027, 4, 22), dayRange{date(2026, 4, 1), date(2027, 4, 1)}},
+		{"aligned month", date(2026, 1, 1), date(2026, 2, 1), dayRange{date(2026, 1, 1), date(2026, 2, 1)}},
+		{"a few days is one month", date(2026, 1, 1), date(2026, 1, 15), dayRange{date(2026, 1, 1), date(2026, 2, 1)}},
+		{"a partial extra month counts as one", date(2026, 1, 10), date(2026, 3, 20), dayRange{date(2026, 1, 1), date(2026, 4, 1)}},
+		{"from the 31st into a short month", date(2026, 1, 31), date(2026, 2, 28), dayRange{date(2026, 1, 1), date(2026, 2, 1)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, wholeMonths(dayRange{start: tt.start, end: tt.end}))
+		})
+	}
 }

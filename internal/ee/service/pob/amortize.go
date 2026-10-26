@@ -23,8 +23,9 @@ type amortizedAmount struct {
 	termWeight   decimal.Decimal
 }
 
-// newAmortizedAmount resolves the term; point_in_time and sub-day periods cover their first day only.
-// e.g. a point_in_time charge on Feb 10 covers [Feb 10, Feb 11).
+// newAmortizedAmount resolves the term; point_in_time and sub-day periods cover their first day only, and period_even
+// covers whole months from its start month.
+// e.g. a point_in_time charge on Feb 10 covers [Feb 10, Feb 11); period_even [Apr 22, May 22) covers [Apr 1, May 1).
 func newAmortizedAmount(amount decimal.Decimal, start, end time.Time, recognition types.RecognitionMethod, amortization types.AmortizationMethod, loc *time.Location) amortizedAmount {
 	// e.g. Jan 15 00:00 → Apr 15 00:00 local gives [Jan 15, Apr 15)
 	term := dayRange{start: utils.LocalDay(start, loc), end: utils.LocalDay(end, loc)}
@@ -32,6 +33,8 @@ func newAmortizedAmount(amount decimal.Decimal, start, end time.Time, recognitio
 	// e.g. a point_in_time charge on Feb 10, or a Feb 10 10:00 → 15:00 period, becomes [Feb 10, Feb 11)
 	if recognition == types.RecognitionMethodPointInTime || term.days() == 0 {
 		term.end = term.start.AddDate(0, 0, 1)
+	} else if amortization == types.AmortizationPeriodEven {
+		term = wholeMonths(term)
 	}
 
 	a := amortizedAmount{amount: amount, term: term, amortization: amortization}
@@ -48,7 +51,7 @@ func (a amortizedAmount) earnedBefore(day time.Time) decimal.Decimal {
 }
 
 // weightBefore sums the weights of the term's days before day, a month at a time: daily weighs each day 1,
-// period_even splits 1 across the term's days in that month, period_even_prorated weighs each day 1 / days in its month.
+// period_even weighs each of its whole months 1, period_even_prorated weighs each day 1 / days in its month.
 // e.g. term [Jan 15, Apr 15) before Mar 1: daily 17 + 28 = 45; period_even 1 + 1 = 2; prorated 17/31 + 28/28 ≈ 1.548.
 func (a amortizedAmount) weightBefore(day time.Time) decimal.Decimal {
 	// e.g. before Mar 1 → [Jan 15, Mar 1); before Jan 1 → empty; before May 1 → the whole term
@@ -64,7 +67,7 @@ func (a amortizedAmount) weightBefore(day time.Time) decimal.Decimal {
 			// e.g. Jan adds 17
 			total = total.Add(elapsedInMonth)
 		case types.AmortizationPeriodEven:
-			// e.g. Jan adds 17 / 17 term days in Jan = 1
+			// e.g. Jan adds 31 / 31 term days in Jan = 1
 			total = total.Add(elapsedInMonth.Div(decimal.NewFromInt(a.term.overlap(month).days())))
 		default:
 			// e.g. Jan adds 17 / 31
@@ -73,6 +76,18 @@ func (a amortizedAmount) weightBefore(day time.Time) decimal.Decimal {
 	}
 
 	return total
+}
+
+// wholeMonths snaps a term to N whole calendar months from its start month: N is its length in months, a partial
+// month counting as one, and at least 1.
+// e.g. [Apr 22, May 22) → [Apr 1, May 1); [Apr 22 2026, Apr 22 2027) → [Apr 1 2026, Apr 1 2027); [Sep 7, Oct 1) → [Sep 1, Oct 1)
+func wholeMonths(term dayRange) dayRange {
+	months := (term.end.Year()-term.start.Year())*12 + int(term.end.Month()-term.start.Month())
+	if term.end.Day() > term.start.Day() {
+		months++
+	}
+	start := monthContaining(term.start).start
+	return dayRange{start: start, end: start.AddDate(0, max(months, 1), 0)}
 }
 
 // dayRange is the local days [start, end), each stamped as UTC midnight by utils.LocalDay.

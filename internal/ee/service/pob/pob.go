@@ -215,10 +215,6 @@ func (s *performanceObligationService) EarnedToDate(ctx context.Context, contrac
 
 	lineItemPOBs := make(map[string]*domainPOB.PerformanceObligation)
 	for _, p := range pobs {
-		if p.RecognitionMethod() == types.RecognitionMethodAsConsumed {
-			continue
-		}
-
 		associations, err := s.pobRepo.ListAssociations(ctx, p.ID())
 		if err != nil {
 			return nil, err
@@ -304,7 +300,7 @@ func (s *performanceObligationService) loadEarningInputs(ctx context.Context, su
 
 // earnedByPOB is what each POB earned before asOf's local day, keyed by POB ID. lineItemPOBs maps each subscription line
 // item to its POB. Each finalized invoice line earns its LineNets amount over its own service period with the POB's
-// methods (a line with no period earns at finalization); proration lines simply add. A PROVISIONAL fact earns on its
+// methods, usage daily (a line with no period earns at finalization); proration lines simply add. A PROVISIONAL fact earns on its
 // day (a period_only fact evenly over its period), unless a SUBSCRIPTION invoice line already covers that day.
 // e.g. a $90 April line, a −$30 and a +$40 proration line over [Apr 21, May 1), and a $5 fact for May 2: by May 3 → 105.
 func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, inputs *earningInputs, asOf time.Time, loc *time.Location) map[string]decimal.Decimal {
@@ -323,7 +319,9 @@ func earnedByPOB(lineItemPOBs map[string]*domainPOB.PerformanceObligation, input
 			// e.g. a one-time line with no period earns in full when the invoice is finalized
 			start := lo.FromPtrOr(line.PeriodStart, lo.FromPtr(inv.FinalizedAt))
 			end := lo.FromPtrOr(line.PeriodEnd, start)
-			earned[p.ID()] = earned[p.ID()].Add(Earned(nets[line.ID], start, end, p.RecognitionMethod(), p.AmortizationMethod(), asOf, loc))
+			// Usage earns on the days its line covers.
+			amortization := lo.Ternary(p.RecognitionMethod() == types.RecognitionMethodAsConsumed, types.AmortizationDaily, p.AmortizationMethod())
+			earned[p.ID()] = earned[p.ID()].Add(Earned(nets[line.ID], start, end, p.RecognitionMethod(), amortization, asOf, loc))
 
 			if inv.InvoiceType == types.InvoiceTypeSubscription {
 				lineItemID := lo.FromPtr(line.SubscriptionLineItemID)

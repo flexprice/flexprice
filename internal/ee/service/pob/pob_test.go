@@ -354,6 +354,9 @@ func TestEarnedToDate(t *testing.T) {
 	require.NoError(t, facts.UpsertProvisional(ctx, []*revenuefact.RevenueFact{{
 		SubscriptionID: sub.ID, SubLineItemID: lo.ToPtr("sli_seats"), PriceID: lo.ToPtr("price_sli_seats"),
 		NetAmount: decimal.NewFromInt(5), Day: at(5, 2), PeriodStart: at(5, 1), PeriodEnd: at(5, 31), DecompositionMode: types.Marginal,
+	}, {
+		SubscriptionID: sub.ID, SubLineItemID: lo.ToPtr("sli_usage"), PriceID: lo.ToPtr("price_sli_usage"),
+		NetAmount: decimal.NewFromInt(7), Day: at(5, 2), PeriodStart: at(5, 1), PeriodEnd: at(5, 31), DecompositionMode: types.Marginal,
 	}}))
 
 	byDate, err := service.EarnedToDate(ctx, c.ID(), []time.Time{at(4, 16), at(5, 3)})
@@ -367,8 +370,9 @@ func TestEarnedToDate(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, earned, 2, "every POB of the contract is present")
 	require.Equal(t, "95", earned[seats.ID()].String(), "April invoice plus the May 2 accrual; the voided invoice never earns")
-	require.True(t, earned[usage.ID()].IsZero(), "as_consumed earns nothing until 8.15")
+	require.Equal(t, "57", earned[usage.ID()].String(), "usage: April's invoiced 50 plus the May 2 accrual of 7")
 	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days; the May fact is not yet earned")
+	require.Equal(t, "25", midApril[usage.ID()].String(), "usage earns daily: 15 of April's 30 days")
 }
 
 func TestReconcileAndRead(t *testing.T) {

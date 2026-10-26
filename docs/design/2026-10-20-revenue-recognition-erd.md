@@ -314,7 +314,7 @@ Recognition method is derived once from the first line item's price:
 - Cancelling or modifying without proration changes nothing for the paid period: it keeps earning, and the new state reaches the next invoice.
 - Daily amounts are `earned(day_end) − earned(day_start)`, never rounded per day.
 
-Usage (`as_consumed`) POBs earn zero in Phase 1; usage evidence follows.
+Usage (`as_consumed`) POBs earn each finalized invoice line daily over its service period, and a PROVISIONAL revenue fact on its day until an invoice line covers that day.
 
 #### APIs
 
@@ -410,7 +410,7 @@ A billed amount `A` covers local dates `[ds, de)` (its service period). Each cov
 | Method                 | `w(d)`                                 | Effect                                                       |
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------ |
 | `daily`                | 1                                      | Equal per day                                                |
-| `period_even`          | 1 / covered days in `d`'s month        | Equal per month touched                                      |
+| `period_even`          | 1 / days in `d`'s month, over N whole months from the start month | A term of N months is N whole calendar months from its start month: a mid-month start puts a full month in the start month and nothing in the last |
 | `period_even_prorated` | 1 / days in `d`'s month                | Equal per full month; partial months by the share they cover |
 
 
@@ -429,7 +429,7 @@ Example: $300 over `[Jan 15, Apr 15)`, `period_even_prorated`.
 | **Total** |              |        | **3.015**    | **$300.00** |
 
 
-On Mar 10: `300 × (0.548 + 1 + 9/31) / 3.015 = $182.95`. The same amount under `daily` is $3.33 a day for 90 days; under `period_even` it is $75 for each of the four months.
+On Mar 10: `300 × (0.548 + 1 + 9/31) / 3.015 = $182.95`. The same amount under `daily` is $3.33 a day for 90 days; under `period_even` (three months from January 15) it is $100 for January, February and March, and nothing for April.
 
 - Never rounded per day. A period's recognition amount is `round(earned(period_end)) − round(earned(period_start))` at currency precision, so periods sum exactly to `A`.
 
