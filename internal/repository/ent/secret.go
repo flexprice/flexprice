@@ -452,9 +452,7 @@ func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Se
 }
 
 func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecret.Secret {
-	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", map[string]interface{}{
-		"secret_id": key,
-	})
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", nil)
 	defer cache.FinishSpan(span)
 	cacheKey := secretCacheKey(key)
 	value, found := r.cache.ForceCacheGet(ctx, cacheKey)
@@ -469,9 +467,7 @@ func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecr
 }
 
 func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
-	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", map[string]interface{}{
-		"secret_id": key,
-	})
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", nil)
 	defer cache.FinishSpan(span)
 
 	cacheKey := secretCacheKey(key)
