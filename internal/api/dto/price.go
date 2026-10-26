@@ -458,8 +458,12 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 
 	startDate := r.StartDate
 	if startDate == nil {
-		now := time.Now().UTC()
-		startDate = &now
+		// Usage and onetime keep now: backdating them would bill pre-price usage or a closed period on sync.
+		def := time.Now().UTC()
+		if r.Type == types.PRICE_TYPE_FIXED && r.BillingPeriod != types.BILLING_PERIOD_ONETIME {
+			def = priceDomain.DefaultFixedPriceStartDate
+		}
+		startDate = &def
 	}
 
 	metadata := priceDomain.JSONBMetadata(r.Metadata)
