@@ -147,7 +147,12 @@ func deriveContractStatus(sub *subscription.Subscription, existing *domainContra
 		case types.SubscriptionStatusActive, types.SubscriptionStatusPaused:
 			b.WithContractStatus(types.ContractStatusActive).WithTermStart(lo.ToPtr(sub.StartDate))
 		case types.SubscriptionStatusCancelled:
-			b.WithContractStatus(types.ContractStatusCancelled)
+			// Cancelled after its start, it delivered service and ended, e.g. first synced after reaching its end date.
+			if sub.CancelledAt != nil && sub.CancelledAt.After(sub.StartDate) {
+				b.WithContractStatus(types.ContractStatusEnded).WithTermStart(lo.ToPtr(sub.StartDate)).WithEndedAt(sub.CancelledAt)
+			} else {
+				b.WithContractStatus(types.ContractStatusCancelled)
+			}
 		}
 
 	case types.ContractStatusActive:

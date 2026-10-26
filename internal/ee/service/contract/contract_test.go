@@ -34,6 +34,8 @@ func TestDeriveContractStatus(t *testing.T) {
 		{name: "draft activates on first activation", existing: types.ContractStatusDraft, subStatus: types.SubscriptionStatusActive, wantStatus: types.ContractStatusActive, wantTermStart: &start},
 		{name: "draft activates when sync first sees a paused subscription", existing: types.ContractStatusDraft, subStatus: types.SubscriptionStatusPaused, wantStatus: types.ContractStatusActive, wantTermStart: &start},
 		{name: "draft cancels when cancelled before activation", existing: types.ContractStatusDraft, subStatus: types.SubscriptionStatusCancelled, wantStatus: types.ContractStatusCancelled},
+		{name: "draft cancels when cancelled at its start", existing: types.ContractStatusDraft, subStatus: types.SubscriptionStatusCancelled, cancelledAt: &start, wantStatus: types.ContractStatusCancelled},
+		{name: "draft ends when first synced after a cancel past its start", existing: types.ContractStatusDraft, subStatus: types.SubscriptionStatusCancelled, cancelledAt: &cancelledAt, wantStatus: types.ContractStatusEnded, wantTermStart: &start, wantEndedAt: &cancelledAt},
 		{name: "active stays active on incomplete", existing: types.ContractStatusActive, subStatus: types.SubscriptionStatusIncomplete, wantStatus: types.ContractStatusActive},
 		{name: "active stays active on pause", existing: types.ContractStatusActive, subStatus: types.SubscriptionStatusPaused, wantStatus: types.ContractStatusActive},
 		{name: "active ends on cancel at cancelled_at", existing: types.ContractStatusActive, subStatus: types.SubscriptionStatusCancelled, cancelledAt: &cancelledAt, wantStatus: types.ContractStatusEnded, wantEndedAt: &cancelledAt},
