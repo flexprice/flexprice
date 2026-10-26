@@ -2,9 +2,9 @@
 
 - **Ticket:** [FLE-1513](https://linear.app/flexprice/issue/FLE-1513/erd-commitments-revamp) · Linear doc: [Commitment Revamp](https://linear.app/flexprice/document/commitment-revamp-f4e4242a0c8b)
 - **Scenarios:** [2026-10-07-FLE-1513-commitments-scenarios.md](./2026-10-07-FLE-1513-commitments-scenarios.md): every supported situation, how to set it up, and what gets invoiced.
-- **Date:** 2026-10-09
+- **Date:** 2026-10-09 · Status updated 2026-10-26
 - **Author:** Ankit Malik
-- **Status:** Proposed
+- **Status:** Phase 1 (commitments, `per_period`) shipped — PRs #3211, #3212, #3214, #3215. Billing terms (§7) designed, not implemented. §0.1 lists what shipped and where it differs from this document.
 
 ---
 
@@ -27,7 +27,33 @@
 
 ---
 
+## 0.1 Implementation status (2026-10-26)
 
+Phase 1 shipped behind the `commitments_v2` environment setting as PRs [#3211](https://github.com/flexprice/flexprice/pull/3211) (engine), [#3212](https://github.com/flexprice/flexprice/pull/3212) (service), [#3214](https://github.com/flexprice/flexprice/pull/3214) (billing) and [#3215](https://github.com/flexprice/flexprice/pull/3215) (API + inline creation).
+
+**Shipped**
+
+- The `commitments` table, the pure allocation engine (`commitment_engine.go`), the loader (`billing_commitments.go`), and period/window maths (`commitment_periods.go`); usage is read from `meter_usage` only (the raw-events read path was removed).
+- CRUD + preview + search + terminate API, inline creation on `CreateSubscriptionRequest.commitments[]` (subscription scope and `subscription_id` filled server-side; price scopes follow price overrides; runs after all line items exist), per-subscription idempotency keys backed by a partial unique index over published rows.
+- Amount and quantity commitments; `billing_period` and `window` measurement; `active_windows` with timezone; stacking by priority; binding floors with true-up; mid-period starts and terminations prorate and clip their floors.
+- Webhooks `commitment.created` / `.updated` / `.terminated`, with `created` cascading to `subscription.updated`; activity-log entries.
+
+**Differences from this document**
+
+- `committed_rate` / `overage_rate` decimals became **price objects** (`committed_price`, `overage_price`: billing_model, amount, tiers, tier_mode, transform_quantity). A committed price must be FLAT_FEE or TIERED-SLAB; VOLUME is rejected because it breaks the binding floor. Every derived amount applies the whole price: period amount = cost(capacity), within = cost(total used) split across lines, overage = custom price over the on-demand total.
+- On-demand remainders bill the **marginal** cost beyond covered units — cost(full) − cost(full − od), per window for bucketed prices. VOLUME-tiered and PACKAGE line prices price the remainder fresh instead, matching entitlement remainders.
+- Terminate takes `{effective_at?, cancellation_fee?}` only — a flat fee billed on an immediate ONE_OFF invoice with the PRORATION billing reason. `bill_remaining`, percent fees and `on_early_termination` are **not** in v1; nothing writes a `cancellation_fee_amount` column.
+- Entitled meters are **rejected** in commitment scope (stricter than legacy, which applied entitlements before commitment math); revisit at legacy migration. WEEK/MONTH-bucketed and group-by-bucketed prices are rejected for window measurement.
+- Nothing sets `commitment_status = ended` in phase 1; terminated commitments stay binding through the end of the billing period containing the cutoff.
+
+**Pending**
+
+- **Billing terms (§5.2, §5.3, §7): designed, not implemented.** No `billing_terms` / `billing_instalments` tables exist; `collection_method`, `total_amount` and `instalment_invoicing` are stored but only `per_period` is honoured. Phase-2 contract: `docs/design/2026-10-24-FLE-1513-billing-terms-api-contract.md`.
+- Utilisation and instalment endpoints (§9.6, §11), revenue rollup and analytics (§9).
+- Before un-gating for a raw-events tenant: tag raw-path charges with `subscription_line_item_id` (line items sharing a price double-count usage on that path); guard entitlements added after a commitment exists (plan change / addon features).
+- Legacy commitment migration (§10, rollout phase 4).
+
+---
 
 ## 1. Problem
 
@@ -232,6 +258,7 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 
 ### 5.1 `commitments` (prefix `cmt`)
 
+> **Shipped**, with these deltas: `committed_price_id` / `overage_price_id` are created from `committed_price` / `overage_price` **price objects**, not rate decimals; `on_early_termination` is unexposed; `collection_method`, `total_amount` and `instalment_invoicing` are dormant until billing terms ship; the idempotency unique index is **partial over published rows**, so archived commitments release their keys.
 
 | Column                 | Type          | Null | Meaning                                                                                                                                                                                                                             |
 | ---------------------- | ------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -475,7 +502,7 @@ All failures return `ErrValidation`, with a hint naming the field.
 
 ## 7. Billing terms and instalments in detail
 
-
+> **Not implemented.** This whole section is design only — no tables, expansion, delivery or termination handling exist yet. The phase-2 API contract supersedes the request shapes here: `docs/design/2026-10-24-FLE-1513-billing-terms-api-contract.md`. One ruling to carry into implementation: under `billing_terms`, within-commitment usage must appear at **$0** ("covered by commitment") — skipping only the true-up would double-collect.
 
 ### 7.1 Input and storage
 
@@ -696,6 +723,8 @@ Future owners (phase 5, each with its own ERD): fixed subscription line items, a
 | Edit           | Only `name`, `invoice_label`, `invoice_description` and `metadata` (D10, D37). Label changes apply to invoices generated afterwards.                                                                                                               |
 
 
+> **Shipped terminate** differs from the design below: `POST /v1/commitments/{id}/terminate {effective_at?, cancellation_fee?}`. The period invoice clips the floor to the days the commitment ran; an optional flat fee is billed at once on a ONE_OFF invoice with the PRORATION billing reason (idempotency key `commitment_termination_<id>`), atomically with the status change. `bill_remaining` and the `billing_terms` branches below are not in v1.
+
 **Termination of a binding commitment.** A non-binding commitment simply stops.
 
 1. Lock the commitment and work out two amounts.
@@ -891,6 +920,7 @@ Invoice totals are unaffected. This attribution setting belongs to the analytics
 
 ## 11. API
 
+> **Shipped:** the first six routes plus inline creation, all permission-gated (read routes included). The instalment and utilisation endpoints wait on billing terms and analytics. Request deltas: `committed_price` / `overage_price` price objects replace `committed_rate` / `overage_rate`; terminate takes `{effective_at?, cancellation_fee?}`; `billing_terms`, `collection_method = billing_terms`, `instalment_invoicing` and `on_early_termination` are not accepted yet. Inline requests may omit `subscription_id` and, on a subscription scope, `scope.entity_id` — both are filled server-side.
 
 | Method | Path                                                       | Scope                                                                     |
 | ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -916,7 +946,9 @@ Invoice totals are unaffected. This attribution setting belongs to the analytics
   "name": "H100 base reservation", "invoice_label": "1× H100 reserved GPU",
   "invoice_description": "8 GPUs reserved at $2.88/hr",
   "scope": {"entity_type": "price", "entity_id": "price_h100"},
-  "type": "quantity", "value": "8", "committed_rate": "0.048",
+  "type": "quantity", "value": "8",
+  "committed_price": {"billing_model": "FLAT_FEE", "amount": "0.048"},
+  "overage_price": {"billing_model": "FLAT_FEE", "amount": "0.06"},
   "measurement": "window", "timezone": "Asia/Kolkata", "priority": 1,
   "binding": true, "collection_method": "per_period",
   "start_date": "2026-08-01T00:00:00+05:30", "end_date": "2027-08-01T00:00:00+05:30"
@@ -1156,7 +1188,7 @@ Every rule C1–C21 and T1–T15 gets at least one failing case and one passing 
 
 | Phase | Ships                                                                                                                                                             | Gate                                                                                           |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1     | Commitments (§6) with `per_period`                                                                                                                                | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged. |
+| 1     | **Shipped (2026-10-26)** — commitments (§6) with `per_period`, PRs #3211/#3212/#3214/#3215                                                                        | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged. |
 | 2     | `billing_terms`: rows, presets, percent input, preview, expansion, both deliveries, claim and void, re-plan, bring forward, trigger; termination for both methods | I1–I15 green; integration sync verified                                                        |
 | 3     | Revenue rollup and analytics                                                                                                                                      | Reconciliation invariant                                                                       |
 | 4     | Migrate legacy commitments                                                                                                                                        | Per-tenant dry-run shows no invoice difference                                                 |

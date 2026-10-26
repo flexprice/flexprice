@@ -19,13 +19,15 @@ type commitmentPeriod struct {
 	ActiveBuckets int64 // window measurement only
 	Capacity      decimal.Decimal
 	Amount        decimal.Decimal // money value of Capacity
+	Clipped       bool            // cut to part of the period by the invoice window or a termination
 }
 
-// commitmentPeriods returns the subscription billing periods clipped to the commitment term, with their value.
+// commitmentPeriods returns the subscription billing periods clipped to the commitment term, with their value;
+// amountOf turns a period's capacity into money.
 func commitmentPeriods(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
-	committedRate decimal.Decimal,
+	amountOf func(capacity decimal.Decimal) decimal.Decimal,
 	bucket types.WindowSize,
 ) ([]commitmentPeriod, error) {
 	full, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
@@ -64,67 +66,97 @@ func commitmentPeriods(
 			FullStart: regular.Start,
 			FullEnd:   regular.End,
 		}
-		fillPeriodValue(c, &cp, committedRate, bucket, sub.BillingAnchor)
+		cp.ActiveBuckets, cp.Capacity = periodCapacity(c, cp, start, end, bucket, sub.BillingAnchor)
+		cp.Amount = amountOf(cp.Capacity)
 		out = append(out, cp)
 	}
 
 	return out, nil
 }
 
-// clipCommitmentPeriod returns p cut to end at until, with its capacity and amount recomputed.
+// clipCommitmentPeriod returns p cut to [from, until), with its capacity and amount recomputed.
+// Bounds within the same second as p's edges leave it whole, since computed billing dates drop sub-seconds.
 func clipCommitmentPeriod(
 	c *commitment.Commitment,
 	p commitmentPeriod,
-	until time.Time,
-	committedRate decimal.Decimal,
+	from, until time.Time,
+	amountOf func(capacity decimal.Decimal) decimal.Decimal,
 	bucket types.WindowSize,
 	anchor time.Time,
 ) commitmentPeriod {
-	if !until.Before(p.End) {
+	out := p
+	if from.Truncate(time.Second).After(p.Start.Truncate(time.Second)) {
+		out.Start = minTime(from, p.End)
+	}
+
+	if until.Truncate(time.Second).Before(p.End.Truncate(time.Second)) {
+		out.End = maxTime(until, out.Start)
+	}
+
+	if out.Start.Equal(p.Start) && out.End.Equal(p.End) {
 		return p
 	}
 
-	out := p
-	out.End = maxTime(until, p.Start)
-	fillPeriodValue(c, &out, committedRate, bucket, anchor)
+	out.Clipped = true
+	out.ActiveBuckets, out.Capacity = periodCapacity(c, p, out.Start, out.End, bucket, anchor)
+	_, before := periodCapacity(c, p, p.Start, out.Start, bucket, anchor)
+	_, through := periodCapacity(c, p, p.Start, out.End, bucket, anchor)
+	out.Amount = accruedAmount(amountOf, before, through, c.Currency)
 	return out
 }
 
-// fillPeriodValue sets the capacity and money value of cp from its Start and End.
-func fillPeriodValue(
+// accruedAmount values the capacity accrued between two cumulative points of a period as the difference of
+// their rounded values, so the partial floors of a period sum exactly to its rounded whole.
+func accruedAmount(
+	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	before, through decimal.Decimal,
+	currency string,
+) decimal.Decimal {
+	amount := types.RoundToCurrencyPrecision(amountOf(through), currency)
+	if before.IsPositive() {
+		amount = amount.Sub(types.RoundToCurrencyPrecision(amountOf(before), currency))
+	}
+
+	return amount
+}
+
+// periodCapacity returns the buckets and capacity cp accrues in [from, to): its active buckets for window
+// measurement, otherwise its share of the regular billing period.
+func periodCapacity(
 	c *commitment.Commitment,
-	cp *commitmentPeriod,
-	committedRate decimal.Decimal,
+	cp commitmentPeriod,
+	from, to time.Time,
 	bucket types.WindowSize,
 	anchor time.Time,
-) {
-	rate := committedRate
-	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
-		rate = decimal.NewFromInt(1)
+) (int64, decimal.Decimal) {
+	if c.Measurement != types.CommitmentMeasurementWindow {
+		fraction := decimal.NewFromInt(int64(to.Sub(from))).Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
+		return 0, c.Value.Mul(fraction)
 	}
 
-	cp.ActiveBuckets = 0
-	if c.Measurement == types.CommitmentMeasurementWindow {
-		loc := c.Location()
-		for _, b := range generateBucketStarts(cp.Start, cp.End, bucket, &anchor) {
-			// The first bucket can start before the period (or the term): it belongs to the
-			// period containing its start, which already counted it.
-			if b.Before(cp.Start) {
-				continue
-			}
+	// A bucket starting before the span belongs to the span that already counted it.
+	first := truncateToBucketStart(from, bucket, &anchor)
+	if first.Before(from) {
+		first = nextBucketStart(first, bucket, &anchor)
+	}
 
+	var buckets int64
+	if dur, fixed := bucketDuration(bucket); fixed && len(c.ActiveWindows) == 0 {
+		// Clock-aligned buckets with no active windows count arithmetically: a minute-bucket
+		// year would otherwise walk half a million instants on every value computation.
+		if first.Before(to) {
+			buckets = int64(to.Sub(first)-1)/int64(dur) + 1
+		}
+	} else {
+		loc := c.Location()
+		for b := first; b.Before(to); b = nextBucketStart(b, bucket, &anchor) {
 			if c.ActiveWindows.Contains(b, loc) {
-				cp.ActiveBuckets++
+				buckets++
 			}
 		}
-
-		cp.Capacity = c.Value.Mul(decimal.NewFromInt(cp.ActiveBuckets))
-	} else {
-		fraction := decimal.NewFromInt(int64(cp.End.Sub(cp.Start))).Div(decimal.NewFromInt(int64(cp.FullEnd.Sub(cp.FullStart))))
-		cp.Capacity = c.Value.Mul(fraction)
 	}
 
-	cp.Amount = cp.Capacity.Mul(rate)
+	return buckets, c.Value.Mul(decimal.NewFromInt(buckets))
 }
 
 // commitmentValue sums the money value of all periods.
@@ -151,4 +183,27 @@ func minTime(a, b time.Time) time.Time {
 	}
 
 	return b
+}
+
+// bucketDuration returns the fixed step of clock-aligned bucket sizes; calendar sizes (day, week,
+// month) step by calendar rules and return false.
+func bucketDuration(size types.WindowSize) (time.Duration, bool) {
+	switch size {
+	case types.WindowSizeMinute:
+		return time.Minute, true
+	case types.WindowSize15Min:
+		return 15 * time.Minute, true
+	case types.WindowSize30Min:
+		return 30 * time.Minute, true
+	case types.WindowSizeHour:
+		return time.Hour, true
+	case types.WindowSize3Hour:
+		return 3 * time.Hour, true
+	case types.WindowSize6Hour:
+		return 6 * time.Hour, true
+	case types.WindowSize12Hour:
+		return 12 * time.Hour, true
+	default:
+		return 0, false
+	}
 }

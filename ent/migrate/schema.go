@@ -387,6 +387,9 @@ var (
 				Name:    "commitment_tenant_id_environment_id_idempotency_key",
 				Unique:  true,
 				Columns: []*schema.Column{CommitmentsColumns[1], CommitmentsColumns[7], CommitmentsColumns[33]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
 			},
 		},
 	}

@@ -86,6 +86,7 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),

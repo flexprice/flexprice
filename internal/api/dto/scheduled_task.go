@@ -128,6 +128,8 @@ func (r *CreateScheduledTaskRequest) ToCreateInput() *types.CreateScheduledTaskI
 type TriggerForceRunRequest struct {
 	StartTime *time.Time `json:"start_time,omitempty" validate:"omitempty"`
 	EndTime   *time.Time `json:"end_time,omitempty" validate:"omitempty"`
+	// Limits a wallet_ledger export to these customers; empty means every customer.
+	CustomerExternalIDs []string `json:"customer_external_ids,omitempty" validate:"omitempty,max=100,dive,required"`
 }
 
 // Validate validates the force run request
@@ -202,6 +204,8 @@ type ExportRequest struct {
 	StartTime    time.Time                     `json:"start_time"`
 	EndTime      time.Time                     `json:"end_time"`
 	JobConfig    *types.S3JobConfig            `json:"job_config"` // S3 job configuration from scheduled_tasks
+	// Only exports that support it read this; empty means every customer.
+	CustomerExternalIDs []string `json:"customer_external_ids,omitempty"`
 }
 
 // ExportResponse represents the result of an export operation

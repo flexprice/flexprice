@@ -537,6 +537,11 @@ func (s *addonChangeService) Persist(ctx context.Context, config *addonChangeCon
 		return err
 	}
 
+	// Checked once the batch's own attaches exist, so a swap's incoming line keeps a commitment's scope covered.
+	if err := s.checkRemovalCommitments(ctx, config); err != nil {
+		return err
+	}
+
 	// Overrides repoint line items at prices that did not exist when Resolve quoted, so the
 	// quote has to be retaken against what will actually be billed.
 	if config.hasPriceOverrides() {
@@ -602,6 +607,18 @@ func (s *addonChangeService) persistRemovals(ctx context.Context, config *addonC
 	return nil
 }
 
+func (s *addonChangeService) checkRemovalCommitments(ctx context.Context, config *addonChangeConfig) error {
+	for _, detach := range config.getDetaches() {
+		for _, lineItem := range detach.getLineItems() {
+			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonChangeConfig) error {
 	sub := config.getSubscription()
 
@@ -638,6 +655,12 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 			return err
 		}
 		lineItems = append(lineItems, attach.getLineItems()...)
+	}
+
+	for _, li := range lineItems {
+		if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, li); err != nil {
+			return err
+		}
 	}
 
 	if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems); err != nil {

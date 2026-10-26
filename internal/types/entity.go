@@ -23,6 +23,7 @@ const (
 	SystemEntityTypePaymentMethod   SystemEntityType = "payment_method"
 	SystemEntityTypePrice           SystemEntityType = "price"
 	SystemEntityTypeEvent           SystemEntityType = "event"
+	SystemEntityTypeCommitment      SystemEntityType = "commitment"
 )
 
 type EntityCreationStatus string

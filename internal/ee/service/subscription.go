@@ -117,6 +117,13 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
+	commitmentSvc := newCommitmentService(s.ServiceParams)
+	if len(req.Commitments) > 0 {
+		if err := commitmentSvc.requireEnabled(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get and validate customer
 	var customer *customer.Customer
 	var err error
@@ -416,7 +423,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 	}
-
 	// Prepare credit grants
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	var creditGrantRequests []dto.CreateCreditGrantRequest
@@ -511,6 +517,29 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 					}
 				}
 			}
+		}
+	}
+
+	// Inline commitments run once every line item exists, so they can scope overridden and phase-one prices.
+	for _, commitmentReq := range req.Commitments {
+		commitmentReq.SubscriptionID = sub.ID
+		switch commitmentReq.Scope.EntityType {
+		case types.CommitmentScopeSubscription:
+			commitmentReq.Scope.EntityID = lo.CoalesceOrEmpty(commitmentReq.Scope.EntityID, sub.ID)
+		case types.CommitmentScopePrice:
+			// An overridden plan price is billed through its subscription-scoped replacement.
+			if lineItemID, ok := originalPriceToLineItemMap[commitmentReq.Scope.EntityID]; ok {
+				lineItem, found := lo.Find(sub.LineItems, func(li *subscription.SubscriptionLineItem) bool {
+					return li.ID == lineItemID
+				})
+				if found {
+					commitmentReq.Scope.EntityID = lineItem.PriceID
+				}
+			}
+		}
+
+		if _, err = commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true}); err != nil {
+			return nil, err
 		}
 	}
 
@@ -2190,6 +2219,12 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
+		// Commitments end before the final invoice is built, so it carries their prorated true-up and settlement.
+		if req.CancellationType == types.CancellationTypeImmediate {
+			if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+				return err
+			}
+		}
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		// A cancel that ends the period early would leave its open draft behind, so the draft becomes
 		// the cancel invoice, is voided (refunding its applied credits), or moves to the cancel date.
@@ -3203,6 +3238,10 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
+
+	if err := s.attachCommitmentBreakdown(ctx, subscription, response, req, usageStartTime, usageEndTime); err != nil {
+		return nil, err
+	}
 	return response, nil
 }
 
@@ -5120,6 +5159,10 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		return err
 	}
 
+	if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -6432,6 +6475,9 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 		response.Currency = sub.Currency
 		response.StartTime = usageStartTime
 		response.EndTime = usageEndTime
+		if err := s.attachCommitmentBreakdown(ctx, sub, response, req, usageStartTime, usageEndTime); err != nil {
+			return nil, err
+		}
 		return response, nil
 	}
 
@@ -6554,6 +6600,10 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
 
+	if err := s.attachCommitmentBreakdown(ctx, sub, response, req, usageStartTime, usageEndTime); err != nil {
+		return nil, err
+	}
+
 	s.Logger.Debug(ctx, "meter usage by subscription calculation completed",
 		"subscription_id", req.SubscriptionID,
 		"total_cost", totalCost.InexactFloat64(),
@@ -6561,6 +6611,29 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 		"currency", response.Currency)
 
 	return response, nil
+}
+
+// attachCommitmentBreakdown adds the per-commitment usage breakdown for API callers. Internal callers set
+// req.Source and run the commitment engine themselves; a lifetime window has no single billing period to break down.
+func (s *subscriptionService) attachCommitmentBreakdown(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	response *dto.GetUsageBySubscriptionResponse,
+	req *dto.GetUsageBySubscriptionRequest,
+	start, end time.Time,
+) error {
+	if req.Source != "" || req.LifetimeUsage {
+		return nil
+	}
+
+	billingSvc := &billingService{ServiceParams: s.ServiceParams}
+	breakdown, err := billingSvc.commitmentUsageBreakdown(ctx, sub, response, start, end)
+	if err != nil {
+		return err
+	}
+
+	response.Commitments = breakdown
+	return nil
 }
 
 // GetSubscriptionEntitlements retrieves all entitlements associated with a subscription

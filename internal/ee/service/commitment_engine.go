@@ -25,12 +25,12 @@ type commitmentStack struct {
 
 // stackedCommitment is a commitment with its capacity laid out per window.
 type stackedCommitment struct {
-	C             *commitment.Commitment
-	CommittedRate decimal.Decimal
-	Period        commitmentPeriod
-	Lines         []*usageLine // in fill order
-	Pools         []capacityPool
-	PoolOf        []int // window index to pool index, -1 when the commitment has no capacity in that window
+	C              *commitment.Commitment
+	CommittedPrice *price.Price // nil for amount stacks
+	Period         commitmentPeriod
+	Lines          []*usageLine // in fill order
+	Pools          []capacityPool
+	PoolOf         []int // window index to pool index, -1 when the commitment has no capacity in that window
 }
 
 // capacityPool is a capacity that one or more windows draw from.
@@ -40,12 +40,13 @@ type capacityPool struct {
 
 // usageLine is one subscription line's usage, per window.
 type usageLine struct {
-	Item        *subscription.SubscriptionLineItem
-	Price       *price.Price
-	OverageRate *decimal.Decimal
-	Quantity    decimal.Decimal
-	Cost        decimal.Decimal
-	Usage       []decimal.Decimal // quantity for quantity stacks, cost for amount stacks
+	Item         *subscription.SubscriptionLineItem
+	Price        *price.Price
+	OveragePrice *price.Price // prices on-demand instead of Price when a covering commitment sets one
+	Quantity     decimal.Decimal
+	Cost         decimal.Decimal
+	Usage        []decimal.Decimal // quantity for quantity stacks, cost for amount stacks
+	PerWindow    bool              // each window is one bucket and prices on its own, as bucketed prices do
 }
 
 // allocation is the result of filling a stack.
@@ -252,26 +253,31 @@ func commitmentInvoiceLines(
 	return out
 }
 
-// commitmentLines renders one commitment's within lines and its true-up; for a binding commitment
-// the rows sum to the rounded period amount.
+// commitmentLines renders one commitment's within lines and its true-up; for a binding commitment the rows sum
+// to the rounded period amount, and a partial period's within is capped there. A quantity commitment prices its
+// whole usage once on the committed price, so tiers walk the total, and splits that value across lines by quantity.
 func (r lineRenderer) commitmentLines(
 	stack *commitmentStack,
 	sc *stackedCommitment,
 	used commitmentAllocation,
 ) []dto.CreateInvoiceLineItemRequest {
+	usedValue := used.Used
+	if stack.Type == types.COMMITMENT_TYPE_QUANTITY && used.Used.IsPositive() {
+		usedValue = r.cost(sc.CommittedPrice, used.Used)
+	}
+
 	var rows []dto.CreateInvoiceLineItemRequest
-	usedValue := decimal.Zero
 	for li, line := range sc.Lines {
-		if !used.UsedByLine[li].IsPositive() {
+		share := used.UsedByLine[li]
+		if !share.IsPositive() {
 			continue
 		}
 
-		qty, amount := used.UsedByLine[li], used.UsedByLine[li].Mul(sc.CommittedRate)
+		qty, amount := share, usedValue.Mul(share).Div(used.Used)
 		if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
-			qty, amount = proportionalQuantity(line, used.UsedByLine[li]), used.UsedByLine[li]
+			qty, amount = proportionalQuantity(line, share), share
 		}
 
-		usedValue = usedValue.Add(amount)
 		rows = append(rows, r.row(sc.C, line, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount))
 	}
 
@@ -280,7 +286,18 @@ func (r lineRenderer) commitmentLines(
 		return rows
 	}
 
-	trueUp := types.RoundToCurrencyPrecision(sc.Period.Amount, r.currency).Sub(withinValue)
+	floor := types.RoundToCurrencyPrecision(sc.Period.Amount, r.currency)
+	if sc.Period.Clipped && withinValue.GreaterThan(floor) {
+		// A partial floor is the period's value accrued in this window; usage valued from tier zero cannot exceed it.
+		for i := range rows {
+			rows[i].Amount = types.RoundToCurrencyPrecision(rows[i].Amount.Mul(floor).Div(withinValue), r.currency)
+		}
+
+		r.absorbDrift(rows, floor)
+		return rows
+	}
+
+	trueUp := floor.Sub(withinValue)
 	if !trueUp.IsPositive() {
 		return rows
 	}
@@ -347,27 +364,28 @@ func (r lineRenderer) onDemandLines(
 	windows []decimal.Decimal,
 ) []dto.CreateInvoiceLineItemRequest {
 	qty, amount := decimal.Zero, decimal.Zero
-	// Window stacks price each window so bucketed prices match the normal path; the rest price the sum once.
-	perWindow := stack.Measurement == types.CommitmentMeasurementWindow && line.OverageRate == nil
-	for _, w := range windows {
-		if !w.IsPositive() {
+	// The line's own price charges on-demand units at the margin above the covered ones, per bucket for bucketed
+	// lines; an overage price charges the period's on-demand total afresh.
+	perWindow := line.PerWindow && line.OveragePrice == nil
+	for w, od := range windows {
+		if !od.IsPositive() {
 			continue
 		}
 
-		qty = qty.Add(w)
+		qty = qty.Add(od)
 		switch {
 		case stack.Type == types.COMMITMENT_TYPE_AMOUNT:
-			amount = amount.Add(w)
+			amount = amount.Add(od)
 		case perWindow:
-			amount = amount.Add(r.cost(line.Price, w))
+			amount = amount.Add(r.marginalCost(line.Price, line.Usage[w], od))
 		}
 	}
 
 	if stack.Type == types.COMMITMENT_TYPE_QUANTITY && !perWindow && qty.IsPositive() {
-		if line.OverageRate != nil {
-			amount = qty.Mul(*line.OverageRate)
+		if line.OveragePrice != nil {
+			amount = r.cost(line.OveragePrice, qty)
 		} else {
-			amount = r.cost(line.Price, qty)
+			amount = r.marginalCost(line.Price, line.Quantity, qty)
 		}
 	}
 
@@ -382,6 +400,17 @@ func (r lineRenderer) onDemandLines(
 	}
 
 	return nil
+}
+
+// marginalCost prices the top qty units of full. A margin is well defined only for monotone marginal models (flat
+// fee, slab tiers); every other model prices qty afresh, as entitlement remainders do.
+func (r lineRenderer) marginalCost(p *price.Price, full, qty decimal.Decimal) decimal.Decimal {
+	isSlab := p.BillingModel == types.BILLING_MODEL_TIERED && p.TierMode == types.BILLING_TIER_SLAB
+	if p.BillingModel != types.BILLING_MODEL_FLAT_FEE && !isSlab {
+		return r.cost(p, qty)
+	}
+
+	return r.cost(p, full).Sub(r.cost(p, full.Sub(qty)))
 }
 
 // row builds one invoice line; a nil commitment means a stack-level line with no commitment id.

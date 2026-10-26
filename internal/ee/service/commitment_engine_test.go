@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -414,7 +415,7 @@ func invoiceLine(id string, quantity, cost string, usage ...string) *usageLine {
 			PlanDisplayName:  "Plan " + id,
 			DisplayName:      "Usage " + id,
 		},
-		Price:    &price.Price{ID: "price_" + id, DisplayName: "Price " + id},
+		Price:    &price.Price{ID: "price_" + id, DisplayName: "Price " + id, BillingModel: types.BILLING_MODEL_FLAT_FEE},
 		Quantity: dec(quantity),
 		Cost:     dec(cost),
 		Usage:    windows,
@@ -436,11 +437,11 @@ func committed(id string, binding bool, periodAmount string, poolOf []int, lines
 			InvoiceDescription: lo.ToPtr("Description " + id),
 			CommittedPriceID:   lo.ToPtr("committed_price_" + id),
 		},
-		CommittedRate: decimal.NewFromInt(1),
-		Period:        commitmentPeriod{Amount: dec(periodAmount)},
-		Lines:         lines,
-		Pools:         pools,
-		PoolOf:        poolOf,
+		CommittedPrice: &price.Price{ID: "committed_price_" + id, BillingModel: types.BILLING_MODEL_FLAT_FEE, Amount: intDec(1)},
+		Period:         commitmentPeriod{Amount: dec(periodAmount)},
+		Lines:          lines,
+		Pools:          pools,
+		PoolOf:         poolOf,
 	}
 }
 
@@ -451,13 +452,48 @@ type wantLine struct {
 	amount string
 }
 
+// withCommittedPrices prices committed prices by their flat amount or slab tiers, and every other price with cost.
+func withCommittedPrices(cost lineCost) lineCost {
+	return func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+		if !strings.HasPrefix(p.ID, "committed_price_") {
+			return cost(p, qty)
+		}
+
+		if p.BillingModel != types.BILLING_MODEL_TIERED {
+			return qty.Mul(p.Amount)
+		}
+
+		total, from := decimal.Zero, decimal.Zero
+		for _, tier := range p.Tiers {
+			upTo := qty
+			if tier.UpTo != nil {
+				upTo = decimal.Min(qty, decimal.NewFromUint64(*tier.UpTo))
+			}
+
+			if upTo.GreaterThan(from) {
+				total = total.Add(upTo.Sub(from).Mul(tier.UnitAmount))
+				from = upTo
+			}
+		}
+
+		return total
+	}
+}
+
 func renderStack(t *testing.T, stack *commitmentStack, cost lineCost) []dto.CreateInvoiceLineItemRequest {
 	t.Helper()
 	alloc, err := allocate(stack)
 	require.NoError(t, err)
 
 	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	return commitmentInvoiceLines([]*commitmentStack{stack}, []*allocation{alloc}, "usd", start, start.AddDate(0, 1, 0), cost)
+	return commitmentInvoiceLines(
+		[]*commitmentStack{stack},
+		[]*allocation{alloc},
+		"usd",
+		start,
+		start.AddDate(0, 1, 0),
+		withCommittedPrices(cost),
+	)
 }
 
 func requireLines(t *testing.T, want []wantLine, got []dto.CreateInvoiceLineItemRequest) {
@@ -474,13 +510,23 @@ func requireLines(t *testing.T, want []wantLine, got []dto.CreateInvoiceLineItem
 
 func TestCommitmentInvoiceLines(t *testing.T) {
 	unitCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty }
-	// Stepped pricing makes per-window and summed pricing differ: a window over 35 units costs 2 each.
-	stepCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
-		if qty.GreaterThan(intDec(35)) {
-			return qty.Mul(intDec(2))
+	// slabCost charges 1 per unit up to 120 and 2 per unit above, so the units on demand cost by where they sit.
+	slabCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
+		first := decimal.Min(qty, intDec(120))
+		return first.Add(qty.Sub(first).Mul(intDec(2)))
+	}
+	// overageCost prices only overage prices: flat at qty × amount, tiered at 3 for the first 20 units and 5 after.
+	overageCost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+		if p.ID != "overage_a" {
+			t.Errorf("cost called with price %s, want the overage price", p.ID)
 		}
 
-		return qty
+		if p.BillingModel == types.BILLING_MODEL_TIERED {
+			first := decimal.Min(qty, intDec(20))
+			return first.Mul(intDec(3)).Add(qty.Sub(first).Mul(intDec(5)))
+		}
+
+		return qty.Mul(p.Amount)
 	}
 
 	tests := []struct {
@@ -512,7 +558,7 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 			build: func() *commitmentStack {
 				line := invoiceLine("a", "60", "0", "60")
 				sc := committed("c1", true, "200", []int{0}, []*usageLine{line}, "100")
-				sc.CommittedRate = intDec(2)
+				sc.CommittedPrice.Amount = intDec(2)
 				return &commitmentStack{
 					Type:        types.COMMITMENT_TYPE_QUANTITY,
 					Measurement: types.CommitmentMeasurementBillingPeriod,
@@ -525,6 +571,36 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 			want: []wantLine{
 				{types.CommitmentLineWithin, "Label c1", "60", "120"},
 				{types.CommitmentLineTrueUp, "Label c1 (unused)", "40", "80"},
+			},
+		},
+		{
+			name: "tiered committed price walks its tiers once over the commitment's usage and splits it by quantity",
+			build: func() *commitmentStack {
+				a := invoiceLine("a", "80", "0", "80")
+				b := invoiceLine("b", "40", "0", "40")
+				sc := committed("c1", true, "125", []int{0}, []*usageLine{a, b}, "150")
+				sc.CommittedPrice = &price.Price{
+					ID:           "committed_price_c1",
+					BillingModel: types.BILLING_MODEL_TIERED,
+					TierMode:     types.BILLING_TIER_SLAB,
+					Tiers: []price.PriceTier{
+						{UpTo: lo.ToPtr(uint64(100)), UnitAmount: intDec(1)},
+						{UnitAmount: dec("0.5")},
+					},
+				}
+				return &commitmentStack{
+					Type:        types.COMMITMENT_TYPE_QUANTITY,
+					Measurement: types.CommitmentMeasurementBillingPeriod,
+					Windows:     engineWindows(1),
+					Lines:       []*usageLine{a, b},
+					Commitments: []*stackedCommitment{sc},
+				}
+			},
+			cost: unitCost,
+			want: []wantLine{
+				{types.CommitmentLineWithin, "Label c1", "80", "73.33"},
+				{types.CommitmentLineWithin, "Label c1", "40", "36.67"},
+				{types.CommitmentLineTrueUp, "Label c1 (unused)", "30", "15"},
 			},
 		},
 		{
@@ -584,10 +660,10 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 			},
 		},
 		{
-			name: "E12 custom overage rate prices on demand without the cost function",
+			name: "E12 flat overage price prices on demand instead of the line's price",
 			build: func() *commitmentStack {
 				line := invoiceLine("a", "130", "0", "130")
-				line.OverageRate = lo.ToPtr(intDec(3))
+				line.OveragePrice = &price.Price{ID: "overage_a", BillingModel: types.BILLING_MODEL_FLAT_FEE, Amount: intDec(3)}
 				return &commitmentStack{
 					Type:        types.COMMITMENT_TYPE_QUANTITY,
 					Measurement: types.CommitmentMeasurementBillingPeriod,
@@ -596,19 +672,17 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 					Commitments: []*stackedCommitment{committed("c1", true, "100", []int{0}, []*usageLine{line}, "100")},
 				}
 			},
-			cost: func(*price.Price, decimal.Decimal) decimal.Decimal {
-				t.Error("cost must not be called when the line has an overage rate")
-				return decimal.Zero
-			},
+			cost: overageCost,
 			want: []wantLine{
 				{types.CommitmentLineWithin, "Label c1", "100", "100"},
 				{types.CommitmentLineOnDemand, "Usage a", "30", "90"},
 			},
 		},
 		{
-			name: "window measured on demand is priced per window",
+			name: "tiered overage price walks its tiers over the period total of a window stack",
 			build: func() *commitmentStack {
-				line := invoiceLine("a", "280", "0", "130", "150")
+				line := invoiceLine("a", "230", "0", "110", "120")
+				line.OveragePrice = &price.Price{ID: "overage_a", BillingModel: types.BILLING_MODEL_TIERED}
 				return &commitmentStack{
 					Type:        types.COMMITMENT_TYPE_QUANTITY,
 					Measurement: types.CommitmentMeasurementWindow,
@@ -617,15 +691,36 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 					Commitments: []*stackedCommitment{committed("c1", true, "200", []int{0, 1}, []*usageLine{line}, "100", "100")},
 				}
 			},
-			cost: stepCost,
-			// On demand is 30 and 50: 30*1 + 50*2 = 130, where the summed 80 would cost 160.
+			cost: overageCost,
+			// On demand is 10 and 20: the summed 30 is 20*3 + 10*5 = 110, where per window would cost 10*3 + 20*3 = 90.
 			want: []wantLine{
 				{types.CommitmentLineWithin, "Label c1", "200", "200"},
-				{types.CommitmentLineOnDemand, "Usage a", "80", "130"},
+				{types.CommitmentLineOnDemand, "Usage a", "30", "110"},
 			},
 		},
 		{
-			name: "billing period on demand is priced once on the summed quantity",
+			name: "a per window line prices each window's on demand above the units covered in it",
+			build: func() *commitmentStack {
+				line := invoiceLine("a", "280", "0", "130", "150")
+				line.PerWindow = true
+				return &commitmentStack{
+					Type:        types.COMMITMENT_TYPE_QUANTITY,
+					Measurement: types.CommitmentMeasurementWindow,
+					Windows:     engineWindows(2),
+					Lines:       []*usageLine{line},
+					Commitments: []*stackedCommitment{committed("c1", true, "200", []int{0, 1}, []*usageLine{line}, "100", "100")},
+				}
+			},
+			cost: slabCost,
+			// Each window covers 100: cost(130)-cost(100) = 140-100 = 40 and cost(150)-cost(100) = 180-100 = 80, where
+			// the summed line would cost cost(280)-cost(200) = 440-280 = 160.
+			want: []wantLine{
+				{types.CommitmentLineWithin, "Label c1", "200", "200"},
+				{types.CommitmentLineOnDemand, "Usage a", "80", "120"},
+			},
+		},
+		{
+			name: "billing period on demand is priced once on the line's units above the covered ones",
 			build: func() *commitmentStack {
 				line := invoiceLine("a", "180", "0", "60", "60", "60")
 				return &commitmentStack{
@@ -636,11 +731,35 @@ func TestCommitmentInvoiceLines(t *testing.T) {
 					Commitments: []*stackedCommitment{committed("c1", true, "100", []int{0, 0, 0}, []*usageLine{line}, "100")},
 				}
 			},
-			cost: stepCost,
-			// On demand is 0, 20 and 60 across windows: 80*2 = 160, where per window would cost 20 + 120.
+			cost: slabCost,
+			// 100 of 180 covered: cost(180)-cost(100) = 240-100 = 140, where per window would cost
+			// cost(60)-cost(40) + cost(60) = 20 + 60 = 80.
 			want: []wantLine{
 				{types.CommitmentLineWithin, "Label c1", "100", "100"},
-				{types.CommitmentLineOnDemand, "Usage a", "80", "160"},
+				{types.CommitmentLineOnDemand, "Usage a", "80", "140"},
+			},
+		},
+		{
+			name: "a tiered line half covered prices its on demand from the covered quantity up, not from tier zero",
+			build: func() *commitmentStack {
+				line := invoiceLine("a", "200", "150", "200")
+				return &commitmentStack{
+					Type:        types.COMMITMENT_TYPE_QUANTITY,
+					Measurement: types.CommitmentMeasurementBillingPeriod,
+					Windows:     engineWindows(1),
+					Lines:       []*usageLine{line},
+					Commitments: []*stackedCommitment{committed("c1", true, "100", []int{0}, []*usageLine{line}, "100")},
+				}
+			},
+			// 100 at 1 then 0.50: the 100 on demand are units 101-200, cost(200)-cost(100) = 150-100 = 50; restarting
+			// at tier zero would charge cost(100) = 100.
+			cost: func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
+				first := decimal.Min(qty, intDec(100))
+				return first.Add(qty.Sub(first).Mul(dec("0.5")))
+			},
+			want: []wantLine{
+				{types.CommitmentLineWithin, "Label c1", "100", "100"},
+				{types.CommitmentLineOnDemand, "Usage a", "100", "50"},
 			},
 		},
 		{
@@ -816,4 +935,178 @@ func TestAllocateRejectsPoolIndexBelowSentinel(t *testing.T) {
 	_, err := allocate(stack)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "references pool")
+}
+
+// partialHalves renders a binding 100-unit April commitment, committed at 50 x 1 then 0.50, over its two half-month
+// invoices with the given usage in each.
+func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInvoiceLineItemRequest {
+	t.Helper()
+	apr := time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC)
+	split, may := apr.AddDate(0, 0, 15), apr.AddDate(0, 1, 0)
+	tiers := []price.PriceTier{{UpTo: lo.ToPtr(uint64(50)), UnitAmount: intDec(1)}, {UnitAmount: dec("0.5")}}
+	committedPrice := &price.Price{ID: "committed_price_c1", BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB, Tiers: tiers}
+	amountOf := func(q decimal.Decimal) decimal.Decimal { return withCommittedPrices(nil)(committedPrice, q) }
+	c := &commitment.Commitment{
+		ID:          "c1",
+		Type:        types.COMMITMENT_TYPE_QUANTITY,
+		Value:       intDec(100),
+		Currency:    "usd",
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone:    "UTC",
+		StartDate:   apr,
+		EndDate:     may,
+	}
+	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "")
+	require.NoError(t, err)
+	require.Len(t, periods, 1)
+
+	edges := []time.Time{apr, split, may}
+	out := make([][]dto.CreateInvoiceLineItemRequest, len(used))
+	for i, u := range used {
+		part := clipCommitmentPeriod(c, periods[0], edges[i], edges[i+1], amountOf, "", apr)
+		line := invoiceLine("a", u, "0", u)
+		sc := committed("c1", binding, "0", []int{0}, []*usageLine{line}, part.Capacity.String())
+		sc.CommittedPrice, sc.Period = committedPrice, part
+		out[i] = renderStack(t, &commitmentStack{
+			Type:        types.COMMITMENT_TYPE_QUANTITY,
+			Measurement: types.CommitmentMeasurementBillingPeriod,
+			Windows:     engineWindows(1),
+			Lines:       []*usageLine{line},
+			Commitments: []*stackedCommitment{sc},
+		}, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+	}
+
+	return out
+}
+
+func TestCommitmentInvoiceLinesPartialWithinIsCappedAtTheFloor(t *testing.T) {
+	tests := []struct {
+		name    string
+		binding bool
+		used    []string
+		want    [][]wantLine
+		total   string
+	}{
+		{
+			name:    "fully used halves bill the whole period's 75, not 50 + 50",
+			binding: true,
+			used:    []string{"50", "50"},
+			// Floors are 50 and 75-50 = 25; the second half's cost(50) = 50 within is capped at its 25.
+			want: [][]wantLine{
+				{{types.CommitmentLineWithin, "Label c1", "50", "50"}},
+				{{types.CommitmentLineWithin, "Label c1", "50", "25"}},
+			},
+			total: "75",
+		},
+		{
+			name:    "an under-used first half trues up and an over-the-cap second half is capped",
+			binding: true,
+			used:    []string{"30", "50"},
+			// Half one: within cost(30) = 30, true-up 50-30 = 20. Half two: within 50 capped at 25.
+			want: [][]wantLine{
+				{{types.CommitmentLineWithin, "Label c1", "30", "30"}, {types.CommitmentLineTrueUp, "Label c1 (unused)", "20", "20"}},
+				{{types.CommitmentLineWithin, "Label c1", "50", "25"}},
+			},
+			total: "75",
+		},
+		{
+			name:    "a non-binding commitment has no floor, so its partial within restarts the tiers",
+			binding: false,
+			used:    []string{"50", "50"},
+			want: [][]wantLine{
+				{{types.CommitmentLineWithin, "Label c1", "50", "50"}},
+				{{types.CommitmentLineWithin, "Label c1", "50", "50"}},
+			},
+			total: "100",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			total := decimal.Zero
+			for i, lines := range partialHalves(t, tt.binding, tt.used...) {
+				requireLines(t, tt.want[i], lines)
+				for _, l := range lines {
+					total = total.Add(l.Amount)
+				}
+			}
+
+			require.True(t, total.Equal(dec(tt.total)), "total %s", total)
+		})
+	}
+}
+
+func TestCommitmentInvoiceLinesCappedWithinConservesTheFloorAcrossLines(t *testing.T) {
+	a, b, c := invoiceLine("a", "10", "0", "10"), invoiceLine("b", "10", "0", "10"), invoiceLine("c", "10", "0", "10")
+	sc := committed("c1", true, "10", []int{0}, []*usageLine{a, b, c}, "30")
+	sc.Period.Clipped = true
+	lines := renderStack(t, &commitmentStack{
+		Type:        types.COMMITMENT_TYPE_QUANTITY,
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Windows:     engineWindows(1),
+		Lines:       []*usageLine{a, b, c},
+		Commitments: []*stackedCommitment{sc},
+	}, func(_ *price.Price, qty decimal.Decimal) decimal.Decimal { return qty })
+
+	// 30 within capped at 10 scales each row to 3.33; the cent left over lands on the first, largest row.
+	requireLines(t, []wantLine{
+		{types.CommitmentLineWithin, "Label c1", "10", "3.34"},
+		{types.CommitmentLineWithin, "Label c1", "10", "3.33"},
+		{types.CommitmentLineWithin, "Label c1", "10", "3.33"},
+	}, lines)
+}
+
+// A volume price reprices every unit by the total, so 150 used with 100 covered would difference to
+// cost(150)-cost(100) = 75-100 = -25; the 50 on demand are priced afresh instead.
+func TestCommitmentInvoiceLinesVolumeLinePricesOnDemandAfresh(t *testing.T) {
+	volumeCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
+		if qty.GreaterThan(intDec(100)) {
+			return qty.Mul(dec("0.5"))
+		}
+
+		return qty
+	}
+
+	for _, perWindow := range []bool{false, true} {
+		line := invoiceLine("a", "150", "75", "150")
+		line.Price.BillingModel, line.Price.TierMode, line.PerWindow = types.BILLING_MODEL_TIERED, types.BILLING_TIER_VOLUME, perWindow
+		lines := renderStack(t, &commitmentStack{
+			Type:        types.COMMITMENT_TYPE_QUANTITY,
+			Measurement: types.CommitmentMeasurementBillingPeriod,
+			Windows:     engineWindows(1),
+			Lines:       []*usageLine{line},
+			Commitments: []*stackedCommitment{committed("c1", true, "100", []int{0}, []*usageLine{line}, "100")},
+		}, volumeCost)
+
+		// cost(50) lands in the first volume tier: 50 x 1 = 50.
+		requireLines(t, []wantLine{
+			{types.CommitmentLineWithin, "Label c1", "100", "100"},
+			{types.CommitmentLineOnDemand, "Usage a", "50", "50"},
+		}, lines)
+	}
+}
+
+// A package price bills whole packages, so differencing 100 used against 50 covered would price the 50 on demand at
+// cost(100)-cost(50) = $0; the remainder is priced afresh as one package.
+func TestCommitmentInvoiceLinesPackageLinePricesOnDemandAfresh(t *testing.T) {
+	packageCost := func(_ *price.Price, qty decimal.Decimal) decimal.Decimal {
+		return qty.Div(intDec(100)).Ceil().Mul(intDec(10))
+	}
+
+	for _, perWindow := range []bool{false, true} {
+		line := invoiceLine("a", "100", "10", "100")
+		line.Price.BillingModel, line.PerWindow = types.BILLING_MODEL_PACKAGE, perWindow
+		lines := renderStack(t, &commitmentStack{
+			Type:        types.COMMITMENT_TYPE_QUANTITY,
+			Measurement: types.CommitmentMeasurementBillingPeriod,
+			Windows:     engineWindows(1),
+			Lines:       []*usageLine{line},
+			Commitments: []*stackedCommitment{committed("c1", true, "50", []int{0}, []*usageLine{line}, "50")},
+		}, packageCost)
+
+		requireLines(t, []wantLine{
+			{types.CommitmentLineWithin, "Label c1", "50", "50"},
+			{types.CommitmentLineOnDemand, "Usage a", "50", "10"},
+		}, lines)
+	}
 }

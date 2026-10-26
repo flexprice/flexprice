@@ -132,11 +132,6 @@ func (s *WorkflowExecutionService) GetWorkflowExecutions(ctx context.Context, re
 	return s.workflowExecRepo.GetMany(ctx, refs)
 }
 
-// DeleteWorkflowExecution deletes a workflow execution record
-func (s *WorkflowExecutionService) DeleteWorkflowExecution(ctx context.Context, id string) error {
-	return s.workflowExecRepo.Delete(ctx, id)
-}
-
 // CalculateTotalPages calculates the total number of pages
 func CalculateTotalPages(total int64, pageSize int) int {
 	if pageSize <= 0 {

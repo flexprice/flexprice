@@ -144,6 +144,20 @@ func (s *InMemoryCommitmentStore) Update(ctx context.Context, c *commitment.Comm
 	return &updated, nil
 }
 
+// Delete mirrors the ent repository's soft delete: the row stays, archived.
+func (s *InMemoryCommitmentStore) Delete(ctx context.Context, id string) error {
+	stored, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	archived := *stored
+	archived.Status = types.StatusArchived
+	archived.UpdatedAt = time.Now().UTC()
+	archived.UpdatedBy = types.GetUserID(ctx)
+	return s.InMemoryStore.Update(ctx, id, &archived)
+}
+
 func (s *InMemoryCommitmentStore) List(ctx context.Context, f *commitment.Filter) ([]*commitment.Commitment, error) {
 	if f == nil {
 		f = commitment.NewNoLimitFilter()

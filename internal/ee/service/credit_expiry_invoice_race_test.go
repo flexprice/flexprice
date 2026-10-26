@@ -94,6 +94,7 @@ func (s *CreditExpiryInvoiceRaceSuite) SetupTest() {
 		TaxAppliedRepo:               stores.TaxAppliedRepo,
 		TaxAssociationRepo:           stores.TaxAssociationRepo,
 		SettingsRepo:                 stores.SettingsRepo,
+		CommitmentRepo:               stores.CommitmentRepo,
 		AlertLogsRepo:                stores.AlertLogsRepo,
 		ConnectionRepo:               stores.ConnectionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,

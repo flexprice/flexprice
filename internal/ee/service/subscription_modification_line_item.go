@@ -580,8 +580,20 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			newItem := builder.Build()
 			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
 
+			if mod.getNewPriceRequest() != nil {
+				if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+					return err
+				}
+			}
+
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
+			}
+
+			if mod.getNewPriceRequest() != nil {
+				if err := checkLineItemCommitmentDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
+					return err
+				}
 			}
 
 			if err := NewCouponAssociationService(sp).CreateCouponRefAssociations(

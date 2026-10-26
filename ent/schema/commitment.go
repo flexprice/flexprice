@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -179,8 +180,10 @@ func (Commitment) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_id", "commitment_status"),
 		index.Fields("tenant_id", "environment_id", "scope_entity_type", "scope_entity_id"),
 		index.Fields("tenant_id", "environment_id", "customer_id"),
+		// Archived commitments release their key.
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
 			Unique().
-			StorageKey(CommitmentIdempotencyKeyConstraint),
+			StorageKey(CommitmentIdempotencyKeyConstraint).
+			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),
 	}
 }

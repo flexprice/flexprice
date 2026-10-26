@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLineItemCommitmentConfig_Validate_OverageFactor(t *testing.T) {
@@ -372,6 +374,69 @@ func TestCreateSubscriptionRequestValidate_IncludePriceIDs(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected no error, got: %v", err)
 			}
+		})
+	}
+}
+
+func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	inline := func(key string, scope CommitmentScopeInput) CreateCommitmentRequest {
+		return CreateCommitmentRequest{
+			IdempotencyKey: lo.EmptyableToPtr(key),
+			Name:           "Floor",
+			Scope:          scope,
+			Type:           types.COMMITMENT_TYPE_AMOUNT,
+			Value:          decimal.NewFromInt(100),
+			Measurement:    types.CommitmentMeasurementBillingPeriod,
+			StartDate:      start,
+			EndDate:        start.AddDate(1, 0, 0),
+		}
+	}
+	subscriptionScope := CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription}
+	priceScope := CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: "price_a"}
+
+	tests := []struct {
+		name        string
+		commitments []CreateCommitmentRequest
+		errSub      string
+	}{
+		{
+			name:        "no subscription_id needed inline",
+			commitments: []CreateCommitmentRequest{inline("", priceScope)},
+		},
+		{
+			name:        "subscription scope may omit entity_id",
+			commitments: []CreateCommitmentRequest{inline("", subscriptionScope)},
+		},
+		{
+			name:        "price scope needs entity_id",
+			commitments: []CreateCommitmentRequest{inline("", CommitmentScopeInput{EntityType: types.CommitmentScopePrice})},
+			errSub:      "scope.entity_id is required",
+		},
+		{
+			name:        "distinct idempotency keys",
+			commitments: []CreateCommitmentRequest{inline("k1", priceScope), inline("k2", subscriptionScope)},
+		},
+		{
+			name:        "duplicate idempotency keys rejected",
+			commitments: []CreateCommitmentRequest{inline("k1", priceScope), inline("k1", subscriptionScope)},
+			errSub:      "more than once",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := baseCreateSubscriptionRequest()
+			req.Commitments = tc.commitments
+			err := req.Validate()
+			if tc.errSub == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			require.True(t, ierr.IsValidation(err), "want validation error, got %v", err)
+			require.Contains(t, err.Error(), tc.errSub)
+			require.Empty(t, req.Commitments[0].SubscriptionID, "validation must not write to the request")
 		})
 	}
 }
