@@ -318,3 +318,37 @@ func (s *EntitlementGrantSuite) TestSubscriptionGrantGuard_ChecksLinesOnlyWhenGr
 	plain := s.newSubGrantSubscription("guard-plain")
 	s.NoError(guard.checkIfGranted(s.GetContext(), plain.sub, subscriptionGrantChange{items: tiered(plain)}))
 }
+
+func (s *EntitlementGrantSuite) TestUpdateSubscriptionGrant_ParallelEditReopensOnlyItsWindow() {
+	s.enableEntitlementAlerts()
+	fx := s.newSubGrantSubscription("edit-parallel")
+	edited, err := s.entService.CreateEntitlement(s.GetContext(), subscriptionGrantRequest(fx.sub.ID, 30, types.EntitlementAggregationModeParallel))
+	s.Require().NoError(err)
+	other, err := s.entService.CreateEntitlement(s.GetContext(), subscriptionGrantRequest(fx.sub.ID, 100, types.EntitlementAggregationModeParallel))
+	s.Require().NoError(err)
+
+	window := func(id, ecID string, quota int64) *entitlementgrant.EntitlementGrant {
+		g := s.seedEvaluatedSubGrantWindow(id, fx, fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd, quota, 20)
+		g.EntitlementConfigID = ecID
+		_, err := s.GetStores().EntitlementGrantRepo.Update(s.GetContext(), g)
+		s.Require().NoError(err)
+		return g
+	}
+	window("eg-edit-par-a", edited.ID, 30)
+	untouched := window("eg-edit-par-b", other.ID, 100)
+
+	_, err = s.entService.UpdateEntitlement(s.GetContext(), edited.ID, dto.UpdateEntitlementRequest{
+		GrantQuota: lo.ToPtr(decimal.NewFromInt(50)),
+	})
+	s.Require().NoError(err)
+
+	windows := s.subGrantWindowsOf(fx.sub.ID)
+	s.Require().Len(windows, 3, "two original windows plus one successor")
+	successor := lo.MaxBy(windows, func(a, b *entitlementgrant.EntitlementGrant) bool { return a.ValidFrom.After(b.ValidFrom) })
+	s.Equal(edited.ID, successor.EntitlementConfigID)
+	s.True(decimal.NewFromInt(30).Equal(successor.Quota), "$10 left + $20 more: got %s", successor.Quota)
+
+	stillLive, err := s.GetStores().EntitlementGrantRepo.Get(s.GetContext(), untouched.ID)
+	s.Require().NoError(err)
+	s.True(stillLive.ValidTo.Equal(untouched.ValidTo), "the other parallel grant's window is not cut")
+}

@@ -401,7 +401,7 @@ func (s *billingService) loadSubscriptionGrants(
 			priceByItemID[id] = charges[0].Price
 		}
 	}
-	reason := subscriptionGrantConflict(subscriptionGrantState{
+	reason := subscriptionGrantBlocker(subscriptionGrantState{
 		sub:                 sub,
 		items:               items,
 		priceByItemID:       priceByItemID,
