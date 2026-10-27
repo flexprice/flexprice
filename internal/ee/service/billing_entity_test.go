@@ -173,6 +173,18 @@ func (s *BillingEntityServiceSuite) TestCustomerServesIntegrations() {
 			s.Equal(tc.want, got)
 		})
 	}
+
+	s.Run("off_missing_record_is_served", func() {
+		s.ClearStores()
+		s.setMode(types.BillingEntityModeOff)
+
+		served, err := s.service.CustomerServesIntegrations(s.GetContext(), "c_missing")
+		s.Require().NoError(err)
+		s.True(served)
+		served, err = s.service.SubscriptionServesIntegrations(s.GetContext(), "sub_missing")
+		s.Require().NoError(err)
+		s.True(served)
+	})
 }
 
 func (s *BillingEntityServiceSuite) TestSubscriptionServesIntegrations() {

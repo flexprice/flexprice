@@ -53,6 +53,12 @@ func fillWalletBillingEntityIDs(ctx context.Context, params ServiceParams, items
 		func(r *dto.WalletResponse, id *string) { r.BillingEntityID = id })
 }
 
+func fillWalletBalanceBillingEntityIDs(ctx context.Context, params ServiceParams, items ...*dto.WalletBalanceResponse) error {
+	return fillBillingEntityIDs(ctx, params, items,
+		func(r *dto.WalletBalanceResponse) string { return r.CustomerID },
+		func(r *dto.WalletBalanceResponse, id *string) { r.BillingEntityID = id })
+}
+
 func fillCreditNoteBillingEntityIDs(ctx context.Context, params ServiceParams, items ...*dto.CreditNoteResponse) error {
 	return fillBillingEntityIDs(ctx, params, items,
 		func(r *dto.CreditNoteResponse) string { return r.CustomerID },
