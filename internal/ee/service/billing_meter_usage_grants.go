@@ -102,11 +102,57 @@ func (s *billingService) loadEntitlementGrantsByMeterID(
 	return out, nil
 }
 
+// meterLineSpan is a usage line's billed range among the billed ranges of every
+// usage line on its meter in the period.
+type meterLineSpan struct {
+	own   TimeInterval
+	lines []TimeInterval
+}
+
+func newMeterLineSpan(own TimeInterval, lines []TimeInterval) *meterLineSpan {
+	return &meterLineSpan{own: own, lines: lines}
+}
+
+// splitsOverage reports whether the line bills only the overage inside its own range:
+// the meter has back-to-back lines (a price change). Overlapping lines each keep the whole overage.
+func (sp *meterLineSpan) splitsOverage() bool {
+	if sp == nil || len(sp.lines) < 2 {
+		return false
+	}
+	sorted := append([]TimeInterval(nil), sp.lines...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Start.Before(sorted[j].Start) })
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i].Start.Before(sorted[i-1].End) {
+			return false
+		}
+	}
+	return true
+}
+
+// lastEndIn is the latest line end inside [from, to), the point the window's saved usage covers.
+func (sp *meterLineSpan) lastEndIn(from, to time.Time) time.Time {
+	var last time.Time
+	for _, l := range sp.lines {
+		if !l.End.After(from) || !l.Start.Before(to) {
+			continue
+		}
+		end := l.End
+		if end.After(to) {
+			end = to
+		}
+		if end.After(last) {
+			last = end
+		}
+	}
+	return last
+}
+
 // adjustMeterUsageGrants folds the meter's EG overage into the line item.
 // Quantity measure: overage re-enters the pricer as the billable quantity.
 // Amount measure: overage is already money and bypasses the pricer.
 // applied=false when the pricing guard rejects the line item; a measurement
 // error propagates — billing a knowingly wrong number is never an option.
+// When span splits the overage, the line bills only the overage inside its own range.
 func (s *billingService) adjustMeterUsageGrants(
 	ctx context.Context,
 	item *subscription.SubscriptionLineItem,
@@ -116,6 +162,7 @@ func (s *billingService) adjustMeterUsageGrants(
 	m *meter.Meter,
 	sub *subscription.Subscription,
 	extCustomerIDs []string,
+	span *meterLineSpan,
 ) (adjustMeterUsageGrantsResult, bool, error) {
 	if len(grants) == 0 {
 		return adjustMeterUsageGrantsResult{}, false, nil
@@ -151,7 +198,15 @@ func (s *billingService) adjustMeterUsageGrants(
 	}
 
 	res := adjustMeterUsageGrantsResult{Measure: measure, PerECOverage: perECOverage}
-	if !grantWindowsOverlap(grants) {
+	overlap := grantWindowsOverlap(grants)
+	if !overlap && span.splitsOverage() {
+		overage, perEC, err := s.lineOverage(ctx, m, sub, extCustomerIDs, grants, measure, span)
+		if err != nil {
+			return adjustMeterUsageGrantsResult{}, false, err
+		}
+		res.Overage = overage
+		res.PerECOverage = perEC
+	} else if !overlap {
 		// Disjoint => an event lands in exactly one window, so the overages just add up.
 		// Two ECs is NOT overlap: a detach re-keys the pooled slot and the cycle tiles.
 		//   EG1 [t0,t1) EC1 Q=1000 U=1200 => over 200
@@ -168,7 +223,7 @@ func (s *billingService) adjustMeterUsageGrants(
 		//   adding gives 900 for 900 units of usage — every unit billed twice.
 		// Measure the merged overage window instead: 900 units, crossing at 600,
 		// bills the 300 spent past it, once.
-		overage, err := s.mergedOverage(ctx, m, sub, extCustomerIDs, grants, measure)
+		overage, err := s.mergedOverage(ctx, m, sub, extCustomerIDs, grants, measure, span)
 		if err != nil {
 			return adjustMeterUsageGrantsResult{}, false, err
 		}
@@ -202,7 +257,7 @@ func (s *billingService) adjustMeterUsageGrants(
 //
 // Quantity measure: one ClickHouse query over all windows (TimeRanges)
 // Amount measure: one billing-path pricing per window.
-// Zero queries when nothing crossed.
+// Zero queries when nothing crossed. A splitting span clips the windows to the line's own range.
 func (s *billingService) mergedOverage(
 	ctx context.Context,
 	m *meter.Meter,
@@ -210,11 +265,20 @@ func (s *billingService) mergedOverage(
 	extCustomerIDs []string,
 	grants []*entitlementgrant.EntitlementGrant,
 	measure types.EntitlementGrantMeasure,
+	span *meterLineSpan,
 ) (decimal.Decimal, error) {
+	clip := span.splitsOverage()
 	overageIntervals := make([]TimeInterval, 0, len(grants))
 	for _, g := range grants {
-		if g != nil && g.QuotaCrossedAt != nil {
-			overageIntervals = append(overageIntervals, TimeInterval{Start: *g.QuotaCrossedAt, End: g.ValidTo})
+		if g == nil || g.QuotaCrossedAt == nil {
+			continue
+		}
+		iv := TimeInterval{Start: *g.QuotaCrossedAt, End: g.ValidTo}
+		if clip {
+			iv = clipInterval(iv, span.own)
+		}
+		if iv.End.After(iv.Start) {
+			overageIntervals = append(overageIntervals, iv)
 		}
 	}
 	if len(overageIntervals) == 0 {
@@ -259,6 +323,104 @@ func (s *billingService) mergedOverage(
 		}
 	}
 	return total, nil
+}
+
+// lineOverage is the line's share of disjoint windows' overage: per window, the
+// overage counted up to the line's end minus the overage counted up to its start.
+// Shares add up to each window's saved overage, so it bills once across the lines.
+//
+//	quota 1000, saved usage 1200; line A [t0,t1) 700 used, line B [t1,t2) 500 used
+//	A: over(t1) − over(t0) = 0 − 0 = 0;  B: over(t2) − over(t1) = 200 − 0 = 200
+func (s *billingService) lineOverage(
+	ctx context.Context,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+	grants []*entitlementgrant.EntitlementGrant,
+	measure types.EntitlementGrantMeasure,
+	span *meterLineSpan,
+) (decimal.Decimal, map[string]decimal.Decimal, error) {
+	total := decimal.Zero
+	perEC := make(map[string]decimal.Decimal)
+	for _, g := range grants {
+		if g == nil || g.Unlimited || !span.own.End.After(g.ValidFrom) || !span.own.Start.Before(g.ValidTo) {
+			continue
+		}
+		atStart, err := s.overageAt(ctx, m, sub, extCustomerIDs, g, measure, span, span.own.Start)
+		if err != nil {
+			return decimal.Zero, nil, err
+		}
+		atEnd, err := s.overageAt(ctx, m, sub, extCustomerIDs, g, measure, span, span.own.End)
+		if err != nil {
+			return decimal.Zero, nil, err
+		}
+		// A stale snapshot can sit below the live count at the cut; never bill negative.
+		share := decimal.Max(atEnd.Sub(atStart), decimal.Zero)
+		if share.IsPositive() {
+			total = total.Add(share)
+			perEC[g.EntitlementConfigID] = perEC[g.EntitlementConfigID].Add(share)
+		}
+	}
+	return total, perEC, nil
+}
+
+// overageAt is the window's overage counted up to t: zero at or before the window start,
+// the saved overage from the meter's last line end on, and a usage query in between.
+func (s *billingService) overageAt(
+	ctx context.Context,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+	g *entitlementgrant.EntitlementGrant,
+	measure types.EntitlementGrantMeasure,
+	span *meterLineSpan,
+	t time.Time,
+) (decimal.Decimal, error) {
+	if !t.After(g.ValidFrom) {
+		return decimal.Zero, nil
+	}
+	if !t.Before(span.lastEndIn(g.ValidFrom, g.ValidTo)) {
+		return g.Overage(), nil
+	}
+	if m == nil {
+		return decimal.Zero, errGrantDepsMissing
+	}
+
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	var usage decimal.Decimal
+	var err error
+	switch measure {
+	case types.EntitlementGrantMeasureQuantity:
+		usage, err = meterUsageSvc.GetUsageTotal(ctx, &dto.UsageTotalRequest{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: extCustomerIDs,
+			MeterID:             m.ID,
+			AggregationType:     m.Aggregation.Type,
+			StartTime:           g.ValidFrom,
+			EndTime:             t,
+		})
+	case types.EntitlementGrantMeasureAmount:
+		if sub == nil {
+			return decimal.Zero, errGrantDepsMissing
+		}
+		usage, err = meterUsageSvc.GetMeterWindowCost(ctx, sub, m.ID, g.ValidFrom, t)
+	}
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return decimal.Max(usage.Sub(g.Quota), decimal.Zero), nil
+}
+
+// clipInterval is the part of iv inside bounds; empty when they do not meet.
+func clipInterval(iv, bounds TimeInterval) TimeInterval {
+	if iv.Start.Before(bounds.Start) {
+		iv.Start = bounds.Start
+	}
+	if iv.End.After(bounds.End) {
+		iv.End = bounds.End
+	}
+	return iv
 }
 
 // grantWindowsOverlap reports whether any two grant windows share an instant — the

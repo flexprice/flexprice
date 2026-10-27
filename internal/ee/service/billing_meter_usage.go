@@ -196,6 +196,18 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	handledByCommitments := commitments.HandledLineIDs()
 
+	// Billed ranges of each meter's usage lines, so grant overage on a meter with
+	// several lines (a price change) is split by time instead of billed on each.
+	lineRangesByMeterID := make(map[string][]TimeInterval)
+	for _, item := range sub.LineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" || handledByCommitments[item.ID] {
+			continue
+		}
+		if start, end, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf); active && end.After(start) {
+			lineRangesByMeterID[item.MeterID] = append(lineRangesByMeterID[item.MeterID], TimeInterval{Start: start, End: end})
+		}
+	}
+
 	// --- Per-line-item processing ---
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -209,7 +221,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 		// Clip the line's period to elapsed time so a version that has not started yet (or a zero-length EndDate==StartDate leftover)
 		// cannot contribute commitment to wallet/invoice totals.
-		if _, _, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf); !active {
+		itemStart, itemEnd, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf)
+		if !active {
 			s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during elapsed window",
 				"subscription_id", sub.ID,
 				"line_item_id", item.ID,
@@ -278,7 +291,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
 			if !matchingCharge.IsOverage {
 				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
-					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs)
+					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs,
+						newMeterLineSpan(TimeInterval{Start: itemStart, End: itemEnd}, lineRangesByMeterID[item.MeterID]))
 					if err != nil {
 						return nil, decimal.Zero, err
 					}
