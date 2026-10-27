@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -116,6 +117,10 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 			Mark(ierr.ErrValidation)
 	}
 
+	if req.IsSubscriptionGrant() {
+		return s.createSubscriptionGrant(ctx, req, entity.(*subscription.Subscription))
+	}
+
 	// Validate feature exists
 	feature, err := s.FeatureRepo.Get(ctx, req.FeatureID)
 	if err != nil {
@@ -186,6 +191,13 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		if err := s.assertSingleContributor(txCtx, e); err != nil {
 			return err
 		}
+		if sub, ok := entity.(*subscription.Subscription); ok && isFeatureAllowance(e) {
+			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{
+				entitlements: []*entitlement.Entitlement{e},
+			}); err != nil {
+				return err
+			}
+		}
 
 		created, err := s.EntitlementRepo.Create(txCtx, e)
 		if err != nil {
@@ -248,7 +260,14 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 		subscriptionIDs := make(map[string]bool)
 		featureIDs := make(map[string]bool)
 
-		for _, entReq := range req.Items {
+		for i, entReq := range req.Items {
+			if entReq.IsSubscriptionGrant() {
+				return ierr.NewError("subscription grants cannot be created in bulk").
+					WithHint("Create each subscription grant with POST /entitlements.").
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
+
 			// Support both legacy plan_id and new entity_type/entity_id
 			var entityType types.EntitlementEntityType
 			var entityID string
@@ -301,8 +320,10 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 		}
 
 		// Validate all subscriptions exist
+		subscriptionsByID := make(map[string]*subscription.Subscription, len(subscriptionIDs))
 		for subscriptionID := range subscriptionIDs {
-			_, err := s.SubRepo.Get(txCtx, subscriptionID)
+			sub, err := s.SubRepo.Get(txCtx, subscriptionID)
+			subscriptionsByID[subscriptionID] = sub
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint(fmt.Sprintf("Subscription with ID %s not found", subscriptionID)).
@@ -384,6 +405,19 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 					Mark(ierr.ErrValidation)
 			}
 			entitlements[i] = ent
+		}
+
+		// A feature allowance on a subscription with a subscription grant would make the same spend free twice.
+		for subscriptionID, sub := range subscriptionsByID {
+			allowances := lo.Filter(entitlements, func(e *entitlement.Entitlement, _ int) bool {
+				return e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION && e.EntityID == subscriptionID && isFeatureAllowance(e)
+			})
+			if len(allowances) == 0 {
+				continue
+			}
+			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{entitlements: allowances}); err != nil {
+				return err
+			}
 		}
 
 		// Create entitlements in bulk
@@ -684,6 +718,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if err != nil {
 		return nil, err
 	}
+	if existing.IsSubscriptionScoped() {
+		return s.updateSubscriptionGrant(ctx, existing, req)
+	}
 
 	priorQuota := existing.GrantQuota
 	priorUnlimited := existing.IsUnlimitedGrant()
@@ -833,6 +870,9 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 
 		if err := s.EntitlementRepo.Delete(txCtx, id); err != nil {
 			return err
+		}
+		if existing.IsSubscriptionScoped() {
+			return s.settleDeletedSubscriptionGrant(txCtx, existing)
 		}
 		return s.settleGrantWindowsForDeletedEC(txCtx, existing)
 	}); err != nil {
@@ -1091,4 +1131,99 @@ func (s *entitlementService) assertSingleContributor(ctx context.Context, e *ent
 			"other_entitlement_ids": otherEntitlements,
 		}).
 		Mark(ierr.ErrValidation)
+}
+
+// createSubscriptionGrant creates a dollar allowance shared by every usage line on one subscription.
+func (s *entitlementService) createSubscriptionGrant(ctx context.Context, req dto.CreateEntitlementRequest, sub *subscription.Subscription) (*dto.EntitlementResponse, error) {
+	e := req.ToEntitlement(ctx)
+	e.EntityType = types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
+	e.EntityID = sub.ID
+	e.ApplyGrantDefaults()
+	if err := e.Validate(); err != nil {
+		return nil, err
+	}
+
+	enabled, err := s.entitlementAlertsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, ierr.NewError("subscription grants need entitlement alerts").
+			WithHint("Contact Flexprice support to enable this feature.").
+			Mark(ierr.ErrValidation)
+	}
+
+	var created *entitlement.Entitlement
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.validateSubscriptionGrantSiblings(txCtx, e); err != nil {
+			return err
+		}
+		if err := newSubscriptionGrantGuard(s.ServiceParams).check(txCtx, sub, subscriptionGrantChange{}); err != nil {
+			return err
+		}
+		created, err = s.EntitlementRepo.Create(txCtx, e)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventEntitlementCreated, created.ID)
+	return &dto.EntitlementResponse{Entitlement: created}, nil
+}
+
+// validateSubscriptionGrantSiblings keeps one mode per subscription, and one window length when the
+// grants pool additively.
+func (s *entitlementService) validateSubscriptionGrantSiblings(ctx context.Context, e *entitlement.Entitlement) error {
+	siblings, err := s.subscriptionGrantConfigs(ctx, e.EntityID)
+	if err != nil {
+		return err
+	}
+	for _, other := range siblings {
+		if other.ID == e.ID {
+			continue
+		}
+		if defaultedMode(other.AggregationMode) != defaultedMode(e.AggregationMode) {
+			return ierr.NewError("additive and parallel subscription grants cannot be mixed").
+				WithHint("Use one aggregation mode for every subscription grant on the subscription.").
+				WithReportableDetails(map[string]any{"subscription_id": e.EntityID, "existing_entitlement_id": other.ID}).
+				Mark(ierr.ErrValidation)
+		}
+		if defaultedMode(e.AggregationMode) == types.EntitlementAggregationModeAdditive && !sameGrantWindow(other, e) {
+			return ierr.NewError("additive subscription grants must share one window length").
+				WithHint("Give every additive subscription grant on the subscription the same grant duration.").
+				WithReportableDetails(map[string]any{"subscription_id": e.EntityID, "existing_entitlement_id": other.ID}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+func sameGrantWindow(a, b *entitlement.Entitlement) bool {
+	return a.GrantDurationUnit == b.GrantDurationUnit &&
+		lo.FromPtr(a.GrantDurationValue) == lo.FromPtr(b.GrantDurationValue) &&
+		a.GrantAllocationBehavior == b.GrantAllocationBehavior
+}
+
+// subscriptionGrantConfigs returns the published subscription grants on one subscription.
+func (s *entitlementService) subscriptionGrantConfigs(ctx context.Context, subID string) ([]*entitlement.Entitlement, error) {
+	filter := types.NewNoLimitEntitlementFilter().
+		WithEntityIDs([]string{subID}).
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
+		WithStatus(types.StatusPublished)
+	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{types.EntitlementGrantScopeSubscription}
+	return s.EntitlementRepo.List(ctx, filter)
+}
+
+// entitlementAlertsEnabled reports whether grant usage is evaluated in this environment: on in the
+// deployment config and in the environment's entitlement alert setting.
+func (s *entitlementService) entitlementAlertsEnabled(ctx context.Context) (bool, error) {
+	if !s.Config.UsageAlerts.Enabled || !s.Config.UsageAlerts.EntitlementAlertsEnabled {
+		return false, nil
+	}
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	cfg, err := GetSetting[types.AlertToggleConfig](settingsSvc, ctx, types.SettingKeyEntitlementAlertConfig)
+	if err != nil && !ierr.IsNotFound(err) {
+		return false, err
+	}
+	return cfg.IsAlertEnabled(), nil
 }

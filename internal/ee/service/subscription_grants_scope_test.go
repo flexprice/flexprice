@@ -23,6 +23,22 @@ type subGrantFixture struct {
 }
 
 func (s *EntitlementGrantSuite) newSubGrantFixture(tag string, ec *entitlement.Entitlement) subGrantFixture {
+	fx := s.newSubGrantSubscription(tag)
+	ec.ID = "ent-subgrant-" + tag
+	ec.EntityType = types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
+	ec.EntityID = fx.sub.ID
+	ec.GrantScope = types.EntitlementGrantScopeSubscription
+	ec.GrantMeasure = types.EntitlementGrantMeasureAmount
+	ec.IsEnabled = true
+	ec.BaseModel = types.GetDefaultBaseModel(s.GetContext())
+	s.Require().NoError(ec.Validate())
+	_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), ec)
+	s.Require().NoError(err)
+	return fx
+}
+
+// newSubGrantSubscription is the fixture subscription and its two usage lines, with no grant.
+func (s *EntitlementGrantSuite) newSubGrantSubscription(tag string) subGrantFixture {
 	ctx := s.GetContext()
 	calls := s.simpleMeter("meter-calls-" + tag)
 	store := s.simpleMeter("meter-store-" + tag)
@@ -59,17 +75,6 @@ func (s *EntitlementGrantSuite) newSubGrantFixture(tag string, ec *entitlement.E
 	}
 	addLine("sli-calls-"+tag, calls.ID, 0.10)
 	addLine("sli-store-"+tag, store.ID, 1)
-
-	ec.ID = "ent-subgrant-" + tag
-	ec.EntityType = types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
-	ec.EntityID = sub.ID
-	ec.GrantScope = types.EntitlementGrantScopeSubscription
-	ec.GrantMeasure = types.EntitlementGrantMeasureAmount
-	ec.IsEnabled = true
-	ec.BaseModel = types.GetDefaultBaseModel(ctx)
-	s.Require().NoError(ec.Validate())
-	_, err := s.GetStores().EntitlementRepo.Create(ctx, ec)
-	s.Require().NoError(err)
 
 	return subGrantFixture{
 		sub: sub, callsLine: "sli-calls-" + tag, storeLine: "sli-store-" + tag,

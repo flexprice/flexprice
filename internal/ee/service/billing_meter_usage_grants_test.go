@@ -543,7 +543,7 @@ func invoiceLines(fx subGrantFixture, calls, store string) []dto.CreateInvoiceLi
 func (s *EntitlementGrantSuite) applySubGrants(fx subGrantFixture, lines []dto.CreateInvoiceLineItemRequest, blockers subGrantBlockers) decimal.Decimal {
 	b := s.subGrantBilling()
 	start, end := fx.sub.CurrentPeriodStart, fx.sub.CurrentPeriodEnd
-	grants, err := b.loadSubscriptionGrants(s.GetContext(), fx.sub, blockers.featureGrants, nil, blockers.commitmentLineIDs, nil, start, end)
+	grants, err := b.loadSubscriptionGrants(s.GetContext(), fx.sub, len(blockers.featureGrants) > 0, nil, blockers.commitmentLineIDs, nil, start, end)
 	s.Require().NoError(err)
 	reduction, err := b.applySubscriptionGrants(s.GetContext(), fx.sub, grants, lines, start, end)
 	s.Require().NoError(err)

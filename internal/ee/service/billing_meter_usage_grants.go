@@ -367,18 +367,12 @@ func (e grantGuardError) Error() string { return string(e) }
 // metadataKeySubscriptionGrantAllowance records how much of an invoice line a subscription grant covered.
 const metadataKeySubscriptionGrantAllowance = "subscription_grant_allowance"
 
-var (
-	errSubGrantCommitment       = grantGuardError("subscription has a minimum spend")
-	errSubGrantCadence          = grantGuardError("usage line billed at a different cadence than the subscription")
-	errSubGrantWithFeatureGrant = grantGuardError("subscription also has feature grants")
-)
-
 // loadSubscriptionGrants returns the subscription grant windows overlapping the period. It returns
 // none, and logs why, when the subscription has a setup the grants cannot be billed on.
 func (s *billingService) loadSubscriptionGrants(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	featureGrants map[string][]*entitlementgrant.EntitlementGrant,
+	hasFeatureAllowance bool,
 	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
 	commitmentLineIDs map[string]bool,
 	meters map[string]*meter.Meter,
@@ -401,7 +395,23 @@ func (s *billingService) loadSubscriptionGrants(
 	if err != nil {
 		return nil, err
 	}
-	if reason := subscriptionGrantBlocker(sub, items, featureGrants, chargesByLineItemID, commitmentLineIDs, meters, periodStart, periodEnd); reason != nil {
+	priceByItemID := make(map[string]*priceDomain.Price, len(chargesByLineItemID))
+	for id, charges := range chargesByLineItemID {
+		if len(charges) > 0 {
+			priceByItemID[id] = charges[0].Price
+		}
+	}
+	reason := subscriptionGrantConflict(subscriptionGrantState{
+		sub:                 sub,
+		items:               items,
+		priceByItemID:       priceByItemID,
+		meters:              meters,
+		hasFeatureAllowance: hasFeatureAllowance,
+		commitmentLineIDs:   commitmentLineIDs,
+		periodStart:         periodStart,
+		periodEnd:           periodEnd,
+	})
+	if reason != nil {
 		s.Logger.Error(ctx, "subscription grant overage: subscription rejected, grants not applied",
 			"subscription_id", sub.ID,
 			"error", reason,
@@ -409,50 +419,6 @@ func (s *billingService) loadSubscriptionGrants(
 		return nil, nil
 	}
 	return grants, nil
-}
-
-// subscriptionGrantBlocker returns why subscription grants cannot be billed on this subscription,
-// or nil. The grant must cover every usage line once, so one bad line blocks it everywhere.
-func subscriptionGrantBlocker(
-	sub *subscription.Subscription,
-	items []*subscription.SubscriptionLineItem,
-	featureGrants map[string][]*entitlementgrant.EntitlementGrant,
-	chargesByLineItemID map[string][]*dto.SubscriptionUsageByMetersResponse,
-	commitmentLineIDs map[string]bool,
-	meters map[string]*meter.Meter,
-	periodStart, periodEnd time.Time,
-) error {
-	if sub.HasCommitment() || lo.FromPtr(sub.CommitmentAmount).IsPositive() {
-		return errSubGrantCommitment
-	}
-	if len(featureGrants) > 0 {
-		return errSubGrantWithFeatureGrant
-	}
-	for _, item := range items {
-		if item == nil || item.PriceType != types.PRICE_TYPE_USAGE || !overlapsPeriod(item, periodStart, periodEnd) {
-			continue
-		}
-		if commitmentLineIDs[item.ID] {
-			return errSubGrantCommitment
-		}
-		if item.BillingPeriod != sub.BillingPeriod || max(item.BillingPeriodCount, 1) != max(sub.BillingPeriodCount, 1) {
-			return errSubGrantCadence
-		}
-		var p *priceDomain.Price
-		if charges := chargesByLineItemID[item.ID]; len(charges) > 0 {
-			p = charges[0].Price
-		}
-		if reason := GrantPricingGuard(types.EntitlementGrantMeasureAmount, item, p, meters[item.MeterID]); reason != nil {
-			return reason
-		}
-	}
-	return nil
-}
-
-func overlapsPeriod(item *subscription.SubscriptionLineItem, periodStart, periodEnd time.Time) bool {
-	startsInTime := item.StartDate.IsZero() || item.StartDate.Before(periodEnd)
-	endsInTime := item.EndDate.IsZero() || item.EndDate.After(periodStart)
-	return startsInTime && endsInTime
 }
 
 // applySubscriptionGrants lowers each usage line to what it is billed after the subscription grants

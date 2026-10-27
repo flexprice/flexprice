@@ -196,7 +196,10 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	handledByCommitments := commitments.HandledLineIDs()
 
-	subGrants, err := s.loadSubscriptionGrants(ctx, sub, grantsByMeterID, chargesByLineItemID, handledByCommitments, meterMap, periodStart, periodEnd)
+	hasFeatureAllowance := len(grantsByMeterID) > 0 || lo.ContainsBy(lo.Values(entitlementsByMeterID), func(e *dto.AggregatedEntitlement) bool {
+		return e.IsEnabled && e.UsageLimit != nil
+	})
+	subGrants, err := s.loadSubscriptionGrants(ctx, sub, hasFeatureAllowance, chargesByLineItemID, handledByCommitments, meterMap, periodStart, periodEnd)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}

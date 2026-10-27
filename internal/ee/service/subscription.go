@@ -5115,6 +5115,10 @@ func (s *subscriptionService) createAddonAttachParams(
 		return nil, err
 	}
 
+	if err := newSubscriptionGrantGuard(s.ServiceParams).checkAddonAttach(ctx, sub, req.AddonID, lineItems); err != nil {
+		return nil, err
+	}
+
 	return &addonAttachParams{
 		subscription:   sub,
 		request:        req,

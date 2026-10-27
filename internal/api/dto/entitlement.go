@@ -16,8 +16,8 @@ import (
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
 	PlanID              string                            `json:"plan_id,omitempty"`
-	FeatureID           string                            `json:"feature_id" binding:"required"`
-	FeatureType         types.FeatureType                 `json:"feature_type" binding:"required"`
+	FeatureID           string                            `json:"feature_id"`
+	FeatureType         types.FeatureType                 `json:"feature_type"`
 	IsEnabled           bool                              `json:"is_enabled"`
 	UsageLimit          *int64                            `json:"usage_limit"`
 	UsageResetPeriod    types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
@@ -40,12 +40,21 @@ type CreateEntitlementRequest struct {
 	GrantUnlimited          bool                                     `json:"grant_unlimited,omitempty"`
 }
 
+// IsSubscriptionGrant reports a subscription grant: a grant config on a subscription with no feature.
+func (r *CreateEntitlementRequest) IsSubscriptionGrant() bool {
+	return r.EntityType == types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION && r.FeatureID == "" && r.hasGrantConfig()
+}
+
+func (r *CreateEntitlementRequest) hasGrantConfig() bool {
+	return r.GrantQuota != nil || r.GrantDurationValue != nil || r.GrantMeasure != "" || r.GrantDurationUnit != ""
+}
+
 func (r *CreateEntitlementRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
 
-	hasGrantConfig := r.GrantQuota != nil || r.GrantDurationValue != nil || r.GrantMeasure != "" || r.GrantDurationUnit != ""
+	hasGrantConfig := r.hasGrantConfig()
 	if hasGrantConfig && r.GrantQuota == nil && !r.GrantUnlimited {
 		return ierr.NewError("grant_quota is required unless the allowance is unlimited").
 			WithHint("Set grant_quota, or send grant_unlimited: true for an allowance with no ceiling").
@@ -55,6 +64,10 @@ func (r *CreateEntitlementRequest) Validate() error {
 		return ierr.NewError("grant_quota cannot be set on an unlimited allowance").
 			WithHint("Remove grant_quota, or drop grant_unlimited").
 			Mark(ierr.ErrValidation)
+	}
+
+	if r.IsSubscriptionGrant() {
+		return nil
 	}
 
 	if r.FeatureID == "" {
@@ -113,6 +126,11 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 	if r.FeatureType == types.FeatureTypeStatic || r.FeatureType == types.FeatureTypeMetered || r.FeatureType == types.FeatureTypeConfig {
 		r.IsEnabled = true
 	}
+	var grantScope types.EntitlementGrantScopeEntityType
+	if r.IsSubscriptionGrant() {
+		r.IsEnabled = true
+		grantScope = types.EntitlementGrantScopeSubscription
+	}
 
 	// TODO: This is a temporary fix to maintain backward compatibility
 	// We need to remove this once we have a proper entitlement entity type
@@ -142,6 +160,7 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		GrantAllocationBehavior: r.GrantAllocationBehavior,
 		GrantQuota:              r.GrantQuota,
 		AggregationMode:         r.AggregationMode,
+		GrantScope:              grantScope,
 		EnvironmentID:           types.GetEnvironmentID(ctx),
 		BaseModel:               types.GetDefaultBaseModel(ctx),
 	}

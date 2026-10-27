@@ -82,6 +82,11 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			return err
 		}
 
+		if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{
+			items: []*subscription.SubscriptionLineItem{lineItem},
+		}); err != nil {
+			return err
+		}
 		if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, lineItem); err != nil {
 			return err
 		}
@@ -887,6 +892,12 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(ctx, sub, subscriptionGrantChange{
+				items: []*subscription.SubscriptionLineItem{newLineItem},
+			}); err != nil {
+				return err
+			}
+
 			// Create the line item directly using repository
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
@@ -959,6 +970,11 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{
+				items: []*subscription.SubscriptionLineItem{existingLineItem},
+			}); err != nil {
+				return err
+			}
 			return s.SubscriptionLineItemRepo.Update(txCtx, existingLineItem)
 		})
 		if err != nil {
