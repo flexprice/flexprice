@@ -456,6 +456,10 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
 	}
+	if err := fillPaymentBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -724,6 +728,10 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		}
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, lo.FromPtr(filter.BillingEntityID)); err != nil {
+		return nil, err
+	}
+
 	payments, err := s.PaymentRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err // Repository already using ierr
@@ -769,6 +777,10 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 			}
 		}
 		items[i] = response
+	}
+
+	if err := fillPaymentBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListPaymentsResponse{

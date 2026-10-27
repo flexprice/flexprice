@@ -1859,6 +1859,10 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 	response.CreditGrants = creditGrantsResponse.Items
 
+	if err := fillSubscriptionBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -2549,6 +2553,10 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset())
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to list subscriptions from repository", "error", err, "filter", filter)
@@ -2782,6 +2790,10 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"total_items", len(response.Items),
 		"total_count", count,
 		"pagination", response.Pagination)
+
+	if err := fillSubscriptionBillingEntityIDs(ctx, s.ServiceParams, response.Items...); err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }

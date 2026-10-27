@@ -209,6 +209,8 @@ type RefundFilter struct {
 
 	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
 	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte"`
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 // NewRefundFilter creates a refund filter with default pagination.

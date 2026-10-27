@@ -57,6 +57,9 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 				WithHint("InternalWalletEvent.Balance must include a wallet").
 				Mark(ierr.ErrInvalidOperation)
 		}
+		if err := b.services.WalletService.FillBillingEntityIDs(ctx, []*dto.WalletResponse{walletData}); err != nil {
+			return nil, err
+		}
 	default:
 		walletData, err = b.services.WalletService.GetWalletByID(ctx, parsedPayload.WalletID)
 		if err != nil {

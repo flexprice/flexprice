@@ -24,6 +24,7 @@ type InternalInvoiceEvent struct {
 type Invoice struct {
 	ID              string              `json:"id"`
 	CustomerID      string              `json:"customer_id"`
+	BillingEntityID *string             `json:"billing_entity_id"`
 	SubscriptionID  *string             `json:"subscription_id,omitempty"`
 	EnvironmentID   string              `json:"environment_id"`
 	InvoiceNumber   *string             `json:"invoice_number,omitempty"`
@@ -512,6 +513,7 @@ func NewInvoice(resp *dto.InvoiceResponse) *Invoice {
 	}
 
 	return &Invoice{
+		BillingEntityID:            resp.BillingEntityID,
 		ID:                         resp.ID,
 		CustomerID:                 resp.CustomerID,
 		SubscriptionID:             resp.SubscriptionID,
