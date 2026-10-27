@@ -62,6 +62,10 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	if len(f.ProductIDs) > 0 && !lo.Contains(f.ProductIDs, p.ProductID) {
+		return false
+	}
+
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
 		return false

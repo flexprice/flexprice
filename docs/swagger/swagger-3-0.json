@@ -10789,6 +10789,479 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List products",
+        "description": "Use when listing products. Returns a paginated list.",
+        "operationId": "listProducts",
+        "parameters": [
+          {
+            "name": "end_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "lookup_keys",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "product_ids",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "deleted",
+                "archived"
+              ],
+              "x-enum-varnames": [
+                "StatusPublished",
+                "StatusDeleted",
+                "StatusArchived"
+              ]
+            },
+            "x-enum-varnames": [
+              "StatusPublished",
+              "StatusDeleted",
+              "StatusArchived"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProductsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create product",
+        "description": "Use when defining a reusable commercial identity for what you sell. Prices can reference it through product_id.",
+        "operationId": "createProduct",
+        "requestBody": {
+          "description": "Product Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "product"
+      }
+    },
+    "/products/search": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Query products",
+        "description": "Use when searching products by ids, lookup keys, filters and sorts. Returns a paginated list.",
+        "operationId": "queryProduct",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product.Filter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProductsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get product",
+        "description": "Use when you need to load a single product.",
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update product",
+        "description": "Use when changing a product's name or description. The lookup key never changes.",
+        "operationId": "updateProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update Product Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "product"
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Delete product",
+        "description": "Use when retiring a product. Fails while any published price references it.",
+        "operationId": "deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/rbac/roles": {
       "get": {
         "tags": [
@@ -18410,6 +18883,20 @@
           }
         }
       },
+      "ListProductsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListScheduledTasksResponse": {
         "type": "object",
         "properties": {
@@ -21821,7 +22308,8 @@
             "type": "string"
           },
           "usage_limit": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Deprecated: use grant_quota; a metered usage_limit is converted to a grant on create."
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -22409,6 +22897,9 @@
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
           },
+          "product_id": {
+            "type": "string"
+          },
           "start_date": {
             "type": "string",
             "format": "date-time"
@@ -22533,6 +23024,24 @@
             "format": "date-time"
           },
           "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateProductRequest": {
+        "required": [
+          "lookup_key",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           }
         }
@@ -26931,6 +27440,9 @@
           "pricing_unit": {
             "$ref": "#/components/schemas/PriceUnitResponse"
           },
+          "product_id": {
+            "type": "string"
+          },
           "sequence": {
             "type": "integer",
             "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
@@ -27040,6 +27552,34 @@
           },
           "updated_by": {
             "type": "string"
+          }
+        }
+      },
+      "ProductResponse": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -30563,7 +31103,8 @@
             "type": "string"
           },
           "usage_limit": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Deprecated: use grant_quota."
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -30798,6 +31339,10 @@
               "$ref": "#/components/schemas/CreatePriceTier"
             }
           },
+          "product_id": {
+            "type": "string",
+            "description": "ProductID sets the price's product while it has none; once set it never changes."
+          },
           "tier_mode": {
             "$ref": "#/components/schemas/types.BillingTier"
           },
@@ -30818,6 +31363,17 @@
         "properties": {
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateProductRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
           },
           "name": {
             "type": "string"
@@ -35254,6 +35810,12 @@
               "type": "string"
             }
           },
+          "product_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "sort": {
             "type": "string"
           },
@@ -37654,6 +38216,9 @@
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
           },
+          "product_id": {
+            "type": "string"
+          },
           "sequence": {
             "type": "integer",
             "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
@@ -37726,6 +38291,65 @@
           },
           "round": {
             "$ref": "#/components/schemas/types.RoundType"
+          }
+        }
+      },
+      "product.Filter": {
+        "type": "object",
+        "properties": {
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "lookup_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "product_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
           }
         }
       },

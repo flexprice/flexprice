@@ -45,6 +45,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
@@ -2010,6 +2011,43 @@ func init() {
 	priceunitDescConversionRate := priceunitFields[5].Descriptor()
 	// priceunit.DefaultConversionRate holds the default value on creation for the conversion_rate field.
 	priceunit.DefaultConversionRate = priceunitDescConversionRate.Default.(decimal.Decimal)
+	productMixin := schema.Product{}.Mixin()
+	productMixinFields0 := productMixin[0].Fields()
+	_ = productMixinFields0
+	productMixinFields1 := productMixin[1].Fields()
+	_ = productMixinFields1
+	productFields := schema.Product{}.Fields()
+	_ = productFields
+	// productDescTenantID is the schema descriptor for tenant_id field.
+	productDescTenantID := productMixinFields0[0].Descriptor()
+	// product.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	product.TenantIDValidator = productDescTenantID.Validators[0].(func(string) error)
+	// productDescStatus is the schema descriptor for status field.
+	productDescStatus := productMixinFields0[1].Descriptor()
+	// product.DefaultStatus holds the default value on creation for the status field.
+	product.DefaultStatus = productDescStatus.Default.(string)
+	// productDescCreatedAt is the schema descriptor for created_at field.
+	productDescCreatedAt := productMixinFields0[2].Descriptor()
+	// product.DefaultCreatedAt holds the default value on creation for the created_at field.
+	product.DefaultCreatedAt = productDescCreatedAt.Default.(func() time.Time)
+	// productDescUpdatedAt is the schema descriptor for updated_at field.
+	productDescUpdatedAt := productMixinFields0[3].Descriptor()
+	// product.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	product.DefaultUpdatedAt = productDescUpdatedAt.Default.(func() time.Time)
+	// product.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	product.UpdateDefaultUpdatedAt = productDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// productDescEnvironmentID is the schema descriptor for environment_id field.
+	productDescEnvironmentID := productMixinFields1[0].Descriptor()
+	// product.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	product.DefaultEnvironmentID = productDescEnvironmentID.Default.(string)
+	// productDescName is the schema descriptor for name field.
+	productDescName := productFields[1].Descriptor()
+	// product.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	product.NameValidator = productDescName.Validators[0].(func(string) error)
+	// productDescLookupKey is the schema descriptor for lookup_key field.
+	productDescLookupKey := productFields[3].Descriptor()
+	// product.LookupKeyValidator is a validator for the "lookup_key" field. It is called by the builders before save.
+	product.LookupKeyValidator = productDescLookupKey.Validators[0].(func(string) error)
 	refundMixin := schema.Refund{}.Mixin()
 	refundMixinFields0 := refundMixin[0].Fields()
 	_ = refundMixinFields0

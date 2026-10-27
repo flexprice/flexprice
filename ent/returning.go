@@ -49,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
@@ -2627,6 +2628,68 @@ func scanReturningPriceUnit(rows *sql.Rows) ([]*PriceUnit, error) {
 	var out []*PriceUnit
 	for rows.Next() {
 		node := &PriceUnit{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*Product.
+func (_u *ProductUpdate) SaveReturning(ctx context.Context) ([]*Product, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ProductUpdate) sqlSaveReturning(ctx context.Context) ([]*Product, error) {
+	var out []*Product
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", product.Table, product.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningProduct(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*Product.
+func (_d *ProductDelete) ExecReturning(ctx context.Context) ([]*Product, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ProductDelete) sqlExecReturning(ctx context.Context) ([]*Product, error) {
+	var out []*Product
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", product.Table, product.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningProduct(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningProduct(rows *sql.Rows) ([]*Product, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*Product
+	for rows.Next() {
+		node := &Product{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

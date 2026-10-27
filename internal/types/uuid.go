@@ -125,6 +125,7 @@ const (
 	UUID_PREFIX_FX_RATE                    = "fxr"
 	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_PRODUCT                    = "product"
 	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
 
 	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.

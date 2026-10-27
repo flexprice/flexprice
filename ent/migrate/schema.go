@@ -1933,6 +1933,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "product_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "sequence", Type: field.TypeInt64, SchemaType: map[string]string{"postgres": "bigserial"}},
 		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -1944,7 +1945,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_price_units_price_unit_edge",
-				Columns:    []*schema.Column{PricesColumns[42]},
+				Columns:    []*schema.Column{PricesColumns[43]},
 				RefColumns: []*schema.Column{PriceUnitsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1974,9 +1975,14 @@ var (
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[40]},
 			},
 			{
+				Name:    "price_tenant_id_environment_id_product_id",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[41]},
+			},
+			{
 				Name:    "price_tenant_id_environment_id_entity_id_entity_type_sequence",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[36], PricesColumns[35], PricesColumns[41]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[36], PricesColumns[35], PricesColumns[42]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
@@ -2021,6 +2027,41 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
+			},
+		},
+	}
+	// ProductsColumns holds the columns for the "products" table.
+	ProductsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "lookup_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+	}
+	// ProductsTable holds the schema information for the "products" table.
+	ProductsTable = &schema.Table{
+		Name:       "products",
+		Columns:    ProductsColumns,
+		PrimaryKey: []*schema.Column{ProductsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "product_tenant_id_environment_id_lookup_key",
+				Unique:  true,
+				Columns: []*schema.Column{ProductsColumns[1], ProductsColumns[7], ProductsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+			{
+				Name:    "product_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{ProductsColumns[1], ProductsColumns[7]},
 			},
 		},
 	}
@@ -3210,6 +3251,7 @@ var (
 		PlansTable,
 		PricesTable,
 		PriceUnitsTable,
+		ProductsTable,
 		RefundsTable,
 		RevenueFactsTable,
 		ScheduledTasksTable,

@@ -149,6 +149,10 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 		return nil, err
 	}
 
+	if err := s.validateProduct(ctx, p.ProductID); err != nil {
+		return nil, err
+	}
+
 	// Validate meter for USAGE prices: must be set and must exist
 	if p.Type == types.PRICE_TYPE_USAGE {
 		if p.MeterID == "" {
@@ -850,6 +854,22 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		return nil, err
 	}
 
+	if req.ProductID != "" && req.ProductID != existingPrice.ProductID {
+		if existingPrice.ProductID != "" {
+			return nil, ierr.NewError("product_id cannot be changed").
+				WithHint("A price's product can be set once and never changed").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   id,
+					"product_id": existingPrice.ProductID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := s.validateProduct(ctx, req.ProductID); err != nil {
+			return nil, err
+		}
+		existingPrice.ProductID = req.ProductID
+	}
+
 	// Validate price unit type cannot be changed
 	hasFIATFields := req.Amount != nil || len(req.Tiers) > 0
 	hasCUSTOMFields := req.PriceUnitAmount != nil || len(req.PriceUnitTiers) > 0
@@ -1486,6 +1506,26 @@ func (s *priceService) validateBucketSizeAgainstMeter(ctx context.Context, req *
 	}
 
 	return s.validateBucketedPriceAgainstEntitlements(ctx, m, req.BucketSize, req.BillingModel)
+}
+
+// validateProduct checks that a price's product exists and is published.
+func (s *priceService) validateProduct(ctx context.Context, productID string) error {
+	if productID == "" {
+		return nil
+	}
+	p, err := s.ProductRepo.GetByID(ctx, productID)
+	if err != nil {
+		return err
+	}
+	if p.Status() != types.StatusPublished {
+		return ierr.NewError("product is not published").
+			WithHint("A price can only reference a published product").
+			WithReportableDetails(map[string]interface{}{
+				"product_id": productID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // validateGroup validates that a group exists and is of type "price"

@@ -136,6 +136,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListProductsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ProductResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListScheduledTasksResponse:
     properties:
       items:
@@ -2646,6 +2655,8 @@ definitions:
       static_value:
         type: string
       usage_limit:
+        description: 'Deprecated: use grant_quota; a metered usage_limit is converted
+          to a grant on create.'
         type: integer
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
@@ -3124,6 +3135,8 @@ definitions:
         $ref: '#/definitions/PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
+      product_id:
+        type: string
       start_date:
         type: string
       tier_mode:
@@ -3237,6 +3250,18 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  CreateProductRequest:
+    properties:
+      description:
+        type: string
+      lookup_key:
+        type: string
+      name:
+        type: string
+    required:
+    - lookup_key
+    - name
     type: object
   CreateScheduledTaskRequest:
     properties:
@@ -6586,6 +6611,8 @@ definitions:
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
         $ref: '#/definitions/PriceUnitResponse'
+      product_id:
+        type: string
       sequence:
         description: |-
           Sequence is the monotonic stamp bumped on every state change that
@@ -6662,6 +6689,23 @@ definitions:
       updated_at:
         type: string
       updated_by:
+        type: string
+    type: object
+  ProductResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      updated_at:
         type: string
     type: object
   ProrationDetail:
@@ -9414,6 +9458,7 @@ definitions:
       static_value:
         type: string
       usage_limit:
+        description: 'Deprecated: use grant_quota.'
         type: integer
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
@@ -9589,6 +9634,10 @@ definitions:
         items:
           $ref: '#/definitions/CreatePriceTier'
         type: array
+      product_id:
+        description: ProductID sets the price's product while it has none; once set
+          it never changes.
+        type: string
       tier_mode:
         allOf:
         - $ref: '#/definitions/types.BillingTier'
@@ -9608,6 +9657,13 @@ definitions:
     properties:
       metadata:
         $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+    type: object
+  UpdateProductRequest:
+    properties:
+      description:
+        type: string
       name:
         type: string
     type: object
@@ -12831,6 +12887,10 @@ definitions:
         items:
           type: string
         type: array
+      product_ids:
+        items:
+          type: string
+        type: array
       sort:
         type: string
       start_date_lt:
@@ -14667,6 +14727,8 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+      product_id:
+        type: string
       sequence:
         description: |-
           Sequence is the monotonic stamp bumped on every state change that
@@ -14733,6 +14795,45 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.RoundType'
         description: up or down
+    type: object
+  product.Filter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      lookup_keys:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      product_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
     type: object
   subscription.SubscriptionLineItem:
     properties:
@@ -21903,6 +22004,256 @@ paths:
       summary: Query price units
       tags:
       - Price Units
+  /products:
+    get:
+      description: Use when listing products. Returns a paginated list.
+      operationId: listProducts
+      parameters:
+      - in: query
+        name: end_time
+        type: string
+      - in: query
+        name: expand
+        type: string
+      - in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: lookup_keys
+        type: array
+      - in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: product_ids
+        type: array
+      - in: query
+        name: start_time
+        type: string
+      - enum:
+        - published
+        - deleted
+        - archived
+        in: query
+        name: status
+        type: string
+        x-enum-varnames:
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListProductsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List products
+      tags:
+      - Products
+    post:
+      consumes:
+      - application/json
+      description: Use when defining a reusable commercial identity for what you sell.
+        Prices can reference it through product_id.
+      operationId: createProduct
+      parameters:
+      - description: Product Request
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create product
+      tags:
+      - Products
+  /products/{id}:
+    delete:
+      description: Use when retiring a product. Fails while any published price references
+        it.
+      operationId: deleteProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete product
+      tags:
+      - Products
+    get:
+      description: Use when you need to load a single product.
+      operationId: getProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get product
+      tags:
+      - Products
+    put:
+      consumes:
+      - application/json
+      description: Use when changing a product's name or description. The lookup key
+        never changes.
+      operationId: updateProduct
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update Product Request
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ProductResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update product
+      tags:
+      - Products
+  /products/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when searching products by ids, lookup keys, filters and sorts.
+        Returns a paginated list.
+      operationId: queryProduct
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/product.Filter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListProductsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Query products
+      tags:
+      - Products
+      x-scope: read
   /rbac/roles:
     get:
       consumes:

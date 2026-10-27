@@ -94,6 +94,8 @@ type Tx struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// Product is the client for interacting with the Product builders.
+	Product *ProductClient
 	// Refund is the client for interacting with the Refund builders.
 	Refund *RefundClient
 	// RevenueFact is the client for interacting with the RevenueFact builders.
@@ -307,6 +309,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.Product = NewProductClient(tx.config)
 	tx.Refund = NewRefundClient(tx.config)
 	tx.RevenueFact = NewRevenueFactClient(tx.config)
 	tx.ScheduledTask = NewScheduledTaskClient(tx.config)

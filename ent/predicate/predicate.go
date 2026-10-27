@@ -126,6 +126,9 @@ type Price func(*sql.Selector)
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
 
+// Product is the predicate function for product builders.
+type Product func(*sql.Selector)
+
 // Refund is the predicate function for refund builders.
 type Refund func(*sql.Selector)
 

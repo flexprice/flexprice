@@ -130,6 +130,8 @@ type Price struct {
 	// GroupID references the group this price belongs to
 	GroupID string `db:"group_id" json:"group_id,omitempty"`
 
+	ProductID string `db:"product_id" json:"product_id,omitempty"`
+
 	// StartDate is the start date of the price
 	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
 
@@ -543,6 +545,7 @@ func FromEnt(e *ent.Price) *Price {
 		EntityID:               e.EntityID,
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
 		GroupID:                lo.FromPtr(e.GroupID),
+		ProductID:              lo.FromPtr(e.ProductID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
 		Sequence:               e.Sequence,

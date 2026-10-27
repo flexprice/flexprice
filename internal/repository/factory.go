@@ -63,6 +63,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"go.uber.org/fx"
 )
@@ -275,6 +276,10 @@ func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
 
 func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
 	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.InMemoryCache)
+}
+
+func NewProductRepository(p RepositoryParams) productRepo.Repository {
+	return productRepo.NewRepository(p.EntClient, p.Logger)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {
