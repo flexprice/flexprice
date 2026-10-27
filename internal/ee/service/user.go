@@ -616,6 +616,13 @@ func (s *userService) CreatePasswordLink(ctx context.Context, id string) (*dto.P
 			Mark(ierr.ErrPermissionDenied)
 	}
 
+	// The link replaces the member's password, so an API key must not be able to get one.
+	if _, source, ok := types.GetActor(ctx); !ok || source != types.SourceDashboard {
+		return nil, ierr.NewError("password link outside a dashboard session").
+			WithHint("Create password links from the dashboard while signed in").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
 	if s.cfg == nil || authProvider.NewProvider(s.cfg).GetProvider() != types.AuthProviderFlexprice {
 		return nil, ierr.NewError("password links need flexprice auth").
 			WithHint("Password links are only available when Flexprice stores passwords").

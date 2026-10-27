@@ -592,6 +592,7 @@ func (s *UserServiceSuite) TestCreatePasswordLink() {
 	tests := []struct {
 		name        string
 		callerRoles []string
+		viaAPIKey   bool
 		cfg         *config.Configuration
 		targetID    string
 		wantErr     func(error) bool
@@ -615,6 +616,11 @@ func (s *UserServiceSuite) TestCreatePasswordLink() {
 			wantErr: ierr.IsPermissionDenied,
 		},
 		{
+			name:        "request made with a super_admin's API key",
+			callerRoles: superAdmin, viaAPIKey: true, cfg: flexpriceCfg, targetID: "user_with_password",
+			wantErr: ierr.IsPermissionDenied,
+		},
+		{
 			name:        "Supabase deployment",
 			callerRoles: superAdmin, cfg: supabaseCfg, targetID: "user_with_password",
 			wantErr: ierr.IsValidation,
@@ -632,6 +638,11 @@ func (s *UserServiceSuite) TestCreatePasswordLink() {
 			ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
 			ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
 			ctx = context.WithValue(ctx, types.CtxRoles, tc.callerRoles)
+			actor, source := types.Actor{Type: types.ActorTypeUser, ID: "actor-1"}, types.SourceDashboard
+			if tc.viaAPIKey {
+				actor, source = types.Actor{Type: types.ActorTypeAPIKey, ID: "secret-1"}, types.SourceAPI
+			}
+			ctx = types.SetActor(ctx, actor, source)
 
 			userRepo := testutil.NewInMemoryUserStore()
 			seed := func(id string, userType types.UserType, status types.Status, tenantID string) {
@@ -767,6 +778,7 @@ func (s *UserServiceSuite) TestCreatePasswordLink_Failures() {
 	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
 	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+	ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: "actor-1"}, types.SourceDashboard)
 
 	tests := []struct {
 		name    string
