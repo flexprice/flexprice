@@ -31,6 +31,147 @@ Steps:
 6. AccountingEvent & Journal
 7. Rollforward & Waterfall
 
+### Entity relationships
+
+New tables show all their columns; existing tables show only the columns revrec links through. Every table also carries `tenant_id`, `environment_id`, `status` and audit columns, left out here.
+
+```mermaid
+erDiagram
+    products ||--o{ prices : "product_id"
+    prices ||--o{ subscription_line_items : "price_id"
+    customers ||--o{ subscriptions : "customer_id"
+    subscriptions ||--|{ subscription_line_items : "subscription_id"
+
+    customers ||--o{ contracts : "customer_id"
+    contracts ||--|{ contract_associations : "contract_id"
+    subscriptions ||--o| contract_associations : "entity_id (subscription)"
+
+    contracts ||--o{ performance_obligations : "contract_id"
+    performance_obligations ||--|{ performance_obligation_associations : "pob_id"
+    subscription_line_items ||--o| performance_obligation_associations : "entity_id (subscription_line_item)"
+
+    invoices ||--|{ invoice_line_items : "invoice_id"
+    subscription_line_items |o--o{ invoice_line_items : "subscription_line_item_id"
+
+    accounting_periods ||--o{ journal_entries : "accounting_period_id"
+    customers ||--o{ journal_entries : "customer_id"
+    contracts |o--o{ journal_entries : "contract_id"
+    journal_entries |o--o| journal_entries : "reversal_of"
+    journal_entries ||--|{ journal_lines : "journal_entry_id"
+    performance_obligations |o--o{ journal_lines : "pob_id"
+
+    invoices ||--o{ journal_entries : "source (invoice)"
+    credit_notes ||--o{ journal_entries : "source (credit_note)"
+    payments ||--o{ journal_entries : "source (payment)"
+    refunds ||--o{ journal_entries : "source (refund)"
+    performance_obligations ||--o{ journal_entries : "source (pob)"
+
+    products {
+        string id PK
+        string name
+        text description
+        string lookup_key "unique among published"
+    }
+    prices {
+        string id PK
+        string product_id FK "new; nullable, set once"
+    }
+    customers {
+        string id PK
+    }
+    subscriptions {
+        string id PK
+        string customer_id FK
+    }
+    subscription_line_items {
+        string id PK
+        string subscription_id FK
+        string price_id FK
+        string predecessor_line_item_id "POB continuity"
+    }
+    invoices {
+        string id PK
+    }
+    invoice_line_items {
+        string id PK
+        string invoice_id FK
+        string subscription_line_item_id FK "resolves the POB"
+    }
+    credit_notes {
+        string id PK
+        timestamptz finalized_at "new; set on finalize"
+        timestamptz voided_at "new; set on void"
+    }
+    payments {
+        string id PK
+    }
+    refunds {
+        string id PK
+    }
+    contracts {
+        string id PK
+        string customer_id FK
+        string currency
+        timestamptz term_start "first activation"
+        timestamptz term_end
+        timestamptz ended_at
+        string contract_status "draft | active | ended | cancelled"
+    }
+    contract_associations {
+        string id PK
+        string contract_id FK
+        string entity_type "subscription"
+        string entity_id "one published contract per entity"
+    }
+    performance_obligations {
+        string id PK
+        string contract_id FK
+        string name
+        string recognition_method "straight_line | as_consumed | point_in_time"
+        string amortization_method "daily | period_even | period_even_prorated"
+        timestamptz service_start
+        timestamptz service_end
+        string pob_status "draft | active | satisfied | cancelled"
+    }
+    performance_obligation_associations {
+        string id PK
+        string pob_id FK
+        string entity_type "subscription_line_item"
+        string entity_id "one published POB per entity"
+    }
+    accounting_periods {
+        string id PK
+        date period_start "1st of month; unique"
+        string period_status "open | closed"
+    }
+    journal_entries {
+        string id PK
+        string event_type
+        string source_entity_type "invoice | credit_note | payment | refund | pob"
+        string source_entity_id
+        string idempotency_key "billing entries only; unique"
+        string accounting_period_id FK
+        date business_date
+        string customer_id FK
+        string contract_id FK "null for standalone invoices"
+        string currency
+        string reversal_of FK
+    }
+    journal_lines {
+        string id PK
+        string journal_entry_id FK
+        string account "LedgerAccountKey, defined in code"
+        string direction "debit | credit"
+        numeric amount "positive"
+        string pob_id FK "null on lines outside a POB"
+    }
+```
+
+- `contract_associations` and `performance_obligation_associations` are polymorphic. `entity_type` names the linked table, so the subscription and line item links are logical, not foreign keys.
+- `journal_entries.source_entity_*` is polymorphic too. Billing entries come from invoices, credit notes, payments and refunds; recognition and offset entries come from POBs.
+- Ledger accounts (Step 5) are fixed in code, so they have no table: `journal_lines.account` holds the key.
+- Earned to date (Step 3) and the reports (Step 7) are computed on read and add no tables.
+
 ---
 
 
@@ -407,11 +548,11 @@ type RevenueRecognitionConfig struct {
 A billed amount `A` covers local dates `[ds, de)` (its service period). Each covered day `d` has a weight:
 
 
-| Method                 | `w(d)`                                 | Effect                                                       |
-| ---------------------- | -------------------------------------- | ------------------------------------------------------------ |
-| `daily`                | 1                                      | Equal per day                                                |
+| Method                 | `w(d)`                                                            | Effect                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `daily`                | 1                                                                 | Equal per day                                                                                                                                      |
 | `period_even`          | 1 / days in `d`'s month, over N whole months from the start month | A term of N months is N whole calendar months from its start month: a mid-month start puts a full month in the start month and nothing in the last |
-| `period_even_prorated` | 1 / days in `d`'s month                | Equal per full month; partial months by the share they cover |
+| `period_even_prorated` | 1 / days in `d`'s month                                           | Equal per full month; partial months by the share they cover                                                                                       |
 
 
 - `earned(asOf) = A × Σ_{d < asOf} w(d) / Σ_{d ∈ [ds, de)} w(d)`. Billed amounts are additive: a POB earns their sum (Step 3).
@@ -595,17 +736,17 @@ No `entry_date`: Phase 1 never closes a period, so it equals `business_date`; on
 Billed means invoiced by `P_end` (the invoice's date), not the service period it covers: an arrears invoice dated Feb 1 for January usage is February billing, so January closes with unbilled. Invoice lines resolve their POB through `subscription_line_item_id`. A line's **line net** is `amount − line_item_discount − invoice_level_discount − inclusive tax` (inclusive tax allocated to lines pro rata by net when stored per invoice); billing entries and earned to date (Step 3) use the same line net, so tax never becomes revenue. `ONE_OFF` lines with no POB are recognized at finalize; their entry keeps the subscription's contract when the invoice has one, and `contract_id` is null for standalone invoices.
 
 
-| Event (business date)                                         | Entry                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invoice finalized (`finalized_at`)                            | Dr AR (invoice `total`, already net of credits), Dr `customer_credit` (credits applied) / Cr `tax_payable` (total tax), and per line by its line net: POB line Cr `deferred_revenue` (with its `pob_id`); no-POB `ONE_OFF` line Cr `revenue`; wallet top-up invoice (metadata carries `wallet_transaction_id`) Cr `customer_credit` |
-| Invoice voided (`voided_at`)                                  | Per line, the inverse of its finalize credit (POB line: Dr `deferred_revenue`; no-POB line: Dr `revenue`; top-up: Dr `customer_credit`), Dr `tax_payable` / Cr AR by the gross including credits applied; the void's wallet refund returns the credits |
-| Credit note finalized                                         | Dr `contra_revenue`, Dr `tax_payable` (when reversed) / Cr AR                                                                                                                                                                                     |
-| Credit note voided                                            | Inverse of its finalize entry, `reversal_of` set                                                                                                                                                                                                  |
-| Payment succeeded (`succeeded_at`)                            | Dr `cash` / Cr AR; method `CREDITS`: Dr `customer_credit` / Cr AR                                                                                                                                                                                 |
-| Payment reversed                                              | Inverse of the payment entry, `reversal_of` set                                                                                                                                                                                                   |
-| Refund succeeded (`succeeded_at`)                             | Dr AR / Cr `cash` (`GATEWAY`, `OUT_OF_BAND`) or Cr `customer_credit` (`WALLET`)                                                                                                                                                                   |
-| Recognition (last day of the period)                          | Per POB and ended month `P`: `δ = round(earned(P_end)) − posted(≤ P)`. Positive `δ`: Dr `unbilled_receivable` / Cr `revenue`; negative mirrors it |
-| Offset (last day of the period)                               | Per POB and ended month `P`, in the same transaction as its recognition: Dr `deferred_revenue` / Cr `unbilled_receivable` by `offset(P) −` offsets posted up to `P`; negative mirrors it |
+| Event (business date)                | Entry                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invoice finalized (`finalized_at`)   | Dr AR (invoice `total`, already net of credits), Dr `customer_credit` (credits applied) / Cr `tax_payable` (total tax), and per line by its line net: POB line Cr `deferred_revenue` (with its `pob_id`); no-POB `ONE_OFF` line Cr `revenue`; wallet top-up invoice (metadata carries `wallet_transaction_id`) Cr `customer_credit` |
+| Invoice voided (`voided_at`)         | Per line, the inverse of its finalize credit (POB line: Dr `deferred_revenue`; no-POB line: Dr `revenue`; top-up: Dr `customer_credit`), Dr `tax_payable` / Cr AR by the gross including credits applied; the void's wallet refund returns the credits                                                                              |
+| Credit note finalized                | Dr `contra_revenue`, Dr `tax_payable` (when reversed) / Cr AR                                                                                                                                                                                                                                                                       |
+| Credit note voided                   | Inverse of its finalize entry, `reversal_of` set                                                                                                                                                                                                                                                                                    |
+| Payment succeeded (`succeeded_at`)   | Dr `cash` / Cr AR; method `CREDITS`: Dr `customer_credit` / Cr AR                                                                                                                                                                                                                                                                   |
+| Payment reversed                     | Inverse of the payment entry, `reversal_of` set                                                                                                                                                                                                                                                                                     |
+| Refund succeeded (`succeeded_at`)    | Dr AR / Cr `cash` (`GATEWAY`, `OUT_OF_BAND`) or Cr `customer_credit` (`WALLET`)                                                                                                                                                                                                                                                     |
+| Recognition (last day of the period) | Per POB and ended month `P`: `δ = round(earned(P_end)) − posted(≤ P)`. Positive `δ`: Dr `unbilled_receivable` / Cr `revenue`; negative mirrors it                                                                                                                                                                                   |
+| Offset (last day of the period)      | Per POB and ended month `P`, in the same transaction as its recognition: Dr `deferred_revenue` / Cr `unbilled_receivable` by `offset(P) −` offsets posted up to `P`; negative mirrors it                                                                                                                                            |
 
 
 Credits and voids: an invoice of 100 with 20 credits applied, paid 80, then voided. Finalize Dr AR 80, Dr `customer_credit` 20; payment Cr AR 80; void Cr AR 100 (gross including credits); the void's wallet refund (`refund_succeeded`, `WALLET`) Dr AR 100 / Cr `customer_credit` 100. AR nets to 0, and `customer_credit` holds 80: the paid cash moved to the wallet, with the 20 credits restored.
@@ -615,12 +756,12 @@ Credits and voids: an invoice of 100 with 20 credits applied, paid 80, then void
 Example 1, prepaid: $1,200 annual from Jan 1, `period_even`, invoiced Jan 1 (Dr AR 1,200 / Cr `deferred_revenue` 1,200).
 
 
-| Run      | Period | `δ`  | `billed` | `earned` | Offset to date | Entries                                                                                            |
-| -------- | ------ | ---- | -------- | -------- | -------------- | -------------------------------------------------------------------------------------------------- |
-| Jan 2–31 | —      | —    | —        | —        | —              | None; January has not ended                                                                        |
+| Run      | Period | `δ`  | `billed` | `earned` | Offset to date | Entries                                                                                                   |
+| -------- | ------ | ---- | -------- | -------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| Jan 2–31 | —      | —    | —        | —        | —              | None; January has not ended                                                                               |
 | Feb 1    | Jan    | +100 | 1,200    | 100      | 100            | Dr `unbilled_receivable` 100 / Cr `revenue` 100; Dr `deferred_revenue` 100 / Cr `unbilled_receivable` 100 |
-| Feb 2    | Jan    | 0    | 1,200    | 100      | 100            | None                                                                                               |
-| Mar 1    | Feb    | +100 | 1,200    | 200      | 200            | Same pair, 100 each                                                                                |
+| Feb 2    | Jan    | 0    | 1,200    | 100      | 100            | None                                                                                                      |
+| Mar 1    | Feb    | +100 | 1,200    | 200      | 200            | Same pair, 100 each                                                                                       |
 
 
 January closes at deferred 1,100, unbilled 0; February at 1,000 and 0. A backdated modification that cuts January's earned to 90 makes the next run post `δ = −10` (Dr `revenue` 10 / Cr `unbilled_receivable` 10) and an offset of −10 (Dr `unbilled_receivable` 10 / Cr `deferred_revenue` 10): deferred after March 1 becomes 1,010.
@@ -628,14 +769,16 @@ January closes at deferred 1,100, unbilled 0; February at 1,000 and 0. A backdat
 Example 2, arrears usage posted out of order: January usage $300, invoiced Feb 1 at 00:05; the recognition run for January runs Feb 1 at 02:00. February usage $250, invoiced Mar 1.
 
 
-| When         | Entry                                                                                              | Period |
-| ------------ | -------------------------------------------------------------------------------------------------- | ------ |
-| Feb 1, 00:05 | Invoice: Dr AR 300 / Cr `deferred_revenue` 300                                                     | Feb    |
-| Feb 1, 02:00 | January recognition: Dr `unbilled_receivable` 300 / Cr `revenue` 300                               | Jan    |
-| Feb 1, 02:00 | January offset: billed by Jan 31 = 0, earned 300, `min` = 0; none                                  | Jan    |
-| Mar 1, 00:05 | Invoice: Dr AR 250 / Cr `deferred_revenue` 250                                                     | Mar    |
-| Mar 1, 02:00 | February recognition: Dr `unbilled_receivable` 250 / Cr `revenue` 250                              | Feb    |
+| When         | Entry                                                                                                                      | Period |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Feb 1, 00:05 | Invoice: Dr AR 300 / Cr `deferred_revenue` 300                                                                             | Feb    |
+| Feb 1, 02:00 | January recognition: Dr `unbilled_receivable` 300 / Cr `revenue` 300                                                       | Jan    |
+| Feb 1, 02:00 | January offset: billed by Jan 31 = 0, earned 300, `min` = 0; none                                                          | Jan    |
+| Mar 1, 00:05 | Invoice: Dr AR 250 / Cr `deferred_revenue` 250                                                                             | Mar    |
+| Mar 1, 02:00 | February recognition: Dr `unbilled_receivable` 250 / Cr `revenue` 250                                                      | Feb    |
 | Mar 1, 02:00 | February offset: billed by Feb 28 = 300, earned 550, `min` = 300; Dr `deferred_revenue` 300 / Cr `unbilled_receivable` 300 | Feb    |
+
+
 
 
 January closes at unbilled 300, deferred 0; February at unbilled 250 (300 + 250 − 300), deferred 0. Posting the 00:05 invoices after the 02:00 runs gives the same balances.
@@ -690,6 +833,8 @@ type JournalService interface {
 - Credit notes set `finalized_at` on finalize and `voided_at` on void (`creditnote.go:794`, `:679`; both are null today). These are the business dates of their entries.
 - Payment hooks fire after the payment row is saved (`payment_processor.go:171-179`), so a payment entry never posts for an unsaved row.
 - Quantity-change proration invoices set `subscription_line_item_id` on their line (`subscription_modification_quantity.go:1068`; only `price_id` is set today). Without it the line resolves no POB, posts as revenue at finalize, and is recognized again through the POB.
+
+
 
 ### Step 7 — Rollforward & Waterfall
 
@@ -833,13 +978,13 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 **Movement categories**, fixed in code from the entry's `event_type` and the line's account. The offset is one entry: it shows as `earned` in the deferred rollforward and as `invoiced` in the unbilled rollforward.
 
 
-| Category      | Event types                                   |
-| ------------- | --------------------------------------------- |
+| Category      | Event types                                                                      |
+| ------------- | -------------------------------------------------------------------------------- |
 | `invoiced`    | `invoice_finalized`, `invoice_voided`; `revenue_offset` on `unbilled_receivable` |
-| `earned`      | `revenue_earned`; `revenue_offset` on `deferred_revenue`     |
-| `adjustments` | `credit_note_finalized`, `credit_note_voided` |
-| `payments`    | `payment_succeeded`, `payment_reversed`       |
-| `refunds`     | `refund_succeeded`                            |
+| `earned`      | `revenue_earned`; `revenue_offset` on `deferred_revenue`                         |
+| `adjustments` | `credit_note_finalized`, `credit_note_voided`                                    |
+| `payments`    | `payment_succeeded`, `payment_reversed`                                          |
+| `refunds`     | `refund_succeeded`                                                               |
 
 
 **Rollforward** is journal only. `opening(P)` = signed lines of entries in periods before `P`; movements are the lines of entries in `P`; `closing = opening + Σ movements`. Only ended months can be requested: the open month is not reported until it ends. With `posted_by`, only entries posted at or before it count, which reproduces a report as it was then. Without close, a recognition correction posts to its original month (Step 6), so ended months can change; `posted_by` shows what changed. (The waterfall's `as_of` is different: the report date.)
@@ -855,11 +1000,11 @@ Example, `group_by=customer_id`, Jan–Apr, on Mar 15 (abridged):
 Example: $1,200 annual prepaid and $100/month recurring (in advance, no end date), both `period_even` from Jan 1; reported on Mar 15.
 
 
-| Report               | Jan                                     | Feb                                       | Mar (open)                                                             |
-| -------------------- | --------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
-| Deferred rollforward | 0 + 1,300 invoiced − 200 earned = 1,100 | 1,100 + 100 invoiced − 200 earned = 1,000 | Not available until March ends                                         |
-| Waterfall, annual    | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec 100 scheduled                 |
-| Waterfall, recurring | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec nothing (no invoice yet)      |
+| Report               | Jan                                     | Feb                                       | Mar (open)                                                        |
+| -------------------- | --------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------- |
+| Deferred rollforward | 0 + 1,300 invoiced − 200 earned = 1,100 | 1,100 + 100 invoiced − 200 earned = 1,000 | Not available until March ends                                    |
+| Waterfall, annual    | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec 100 scheduled            |
+| Waterfall, recurring | 100 actual                              | 100 actual                                | 45.16 pending + 54.84 scheduled; Apr–Dec nothing (no invoice yet) |
 
 
 Pending on Mar 15 is 14 of 31 days for each: 100 × 14/31 = 45.16.
