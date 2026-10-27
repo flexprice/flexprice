@@ -52,6 +52,7 @@ type Handlers struct {
 	Refund                   *v1.RefundHandler
 	Tax                      *v1.TaxHandler
 	FXRate                   *v1.FXRateHandler
+	BillingEntity            *v1.BillingEntityHandler
 	Coupon                   *v1.CouponHandler
 	Commitment               *v1.CommitmentHandler
 	Webhook                  *v1.WebhookHandler
@@ -574,6 +575,14 @@ func NewRouter(
 			fxRates.GET("/:id", handlers.FXRate.GetFXRate)
 			fxRates.PUT("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.UpdateFXRate)
 			fxRates.DELETE("/:id", write(types.EntityFXRate, types.ActionWrite), handlers.FXRate.DeleteFXRate)
+		}
+
+		billingEntities := v1Private.Group("/billing-entities")
+		{
+			billingEntities.GET("", handlers.BillingEntity.ListBillingEntities)
+			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
+			billingEntities.GET("/:id", handlers.BillingEntity.GetBillingEntity)
+			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)
 		}
 
 		taxAssociations := tax.Group("/associations")
