@@ -127,6 +127,11 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 		return
 	}
 
+	if err := h.service.CheckCloneAllowed(c.Request.Context()); err != nil {
+		c.Error(err)
+		return
+	}
+
 	// Validate that the source environment exists
 	if _, err := h.service.GetEnvironment(c.Request.Context(), sourceEnvID); err != nil {
 		c.Error(err)

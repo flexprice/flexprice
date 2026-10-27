@@ -16,6 +16,8 @@ type EnvironmentService interface {
 	GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error)
 	GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error)
 	UpdateEnvironment(ctx context.Context, id string, req dto.UpdateEnvironmentRequest) (*dto.EnvironmentResponse, error)
+	// CheckCloneAllowed rejects cloning for tenants with billing entities.
+	CheckCloneAllowed(ctx context.Context) error
 }
 
 type environmentService struct {
@@ -81,7 +83,24 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 		return nil, err
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).EnsureDefaultForEnvironment(ctx, env.ID); err != nil {
+		return nil, err
+	}
+
 	return dto.NewEnvironmentResponse(env), nil
+}
+
+func (s *environmentService) CheckCloneAllowed(ctx context.Context) error {
+	mode, err := NewBillingEntityService(s.ServiceParams).Status(ctx)
+	if err != nil {
+		return err
+	}
+	if mode != types.BillingEntityModeOff {
+		return ierr.NewError("environment cloning is not available for tenants with billing entities").
+			WithHint("Environments cannot be cloned once billing entities are enabled").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error) {

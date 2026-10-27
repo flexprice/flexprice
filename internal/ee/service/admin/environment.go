@@ -48,6 +48,9 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req admindto
 	if err := s.EnvironmentRepo.Create(ctx, env); err != nil {
 		return nil, err
 	}
+	if err := service.NewBillingEntityService(s.ServiceParams).EnsureDefaultForEnvironment(ctx, env.ID); err != nil {
+		return nil, err
+	}
 
 	if s.Logger != nil {
 		s.Logger.Info(ctx, "created environment", "environment_id", env.ID, "tenant_id", tenantID, "type", env.Type.String())

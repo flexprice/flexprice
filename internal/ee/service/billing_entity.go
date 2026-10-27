@@ -26,6 +26,8 @@ type BillingEntityService interface {
 	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
+	// EnsureDefaultForEnvironment gives a new environment its default entity once the tenant is enabling or enabled.
+	EnsureDefaultForEnvironment(ctx context.Context, environmentID string) error
 
 	Create(ctx context.Context, req dto.CreateBillingEntityRequest) (*dto.BillingEntityResponse, error)
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
@@ -358,4 +360,16 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 		return nil, err
 	}
 	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
+}
+
+func (s *billingEntityService) EnsureDefaultForEnvironment(ctx context.Context, environmentID string) error {
+	mode, err := s.mode(ctx)
+	if err != nil {
+		return err
+	}
+	if mode == types.BillingEntityModeOff {
+		return nil
+	}
+	_, err = s.GetOrCreateDefault(types.SetEnvironmentID(ctx, environmentID))
+	return err
 }
