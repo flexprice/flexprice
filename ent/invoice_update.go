@@ -320,6 +320,18 @@ func (_u *InvoiceUpdate) ClearFxConversion() *InvoiceUpdate {
 	return _u
 }
 
+// SetSellerSnapshot sets the "seller_snapshot" field.
+func (_u *InvoiceUpdate) SetSellerSnapshot(v *types.SellerSnapshot) *InvoiceUpdate {
+	_u.mutation.SetSellerSnapshot(v)
+	return _u
+}
+
+// ClearSellerSnapshot clears the value of the "seller_snapshot" field.
+func (_u *InvoiceUpdate) ClearSellerSnapshot() *InvoiceUpdate {
+	_u.mutation.ClearSellerSnapshot()
+	return _u
+}
+
 // SetDescription sets the "description" field.
 func (_u *InvoiceUpdate) SetDescription(v string) *InvoiceUpdate {
 	_u.mutation.SetDescription(v)
@@ -932,6 +944,12 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.SellerSnapshot(); ok {
+		_spec.SetField(invoice.FieldSellerSnapshot, field.TypeJSON, value)
+	}
+	if _u.mutation.SellerSnapshotCleared() {
+		_spec.ClearField(invoice.FieldSellerSnapshot, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)
 	}
@@ -1450,6 +1468,18 @@ func (_u *InvoiceUpdateOne) SetFxConversion(v *types.FxConversion) *InvoiceUpdat
 // ClearFxConversion clears the value of the "fx_conversion" field.
 func (_u *InvoiceUpdateOne) ClearFxConversion() *InvoiceUpdateOne {
 	_u.mutation.ClearFxConversion()
+	return _u
+}
+
+// SetSellerSnapshot sets the "seller_snapshot" field.
+func (_u *InvoiceUpdateOne) SetSellerSnapshot(v *types.SellerSnapshot) *InvoiceUpdateOne {
+	_u.mutation.SetSellerSnapshot(v)
+	return _u
+}
+
+// ClearSellerSnapshot clears the value of the "seller_snapshot" field.
+func (_u *InvoiceUpdateOne) ClearSellerSnapshot() *InvoiceUpdateOne {
+	_u.mutation.ClearSellerSnapshot()
 	return _u
 }
 
@@ -2094,6 +2124,12 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if _u.mutation.FxConversionCleared() {
 		_spec.ClearField(invoice.FieldFxConversion, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.SellerSnapshot(); ok {
+		_spec.SetField(invoice.FieldSellerSnapshot, field.TypeJSON, value)
+	}
+	if _u.mutation.SellerSnapshotCleared() {
+		_spec.ClearField(invoice.FieldSellerSnapshot, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Description(); ok {
 		_spec.SetField(invoice.FieldDescription, field.TypeString, value)

@@ -19,6 +19,8 @@ const (
 	FieldEnvironmentID = "environment_id"
 	// FieldYearMonth holds the string denoting the year_month field in the database.
 	FieldYearMonth = "year_month"
+	// FieldPrefix holds the string denoting the prefix field in the database.
+	FieldPrefix = "prefix"
 	// FieldLastValue holds the string denoting the last_value field in the database.
 	FieldLastValue = "last_value"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -35,6 +37,7 @@ var Columns = []string{
 	FieldTenantID,
 	FieldEnvironmentID,
 	FieldYearMonth,
+	FieldPrefix,
 	FieldLastValue,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -86,6 +89,11 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByYearMonth orders the results by the year_month field.
 func ByYearMonth(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldYearMonth, opts...).ToFunc()
+}
+
+// ByPrefix orders the results by the prefix field.
+func ByPrefix(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrefix, opts...).ToFunc()
 }
 
 // ByLastValue orders the results by the last_value field.
