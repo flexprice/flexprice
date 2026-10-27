@@ -494,17 +494,16 @@ Phase 2
 | # | Question | Proposal |
 | --- | --- | --- |
 | 1 | Can one buyer be billed under different entities? | If yes, the buyer gets a separate customer under each entity, each with its own config (external ID, billing details, tax, currency, payment methods, wallets) and its own usage stream. One customer across entities needs subscription-level entities and per-subscription usage attribution; out of scope now |
-| 2 | Credit note numbering per entity? | To discuss |
-| 3 | Accounting and CRM connectors (QuickBooks, Zoho Books, HubSpot, Tabs) in Phase 2? | Yes; each company's books stay separate |
-| 4 | Stripe Tax for non-default entities in Phase 1 | Native tax only until Phase 2 |
-| 5 | Disabling an entity with drafts or scheduled work | Block disable while drafts or active subscriptions exist |
-| 6 | All-entities reporting view | Defer; design after Phase 2 |
+| 2 | Accounting and CRM connectors (QuickBooks, Zoho Books, HubSpot, Tabs) in Phase 2? | Yes; each company's books stay separate |
+| 3 | Stripe Tax for non-default entities in Phase 1 | Native tax only until Phase 2 |
+| 4 | Disabling an entity with drafts or scheduled work | Block disable while drafts or active subscriptions exist |
+| 5 | All-entities reporting view | Defer; design after Phase 2 |
 
 Decided: customer-level entities; tenant-level irreversible switch; mode on `tenants`; entity stored
 only on customers and connections, derived everywhere else; entity selected by list filters and
 customer/connection create bodies, no header; lists without a filter span all entities; responses carry
 `billing_entity_id` on top-level billing resources; get-by-ID not entity-scoped; per-entity invoice
-counter with required distinct prefix; no backfill needed for environments created after enablement.
+counter with required distinct prefix; credit notes keep their random `CN-` IDs, unchanged; no backfill needed for environments created after enablement.
 
 ## 14. References
 
