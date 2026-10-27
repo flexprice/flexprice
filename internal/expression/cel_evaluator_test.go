@@ -323,3 +323,12 @@ func TestCELEvaluator_NonNumericErrorOmitsRawValue(t *testing.T) {
 		t.Fatalf("error message should name the property: %v", err)
 	}
 }
+
+func TestCELEvaluator_Identifiers(t *testing.T) {
+	ids, err := NewCELEvaluator().Identifiers("max(input_tokens, 1) * 2 + output_tokens")
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"input_tokens", "output_tokens"}, ids)
+
+	_, err = NewCELEvaluator().Identifiers("input_tokens +")
+	assert.Error(t, err)
+}

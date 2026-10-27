@@ -424,6 +424,20 @@ func (_c *InvoiceLineItemCreate) SetNillableSubscriptionLineItemID(v *string) *I
 	return _c
 }
 
+// SetCommitmentID sets the "commitment_id" field.
+func (_c *InvoiceLineItemCreate) SetCommitmentID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetCommitmentID(v)
+	return _c
+}
+
+// SetNillableCommitmentID sets the "commitment_id" field if the given value is not nil.
+func (_c *InvoiceLineItemCreate) SetNillableCommitmentID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetCommitmentID(*v)
+	}
+	return _c
+}
+
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
 func (_c *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(v decimal.Decimal) *InvoiceLineItemCreate {
 	_c.mutation.SetAdjustedEntitlementQuantity(v)
@@ -778,6 +792,10 @@ func (_c *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Creat
 	if value, ok := _c.mutation.SubscriptionLineItemID(); ok {
 		_spec.SetField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString, value)
 		_node.SubscriptionLineItemID = &value
+	}
+	if value, ok := _c.mutation.CommitmentID(); ok {
+		_spec.SetField(invoicelineitem.FieldCommitmentID, field.TypeString, value)
+		_node.CommitmentID = &value
 	}
 	if value, ok := _c.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)

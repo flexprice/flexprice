@@ -26,8 +26,45 @@ import (
 // from the real translate/execute/shape pipeline already covered by
 // internal/ee/service/analytics_test.go.
 type stubAnalyticsService struct {
-	result *dto.AnalyticsQueryResult
-	err    error
+	result  *dto.AnalyticsQueryResult
+	err     error
+	catalog *dto.ReportCatalogResponse
+	lastKey string
+	lastReq *dto.ReportQueryRequest
+
+	views    []*analytics.View
+	lastView *analytics.View
+	lastID   string
+}
+
+func (s *stubAnalyticsService) ListViews(_ context.Context, _ types.Family) ([]*analytics.View, error) {
+	return s.views, s.err
+}
+
+func (s *stubAnalyticsService) GetView(_ context.Context, _ string) (*analytics.View, error) {
+	if len(s.views) == 0 {
+		return nil, s.err
+	}
+	return s.views[0], s.err
+}
+
+func (s *stubAnalyticsService) UpdateView(_ context.Context, v *analytics.View) error {
+	s.lastView = v
+	return s.err
+}
+
+func (s *stubAnalyticsService) DeleteView(_ context.Context, id string) error {
+	s.lastID = id
+	return s.err
+}
+
+func (s *stubAnalyticsService) ListReports(_ context.Context) (*dto.ReportCatalogResponse, error) {
+	return s.catalog, s.err
+}
+
+func (s *stubAnalyticsService) RunReport(_ context.Context, key string, req *dto.ReportQueryRequest) (*dto.AnalyticsQueryResult, error) {
+	s.lastKey, s.lastReq = key, req
+	return s.result, s.err
 }
 
 func (s *stubAnalyticsService) ExecuteView(_ context.Context, _ *analytics.ViewDefinition, _ map[string][]string) (*dto.AnalyticsQueryResult, error) {
@@ -72,6 +109,12 @@ func setupAnalyticsRouter(t *testing.T, svc service.AnalyticsService) *gin.Engin
 	router.Use(middleware.ErrorHandler())
 	router.POST("/v1/analytics/query", handler.Query)
 	router.POST("/v1/analytics/views", handler.CreateView)
+	router.GET("/v1/analytics/views", handler.ListViews)
+	router.GET("/v1/analytics/views/:id", handler.GetView)
+	router.PUT("/v1/analytics/views/:id", handler.UpdateView)
+	router.DELETE("/v1/analytics/views/:id", handler.DeleteView)
+	router.GET("/v1/analytics/reports", handler.ListReports)
+	router.POST("/v1/analytics/reports/:key/query", handler.RunReport)
 
 	return router
 }
@@ -156,10 +199,7 @@ func TestAnalyticsQuery_MalformedBody_ReturnsBadRequest(t *testing.T) {
 	}
 }
 
-// TestAnalyticsCreateView_ResponseIsDTONotDomainModel proves CreateView returns
-// the ViewResponse DTO rather than the raw *analytics.View, so
-// tenant_id/status/created_by/timestamps (from the embedded types.BaseModel)
-// are never exposed to the client.
+// Response must be the DTO.
 func TestAnalyticsCreateView_ResponseIsDTONotDomainModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -190,9 +230,8 @@ func TestAnalyticsCreateView_ResponseIsDTONotDomainModel(t *testing.T) {
 
 	require.NotContains(t, resp, "tenant_id")
 	require.NotContains(t, resp, "status")
-	require.NotContains(t, resp, "created_by")
-	require.NotContains(t, resp, "created_at")
-	require.NotContains(t, resp, "updated_at")
+	require.Contains(t, resp, "created_at")
+	require.Contains(t, resp, "updated_at")
 	require.NotContains(t, resp, "updated_by")
 }
 
@@ -222,4 +261,93 @@ func TestAnalyticsQuery_ServiceError_MapsToNotFound(t *testing.T) {
 	var errResp ierr.ErrorResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &errResp))
 	require.Equal(t, "no such view", errResp.Message)
+}
+
+func doRunReport(r *gin.Engine, key, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/analytics/reports/"+key+"/query", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestListReportsHandler_OK(t *testing.T) {
+	stub := &stubAnalyticsService{catalog: &dto.ReportCatalogResponse{Items: []*dto.ReportCatalogEntry{{Key: "invoice_total", Name: "Total billing"}}}}
+	r := setupAnalyticsRouter(t, stub)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/reports", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), `"key":"invoice_total"`)
+}
+
+func TestRunReportHandler_PassesKeyAndBody(t *testing.T) {
+	stub := &stubAnalyticsService{result: cannedBreakdownResult()}
+	r := setupAnalyticsRouter(t, stub)
+	w := doRunReport(r, "invoice_total", `{"shape":"timeseries","range":"2026-09-01..2026-10-01","grain":"month","compare":"previous_period"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "invoice_total", stub.lastKey)
+	require.Equal(t, "previous_period", stub.lastReq.Compare)
+}
+
+func TestRunReportHandler_MissingShapeIs400(t *testing.T) {
+	r := setupAnalyticsRouter(t, &stubAnalyticsService{result: cannedBreakdownResult()})
+	w := doRunReport(r, "invoice_total", `{"range":"2026-09-01..2026-10-01"}`)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestRunReportHandler_NotFoundIs404(t *testing.T) {
+	r := setupAnalyticsRouter(t, &stubAnalyticsService{err: ierr.NewError("report not found").Mark(ierr.ErrNotFound)})
+	w := doRunReport(r, "nope", `{"shape":"scalar","range":"2026-09-01..2026-10-01"}`)
+	require.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestViewHandlers_ListGetUpdateDelete(t *testing.T) {
+	v := &analytics.View{ID: "view_1", Name: "Acme", Version: 2, Definition: &analytics.ViewDefinition{Family: types.FamilyReport}}
+	v.CreatedBy = "user_1"
+	stub := &stubAnalyticsService{views: []*analytics.View{v}}
+	r := setupAnalyticsRouter(t, stub)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/views?family=report", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Contains(t, w.Body.String(), `"items":[{"id":"view_1"`)
+	require.Contains(t, w.Body.String(), `"created_by":"user_1"`)
+	require.NotContains(t, w.Body.String(), `tenant_id`)
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/views/view_1", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	body := `{"name":"Renamed","definition":{"family":"report","shape":"scalar","metrics":["invoice_total"],"time":{"range":"this_month"}}}`
+	req := httptest.NewRequest(http.MethodPut, "/v1/analytics/views/view_1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "view_1", stub.lastView.ID)
+	require.Equal(t, "Renamed", stub.lastView.Name)
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/v1/analytics/views/view_1", nil))
+	require.Equal(t, http.StatusNoContent, w.Code)
+	require.Equal(t, "view_1", stub.lastID)
+}
+
+func TestViewHandlers_Errors(t *testing.T) {
+	r := setupAnalyticsRouter(t, &stubAnalyticsService{err: ierr.NewError("nope").Mark(ierr.ErrNotFound)})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/v1/analytics/views/x", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
+
+	r = setupAnalyticsRouter(t, &stubAnalyticsService{})
+	long := strings.Repeat("a", 256)
+	req := httptest.NewRequest(http.MethodPut, "/v1/analytics/views/x", strings.NewReader(`{"name":"`+long+`","definition":{"shape":"scalar","metrics":["invoice_total"]}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/analytics/views?family=bogus", nil))
+	require.Equal(t, http.StatusBadRequest, w.Code)
 }

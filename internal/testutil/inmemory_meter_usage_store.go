@@ -1061,27 +1061,39 @@ func (s *InMemoryMeterUsageStore) meterUsageForExportWindow(ctx context.Context,
 	return filtered
 }
 
-// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.
-func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID mirrors ClickHouse: the latest row per meter within window,
+// ordered by meter id.
+func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string, window events.TimeRange) ([]*events.MeterUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	latestByMeterID := make(map[string]*events.MeterUsage)
 	for _, r := range s.records {
-		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
-			return &events.MeterUsage{
-				Event: events.Event{
-					ID:                 eventID,
-					ExternalCustomerID: r.ExternalCustomerID,
-					IngestedAt:         r.IngestedAt,
-					Properties:         r.Properties,
-					Timestamp:          r.Timestamp,
-				},
-				MeterID:  r.MeterID,
-				QtyTotal: r.QtyTotal,
-			}, nil
+		if r.TenantID != tenantID || r.EnvironmentID != environmentID || r.ExternalCustomerID != externalCustomerID || r.ID != eventID {
+			continue
+		}
+		if r.Timestamp.Before(window.Start) || !r.Timestamp.Before(window.End) {
+			continue
+		}
+		if latest, ok := latestByMeterID[r.MeterID]; ok && !r.IngestedAt.After(latest.IngestedAt) {
+			continue
+		}
+		latestByMeterID[r.MeterID] = &events.MeterUsage{
+			Event: events.Event{
+				ID:                 eventID,
+				ExternalCustomerID: r.ExternalCustomerID,
+				IngestedAt:         r.IngestedAt,
+				Properties:         r.Properties,
+				Timestamp:          r.Timestamp,
+			},
+			MeterID:  r.MeterID,
+			QtyTotal: r.QtyTotal,
 		}
 	}
-	return nil, nil
+
+	out := lo.Values(latestByMeterID)
+	sort.Slice(out, func(i, j int) bool { return out[i].MeterID < out[j].MeterID })
+	return out, nil
 }
 
 // GetUsageActivitySince mirrors the ClickHouse activity query: distinct
@@ -1189,6 +1201,71 @@ func (s *InMemoryMeterUsageStore) GetDailyUsageByMeter(_ context.Context, params
 		byMeter[k.meterID] = append(byMeter[k.meterID], events.DailyUsagePoint{Day: k.day, Qty: dayTotals[k]})
 	}
 	return byMeter, nil
+}
+
+// GetPropertyKeys counts property keys over all matching records; test data is too small to need sampling.
+func (s *InMemoryMeterUsageStore) GetPropertyKeys(_ context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	counts := make(map[string]uint64)
+	for _, r := range s.records {
+		if !matchPropertyLookup(r, params) {
+			continue
+		}
+		for key := range r.Properties {
+			counts[key]++
+		}
+	}
+	return sortedByCount(counts), nil
+}
+
+// GetPropertyValues mirrors the ClickHouse query: string values only, as JSONExtractString returns "" otherwise.
+func (s *InMemoryMeterUsageStore) GetPropertyValues(_ context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	counts := make(map[string]uint64)
+	for _, r := range s.records {
+		if !matchPropertyLookup(r, params) {
+			continue
+		}
+		if value, _ := r.Properties[params.Key].(string); value != "" && strings.HasPrefix(value, params.Prefix) {
+			counts[value]++
+		}
+	}
+
+	values := sortedByCount(counts)
+	if len(values) > params.Limit {
+		values = values[:params.Limit]
+	}
+	return values, nil
+}
+
+func matchPropertyLookup(r *events.MeterUsage, params *events.PropertyLookupParams) bool {
+	return r.TenantID == params.TenantID && r.EnvironmentID == params.EnvironmentID &&
+		(params.ExternalCustomerID == "" || r.ExternalCustomerID == params.ExternalCustomerID) && lo.Contains(params.MeterIDs, r.MeterID) &&
+		!r.Timestamp.Before(params.StartTime) && r.Timestamp.Before(params.EndTime)
+}
+
+// sortedByCount returns the map's keys by count, highest first, ties by name.
+func sortedByCount(counts map[string]uint64) []string {
+	keys := lo.Keys(counts)
+	sort.Slice(keys, func(i, j int) bool {
+		if counts[keys[i]] != counts[keys[j]] {
+			return counts[keys[i]] > counts[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	return keys
 }
 
 // Ensure interface compliance

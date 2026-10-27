@@ -289,3 +289,27 @@ func TestResolveVariables_PreservesShapeMetricsDimensionsSortLimit(t *testing.T)
 	assert.Equal(t, []*SortSpec{{Field: "usage_quantity", Dir: types.SortDirectionDesc}}, rv.Sort)
 	assert.Equal(t, 25, rv.Limit)
 }
+
+func TestResolveVariables_CalendarPresets(t *testing.T) {
+	now := time.Now().UTC()
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for rng, wantFrom := range map[string]time.Time{
+		"this_month":   thisMonth,
+		"last_month":   thisMonth.AddDate(0, -1, 0),
+		"this_quarter": time.Date(now.Year(), time.Month((int(now.Month())-1)/3*3+1), 1, 0, 0, 0, 0, time.UTC),
+		"this_year":    time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC),
+	} {
+		def := ViewDefinition{
+			Shape:   types.ShapeBreakdown,
+			Metrics: []types.Metric{types.MetricUsageQuantity},
+			Time:    TimeSpecRaw{Range: rng, Grain: types.GrainDay},
+		}
+		rv, err := ResolveVariables(&def, nil)
+		require.NoError(t, err, rng)
+		assert.True(t, wantFrom.Equal(rv.Time.From), rng)
+		assert.True(t, rv.Time.To.After(rv.Time.From), rng)
+		days, err := ReportRangeMaxDays(rng)
+		require.NoError(t, err, rng)
+		assert.LessOrEqual(t, rv.Time.To.Sub(rv.Time.From), time.Duration(days)*24*time.Hour, rng)
+	}
+}

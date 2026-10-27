@@ -327,21 +327,23 @@ func TestInvoiceConversion(t *testing.T) {
 func (s *InvoiceConversionSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.svc = NewInvoiceService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
-		FXRateRepo:          s.GetStores().FXRateRepo,
-		TaxRateRepo:         s.GetStores().TaxRateRepo,
-		TaxAppliedRepo:      s.GetStores().TaxAppliedRepo,
-		TaxAssociationRepo:  s.GetStores().TaxAssociationRepo,
-		SettingsRepo:        s.GetStores().SettingsRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		EventPublisher:      s.GetPublisher(),
-		WebhookPublisher:    s.GetWebhookPublisher(),
+		Logger:                 s.GetLogger(),
+		Config:                 s.GetConfig(),
+		DB:                     s.GetDB(),
+		SubRepo:                s.GetStores().SubscriptionRepo,
+		CustomerRepo:           s.GetStores().CustomerRepo,
+		InvoiceRepo:            s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
+		ConnectionRepo:         s.GetStores().ConnectionRepo,
+		InvoiceLineItemRepo:    s.GetStores().InvoiceLineItemRepo,
+		FXRateRepo:             s.GetStores().FXRateRepo,
+		TaxRateRepo:            s.GetStores().TaxRateRepo,
+		TaxAppliedRepo:         s.GetStores().TaxAppliedRepo,
+		TaxAssociationRepo:     s.GetStores().TaxAssociationRepo,
+		SettingsRepo:           s.GetStores().SettingsRepo,
+		WalletRepo:             s.GetStores().WalletRepo,
+		EventPublisher:         s.GetPublisher(),
+		WebhookPublisher:       s.GetWebhookPublisher(),
 	}).(*invoiceService)
 }
 
@@ -745,19 +747,21 @@ func (s *InvoiceConversionSuite) TestRejectPrepaidCrossCurrencyOneOff() {
 // TestPaymentBeforeConversionRejected covers the no-payment-before-conversion guard.
 func (s *InvoiceConversionSuite) TestPaymentBeforeConversionRejected() {
 	paySvc := NewPaymentService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		InvoiceLineItemRepo: s.GetStores().InvoiceLineItemRepo,
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
-		PaymentRepo:         s.GetStores().PaymentRepo,
-		SettingsRepo:        s.GetStores().SettingsRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		EventPublisher:      s.GetPublisher(),
-		WebhookPublisher:    s.GetWebhookPublisher(),
+		Logger:                 s.GetLogger(),
+		Config:                 s.GetConfig(),
+		DB:                     s.GetDB(),
+		CustomerRepo:           s.GetStores().CustomerRepo,
+		InvoiceRepo:            s.GetStores().InvoiceRepo,
+		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
+		ConnectionRepo:         s.GetStores().ConnectionRepo,
+		InvoiceLineItemRepo:    s.GetStores().InvoiceLineItemRepo,
+		SubRepo:                s.GetStores().SubscriptionRepo,
+		CheckoutSessionRepo:    s.GetStores().CheckoutSessionRepo,
+		PaymentRepo:            s.GetStores().PaymentRepo,
+		SettingsRepo:           s.GetStores().SettingsRepo,
+		WalletRepo:             s.GetStores().WalletRepo,
+		EventPublisher:         s.GetPublisher(),
+		WebhookPublisher:       s.GetWebhookPublisher(),
 	}).(*paymentService)
 
 	s.seedCustomer("cust_pay_inr", lo.ToPtr("inr"))

@@ -12,6 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func withSQL(t *testing.T, m types.Metric, sq *billingSQL) {
+	t.Helper()
+	prev := billingSQLs[m]
+	billingSQLs[m] = sq
+	t.Cleanup(func() { billingSQLs[m] = prev })
+}
+
 func TestBillingSQL_InvoiceTotalUsesConstants(t *testing.T) {
 	_, sq, ok := lookupBillingMetric(types.MetricInvoiceTotal)
 	require.True(t, ok)
@@ -27,6 +34,38 @@ func TestBillingSQL_MatchesDomainRegistry(t *testing.T) {
 		require.True(t, ok, "metric %q has no SQL", m)
 		for d := range sq.DimExprs {
 			assert.True(t, slices.Contains(bm.Dimensions, d), "metric %q: unknown dimension %q", m, d)
+		}
+	}
+}
+
+func TestReportCatalog_AgreesWithRegistry(t *testing.T) {
+	entries := analytics.ReportCatalog()
+	require.NotEmpty(t, entries)
+	for _, e := range entries {
+		bm, sq, ok := lookupBillingMetric(e.Key)
+		require.True(t, ok, "catalog key %q has no billing metric", e.Key)
+		if sq.Agg != "" {
+			assert.Equal(t, sq.Agg+"("+sq.Arg+")", sq.Measure, "measure of %q", e.Key)
+		} else if sq.CompareMeasure == nil {
+			assert.False(t, e.SupportsCompare, "compare of %q", e.Key)
+		}
+		for _, s := range e.Shapes {
+			assert.Contains(t, bm.Shapes, s, "shape %q of %q", s, e.Key)
+		}
+		assert.Contains(t, e.Shapes, e.DefaultShape)
+		for _, d := range e.Dimensions {
+			assert.True(t, slices.Contains(bm.Dimensions, d.Key), "dimension %q of %q", d.Key, e.Key)
+			assert.NotEmpty(t, d.Label)
+		}
+		for _, g := range e.Grains {
+			assert.Contains(t, []types.Grain{types.GrainDay, types.GrainWeek, types.GrainMonth}, g)
+		}
+		assert.Contains(t, []types.ReportCategory{types.ReportCategoryBilling, types.ReportCategoryReceivables, types.ReportCategoryCustomers, types.ReportCategoryCredits, types.ReportCategoryUsage}, e.Category)
+		assert.Contains(t, []types.ReportKind{types.ReportKindFlow, types.ReportKindRatio, types.ReportKindSnapshot}, e.Kind)
+		assert.Contains(t, []types.ReportValueType{types.ReportValueTypeMoney, types.ReportValueTypeCount, types.ReportValueTypeDays}, e.ValueType)
+		if e.Kind == types.ReportKindSnapshot {
+			assert.False(t, e.SupportsCompare)
+			assert.Empty(t, e.Grains)
 		}
 	}
 }

@@ -278,16 +278,30 @@ func (p *Price) CalculateAmount(quantity decimal.Decimal) decimal.Decimal {
 	return result
 }
 
-// CalculateTierAmount performs calculation for tier price with flat and fixed ampunt
+// CalculateTierAmount performs calculation for tier price with flat and fixed ampunt.
+// A package tier charges unit_amount per package of divide_by units.
 func (pt *PriceTier) CalculateTierAmount(quantity decimal.Decimal, currency string) decimal.Decimal {
-	tierCost := pt.UnitAmount.Mul(quantity)
+	units := quantity
+	if tq := pt.TransformQuantity; tq != nil && tq.DivideBy > 0 {
+		units = quantity.Div(decimal.NewFromInt(int64(tq.DivideBy)))
+		if tq.Round == types.ROUND_DOWN {
+			units = units.Floor()
+		} else {
+			units = units.Ceil()
+		}
+	}
+	tierCost := pt.UnitAmount.Mul(units)
 	if pt.FlatAmount != nil {
 		tierCost = tierCost.Add(*pt.FlatAmount)
 	}
 	return tierCost
 }
 
+// GetPerUnitCost returns the tier's rate per unit; a package tier spreads unit_amount over divide_by.
 func (pt *PriceTier) GetPerUnitCost() decimal.Decimal {
+	if tq := pt.TransformQuantity; tq != nil && tq.DivideBy > 0 {
+		return pt.UnitAmount.Div(decimal.NewFromInt(int64(tq.DivideBy)))
+	}
 	return pt.UnitAmount
 }
 
@@ -357,6 +371,9 @@ type PriceTier struct {
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
 	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
+
+	// transform_quantity bills unit_amount per package of divide_by units; round defaults to up
+	TransformQuantity *TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 // TODO : comeup with a better way to handle jsonb fields
@@ -465,8 +482,9 @@ func FromEnt(e *ent.Price) *Price {
 		tiers = make(JSONBTiers, len(e.Tiers))
 		for i, tier := range e.Tiers {
 			tiers[i] = PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        tier.UnitAmount,
+				TransformQuantity: (*TransformQuantity)(tier.TransformQuantity),
 			}
 			if tier.FlatAmount != nil {
 				flatAmount := tier.FlatAmount
@@ -481,8 +499,9 @@ func FromEnt(e *ent.Price) *Price {
 		priceUnitTiers = make(JSONBTiers, len(e.PriceUnitTiers))
 		for i, tier := range e.PriceUnitTiers {
 			priceUnitTiers[i] = PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        tier.UnitAmount,
+				TransformQuantity: (*TransformQuantity)(tier.TransformQuantity),
 			}
 			if tier.FlatAmount != nil {
 				flatAmount := tier.FlatAmount
@@ -560,9 +579,10 @@ func ToEntTiersFromJSONB(jsonbTiers JSONBTiers) []*types.PriceTier {
 	tiers := make([]*types.PriceTier, len(jsonbTiers))
 	for i, tier := range jsonbTiers {
 		tiers[i] = &types.PriceTier{
-			UpTo:       tier.UpTo,
-			UnitAmount: tier.UnitAmount,
-			FlatAmount: tier.FlatAmount,
+			UpTo:              tier.UpTo,
+			UnitAmount:        tier.UnitAmount,
+			FlatAmount:        tier.FlatAmount,
+			TransformQuantity: (*types.TransformQuantity)(tier.TransformQuantity),
 		}
 	}
 	return tiers

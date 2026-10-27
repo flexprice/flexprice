@@ -72,6 +72,10 @@ const (
 	FieldSubscriptionPhaseID = "subscription_phase_id"
 	// FieldAddonAssociationID holds the string denoting the addon_association_id field in the database.
 	FieldAddonAssociationID = "addon_association_id"
+	// FieldPredecessorLineItemID holds the string denoting the predecessor_line_item_id field in the database.
+	FieldPredecessorLineItemID = "predecessor_line_item_id"
+	// FieldSuccessorLineItemID holds the string denoting the successor_line_item_id field in the database.
+	FieldSuccessorLineItemID = "successor_line_item_id"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// FieldCommitmentAmount holds the string denoting the commitment_amount field in the database.
@@ -143,6 +147,8 @@ var Columns = []string{
 	FieldEndDate,
 	FieldSubscriptionPhaseID,
 	FieldAddonAssociationID,
+	FieldPredecessorLineItemID,
+	FieldSuccessorLineItemID,
 	FieldMetadata,
 	FieldCommitmentAmount,
 	FieldCommitmentQuantity,
@@ -345,6 +351,16 @@ func BySubscriptionPhaseID(opts ...sql.OrderTermOption) OrderOption {
 // ByAddonAssociationID orders the results by the addon_association_id field.
 func ByAddonAssociationID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAddonAssociationID, opts...).ToFunc()
+}
+
+// ByPredecessorLineItemID orders the results by the predecessor_line_item_id field.
+func ByPredecessorLineItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPredecessorLineItemID, opts...).ToFunc()
+}
+
+// BySuccessorLineItemID orders the results by the successor_line_item_id field.
+func BySuccessorLineItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSuccessorLineItemID, opts...).ToFunc()
 }
 
 // ByCommitmentAmount orders the results by the commitment_amount field.

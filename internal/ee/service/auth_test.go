@@ -18,6 +18,20 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// recordingHook records each tenant handed to self-billing as "tenant|name|email".
+type recordingHook struct {
+	calls   []string
+	updated []string
+}
+
+func (h *recordingHook) OnTenantCreated(_ context.Context, tenantID, name, email string) {
+	h.calls = append(h.calls, tenantID+"|"+name+"|"+email)
+}
+
+func (h *recordingHook) OnTenantBillingDetailsUpdated(_ context.Context, tenantID string) {
+	h.updated = append(h.updated, tenantID)
+}
+
 type AuthServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	authService AuthService
@@ -41,6 +55,7 @@ func (s *AuthServiceSuite) setupService() {
 	pubSub := testutil.NewInMemoryPubSub()
 
 	s.authService = NewAuthService(ServiceParams{
+		SelfBilling:                  &recordingHook{},
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
@@ -183,6 +198,7 @@ type fakeSupabaseProvider struct {
 	err        error
 	confirmed  bool
 	confirmErr error
+	assignErr  error
 }
 
 // EmailConfirmed stands in for the Admin API lookup. The guard reads
@@ -209,7 +225,7 @@ func (f *fakeSupabaseProvider) SignUp(_ context.Context, req authProvider.AuthRe
 }
 
 func (f *fakeSupabaseProvider) AssignUserToTenant(_ context.Context, _ string, _ string) error {
-	return nil
+	return f.assignErr
 }
 
 // TestSignUpRefusesUnverifiedEmail covers the signup guard: an account must not
@@ -569,6 +585,56 @@ func (s *AuthServiceSuite) TestCheckPasswordLink_Failures() {
 	}
 }
 
+// TestSignUpProvisionsSelfBillingAfterCommit checks signup hands the new tenant to self-billing only once
+// its transaction has committed, so a rollback never leaves a billing customer for a missing tenant.
+func (s *AuthServiceSuite) TestSignUpProvisionsSelfBillingAfterCommit() {
+	testCases := []struct {
+		name       string
+		tenantName string
+		assignErr  error
+		wantCall   bool
+		wantName   string
+	}{
+		{name: "provisions the committed tenant", tenantName: "Acme", wantCall: true, wantName: "Acme"},
+		{name: "provisions under the default tenant name", wantCall: true, wantName: s.GetConfig().Onboarding.DefaultTenantName},
+		{name: "skips provisioning when the transaction fails", tenantName: "Acme", assignErr: errors.New("assign failed")},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			svc := s.authService.(*authService)
+			original, originalHook := svc.authProvider, svc.SelfBilling
+			svc.authProvider = &fakeSupabaseProvider{
+				claims:    &auth.Claims{UserID: "user_1", Email: "owner@acme.io"},
+				confirmed: true,
+				assignErr: tc.assignErr,
+			}
+			hook := &recordingHook{}
+			svc.SelfBilling = hook
+			defer func() {
+				svc.authProvider = original
+				svc.SelfBilling = originalHook
+			}()
+
+			resp, err := svc.SignUp(s.GetContext(), &dto.SignUpRequest{
+				Email:      "owner@acme.io",
+				Password:   "password123",
+				Token:      "token",
+				TenantName: tc.tenantName,
+			})
+
+			if !tc.wantCall {
+				s.Error(err)
+				s.Empty(hook.calls)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal([]string{resp.TenantID + "|" + tc.wantName + "|owner@acme.io"}, hook.calls)
+		})
+	}
+}
+
 // Two requests racing with one link: the one that waited for the lock finds the
 // password already saved and is refused instead of overwriting it.
 func (s *AuthServiceSuite) TestSetPassword_LinkUsedWhileWaitingForLock() {
@@ -597,4 +663,43 @@ func (s *AuthServiceSuite) TestSetPassword_LockFails() {
 	s.True(ierr.IsInternal(err), "got %v", err)
 	_, err = s.GetStores().AuthRepo.GetAuthByUserID(testutil.SetupContext(), invitee.ID)
 	s.True(ierr.IsNotFound(err), "no password may be saved without the lock")
+}
+
+func (s *AuthServiceSuite) TestEmailCaseInsensitive() {
+	ctx := s.GetContext()
+	resp, err := s.authService.SignUp(ctx, &dto.SignUpRequest{Email: "  Alice@Example.com ", Password: "securepassword"})
+	s.Require().NoError(err)
+
+	for _, email := range []string{"alice@example.com", "ALICE@EXAMPLE.COM", "Alice@Example.com"} {
+		found, err := s.userRepo.GetByEmail(ctx, email)
+		s.Require().NoError(err, email)
+		s.Equal(resp.UserID, found.ID, email)
+		s.Equal("alice@example.com", found.Email, email)
+
+		login, err := s.authService.Login(ctx, &dto.LoginRequest{Email: email, Password: "securepassword"})
+		s.Require().NoError(err, email)
+		s.Equal(resp.UserID, login.UserID, email)
+	}
+
+	for _, email := range []string{"alice@example.com", "ALICE@example.com"} {
+		dup, err := s.authService.SignUp(ctx, &dto.SignUpRequest{Email: email, Password: "securepassword"})
+		s.Error(err, email)
+		s.Nil(dup, email)
+	}
+}
+
+func (s *AuthServiceSuite) TestEmailLookupIgnoresArchivedUsers() {
+	ctx := s.GetContext()
+	archived := &user.User{ID: "user-old", Email: "Alice@Example.com"}
+	archived.Status = types.StatusArchived
+	s.Require().NoError(s.userRepo.Create(ctx, archived))
+	active := &user.User{ID: "user-new", Email: "alice@example.com"}
+	active.Status = types.StatusPublished
+	s.Require().NoError(s.userRepo.Create(ctx, active))
+
+	for _, email := range []string{"Alice@Example.com", "alice@example.com"} {
+		found, err := s.userRepo.GetByEmail(ctx, email)
+		s.Require().NoError(err, email)
+		s.Equal("user-new", found.ID, email)
+	}
 }

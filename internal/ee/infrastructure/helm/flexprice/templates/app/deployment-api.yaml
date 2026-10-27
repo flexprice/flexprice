@@ -55,6 +55,9 @@ spec:
             - name: TMPDIR
               value: "/tmp"
             {{- include "flexprice.env" . | nindent 12 }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- if and .Values.api.preStop .Values.api.preStop.enabled }}
           lifecycle:
             preStop:

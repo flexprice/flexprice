@@ -31,6 +31,8 @@ type PaymentService interface {
 	CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
 	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
+	// GetOrCreateInvoicePaymentLink returns the invoice's open payment link on the gateway, or creates one.
+	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
 	UpdatePayment(ctx context.Context, id string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error)
 	DeletePayment(ctx context.Context, id string) error
 	GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error)
@@ -186,8 +188,13 @@ type SubscriptionService interface {
 
 	GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*dto.EntitlementResponse, error)
 
+	// GetActiveSubscriptionEntitlementsForSubscription is the subscription's entitlements live at at:
+	// an override past its end_date drops out and the plan or addon entitlement it replaced returns.
+	GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*dto.EntitlementResponse, error)
+
 	GetAggregatedSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
+	GetActiveAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 
 	// List all tenant subscriptions
 	GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
@@ -321,4 +328,12 @@ type ServiceDependencies struct {
 	CheckoutSessionService          CheckoutSessionService
 	RefundService                   RefundService
 	DB                              postgres.IClient
+}
+
+// SelfBillingHook keeps a tenant's Flexprice Cloud customer in step with the tenant without importing self-billing.
+type SelfBillingHook interface {
+	OnTenantCreated(ctx context.Context, tenantID, name, email string)
+
+	// OnTenantBillingDetailsUpdated copies the tenant's name and billing address to its Flexprice Cloud customer.
+	OnTenantBillingDetailsUpdated(ctx context.Context, tenantID string)
 }

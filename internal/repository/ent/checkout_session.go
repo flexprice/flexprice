@@ -131,6 +131,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 			entCheckout.ID(s.ID),
 			entCheckout.TenantID(types.GetTenantID(ctx)),
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		SetStatus(string(s.Status)).
 		SetCheckoutStatus(s.CheckoutStatus).
@@ -152,7 +153,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 	}
 	if len(rows) == 0 {
 		return ierr.NewError("checkout session not found").
-			WithHintf("checkout session %s not found or already archived", s.ID).
+			WithHintf("checkout session %s not found, archived or already terminal", s.ID).
 			Mark(ierr.ErrNotFound)
 	}
 

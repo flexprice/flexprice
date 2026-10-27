@@ -31,6 +31,7 @@ type PriceServiceSuite struct {
 	suite.Suite
 	ctx           context.Context
 	priceService  PriceService
+	serviceParams ServiceParams
 	priceRepo     *testutil.InMemoryPriceStore
 	meterRepo     *testutil.InMemoryMeterStore
 	planRepo      *testutil.InMemoryPlanStore
@@ -66,6 +67,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		Logger:        s.logger,
 		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
+	s.serviceParams = serviceParams
 	s.priceService = NewPriceService(serviceParams)
 }
 
@@ -260,6 +262,81 @@ func (s *PriceServiceSuite) TestGetPrices_ExpandFeatures() {
 	s.Equal("minute", resp.Items[0].Feature.ReportingUnit.UnitSingular)
 	s.Equal("minutes", resp.Items[0].Feature.ReportingUnit.UnitPlural)
 	s.True(conversionRate.Equal(*resp.Items[0].Feature.ReportingUnit.ConversionRate))
+}
+
+// meterRepoSpy records how GetPrices resolves meters.
+type meterRepoSpy struct {
+	meter.Repository
+	listByIDsRequests [][]string
+	listAllCalls      int
+	countCalls        int
+}
+
+func (m *meterRepoSpy) ListByIDs(ctx context.Context, ids []string) ([]*meter.Meter, error) {
+	m.listByIDsRequests = append(m.listByIDsRequests, ids)
+	return m.Repository.ListByIDs(ctx, ids)
+}
+
+func (m *meterRepoSpy) ListAll(ctx context.Context, filter *types.MeterFilter) ([]*meter.Meter, error) {
+	m.listAllCalls++
+	return m.Repository.ListAll(ctx, filter)
+}
+
+func (m *meterRepoSpy) Count(ctx context.Context, filter *types.MeterFilter) (int, error) {
+	m.countCalls++
+	return m.Repository.Count(ctx, filter)
+}
+
+func (s *PriceServiceSuite) TestGetPrices_ExpandMeters_AttachesOnlyReferencedMeters() {
+	for _, id := range []string{"meter-a", "meter-b", "meter-unused"} {
+		s.Require().NoError(s.meterRepo.CreateMeter(s.ctx, &meter.Meter{
+			ID:          id,
+			Name:        id,
+			EventName:   id,
+			Aggregation: meter.Aggregation{Type: types.AggregationSum},
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}))
+	}
+
+	prices := []*price.Price{
+		{ID: "price-a", MeterID: "meter-a"},
+		{ID: "price-b", MeterID: "meter-b"},
+		{ID: "price-no-meter"},
+	}
+	for _, p := range prices {
+		p.Amount = decimal.NewFromInt(1)
+		p.Currency = "usd"
+		p.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+		p.EntityID = "plan-expand-meters"
+		p.BaseModel = types.GetDefaultBaseModel(s.ctx)
+		s.Require().NoError(s.priceRepo.Create(s.ctx, p))
+	}
+
+	priceFilter := types.NewPriceFilter()
+	priceFilter.EntityType = lo.ToPtr(types.PRICE_ENTITY_TYPE_PLAN)
+	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
+
+	spy := &meterRepoSpy{Repository: s.meterRepo}
+	params := s.serviceParams
+	params.MeterRepo = spy
+	resp, err := NewPriceService(params).GetPrices(s.ctx, priceFilter)
+	s.Require().NoError(err)
+
+	s.Require().Len(spy.listByIDsRequests, 1)
+	s.ElementsMatch([]string{"meter-a", "meter-b"}, spy.listByIDsRequests[0])
+	s.Zero(spy.listAllCalls)
+	s.Zero(spy.countCalls)
+
+	meterByPrice := make(map[string]*dto.MeterResponse, len(resp.Items))
+	for _, item := range resp.Items {
+		meterByPrice[item.ID] = item.Meter
+	}
+	s.Require().Len(meterByPrice, 3)
+	s.Require().NotNil(meterByPrice["price-a"])
+	s.Equal("meter-a", meterByPrice["price-a"].ID)
+	s.Require().NotNil(meterByPrice["price-b"])
+	s.Equal("meter-b", meterByPrice["price-b"].ID)
+	s.Nil(meterByPrice["price-no-meter"])
 }
 
 // TestGetPrices_ExpandFeatures_IgnoresDeletedFeature verifies that a deleted feature
@@ -1418,6 +1495,86 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlabEdgeCases() {
 				tc.description)
 		})
 	}
+}
+
+func (s *PriceServiceSuite) TestCalculateCost_PackageTiers() {
+	d := decimal.RequireFromString
+	upTo := func(v uint64) *uint64 { return &v }
+	pkg := func(size int, round types.RoundType) *price.TransformQuantity {
+		return &price.TransformQuantity{DivideBy: size, Round: round}
+	}
+	tiered := func(mode types.BillingTier, tiers ...price.PriceTier) func() *price.Price {
+		return func() *price.Price {
+			return &price.Price{
+				ID:           "price-package-tiers",
+				Currency:     "inr",
+				BillingModel: types.BILLING_MODEL_TIERED,
+				TierMode:     mode,
+				Tiers:        append([]price.PriceTier(nil), tiers...),
+			}
+		}
+	}
+
+	slabCustomer := tiered(types.BILLING_TIER_SLAB,
+		price.PriceTier{UpTo: upTo(200), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("10000"))},
+		price.PriceTier{UpTo: upTo(500), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("20000"))},
+		price.PriceTier{UpTo: upTo(1000), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("40000"))},
+		price.PriceTier{UnitAmount: d("1000"), TransformQuantity: pkg(100, types.ROUND_UP)},
+	)
+	// API calls: up to 100,000 at ₹50 per 1,000; above that every call at ₹40 per 1,000.
+	volumeAPICalls := tiered(types.BILLING_TIER_VOLUME,
+		price.PriceTier{UpTo: upTo(100_000), UnitAmount: d("50"), TransformQuantity: pkg(1000, types.ROUND_UP)},
+		price.PriceTier{UnitAmount: d("40"), TransformQuantity: pkg(1000, types.ROUND_UP)},
+	)
+
+	testCases := []struct {
+		name     string
+		price    func() *price.Price
+		quantity string
+		want     string
+	}{
+		{"slab band 1", slabCustomer, "150", "10000"},
+		{"slab bands 1 and 2", slabCustomer, "400", "30000"},
+		{"slab at boundary", slabCustomer, "1000", "70000"},
+		{"slab just over boundary", slabCustomer, "1001", "71000"},
+		{"slab partial package", slabCustomer, "1050", "71000"},
+		{"slab exact multiple", slabCustomer, "1500", "75000"},
+		{"slab zero usage", slabCustomer, "0", "0"},
+		{"volume partial package", volumeAPICalls, "45500", "2300"},
+		{"volume at boundary", volumeAPICalls, "100000", "5000"},
+		{"volume above boundary prices all units at the next tier", volumeAPICalls, "250000", "10000"},
+		{"decimal usage rounds up", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, types.ROUND_UP)},
+		), "50.5", "7"},
+		{"empty round rounds up", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, "")},
+		), "150", "14"},
+		{"slab round down drops partial package", tiered(types.BILLING_TIER_SLAB,
+			price.PriceTier{UpTo: upTo(1000), UnitAmount: d("0"), FlatAmount: lo.ToPtr(d("40000"))},
+			price.PriceTier{UnitAmount: d("1000"), TransformQuantity: pkg(100, types.ROUND_DOWN)},
+		), "1250", "42000"},
+		{"volume round down", tiered(types.BILLING_TIER_VOLUME,
+			price.PriceTier{UnitAmount: d("7"), TransformQuantity: pkg(100, types.ROUND_DOWN)},
+		), "250", "14"},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			want := d(tc.want)
+			quantity := d(tc.quantity)
+
+			cost := s.priceService.CalculateCost(s.ctx, tc.price(), quantity)
+			s.True(want.Equal(cost), "CalculateCost: want %s, got %s", want, cost)
+
+			breakup := s.priceService.CalculateCostWithBreakup(s.ctx, tc.price(), quantity, false)
+			s.True(want.Equal(breakup.FinalCost), "CalculateCostWithBreakup: want %s, got %s", want, breakup.FinalCost)
+		})
+	}
+
+	s.Run("breakup reports per-unit rate of a package tier", func() {
+		s.True(d("0.05").Equal(s.priceService.CalculateCostWithBreakup(s.ctx, volumeAPICalls(), d("45500"), false).TierUnitAmount))
+		s.True(d("10").Equal(s.priceService.CalculateCostWithBreakup(s.ctx, slabCustomer(), d("1050"), false).TierUnitAmount))
+	})
 }
 
 func (s *PriceServiceSuite) TestDeletePrice_Comprehensive() {

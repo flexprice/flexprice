@@ -11,14 +11,75 @@ type BillingMetric struct {
 	Shapes     []types.Shape
 	// Forces currency into the group-by.
 	Currency bool
+	// Point-in-time metric; no time window.
+	Snapshot bool
+	// Widest allowed range in days; 0 = unlimited.
+	MaxRangeDays int
+}
+
+func invoiceTotalMetric(m types.Metric) *BillingMetric {
+	return &BillingMetric{
+		Metric:     m,
+		Dimensions: []string{"currency", "customer_id", "invoice_type"},
+		Shapes:     types.AllShapes,
+		Currency:   true,
+	}
+}
+
+func currencyMetric(m types.Metric, shapes ...types.Shape) *BillingMetric {
+	return &BillingMetric{
+		Metric:     m,
+		Dimensions: []string{"currency"},
+		Shapes:     shapes,
+		Currency:   true,
+	}
 }
 
 var billingMetrics = map[types.Metric]*BillingMetric{
-	types.MetricInvoiceTotal: {
-		Metric:     types.MetricInvoiceTotal,
-		Dimensions: []string{"currency", "customer_id", "invoice_type"},
-		Shapes:     []types.Shape{types.ShapeScalar, types.ShapeTimeseries, types.ShapeBreakdown},
+	types.MetricTotalReceivables: {
+		Metric:     types.MetricTotalReceivables,
+		Dimensions: []string{"currency"},
+		Shapes:     []types.Shape{types.ShapeScalar},
 		Currency:   true,
+		Snapshot:   true,
+	},
+	types.MetricReceivablesAging: {
+		Metric:     types.MetricReceivablesAging,
+		Dimensions: []string{"aging_bucket", "customer_id", "currency"},
+		Shapes:     []types.Shape{types.ShapeBreakdown},
+		Currency:   true,
+		Snapshot:   true,
+	},
+	types.MetricDaysToPay: {
+		Metric:     types.MetricDaysToPay,
+		Dimensions: []string{"customer_id", "currency"},
+		Shapes:     types.AllShapes,
+		Currency:   true,
+	},
+	types.MetricARPUPaid: currencyMetric(types.MetricARPUPaid, types.ShapeScalar, types.ShapeTimeseries),
+	types.MetricARPU:     currencyMetric(types.MetricARPU, types.ShapeScalar, types.ShapeTimeseries),
+	types.MetricCreditConsumption: {
+		Metric:     types.MetricCreditConsumption,
+		Dimensions: []string{"customer_id", "currency", "credit_type"},
+		Shapes:     types.AllShapes,
+		Currency:   true,
+	},
+	types.MetricCreditTopups: {
+		Metric:     types.MetricCreditTopups,
+		Dimensions: []string{"transaction_reason", "customer_id", "currency"},
+		Shapes:     types.AllShapes,
+		Currency:   true,
+	},
+	types.MetricInvoiceTotal:       invoiceTotalMetric(types.MetricInvoiceTotal),
+	types.MetricInvoiceTotalIssued: invoiceTotalMetric(types.MetricInvoiceTotalIssued),
+	types.MetricNetBilling:         currencyMetric(types.MetricNetBilling, types.ShapeScalar, types.ShapeTimeseries),
+	types.MetricNetBillingIssued:   currencyMetric(types.MetricNetBillingIssued, types.ShapeScalar, types.ShapeTimeseries),
+	types.MetricActiveCustomers:    currencyMetric(types.MetricActiveCustomers, types.ShapeScalar),
+	types.MetricEventsVolume: {
+		Metric:       types.MetricEventsVolume,
+		Dimensions:   []string{"meter_id"},
+		Shapes:       []types.Shape{types.ShapeTimeseries, types.ShapeBreakdown},
+		MaxRangeDays: 7,
 	},
 }
 

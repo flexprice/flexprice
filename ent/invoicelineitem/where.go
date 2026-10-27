@@ -219,6 +219,11 @@ func SubscriptionLineItemID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldSubscriptionLineItemID, v))
 }
 
+// CommitmentID applies equality check predicate on the "commitment_id" field. It's identical to CommitmentIDEQ.
+func CommitmentID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCommitmentID, v))
+}
+
 // AdjustedEntitlementQuantity applies equality check predicate on the "adjusted_entitlement_quantity" field. It's identical to AdjustedEntitlementQuantityEQ.
 func AdjustedEntitlementQuantity(v decimal.Decimal) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedEntitlementQuantity, v))
@@ -2195,6 +2200,81 @@ func SubscriptionLineItemIDEqualFold(v string) predicate.InvoiceLineItem {
 // SubscriptionLineItemIDContainsFold applies the ContainsFold predicate on the "subscription_line_item_id" field.
 func SubscriptionLineItemIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldSubscriptionLineItemID, v))
+}
+
+// CommitmentIDEQ applies the EQ predicate on the "commitment_id" field.
+func CommitmentIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCommitmentID, v))
+}
+
+// CommitmentIDNEQ applies the NEQ predicate on the "commitment_id" field.
+func CommitmentIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldCommitmentID, v))
+}
+
+// CommitmentIDIn applies the In predicate on the "commitment_id" field.
+func CommitmentIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldCommitmentID, vs...))
+}
+
+// CommitmentIDNotIn applies the NotIn predicate on the "commitment_id" field.
+func CommitmentIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldCommitmentID, vs...))
+}
+
+// CommitmentIDGT applies the GT predicate on the "commitment_id" field.
+func CommitmentIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldCommitmentID, v))
+}
+
+// CommitmentIDGTE applies the GTE predicate on the "commitment_id" field.
+func CommitmentIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldCommitmentID, v))
+}
+
+// CommitmentIDLT applies the LT predicate on the "commitment_id" field.
+func CommitmentIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldCommitmentID, v))
+}
+
+// CommitmentIDLTE applies the LTE predicate on the "commitment_id" field.
+func CommitmentIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldCommitmentID, v))
+}
+
+// CommitmentIDContains applies the Contains predicate on the "commitment_id" field.
+func CommitmentIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldCommitmentID, v))
+}
+
+// CommitmentIDHasPrefix applies the HasPrefix predicate on the "commitment_id" field.
+func CommitmentIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldCommitmentID, v))
+}
+
+// CommitmentIDHasSuffix applies the HasSuffix predicate on the "commitment_id" field.
+func CommitmentIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldCommitmentID, v))
+}
+
+// CommitmentIDIsNil applies the IsNil predicate on the "commitment_id" field.
+func CommitmentIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldCommitmentID))
+}
+
+// CommitmentIDNotNil applies the NotNil predicate on the "commitment_id" field.
+func CommitmentIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCommitmentID))
+}
+
+// CommitmentIDEqualFold applies the EqualFold predicate on the "commitment_id" field.
+func CommitmentIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldCommitmentID, v))
+}
+
+// CommitmentIDContainsFold applies the ContainsFold predicate on the "commitment_id" field.
+func CommitmentIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldCommitmentID, v))
 }
 
 // AdjustedEntitlementQuantityEQ applies the EQ predicate on the "adjusted_entitlement_quantity" field.

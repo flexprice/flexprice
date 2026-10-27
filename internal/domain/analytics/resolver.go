@@ -191,6 +191,10 @@ func resolveTime(raw TimeSpecRaw, supplied map[string][]string) (TimeSpec, error
 //   - "yesterday"       — start of yesterday (UTC) .. start of today (UTC)
 //   - "last_N_days"     — now-N*24h .. now
 //   - "last_N_hours"    — now-N*1h .. now
+//   - "this_month"      — start of month (UTC) .. now
+//   - "last_month"      — start of previous month .. start of this month
+//   - "this_quarter"    — start of quarter (UTC) .. now
+//   - "this_year"       — Jan 1 (UTC) .. now
 func parseRelativeRange(token string) (time.Time, time.Time, error) {
 	now := time.Now().UTC()
 	switch token {
@@ -200,12 +204,22 @@ func parseRelativeRange(token string) (time.Time, time.Time, error) {
 	case "yesterday":
 		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 		return todayStart.Add(-24 * time.Hour), todayStart, nil
+	case "this_month":
+		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC), now, nil
+	case "last_month":
+		thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return thisMonth.AddDate(0, -1, 0), thisMonth, nil
+	case "this_quarter":
+		qStart := time.Month((int(now.Month())-1)/3*3 + 1)
+		return time.Date(now.Year(), qStart, 1, 0, 0, 0, 0, time.UTC), now, nil
+	case "this_year":
+		return time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, time.UTC), now, nil
 	}
 
 	m := relativeRangePattern.FindStringSubmatch(token)
 	if m == nil {
 		return time.Time{}, time.Time{}, ierr.NewErrorf("unrecognized relative time range %q", token).
-			WithHint("supported: last_N_days, last_N_hours, today, yesterday, or an absolute <from>..<to> range").
+			WithHint("supported: last_N_days, last_N_hours, today, yesterday, this_month, last_month, this_quarter, this_year, or an absolute <from>..<to> range").
 			Mark(ierr.ErrValidation)
 	}
 	n, err := strconv.Atoi(m[1])

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,12 @@ func NewMeterUsageRepository(store *clickhouse.ClickHouseStore, logger *logger.L
 
 // insertTimeout caps each batch insert; without it the driver uses the caller's much longer deadline.
 const insertTimeout = 30 * time.Second
+
+// groupKeySeparator joins a row's group-by values into one map key; NUL never occurs in a value.
+const groupKeySeparator = "\x00"
+
+// propertyKeysSampleRows is the number of latest rows sampled per meter for property keys.
+const propertyKeysSampleRows = 10000
 
 // BulkInsertMeterUsage inserts meter usage records in batches of 100
 func (r *MeterUsageRepository) BulkInsertMeterUsage(ctx context.Context, records []*events.MeterUsage) error {
@@ -766,6 +773,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 	defer rows.Close()
 
 	var results []*events.MeterUsageDetailedResult
+	byGroup := make(map[string]*events.MeterUsageDetailedResult)
 
 	for rows.Next() {
 		result := &events.MeterUsageDetailedResult{
@@ -826,15 +834,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 			}
 		}
 
-		if params.WindowSize != "" {
-			points, err := r.getDetailedAnalyticsPoints(ctx, params, result, groupByResult)
-			if err != nil {
-				SetSpanError(span, err)
-				return nil, err
-			}
-			result.Points = points
-		}
-
+		byGroup[strings.Join(groupByTargets, groupKeySeparator)] = result
 		results = append(results, result)
 	}
 
@@ -845,42 +845,58 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 			Mark(ierr.ErrDatabase)
 	}
 
+	if params.WindowSize != "" {
+		if err := r.getDetailedAnalyticsPoints(ctx, params, groupByResult, byGroup); err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	}
+
 	SetSpanSuccess(span)
 	return results, nil
 }
 
-// getDetailedAnalyticsPoints fetches time-series breakdown for a single group result.
+// getDetailedAnalyticsPoints fetches the time-series points of every group in one query
+// and appends each point to its group in byGroup.
 func (r *MeterUsageRepository) getDetailedAnalyticsPoints(
 	ctx context.Context,
 	params *events.MeterUsageDetailedAnalyticsParams,
-	result *events.MeterUsageDetailedResult,
 	groupByResult *DetailedGroupByResult,
-) ([]events.MeterUsageDetailedPoint, error) {
-	query, args := r.qb.BuildDetailedPointsQuery(params, result, groupByResult)
+	byGroup map[string]*events.MeterUsageDetailedResult,
+) error {
+	query, args := r.qb.BuildDetailedPointsQuery(params, groupByResult)
 	if query == "" {
-		return nil, nil
+		return nil
 	}
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
-		return nil, ierr.WithError(err).
+		return ierr.WithError(err).
 			WithHint("Failed to query detailed meter usage analytics points").
 			Mark(ierr.ErrDatabase)
 	}
 	defer rows.Close()
 
-	var points []events.MeterUsageDetailedPoint
+	var p events.MeterUsageDetailedPoint
+	groupValues := make([]string, len(groupByResult.Columns))
+	scanArgs := make([]interface{}, 0, len(groupValues)+6)
+	for i := range groupValues {
+		scanArgs = append(scanArgs, &groupValues[i])
+	}
+	scanArgs = append(scanArgs, &p.WindowStart, &p.TotalUsage, &p.MaxUsage, &p.LatestUsage, &p.CountUniqueUsage, &p.EventCount)
+
 	for rows.Next() {
-		var p events.MeterUsageDetailedPoint
-		if err := rows.Scan(&p.WindowStart, &p.TotalUsage, &p.MaxUsage, &p.LatestUsage, &p.CountUniqueUsage, &p.EventCount); err != nil {
-			return nil, ierr.WithError(err).
+		if err := rows.Scan(scanArgs...); err != nil {
+			return ierr.WithError(err).
 				WithHint("Failed to scan detailed meter usage analytics point").
 				Mark(ierr.ErrDatabase)
 		}
-		points = append(points, p)
+		if result, ok := byGroup[strings.Join(groupValues, groupKeySeparator)]; ok {
+			result.Points = append(result.Points, p)
+		}
 	}
 
-	return points, nil
+	return rows.Err()
 }
 
 // joinSelect joins select columns with comma+newline for readability
@@ -903,7 +919,7 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 	case *MeterUsageMaxAggregator:
 		aggExpr = "MAX(qty_total)"
 	case *MeterUsageAvgAggregator:
-		aggExpr = "AVG(qty_total)"
+		aggExpr = "ifNotFinite(AVG(qty_total), 0)"
 	case *MeterUsageLatestAggregator:
 		aggExpr = "argMax(qty_total, timestamp)"
 	default:
@@ -945,7 +961,7 @@ func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []strin
 	case aggSet[types.AggregationMax]:
 		primaryExpr = "MAX(qty_total)"
 	case aggSet[types.AggregationAvg]:
-		primaryExpr = "AVG(qty_total)"
+		primaryExpr = "ifNotFinite(AVG(qty_total), 0)"
 	case aggSet[types.AggregationLatest]:
 		primaryExpr = "argMax(qty_total, timestamp)"
 	default:
@@ -1227,16 +1243,20 @@ func (r *MeterUsageRepository) GetUsageActivitySince(ctx context.Context, params
 	return activity, nil
 }
 
-// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not yet processed.
-func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage rows for a single event
+// within window, one per meter it matched, or none if not yet processed.
+func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string, window events.TimeRange) ([]*events.MeterUsage, error) {
 	span := StartRepositorySpan(ctx, "meter_usage", "get_events_by_event_id_and_external_customer_id", map[string]interface{}{
 		"tenant_id":            tenantID,
 		"environment_id":       environmentID,
 		"external_customer_id": externalCustomerID,
 		"event_id":             eventID,
+		"start_time":           window.Start,
+		"end_time":             window.End,
 	})
 	defer FinishSpan(span)
 
+	// LIMIT 1 BY meter_id keeps the latest row per meter while duplicates are still unmerged.
 	query := `
 		SELECT
 			id,
@@ -1256,45 +1276,206 @@ func (r *MeterUsageRepository) GetEventsByEventIDAndExternalCustomerID(ctx conte
 		  AND environment_id = ?
 		  AND external_customer_id = ?
 		  AND id = ?
-		LIMIT 1
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		ORDER BY meter_id, ingested_at DESC
+		LIMIT 1 BY meter_id
 		SETTINGS max_memory_usage = 96636764160
 	`
 
-	var usage events.MeterUsage
-	var propertiesJSON string
-
-	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, externalCustomerID, eventID).Scan(
-		&usage.ID,
-		&usage.TenantID,
-		&usage.EnvironmentID,
-		&usage.ExternalCustomerID,
-		&usage.EventName,
-		&usage.Source,
-		&usage.Timestamp,
-		&usage.IngestedAt,
-		&propertiesJSON,
-		&usage.MeterID,
-		&usage.QtyTotal,
-		&usage.UniqueHash,
-	)
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, externalCustomerID, eventID, window.Start, window.End)
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			SetSpanSuccess(span)
-			return nil, nil
-		}
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query meter_usage by event ID").
 			Mark(ierr.ErrDatabase)
 	}
+	defer rows.Close()
 
-	if propertiesJSON != "" {
-		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
-			usage.Properties = make(map[string]interface{})
+	var out []*events.MeterUsage
+	for rows.Next() {
+		var usage events.MeterUsage
+		var propertiesJSON string
+		if err := rows.Scan(
+			&usage.ID,
+			&usage.TenantID,
+			&usage.EnvironmentID,
+			&usage.ExternalCustomerID,
+			&usage.EventName,
+			&usage.Source,
+			&usage.Timestamp,
+			&usage.IngestedAt,
+			&propertiesJSON,
+			&usage.MeterID,
+			&usage.QtyTotal,
+			&usage.UniqueHash,
+		); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan meter_usage row").
+				Mark(ierr.ErrDatabase)
 		}
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+				r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
+				usage.Properties = make(map[string]interface{})
+			}
+		}
+		out = append(out, &usage)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating meter_usage rows").
+			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return &usage, nil
+	return out, nil
+}
+
+// GetPropertyKeys samples the latest rows of each meter and returns the keys by merged count, highest first.
+func (r *MeterUsageRepository) GetPropertyKeys(ctx context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return nil, nil
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_property_keys", map[string]interface{}{
+		"external_customer_id": params.ExternalCustomerID,
+		"meter_count":          len(params.MeterIDs),
+	})
+	defer FinishSpan(span)
+
+	// Without a customer, the sort key doesn't order rows by timestamp, so any rows are sampled instead of the latest.
+	customerScope, order := "", ""
+	args := []interface{}{params.TenantID, params.EnvironmentID}
+	if params.ExternalCustomerID != "" {
+		customerScope, order = "AND external_customer_id = ?", "ORDER BY timestamp DESC"
+		args = append(args, params.ExternalCustomerID)
+	}
+	query := fmt.Sprintf(`
+		SELECT key, count() AS seen
+		FROM (
+			SELECT properties FROM meter_usage
+			WHERE tenant_id = ? AND environment_id = ? %s
+				AND meter_id = ? AND timestamp >= ? AND timestamp < ?
+			%s
+			LIMIT %d
+		)
+		ARRAY JOIN JSONExtractKeys(properties) AS key
+		GROUP BY key
+		SETTINGS max_memory_usage = 96636764160
+	`, customerScope, order, propertyKeysSampleRows)
+
+	counts := make(map[string]uint64)
+	for _, meterID := range params.MeterIDs {
+		rows, err := r.store.GetConn().Query(ctx, query, append(args, meterID, params.StartTime, params.EndTime)...)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to query property keys").
+				Mark(ierr.ErrDatabase)
+		}
+		for rows.Next() {
+			var key string
+			var seen uint64
+			if err := rows.Scan(&key, &seen); err != nil {
+				rows.Close()
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan property key row").
+					Mark(ierr.ErrDatabase)
+			}
+			counts[key] += seen
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Error iterating property key rows").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	keys := lo.Keys(counts)
+	sort.Slice(keys, func(i, j int) bool {
+		if counts[keys[i]] != counts[keys[j]] {
+			return counts[keys[i]] > counts[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+
+	SetSpanSuccess(span)
+	return keys, nil
+}
+
+// GetPropertyValues ranks the key's values by row count; no FINAL since the count only orders them.
+func (r *MeterUsageRepository) GetPropertyValues(ctx context.Context, params *events.PropertyLookupParams) ([]string, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+	if len(params.MeterIDs) == 0 {
+		return nil, nil
+	}
+
+	span := StartRepositorySpan(ctx, "meter_usage", "get_property_values", map[string]interface{}{
+		"external_customer_id": params.ExternalCustomerID,
+		"meter_count":          len(params.MeterIDs),
+		"key":                  params.Key,
+	})
+	defer FinishSpan(span)
+
+	where, whereArgs := r.qb.BuildWhereClause(&events.MeterUsageQueryParams{
+		TenantID:           params.TenantID,
+		EnvironmentID:      params.EnvironmentID,
+		ExternalCustomerID: params.ExternalCustomerID,
+		MeterIDs:           params.MeterIDs,
+		StartTime:          params.StartTime,
+		EndTime:            params.EndTime,
+	})
+	query := fmt.Sprintf(`
+		SELECT JSONExtractString(properties, ?) AS value
+		FROM meter_usage
+		WHERE %s AND value != '' AND startsWith(value, ?)
+		GROUP BY value
+		ORDER BY count() DESC, value
+		LIMIT ?
+		SETTINGS max_memory_usage = 96636764160
+	`, where)
+	args := append([]interface{}{params.Key}, whereArgs...)
+	args = append(args, params.Prefix, params.Limit)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query property values").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan property value row").
+				Mark(ierr.ErrDatabase)
+		}
+		values = append(values, value)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating property value rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return values, nil
 }

@@ -89,25 +89,3 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
-
-// @Summary Get billing usage for the current tenant
-// @ID getTenantBillingUsage
-// @Description Use when showing the current tenant's billing usage (e.g. admin billing page or usage caps). Returns subscription and usage for the tenant.
-// @Tags Tenants
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Success 200 {object} dto.TenantBillingUsage "Tenant billing usage"
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 404 {object} ierr.ErrorResponse "Tenant not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /tenant/billing [get]
-func (h *TenantHandler) GetTenantBillingUsage(c *gin.Context) {
-	usage, err := h.service.GetBillingUsage(c.Request.Context())
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, usage)
-}

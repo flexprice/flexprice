@@ -3,10 +3,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	domainCustomer "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -14,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -59,6 +62,7 @@ func (s *CustomerServiceSuite) SetupTest() {
 		SettingsRepo:        s.GetStores().SettingsRepo,
 		FXRateRepo:          s.GetStores().FXRateRepo,
 		CheckoutSessionRepo: s.GetStores().CheckoutSessionRepo,
+		IntegrationFactory:  s.GetIntegrationFactory(),
 	})
 
 }
@@ -785,6 +789,146 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 				s.Equal(customer.AddressCountry, resp.Customer.AddressCountry)
 				s.Equal(customer.Metadata["source"], resp.Customer.Metadata["source"])
 			}
+		})
+	}
+}
+
+// A linked customer whose tenant does not push customers to Stripe still updates normally.
+func (s *CustomerServiceSuite) TestUpdateCustomer_StripePushIsSkippedWithoutOutboundSync() {
+	tests := []struct {
+		name       string
+		connection *types.SyncConfig
+		connected  bool
+	}{
+		{
+			name: "no Stripe connection",
+		},
+		{
+			name:      "customer outbound sync off",
+			connected: true,
+			connection: &types.SyncConfig{
+				Customer: &types.EntitySyncConfig{Outbound: false},
+			},
+		},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+
+			if tt.connected {
+				conn := &connection.Connection{
+					ID:            "conn_stripe",
+					Name:          "stripe",
+					ProviderType:  types.SecretProviderStripe,
+					SyncConfig:    tt.connection,
+					EnvironmentID: types.GetEnvironmentID(s.ctx),
+					BaseModel:     types.GetDefaultBaseModel(s.ctx),
+				}
+				conn.Status = types.StatusPublished
+				s.NoError(s.GetStores().ConnectionRepo.Create(s.ctx, conn))
+			}
+
+			customerID := fmt.Sprintf("cust_stripe_push_%d", i)
+			s.NoError(s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+				ID:        customerID,
+				Name:      "Acme",
+				Email:     "billing@acme.test",
+				Metadata:  map[string]string{"stripe_customer_id": "cus_linked"},
+				BaseModel: types.GetDefaultBaseModel(s.ctx),
+			}))
+
+			resp, err := s.service.UpdateCustomer(s.ctx, customerID, dto.UpdateCustomerRequest{
+				AddressCountry:    lo.ToPtr("US"),
+				AddressPostalCode: lo.ToPtr("78701"),
+			})
+
+			s.NoError(err)
+			s.Equal("US", resp.Customer.AddressCountry)
+			s.Equal("78701", resp.Customer.AddressPostalCode)
+		})
+	}
+}
+
+func TestStripeFieldsChanged(t *testing.T) {
+	base := domainCustomer.Customer{
+		Name:              "Acme",
+		Email:             "billing@acme.test",
+		AddressLine1:      "1 Main St",
+		AddressCountry:    "US",
+		AddressPostalCode: "78701",
+		Timezone:          "UTC",
+	}
+
+	tests := []struct {
+		name   string
+		change func(c *domainCustomer.Customer)
+		want   bool
+	}{
+		{
+			name:   "nothing changed",
+			change: func(c *domainCustomer.Customer) {},
+			want:   false,
+		},
+		{
+			name:   "only metadata changed, as when the Stripe link itself is saved",
+			change: func(c *domainCustomer.Customer) { c.Metadata = map[string]string{"stripe_customer_id": "cus_1"} },
+			want:   false,
+		},
+		{
+			name:   "a field Stripe does not mirror changed",
+			change: func(c *domainCustomer.Customer) { c.Timezone = "Asia/Kolkata" },
+			want:   false,
+		},
+		{
+			name:   "name",
+			change: func(c *domainCustomer.Customer) { c.Name = "Acme Inc" },
+			want:   true,
+		},
+		{
+			name:   "email",
+			change: func(c *domainCustomer.Customer) { c.Email = "ap@acme.test" },
+			want:   true,
+		},
+		{
+			name:   "line 1",
+			change: func(c *domainCustomer.Customer) { c.AddressLine1 = "2 Main St" },
+			want:   true,
+		},
+		{
+			name:   "line 2",
+			change: func(c *domainCustomer.Customer) { c.AddressLine2 = "Suite 2" },
+			want:   true,
+		},
+		{
+			name:   "city",
+			change: func(c *domainCustomer.Customer) { c.AddressCity = "Austin" },
+			want:   true,
+		},
+		{
+			name:   "state",
+			change: func(c *domainCustomer.Customer) { c.AddressState = "TX" },
+			want:   true,
+		},
+		{
+			name:   "postal code",
+			change: func(c *domainCustomer.Customer) { c.AddressPostalCode = "78702" },
+			want:   true,
+		},
+		{
+			name:   "country",
+			change: func(c *domainCustomer.Customer) { c.AddressCountry = "CA" },
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := base
+			after := base
+			tt.change(&after)
+
+			assert.Equal(t, tt.want, stripeFieldsChanged(&before, &after))
 		})
 	}
 }

@@ -1,7 +1,10 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/domain/analytics"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -20,7 +23,7 @@ func (r *AnalyticsQueryRequest) Validate() error {
 
 // CreateViewRequest is the request for POST /v1/analytics/views.
 type CreateViewRequest struct {
-	Name       string                    `json:"name" validate:"required"`
+	Name       string                    `json:"name" validate:"required,max=255"`
 	Definition *analytics.ViewDefinition `json:"definition" binding:"required" validate:"required"`
 }
 
@@ -37,14 +40,20 @@ func (r *ViewQueryRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 
-// ViewResponse is the response for POST /v1/analytics/views. It exposes
-// only the fields a client needs, unlike the domain analytics.View which
-// embeds types.BaseModel (tenant_id, status, created_by, timestamps, ...).
+// ViewResponse omits internal fields.
 type ViewResponse struct {
 	ID         string                    `json:"id"`
 	Name       string                    `json:"name"`
 	Version    int                       `json:"version"`
 	Definition *analytics.ViewDefinition `json:"definition"`
+	CreatedBy  string                    `json:"created_by,omitempty"`
+	CreatedAt  time.Time                 `json:"created_at"`
+	UpdatedAt  time.Time                 `json:"updated_at"`
+}
+
+// ListViewsResponse wraps saved views.
+type ListViewsResponse struct {
+	Items []*ViewResponse `json:"items"`
 }
 
 // NewViewResponse maps a domain analytics.View onto its response DTO.
@@ -57,6 +66,9 @@ func NewViewResponse(v *analytics.View) *ViewResponse {
 		Name:       v.Name,
 		Version:    v.Version,
 		Definition: v.Definition,
+		CreatedBy:  v.CreatedBy,
+		CreatedAt:  v.CreatedAt,
+		UpdatedAt:  v.UpdatedAt,
 	}
 }
 
@@ -80,6 +92,10 @@ func NewAnalyticsColumn(name string, columnType types.ColumnType, role types.Col
 // AnalyticsQueryMeta carries non-tabular metadata about a query result.
 type AnalyticsQueryMeta struct {
 	QuerySource string `json:"query_source"`
+	From        string `json:"from,omitempty"`
+	To          string `json:"to,omitempty"`
+	PrevFrom    string `json:"prev_from,omitempty"`
+	PrevTo      string `json:"prev_to,omitempty"`
 }
 
 // AnalyticsQueryResult is the visualization-agnostic shape every analytics
@@ -89,4 +105,86 @@ type AnalyticsQueryResult struct {
 	Columns []*AnalyticsColumn `json:"columns"`
 	Rows    [][]string         `json:"rows"`
 	Meta    AnalyticsQueryMeta `json:"meta"`
+}
+
+type ReportDimension struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+type ReportCatalogEntry struct {
+	Key             string                     `json:"key"`
+	Name            string                     `json:"name"`
+	Description     string                     `json:"description"`
+	Category        types.ReportCategory       `json:"category" enums:"billing,receivables,customers,credits,usage"`
+	Kind            types.ReportKind           `json:"kind" enums:"flow,ratio,snapshot"`
+	ValueType       types.ReportValueType      `json:"value_type" enums:"money,count,days"`
+	Improvement     types.ImprovementDirection `json:"improvement" enums:"higher,lower"`
+	Shapes          []string                   `json:"shapes" enums:"timeseries,breakdown,scalar"`
+	DefaultShape    string                     `json:"default_shape" enums:"timeseries,breakdown,scalar"`
+	Dimensions      []ReportDimension          `json:"dimensions"`
+	Grains          []string                   `json:"grains" enums:"day,week,month"`
+	SupportsCompare bool                       `json:"supports_compare"`
+	VariantOf       string                     `json:"variant_of,omitempty"`
+	VariantLabel    string                     `json:"variant_label,omitempty"`
+	MaxRangeDays    int                        `json:"max_range_days,omitempty"`
+}
+
+type ReportCatalogResponse struct {
+	Items []*ReportCatalogEntry `json:"items"`
+}
+
+type ReportFilter struct {
+	Field string   `json:"field"`
+	Op    string   `json:"op" enums:"eq,in"`
+	Value []string `json:"value"`
+}
+
+type ReportSort struct {
+	Field string `json:"field"`
+	Dir   string `json:"dir" enums:"asc,desc"`
+}
+
+// ReportQueryRequest is a report query body.
+type ReportQueryRequest struct {
+	Shape      string         `json:"shape" validate:"required" enums:"timeseries,breakdown,scalar"`
+	Dimensions []string       `json:"dimensions,omitempty"`
+	Range      string         `json:"range" validate:"required" example:"2026-09-01..2026-10-01"`
+	Grain      string         `json:"grain,omitempty" enums:"day,week,month"`
+	Currency   string         `json:"currency,omitempty"`
+	Filters    []ReportFilter `json:"filters,omitempty"`
+	Compare    string         `json:"compare,omitempty" enums:"previous_period,previous_year"`
+	Limit      int            `json:"limit,omitempty"`
+	Offset     int            `json:"offset,omitempty" minimum:"0"`
+	Sort       []ReportSort   `json:"sort,omitempty"`
+}
+
+func (r *ReportQueryRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// ValidateForReport resolves the catalog entry for key and checks the request against it.
+func (req *ReportQueryRequest) ValidateForReport(key string, maxRows int) (*analytics.ReportCatalogEntry, error) {
+	e, ok := analytics.LookupReport(key)
+	if !ok {
+		return nil, ierr.NewErrorf("report %q not found", key).Mark(ierr.ErrNotFound)
+	}
+	if err := req.toQuery().ValidateAgainst(e, maxRows); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+func (req *ReportQueryRequest) toQuery() *analytics.ReportQuery {
+	q := &analytics.ReportQuery{
+		Shape: req.Shape, Dimensions: req.Dimensions, Grain: req.Grain,
+		Compare: req.Compare, Currency: req.Currency, Limit: req.Limit, Offset: req.Offset,
+	}
+	for _, f := range req.Filters {
+		q.Filters = append(q.Filters, analytics.ReportQueryFilter{Field: f.Field, Op: f.Op, Value: f.Value})
+	}
+	for _, so := range req.Sort {
+		q.Sort = append(q.Sort, analytics.ReportQuerySort{Field: so.Field, Dir: so.Dir})
+	}
+	return q
 }

@@ -418,7 +418,7 @@ func (h *Handler) handlePaymentLinkPaid(ctx context.Context, event *RazorpayWebh
 }
 
 // handlePaymentLinkFailed processes payment_link.cancelled and payment_link.expired webhook events.
-// If a pending checkout session is associated with the payment link, it is cleaned up as failed.
+// A pending checkout session is expired on payment_link.expired and failed on payment_link.cancelled.
 func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWebhookEvent, services *ServiceDependencies) error {
 	paymentLinkID := event.Payload.PaymentLink.Entity.ID
 	if paymentLinkID == "" {
@@ -457,7 +457,10 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	}
 
 	sessionID := sessions.Items[0].ID
-	reason := fmt.Errorf("payment link %s by provider", event.Event)
+	var reason error
+	if event.Event != string(EventPaymentLinkExpired) {
+		reason = fmt.Errorf("payment link %s by provider", event.Event)
+	}
 	if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, sessionID, reason); err != nil {
 		h.logger.Error(ctx, "failed to cleanup checkout session on payment link failure",
 			"error", err,
@@ -493,7 +496,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	switch session.CheckoutStatus {
-	case types.CheckoutStatusPending:
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: razorpayPaymentID,
 		}); err != nil {

@@ -12,6 +12,7 @@ import (
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -29,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -41,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -114,6 +117,7 @@ type ServiceParams struct {
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
+	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	CouponRepo                   coupon.Repository
@@ -137,6 +141,11 @@ type ServiceParams struct {
 	ReportsRepo                  domainAnalytics.ReportsRepository
 	RevenueFactRepo              revenuefact.Repository
 	ActivityRepo                 domainActivity.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
+	CommitmentRepo               commitment.Repository
+	EventDeletionRequestRepo     events.DeletionRequestRepository
+	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -168,6 +177,9 @@ type ServiceParams struct {
 	// in main — a plain constructor here would import that package back into
 	// this one. Nil skips the hooks (facts not wired in this deployment).
 	RevenueFacts interfaces.RevenueService
+
+	// SelfBilling provisions new tenants on Flexprice Cloud. Injected in main to avoid an import cycle; a no-op unless configured.
+	SelfBilling interfaces.SelfBillingHook
 }
 
 // Common service params
@@ -216,6 +228,7 @@ func NewServiceParams(
 	taxAppliedRepo taxapplied.Repository,
 	taxRateRepo taxrate.Repository,
 	fxRateRepo fxrate.Repository,
+	hostedInvoiceTokenRepo hostedinvoicetoken.Repository,
 	couponRepo coupon.Repository,
 	couponAssociationRepo coupon_association.Repository,
 	couponApplicationRepo coupon_application.Repository,
@@ -246,6 +259,11 @@ func NewServiceParams(
 	reportsRepo domainAnalytics.ReportsRepository,
 	revenueFactRepo revenuefact.Repository,
 	activityRepo domainActivity.Repository,
+	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
+	selfBillingPostgresRepo domainsb.PostgresRepository,
+	commitmentRepo commitment.Repository,
+	eventDeletionRequestRepo events.DeletionRequestRepository,
+	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -290,6 +308,7 @@ func NewServiceParams(
 		CreditNoteLineItemRepo:       creditNoteLineItemRepo,
 		TaxRateRepo:                  taxRateRepo,
 		FXRateRepo:                   fxRateRepo,
+		HostedInvoiceTokenRepo:       hostedInvoiceTokenRepo,
 		TaxAssociationRepo:           taxConfigRepo,
 		TaxAppliedRepo:               taxAppliedRepo,
 		EventPublisher:               eventPublisher,
@@ -322,5 +341,10 @@ func NewServiceParams(
 		ReportsRepo:                  reportsRepo,
 		RevenueFactRepo:              revenueFactRepo,
 		ActivityRepo:                 activityRepo,
+		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
+		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
+		CommitmentRepo:               commitmentRepo,
+		EventDeletionRequestRepo:     eventDeletionRequestRepo,
+		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}
 }

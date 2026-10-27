@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -34,9 +35,11 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
+	"github.com/flexprice/flexprice/ent/eventdeletionrequest"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -137,6 +140,7 @@ func checkColumn(t, c string) error {
 			auth.Table:                     auth.ValidColumn,
 			billingsequence.Table:          billingsequence.ValidColumn,
 			checkoutsession.Table:          checkoutsession.ValidColumn,
+			commitment.Table:               commitment.ValidColumn,
 			connection.Table:               connection.ValidColumn,
 			costsheet.Table:                costsheet.ValidColumn,
 			coupon.Table:                   coupon.ValidColumn,
@@ -151,9 +155,11 @@ func checkColumn(t, c string) error {
 			entitlementgrant.Table:         entitlementgrant.ValidColumn,
 			entityintegrationmapping.Table: entityintegrationmapping.ValidColumn,
 			environment.Table:              environment.ValidColumn,
+			eventdeletionrequest.Table:     eventdeletionrequest.ValidColumn,
 			fxrate.Table:                   fxrate.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
+			hostedinvoicetoken.Table:       hostedinvoicetoken.ValidColumn,
 			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
 			invoice.Table:                  invoice.ValidColumn,
 			invoicelineitem.Table:          invoicelineitem.ValidColumn,

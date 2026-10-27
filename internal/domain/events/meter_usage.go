@@ -40,8 +40,10 @@ type MeterUsageQueryParams struct {
 	ExternalCustomerIDs []string
 	MeterID             string
 	MeterIDs            []string
-	StartTime           time.Time
-	EndTime             time.Time
+	// IDs restricts the query to these event ids. Empty means no id filter.
+	IDs       []string
+	StartTime time.Time
+	EndTime   time.Time
 	// TimeRanges, when non-empty, replaces StartTime/EndTime with multiple
 	// OR'd half-open [Start, End) windows — one query for disjoint ranges.
 	TimeRanges      []TimeRange
@@ -204,6 +206,20 @@ type UsageActivity struct {
 	Unattributed bool
 }
 
+// PropertyLookupParams scopes a lookup of property keys, or of one key's values, to a customer's usage.
+type PropertyLookupParams struct {
+	TenantID           string
+	EnvironmentID      string
+	ExternalCustomerID string
+	FeatureIDs         []string
+	MeterIDs           []string
+	StartTime          time.Time
+	EndTime            time.Time
+	Key                string
+	Prefix             string
+	Limit              int
+}
+
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches
@@ -253,8 +269,9 @@ type MeterUsageRepository interface {
 	// window. Implementations should avoid FINAL so the check stays cheap.
 	CountMeterUsageForExport(ctx context.Context, startTime, endTime time.Time) (int, error)
 
-	// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not yet processed.
-	GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*MeterUsage, error)
+	// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage rows for a single event
+	// within window, one per meter it matched, or none if not yet processed.
+	GetEventsByEventIDAndExternalCustomerID(ctx context.Context, tenantID, environmentID, externalCustomerID, eventID string, window TimeRange) ([]*MeterUsage, error)
 
 	// GetDailyUsageByMeter returns per-day SUM(qty_total) over the half-open
 	// window [StartTime, EndTime), keyed by meter id — one round-trip for every
@@ -264,4 +281,10 @@ type MeterUsageRepository interface {
 	// GetUsageActivitySince returns the customers with any usage ingested after
 	// the given time, so a rollup can scan what changed instead of everything.
 	GetUsageActivitySince(ctx context.Context, params *UsageActivityParams) (*UsageActivity, error)
+
+	// GetPropertyKeys returns the property keys in the customer's recent usage, most seen first.
+	GetPropertyKeys(ctx context.Context, params *PropertyLookupParams) ([]string, error)
+
+	// GetPropertyValues returns the Key's non-empty values starting with Prefix, most seen first, up to Limit.
+	GetPropertyValues(ctx context.Context, params *PropertyLookupParams) ([]string, error)
 }

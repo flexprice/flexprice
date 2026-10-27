@@ -432,6 +432,11 @@ func TestListRate_PerUnit(t *testing.T) {
 
 	assert.Equal(t, "0.01", listRate(flatSum(t)).String(), "flat fee: the amount is already per unit")
 	assert.Equal(t, "0.01", listRate(graduated(t)).String(), "tiered: the first tier's unit amount")
+
+	packaged := graduated(t)
+	packaged.Tiers[0].UnitAmount = decimal.NewFromInt(1000)
+	packaged.Tiers[0].TransformQuantity = &price.TransformQuantity{DivideBy: 100}
+	assert.Equal(t, "10", listRate(packaged).String(), "package tier: unit amount spread over the package")
 }
 
 // TestDecomposeLineCommitmentRows_TrueUpAndOverageTogether: a per-bucket

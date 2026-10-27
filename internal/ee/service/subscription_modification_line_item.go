@@ -175,6 +175,7 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	allowAlreadyApplied bool,
 ) (*lineItemChangeMod, error) {
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 	lineItemID := change.ID
 	updatedQuantity := change.Quantity
 
@@ -206,6 +207,11 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 
 	alreadyApplied := allowAlreadyApplied && !lineItem.EndDate.IsZero() && lineItem.EndDate.Equal(effectiveDate)
 	if !alreadyApplied {
+		if successor, err := subSvc.findPublishedSuccessor(ctx, lineItem); err != nil {
+			return nil, err
+		} else if successor != nil {
+			return nil, alreadyScheduledVersionError(lineItemID, successor.ID)
+		}
 		if err := validateChangeEffectiveDateWithinLineItemWindow(effectiveDate, sub, lineItem, lineItemID); err != nil {
 			return nil, err
 		}
@@ -492,6 +498,7 @@ func (s *subscriptionModificationService) applyLineItemChange(
 	}
 
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 	mods := request.GetModifications()
 	if len(mods) == 0 {
 		return []dto.ChangedLineItem{}, nil
@@ -531,13 +538,21 @@ func (s *subscriptionModificationService) applyLineItemChange(
 					Mark(ierr.ErrValidation)
 			}
 
+			if successor, err := subSvc.findPublishedSuccessor(txCtx, lineItem); err != nil {
+				return err
+			} else if successor != nil {
+				return alreadyScheduledVersionError(lineItemID, successor.ID)
+			}
+
 			newItemEndDate := time.Time{}
 			if !lineItem.EndDate.IsZero() {
 				newItemEndDate = lineItem.EndDate
 			}
 
+			newItemID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
 			endedItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
 				WithEndDate(effectiveDate).
+				WithSuccessorLineItemID(lo.ToPtr(newItemID)).
 				Build()
 			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
 				return ierr.WithError(err).
@@ -546,11 +561,13 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			}
 
 			builder := subscription.NewSubscriptionLineItemBuilder(endedItem).
-				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)).
+				WithID(newItemID).
 				WithQuantity(mod.getTargetQuantity()).
 				WithStartDate(effectiveDate).
 				WithEndDate(newItemEndDate).
-				WithBaseModel(types.GetDefaultBaseModel(txCtx))
+				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
+				WithPredecessorLineItemID(lo.ToPtr(lineItemID)).
+				WithSuccessorLineItemID(nil)
 
 			if priceReq := mod.getNewPriceRequest(); priceReq != nil {
 				newPrice, err := priceSvc.CreatePrice(txCtx, *priceReq)
@@ -561,24 +578,27 @@ func (s *subscriptionModificationService) applyLineItemChange(
 			}
 
 			newItem := builder.Build()
+			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
 
-			setPredecessorLineItemID(newItem, lineItemID)
-			clearSuccessorLineItemID(newItem)
+			if mod.getNewPriceRequest() != nil {
+				if err := checkLineItemCommitmentAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+					return err
+				}
+			}
 
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
 			}
 
+			if mod.getNewPriceRequest() != nil {
+				if err := checkLineItemCommitmentDetach(txCtx, sp, request.GetSubscription(), endedItem, effectiveDate); err != nil {
+					return err
+				}
+			}
+
 			if err := NewCouponAssociationService(sp).CreateCouponRefAssociations(
 				txCtx, request.GetSubscription(), mod.getCoupons(), newItem.ID); err != nil {
 				return err
-			}
-
-			setSuccessorLineItemID(endedItem, newItem.ID)
-			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to link the superseded line item to its successor").
-					Mark(ierr.ErrDatabase)
 			}
 
 			changedLineItems = append(changedLineItems,

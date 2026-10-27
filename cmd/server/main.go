@@ -13,6 +13,7 @@ import (
 	adminapi "github.com/flexprice/flexprice/internal/api/admin"
 	adminv1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
+	"github.com/flexprice/flexprice/internal/buildinfo"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
@@ -22,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
+	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -36,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -106,6 +109,7 @@ func main() {
 			// Monitoring
 			tracing.NewService,
 			pyroscope.NewPyroscopeService,
+			telemetry.NewReporter,
 
 			// Cache
 			cache.InitializeInMemoryCache,
@@ -165,6 +169,7 @@ func main() {
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
 			repository.NewEntitlementGrantRepository,
+			repository.NewCommitmentRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,
@@ -181,6 +186,7 @@ func main() {
 			repository.NewUsageRecordRepository,
 			repository.NewTaxRateRepository,
 			repository.NewFXRateRepository,
+			repository.NewHostedInvoiceTokenRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
 			repository.NewCouponAssociationRepository,
@@ -205,6 +211,10 @@ func main() {
 			repository.NewAnalyticsViewRepository,
 			repository.NewReportsRepository,
 			repository.NewRevenueFactRepository,
+			repository.NewSelfBillingClickHouseRepository,
+			repository.NewSelfBillingPostgresRepository,
+			repository.NewEventDeletionRequestRepository,
+			repository.NewEventDeletionLogRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -240,6 +250,7 @@ func main() {
 
 	// Service layer
 	opts = append(opts,
+		serviceParamsProviders(),
 		fx.Provide(
 			// Services
 			// Integration factory must be provided before service params
@@ -250,12 +261,6 @@ func main() {
 			provideStorageResolver,
 			syncExport.NewExportService,
 			fx.Annotate(service.NewServiceParams, fx.ResultTags(`name:"base"`)),
-			// revenue.New builds from the BASE params (it never calls the
-			// invoice hooks itself); enrichServiceParams then hands every
-			// other service a copy carrying it, closing the hook loop
-			// without importing the revenue package from the service layer.
-			fx.Annotate(revenue.New, fx.ParamTags(`name:"base"`)),
-			fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``)),
 			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -267,14 +272,17 @@ func main() {
 			adminsvc.NewTenantService,
 			adminsvc.NewUserService,
 			adminsvc.NewSettingsService,
+			adminsvc.NewDLQService,
 			service.NewMeterService,
 			service.NewEventService,
+			service.NewEventDeletionWindowService,
 			service.NewEventConsumptionService,
 			service.NewRawEventsReprocessingService,
 			service.NewRawEventConsumptionService,
 			service.NewCostSheetUsageTrackingService,
 			service.NewMeterUsageTrackingService,
 			service.NewMeterUsageService,
+			service.NewEventDeletionService,
 			service.NewCheckoutSessionService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
@@ -307,7 +315,10 @@ func main() {
 			service.NewIntegrationSyncService,
 			service.NewTaxService,
 			service.NewFXRateService,
+			service.NewHostedInvoiceTokenService,
+			service.NewHostedInvoiceService,
 			service.NewCouponService,
+			service.NewCommitmentService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
@@ -348,6 +359,7 @@ func main() {
 			tracing.RegisterHooks,
 			repository.InitTracing,
 			pyroscope.RegisterHooks,
+			telemetry.RegisterHooks,
 			activity.Install,
 			initIntegrationFactory,
 			startServer,
@@ -363,7 +375,6 @@ func provideHandlers(
 	logger *logger.Logger,
 	serviceParams service.ServiceParams,
 	redisCache cache.RedisCache,
-	locker cache.Locker,
 	meterService service.MeterService,
 	eventService service.EventService,
 	environmentService service.EnvironmentService,
@@ -401,6 +412,7 @@ func provideHandlers(
 	taxService service.TaxService,
 	fxRateService service.FXRateService,
 	couponService service.CouponService,
+	commitmentService service.CommitmentService,
 	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
 	settingsService service.SettingsService,
@@ -419,17 +431,20 @@ func provideHandlers(
 	oauthService service.OAuthService,
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
+	hostedInvoiceService service.HostedInvoiceService,
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
+	eventDeletionService service.EventDeletionService,
 	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	analyticsService service.AnalyticsService,
 	revenueService interfaces.RevenueService,
+	selfBillingService selfbilling.Service,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, eventDeletionService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -438,7 +453,7 @@ func provideHandlers(
 		Price:                    v1.NewPriceHandler(priceService, logger),
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, paymentService, entityIntegrationMappingService, logger),
-		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, locker, cfg, logger),
+		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, cfg, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionPause:        v1.NewSubscriptionPauseHandler(subscriptionService, logger),
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
@@ -470,7 +485,8 @@ func provideHandlers(
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
-		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, locker, logger),
+		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
+		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
@@ -480,6 +496,8 @@ func provideHandlers(
 		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
+		SelfBilling:              v1.NewSelfBillingHandler(selfBillingService),
+		HostedInvoice:            v1.NewHostedInvoiceHandler(hostedInvoiceService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
@@ -494,6 +512,7 @@ func provideAdminHandlers(
 	tenants adminsvc.TenantService,
 	users adminsvc.UserService,
 	settings adminsvc.SettingsService,
+	dlq adminsvc.DLQService,
 ) adminapi.Handlers {
 	return adminapi.Handlers{
 		Health:      adminv1.NewHealthHandler(),
@@ -502,6 +521,7 @@ func provideAdminHandlers(
 		Tenant:      adminv1.NewTenantHandler(tenants),
 		User:        adminv1.NewUserHandler(users),
 		Settings:    adminv1.NewSettingsHandler(settings),
+		DLQ:         adminv1.NewDLQHandler(dlq),
 	}
 }
 
@@ -523,6 +543,7 @@ func provideRouter(
 	webhookRequestRepo incomingwebhookevent.Repository,
 	environmentRepo environment.Repository,
 	userRepo user.Repository,
+	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -535,6 +556,7 @@ func provideRouter(
 		webhookRequestRepo,
 		environmentRepo,
 		userRepo,
+		hostedInvoiceService,
 	)
 }
 
@@ -628,6 +650,8 @@ func startServer(
 	if mode == "" {
 		mode = types.ModeLocal
 	}
+
+	log.Infow("starting flexprice", "mode", mode, "version", buildinfo.Version, "git_sha", buildinfo.GitSHA)
 
 	switch mode {
 	case types.ModeLocal:
@@ -847,9 +871,20 @@ func provideActivityPubSub(
 	return types.ActivityPubSub{PubSub: pubSub}
 }
 
-// enrichServiceParams returns the ServiceParams the rest of the app consumes:
-// the base params plus the revenue-facts service the invoice hooks call.
-func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService) service.ServiceParams {
+// serviceParamsProviders build the ServiceParams every service consumes from the base params.
+// revenue.New and self-billing build from the base params, so the service layer never imports them.
+func serviceParamsProviders() fx.Option {
+	return fx.Provide(
+		fx.Annotate(revenue.New, fx.ParamTags(`name:"base"`)),
+		fx.Annotate(selfbilling.New, fx.ParamTags(`name:"base"`)),
+		fx.Annotate(enrichServiceParams, fx.ParamTags(`name:"base"`, ``, ``)),
+	)
+}
+
+// enrichServiceParams returns the ServiceParams the rest of the app consumes: the base params plus
+// the revenue-facts service the invoice hooks call and the self-billing hook.
+func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.RevenueService, selfBilling selfbilling.Service) service.ServiceParams {
 	base.RevenueFacts = revenueFacts
+	base.SelfBilling = selfBilling
 	return base
 }

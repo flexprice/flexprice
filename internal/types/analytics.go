@@ -13,21 +13,24 @@ const (
 	ShapeScalar     Shape = "scalar"
 )
 
+var AllShapes = []Shape{ShapeScalar, ShapeTimeseries, ShapeBreakdown}
+
 // Family selects the view's compiler.
 type Family string
 
 const (
 	FamilyUsage   Family = "usage"
 	FamilyBilling Family = "billing"
+	FamilyReport  Family = "report"
 )
 
 func (f Family) Validate() error {
 	switch f {
-	case "", FamilyUsage, FamilyBilling:
+	case "", FamilyUsage, FamilyBilling, FamilyReport:
 		return nil
 	default:
 		return ierr.NewErrorf("invalid family %q", f).
-			WithHint("family must be one of: usage, billing").
+			WithHint("family must be one of: usage, billing, report").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -100,11 +103,23 @@ type Metric string
 const (
 	MetricUsageQuantity Metric = "usage_quantity"
 	MetricEventCount    Metric = "event_count"
+	MetricEventsVolume  Metric = "events_volume"
 )
 
 // Billing family metrics.
 const (
-	MetricInvoiceTotal Metric = "invoice_total"
+	MetricInvoiceTotal       Metric = "invoice_total"
+	MetricTotalReceivables   Metric = "total_receivables"
+	MetricReceivablesAging   Metric = "receivables_aging"
+	MetricDaysToPay          Metric = "days_to_pay"
+	MetricARPU               Metric = "arpu"
+	MetricARPUPaid           Metric = "arpu_paid"
+	MetricCreditConsumption  Metric = "credit_consumption"
+	MetricCreditTopups       Metric = "credit_topups"
+	MetricNetBilling         Metric = "net_billing"
+	MetricInvoiceTotalIssued Metric = "invoice_total_issued"
+	MetricNetBillingIssued   Metric = "net_billing_issued"
+	MetricActiveCustomers    Metric = "active_customers"
 )
 
 func (m Metric) Validate() error {
@@ -156,3 +171,40 @@ func (t ColumnType) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 }
+
+// ReportCategory groups catalog reports in the UI.
+type ReportCategory string
+
+const (
+	ReportCategoryBilling     ReportCategory = "billing"
+	ReportCategoryReceivables ReportCategory = "receivables"
+	ReportCategoryCustomers   ReportCategory = "customers"
+	ReportCategoryCredits     ReportCategory = "credits"
+	ReportCategoryUsage       ReportCategory = "usage"
+)
+
+// ReportKind is how a report's value behaves over time.
+type ReportKind string
+
+const (
+	ReportKindFlow     ReportKind = "flow"
+	ReportKindRatio    ReportKind = "ratio"
+	ReportKindSnapshot ReportKind = "snapshot"
+)
+
+// ReportValueType is the unit of a report's value.
+type ReportValueType string
+
+const (
+	ReportValueTypeMoney ReportValueType = "money"
+	ReportValueTypeCount ReportValueType = "count"
+	ReportValueTypeDays  ReportValueType = "days"
+)
+
+// ImprovementDirection says which way a report value improves.
+type ImprovementDirection string
+
+const (
+	ImprovementHigher ImprovementDirection = "higher"
+	ImprovementLower  ImprovementDirection = "lower"
+)

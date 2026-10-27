@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/flexprice/flexprice/internal/types"
@@ -18,7 +20,10 @@ func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
 	handlers := []gin.HandlerFunc{}
 
 	if cfg.Otel.Enabled && cfg.Otel.Traces.Enabled {
-		handlers = append(handlers, otelgin.Middleware(cfg.Otel.ResolveServiceName(cfg)))
+		handlers = append(handlers, otelgin.Middleware(
+			cfg.Otel.ResolveServiceName(cfg),
+			otelgin.WithFilter(func(r *http.Request) bool { return r.URL.Path != "/health" }),
+		))
 	}
 
 	return handlers

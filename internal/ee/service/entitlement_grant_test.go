@@ -611,6 +611,90 @@ func (s *EntitlementGrantSuite) TestComputeGrantWindow_CycleBoundaryCap() {
 	s.True(to.Equal(fx.cycleEnd), "valid_to must cap at cycle_end")
 }
 
+// No window runs past the candidate's end_date, and none opens once coverage reaches it.
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_CapsAtCandidateEndDate() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("enddate", 24)
+	eventAt := fx.cycleStart.Add(48 * time.Hour)
+	endDate := eventAt.Add(6 * time.Hour)
+	s.seedMeterUsage(fx.extID, fx.meterID, eventAt, 1)
+
+	meta, last := s.windowArgs(fx)
+	candidate := grantCandidate{ec: fx.ec, endDate: endDate}
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(), candidate, fx.sub, meta, last, eventAt.Add(time.Minute), 24*time.Hour)
+	s.NoError(err)
+	s.Require().True(ok)
+	s.True(from.Equal(eventAt), "got %s want %s", from, eventAt)
+	s.True(to.Equal(endDate), "valid_to must cap at end_date: got %s want %s", to, endDate)
+
+	s.seedMeterUsage(fx.extID, fx.meterID, endDate.Add(time.Hour), 1)
+	_, _, ok, err = svc.computeGrantWindow(s.GetContext(), candidate, fx.sub, meta, endDate, endDate.Add(2*time.Hour), 24*time.Hour)
+	s.NoError(err)
+	s.False(ok, "no window may open at or after end_date")
+}
+
+// subscription_period ends at end_date instead of cycle_end.
+func (s *EntitlementGrantSuite) TestComputeGrantWindow_SubscriptionPeriod_EndsAtEndDate() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("enddate-subper", 5)
+	endDate := fx.cycleStart.Add(10 * 24 * time.Hour)
+	ec := s.newTimeBoxedEC("ec-subper-end", fx.ec.FeatureID, 0,
+		types.EntitlementGrantDurationUnitSubscriptionPeriod, decimal.NewFromInt(400))
+
+	meta, last := s.windowArgs(fx)
+	from, to, ok, err := svc.computeGrantWindow(s.GetContext(),
+		grantCandidate{ec: ec, endDate: endDate}, fx.sub, meta, last, fx.cycleStart.Add(time.Hour), 0)
+	s.NoError(err)
+	s.Require().True(ok)
+	s.True(from.Equal(fx.cycleStart))
+	s.True(to.Equal(endDate), "got %s want %s", to, endDate)
+}
+
+// Only configs live during the current period open grants; one starting at cycle end waits for
+// the next cycle instead of opening an empty window.
+func (s *EntitlementGrantSuite) TestEligibleGrantConfigs_SkipsConfigsOutsidePeriod() {
+	svc := s.grantService.(*entitlementGrantService)
+	fx := s.newWindowFixture("period-filter", 5)
+	ended := fx.cycleStart
+	nextCycle := fx.cycleEnd
+
+	live := s.newTimeBoxedEC("ec-live", fx.ec.FeatureID, 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
+	gone := s.newTimeBoxedEC("ec-ended", fx.ec.FeatureID, 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
+	gone.EndDate = &ended
+	future := s.newTimeBoxedEC("ec-next", fx.ec.FeatureID, 5, types.EntitlementGrantDurationUnitHour, decimal.NewFromInt(10))
+	future.StartDate = &nextCycle
+
+	got := svc.eligibleGrantConfigsByFeature(s.GetContext(), fx.sub, []*entitlement.Entitlement{live, gone, future})
+	ids := lo.Map(got[fx.ec.FeatureID], func(e *entitlement.Entitlement, _ int) string { return e.ID })
+	s.Equal([]string{live.ID}, ids)
+}
+
+// A pool ends at its earliest contributor's end_date; parallel ECs keep their own.
+func (s *EntitlementGrantSuite) TestGrantCandidatesForFeature_EndDate() {
+	cycleStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	day10 := cycleStart.Add(10 * 24 * time.Hour)
+	day20 := cycleStart.Add(20 * 24 * time.Hour)
+
+	open := &entitlement.Entitlement{ID: "ent_a", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(1000))}
+	late := &entitlement.Entitlement{ID: "ent_b", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(600)), EndDate: &day20}
+	early := &entitlement.Entitlement{ID: "ent_c", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(300)), EndDate: &day10}
+
+	got := grantCandidatesForFeature([]*entitlement.Entitlement{open})
+	s.Require().Len(got, 1)
+	s.True(got[0].endDate.IsZero())
+
+	got = grantCandidatesForFeature([]*entitlement.Entitlement{open, late, early})
+	s.Require().Len(got, 1)
+	s.True(got[0].endDate.Equal(day10), "expected the earliest end %s, got %s", day10, got[0].endDate)
+
+	parA := &entitlement.Entitlement{ID: "ent_p1", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(500)), AggregationMode: types.EntitlementAggregationModeParallel}
+	parB := &entitlement.Entitlement{ID: "ent_p2", FeatureID: "f", GrantQuota: lo.ToPtr(decimal.NewFromInt(400)), AggregationMode: types.EntitlementAggregationModeParallel, EndDate: &day10}
+	got = grantCandidatesForFeature([]*entitlement.Entitlement{parA, parB})
+	s.Require().Len(got, 2)
+	s.True(got[0].endDate.IsZero())
+	s.True(got[1].endDate.Equal(day10))
+}
+
 func (s *EntitlementGrantSuite) TestComputeGrantWindow_TrailingStubAbsorbed() {
 	// A window whose remainder to cycle_end would be sub-minimum stretches to
 	// cycle_end — a stub can't stand alone and skipping it would orphan events.

@@ -1097,6 +1097,12 @@ func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlementsForSubscr
 func (m *mockSubscriptionService) GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*apidto.EntitlementResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*apidto.EntitlementResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetActiveAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
 	return nil, nil
 }

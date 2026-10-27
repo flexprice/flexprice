@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -68,6 +69,17 @@ func NewEventExporter(
 
 // PrepareData fetches meter usage data in batches and converts it to CSV format.
 func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
+	var buf bytes.Buffer
+	totalRecords, err := e.WriteData(ctx, request, &buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	return buf.Bytes(), totalRecords, nil
+}
+
+// WriteData writes meter usage as CSV in batches, preserving the FeatureUsageCSV schema.
+// Fields unavailable in meter_usage remain empty.
+func (e *EventExporter) WriteData(ctx context.Context, request *dto.ExportRequest, w io.Writer) (int, error) {
 	const batchSize = 500
 
 	e.logger.Info(ctx, "starting batched meter usage data fetch",
@@ -77,24 +89,15 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 		"end_time", request.EndTime,
 		"batch_size", batchSize)
 
-	return e.prepareDataFromMeterUsage(ctx, request, batchSize)
-}
-
-// prepareDataFromMeterUsage fetches rows from the meter_usage table and maps each
-// into the existing FeatureUsageCSV schema. Columns that meter_usage does not
-// carry (subscription_id, sub_line_item_id, price_id, customer_id, feature_id,
-// period_id, provisional_usage_charges) are left as empty strings — the schema
-// stays stable so downstream consumers don't see a header-row change.
-func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *dto.ExportRequest, batchSize int) ([]byte, int, error) {
 	rowCount, err := e.meterUsageRepo.CountMeterUsageForExport(ctx, request.StartTime, request.EndTime)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
 	if err := enforceExportVolume(ctx, e.logger, request.EntityType, request.TenantID, request.StartTime, request.EndTime, rowCount); err != nil {
-		return nil, 0, err
+		return 0, err
 	}
 
-	var csvRecords []*FeatureUsageCSV
+	csvWriter := gocsv.DefaultCSVWriter(w)
 	totalRecords := 0
 	offset := 0
 
@@ -111,7 +114,7 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 			offset,
 		)
 		if err != nil {
-			return nil, 0, ierr.WithError(err).
+			return 0, ierr.WithError(err).
 				WithHint("Failed to fetch meter usage data batch").
 				WithReportableDetails(map[string]interface{}{
 					"offset":     offset,
@@ -126,9 +129,19 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 
 		batchRecords, err := e.convertMeterUsageToCSVRecords(usageData)
 		if err != nil {
-			return nil, 0, err
+			return 0, err
 		}
-		csvRecords = append(csvRecords, batchRecords...)
+		// The header row goes out with the first batch only.
+		if totalRecords == 0 {
+			err = gocsv.MarshalCSV(batchRecords, csvWriter)
+		} else {
+			err = gocsv.MarshalCSVWithoutHeaders(batchRecords, csvWriter)
+		}
+		if err != nil {
+			return 0, ierr.WithError(err).
+				WithHint("Failed to marshal data to CSV").
+				Mark(ierr.ErrInternal)
+		}
 
 		totalRecords += len(usageData)
 		offset += batchSize
@@ -138,26 +151,21 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 		}
 	}
 
-	var buf bytes.Buffer
-	if err := gocsv.Marshal(csvRecords, &buf); err != nil {
-		return nil, 0, ierr.WithError(err).
-			WithHint("Failed to marshal data to CSV").
-			Mark(ierr.ErrInternal)
-	}
-	csvBytes := buf.Bytes()
-
 	if totalRecords == 0 {
+		if err := gocsv.MarshalCSV([]*FeatureUsageCSV{}, csvWriter); err != nil {
+			return 0, ierr.WithError(err).
+				WithHint("Failed to marshal data to CSV").
+				Mark(ierr.ErrInternal)
+		}
 		e.logger.Info(ctx, "no meter usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
-			"env_id", request.EnvID,
-			"csv_size_bytes", len(csvBytes))
+			"env_id", request.EnvID)
 	} else {
 		e.logger.Info(ctx, "completed batched meter_usage fetch and CSV conversion",
-			"total_records", totalRecords,
-			"csv_size_bytes", len(csvBytes))
+			"total_records", totalRecords)
 	}
 
-	return csvBytes, totalRecords, nil
+	return totalRecords, nil
 }
 
 // convertMeterUsageToCSVRecords maps MeterUsage rows into FeatureUsageCSV with

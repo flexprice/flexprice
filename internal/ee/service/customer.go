@@ -221,6 +221,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if err != nil {
 		return nil, err
 	}
+	before := *cust
 
 	// Update basic fields
 	if req.ExternalID != nil && *req.ExternalID != cust.ExternalID {
@@ -304,8 +305,57 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
 	s.syncCustomerUpdateToZoho(ctx, cust)
+	s.syncCustomerUpdateToStripe(ctx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+// syncCustomerUpdateToStripe runs in the request rather than async: a checkout taxed against the
+// Stripe customer can follow immediately. A Stripe failure never fails the update.
+func (s *customerService) syncCustomerUpdateToStripe(ctx context.Context, before, after *customer.Customer) {
+	if !stripeFieldsChanged(before, after) || s.IntegrationFactory == nil || s.ConnectionRepo == nil {
+		return
+	}
+
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+	if ierr.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		s.Logger.Error(ctx, "failed to read the Stripe connection, customer update not pushed to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+		return
+	}
+	if conn == nil || !conn.IsCustomerOutboundEnabled() {
+		return
+	}
+
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load the Stripe integration, customer update not pushed to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+		return
+	}
+
+	if err := stripeIntegration.CustomerSvc.UpdateCustomerInStripe(ctx, after, s); err != nil {
+		s.Logger.Error(ctx, "failed to push customer update to Stripe",
+			"error", err,
+			"customer_id", after.ID)
+	}
+}
+
+// stripeFieldsChanged reports whether anything the Stripe customer mirrors was changed.
+func stripeFieldsChanged(before, after *customer.Customer) bool {
+	return before.Name != after.Name ||
+		before.Email != after.Email ||
+		before.AddressLine1 != after.AddressLine1 ||
+		before.AddressLine2 != after.AddressLine2 ||
+		before.AddressCity != after.AddressCity ||
+		before.AddressState != after.AddressState ||
+		before.AddressPostalCode != after.AddressPostalCode ||
+		before.AddressCountry != after.AddressCountry
 }
 
 func (s *customerService) syncCustomerUpdateToZoho(ctx context.Context, cust *customer.Customer) {

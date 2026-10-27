@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -100,6 +101,63 @@ func TestCalculationParams_ZeroDecimalCurrencyIsNotScaled(t *testing.T) {
 
 	assert.Equal(t, int64(1500), *params.LineItems[0].Amount,
 		"yen has no minor unit, so its smallest unit is the major one")
+}
+
+// The engine has no connection repo, so reaching Stripe would panic: these prove the zero path
+// returns first.
+func TestCalculate_ZeroBaseChargesNothingWithoutCallingStripe(t *testing.T) {
+	tests := []struct {
+		name     string
+		subtotal string
+		discount string
+	}{
+		{
+			name:     "zero subtotal, as on a trial start invoice",
+			subtotal: "0",
+			discount: "0",
+		},
+		{
+			name:     "fully discounted",
+			subtotal: "100",
+			discount: "100",
+		},
+		{
+			name:     "over discounted is clamped to zero",
+			subtotal: "100",
+			discount: "150",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := &stripeTaxEngine{}
+
+			result, err := engine.Calculate(context.Background(), invoiceTaxRequest(stripeTestInvoice("USD", tt.subtotal, tt.discount)))
+
+			require.NoError(t, err)
+			assert.Equal(t, types.TaxProviderStripe, result.Provider)
+			assert.True(t, result.TotalTaxAmount.IsZero())
+			assert.True(t, result.ExclusiveTax.IsZero())
+			assert.True(t, result.AmountTotal.IsZero())
+			assert.Empty(t, result.TaxAppliedRecords, "no rows means commit has nothing to file")
+			assert.Nil(t, result.ExemptionReason)
+		})
+	}
+}
+
+func TestCalculate_ZeroBaseInvoiceIsStampedUntaxed(t *testing.T) {
+	engine := &stripeTaxEngine{}
+
+	result, err := engine.Calculate(context.Background(), invoiceTaxRequest(stripeTestInvoice("USD", "0", "0")))
+	require.NoError(t, err)
+
+	inv := stripeTestInvoice("USD", "0", "0")
+	applyTaxResultToInvoice(inv, result)
+
+	assert.True(t, inv.Total.IsZero())
+	assert.True(t, inv.TotalTax.IsZero())
+	require.NotNil(t, inv.TaxExemptionReasonCode, "no tax was charged, so the reason is set")
+	assert.Equal(t, types.TaxExemptionReasonNoTaxConfigured, *inv.TaxExemptionReasonCode)
 }
 
 // ---------------------------------------------------------------------------

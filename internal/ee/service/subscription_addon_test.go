@@ -448,32 +448,6 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutRejectsUnsupportedCombin
 	ctx := s.GetContext()
 	sub := s.testData.subscription
 
-	s.Run("override_line_items", func() {
-		addonID := "addon_reject_override"
-		s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
-
-		now := s.testData.now
-		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
-			SubscriptionID: sub.ID,
-			Checkout:       s.razorpayCheckoutParams(),
-			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
-				AddonID:           addonID,
-				Cadence:           types.AddonCadenceRecurring,
-				StartDate:         &now,
-				ProrationBehavior: types.ProrationBehaviorCreateProrations,
-				OverrideLineItems: []dto.OverrideLineItemRequest{{
-					PriceID:  "price_" + addonID,
-					Quantity: lo.ToPtr(decimal.NewFromInt(2)),
-				}},
-			},
-		})
-
-		s.Require().Error(err)
-		s.True(ierr.IsValidation(err))
-		s.Empty(s.addonLineItemsFor(sub.ID, addonID))
-		s.Zero(s.checkoutSessionCount())
-	})
-
 	s.Run("line_item_commitments", func() {
 		addonID := "addon_reject_commitment"
 		s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)

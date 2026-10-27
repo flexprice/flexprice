@@ -105,6 +105,18 @@ func (f CheckoutSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CheckoutSessionMutation", m)
 }
 
+// The CommitmentFunc type is an adapter to allow the use of ordinary
+// function as Commitment mutator.
+type CommitmentFunc func(context.Context, *ent.CommitmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommitmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommitmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommitmentMutation", m)
+}
+
 // The ConnectionFunc type is an adapter to allow the use of ordinary
 // function as Connection mutator.
 type ConnectionFunc func(context.Context, *ent.ConnectionMutation) (ent.Value, error)
@@ -273,6 +285,18 @@ func (f EnvironmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EnvironmentMutation", m)
 }
 
+// The EventDeletionRequestFunc type is an adapter to allow the use of ordinary
+// function as EventDeletionRequest mutator.
+type EventDeletionRequestFunc func(context.Context, *ent.EventDeletionRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventDeletionRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventDeletionRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventDeletionRequestMutation", m)
+}
+
 // The FXRateFunc type is an adapter to allow the use of ordinary
 // function as FXRate mutator.
 type FXRateFunc func(context.Context, *ent.FXRateMutation) (ent.Value, error)
@@ -307,6 +331,18 @@ func (f GroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMutation", m)
+}
+
+// The HostedInvoiceTokenFunc type is an adapter to allow the use of ordinary
+// function as HostedInvoiceToken mutator.
+type HostedInvoiceTokenFunc func(context.Context, *ent.HostedInvoiceTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f HostedInvoiceTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.HostedInvoiceTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.HostedInvoiceTokenMutation", m)
 }
 
 // The IncomingWebhookEventFunc type is an adapter to allow the use of ordinary

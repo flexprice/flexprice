@@ -3,6 +3,7 @@ package analytics
 import (
 	"testing"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,4 +102,22 @@ func TestNewViewDefinition_SetsAllFields(t *testing.T) {
 
 func TestValidateDimensions_RejectsEmptyPropertyField(t *testing.T) {
 	require.Error(t, ValidateDimensions([]string{"properties."}))
+}
+
+func TestViewDefinition_ReportFamily(t *testing.T) {
+	ok := ViewDefinition{Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal}, Time: TimeSpecRaw{Range: "this_month"}, Display: "table"}
+	require.NoError(t, ok.Validate())
+
+	bad := map[string]ViewDefinition{
+		"two metrics":   {Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal, types.MetricARPU}, Time: TimeSpecRaw{Range: "this_month"}},
+		"unknown key":   {Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{"nope"}, Time: TimeSpecRaw{Range: "this_month"}},
+		"bad display":   {Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal}, Time: TimeSpecRaw{Range: "this_month"}, Display: "pie"},
+		"bad range":     {Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal}, Time: TimeSpecRaw{Range: "today"}},
+		"missing range": {Family: types.FamilyReport, Shape: types.ShapeScalar, Metrics: []types.Metric{types.MetricInvoiceTotal}},
+	}
+	for name, d := range bad {
+		err := d.Validate()
+		require.Error(t, err, name)
+		assert.True(t, ierr.IsValidation(err), name)
+	}
 }

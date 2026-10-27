@@ -30,6 +30,8 @@ type Tx struct {
 	BillingSequence *BillingSequenceClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
+	// Commitment is the client for interacting with the Commitment builders.
+	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -58,12 +60,16 @@ type Tx struct {
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
+	// EventDeletionRequest is the client for interacting with the EventDeletionRequest builders.
+	EventDeletionRequest *EventDeletionRequestClient
 	// FXRate is the client for interacting with the FXRate builders.
 	FXRate *FXRateClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// HostedInvoiceToken is the client for interacting with the HostedInvoiceToken builders.
+	HostedInvoiceToken *HostedInvoiceTokenClient
 	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
 	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
@@ -267,6 +273,7 @@ func (tx *Tx) init() {
 	tx.Auth = NewAuthClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
+	tx.Commitment = NewCommitmentClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)
 	tx.Coupon = NewCouponClient(tx.config)
@@ -281,9 +288,11 @@ func (tx *Tx) init() {
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
+	tx.EventDeletionRequest = NewEventDeletionRequestClient(tx.config)
 	tx.FXRate = NewFXRateClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.HostedInvoiceToken = NewHostedInvoiceTokenClient(tx.config)
 	tx.IncomingWebhookEvent = NewIncomingWebhookEventClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)

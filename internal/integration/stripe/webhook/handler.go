@@ -105,7 +105,6 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event
 		return h.handleSubscriptionCancellation(ctx, event, environmentID, services)
 
 	default:
-		h.logger.Info(ctx, "unhandled Stripe webhook event type", "type", event.Type)
 		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
@@ -555,6 +554,19 @@ func (h *Handler) handleInvoicePaymentFailed(ctx context.Context, event *stripea
 	}
 	if err != nil {
 		return err
+	}
+
+	// A failed Stripe charge on an invoice already paid elsewhere is not a failure of the invoice.
+	paid, err := h.paymentSvc.IsFlexPriceInvoicePaid(ctx, flexpriceInvoiceID)
+	if err != nil {
+		return err
+	}
+	if paid {
+		h.logger.Info(ctx, "Stripe payment failed on an invoice already paid in FlexPrice, skipping event",
+			"invoice_id", flexpriceInvoiceID,
+			"stripe_invoice_id", stripeInvoice.ID,
+			"event_id", event.ID)
+		return nil
 	}
 
 	// Both steps are idempotent, so errors are returned for Stripe to retry the event.
@@ -1043,7 +1055,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	switch session.CheckoutStatus {
-	case types.CheckoutStatusPending:
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		providerResult := &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: stripePaymentIntentID,
 		}

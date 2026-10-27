@@ -47,6 +47,7 @@ type eventConsumptionService struct {
 	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
+	deletionWindow EventDeletionWindowService
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -54,11 +55,13 @@ func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
 	tracingService *tracing.Service,
+	deletionWindow EventDeletionWindowService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{
 		ServiceParams:  params,
 		eventRepo:      eventRepo,
 		tracingService: tracingService,
+		deletionWindow: deletionWindow,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -178,6 +181,18 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		}
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
+		}
+		// The whole batch is held: one Kafka message cannot be part-acknowledged,
+		// and writing the rest would duplicate them on every redelivery.
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
+			s.Logger.Error(ctx, "holding bulk event batch: a deletion is in progress for this customer and period",
+				"error", types.ErrEventDeletionInProgress,
+				"event_id", evt.ID,
+				"external_customer_id", evt.ExternalCustomerID,
+				"timestamp", evt.Timestamp,
+				"message_uuid", msg.UUID,
+			)
+			return types.ErrEventDeletionInProgress
 		}
 		inserts = append(inserts, evt)
 	}
@@ -332,10 +347,12 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 
 	if tenantID == "" && event.TenantID != "" {
 		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
 
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	s.Logger.Debug(ctx, "processing event in event consumption service",
@@ -347,42 +364,18 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 		"timestamp", event.Timestamp,
 	)
 
+	if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		s.Logger.Error(ctx, "holding event: a deletion is in progress for this customer and period",
+			"error", types.ErrEventDeletionInProgress,
+			"event_id", event.ID,
+			"external_customer_id", event.ExternalCustomerID,
+			"timestamp", event.Timestamp,
+		)
+		return types.ErrEventDeletionInProgress
+	}
+
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
-
-	s.Logger.Debug(ctx, "creating billing event",
-		"tenant_id", s.Config.Billing.TenantID,
-		"environment_id", s.Config.Billing.EnvironmentID,
-		"external_customer_id", event.ExternalCustomerID,
-	)
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Generate new ID
-			"", // Customer ID will be looked up by external ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		s.Logger.Debug(ctx, "appending billing event",
-			"tenant_id", s.Config.Billing.TenantID,
-			"environment_id", s.Config.Billing.EnvironmentID,
-			"external_customer_id", event.ExternalCustomerID,
-		)
-
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
 
 	// Insert events into ClickHouse
 	s.Logger.Debug(ctx, "inserting events into ClickHouse",
@@ -440,28 +433,6 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {

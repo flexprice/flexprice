@@ -78,6 +78,14 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
 
+		if err := NewCommitmentService(s.ServiceParams).CheckPriceAttach(txCtx, sub, price.Price, lineItem.StartDate, lo.EmptyableToPtr(lineItem.EndDate)); err != nil {
+			return err
+		}
+
+		if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, lineItem); err != nil {
+			return err
+		}
+
 		// Materialize bucket prices: create a SUBSCRIPTION-scoped Price for each
 		// CommitmentTimeBuckets entry and assign the resulting slice (with PriceIDs
 		// and stable UUIDs) onto the line item. This must happen inside the
@@ -390,7 +398,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		resp, err := s.cancelScheduledLineItem(ctx, lineItem)
+		resp, err := s.cancelScheduledLineItem(ctx, sub, lineItem)
 		if err != nil {
 			return nil, err
 		}
@@ -398,7 +406,28 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		return resp, nil
 	}
 
-	resp, err := s.deleteSubscriptionLineItem(ctx, lineItemID, req)
+	endDate := now
+	if req.EffectiveFrom != nil {
+		endDate = req.EffectiveFrom.UTC()
+	}
+
+	var resp *dto.SubscriptionLineItemResponse
+	detach := func(ctx context.Context) error {
+		if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, endDate); err != nil {
+			return err
+		}
+
+		var err error
+		resp, err = s.deleteSubscriptionLineItem(ctx, lineItemID, req)
+		return err
+	}
+
+	// A usage line ends under the commitments lock; other lines settle proration, which stays out of the transaction.
+	if lineItem.PriceType == types.PRICE_TYPE_USAGE {
+		err = s.DB.WithTx(ctx, detach)
+	} else {
+		err = detach(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +550,11 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 
 // cancelScheduledLineItem removes a line item that has not started yet and
 // reopens the predecessor this successor replaced, if one was recorded.
-func (s *subscriptionService) cancelScheduledLineItem(ctx context.Context, lineItem *subscription.SubscriptionLineItem) (*dto.SubscriptionLineItemResponse, error) {
+func (s *subscriptionService) cancelScheduledLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItem *subscription.SubscriptionLineItem,
+) (*dto.SubscriptionLineItemResponse, error) {
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if predID := predecessorLineItemID(lineItem); predID != "" {
 			pred, err := s.SubscriptionLineItemRepo.Get(ctx, predID)
@@ -529,14 +562,20 @@ func (s *subscriptionService) cancelScheduledLineItem(ctx context.Context, lineI
 				return err
 			}
 			pred.EndDate = lineItem.EndDate
-			clearSuccessorLineItemID(pred)
+			pred.SuccessorLineItemID = nil
+			clearLineItemMetadataIDs(pred, types.SubscriptionLineItemMetadataKeySuccessorID)
 			if err := s.SubscriptionLineItemRepo.Update(ctx, pred); err != nil {
 				return err
 			}
 		}
 
 		lineItem.Status = types.StatusDeleted
-		return s.SubscriptionLineItemRepo.Update(ctx, lineItem)
+		if err := s.SubscriptionLineItemRepo.Update(ctx, lineItem); err != nil {
+			return err
+		}
+
+		// The line never runs, so it is ended at its start; a reopened predecessor counts as cover.
+		return checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, lineItem, lineItem.StartDate)
 	})
 	if err != nil {
 		return nil, err
@@ -562,36 +601,28 @@ func (s *subscriptionService) findPublishedSuccessor(ctx context.Context, item *
 	return succ, nil
 }
 
+// predecessorLineItemID reads the column first and falls back to metadata, where
+// line items versioned before the lineage columns existed still hold the pointer.
 func predecessorLineItemID(item *subscription.SubscriptionLineItem) string {
-	if item == nil || item.Metadata == nil {
+	if item == nil {
 		return ""
+	}
+	if item.PredecessorLineItemID != nil {
+		return *item.PredecessorLineItemID
 	}
 	return item.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID]
 }
 
+// successorLineItemID reads the column first and falls back to metadata, where
+// line items versioned before the lineage columns existed still hold the pointer.
 func successorLineItemID(item *subscription.SubscriptionLineItem) string {
-	if item == nil || item.Metadata == nil {
+	if item == nil {
 		return ""
 	}
-	return item.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
-}
-
-func setLineItemMetadataID(item *subscription.SubscriptionLineItem, key, id string) {
-	if item == nil || id == "" {
-		return
+	if item.SuccessorLineItemID != nil {
+		return *item.SuccessorLineItemID
 	}
-	copied := make(map[string]string, len(item.Metadata)+1)
-	maps.Copy(copied, item.Metadata)
-	copied[key] = id
-	item.Metadata = copied
-}
-
-func setPredecessorLineItemID(item *subscription.SubscriptionLineItem, predecessorID string) {
-	setLineItemMetadataID(item, types.SubscriptionLineItemMetadataKeyPredecessorID, predecessorID)
-}
-
-func setSuccessorLineItemID(item *subscription.SubscriptionLineItem, successorID string) {
-	setLineItemMetadataID(item, types.SubscriptionLineItemMetadataKeySuccessorID, successorID)
+	return item.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
 }
 
 // lineageMetadataKeys are service-owned. Callers must never set them: a forged pointer
@@ -621,10 +652,6 @@ func clearLineItemMetadataIDs(item *subscription.SubscriptionLineItem, keys ...s
 		delete(copied, key)
 	}
 	item.Metadata = copied
-}
-
-func clearSuccessorLineItemID(item *subscription.SubscriptionLineItem) {
-	clearLineItemMetadataIDs(item, types.SubscriptionLineItemMetadataKeySuccessorID)
 }
 
 // stripCallerLineageMetadata drops version pointers that arrived in a request payload.
@@ -763,6 +790,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			// locked and the repo's copy can be the same object, so this must be read
 			// before deleteSubscriptionLineItem below overwrites EndDate in place.
 			oldEndDate := locked.EndDate
+			endedLineItem := *locked // price overrides repoint locked, so keep the line as it was
 
 			price, err := NewPriceService(s.ServiceParams).GetPrice(ctx, locked.PriceID)
 			if err != nil {
@@ -807,8 +835,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if !oldEndDate.IsZero() {
 				newLineItem.EndDate = oldEndDate // Fill the gap freed up by the backdate
 			}
-			setPredecessorLineItemID(newLineItem, lineItemID)
-			clearSuccessorLineItemID(newLineItem)
+			newLineItem.PredecessorLineItemID = lo.ToPtr(lineItemID)
+			newLineItem.SuccessorLineItemID = nil
+			clearLineItemMetadataIDs(newLineItem, lineageMetadataKeys...)
 
 			// Materialize bucket prices when the update request carries
 			// commitment_time_buckets: ToSubscriptionLineItem rebuilt
@@ -850,6 +879,14 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := rejectLegacyCommitmentInScope(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+				return err
+			}
+
+			if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
+				return err
+			}
+
 			// Create the line item directly using repository
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
@@ -858,7 +895,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			if err != nil {
 				return err
 			}
-			setSuccessorLineItemID(predecessor, newLineItem.ID)
+			if err := checkLineItemCommitmentDetach(ctx, s.ServiceParams, sub, &endedLineItem, endDate); err != nil {
+				return err
+			}
+			predecessor.SuccessorLineItemID = lo.ToPtr(newLineItem.ID)
 			return s.SubscriptionLineItemRepo.Update(ctx, predecessor)
 		})
 
@@ -913,7 +953,15 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			return nil, err
 		}
 
-		if err := s.SubscriptionLineItemRepo.Update(ctx, existingLineItem); err != nil {
+		// The commitment guard takes an advisory lock, which needs a transaction.
+		err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, existingLineItem); err != nil {
+				return err
+			}
+
+			return s.SubscriptionLineItemRepo.Update(txCtx, existingLineItem)
+		})
+		if err != nil {
 			return nil, err
 		}
 

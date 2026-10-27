@@ -122,3 +122,39 @@ func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *MeterUsageHandler) GetPropertyKeys(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.MeterUsagePropertyKeysRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	keys, err := h.meterUsageService.GetGroupablePropertyKeys(ctx, req.ToParams(types.GetTenantID(ctx), types.GetEnvironmentID(ctx)))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PropertyKeysResponse{Keys: keys})
+}
+
+func (h *MeterUsageHandler) GetPropertyValues(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.MeterUsagePropertyValuesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).Mark(ierr.ErrValidation))
+		return
+	}
+
+	values, err := h.meterUsageService.GetPropertyValues(ctx, req.ToParams(types.GetTenantID(ctx), types.GetEnvironmentID(ctx)))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PropertyValuesResponse{Values: values})
+}

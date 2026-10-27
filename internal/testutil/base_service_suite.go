@@ -14,6 +14,7 @@ import (
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -30,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -41,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -95,6 +98,7 @@ type Stores struct {
 	CreditNoteLineItemRepo       creditnote.CreditNoteLineItemRepository
 	TaxRateRepo                  taxrate.Repository
 	FXRateRepo                   fxrate.Repository
+	HostedInvoiceTokenRepo       hostedinvoicetoken.Repository
 	TaxAppliedRepo               taxapplied.Repository
 	TaxAssociationRepo           taxassociation.Repository
 	CouponRepo                   coupon.Repository
@@ -115,6 +119,9 @@ type Stores struct {
 	UsageRecordRepo              usagerecord.Repository
 	AnalyticsViewRepo            domainAnalytics.Repository
 	RevenueFactRepo              revenuefact.Repository
+	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
+	SelfBillingPostgresRepo      domainsb.PostgresRepository
+	CommitmentRepo               commitment.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -230,6 +237,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	addonAssociationStore := NewInMemoryAddonAssociationStore()
 	addonPriceSyncStore := NewInMemoryAddonPriceSyncStore(priceStore, subStore, lineItemStore, addonAssociationStore)
 	couponStore := NewInMemoryCouponStore()
+	selfBillingStore := NewInMemorySelfBillingStore()
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
 		SubscriptionLineItemRepo:     lineItemStore,
@@ -261,6 +269,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		CreditNoteLineItemRepo:       NewInMemoryCreditNoteLineItemStore(),
 		TaxRateRepo:                  NewInMemoryTaxRateStore(),
 		FXRateRepo:                   NewInMemoryFXRateStore(),
+		HostedInvoiceTokenRepo:       NewInMemoryHostedInvoiceTokenStore(),
 		TaxAppliedRepo:               NewInMemoryTaxAppliedStore(),
 		TaxAssociationRepo:           NewInMemoryTaxAssociationStore(),
 		CouponRepo:                   couponStore,
@@ -281,6 +290,9 @@ func (s *BaseServiceTestSuite) setupStores() {
 		UsageRecordRepo:              NewInMemoryUsageRecordStore(),
 		AnalyticsViewRepo:            NewInMemoryAnalyticsViewStore(),
 		RevenueFactRepo:              NewInMemoryRevenueFactStore(),
+		SelfBillingClickHouseRepo:    selfBillingStore,
+		SelfBillingPostgresRepo:      selfBillingStore,
+		CommitmentRepo:               NewInMemoryCommitmentStore(),
 	}
 
 	// Cache stores
@@ -327,6 +339,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.EntityIntegrationMappingRepo.(*InMemoryEntityIntegrationMappingStore).Clear()
 	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
 	s.stores.FXRateRepo.(*InMemoryFXRateStore).Clear()
+	s.stores.HostedInvoiceTokenRepo.(*InMemoryHostedInvoiceTokenStore).Clear()
 	s.stores.TaxAppliedRepo.(*InMemoryTaxAppliedStore).Clear()
 	s.stores.TaxAssociationRepo.(*InMemoryTaxAssociationStore).Clear()
 	s.stores.CouponRepo.(*InMemoryCouponStore).Clear()
@@ -347,6 +360,8 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.UsageRecordRepo.(*InMemoryUsageRecordStore).Clear()
 	s.stores.AnalyticsViewRepo.(*InMemoryAnalyticsViewStore).Clear()
 	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
+	s.stores.SelfBillingClickHouseRepo.(*InMemorySelfBillingStore).Clear()
+	s.stores.CommitmentRepo.(*InMemoryCommitmentStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

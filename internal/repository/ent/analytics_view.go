@@ -80,6 +80,8 @@ func (r *analyticsViewRepository) Create(ctx context.Context, v *domainAnalytics
 		SetName(v.Name).
 		SetVersion(version).
 		SetDefinition(*v.Definition).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
 	if err != nil {
@@ -159,6 +161,7 @@ func (r *analyticsViewRepository) List(ctx context.Context) ([]*domainAnalytics.
 			analyticsview.EnvironmentID(types.GetEnvironmentID(ctx)),
 			analyticsview.Status(string(types.StatusPublished)),
 		).
+		Order(ent.Desc(analyticsview.FieldCreatedAt)).
 		All(ctx)
 
 	if err != nil {
@@ -174,4 +177,67 @@ func (r *analyticsViewRepository) List(ctx context.Context) ([]*domainAnalytics.
 	}
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+func (r *analyticsViewRepository) Update(ctx context.Context, v *domainAnalytics.View) error {
+	if v.Definition == nil {
+		return ierr.NewError("view definition is required").Mark(ierr.ErrValidation)
+	}
+	span := StartRepositorySpan(ctx, "analytics_view", "update", map[string]interface{}{"view_id": v.ID})
+	defer FinishSpan(span)
+
+	n, err := r.client.Writer(ctx).AnalyticsView.Update().
+		Where(
+			analyticsview.ID(v.ID),
+			analyticsview.TenantID(types.GetTenantID(ctx)),
+			analyticsview.EnvironmentID(types.GetEnvironmentID(ctx)),
+			analyticsview.Status(string(types.StatusPublished)),
+			analyticsview.Version(v.Version-1),
+		).
+		SetName(v.Name).
+		SetDefinition(*v.Definition).
+		SetVersion(v.Version).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("Failed to update analytics view").Mark(ierr.ErrDatabase)
+	}
+	if n == 0 {
+		if _, err := r.Get(ctx, v.ID); err != nil {
+			return err
+		}
+		return ierr.NewErrorf("analytics view %s changed concurrently", v.ID).
+			WithHint("View was modified by someone else; reload and retry").
+			Mark(ierr.ErrVersionConflict)
+	}
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *analyticsViewRepository) Delete(ctx context.Context, id string) error {
+	span := StartRepositorySpan(ctx, "analytics_view", "delete", map[string]interface{}{"view_id": id})
+	defer FinishSpan(span)
+
+	n, err := r.client.Writer(ctx).AnalyticsView.Update().
+		Where(
+			analyticsview.ID(id),
+			analyticsview.TenantID(types.GetTenantID(ctx)),
+			analyticsview.EnvironmentID(types.GetEnvironmentID(ctx)),
+			analyticsview.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusDeleted)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("Failed to delete analytics view").Mark(ierr.ErrDatabase)
+	}
+	if n == 0 {
+		return ierr.NewErrorf("analytics view %s not found", id).
+			WithHintf("analytics view with ID %s was not found", id).
+			Mark(ierr.ErrNotFound)
+	}
+	SetSpanSuccess(span)
+	return nil
 }

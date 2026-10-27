@@ -1,6 +1,7 @@
 package dto_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -113,4 +114,89 @@ func TestCreatePriceRequest_Validate_AcceptsPackageWithTransformQuantity(t *test
 	if err := req.Validate(); err != nil {
 		t.Fatalf("expected no error for valid PACKAGE request, got: %v", err)
 	}
+}
+
+func TestCreatePriceRequest_Validate_PackageTiers(t *testing.T) {
+	d := decimal.RequireFromString
+	upTo := func(v uint64) *uint64 { return &v }
+	pkg := func(size int) *price.TransformQuantity { return &price.TransformQuantity{DivideBy: size} }
+	flat := func(v string) *decimal.Decimal { a := d(v); return &a }
+	tieredRequest := func(mode types.BillingTier, tiers ...dto.CreatePriceTier) dto.CreatePriceRequest {
+		req := validFlatFeeRequest()
+		req.Amount = nil
+		req.BillingModel = types.BILLING_MODEL_TIERED
+		req.TierMode = mode
+		req.Tiers = tiers
+		return req
+	}
+	slabCustomer := []dto.CreatePriceTier{
+		{UpTo: upTo(200), UnitAmount: d("0"), FlatAmount: flat("10000")},
+		{UpTo: upTo(500), UnitAmount: d("0"), FlatAmount: flat("20000")},
+		{UpTo: upTo(1000), UnitAmount: d("0"), FlatAmount: flat("40000")},
+		{UnitAmount: d("1000"), TransformQuantity: pkg(100)},
+	}
+
+	tests := []struct {
+		name    string
+		req     func() dto.CreatePriceRequest
+		wantErr bool
+	}{
+		{"divide_by 0", func() dto.CreatePriceRequest {
+			return tieredRequest(types.BILLING_TIER_SLAB, dto.CreatePriceTier{UnitAmount: d("1"), TransformQuantity: pkg(0)})
+		}, true},
+		{"divide_by 0 in price unit tiers", func() dto.CreatePriceRequest {
+			req := tieredRequest(types.BILLING_TIER_SLAB)
+			req.PriceUnitType = types.PRICE_UNIT_TYPE_CUSTOM
+			req.PriceUnitConfig = &dto.PriceUnitConfig{
+				PriceUnit:      "BTC",
+				PriceUnitTiers: []dto.CreatePriceTier{{UnitAmount: d("1"), TransformQuantity: pkg(0)}},
+			}
+			return req
+		}, true},
+		{"invalid round", func() dto.CreatePriceRequest {
+			return tieredRequest(types.BILLING_TIER_SLAB, dto.CreatePriceTier{
+				UnitAmount:        d("1"),
+				TransformQuantity: &price.TransformQuantity{DivideBy: 100, Round: "nearest"},
+			})
+		}, true},
+		{"tiers on FLAT_FEE", func() dto.CreatePriceRequest {
+			req := validFlatFeeRequest()
+			req.Tiers = []dto.CreatePriceTier{{UnitAmount: d("1")}}
+			return req
+		}, true},
+		{"slab customer config", func() dto.CreatePriceRequest {
+			return tieredRequest(types.BILLING_TIER_SLAB, slabCustomer...)
+		}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.req()
+			err := req.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestCreatePriceRequest_ToPrice_TierRoundDefaultsUp(t *testing.T) {
+	req := validFlatFeeRequest()
+	req.Amount = nil
+	req.BillingModel = types.BILLING_MODEL_TIERED
+	req.TierMode = types.BILLING_TIER_SLAB
+	req.Tiers = []dto.CreatePriceTier{
+		{UnitAmount: decimal.NewFromInt(1)},
+		{UnitAmount: decimal.NewFromInt(1), TransformQuantity: &price.TransformQuantity{DivideBy: 100}},
+		{UnitAmount: decimal.NewFromInt(1), TransformQuantity: &price.TransformQuantity{DivideBy: 100, Round: types.ROUND_DOWN}},
+	}
+
+	p, err := req.ToPrice(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, p.Tiers[0].TransformQuantity)
+	assert.Equal(t, types.ROUND_UP, p.Tiers[1].TransformQuantity.Round)
+	assert.Equal(t, types.ROUND_DOWN, p.Tiers[2].TransformQuantity.Round)
+	assert.Empty(t, req.Tiers[1].TransformQuantity.Round)
 }

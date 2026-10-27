@@ -186,8 +186,3 @@ func setIfProvided(dst *string, src *string) {
 		*dst = *src
 	}
 }
-
-type TenantBillingUsage struct {
-	Usage         *CustomerUsageSummaryResponse `json:"usage"`
-	Subscriptions []*SubscriptionResponse       `json:"subscriptions"`
-}

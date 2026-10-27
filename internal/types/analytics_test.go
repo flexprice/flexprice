@@ -22,7 +22,7 @@ func TestGrain_ToWindowSize(t *testing.T) {
 }
 
 func TestFamily_Validate(t *testing.T) {
-	for _, f := range []Family{"", FamilyUsage, FamilyBilling} {
+	for _, f := range []Family{"", FamilyUsage, FamilyBilling, FamilyReport} {
 		require.NoError(t, f.Validate(), "family %q", f)
 	}
 	err := Family("raw").Validate()

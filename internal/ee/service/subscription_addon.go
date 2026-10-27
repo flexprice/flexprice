@@ -176,7 +176,8 @@ func (s *subscriptionService) replayAddonChangeRequest(
 				Metadata:          association.Metadata,
 				CouponRefs:        ref.Coupons,
 			},
-			Existing: association,
+			Existing:       association,
+			PriceOverrides: ref.PriceOverrides,
 		})
 	}
 

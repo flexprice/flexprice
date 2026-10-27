@@ -38,6 +38,10 @@ type SubscriptionLineItem struct {
 	Metadata            map[string]string                    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
+	// Version lineage, set by the service when a line item is replaced by a new version
+	PredecessorLineItemID *string `db:"predecessor_line_item_id" json:"predecessor_line_item_id,omitempty"`
+	SuccessorLineItemID   *string `db:"successor_line_item_id" json:"successor_line_item_id,omitempty"`
+
 	// Commitment fields
 	CommitmentAmount        *decimal.Decimal       `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
 	CommitmentQuantity      *decimal.Decimal       `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
@@ -222,6 +226,8 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		EndDate:                 endDate,
 		SubscriptionPhaseID:     subscriptionPhaseID,
 		AddonAssociationID:      addonAssociationID,
+		PredecessorLineItemID:   e.PredecessorLineItemID,
+		SuccessorLineItemID:     e.SuccessorLineItemID,
 		Metadata:                e.Metadata,
 		EnvironmentID:           e.EnvironmentID,
 		CommitmentAmount:        e.CommitmentAmount,

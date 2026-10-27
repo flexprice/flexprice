@@ -122,7 +122,12 @@ const (
 	UUID_PREFIX_ANALYTICS_VIEW             = "aview"
 	UUID_PREFIX_REVENUE_FACT               = "revfact"
 	UUID_PREFIX_FX_RATE                    = "fxr"
+	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
+
+	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
+	UUID_PREFIX_COMMITMENT = "cmt"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

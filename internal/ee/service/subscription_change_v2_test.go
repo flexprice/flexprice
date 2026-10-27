@@ -75,6 +75,7 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 		MeterUsageRepo:             st.MeterUsageRepo,
 		CustomerRepo:               st.CustomerRepo,
 		InvoiceRepo:                st.InvoiceRepo,
+		HostedInvoiceTokenRepo:     st.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        st.InvoiceLineItemRepo,
 		EntitlementRepo:            st.EntitlementRepo,
 		EntitlementGrantRepo:       st.EntitlementGrantRepo,

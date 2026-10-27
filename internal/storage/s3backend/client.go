@@ -207,31 +207,9 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		compressedSize = int64(len(data))
 	}
 
-	contentType := req.ContentType
-	if contentType == "" {
-		contentType = contentTypeFor(req.Format, req.Compress && c.cfg.CompressionGzip)
-	}
-
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(c.cfg.Bucket),
-		Key:         aws.String(req.Key),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
-	}
-	if req.Compress && c.cfg.CompressionGzip {
-		// Without this, S3 serves the gzipped bytes as-is and clients receive
-		// compressed data instead of the original payload.
-		input.ContentEncoding = aws.String("gzip")
-	}
-	if err := c.setServerSideEncryption(input); err != nil {
+	gzipped := req.Compress && c.cfg.CompressionGzip
+	if err := c.putObject(ctx, req.Key, bytes.NewReader(data), compressedSize, req.ContentType, req.Format, gzipped); err != nil {
 		return nil, err
-	}
-
-	if _, err := c.s3.PutObject(ctx, input); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("failed to upload object to S3").
-			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, req.Key).
-			Mark(ierr.ErrHTTPClient)
 	}
 
 	return &storagetypes.UploadResponse{
@@ -242,6 +220,64 @@ func (c *client) Upload(ctx context.Context, req *storagetypes.UploadRequest) (*
 		CompressedSize: compressedSize,
 		UploadedAt:     time.Now(),
 	}, nil
+}
+
+// UploadStream uploads a seekable body as-is.
+func (c *client) UploadStream(ctx context.Context, req *storagetypes.StreamUploadRequest) (*storagetypes.UploadResponse, error) {
+	size, err := req.Body.Seek(0, io.SeekEnd)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to read upload size").Mark(ierr.ErrSystem)
+	}
+	if _, err := req.Body.Seek(0, io.SeekStart); err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to rewind upload body").Mark(ierr.ErrSystem)
+	}
+
+	if err := c.putObject(ctx, req.Key, req.Body, size, req.ContentType, req.Format, req.Gzipped); err != nil {
+		return nil, err
+	}
+
+	originalSize := size
+	if req.Gzipped {
+		originalSize = req.UncompressedSize
+	}
+	return &storagetypes.UploadResponse{
+		FileURL:        c.FileURL(req.Key),
+		Bucket:         c.cfg.Bucket,
+		Key:            req.Key,
+		FileSizeBytes:  originalSize,
+		CompressedSize: size,
+		UploadedAt:     time.Now(),
+	}, nil
+}
+
+func (c *client) putObject(ctx context.Context, key string, body io.ReadSeeker, size int64, contentType string, format storagetypes.UploadFormat, gzipped bool) error {
+	if contentType == "" {
+		contentType = contentTypeFor(format, gzipped)
+	}
+
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String(c.cfg.Bucket),
+		Key:           aws.String(key),
+		Body:          body,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+	}
+	if gzipped {
+		// Without this, S3 serves the gzipped bytes as-is and clients receive
+		// compressed data instead of the original payload.
+		input.ContentEncoding = aws.String("gzip")
+	}
+	if err := c.setServerSideEncryption(input); err != nil {
+		return err
+	}
+
+	if _, err := c.s3.PutObject(ctx, input); err != nil {
+		return ierr.WithError(err).
+			WithHint("failed to upload object to S3").
+			WithMessagef("bucket:%s, key:%s", c.cfg.Bucket, key).
+			Mark(ierr.ErrHTTPClient)
+	}
+	return nil
 }
 
 func (c *client) Download(ctx context.Context, key string) ([]byte, error) {

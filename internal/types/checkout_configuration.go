@@ -239,6 +239,24 @@ type AddAddonRef struct {
 	ProrationBehavior ProrationBehavior `json:"proration_behavior,omitempty"`
 	StartDate         time.Time         `json:"start_date"`
 	Coupons           []CouponRef       `json:"coupons,omitempty"`
+	// Price overrides minted at execute time; completion repoints the line items instead of minting again.
+	PriceOverrides []AddonPriceOverrideRef `json:"price_overrides,omitempty"`
+}
+
+// AddonPriceOverrideRef maps an addon's plan price to the subscription-scoped price minted for it.
+type AddonPriceOverrideRef struct {
+	PriceID         string           `json:"price_id"`
+	OverridePriceID string           `json:"override_price_id"`
+	Quantity        *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
+}
+
+// OverridePriceIDs returns the subscription-scoped prices minted for this attach.
+func (r AddAddonRef) OverridePriceIDs() []string {
+	ids := make([]string, 0, len(r.PriceOverrides))
+	for _, override := range r.PriceOverrides {
+		ids = append(ids, override.OverridePriceID)
+	}
+	return ids
 }
 
 // RemoveAddonRef is one removal riding along with a payment-gated attach. It persists nothing

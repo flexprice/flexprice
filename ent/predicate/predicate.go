@@ -30,6 +30,9 @@ type BillingSequence func(*sql.Selector)
 // CheckoutSession is the predicate function for checkoutsession builders.
 type CheckoutSession func(*sql.Selector)
 
+// Commitment is the predicate function for commitment builders.
+type Commitment func(*sql.Selector)
+
 // Connection is the predicate function for connection builders.
 type Connection func(*sql.Selector)
 
@@ -72,6 +75,9 @@ type EntityIntegrationMapping func(*sql.Selector)
 // Environment is the predicate function for environment builders.
 type Environment func(*sql.Selector)
 
+// EventDeletionRequest is the predicate function for eventdeletionrequest builders.
+type EventDeletionRequest func(*sql.Selector)
+
 // FXRate is the predicate function for fxrate builders.
 type FXRate func(*sql.Selector)
 
@@ -80,6 +86,9 @@ type Feature func(*sql.Selector)
 
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
+
+// HostedInvoiceToken is the predicate function for hostedinvoicetoken builders.
+type HostedInvoiceToken func(*sql.Selector)
 
 // IncomingWebhookEvent is the predicate function for incomingwebhookevent builders.
 type IncomingWebhookEvent func(*sql.Selector)

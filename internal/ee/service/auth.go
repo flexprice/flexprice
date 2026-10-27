@@ -42,6 +42,7 @@ func NewAuthService(
 
 // SignUp creates a new user and returns an auth token
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
+	req.Email = types.NormalizeEmail(req.Email)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -98,6 +99,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 		TenantID: tenantID,
 	}
 
+	var newTenant *dto.TenantResponse
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Create auth record
 		if s.authProvider.GetProvider() == types.AuthProviderFlexprice {
@@ -112,7 +114,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 
 		onboardingService := NewOnboardingService(s.ServiceParams)
 
-		err = onboardingService.OnboardNewUserWithTenant(ctx, dto.OnboardNewUserWithTenantRequest{
+		newTenant, err = onboardingService.OnboardNewUserWithTenant(ctx, dto.OnboardNewUserWithTenantRequest{
 			UserID:     authResponse.ID,
 			Email:      req.Email,
 			TenantName: req.TenantName,
@@ -137,6 +139,9 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 	if err != nil {
 		return nil, err
 	}
+
+	// Only after the commit: provisioning calls Flexprice Cloud, and a rollback could not recall it.
+	s.SelfBilling.OnTenantCreated(ctx, newTenant.ID, newTenant.Name, req.Email)
 
 	return response, nil
 }
@@ -270,7 +275,7 @@ func invalidLoginError(reason string) error {
 
 // Login authenticates a user and returns an auth token
 func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error) {
-	user, err := s.UserRepo.GetByEmail(ctx, req.Email)
+	user, err := s.UserRepo.GetByEmail(ctx, types.NormalizeEmail(req.Email))
 	if err != nil {
 		// Only normalize the not-found case: an unknown email must return the
 		// same "invalid credentials" response as a valid email with a wrong

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/fxrate"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -358,6 +359,64 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionCre
 		s.Equal(types.StatusDeleted, inv.Status,
 			"the draft invoice must be archived alongside its subscription")
 	}
+}
+
+// An abandoned checkout must not leave inline commitments published, and their keys must be reusable.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFailureArchivesInlineCommitments() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	s.seedFixedPricePlan("plan_checkout_commitment", decimal.NewFromInt(50), 0)
+	usagePrice := &price.Price{
+		ID:                 "price_checkout_commitment_usage",
+		Amount:             decimal.RequireFromString("0.05"),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           "plan_checkout_commitment",
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            s.testData.meters.apiCalls.ID,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	idempKey := "create-subscription-commitment-idemp-key"
+	s.seedCollidingCheckoutSession(idempKey)
+
+	start := s.testData.now.Truncate(time.Second)
+	req := s.checkoutCreateRequest("plan_checkout_commitment")
+	req.Checkout.IdempotencyKey = &idempKey
+	req.StartDate = lo.ToPtr(start)
+	req.Commitments = []dto.CreateCommitmentRequest{{
+		IdempotencyKey: lo.ToPtr("contract-checkout"),
+		Name:           "API floor",
+		Scope:          dto.CommitmentScopeInput{EntityType: types.CommitmentScopePrice, EntityID: usagePrice.ID},
+		Type:           types.COMMITMENT_TYPE_AMOUNT,
+		Value:          decimal.NewFromInt(100),
+		Measurement:    types.CommitmentMeasurementBillingPeriod,
+		StartDate:      start,
+		EndDate:        start.AddDate(1, 0, 0),
+	}}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Equal(types.StatusArchived, s.subscriptionForPlan("plan_checkout_commitment").Status)
+
+	published, err := s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Empty(published, "the abandoned subscription's commitments must be archived with it")
+
+	retry := s.inlineCommitmentRequest()
+	retry.Commitments[0].IdempotencyKey = lo.ToPtr("contract-checkout")
+	resp, err := s.service.CreateSubscription(ctx, retry)
+	s.Require().NoError(err, "the archived commitment must release its idempotency key")
+
+	published, err = s.GetStores().CommitmentRepo.List(ctx, commitment.NewNoLimitFilter())
+	s.Require().NoError(err)
+	s.Require().Len(published, 1)
+	s.Equal(resp.ID, published[0].SubscriptionID)
 }
 
 // ─────────────────────────────────────────────

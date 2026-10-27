@@ -3,6 +3,7 @@ package storagetypes
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -32,6 +33,17 @@ type UploadRequest struct {
 	Compress    bool
 }
 
+// StreamUploadRequest describes an upload backed by a seekable body, uploaded as-is.
+type StreamUploadRequest struct {
+	Key         string
+	Body        io.ReadSeeker
+	Format      UploadFormat
+	ContentType string // optional, inferred from Format if empty
+	// Gzipped marks Body as already gzip-compressed; UncompressedSize is then its size before compression.
+	Gzipped          bool
+	UncompressedSize int64
+}
+
 type UploadResponse struct {
 	FileURL        string
 	Bucket         string
@@ -46,6 +58,7 @@ type UploadResponse struct {
 // hold a concrete backend type or import a cloud SDK package directly.
 type Storage interface {
 	Upload(ctx context.Context, req *UploadRequest) (*UploadResponse, error)
+	UploadStream(ctx context.Context, req *StreamUploadRequest) (*UploadResponse, error)
 	Download(ctx context.Context, key string) ([]byte, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	PresignGet(ctx context.Context, key string, duration time.Duration) (string, error)

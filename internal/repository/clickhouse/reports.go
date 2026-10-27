@@ -1,19 +1,34 @@
 package clickhouse
 
 import (
+	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"hash"
+	"maps"
+	"slices"
+	"strings"
+	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/proto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
-	defaultReportsMaxExecutionSeconds = 30
+	defaultReportsMaxExecutionSeconds = 10
 	defaultReportsMaxResultRows       = 10000
+	maxCachedReportBytes              = 1 << 20
 )
 
 var _ analytics.ReportsRepository = (*ReportsRepository)(nil)
@@ -22,10 +37,15 @@ type ReportsRepository struct {
 	conn   driver.Conn
 	cfg    config.ReportsConfig
 	logger *logger.Logger
+	cache  cache.RedisCache
+	source string
+
+	usageConn   driver.Conn
+	usageSource string
 }
 
-func NewReportsRepository(cfg *config.Configuration, log *logger.Logger) (*ReportsRepository, error) {
-	r := &ReportsRepository{cfg: cfg.Reports, logger: log}
+func NewReportsRepository(cfg *config.Configuration, log *logger.Logger, rc cache.RedisCache) (*ReportsRepository, error) {
+	r := &ReportsRepository{cfg: cfg.Reports, logger: log, cache: rc}
 	if r.cfg.MaxExecutionSeconds <= 0 {
 		r.cfg.MaxExecutionSeconds = defaultReportsMaxExecutionSeconds
 	}
@@ -36,6 +56,10 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger) (*Repor
 		return r, nil
 	}
 	opts := cfg.ClickHouse.GetClientOptions()
+	if r.cfg.Address != "" {
+		opts.Addr = []string{r.cfg.Address}
+	}
+	r.source = strings.Join(opts.Addr, ",")
 	opts.Auth = clickhouse_go.Auth{
 		Database: r.cfg.Database,
 		Username: r.cfg.Username,
@@ -46,6 +70,19 @@ func NewReportsRepository(cfg *config.Configuration, log *logger.Logger) (*Repor
 		return nil, ierr.WithError(err).WithHint("open reports clickhouse connection").Mark(ierr.ErrSystem)
 	}
 	r.conn = conn
+	if !r.cfg.UsageOnEventsClickHouse {
+		return r, nil
+	}
+	r.cfg.UsageDatabase = cmp.Or(r.cfg.UsageDatabase, cfg.ClickHouse.Database)
+	usageOpts := cfg.ClickHouse.GetClientOptions()
+	usageOpts.Auth.Database = r.cfg.UsageDatabase
+	usageConn, err := clickhouse_go.Open(usageOpts)
+	if err != nil {
+		_ = conn.Close()
+		return nil, ierr.WithError(err).WithHint("open usage clickhouse connection").Mark(ierr.ErrSystem)
+	}
+	r.usageConn = usageConn
+	r.usageSource = strings.Join(usageOpts.Addr, ",")
 	return r, nil
 }
 
@@ -53,19 +90,68 @@ func (r *ReportsRepository) Enabled() bool { return r.conn != nil }
 
 func (r *ReportsRepository) MaxRows() int { return r.cfg.MaxResultRows }
 
+const (
+	chCodeTooManyRows         = 158
+	chCodeTimeoutExceeded     = 159
+	chCodeMemoryLimitExceeded = 241
+)
+
+func reportError(err error, hint string) error {
+	var ex *proto.Exception
+	if errors.As(err, &ex) && (ex.Code == chCodeTooManyRows || ex.Code == chCodeTimeoutExceeded || ex.Code == chCodeMemoryLimitExceeded) {
+		return ierr.WithError(err).
+			WithHint("Query too large; narrow the date range").
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.WithError(err).WithHint(hint).Mark(ierr.ErrDatabase)
+}
+
 func (r *ReportsRepository) RunReport(ctx context.Context, rv *analytics.ResolvedView, tenantID, environmentID string) (*analytics.ReportResult, error) {
 	if r.conn == nil {
 		return nil, ierr.NewError("financial reports are not enabled").Mark(ierr.ErrPermissionDenied)
 	}
-	q, err := buildBillingQuery(rv, r.cfg.Database, tenantID, environmentID, r.cfg.MaxResultRows)
+	q, err := r.buildReport(rv, tenantID, environmentID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.run(ctx, q)
+	rows, err := r.forReport(rv).run(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 	return reportResult(q, rows, r.cfg.MaxResultRows)
+}
+
+// forReport targets the usage server for usage-backed metrics.
+func (r *ReportsRepository) forReport(rv *analytics.ResolvedView) *ReportsRepository {
+	if r.usageConn == nil || rv == nil || !slices.Contains(rv.Metrics, types.MetricEventsVolume) {
+		return r
+	}
+	u := *r
+	u.conn = r.usageConn
+	u.source = r.usageSource
+	return &u
+}
+
+func (r *ReportsRepository) buildReport(rv *analytics.ResolvedView, tenantID, environmentID string) (*reportQuery, error) {
+	if rv == nil {
+		return buildBillingQueryWithUsage(rv, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+	}
+	w := *rv
+	w.Time.From = r.stableTime(rv.Time.From)
+	w.Time.To = r.stableTime(rv.Time.To)
+	return buildBillingQueryWithUsage(&w, r.cfg.Database, r.cfg.UsageDatabase, tenantID, environmentID, r.cfg.MaxResultRows)
+}
+
+// stableTime lets relative ranges share cache keys.
+func (r *ReportsRepository) stableTime(t time.Time) time.Time {
+	if !r.resultCacheOn() {
+		return t
+	}
+	return t.Truncate(time.Minute)
+}
+
+func (r *ReportsRepository) resultCacheOn() bool {
+	return r.cache != nil && r.cache.IsEnabled() && r.cfg.QueryCacheTTLSeconds > 0
 }
 
 func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.ReportResult, error) {
@@ -78,23 +164,72 @@ func reportResult(q *reportQuery, rows [][]string, maxRows int) (*analytics.Repo
 }
 
 func (r *ReportsRepository) run(ctx context.Context, q *reportQuery) ([][]string, error) {
+	return r.cached(ctx, q, func() ([][]string, error) { return r.query(ctx, q) })
+}
+
+func (r *ReportsRepository) cached(ctx context.Context, q *reportQuery, fetch func() ([][]string, error)) ([][]string, error) {
+	if !r.resultCacheOn() {
+		return fetch()
+	}
+	key := reportCacheKey(ctx, r.source, q)
+	if v, ok := r.cache.Get(ctx, key); ok {
+		if rows, ok := cache.UnmarshalCacheValue[[][]string](v); ok {
+			return *rows, nil
+		}
+	}
+	rows, err := fetch()
+	if err != nil {
+		return nil, err
+	}
+	if b, err := json.Marshal(rows); err == nil && len(b) <= maxCachedReportBytes {
+		r.cache.Set(ctx, key, string(b), time.Duration(r.cfg.QueryCacheTTLSeconds)*time.Second)
+	}
+	return rows, nil
+}
+
+// Params carry tenant and environment.
+func reportCacheKey(ctx context.Context, source string, q *reportQuery) string {
+	h := sha256.New()
+	writeLengthPrefixed(h, source)
+	writeLengthPrefixed(h, q.SQL)
+	for _, k := range slices.Sorted(maps.Keys(q.Params)) {
+		writeLengthPrefixed(h, k)
+		writeLengthPrefixed(h, q.Params[k])
+	}
+	return cache.GenerateKey(ctx, cache.PrefixReportResult, hex.EncodeToString(h.Sum(nil)))
+}
+
+func writeLengthPrefixed(h hash.Hash, s string) {
+	var n [8]byte
+	binary.BigEndian.PutUint64(n[:], uint64(len(s)))
+	h.Write(n[:])
+	h.Write([]byte(s))
+}
+
+func (r *ReportsRepository) query(ctx context.Context, q *reportQuery) ([][]string, error) {
 	settings := clickhouse_go.Settings{
 		"max_execution_time":   r.cfg.MaxExecutionSeconds,
 		"max_result_rows":      r.cfg.MaxResultRows + 1,
 		"result_overflow_mode": "throw",
 		// Blocks writes; still allows settings.
 		"readonly": 2,
-		// Keep FINAL before WHERE.
-		"optimize_move_to_prewhere_if_final": 0,
 	}
 	if r.cfg.MaxRowsToRead > 0 {
 		settings["max_rows_to_read"] = r.cfg.MaxRowsToRead
+	}
+	if r.cfg.QueryCacheTTLSeconds > 0 {
+		settings["use_query_cache"] = 1
+		settings["query_cache_ttl"] = r.cfg.QueryCacheTTLSeconds
+		// Cache, not throw, on now().
+		settings["query_cache_nondeterministic_function_handling"] = "save"
+	} else {
+		settings["use_query_cache"] = 0
 	}
 	ctx = clickhouse_go.Context(ctx, clickhouse_go.WithParameters(q.Params), clickhouse_go.WithSettings(settings))
 
 	rows, err := r.conn.Query(ctx, q.SQL)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("run report query").Mark(ierr.ErrDatabase)
+		return nil, reportError(err, "run report query")
 	}
 	defer rows.Close()
 
@@ -111,7 +246,7 @@ func (r *ReportsRepository) run(ctx context.Context, q *reportQuery) ([][]string
 		out = append(out, vals)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, ierr.WithError(err).WithHint("read report rows").Mark(ierr.ErrDatabase)
+		return nil, reportError(err, "read report rows")
 	}
 	return out, nil
 }

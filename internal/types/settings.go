@@ -40,6 +40,7 @@ const (
 	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
 	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
+	SettingKeyCommitmentsV2               SettingKey = "commitments_v2"
 )
 
 func (s *SettingKey) Validate() error {
@@ -66,6 +67,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyRevenueAnalyticsConfig,
 		SettingKeyUsageAlertConfig,
 		SettingKeyTaxConfig,
+		SettingKeyCommitmentsV2,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -315,11 +317,26 @@ type CustomerPortalConfig struct {
 
 	// Sections defines the ordered list of navigation sections shown in the portal
 	Sections []CustomerPortalSection `json:"sections,omitempty" validate:"omitempty,dive"`
+
+	AnalyticsConfig *CustomerPortalAnalyticsConfig `json:"analytics_config,omitempty"`
 }
 
 // Validate implements SettingConfig interface
 func (c CustomerPortalConfig) Validate() error {
 	return validator.ValidateRequest(c)
+}
+
+// CustomerPortalAnalyticsConfig holds analytics settings for the portal
+type CustomerPortalAnalyticsConfig struct {
+	UsageProperties *CustomerPortalUsageProperties `json:"usage_properties,omitempty"`
+}
+
+// CustomerPortalUsageProperties controls which event property keys portal users can group and filter by.
+// Off unless Enabled. When AllowedKeys is set, only those keys are visible; HiddenKeys are always hidden.
+type CustomerPortalUsageProperties struct {
+	Enabled     bool     `json:"enabled"`
+	AllowedKeys []string `json:"allowed_keys,omitempty"`
+	HiddenKeys  []string `json:"hidden_keys,omitempty"`
 }
 
 // CustomerPortalTheme holds brand colour tokens used by the portal UI
@@ -943,6 +960,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{},
 			Description:  "Which external tax engine calculates tax, if any. Absent or disabled means the native engine",
 		},
+		SettingKeyCommitmentsV2: {
+			Key:          SettingKeyCommitmentsV2,
+			DefaultValue: map[string]interface{}{"enabled": false},
+			Description:  "Enable first-class commitments",
+		},
 	}, nil
 }
 
@@ -1115,6 +1137,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
+	case SettingKeyCommitmentsV2:
+		cfg, err := utils.ToStruct[CommitmentsV2Config](value)
+		if err != nil {
+			return err
+		}
+		return cfg.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1254,3 +1283,12 @@ func validateSAMLConfig(value map[string]interface{}) error {
 // settings path calls. Putting rules here as well would mean two places to keep
 // in step.
 func (c SAMLConfig) Validate() error { return nil }
+
+// CommitmentsV2Config gates first-class commitments per environment.
+type CommitmentsV2Config struct {
+	Enabled bool `json:"enabled"`
+}
+
+func (c CommitmentsV2Config) Validate() error {
+	return nil
+}

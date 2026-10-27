@@ -45,6 +45,7 @@ func provideEventCascader(
 		logger,
 		webhookPublisher,
 		cascaderules.NewEntitlementCascadeRule(entitlementService, logger),
+		cascaderules.NewCommitmentCascadeRule(logger),
 	)
 }
 
@@ -67,6 +68,7 @@ func providePayloadBuilderFactory(
 	groupService service.GroupService,
 	entitlementGrantService service.EntitlementGrantService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
+	commitmentService service.CommitmentService,
 ) payload.PayloadBuilderFactory {
 	services := payload.NewServices(
 		invoiceService,
@@ -86,6 +88,7 @@ func providePayloadBuilderFactory(
 		groupService,
 		entitlementGrantService,
 		entityIntegrationMappingService,
+		commitmentService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
 }

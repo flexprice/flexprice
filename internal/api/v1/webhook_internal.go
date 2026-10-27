@@ -23,6 +23,7 @@ var _ = []any{
 	(*webhookDto.AlertWebhookPayload)(nil),
 	(*webhookDto.SpendAlertEvent)(nil),
 	(*webhookDto.EntitlementWebhookPayload)(nil),
+	(*webhookDto.CommitmentWebhookPayload)(nil),
 	(*webhookDto.WalletWebhookPayload)(nil),
 	(*webhookDto.TransactionWebhookPayload)(nil),
 	(*webhookDto.TransactionUpdatedWebhookPayload)(nil),
@@ -451,6 +452,36 @@ func WebhookEventEntitlementUpdated() {}
 // @Success 200 {object} webhookDto.EntitlementWebhookPayload "Webhook payload"
 // @Router /webhook-events/entitlement.deleted [post]
 func WebhookEventEntitlementDeleted() {}
+
+// WebhookEventCommitmentCreated godoc
+// @Summary commitment.created
+// @Description Fired when a commitment is created on a subscription. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.created [post]
+func WebhookEventCommitmentCreated() {}
+
+// WebhookEventCommitmentUpdated godoc
+// @Summary commitment.updated
+// @Description Fired when a commitment's descriptive fields are updated. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.updated [post]
+func WebhookEventCommitmentUpdated() {}
+
+// WebhookEventCommitmentTerminated godoc
+// @Summary commitment.terminated
+// @Description Fired when a commitment is terminated. Doc-only for parsing.
+// @Tags Webhook Events
+// @Accept json
+// @Produce json
+// @Success 200 {object} webhookDto.CommitmentWebhookPayload "Webhook payload"
+// @Router /webhook-events/commitment.terminated [post]
+func WebhookEventCommitmentTerminated() {}
 
 // WebhookEventWalletCreated godoc
 // @Summary wallet.created

@@ -699,23 +699,6 @@ func (o PriceQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*domainPrice.Price, error) {
-	client := r.client.Reader(ctx)
-
-	prices, err := client.Price.Query().
-		Where(price.EntityID(planID), price.Status(string(types.StatusPublished))).
-		All(ctx)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get prices by plan ID").
-			WithReportableDetails(map[string]interface{}{
-				"plan_id": planID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-	return domainPrice.FromEntList(prices), nil
-}
-
 func (r *priceRepository) SetCache(ctx context.Context, price *domainPrice.Price) {
 	span, ctx := cache.StartRedisCacheSpan(ctx, "price", "set", map[string]interface{}{
 		"price_id": price.ID,
@@ -760,7 +743,11 @@ func (r *priceRepository) GetByGroupIDs(ctx context.Context, groupIDs []string) 
 	client := r.client.Reader(ctx)
 
 	prices, err := client.Price.Query().
-		Where(price.GroupIDIn(groupIDs...)).
+		Where(
+			price.GroupIDIn(groupIDs...),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -905,7 +892,7 @@ func (r *priceRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 
 // GetLinkedCustomerID returns the subscription's customer for a subscription price; "" for any other price.
 func (r *priceRepository) GetLinkedCustomerID(ctx context.Context, id string) (string, error) {
-	return linkedCustomerID(ctx, "price", id, func() (string, error) {
+	return linkedCustomerID(ctx, "price", id, func(ctx context.Context) (string, error) {
 		client := r.client.Reader(ctx)
 		p, err := client.Price.Query().
 			Where(price.ID(id), price.TenantID(types.GetTenantID(ctx)), price.EnvironmentID(types.GetEnvironmentID(ctx))).

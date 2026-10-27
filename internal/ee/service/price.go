@@ -602,8 +602,6 @@ func (s *priceService) GetPricesByCostsheetID(ctx context.Context, costsheetID s
 }
 
 func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
-	meterService := NewMeterService(s.MeterRepo)
-
 	// Validate expand fields
 	if err := filter.GetExpand().Validate(types.PriceExpandConfig); err != nil {
 		return nil, err
@@ -637,22 +635,24 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		return response, nil
 	}
 
-	// If meters are requested to be expanded, fetch all meters in one query
+	// Resolve only referenced meters.
 	var metersByID map[string]*dto.MeterResponse
 	if filter.GetExpand().Has(types.ExpandMeters) && len(prices) > 0 {
-		// Fetch all meters in one query
-		metersResponse, err := meterService.GetAllMeters(ctx)
+		meterIDs := lo.Uniq(lo.FilterMap(prices, func(p *price.Price, _ int) (string, bool) {
+			return p.MeterID, p.MeterID != ""
+		}))
+
+		meters, err := s.MeterRepo.ListByIDs(ctx, meterIDs)
 		if err != nil {
 			return nil, err
 		}
 
-		// Create a map for quick meter lookup
-		metersByID = make(map[string]*dto.MeterResponse, len(metersResponse.Items))
-		for _, m := range metersResponse.Items {
-			metersByID[m.ID] = m
+		metersByID = make(map[string]*dto.MeterResponse, len(meters))
+		for _, m := range meters {
+			metersByID[m.ID] = dto.ToMeterResponse(m)
 		}
 
-		s.Logger.Debug(ctx, "fetched meters for prices", "count", len(metersResponse.Items))
+		s.Logger.Debug(ctx, "fetched meters for prices", "count", len(meters))
 	}
 
 	// If features are requested to be expanded, fetch the metered feature (for reporting unit) per meter in one query.
@@ -1365,7 +1365,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 		selectedTier := price.Tiers[selectedTierIndex]
 		result.SelectedTierIndex = selectedTierIndex
-		result.TierUnitAmount = selectedTier.UnitAmount
+		result.TierUnitAmount = selectedTier.GetPerUnitCost()
 
 		// Calculate tier cost with full precision and handling of flat amount
 		result.FinalCost = selectedTier.CalculateTierAmount(quantity, price.Currency)
@@ -1409,7 +1409,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			// Record the last tier used (will be the highest tier the quantity applies to)
 			if tierQuantity.GreaterThan(decimal.Zero) {
 				result.SelectedTierIndex = i
-				result.TierUnitAmount = tier.UnitAmount
+				result.TierUnitAmount = tier.GetPerUnitCost()
 			}
 
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
@@ -1640,8 +1640,9 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 			}
 
 			convertedTier := price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: convertedUnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        convertedUnitAmount,
+				TransformQuantity: tier.TransformQuantity,
 			}
 
 			// Convert flat amount if provided

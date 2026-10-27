@@ -503,7 +503,7 @@ func decomposeUsageMarginal(li previewLineItem, curve []dayCharge) []*revenuefac
 // price has no tiers.
 func listRate(p *price.Price) decimal.Decimal {
 	if len(p.Tiers) > 0 {
-		return p.Tiers[0].UnitAmount
+		return p.Tiers[0].GetPerUnitCost()
 	}
 	// A package price's Amount buys a whole block of units, so the per-unit
 	// list rate is that amount spread over the block. TierDelta then carries

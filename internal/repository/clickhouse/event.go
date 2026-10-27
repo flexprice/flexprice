@@ -13,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/repository/clickhouse/builder"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -419,118 +418,6 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 
 	SetSpanSuccess(span)
 	return &result, nil
-}
-
-func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *events.UsageWithFiltersParams) ([]*events.AggregationResult, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "event", "get_usage_with_filters", map[string]interface{}{
-		"event_name":       params.UsageParams.EventName,
-		"aggregation_type": params.AggregationType,
-		"property_name":    params.PropertyName,
-		"filter_groups":    len(params.FilterGroups),
-	})
-	defer FinishSpan(span)
-
-	aggregator := GetAggregator(params.AggregationType)
-	if aggregator == nil {
-		err := ierr.NewError("unsupported aggregation type").
-			WithHint("The specified aggregation type is not supported").
-			WithReportableDetails(map[string]interface{}{
-				"aggregation_type": params.AggregationType,
-			}).
-			Mark(ierr.ErrValidation)
-		SetSpanError(span, err)
-		return nil, err
-	}
-
-	// Build query using the new builder
-	qb := builder.NewQueryBuilder().
-		WithBaseFilters(ctx, params.UsageParams).
-		WithAggregation(ctx, params.AggregationType, params.PropertyName).
-		WithFilterGroups(ctx, params.FilterGroups)
-
-	query, queryParams := qb.Build()
-
-	r.logger.Debug(ctx, "executing filter groups query",
-		"aggregation_type", params.AggregationType,
-		"event_name", params.UsageParams.EventName,
-		"filter_groups", len(params.FilterGroups),
-		"query", query,
-		"params", queryParams)
-
-	rows, err := r.store.GetConn().Query(ctx, query, queryParams)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to execute usage query with filters").
-			WithReportableDetails(map[string]interface{}{
-				"event_name":       params.UsageParams.EventName,
-				"aggregation_type": params.AggregationType,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-	defer rows.Close()
-
-	var results []*events.AggregationResult
-	for rows.Next() {
-		var filterGroupID string
-
-		result := &events.AggregationResult{}
-		result.Type = params.AggregationType
-		result.EventName = params.UsageParams.EventName
-
-		// Use appropriate type based on aggregation
-		switch params.AggregationType {
-		case types.AggregationCount, types.AggregationCountUnique:
-			var value uint64
-			if err := rows.Scan(&filterGroupID, &value); err != nil {
-				SetSpanError(span, err)
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan count row").
-					WithReportableDetails(map[string]interface{}{
-						"filter_group_id": filterGroupID,
-					}).
-					Mark(ierr.ErrDatabase)
-			}
-			result.Value = decimal.NewFromUint64(value)
-		case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationMax:
-			var value float64
-			if err := rows.Scan(&filterGroupID, &value); err != nil {
-				SetSpanError(span, err)
-				return nil, ierr.WithError(err).
-					WithHint("Failed to scan float row").
-					WithReportableDetails(map[string]interface{}{
-						"filter_group_id": filterGroupID,
-					}).
-					Mark(ierr.ErrDatabase)
-			}
-			result.Value = safeDecimalFromFloat(value)
-		default:
-			err := ierr.NewError("unsupported aggregation type").
-				WithHint("The specified aggregation type is not supported").
-				WithReportableDetails(map[string]interface{}{
-					"aggregation_type": params.AggregationType,
-				}).
-				Mark(ierr.ErrValidation)
-			SetSpanError(span, err)
-			return nil, err
-		}
-
-		result.Metadata = map[string]string{
-			"filter_group_id": filterGroupID,
-		}
-		results = append(results, result)
-	}
-
-	if err := rows.Err(); err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Error iterating rows").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return results, nil
 }
 
 func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEventsParams) ([]*events.Event, uint64, error) {

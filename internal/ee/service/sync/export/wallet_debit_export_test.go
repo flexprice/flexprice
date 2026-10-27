@@ -66,3 +66,24 @@ func TestWalletDebitCSVTopUpAmountUsed(t *testing.T) {
 		})
 	}
 }
+
+func TestCreditReportsCSVInvoicePeriod(t *testing.T) {
+	start := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+
+	debit := toWalletDebitCSV(&wallet.WalletDebitsExportData{Currency: "usd", InvoicePeriodStart: &start, InvoicePeriodEnd: &end})
+	assert.Equal(t, "2026-10-01T00:00:00Z", debit.InvoicePeriodStart)
+	assert.Equal(t, "2026-11-01T00:00:00Z", debit.InvoicePeriodEnd)
+
+	noInvoice := toWalletDebitCSV(&wallet.WalletDebitsExportData{Currency: "usd"})
+	assert.Empty(t, noInvoice.InvoicePeriodStart)
+	assert.Empty(t, noInvoice.InvoicePeriodEnd)
+
+	topups := (&CreditTopupExporter{}).convertToCSVRecords([]*wallet.CreditTopupsExportData{
+		{InvoicePeriodStart: &start, InvoicePeriodEnd: &end},
+		{},
+	})
+	assert.Equal(t, "2026-10-01T00:00:00Z", topups[0].InvoicePeriodStart)
+	assert.Equal(t, "2026-11-01T00:00:00Z", topups[0].InvoicePeriodEnd)
+	assert.Empty(t, topups[1].InvoicePeriodStart, "a one-off top-up invoice has no period")
+}

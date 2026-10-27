@@ -82,9 +82,11 @@ jobs:
 
       - name: Check if chart version changed
         id: changed
+        env:
+          TRIGGER: ${{ steps.chart-version.outputs.trigger }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
         run: |
           set -euo pipefail
-          TRIGGER="${{ steps.chart-version.outputs.trigger }}"
           # chart-tag and manual triggers always publish — no diff check needed.
           if [[ "$TRIGGER" == "chart-tag" || "$TRIGGER" == "manual" ]]; then
             echo "Trigger is '$TRIGGER' — unconditionally publishing"
@@ -96,11 +98,11 @@ jobs:
           else
             PREV=""
           fi
-          if [[ "$PREV" == "${{ steps.chart-version.outputs.version }}" ]]; then
+          if [[ "$PREV" == "$CHART_VERSION" ]]; then
             echo "Chart version unchanged ($PREV) — skipping publish"
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Chart version changed: $PREV → ${{ steps.chart-version.outputs.version }}"
+            echo "Chart version changed: $PREV → $CHART_VERSION"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -122,8 +124,10 @@ jobs:
 
       - name: Package Helm Chart
         if: ${{ steps.changed.outputs.publish == 'true' }}
+        env:
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
         run: |
-          helm package internal/ee/infrastructure/helm/flexprice --version ${{ steps.chart-version.outputs.version }}
+          helm package internal/ee/infrastructure/helm/flexprice --version "$CHART_VERSION"
 
       - name: Login to GHCR
         if: ${{ steps.changed.outputs.publish == 'true' }}

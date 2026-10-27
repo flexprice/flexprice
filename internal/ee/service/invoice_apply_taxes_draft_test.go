@@ -261,8 +261,8 @@ func (s *InvoiceServiceSuite) TestRecalculateTaxesOnInvoice_ExemptCustomerSkipsE
 	s.Require().NotNil(got.TaxExemptionReasonCode)
 	s.Equal(types.TaxExemptionReasonCustomerExempt, *got.TaxExemptionReasonCode)
 	s.Equal(0, s.invoiceTaxApplied(inv.ID))
-	s.NotContains(rec.getByProviderCalls, types.SecretProviderStripe,
-		"the Stripe connection must never be looked up for an exempt customer")
+	s.Equal(1, lo.Count(rec.getByProviderCalls, types.SecretProviderStripe),
+		"only the hosted invoice check at finalize may look up Stripe; the tax engine must not for an exempt customer")
 }
 
 // Control for the test above: the same setup for a taxable customer does reach Stripe and fails.

@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -106,6 +107,127 @@ func (h *AnalyticsHandler) CreateView(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.NewViewResponse(v))
 }
 
+// ListViews lists saved analytics views.
+// @Summary List analytics views
+// @Description Lists saved views, optionally filtered by family.
+// @ID listAnalyticsViews
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param family query string false "Filter by view family"
+// @Success 200 {object} dto.ListViewsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /analytics/views [get]
+// @x-scope "read"
+func (h *AnalyticsHandler) ListViews(c *gin.Context) {
+	ctx := c.Request.Context()
+	family := types.Family(c.Query("family"))
+	if err := family.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+	views, err := h.svc.ListViews(ctx, family)
+	if err != nil {
+		h.log.Error(ctx, "failed to list analytics views", "error", err)
+		c.Error(err)
+		return
+	}
+	res := &dto.ListViewsResponse{Items: make([]*dto.ViewResponse, 0, len(views))}
+	for _, v := range views {
+		res.Items = append(res.Items, dto.NewViewResponse(v))
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// GetView returns a saved analytics view.
+// @Summary Get an analytics view
+// @Description Returns a saved view by ID.
+// @ID getAnalyticsView
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "View ID"
+// @Success 200 {object} dto.ViewResponse
+// @Failure 404 {object} ierr.ErrorResponse "View not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /analytics/views/{id} [get]
+// @x-scope "read"
+func (h *AnalyticsHandler) GetView(c *gin.Context) {
+	ctx := c.Request.Context()
+	v, err := h.svc.GetView(ctx, c.Param("id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.NewViewResponse(v))
+}
+
+// UpdateView updates a saved analytics view.
+// @Summary Update an analytics view
+// @Description Replaces the name and definition of a saved view.
+// @ID updateAnalyticsView
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "View ID"
+// @Param request body dto.CreateViewRequest true "View request"
+// @Success 200 {object} dto.ViewResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "View not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /analytics/views/{id} [put]
+// @x-scope "write"
+func (h *AnalyticsHandler) UpdateView(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.CreateViewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+	v := &analytics.View{ID: c.Param("id"), Name: req.Name, Definition: req.Definition}
+	if err := h.svc.UpdateView(ctx, v); err != nil {
+		h.log.Error(ctx, "failed to update analytics view", "error", err, "view_id", v.ID)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.NewViewResponse(v))
+}
+
+// DeleteView deletes a saved analytics view.
+// @Summary Delete an analytics view
+// @Description Deletes a saved view by ID.
+// @ID deleteAnalyticsView
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "View ID"
+// @Success 204 "No Content"
+// @Failure 404 {object} ierr.ErrorResponse "View not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /analytics/views/{id} [delete]
+// @x-scope "write"
+func (h *AnalyticsHandler) DeleteView(c *gin.Context) {
+	ctx := c.Request.Context()
+	id := c.Param("id")
+	if err := h.svc.DeleteView(ctx, id); err != nil {
+		h.log.Error(ctx, "failed to delete analytics view", "error", err, "view_id", id)
+		c.Error(err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 // QueryView executes a previously created analytics view by ID.
 // @Summary Query an analytics view
 // @Description Resolves the view's definition against the supplied variables and executes it.
@@ -149,6 +271,82 @@ func (h *AnalyticsHandler) QueryView(c *gin.Context) {
 	res, err := h.svc.QueryView(ctx, id, req.Variables)
 	if err != nil {
 		h.log.Error(ctx, "failed to query analytics view", "error", err, "view_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// ListReports returns the financial reports catalog.
+// @Summary List financial reports
+// @Description Returns the catalog of reports with their allowed shapes, dimensions and grains.
+// @ID listAnalyticsReports
+// @Tags Analytics
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.ReportCatalogResponse
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/reports [get]
+func (h *AnalyticsHandler) ListReports(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	res, err := h.svc.ListReports(ctx)
+	if err != nil {
+		h.log.Error(ctx, "failed to list analytics reports", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// RunReport runs one report by key.
+// @Summary Run a financial report
+// @Description Runs the report identified by key. range is an absolute YYYY-MM-DD..YYYY-MM-DD (end exclusive) or last_N_days. compare is previous_period or previous_year.
+// @ID runAnalyticsReport
+// @Tags Analytics
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param key path string true "Report key"
+// @Param request body dto.ReportQueryRequest true "Report query request"
+// @Success 200 {object} dto.AnalyticsQueryResult
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Reports not enabled"
+// @Failure 404 {object} ierr.ErrorResponse "Report not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /analytics/reports/{key}/query [post]
+func (h *AnalyticsHandler) RunReport(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	key := c.Param("key")
+	if key == "" {
+		c.Error(ierr.NewError("report key is required").
+			WithHint("Provide a valid report key").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ReportQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	res, err := h.svc.RunReport(ctx, key, &req)
+	if err != nil {
+		h.log.Error(ctx, "failed to run analytics report", "error", err, "report_key", key)
 		c.Error(err)
 		return
 	}

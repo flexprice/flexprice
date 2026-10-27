@@ -253,6 +253,17 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_PendingSessionIsCom
 	s.Equal([]string{session.ID}, s.checkoutSvc.completeCalls)
 }
 
+// Chargebee can webhook before the create call returns, while the session is still initiated.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_InitiatedSessionIsCompleted() {
+	session := s.seedSession(types.CheckoutStatusInitiated)
+
+	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
+
+	s.Require().NoError(err)
+	s.True(handled)
+	s.Equal([]string{session.ID}, s.checkoutSvc.completeCalls)
+}
+
 // At-least-once delivery: the second webhook must be a quiet no-op, not an error.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_AlreadyCompletedIsNotAnError() {
 	s.seedSession(types.CheckoutStatusPending)

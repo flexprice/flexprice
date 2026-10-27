@@ -93,6 +93,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
+			CommitmentID:                item.CommitmentID,
 			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
@@ -651,6 +652,20 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	// Filter by period_end_lte (periodEnd <= value)
 	if f.PeriodEndLTE != nil {
 		if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.PeriodEndLTE) {
+			return false
+		}
+	}
+
+	// Filter by period_start_lt (periodStart < value)
+	if f.PeriodStartLT != nil {
+		if inv.PeriodStart == nil || !inv.PeriodStart.Before(*f.PeriodStartLT) {
+			return false
+		}
+	}
+
+	// Filter by period_end_gt (periodEnd > value)
+	if f.PeriodEndGT != nil {
+		if inv.PeriodEnd == nil || !inv.PeriodEnd.After(*f.PeriodEndGT) {
 			return false
 		}
 	}

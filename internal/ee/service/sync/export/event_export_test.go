@@ -244,12 +244,25 @@ func TestEventExporter_PrepareData_BatchesAcrossPages(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	_, count, err := exporter.PrepareData(ctx, exportRequest(tenantID, envID, now))
+	csvBytes, count, err := exporter.PrepareData(ctx, exportRequest(tenantID, envID, now))
 	if err != nil {
 		t.Fatalf("PrepareData: %v", err)
 	}
 	if count != total {
 		t.Errorf("expected %d records across pages, got %d", total, count)
+	}
+	// Batches are written one at a time; the header must appear once, not per batch.
+	var parsed []*FeatureUsageCSV
+	if err := gocsv.UnmarshalBytes(csvBytes, &parsed); err != nil {
+		t.Fatalf("Unmarshal CSV: %v", err)
+	}
+	if len(parsed) != total {
+		t.Errorf("expected %d CSV rows, got %d", total, len(parsed))
+	}
+	for _, r := range parsed {
+		if r.ID == "id" {
+			t.Fatalf("header row repeated inside the CSV")
+		}
 	}
 }
 

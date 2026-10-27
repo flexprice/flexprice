@@ -234,6 +234,16 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceCheckoutGated(invoice.ID, "pay")
 	}
 
+	// Paying a draft in full finalizes it outside FinalizeInvoice, the one path that
+	// takes the deletion gate, so it would seal usage the deletion is about to remove.
+	gatedDeletion, err := invSvc.isInvoiceGatedOnEventDeletion(ctx, invoice)
+	if err != nil {
+		return err
+	}
+	if gatedDeletion != nil {
+		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
+	}
+
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		return ierr.NewError("invoice is already paid").
@@ -1167,4 +1177,58 @@ func hasLiveMandate(m interfaces.ProviderPaymentMethod, gw types.PaymentGatewayT
 		return gw != types.PaymentGatewayTypeRazorpay
 	}
 	return m.Recurring.Status == types.RecurringPaymentStatusActive
+}
+
+func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error) {
+	// A live link for this invoice is reusable: without this a second tap creates a
+	// second full-amount link, and two links can both be paid.
+	if existing, err := s.livePaymentLink(ctx, req.DestinationID, lo.FromPtr(req.PaymentGateway)); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return existing, nil
+	}
+
+	return s.CreatePayment(ctx, req)
+}
+
+// livePaymentLink returns the payment for an unexpired link already issued for this
+// invoice on this gateway, or nil when there is none to reuse. A link whose payment
+// carries no URL is not reusable — there would be nothing to send the customer to.
+func (s *paymentService) livePaymentLink(
+	ctx context.Context,
+	invoiceID string,
+	gateway types.PaymentGatewayType,
+) (*dto.PaymentResponse, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+	filter.PaymentGateway = lo.ToPtr(string(gateway))
+	filter.Limit = lo.ToPtr(1)
+
+	payments, err := s.ListPayments(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if payments == nil || len(payments.Items) == 0 {
+		return nil, nil
+	}
+
+	latest := payments.Items[0]
+	if paymentActionFrom(latest) == nil {
+		return nil, nil
+	}
+	return latest, nil
+}
+
+func paymentActionFrom(payResp *dto.PaymentResponse) *types.PaymentAction {
+	if payResp.GatewayMetadata == nil {
+		return nil
+	}
+	url := payResp.GatewayMetadata["payment_url"]
+	if url == "" {
+		return nil
+	}
+	return &types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: url}
 }

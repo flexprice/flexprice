@@ -30,7 +30,13 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 type PermissionOption func(*permissionRules)
 
 type permissionRules struct {
-	superAdminOnly bool
+	superAdminOnly     bool
+	allowWhenSuspended bool
+}
+
+// AllowWhenSuspended lets a suspended tenant use a write route: event ingest, and paying its way back.
+func AllowWhenSuspended() PermissionOption {
+	return func(r *permissionRules) { r.allowWhenSuspended = true }
 }
 
 // SuperAdminOnly restricts a route to a person holding super_admin. Use it for
@@ -60,7 +66,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 		// Suspended tenants are blocked from all write operations. Checked first
 		// so a suspended tenant hears about the suspension rather than a narrower
 		// role problem it cannot act on until the account is restored.
-		if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+		if action == types.ActionWrite && !rules.allowWhenSuspended && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "tenant account is suspended",
 			})

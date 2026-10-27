@@ -39,12 +39,13 @@ type Configuration struct {
 	Postgres               PostgresConfig               `validate:"required"`
 	Otel                   OtelConfig                   `validate:"omitempty"`
 	Pyroscope              PyroscopeConfig              `validate:"required"`
+	Telemetry              TelemetryConfig              `mapstructure:"telemetry" validate:"omitempty"`
 	Event                  EventConfig                  `validate:"required"`
 	DynamoDB               DynamoDBConfig               `validate:"required"`
 	Temporal               TemporalConfig               `validate:"required"`
 	Webhook                Webhook                      `validate:"omitempty"`
 	Secrets                SecretsConfig                `validate:"required"`
-	Billing                BillingConfig                `validate:"omitempty"`
+	Billing                BillingConfig                `mapstructure:"billing" validate:"omitempty"`
 	S3                     S3Config                     `validate:"required"`
 	Storage                StorageConfig                `mapstructure:"storage" validate:"omitempty"`
 	GCS                    GCSConfig                    `mapstructure:"gcs" validate:"omitempty"`
@@ -69,6 +70,7 @@ type Configuration struct {
 	Activity               ActivityConfig               `mapstructure:"activity" validate:"omitempty"`
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
+	HostedInvoice          HostedInvoiceConfig          `mapstructure:"hosted_invoice" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
@@ -615,12 +617,16 @@ type ClickHouseConfig struct {
 
 // ReportsConfig is the reports ClickHouse login.
 type ReportsConfig struct {
-	Database            string `mapstructure:"database"`
-	Username            string `mapstructure:"username"`
-	Password            string `mapstructure:"password"`
-	MaxExecutionSeconds int    `mapstructure:"max_execution_seconds"`
-	MaxResultRows       int    `mapstructure:"max_result_rows"`
-	MaxRowsToRead       int64  `mapstructure:"max_rows_to_read"`
+	Address                 string `mapstructure:"address"`
+	Database                string `mapstructure:"database"`
+	UsageDatabase           string `mapstructure:"usage_database"`
+	UsageOnEventsClickHouse bool   `mapstructure:"usage_on_events_clickhouse"`
+	Username                string `mapstructure:"username"`
+	Password                string `mapstructure:"password"`
+	MaxExecutionSeconds     int    `mapstructure:"max_execution_seconds"`
+	MaxResultRows           int    `mapstructure:"max_result_rows"`
+	MaxRowsToRead           int64  `mapstructure:"max_rows_to_read"`
+	QueryCacheTTLSeconds    int    `mapstructure:"query_cache_ttl_seconds"`
 }
 
 func (c ReportsConfig) Enabled() bool {
@@ -844,6 +850,16 @@ type PyroscopeConfig struct {
 	DisableGCRuns   bool     `mapstructure:"disable_gc_runs" default:"false"`
 }
 
+type TelemetryConfig struct {
+	// Enabled defaults to false — telemetry is opt-in until validated.
+	// FLEXPRICE_TELEMETRY_DISABLED / DO_NOT_TRACK always win regardless.
+	Enabled      bool   `mapstructure:"enabled"`
+	Disabled     bool   `mapstructure:"disabled"`
+	Host         string `mapstructure:"host"`
+	DryRun       bool   `mapstructure:"dry_run"`
+	InstallLabel string `mapstructure:"install_label"`
+}
+
 type TemporalConfig struct {
 	Address                string               `mapstructure:"address" validate:"required"`
 	TaskQueue              string               `mapstructure:"task_queue" validate:"required"`
@@ -886,9 +902,78 @@ type SecretsConfig struct {
 	EncryptionKey string `mapstructure:"encryption_key" validate:"required"`
 }
 
+// BillingConfig points this region at the Flexprice billing tenant on Flexprice Cloud.
+// TenantID/EnvironmentID are set only where that tenant is local; the remote fields are set wherever self-billing runs.
 type BillingConfig struct {
 	TenantID      string `mapstructure:"tenant_id" validate:"omitempty"`
 	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Region        string `mapstructure:"region"`
+	APIHost       string `mapstructure:"api_host"`
+	APIKey        string `mapstructure:"api_key"`
+	PlanID        string `mapstructure:"plan_id"`
+	DashboardURL  string `mapstructure:"dashboard_url"`
+
+	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
+	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
+
+	// UsageLookbackHours is how many closed hours each usage push re-sends, so a missed run is recovered.
+	UsageLookbackHours int `mapstructure:"usage_lookback_hours" default:"6"`
+
+	// ZapierWebhookURL receives self-billing lifecycle alerts for Slack; empty disables them.
+	ZapierWebhookURL string `mapstructure:"zapier_webhook_url"`
+}
+
+const defaultUsageLookback = 6 * time.Hour
+
+// UsageLookback is the usage push window length; a non-positive setting falls back to 6 hours.
+func (c BillingConfig) UsageLookback() time.Duration {
+	if c.UsageLookbackHours <= 0 {
+		return defaultUsageLookback
+	}
+	return time.Duration(c.UsageLookbackHours) * time.Hour
+}
+
+// IsSelfBillingEnabled reports whether this deployment bills its tenants through Flexprice Cloud.
+func (c BillingConfig) IsSelfBillingEnabled() bool {
+	return c.Enabled &&
+		c.Region != "" &&
+		c.APIKey != "" &&
+		c.PlanID != "" &&
+		c.DashboardURL != "" &&
+		c.CheckoutProvider().Validate() == nil &&
+		c.hasSecureAPIHost()
+}
+
+// CheckoutProvider returns the configured checkout payment provider, defaulting to stripe.
+func (c BillingConfig) CheckoutProvider() types.CheckoutPaymentProvider {
+	if c.PaymentProvider == "" {
+		return types.CheckoutPaymentProviderStripe
+	}
+	return c.PaymentProvider
+}
+
+// hasSecureAPIHost reports whether APIHost is an https URL; plain http is allowed only for localhost.
+func (c BillingConfig) hasSecureAPIHost() bool {
+	return isSecureURL(c.APIHost)
+}
+
+// HasSecureZapierWebhookURL reports whether ZapierWebhookURL is an https URL; plain http is allowed only for localhost.
+func (c BillingConfig) HasSecureZapierWebhookURL() bool {
+	return isSecureURL(c.ZapierWebhookURL)
+}
+
+func isSecureURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && isLoopbackHost(u.Hostname()))
+}
+
+// IsBillingTenant reports whether tenantID is the local billing tenant, which never bills itself.
+func (c BillingConfig) IsBillingTenant(tenantID string) bool {
+	return c.TenantID != "" && c.TenantID == tenantID
 }
 
 type EventProcessingConfig struct {
@@ -986,6 +1071,8 @@ type ActivityConfig struct {
 	ConsumerGroup string                  `mapstructure:"consumer_group" default:"activity_log"`
 	RateLimit     int64                   `mapstructure:"rate_limit" default:"50"`
 	Publisher     ActivityPublisherConfig `mapstructure:"publisher"`
+	// ExcludedTenants lists "tenant_id" or "tenant_id:environment_id" entries whose writes are not logged. Empty = log all.
+	ExcludedTenants []string `mapstructure:"excluded_tenants"`
 }
 
 type ActivityPublisherConfig struct {
@@ -1097,6 +1184,11 @@ type EmailConfig struct {
 
 type CheckoutConfig struct {
 	BaseURL string `mapstructure:"base_url" validate:"required,url"`
+}
+
+// HostedInvoiceConfig holds the hosted invoice page base; empty returns no Flexprice hosted links.
+type HostedInvoiceConfig struct {
+	BaseURL string `mapstructure:"base_url" validate:"omitempty,url"`
 }
 
 type CustomerPortalConfig struct {
@@ -1296,6 +1388,9 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+// devAPIKeyHash is the hash of the public dev API key in config.yaml.
+const devAPIKeyHash = "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c"
+
 const (
 	defaultClickHouseDialTimeout = 10 * time.Second
 	defaultClickHouseReadTimeout = 30 * time.Second
@@ -1306,6 +1401,7 @@ const (
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
 	"": true, // unset
+	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
 	"svix_auth_token":                                          true,
@@ -1324,6 +1420,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	}
 	if cfg.Deployment.Mode == types.ModeLocal {
 		return cfg, nil
+	}
+	if err := cfg.validateCriticalSecrets(); err != nil {
+		return nil, err
 	}
 	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
 	// Many fields carry dormant `validate:"required"` tags that were never enforced
@@ -1352,6 +1451,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	// customer uploads to their identity provider contains unusable endpoints,
 	// and the failure surfaces much later as an audience mismatch on every
 	// assertion, pointing at signatures rather than at configuration.
+	if err := cfg.validateEncryptionKey(); err != nil {
+		return nil, err
+	}
 	if err := cfg.Auth.SAML.validate(); err != nil {
 		return nil, err
 	}
@@ -1359,6 +1461,25 @@ func NewValidatedConfig() (*Configuration, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateCriticalSecrets rejects secrets that sign tokens or grant access.
+func (c Configuration) validateCriticalSecrets() error {
+	allowInsecure := os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true"
+	fail := func(err error) error {
+		if !allowInsecure {
+			return err
+		}
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed critical secret check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	if placeholderSecrets[strings.TrimSpace(c.Auth.Secret)] {
+		return fail(fmt.Errorf("auth.secret (FLEXPRICE_AUTH_SECRET) is empty or a placeholder (mode %q)", c.Deployment.Mode))
+	}
+	if _, ok := c.Auth.APIKey.Keys[devAPIKeyHash]; ok {
+		return fail(fmt.Errorf("auth.api_key.keys contains the public dev key (mode %q): set FLEXPRICE_AUTH_API_KEY_KEYS", c.Deployment.Mode))
+	}
+	return nil
 }
 
 // validateSecrets flags placeholder/dev secret values for features that are actually
@@ -1390,16 +1511,27 @@ func (c Configuration) validateSecrets() error {
 	if strings.TrimSpace(c.ClickHouse.Password) == devDBPassword {
 		bad = append(bad, "clickhouse.password (FLEXPRICE_CLICKHOUSE_PASSWORD)")
 	}
-	// NOTE: secrets.encryption_key is intentionally NOT checked. ECS prod currently decrypts
-	// with the baked value (canonical env FLEXPRICE_SECRETS_ENCRYPTION_KEY is unset there; ECS
-	// sets a different, unread name). Rejecting it would block prod boot and switching keys
-	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
-
 	if len(bad) > 0 {
 		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
 			c.Deployment.Mode, strings.Join(bad, ", "))
 	}
 	return nil
+}
+
+const defaultEncryptionKey = "super-secret-encryption-key"
+
+func (c Configuration) validateEncryptionKey() error {
+	key := strings.TrimSpace(c.Secrets.EncryptionKey)
+	if key != "" && key != defaultEncryptionKey {
+		return nil
+	}
+	err := fmt.Errorf("secrets.encryption_key is empty or the shipped default (mode %q): set FLEXPRICE_SECRETS_ENCRYPTION_KEY",
+		c.Deployment.Mode)
+	if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true" {
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed encryption key check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	return err
 }
 
 // GetDefaultConfig returns a default configuration for local development

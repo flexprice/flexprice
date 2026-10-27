@@ -104,3 +104,14 @@ func TestLookupBillingMetric_InvoiceTotalForcesCurrency(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, bm.Currency)
 }
+
+func TestBillingValidate_SnapshotRejectsTimeseries(t *testing.T) {
+	withMetric(t, &BillingMetric{
+		Metric:     "test_snap_v",
+		Dimensions: []string{"currency"},
+		Shapes:     []types.Shape{types.ShapeScalar, types.ShapeTimeseries}, Snapshot: true,
+	})
+	d := billingDef(types.ShapeTimeseries)
+	d.Metrics = []types.Metric{"test_snap_v"}
+	requireValidationErr(t, d.Validate())
+}

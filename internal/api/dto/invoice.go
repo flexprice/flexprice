@@ -874,6 +874,9 @@ type CreateInvoiceLineItemRequest struct {
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// CommitmentID links this line item to the commitment it bills; server-set only.
+	CommitmentID *string `json:"-"`
+
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
@@ -988,6 +991,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
+		CommitmentID:                r.CommitmentID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 
@@ -1249,6 +1253,9 @@ type InvoiceResponse struct {
 	// customer contains the customer information associated with this invoice
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
+	// hosted_invoice_url is the page where the customer can view, download and pay this invoice
+	HostedInvoiceURL string `json:"hosted_invoice_url,omitempty"`
+
 	// tax_applied_records contains the tax applied records associated with this invoice
 	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
 
@@ -1362,6 +1369,12 @@ func (r *InvoiceResponse) WithSubscription(sub *SubscriptionResponse) *InvoiceRe
 // WithCheckoutSession adds the gating checkout session to the invoice response
 func (r *InvoiceResponse) WithCheckoutSession(session *CheckoutSessionResponse) *InvoiceResponse {
 	r.CheckoutSession = session
+	return r
+}
+
+// WithHostedInvoiceURL sets the hosted invoice page link
+func (r *InvoiceResponse) WithHostedInvoiceURL(url string) *InvoiceResponse {
+	r.HostedInvoiceURL = url
 	return r
 }
 
