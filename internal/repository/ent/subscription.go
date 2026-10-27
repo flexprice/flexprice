@@ -714,10 +714,14 @@ func (o SubscriptionQueryOptions) filtersConstrainSubscriptionStatus(filters []*
 }
 
 // applyEntityQueryOptions applies subscription-specific filters to the query
-func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionFilter, query SubscriptionQuery) (SubscriptionQuery, error) {
+func (o *SubscriptionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.SubscriptionFilter, query SubscriptionQuery) (SubscriptionQuery, error) {
 	var err error
 	if f == nil {
 		return query, nil
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(predicate.Subscription(columnInSelector(subscription.FieldCustomerID, customerIDsOfEntity(ctx, f.BillingEntityID))))
 	}
 
 	// Apply subscription IDs filter

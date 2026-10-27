@@ -501,6 +501,9 @@ type InvoiceFilter struct {
 	// This is the ID returned by FlexPrice when creating or retrieving customers
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
 
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
+
 	// external_customer_id filters invoices for a customer using your system's customer identifier
 	// This is the ID you provided when creating the customer in FlexPrice
 	ExternalCustomerID string `json:"external_customer_id,omitempty" form:"external_customer_id"`

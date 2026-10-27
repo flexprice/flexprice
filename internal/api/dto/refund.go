@@ -9,6 +9,8 @@ import (
 
 type RefundResponse struct {
 	*refund.Refund
+	// billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities
+	BillingEntityID *string `json:"billing_entity_id"`
 }
 
 type ListRefundsResponse = types.ListResponse[*RefundResponse]

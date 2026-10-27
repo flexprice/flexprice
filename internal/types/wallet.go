@@ -341,6 +341,9 @@ type WalletFilter struct {
 	WalletIDs    []string      `json:"wallet_ids,omitempty" form:"wallet_ids"`
 	Status       *WalletStatus `json:"status,omitempty" form:"status"`
 	AlertEnabled *bool         `json:"alert_enabled,omitempty" form:"alert_enabled"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 func NewWalletFilter() *WalletFilter {

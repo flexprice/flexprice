@@ -516,6 +516,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		return query, nil
 	}
 
+	if f.BillingEntityID != "" {
+		query = query.Where(customer.BillingEntityID(f.BillingEntityID))
+	}
+
 	if f.ExternalID != "" {
 		query = query.Where(customer.ExternalID(f.ExternalID))
 	}

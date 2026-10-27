@@ -204,6 +204,9 @@ type RefundFilter struct {
 	RefundDestinations []RefundDestination `json:"refund_destinations,omitempty" form:"refund_destinations"`
 	Gateway            *string             `json:"gateway,omitempty" form:"gateway"`
 	OnlySettled        *bool               `json:"only_settled,omitempty" form:"only_settled"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 // NewRefundFilter creates a refund filter with default pagination.

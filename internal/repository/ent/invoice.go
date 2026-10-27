@@ -1186,10 +1186,14 @@ func (o InvoiceQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.InvoiceFilter, query InvoiceQuery) (InvoiceQuery, error) {
+func (o InvoiceQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.InvoiceFilter, query InvoiceQuery) (InvoiceQuery, error) {
 	var err error
 	if f == nil {
 		return query, nil
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(predicate.Invoice(columnInSelector(invoice.FieldCustomerID, customerIDsOfEntity(ctx, f.BillingEntityID))))
 	}
 
 	// Apply entity-specific filters

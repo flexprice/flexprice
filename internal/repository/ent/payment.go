@@ -800,9 +800,16 @@ func (o PaymentQueryOptions) GetFieldName(field string) string {
 	return ""
 }
 
-func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PaymentFilter, query PaymentQuery) PaymentQuery {
+func (o PaymentQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.PaymentFilter, query PaymentQuery) PaymentQuery {
 	if f == nil {
 		return query
+	}
+
+	if f.BillingEntityID != nil && *f.BillingEntityID != "" {
+		query = query.Where(
+			payment.DestinationType(string(types.PaymentDestinationTypeInvoice)),
+			predicate.Payment(columnInSelector(payment.FieldDestinationID, invoiceIDsOfEntity(ctx, *f.BillingEntityID))),
+		)
 	}
 
 	// Apply payment IDs filter if specified

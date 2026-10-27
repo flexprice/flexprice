@@ -992,6 +992,10 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
+	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -1229,6 +1233,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -1304,6 +1312,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		for _, inv := range items {
 			inv.WithTaxes(taxesByInvoice[inv.ID])
 		}
+	}
+
+	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListInvoicesResponse{

@@ -19,6 +19,9 @@ type CustomerFilter struct {
 	ExternalIDs []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
 	ExternalID  string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
 	Email       string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values

@@ -417,6 +417,9 @@ type SubscriptionFilter struct {
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
 
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
+
 	// CustomerIDs filters by customer IDs
 	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids"`
 

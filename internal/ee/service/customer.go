@@ -150,6 +150,9 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
 		return nil, err
 	}
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
 
 	if err := filter.Validate(); err != nil {
 		return nil, ierr.WithError(err).

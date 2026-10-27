@@ -1140,6 +1140,10 @@ func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types
 		query = query.Where(wallet.IDIn(filter.WalletIDs...))
 	}
 
+	if filter.BillingEntityID != "" {
+		query = query.Where(predicate.Wallet(columnInSelector(wallet.FieldCustomerID, customerIDsOfEntity(ctx, filter.BillingEntityID))))
+	}
+
 	wallets, err := query.All(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
