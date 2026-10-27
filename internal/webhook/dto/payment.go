@@ -17,6 +17,7 @@ type Payment struct {
 	ID                string                       `json:"id"`
 	DestinationType   types.PaymentDestinationType `json:"destination_type"`
 	DestinationID     string                       `json:"destination_id"`
+	BillingEntityID   *string                      `json:"billing_entity_id"`
 	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type"`
 	Amount            decimal.Decimal              `json:"amount" swaggertype:"string"`
 	Currency          string                       `json:"currency"`
@@ -35,6 +36,7 @@ func NewPayment(resp *dto.PaymentResponse) *Payment {
 		return nil
 	}
 	return &Payment{
+		BillingEntityID:   resp.BillingEntityID,
 		ID:                resp.ID,
 		DestinationType:   resp.DestinationType,
 		DestinationID:     resp.DestinationID,

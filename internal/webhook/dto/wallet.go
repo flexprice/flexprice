@@ -23,15 +23,16 @@ type InternalTransactionEvent struct {
 }
 
 type Wallet struct {
-	ID             string             `json:"id"`
-	CustomerID     string             `json:"customer_id"`
-	Currency       string             `json:"currency"`
-	Balance        decimal.Decimal    `json:"balance" swaggertype:"string"`
-	CreditBalance  decimal.Decimal    `json:"credit_balance" swaggertype:"string"`
-	WalletStatus   types.WalletStatus `json:"wallet_status"`
-	Name           string             `json:"name,omitempty"`
-	WalletType     types.WalletType   `json:"wallet_type"`
-	ConversionRate decimal.Decimal    `json:"conversion_rate" swaggertype:"string"`
+	ID              string             `json:"id"`
+	CustomerID      string             `json:"customer_id"`
+	BillingEntityID *string            `json:"billing_entity_id"`
+	Currency        string             `json:"currency"`
+	Balance         decimal.Decimal    `json:"balance" swaggertype:"string"`
+	CreditBalance   decimal.Decimal    `json:"credit_balance" swaggertype:"string"`
+	WalletStatus    types.WalletStatus `json:"wallet_status"`
+	Name            string             `json:"name,omitempty"`
+	WalletType      types.WalletType   `json:"wallet_type"`
+	ConversionRate  decimal.Decimal    `json:"conversion_rate" swaggertype:"string"`
 }
 
 func NewWallet(resp *dto.WalletResponse) *Wallet {
@@ -39,15 +40,16 @@ func NewWallet(resp *dto.WalletResponse) *Wallet {
 		return nil
 	}
 	return &Wallet{
-		ID:             resp.ID,
-		CustomerID:     resp.CustomerID,
-		Currency:       resp.Currency,
-		Balance:        resp.Balance,
-		CreditBalance:  resp.CreditBalance,
-		WalletStatus:   resp.WalletStatus,
-		Name:           resp.Name,
-		WalletType:     resp.WalletType,
-		ConversionRate: resp.ConversionRate,
+		BillingEntityID: resp.BillingEntityID,
+		ID:              resp.ID,
+		CustomerID:      resp.CustomerID,
+		Currency:        resp.Currency,
+		Balance:         resp.Balance,
+		CreditBalance:   resp.CreditBalance,
+		WalletStatus:    resp.WalletStatus,
+		Name:            resp.Name,
+		WalletType:      resp.WalletType,
+		ConversionRate:  resp.ConversionRate,
 	}
 }
 

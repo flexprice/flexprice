@@ -99,7 +99,10 @@ type RecordAttemptRequest struct {
 
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
-	ID                     string                       `json:"id"`
+	ID string `json:"id"`
+	// billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities
+	BillingEntityID *string `json:"billing_entity_id"`
+
 	IdempotencyKey         string                       `json:"idempotency_key"`
 	DestinationType        types.PaymentDestinationType `json:"destination_type"`
 	DestinationID          string                       `json:"destination_id"`
