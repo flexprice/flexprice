@@ -611,6 +611,16 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 			"customer_id", customer.ID)
 	}
 
+	if err := s.guardTenantLevelTaxLink(ctx, req.EntityType); err != nil {
+		return nil, err
+	}
+	if req.EntityType == types.TaxRateEntityTypeBillingEntity {
+		beService := &billingEntityService{ServiceParams: s.ServiceParams}
+		if _, err := beService.entityInEnvironment(ctx, req.EntityID); err != nil {
+			return nil, err
+		}
+	}
+
 	// validate tax rate exists and is valid
 	taxRate, err := s.TaxRateRepo.GetByCode(ctx, req.TaxRateCode)
 	if err != nil {
@@ -731,6 +741,9 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 	if err != nil {
 		return nil, err
 	}
+	if err := s.guardTenantLevelTaxLink(ctx, existing.EntityType); err != nil {
+		return nil, err
+	}
 
 	// Update fields if provided
 	if req.Priority != nil {
@@ -784,6 +797,9 @@ func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error 
 	// Get existing tax association to ensure it exists
 	existing, err := s.TaxAssociationRepo.Get(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := s.guardTenantLevelTaxLink(ctx, existing.EntityType); err != nil {
 		return err
 	}
 
@@ -1939,4 +1955,22 @@ func (s *taxService) taxIsReversed(ctx context.Context, entityType types.TaxRate
 	return lo.ContainsBy(rows, func(applied *taxapplied.TaxApplied) bool {
 		return applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) != ""
 	}), nil
+}
+
+// guardTenantLevelTaxLink rejects changes to tenant-level tax links once billing entities are enabling or enabled,
+// because new customers then take their entity's links instead.
+func (s *taxService) guardTenantLevelTaxLink(ctx context.Context, entityType types.TaxRateEntityType) error {
+	if entityType != types.TaxRateEntityTypeTenant {
+		return nil
+	}
+	mode, err := s.TenantRepo.GetBillingEntityMode(ctx, types.GetTenantID(ctx))
+	if err != nil {
+		return err
+	}
+	if mode != types.BillingEntityModeOff {
+		return ierr.NewError("tax defaults are set per billing entity").
+			WithHint("Tax defaults are set per billing entity. Link the tax rate to a billing entity instead.").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }

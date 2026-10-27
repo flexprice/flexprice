@@ -407,7 +407,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 
 	switch key {
 	case types.SettingKeyInvoiceConfig:
-		return updateSettingByKey[types.InvoiceConfig](s, ctx, key, req)
+		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.InvoiceConfig])
 	case types.SettingKeySubscriptionConfig:
 		return updateSettingByKey[types.SubscriptionConfig](s, ctx, key, req)
 	case types.SettingKeyInvoicePDFConfig:
@@ -443,7 +443,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyCustomCurrencyConfig:
 		return updateSettingByKey[*types.CustomCurrencyConfig](s, ctx, key, req)
 	case types.SettingKeyTaxConfig:
-		return updateSettingByKey[types.TaxConfig](s, ctx, key, req)
+		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.TaxConfig])
 	case types.SettingKeyCommitmentsV2:
 		return updateSettingByKey[types.CommitmentsV2Config](s, ctx, key, req)
 	default:
@@ -475,6 +475,17 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 	}
 	if err != nil {
 		return err
+	}
+
+	// Deleting invoice_config resets the prefix, which billing entities own once enabling.
+	if key == types.SettingKeyInvoiceConfig {
+		mode, err := s.TenantRepo.GetBillingEntityMode(ctx, types.GetTenantID(ctx))
+		if err != nil {
+			return err
+		}
+		if mode != types.BillingEntityModeOff {
+			return errSettingOwnedByBillingEntity()
+		}
 	}
 
 	// Delete based on setting type (tenant-level vs environment-level)
@@ -549,4 +560,64 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 
 	// Return updated setting
 	return s.GetSettingByKey(ctx, key)
+}
+
+type settingUpdater func(s *settingsService, ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
+
+// updateBillingEntityGuardedSetting applies an invoice_config or tax_config update under the shared
+// billing entity lock, so it cannot race an enablement.
+func (s *settingsService) updateBillingEntityGuardedSetting(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest, update settingUpdater) (*dto.SettingResponse, error) {
+	var resp *dto.SettingResponse
+	err := NewBillingEntityService(s.ServiceParams).WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		if mode != types.BillingEntityModeOff {
+			if err := s.guardBillingEntitySetting(txCtx, key, req); err != nil {
+				return err
+			}
+		}
+		var err error
+		resp, err = update(s, txCtx, key, req)
+		return err
+	})
+	return resp, err
+}
+
+// guardBillingEntitySetting rejects a prefix change or an external tax engine once billing entities are on.
+func (s *settingsService) guardBillingEntitySetting(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) error {
+	switch key {
+	case types.SettingKeyInvoiceConfig:
+		prefix, ok := req.Value["prefix"]
+		if !ok {
+			return nil
+		}
+		current, err := GetSetting[types.InvoiceConfig](s, ctx, key)
+		if err != nil {
+			return err
+		}
+		if prefix != current.InvoiceNumberPrefix {
+			return errSettingOwnedByBillingEntity()
+		}
+	case types.SettingKeyTaxConfig:
+		merged, err := GetSetting[types.TaxConfig](s, ctx, key)
+		if err != nil {
+			return err
+		}
+		if enabled, ok := req.Value["enabled"].(bool); ok {
+			merged.Enabled = enabled
+		}
+		if provider, ok := req.Value["provider"].(string); ok {
+			merged.Provider = types.TaxProvider(provider)
+		}
+		if merged.UsesExternalTaxEngine() {
+			return ierr.NewErrorf("the %s tax engine cannot be used with billing entities", merged.Provider).
+				WithHintf("Billing entities calculate tax natively. The %s tax engine cannot be turned on while billing entities are enabled.", merged.Provider).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+func errSettingOwnedByBillingEntity() error {
+	return ierr.NewError("invoice prefix is set per billing entity").
+		WithHint("The invoice prefix is set per billing entity. Edit the billing entity's invoice prefix instead.").
+		Mark(ierr.ErrValidation)
 }
