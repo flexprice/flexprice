@@ -80,6 +80,18 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.Equal("Old EU B.V.", got.LegalName)
 	})
 
+	s.Run("issued_before_enable_is_tenant_seller", func() {
+		s.ClearStores()
+		s.setMode(types.BillingEntityModeEnabled)
+		s.addEntity("be_eu", env, "EU", false)
+		s.addCustomer("c1", lo.ToPtr("be_eu"))
+		inv := &invoice.Invoice{ID: "inv_1", CustomerID: "c1", InvoiceStatus: types.InvoiceStatusFinalized}
+
+		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		s.Require().NoError(err)
+		s.Nil(got)
+	})
+
 	s.Run("draft_uses_current_entity", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)
