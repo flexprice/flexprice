@@ -38,7 +38,7 @@ Non-goals for this release:
 
 - Moving an existing customer or connection to another entity. Everything that exists at enablement
   stays with the default entity.
-- One customer billed by more than one entity (see §13, open question 1).
+- One customer billed by more than one entity; the buyer gets a separate customer per entity.
 - Changing which entity is the default.
 - Entity-level user permissions.
 - An all-entities reporting view.
@@ -289,7 +289,8 @@ value can never drift.
 
 Child records inherit through their parent: invoice and subscription line items, wallet transactions,
 credit grants and applications, tax applied, payment attempts, coupon applications, hosted invoice
-tokens.
+tokens. Every other customer-linked table inherits through the customer the same way, with no schema
+change.
 
 Derivation reads customers in any status, so records of deleted or archived customers keep their entity.
 
@@ -307,7 +308,7 @@ reassignment is introduced, invoice entity ids are populated before customers ma
 | `invoices` | Add `seller_snapshot` jsonb for enabled tenants: entity id, seller details, tax IDs | Issued invoices keep their seller and issuing entity |
 | `invoice_sequences` | Add `billing_entity_id` NOT NULL default `''`; unique key `(tenant_id, environment_id, billing_entity_id, year_month)` | Default entity keeps writing the `''` row so its sequence continues; `ON CONFLICT` works without `NULLS NOT DISTINCT` |
 | `invoices` unique `(tenant_id, environment_id, invoice_number)` | Keep | Distinct prefix per entity prevents collisions without rebuilding a hot index |
-| `entity_integration_mappings` (Phase 2) | Add `connection_id` NOT NULL default `''`; add it to the unique key; written on every new row | A shared plan or price maps to one external id per provider account; `''` = default entity's connection |
+| `entity_integration_mappings` (Phase 2) | Add `connection_id` NOT NULL default `''`; add it to the unique key; written on every new row of enabled tenants | A shared plan or price maps to one external id per provider account; `''` = default entity's connection; off tenants keep writing `''` |
 | `tax_associations` | New `entity_type = billing_entity` | Entity-level tax defaults; tenant-level rows are treated as the default entity's |
 
 **Invoice numbering (decided).** Each entity gets its own counter and a distinct prefix. The counter's
@@ -537,12 +538,12 @@ Phase 2
 
 | # | Question | Proposal |
 | --- | --- | --- |
-| 1 | Can one buyer be billed under different entities? | If yes, the buyer gets a separate customer under each entity, each with its own config (external ID, billing details, tax, currency, payment methods, wallets) and its own usage stream. One customer across entities needs subscription-level entities and per-subscription usage attribution; out of scope now |
-| 2 | Accounting and CRM connectors (QuickBooks, Zoho Books, HubSpot, Tabs) in Phase 2? | Yes; each company's books stay separate |
-| 3 | Stripe Tax for non-default entities in Phase 1 | Native tax only until Phase 2 |
-| 4 | All-entities reporting view | Defer; design after Phase 2 |
+| 1 | Accounting and CRM connectors (QuickBooks, Zoho Books, HubSpot, Tabs) in Phase 2? | Yes; each company's books stay separate |
+| 2 | Stripe Tax for non-default entities in Phase 1 | Native tax only until Phase 2 |
+| 3 | All-entities reporting view | Defer; design after Phase 2 |
 
-Decided: customer-level entities; tenant-level irreversible switch with no backfill; mode on `tenants`;
+Decided: customer-level entities; a buyer billed by two entities is two customers, each with its own
+external ID, billing details, tax, currency, payment methods, wallets and usage stream; tenant-level irreversible switch with no backfill; mode on `tenants`;
 one fixed default entity per environment, stored as NULL; entity stored only on customers and
 connections, derived everywhere else, including payment and refund connections; entity selected by list
 filters and customer/connection create bodies, no header; lists without a filter span all entities;
