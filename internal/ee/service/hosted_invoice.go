@@ -96,6 +96,13 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	if err != nil {
 		return nil, err
 	}
+	seller, err := NewInvoiceService(s.ServiceParams).(*invoiceService).sellerFor(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	if seller != nil {
+		t = sellerAsTenant(t, seller)
+	}
 
 	filter := types.NewNoLimitPaymentFilter()
 	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
@@ -198,6 +205,15 @@ func (s *hostedInvoiceService) payGateway(ctx context.Context, inv *dto.InvoiceR
 	}
 
 	if hostedInvoiceURL(s.Config, types.GetHostedInvoiceTokenID(ctx)) == "" {
+		return "", false, nil
+	}
+
+	// Gateways serve only the default billing entity's customers.
+	served, err := NewBillingEntityService(s.ServiceParams).CustomerServesIntegrations(ctx, inv.CustomerID)
+	if err != nil {
+		return "", false, err
+	}
+	if !served {
 		return "", false, nil
 	}
 
