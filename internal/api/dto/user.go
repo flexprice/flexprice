@@ -81,7 +81,10 @@ type ChangePasswordRequest struct {
 }
 
 func (r *ChangePasswordRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return validatePasswordLength(r.Password)
 }
 
 // PasswordLinkResponse is a one-time link that lets a user set their own password.

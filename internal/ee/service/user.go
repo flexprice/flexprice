@@ -690,11 +690,6 @@ func (s *userService) ChangePassword(ctx context.Context, req *dto.ChangePasswor
 			WithHint("Passwords can only be changed here when Flexprice stores them").
 			Mark(ierr.ErrValidation)
 	}
-	if len(req.Password) > maxPasswordBytes {
-		return ierr.NewError("password longer than bcrypt accepts").
-			WithHint("Password must be at most 72 characters").
-			Mark(ierr.ErrValidation)
-	}
 
 	hashedPassword, err := authProvider.HashPassword(req.Password)
 	if err != nil {

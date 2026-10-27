@@ -1,8 +1,12 @@
 package dto
 
 import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 )
+
+// maxPasswordBytes is the most bcrypt will hash; longer passwords are refused rather than truncated.
+const maxPasswordBytes = 72
 
 type SignUpRequest struct {
 	Email      string            `json:"email" binding:"required,email" validate:"email"`
@@ -25,7 +29,10 @@ type AuthResponse struct {
 }
 
 func (r *SignUpRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return validatePasswordLength(r.Password)
 }
 
 func (r *LoginRequest) Validate() error {
@@ -50,5 +57,17 @@ type SetPasswordRequest struct {
 }
 
 func (r *SetPasswordRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return validatePasswordLength(r.Password)
+}
+
+func validatePasswordLength(password string) error {
+	if len(password) > maxPasswordBytes {
+		return ierr.NewError("password longer than bcrypt accepts").
+			WithHint("Password must be at most 72 characters").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }

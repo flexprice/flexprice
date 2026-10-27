@@ -337,9 +337,6 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	return response, nil
 }
 
-// maxPasswordBytes is the most bcrypt will hash; longer passwords are refused rather than truncated.
-const maxPasswordBytes = 72
-
 // CheckPasswordLink tells the set-password page what a link is for and whose it is.
 func (s *authService) CheckPasswordLink(ctx context.Context, req *dto.CheckPasswordLinkRequest) (*dto.PasswordLinkDetailsResponse, error) {
 	claims, target, _, err := s.resolvePasswordLink(ctx, req.Token)
@@ -364,11 +361,6 @@ func (s *authService) SetPassword(ctx context.Context, req *dto.SetPasswordReque
 	claims, _, _, err := s.resolvePasswordLink(ctx, req.Token)
 	if err != nil {
 		return err
-	}
-	if len(req.Password) > maxPasswordBytes {
-		return ierr.NewError("password longer than bcrypt accepts").
-			WithHint("Password must be at most 72 characters").
-			Mark(ierr.ErrValidation)
 	}
 
 	hashedPassword, err := authProvider.HashPassword(req.Password)

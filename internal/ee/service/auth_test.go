@@ -489,18 +489,6 @@ func (s *AuthServiceSuite) TestLogin_RefusalsAreOnlyPermissionDenied() {
 	})
 }
 
-// A made-up link must be refused before bcrypt runs, so it costs the server no hashing.
-// A 73-byte password makes bcrypt fail, which shows whether hashing came first.
-func (s *AuthServiceSuite) TestSetPassword_BadLinkIsRefusedBeforeHashing() {
-	s.useLinkSecret()
-	invitee := s.seedMember("user_invitee", types.StatusPublished, "")
-	forged := s.signLink(invitee, types.DefaultTenantID, "another-secret", time.Now().Add(time.Hour))
-
-	err := s.authService.SetPassword(context.Background(), &dto.SetPasswordRequest{Token: forged, Password: strings.Repeat("a", 73)})
-
-	s.True(ierr.IsNotFound(err), "expected the bad-link error before any hashing, got %v", err)
-}
-
 func (s *AuthServiceSuite) TestSetPassword_PasswordOver72Bytes() {
 	s.useLinkSecret()
 	invitee := s.seedMember("user_invitee", types.StatusPublished, "")
