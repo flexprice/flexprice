@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -52,4 +53,15 @@ func (s *invoiceService) applySellerSnapshot(ctx context.Context, inv *invoice.I
 	}
 	inv.SellerSnapshot = entity.SellerSnapshot()
 	return nil
+}
+
+// sellerAsTenant presents an entity seller in the tenant shape the biller block and hosted page render.
+func sellerAsTenant(t *tenant.Tenant, seller *types.SellerSnapshot) *tenant.Tenant {
+	biller := &tenant.Tenant{}
+	if t != nil {
+		*biller = *t
+	}
+	biller.Name = seller.LegalName
+	biller.BillingDetails = billingentity.TenantBillingDetailsFromSeller(seller.SellerDetails)
+	return biller
 }

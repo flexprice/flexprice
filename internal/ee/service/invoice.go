@@ -3687,6 +3687,16 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			"customer_id", inv.CustomerID)
 	}
 
+	seller, err := s.sellerFor(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	biller := tenant
+	if seller != nil {
+		biller = sellerAsTenant(tenant, seller)
+		billerTaxIDs = seller.TaxIdentifiers
+	}
+
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
 		ID:                         inv.ID,
@@ -3702,7 +3712,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		BillingReason:              inv.BillingReason,
 		Notes:                      "",  // resolved from invoice metadata
 		VAT:                        0.0, // resolved from invoice metadata
-		Biller:                     s.getBillerInfo(tenant, billerTaxIDs),
+		Biller:                     s.getBillerInfo(biller, billerTaxIDs),
 		PeriodStart:                pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
 		PeriodEnd:                  pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:                  s.getRecipientInfo(customer, customerTaxIDs),
