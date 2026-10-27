@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type InMemoryTenantStore struct {
@@ -83,5 +84,29 @@ func (s *InMemoryTenantStore) Update(ctx context.Context, t *tenant.Tenant) erro
 	}
 
 	s.tenants[t.ID] = t
+	return nil
+}
+
+func (s *InMemoryTenantStore) GetBillingEntityMode(ctx context.Context, tenantID string) (types.BillingEntityMode, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Suites that never create a tenant run as an off tenant.
+	t, ok := s.tenants[tenantID]
+	if !ok {
+		return types.BillingEntityModeOff, nil
+	}
+	return t.BillingEntityMode.Normalize(), nil
+}
+
+func (s *InMemoryTenantStore) SetBillingEntityMode(ctx context.Context, tenantID string, mode types.BillingEntityMode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	t, ok := s.tenants[tenantID]
+	if !ok {
+		return ierr.NewError("tenant not found").Mark(ierr.ErrNotFound)
+	}
+	t.BillingEntityMode = mode
 	return nil
 }

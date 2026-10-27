@@ -48,6 +48,9 @@ type Repository interface {
 	// Format: INV-YYYYMM-XXXXX
 	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error)
 
+	// CustomerIDsByInvoiceIDs maps each found invoice ID to its customer ID.
+	CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error)
+
 	// GetNextBillingSequence returns the next billing sequence number for a subscription
 	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)
 

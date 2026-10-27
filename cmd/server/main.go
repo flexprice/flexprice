@@ -171,6 +171,7 @@ func main() {
 			repository.NewEntitlementGrantRepository,
 			repository.NewMeterUsageCheckpointRepository,
 			repository.NewCommitmentRepository,
+			repository.NewBillingEntityRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,

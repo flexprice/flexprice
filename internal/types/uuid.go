@@ -130,6 +130,8 @@ const (
 	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
 	UUID_PREFIX_COMMITMENT = "cmt"
 
+	UUID_PREFIX_BILLING_ENTITY = "be"
+
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"
 	UUID_PREFIX_RUN      = "run"

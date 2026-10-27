@@ -33,9 +33,11 @@ type Tenant struct {
 	Status         types.Status               `json:"status"`
 	InternalStatus types.TenantInternalStatus `json:"internal_status"`
 	BillingDetails TenantBillingDetails       `json:"billing_details"`
-	Metadata       types.Metadata             `json:"metadata"`
-	CreatedAt      time.Time                  `json:"created_at"`
-	UpdatedAt      time.Time                  `json:"updated_at"`
+	// BillingEntityMode is for display only; decisions read it from the database.
+	BillingEntityMode types.BillingEntityMode `json:"billing_entity_mode"`
+	Metadata          types.Metadata          `json:"metadata"`
+	CreatedAt         time.Time               `json:"created_at"`
+	UpdatedAt         time.Time               `json:"updated_at"`
 }
 
 // FromEnt converts an ent Tenant to a domain Tenant
@@ -45,14 +47,15 @@ func FromEnt(e *ent.Tenant) *Tenant {
 	}
 
 	return &Tenant{
-		ID:             e.ID,
-		Name:           e.Name,
-		Status:         types.Status(e.Status),
-		InternalStatus: types.TenantInternalStatus(e.InternalStatus),
-		Metadata:       e.Metadata,
-		CreatedAt:      e.CreatedAt,
-		UpdatedAt:      e.UpdatedAt,
-		BillingDetails: FromEntBillingDetails(e.BillingDetails),
+		ID:                e.ID,
+		Name:              e.Name,
+		Status:            types.Status(e.Status),
+		InternalStatus:    types.TenantInternalStatus(e.InternalStatus),
+		Metadata:          e.Metadata,
+		CreatedAt:         e.CreatedAt,
+		UpdatedAt:         e.UpdatedAt,
+		BillingDetails:    FromEntBillingDetails(e.BillingDetails),
+		BillingEntityMode: types.BillingEntityMode(e.BillingEntityMode),
 	}
 }
 
