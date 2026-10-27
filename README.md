@@ -2,7 +2,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/FlexpriceWordMarkLight.png">
   <source media="(prefers-color-scheme: light)" srcset="./assets/FlexpriceWordMarkDark.png">
-  <img align="center" src="./assets/logo.png" height="30%" 
+  <img align="center" src="./assets/FlexpriceWordMarkDark.png" height="30%" 
   width="30%"  alt="flexprice logo"/>
 </picture>
 </p>
