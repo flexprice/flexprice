@@ -407,3 +407,34 @@ func skipIntegrationsForCustomer(ctx context.Context, params ServiceParams, cust
 func (s *billingEntityService) RequireCustomerIntegrations(ctx context.Context, customerID string) error {
 	return requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID)
 }
+
+// requireSameBillingEntity rejects combining customers of different billing entities on one invoice.
+func requireSameBillingEntity(ctx context.Context, params ServiceParams, customerID, otherCustomerID string) error {
+	if customerID == otherCustomerID {
+		return nil
+	}
+	beService := NewBillingEntityService(params)
+	entityIDs := make([]string, 0, 2)
+	for _, id := range []string{customerID, otherCustomerID} {
+		cust, err := params.CustomerRepo.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		entity, err := beService.EffectiveEntity(ctx, cust)
+		if err != nil {
+			return err
+		}
+		entityID := ""
+		if entity != nil {
+			entityID = entity.ID
+		}
+		entityIDs = append(entityIDs, entityID)
+	}
+	if entityIDs[0] != entityIDs[1] {
+		return ierr.NewError("customers belong to different billing entities").
+			WithHint("Customers of different billing entities cannot be invoiced together").
+			WithReportableDetails(map[string]any{"customer_id": customerID, "other_customer_id": otherCustomerID}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
