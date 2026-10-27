@@ -933,6 +933,15 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 	if p.ConnectionRepo == nil {
 		return
 	}
+	served, err := NewBillingEntityService(p.ServiceParams).InvoiceServesIntegrations(ctx, invoiceID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to check billing entity for mark-paid", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	if !served {
+		p.Logger.Info(ctx, "skipping integration for non-default billing entity", "invoice_id", invoiceID, "step", "mark_paid")
+		return
+	}
 
 	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
 	if err != nil {

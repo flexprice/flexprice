@@ -990,6 +990,12 @@ func triggerHubSpotDealSync(ctx context.Context, sp ServiceParams, subscriptionI
 			"subscription_id", subscriptionID)
 		return
 	}
+	if skip, err := skipIntegrationsForCustomer(ctx, sp, cust.ID, "hubspot_deal_sync"); err != nil || skip {
+		if err != nil {
+			sp.Logger.Error(ctx, "failed to check billing entity for HubSpot deal sync", "error", err, "subscription_id", subscriptionID)
+		}
+		return
+	}
 
 	input := &models.HubSpotDealSyncWorkflowInput{
 		SubscriptionID: subscriptionID,
@@ -1082,6 +1088,12 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
 		return // Not an error - customer might not be from HubSpot
+	}
+	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, customerID, "hubspot_quote_sync"); err != nil || skip {
+		if err != nil {
+			s.Logger.Error(ctx, "failed to check billing entity for HubSpot quote sync", "error", err, "subscription_id", subscriptionID)
+		}
+		return
 	}
 
 	// Prepare workflow input with all necessary IDs

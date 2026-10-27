@@ -318,6 +318,7 @@ func main() {
 			service.NewTaxService,
 			service.NewFXRateService,
 			service.NewBillingEntityService,
+			provideBillingEntityGuard,
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
 			service.NewCouponService,
@@ -493,7 +494,7 @@ func provideHandlers(
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
 		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, billingEntityService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
@@ -892,4 +893,8 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 	base.RevenueFacts = revenueFacts
 	base.SelfBilling = selfBilling
 	return base
+}
+
+func provideBillingEntityGuard(s service.BillingEntityService) interfaces.BillingEntityGuard {
+	return s
 }

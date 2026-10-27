@@ -24,6 +24,7 @@ type BillingEntityService interface {
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error)
 	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
+	RequireCustomerIntegrations(ctx context.Context, customerID string) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
 	// EnsureDefaultForEnvironment gives a new environment its default entity once the tenant is enabling or enabled.
@@ -372,4 +373,37 @@ func (s *billingEntityService) EnsureDefaultForEnvironment(ctx context.Context, 
 	}
 	_, err = s.GetOrCreateDefault(types.SetEnvironmentID(ctx, environmentID))
 	return err
+}
+
+// requireIntegrationsForCustomer rejects an integration request for a customer of a non-default billing entity.
+func requireIntegrationsForCustomer(ctx context.Context, params ServiceParams, customerID string) error {
+	served, err := NewBillingEntityService(params).CustomerServesIntegrations(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	if !served {
+		return ierr.NewError("no integration for this customer's billing entity").
+			WithHint("No integration is available for this customer's billing entity").
+			WithReportableDetails(map[string]any{"customer_id": customerID}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// skipIntegrationsForCustomer reports, and logs, whether an automatic integration step must skip this customer.
+func skipIntegrationsForCustomer(ctx context.Context, params ServiceParams, customerID, step string) (bool, error) {
+	served, err := NewBillingEntityService(params).CustomerServesIntegrations(ctx, customerID)
+	if err != nil {
+		return false, err
+	}
+	if !served {
+		params.Logger.Info(ctx, "skipping integration for non-default billing entity",
+			"customer_id", customerID,
+			"step", step)
+	}
+	return !served, nil
+}
+
+func (s *billingEntityService) RequireCustomerIntegrations(ctx context.Context, customerID string) error {
+	return requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID)
 }

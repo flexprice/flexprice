@@ -3380,6 +3380,11 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
+	// Non-default billing entities have no gateway: the invoice stays pending and is paid manually.
+	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, inv.CustomerID, "invoice_auto_payment"); err != nil || skip {
+		return err
+	}
+
 	// If Stripe outbound invoice sync is enabled for this tenant/environment,
 	// skip automatic payment and let Stripe/record-payment flows be the source of truth.
 	conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
@@ -5731,6 +5736,9 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	}
 	if inv.SubscriptionID == nil {
 		return nil // No subscription to sync for non-subscription invoices
+	}
+	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, inv.CustomerID, "invoice_vendor_sync"); err != nil || skip {
+		return err
 	}
 
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})

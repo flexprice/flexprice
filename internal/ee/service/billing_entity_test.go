@@ -140,3 +140,35 @@ func (s *BillingEntityServiceSuite) TestEffectiveEntity() {
 		s.Nil(got)
 	})
 }
+
+func (s *BillingEntityServiceSuite) TestCustomerServesIntegrations() {
+	env := types.GetEnvironmentID(s.GetContext())
+
+	tests := []struct {
+		name     string
+		mode     types.BillingEntityMode
+		customer *string
+		want     bool
+	}{
+		{name: "off_no_entity", mode: types.BillingEntityModeOff, want: true},
+		{name: "stored_default", mode: types.BillingEntityModeEnabled, customer: lo.ToPtr("be_default"), want: true},
+		{name: "stored_non_default", mode: types.BillingEntityModeEnabled, customer: lo.ToPtr("be_eu"), want: false},
+		{name: "unassigned_while_enabling", mode: types.BillingEntityModeEnabling, want: true},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.ClearStores()
+			s.setMode(tc.mode)
+			if tc.mode != types.BillingEntityModeOff {
+				s.addEntity("be_default", env, "INV", true)
+				s.addEntity("be_eu", env, "EU", false)
+			}
+			s.addCustomer("c1", tc.customer)
+
+			got, err := s.service.CustomerServesIntegrations(s.GetContext(), "c1")
+			s.Require().NoError(err)
+			s.Equal(tc.want, got)
+		})
+	}
+}
