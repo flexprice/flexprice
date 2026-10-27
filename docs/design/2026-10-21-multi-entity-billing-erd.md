@@ -258,8 +258,8 @@ All changes are additive. Existing rows keep their current values and need no ba
 | `tax_identifiers` | jsonb | Seller tax IDs printed on invoices |
 | `invoice_number_prefix` | varchar(20), nullable | Required for non-default entities; NULL = env `invoice_config` prefix. Editable; see prefix rule below |
 
-`billing_entities` is not recorded in the activity log; customer activity snapshots carry
-`billing_entity_id`.
+`billing_entities` is not recorded in the activity log. Customer activity snapshots carry
+`billing_entity_id`; invoice snapshots carry the entity through `seller_snapshot` once finalized.
 
 **Prefix rule.** An entity cannot set prefix `P` (on create or edit) if `P` is another entity's current
 prefix or any invoice in the environment numbered `P<separator>…` belongs to another entity. The env
