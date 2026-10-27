@@ -429,7 +429,7 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1"`
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1,max=20"`
 	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
 	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`

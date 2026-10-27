@@ -411,10 +411,12 @@ sequenceDiagram
   API->>DB: Read tenant mode (database, not cache)
   alt off
     API->>DB: Store customer with no entity, copy tenant-level tax rates
-  else enabling or enabled
-    API->>DB: Find the environment's default entity (create it if missing)
-    API->>DB: Store customer with the named entity, else the default's ID
-    API->>DB: Copy that entity's auto-apply tax rates
+  else enabling
+    API->>DB: Reject a named entity; find the environment's default entity (create it if missing)
+    API->>DB: Store customer with the default's ID, copy its auto-apply tax rates
+  else enabled
+    API->>DB: Find the named entity, else the environment's default (create it if missing)
+    API->>DB: Store customer with that entity's ID, copy its auto-apply tax rates
   end
   API->>DB: Commit
   API-->>Client: Customer with billing_entity_id

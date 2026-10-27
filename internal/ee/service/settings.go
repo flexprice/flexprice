@@ -479,16 +479,18 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 
 	// Deleting invoice_config resets the prefix, which billing entities own once enabling.
 	if key == types.SettingKeyInvoiceConfig {
-		mode, err := s.TenantRepo.GetBillingEntityMode(ctx, types.GetTenantID(ctx))
-		if err != nil {
-			return err
-		}
-		if mode != types.BillingEntityModeOff {
-			return errSettingOwnedByBillingEntity()
-		}
+		return NewBillingEntityService(s.ServiceParams).WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+			if mode != types.BillingEntityModeOff {
+				return errSettingOwnedByBillingEntity()
+			}
+			return s.deleteSetting(txCtx, key)
+		})
 	}
+	return s.deleteSetting(ctx, key)
+}
 
-	// Delete based on setting type (tenant-level vs environment-level)
+// deleteSetting deletes a tenant-level or environment-level setting by key.
+func (s *settingsService) deleteSetting(ctx context.Context, key types.SettingKey) error {
 	if isTenantLevelSetting(key) {
 		return s.SettingsRepo.DeleteTenantLevelSettingByKey(ctx, key)
 	}

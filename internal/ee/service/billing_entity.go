@@ -85,8 +85,16 @@ func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx conte
 }
 
 func (s *billingEntityService) GetOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
+	existing, err := s.BillingEntityRepo.GetDefault(ctx)
+	if err == nil {
+		return existing, nil
+	}
+	if !ierr.IsNotFound(err) {
+		return nil, err
+	}
+
 	var result *billingentity.BillingEntity
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		key := "billing_entity_default:" + types.GetTenantID(txCtx) + ":" + types.GetEnvironmentID(txCtx)
 		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: key}); err != nil {
 			return err

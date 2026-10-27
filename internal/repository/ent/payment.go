@@ -806,10 +806,16 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 	}
 
 	if f.BillingEntityID != nil && *f.BillingEntityID != "" {
-		query = query.Where(
-			payment.DestinationType(string(types.PaymentDestinationTypeInvoice)),
-			predicate.Payment(columnInSelector(payment.FieldDestinationID, invoiceIDsOfEntity(ctx, *f.BillingEntityID))),
-		)
+		query = query.Where(payment.Or(
+			payment.And(
+				payment.DestinationType(string(types.PaymentDestinationTypeInvoice)),
+				predicate.Payment(columnInSelector(payment.FieldDestinationID, invoiceIDsOfEntity(ctx, *f.BillingEntityID))),
+			),
+			payment.And(
+				payment.DestinationType(string(types.PaymentDestinationTypeCustomer)),
+				predicate.Payment(columnInSelector(payment.FieldDestinationID, customerIDsOfEntity(ctx, *f.BillingEntityID))),
+			),
+		))
 	}
 
 	// Apply payment IDs filter if specified

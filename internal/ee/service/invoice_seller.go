@@ -19,9 +19,13 @@ func (s *invoiceService) invoiceBillingEntity(ctx context.Context, inv *invoice.
 }
 
 // sellerFor is the seller frozen at finalization, else the customer's entity now; nil means the tenant sells.
+// An issued invoice without a snapshot predates billing entities, so the tenant stays its seller.
 func (s *invoiceService) sellerFor(ctx context.Context, inv *invoice.Invoice) (*types.SellerSnapshot, error) {
 	if inv.SellerSnapshot != nil {
 		return inv.SellerSnapshot, nil
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return nil, nil
 	}
 	entity, err := s.invoiceBillingEntity(ctx, inv)
 	if err != nil {

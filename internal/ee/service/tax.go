@@ -611,9 +611,6 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 			"customer_id", customer.ID)
 	}
 
-	if err := s.guardTenantLevelTaxLink(ctx, req.EntityType); err != nil {
-		return nil, err
-	}
 	if req.EntityType == types.TaxRateEntityTypeBillingEntity {
 		beService := &billingEntityService{ServiceParams: s.ServiceParams}
 		if _, err := beService.entityInEnvironment(ctx, req.EntityID); err != nil {
@@ -676,7 +673,9 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		"auto_apply", tc.AutoApply)
 
 	// Create tax config
-	err = s.TaxAssociationRepo.Create(ctx, tc)
+	err = s.writeTaxLink(ctx, tc.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Create(ctx, tc)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to create tax association",
 			"error", err,
@@ -741,10 +740,6 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 	if err != nil {
 		return nil, err
 	}
-	if err := s.guardTenantLevelTaxLink(ctx, existing.EntityType); err != nil {
-		return nil, err
-	}
-
 	// Update fields if provided
 	if req.Priority != nil {
 		existing.Priority = lo.FromPtr(req.Priority)
@@ -769,7 +764,9 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 		"entity_id", existing.EntityID)
 
 	// Update tax config
-	err = s.TaxAssociationRepo.Update(ctx, existing)
+	err = s.writeTaxLink(ctx, existing.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Update(ctx, existing)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to update tax association",
 			"error", err,
@@ -799,12 +796,10 @@ func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error 
 	if err != nil {
 		return err
 	}
-	if err := s.guardTenantLevelTaxLink(ctx, existing.EntityType); err != nil {
-		return err
-	}
-
 	// Delete tax association
-	err = s.TaxAssociationRepo.Delete(ctx, existing)
+	err = s.writeTaxLink(ctx, existing.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Delete(ctx, existing)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to delete tax association",
 			"error", err,
@@ -1957,20 +1952,18 @@ func (s *taxService) taxIsReversed(ctx context.Context, entityType types.TaxRate
 	}), nil
 }
 
-// guardTenantLevelTaxLink rejects changes to tenant-level tax links once billing entities are enabling or enabled,
-// because new customers then take their entity's links instead.
-func (s *taxService) guardTenantLevelTaxLink(ctx context.Context, entityType types.TaxRateEntityType) error {
+// writeTaxLink runs write; a tenant-level link is checked and written under the shared billing entity lock,
+// because new customers take their entity's links once billing entities are enabling or enabled.
+func (s *taxService) writeTaxLink(ctx context.Context, entityType types.TaxRateEntityType, write func(ctx context.Context) error) error {
 	if entityType != types.TaxRateEntityTypeTenant {
-		return nil
+		return write(ctx)
 	}
-	mode, err := s.TenantRepo.GetBillingEntityMode(ctx, types.GetTenantID(ctx))
-	if err != nil {
-		return err
-	}
-	if mode != types.BillingEntityModeOff {
-		return ierr.NewError("tax defaults are set per billing entity").
-			WithHint("Tax defaults are set per billing entity. Link the tax rate to a billing entity instead.").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
+	return NewBillingEntityService(s.ServiceParams).WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		if mode != types.BillingEntityModeOff {
+			return ierr.NewError("tax defaults are set per billing entity").
+				WithHint("Tax defaults are set per billing entity. Link the tax rate to a billing entity instead.").
+				Mark(ierr.ErrValidation)
+		}
+		return write(txCtx)
+	})
 }

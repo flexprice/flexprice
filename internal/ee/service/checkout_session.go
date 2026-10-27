@@ -823,6 +823,31 @@ func (s *checkoutSessionService) createCheckoutPayment(ctx context.Context, inv 
 	})
 }
 
+// releasePayFirstDraft undoes the caller's draft invoice and pending wallet top-up when no session is started.
+func (s *checkoutSessionService) releasePayFirstDraft(ctx context.Context, session *domainCheckout.CheckoutSession, req *dto.PayFirstCheckoutRequest, cause error) {
+	draftInvoiceID := req.DraftInvoice.ID
+	// Compute already debited prepaid credits; archiving alone would not return them.
+	s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
+	if delErr := archiveDraftInvoice(ctx, s.ServiceParams, draftInvoiceID); delErr != nil {
+		s.Logger.Error(ctx, "failed to archive draft invoice after checkout session start failure",
+			"invoice_id", draftInvoiceID,
+			"error", delErr,
+			"original_err", cause,
+		)
+	}
+
+	if params := req.Configuration.WalletTopupParams; params != nil && params.WalletTransactionID != "" {
+		walletSvc := NewWalletService(s.ServiceParams)
+		if failErr := walletSvc.FailPurchasedCreditTransaction(ctx, params.WalletTransactionID, cause.Error()); failErr != nil {
+			s.Logger.Error(ctx, "failed to fail wallet top-up transaction after checkout session start failure",
+				"wallet_transaction_id", params.WalletTransactionID,
+				"error", failErr,
+				"original_err", cause,
+			)
+		}
+	}
+}
+
 // StartPayFirstCheckoutSession creates a checkout session on an existing DRAFT invoice,
 // fulfills payment + provider link, and publishes checkout.session.initiated.
 // On session create failure the draft is archived. On fulfill failure the session is cleaned up.
@@ -847,33 +872,16 @@ func (s *checkoutSessionService) StartPayFirstCheckoutSession(
 	req.Checkout.PaymentProviderConfig = providerCfg
 
 	draftInvoiceID := req.DraftInvoice.ID
-	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, req.CustomerID); err != nil {
-		return nil, err
-	}
 	session := req.ToCheckoutSession(ctx, req.CustomerID)
 	session.CheckoutInvoiceID = lo.ToPtr(draftInvoiceID)
 
-	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
-		// Compute already debited prepaid credits; archiving alone would not return them.
-		s.voidCheckoutInvoiceIfPartiallyPaid(ctx, session, draftInvoiceID)
-		if delErr := archiveDraftInvoice(ctx, s.ServiceParams, draftInvoiceID); delErr != nil {
-			s.Logger.Error(ctx, "failed to archive draft invoice after checkout session create failure",
-				"invoice_id", draftInvoiceID,
-				"error", delErr,
-				"original_err", err,
-			)
-		}
+	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, req.CustomerID); err != nil {
+		s.releasePayFirstDraft(ctx, session, req, err)
+		return nil, err
+	}
 
-		if params := req.Configuration.WalletTopupParams; params != nil && params.WalletTransactionID != "" {
-			walletSvc := NewWalletService(s.ServiceParams)
-			if failErr := walletSvc.FailPurchasedCreditTransaction(ctx, params.WalletTransactionID, err.Error()); failErr != nil {
-				s.Logger.Error(ctx, "failed to fail wallet top-up transaction after checkout session create failure",
-					"wallet_transaction_id", params.WalletTransactionID,
-					"error", failErr,
-					"original_err", err,
-				)
-			}
-		}
+	if err := s.CheckoutSessionRepo.Create(ctx, session); err != nil {
+		s.releasePayFirstDraft(ctx, session, req, err)
 		return nil, err
 	}
 
