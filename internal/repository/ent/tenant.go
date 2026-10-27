@@ -199,7 +199,7 @@ func (r *tenantRepository) GetBillingEntityMode(ctx context.Context, tenantID st
 	})
 	defer FinishSpan(span)
 
-	row, err := r.client.Writer(ctx).Tenant.Query().
+	row, err := r.client.Reader(ctx).Tenant.Query().
 		Where(entTenant.ID(tenantID)).
 		Select(entTenant.FieldBillingEntityMode).
 		Only(ctx)

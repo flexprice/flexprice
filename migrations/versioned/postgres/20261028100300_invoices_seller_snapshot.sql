@@ -1,6 +1,6 @@
 -- migrate:up
-SET lock_timeout = '3s';
-SET statement_timeout = '30s';
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
 
 ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "seller_snapshot" jsonb NULL;
 

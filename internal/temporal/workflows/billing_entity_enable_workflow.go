@@ -36,7 +36,11 @@ func BillingEntityEnableWorkflow(ctx workflow.Context, in models.BillingEntityEn
 	if err := workflow.ExecuteActivity(ctx, ActivityPrepareBillingEntityEnable, in).Get(ctx, nil); err != nil {
 		return err
 	}
-	if err := workflow.ExecuteActivity(ctx, ActivityAssignBillingEntityCustomers, in).Get(ctx, nil); err != nil {
+	// The backfill heartbeats per batch, so a crashed worker is retried within minutes rather than after StartToClose.
+	assignOptions := ao
+	assignOptions.HeartbeatTimeout = time.Minute * 2
+	assignCtx := workflow.WithActivityOptions(ctx, assignOptions)
+	if err := workflow.ExecuteActivity(assignCtx, ActivityAssignBillingEntityCustomers, in).Get(ctx, nil); err != nil {
 		return err
 	}
 	return workflow.ExecuteActivity(ctx, ActivityCompleteBillingEntityEnable, in).Get(ctx, nil)

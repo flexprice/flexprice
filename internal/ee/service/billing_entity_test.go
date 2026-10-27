@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -34,6 +35,7 @@ func (s *BillingEntityServiceSuite) SetupTest() {
 		TenantRepo:         s.GetStores().TenantRepo,
 		CustomerRepo:       s.GetStores().CustomerRepo,
 		InvoiceRepo:        s.GetStores().InvoiceRepo,
+		SubRepo:            s.GetStores().SubscriptionRepo,
 		BillingEntityRepo:  s.GetStores().BillingEntityRepo,
 		SettingsRepo:       s.GetStores().SettingsRepo,
 		TaxRateRepo:        s.GetStores().TaxRateRepo,
@@ -171,4 +173,32 @@ func (s *BillingEntityServiceSuite) TestCustomerServesIntegrations() {
 			s.Equal(tc.want, got)
 		})
 	}
+}
+
+func (s *BillingEntityServiceSuite) TestSubscriptionServesIntegrations() {
+	env := types.GetEnvironmentID(s.GetContext())
+	s.ClearStores()
+	s.setMode(types.BillingEntityModeEnabled)
+	s.addEntity("be_default", env, "INV", true)
+	s.addEntity("be_eu", env, "EU", false)
+	s.addCustomer("c_eu", lo.ToPtr("be_eu"))
+	s.addCustomer("c_default", lo.ToPtr("be_default"))
+
+	ctx := s.GetContext()
+	for id, customerID := range map[string]string{"sub_eu": "c_eu", "sub_default": "c_default"} {
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &subscription.Subscription{
+			ID:            id,
+			CustomerID:    customerID,
+			EnvironmentID: env,
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}))
+	}
+
+	served, err := s.service.SubscriptionServesIntegrations(ctx, "sub_eu")
+	s.Require().NoError(err)
+	s.False(served)
+
+	served, err = s.service.SubscriptionServesIntegrations(ctx, "sub_default")
+	s.Require().NoError(err)
+	s.True(served)
 }

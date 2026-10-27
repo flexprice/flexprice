@@ -18,9 +18,9 @@ func (s *invoiceService) invoiceBillingEntity(ctx context.Context, inv *invoice.
 	return NewBillingEntityService(s.ServiceParams).EffectiveEntity(ctx, cust)
 }
 
-// sellerFor is the frozen seller of a finalized invoice, else the customer's entity now; nil means the tenant sells.
+// sellerFor is the seller frozen at finalization, else the customer's entity now; nil means the tenant sells.
 func (s *invoiceService) sellerFor(ctx context.Context, inv *invoice.Invoice) (*types.SellerSnapshot, error) {
-	if inv.InvoiceStatus == types.InvoiceStatusFinalized && inv.SellerSnapshot != nil {
+	if inv.SellerSnapshot != nil {
 		return inv.SellerSnapshot, nil
 	}
 	entity, err := s.invoiceBillingEntity(ctx, inv)

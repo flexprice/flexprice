@@ -24,6 +24,7 @@ type BillingEntityService interface {
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
 	CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error)
 	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
+	SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error)
 	RequireCustomerIntegrations(ctx context.Context, customerID string) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
@@ -253,6 +254,14 @@ func (s *billingEntityService) InvoiceServesIntegrations(ctx context.Context, in
 		return false, err
 	}
 	return s.CustomerServesIntegrations(ctx, inv.CustomerID)
+}
+
+func (s *billingEntityService) SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error) {
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return false, err
+	}
+	return s.CustomerServesIntegrations(ctx, sub.CustomerID)
 }
 
 func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntityID string) error {
