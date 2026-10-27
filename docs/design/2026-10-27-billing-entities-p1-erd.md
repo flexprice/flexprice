@@ -143,7 +143,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 
 | ID | Category | Requirement (measurable) | How we verify |
 |---|---|---|---|
-| NFR-1 | Compatibility | A tenant that never enables sees identical responses, invoice numbers, PDFs and integration behaviour, except the added null `billing_entity_id` field and per-prefix counters after a mid-period prefix change. | Full integration suite on an off tenant before and after the change; diff of invoice numbers. |
+| NFR-1 | Compatibility | A tenant that never enables sees identical responses, invoice numbers, PDFs and integration behaviour, except the added null `billing_entity_id` field and the `prefix` recorded on each invoice counter. | Full integration suite on an off tenant before and after the change; diff of invoice numbers. |
 | NFR-2 | Compatibility | API changes are additive: no field removed or renamed, every new request field optional. | OpenAPI diff shows additions only; SDK builds unchanged. |
 | NFR-3 | Correctness | No two invoices in an environment share a number, under concurrent finalization and concurrent prefix edits. | Unique index on invoice number holds; concurrent finalize e2e. |
 | NFR-4 | Correctness | Once a tenant is `enabled`, no customer has an empty entity. | e2e: enable with customers created concurrently during enabling; count of empty-entity customers = 0. |
