@@ -474,22 +474,22 @@ func decs(vals ...string) []decimal.Decimal {
 
 func TestSplitByShare(t *testing.T) {
 	tests := []struct {
-		name   string
-		gross  []decimal.Decimal
-		charge string
-		want   []decimal.Decimal
+		name    string
+		gross   []decimal.Decimal
+		overage string
+		want    []decimal.Decimal
 	}{
 		{"prd example", decs("70", "50"), "90", decs("52.5", "37.5")},
 		{"daily windows example", decs("30", "10"), "20", decs("15", "5")},
 		{"nothing over quota", decs("70", "50"), "0", decs("0", "0")},
-		{"charge above gross bills gross", decs("70", "50"), "150", decs("70", "50")},
+		{"overage above gross bills gross", decs("70", "50"), "150", decs("70", "50")},
 		{"exact split", decs("10", "10", "20"), "10", decs("2.5", "2.5", "5")},
-		{"thirds add up to the charge", decs("10", "10", "10.01"), "10", decs("3.33", "3.33", "3.34")},
+		{"thirds add up to the overage", decs("10", "10", "10.01"), "10", decs("3.33", "3.33", "3.34")},
 		{"zero and negative lines get nothing", decs("0", "-5", "40"), "10", decs("0", "0", "10")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := splitByShare(tt.gross, decimal.RequireFromString(tt.charge), 2)
+			got := splitByShare(tt.gross, decimal.RequireFromString(tt.overage), 2)
 			require.Len(t, got, len(tt.want))
 			for i := range tt.want {
 				require.True(t, tt.want[i].Equal(got[i]), "line %d: want %s, got %s", i, tt.want[i], got[i])
@@ -550,7 +550,7 @@ func (s *EntitlementGrantSuite) applySubGrants(fx subGrantFixture, lines []dto.C
 	return reduction
 }
 
-func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_SplitsChargeByShare() {
+func (s *EntitlementGrantSuite) TestSubscriptionGrantBilling_SplitsOverageByShare() {
 	fx := s.newSubGrantFixture("bill-share", dailySubscriptionGrant(30, types.EntitlementGrantAllocationBehaviorFirstUsage))
 	start := fx.sub.CurrentPeriodStart
 	s.seedSubGrantWindow("eg-share", fx, start, fx.sub.CurrentPeriodEnd, 30, 120, nil)

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -281,11 +280,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		}
 
 		var usage decimal.Decimal
-		var lineUsage map[string]decimal.Decimal
 		var err error
 		switch g.ScopeEntityType {
 		case types.EntitlementGrantScopeSubscription:
-			usage, lineUsage, err = s.refreshSubscriptionGrantUsage(ctx, g, sub, at)
+			usage, err = s.refreshSubscriptionGrantUsage(ctx, g, sub, at)
 		case types.EntitlementGrantScopeFeature:
 			f, ok := meta.featureByID[g.ScopeEntityID]
 			if !ok || f.MeterID == "" {
@@ -347,9 +345,6 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			WithQuotaCrossedAt(cross)
 		if g.IsExhausted(usage) && g.GrantStatus == types.EntitlementGrantStatusActive {
 			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
-		}
-		if lineUsage != nil {
-			builder = builder.WithMetadata(withLineUsage(g.Metadata, lineUsage))
 		}
 		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
@@ -416,37 +411,20 @@ func (s *alertService) refreshEntitlementGrantUsage(
 	return total, nil
 }
 
-// lineUsageKeyPrefix marks a subscription grant's per-line usage in its metadata, kept
-// to trace and reproduce the grant's numbers.
-const lineUsageKeyPrefix = "line_usage:"
-
 // refreshSubscriptionGrantUsage prices every usage line on the subscription over
-// [valid_from, min(at, valid_to)): the total is the grant's usage, keyed per line too.
+// [valid_from, min(at, valid_to)); the total is the grant's usage.
 func (s *alertService) refreshSubscriptionGrantUsage(
 	ctx context.Context,
 	g *entitlementgrant.EntitlementGrant,
 	sub *subscription.Subscription,
 	at time.Time,
-) (decimal.Decimal, map[string]decimal.Decimal, error) {
+) (decimal.Decimal, error) {
 	end := at
 	if end.After(g.ValidTo) {
 		end = g.ValidTo
 	}
-	return subscriptionLineSpend(ctx, s.ServiceParams, sub, g.ValidFrom, end)
-}
-
-// withLineUsage replaces the per-line usage entries in metadata, keeping every other key.
-func withLineUsage(metadata types.Metadata, lineUsage map[string]decimal.Decimal) types.Metadata {
-	out := make(types.Metadata, len(metadata)+len(lineUsage))
-	for k, v := range metadata {
-		if !strings.HasPrefix(k, lineUsageKeyPrefix) {
-			out[k] = v
-		}
-	}
-	for lineID, amount := range lineUsage {
-		out[lineUsageKeyPrefix+lineID] = amount.String()
-	}
-	return out
+	total, _, err := subscriptionLineSpend(ctx, s.ServiceParams, sub, g.ValidFrom, end)
+	return total, err
 }
 
 // transitionEntitlementGrantAlert emits an alert-log row on state change.

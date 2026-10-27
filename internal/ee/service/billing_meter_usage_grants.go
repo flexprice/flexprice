@@ -488,7 +488,7 @@ func (s *billingService) applySubscriptionGrants(
 
 // subscriptionGrantBilled returns what each line is billed after the grants, in line order.
 //
-//   - Windows never overlap: charge = sum of (usage - quota), split by each line's share.
+//   - Windows never overlap: overage = sum of (usage - quota), split by each line's share.
 //     $30 grant, X $70 + Y $50: charge $90, X $52.50, Y $37.50.
 //   - Parallel windows overlap: each line is billed its own spend after a crossing.
 func (s *billingService) subscriptionGrantBilled(
@@ -502,11 +502,11 @@ func (s *billingService) subscriptionGrantBilled(
 	amounts := lo.Map(lines, func(l dto.CreateInvoiceLineItemRequest, _ int) decimal.Decimal { return l.Amount })
 
 	if !grantWindowsOverlap(grants) {
-		charge := decimal.Zero
+		overage := decimal.Zero
 		for _, g := range grants {
-			charge = charge.Add(decimal.Max(g.Overage(), decimal.Zero))
+			overage = overage.Add(decimal.Max(g.Overage(), decimal.Zero))
 		}
-		return splitByShare(amounts, charge, precision), nil
+		return splitByShare(amounts, overage, precision), nil
 	}
 
 	spend, err := s.lineSpendAfterCrossing(ctx, sub, grants, periodStart, periodEnd)
@@ -615,34 +615,30 @@ func subscriptionLineSpend(
 	return total, perLine, nil
 }
 
-// splitByShare spreads charge over the lines in proportion to their gross amounts, rounded to the
-// currency. Rounding drift goes to the largest line so the parts add up to min(charge, total gross).
-func splitByShare(gross []decimal.Decimal, charge decimal.Decimal, precision int32) []decimal.Decimal {
+// splitByShare spreads the overage over the lines in proportion to their gross amounts, rounded to
+// the currency. Rounding drift goes to the largest line so the parts add up to min(overage, total gross).
+func splitByShare(gross []decimal.Decimal, overage decimal.Decimal, precision int32) []decimal.Decimal {
 	billed := make([]decimal.Decimal, len(gross))
-	total := decimal.Zero
-	largest := 0
+	total, largest := decimal.Zero, 0
 	for i, g := range gross {
 		total = total.Add(decimal.Max(g, decimal.Zero))
 		if g.GreaterThan(gross[largest]) {
 			largest = i
 		}
 	}
-	if !total.IsPositive() || !charge.IsPositive() {
+	if !total.IsPositive() || !overage.IsPositive() {
 		return billed
 	}
-	if charge.GreaterThanOrEqual(total) {
-		copy(billed, gross)
-		return billed
-	}
+	// Never bill more than was spent.
+	overage = decimal.Min(overage, total).Round(precision)
 
 	sum := decimal.Zero
 	for i, g := range gross {
 		if g.IsPositive() {
-			billed[i] = g.Mul(charge).Div(total).Round(precision)
+			billed[i] = g.Mul(overage).Div(total).Round(precision)
 			sum = sum.Add(billed[i])
 		}
 	}
-	drift := charge.Round(precision).Sub(sum)
-	billed[largest] = decimal.Min(gross[largest], billed[largest].Add(drift))
+	billed[largest] = decimal.Min(gross[largest], billed[largest].Add(overage.Sub(sum)))
 	return billed
 }

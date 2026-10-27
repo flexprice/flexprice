@@ -131,7 +131,7 @@ func (s *EntitlementGrantSuite) TestSubscriptionGrant_NoUsage_NoWindow() {
 	s.Empty(grants)
 }
 
-func (s *EntitlementGrantSuite) TestSubscriptionGrant_EvaluateTotalsEveryLineAndKeepsBreakdown() {
+func (s *EntitlementGrantSuite) TestSubscriptionGrant_EvaluateTotalsEveryLine() {
 	fx := s.newSubGrantFixture("eval", dailySubscriptionGrant(10, types.EntitlementGrantAllocationBehaviorFirstUsage))
 	first := fx.sub.CurrentPeriodStart.Add(30 * time.Minute)
 	s.seedMeterUsage(fx.extID, fx.callsMeter, first, 100)                // $10
@@ -151,8 +151,6 @@ func (s *EntitlementGrantSuite) TestSubscriptionGrant_EvaluateTotalsEveryLineAnd
 	s.True(stored.Usage.Equal(decimal.NewFromInt(15)), "usage = $10 calls + $5 storage, got %s", stored.Usage)
 	s.Equal(types.EntitlementGrantStatusExhausted, stored.GrantStatus)
 	s.Require().NotNil(stored.QuotaCrossedAt)
-	s.Equal("10", stored.Metadata[lineUsageKeyPrefix+fx.callsLine])
-	s.Equal("5", stored.Metadata[lineUsageKeyPrefix+fx.storeLine])
 }
 
 func (s *EntitlementGrantSuite) TestSubscriptionGrant_ParallelGrantsOpenOneWindowEach() {
