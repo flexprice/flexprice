@@ -52,6 +52,9 @@ type IClient interface {
 	// Must be called inside a transaction. Lock is automatically released on commit/rollback.
 	LockWithWait(ctx context.Context, req LockRequest) error
 
+	// LockSharedWithWait acquires a shared advisory lock on the same keys as LockWithWait.
+	LockSharedWithWait(ctx context.Context, req LockRequest) error
+
 	// Close closes the database connection
 	Close() error
 }

@@ -114,6 +114,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		CustomCurrency:             inv.CustomCurrency,
 		FxConversion:               clonePtr(inv.FxConversion),
+		SellerSnapshot:             inv.SellerSnapshot,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
 		TotalTax:                   inv.TotalTax,
@@ -300,6 +301,11 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	if updated.FxConversion == nil {
 		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
 			updated.FxConversion = existing.FxConversion
+		}
+	}
+	if updated.SellerSnapshot == nil {
+		if existing, err := s.InMemoryStore.Get(ctx, inv.ID); err == nil {
+			updated.SellerSnapshot = existing.SellerSnapshot
 		}
 	}
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)
@@ -827,4 +833,19 @@ func (s *InMemoryInvoiceStore) Clear() {
 	if s.lineItemStore != nil {
 		s.lineItemStore.Clear()
 	}
+}
+
+func (s *InMemoryInvoiceStore) CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	result := make(map[string]string, len(ids))
+	for _, id := range ids {
+		inv, err := s.InMemoryStore.Get(ctx, id)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+		result[id] = inv.CustomerID
+	}
+	return result, nil
 }
