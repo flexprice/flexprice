@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -156,6 +157,7 @@ type ServiceParams struct {
 	POBService                   pobsvc.PerformanceObligationService
 	JournalRepo                  journalRepo.Repository
 	JournalService               journalsvc.JournalService
+	BillingEntityRepo            billingentity.Repository
 	EventDeletionRequestRepo     events.DeletionRequestRepository
 	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
@@ -280,6 +282,7 @@ func NewServiceParams(
 	pobService pobsvc.PerformanceObligationService,
 	journalRepo journalRepo.Repository,
 	journalService journalsvc.JournalService,
+	billingEntityRepo billingentity.Repository,
 	eventDeletionRequestRepo events.DeletionRequestRepository,
 	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
@@ -368,6 +371,7 @@ func NewServiceParams(
 		POBService:                   pobService,
 		JournalRepo:                  journalRepo,
 		JournalService:               journalService,
+		BillingEntityRepo:            billingEntityRepo,
 		EventDeletionRequestRepo:     eventDeletionRequestRepo,
 		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}
