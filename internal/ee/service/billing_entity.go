@@ -14,6 +14,8 @@ import (
 
 // BillingEntityService owns billing entities and the tenant's billing entity mode.
 type BillingEntityService interface {
+	BillingEntityEnabler
+
 	// WithMode runs fn in a transaction holding the shared enable lock, with the mode read from the database.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
 	GetOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error)
