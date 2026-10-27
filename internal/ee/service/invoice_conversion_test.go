@@ -332,6 +332,7 @@ func (s *InvoiceConversionSuite) SetupTest() {
 		DB:                     s.GetDB(),
 		SubRepo:                s.GetStores().SubscriptionRepo,
 		CustomerRepo:           s.GetStores().CustomerRepo,
+		TenantRepo:             s.GetStores().TenantRepo,
 		InvoiceRepo:            s.GetStores().InvoiceRepo,
 		HostedInvoiceTokenRepo: s.GetStores().HostedInvoiceTokenRepo,
 		ConnectionRepo:         s.GetStores().ConnectionRepo,
