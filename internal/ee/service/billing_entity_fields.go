@@ -41,6 +41,12 @@ func fillSubscriptionBillingEntityIDs(ctx context.Context, params ServiceParams,
 		func(r *dto.SubscriptionResponse, id *string) { r.BillingEntityID = id })
 }
 
+func fillSubscriptionV2BillingEntityIDs(ctx context.Context, params ServiceParams, items ...*dto.SubscriptionResponseV2) error {
+	return fillBillingEntityIDs(ctx, params, items,
+		func(r *dto.SubscriptionResponseV2) string { return r.CustomerID },
+		func(r *dto.SubscriptionResponseV2, id *string) { r.BillingEntityID = id })
+}
+
 func fillWalletBillingEntityIDs(ctx context.Context, params ServiceParams, items ...*dto.WalletResponse) error {
 	return fillBillingEntityIDs(ctx, params, items,
 		func(r *dto.WalletResponse) string { return r.CustomerID },
