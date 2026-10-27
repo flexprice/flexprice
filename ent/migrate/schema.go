@@ -264,6 +264,48 @@ var (
 			},
 		},
 	}
+	// BillingEntitiesColumns holds the columns for the "billing_entities" table.
+	BillingEntitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "legal_name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "invoice_number_prefix", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "seller_details", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "tax_identifiers", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// BillingEntitiesTable holds the schema information for the "billing_entities" table.
+	BillingEntitiesTable = &schema.Table{
+		Name:       "billing_entities",
+		Columns:    BillingEntitiesColumns,
+		PrimaryKey: []*schema.Column{BillingEntitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_billing_entity_tenant_env_default",
+				Unique:  true,
+				Columns: []*schema.Column{BillingEntitiesColumns[1], BillingEntitiesColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(is_default AND ((status)::text = 'published'::text))",
+				},
+			},
+			{
+				Name:    "idx_billing_entity_tenant_env_prefix",
+				Unique:  true,
+				Columns: []*schema.Column{BillingEntitiesColumns[1], BillingEntitiesColumns[7], BillingEntitiesColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+		},
+	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
 	BillingSequencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -1011,6 +1053,7 @@ var (
 		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_treatment", Type: field.TypeString, Default: "taxable", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
+		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -1046,6 +1089,11 @@ var (
 				Annotation: &entsql.IndexAnnotation{
 					Type: "GIN",
 				},
+			},
+			{
+				Name:    "idx_customers_tenant_env_billing_entity",
+				Unique:  false,
+				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[23]},
 			},
 		},
 	}
@@ -1525,6 +1573,7 @@ var (
 		{Name: "total", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "fx_conversion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "seller_snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "due_date", Type: field.TypeTime, Nullable: true},
 		{Name: "paid_at", Type: field.TypeTime, Nullable: true},
@@ -1575,12 +1624,12 @@ var (
 			{
 				Name:    "idx_tenant_due_date_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[28], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
 			},
 			{
 				Name:    "idx_tenant_environment_invoice_number_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[40]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[41]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((invoice_number IS NOT NULL) AND ((invoice_number)::text <> ''::text) AND ((status)::text = 'published'::text))",
 				},
@@ -1588,7 +1637,7 @@ var (
 			{
 				Name:    "idx_tenant_environment_idempotency_key_unique",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[43]},
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[44]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((idempotency_key IS NOT NULL) AND ((status)::text = 'published'::text) AND ((invoice_status)::text <> 'VOIDED'::text))",
 				},
@@ -1596,7 +1645,7 @@ var (
 			{
 				Name:    "idx_invoices_finalized_at_published",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[30]},
+				Columns: []*schema.Column{InvoicesColumns[31]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text))",
 				},
@@ -1604,7 +1653,7 @@ var (
 			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[34], InvoicesColumns[35]},
+				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[35], InvoicesColumns[36]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))",
 				},
@@ -1717,6 +1766,7 @@ var (
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(6)"}},
+		{Name: "prefix", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_value", Type: field.TypeInt64, Default: 0, SchemaType: map[string]string{"postgres": "bigint"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
@@ -1731,6 +1781,11 @@ var (
 				Name:    "invoicesequence_tenant_id_environment_id_year_month",
 				Unique:  true,
 				Columns: []*schema.Column{InvoiceSequencesColumns[1], InvoiceSequencesColumns[2], InvoiceSequencesColumns[3]},
+			},
+			{
+				Name:    "idx_invoice_sequences_tenant_env_prefix_month",
+				Unique:  true,
+				Columns: []*schema.Column{InvoiceSequencesColumns[1], InvoiceSequencesColumns[2], InvoiceSequencesColumns[4], InvoiceSequencesColumns[3]},
 			},
 		},
 	}
@@ -3136,6 +3191,7 @@ var (
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "internal_status", Type: field.TypeString, Default: "trialing", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "billing_entity_mode", Type: field.TypeString, Default: "off", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "billing_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -3150,7 +3206,7 @@ var (
 			{
 				Name:    "idx_tenant_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{TenantsColumns[4]},
+				Columns: []*schema.Column{TenantsColumns[5]},
 			},
 		},
 	}
@@ -3465,6 +3521,7 @@ var (
 		AlertSettingsTable,
 		AnalyticsViewsTable,
 		AuthsTable,
+		BillingEntitiesTable,
 		BillingSequencesTable,
 		CheckoutSessionsTable,
 		CommitmentsTable,

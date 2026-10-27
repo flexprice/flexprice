@@ -25,6 +25,8 @@ type Tenant struct {
 	Status string `json:"status,omitempty"`
 	// InternalStatus holds the value of the "internal_status" field.
 	InternalStatus string `json:"internal_status,omitempty"`
+	// BillingEntityMode holds the value of the "billing_entity_mode" field.
+	BillingEntityMode string `json:"billing_entity_mode,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -43,7 +45,7 @@ func (*Tenant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case tenant.FieldBillingDetails, tenant.FieldMetadata:
 			values[i] = new([]byte)
-		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus, tenant.FieldInternalStatus:
+		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus, tenant.FieldInternalStatus, tenant.FieldBillingEntityMode:
 			values[i] = new(sql.NullString)
 		case tenant.FieldCreatedAt, tenant.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -85,6 +87,12 @@ func (_m *Tenant) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field internal_status", values[i])
 			} else if value.Valid {
 				_m.InternalStatus = value.String
+			}
+		case tenant.FieldBillingEntityMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_entity_mode", values[i])
+			} else if value.Valid {
+				_m.BillingEntityMode = value.String
 			}
 		case tenant.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -158,6 +166,9 @@ func (_m *Tenant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("internal_status=")
 	builder.WriteString(_m.InternalStatus)
+	builder.WriteString(", ")
+	builder.WriteString("billing_entity_mode=")
+	builder.WriteString(_m.BillingEntityMode)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -20,6 +20,8 @@ const (
 	FieldStatus = "status"
 	// FieldInternalStatus holds the string denoting the internal_status field in the database.
 	FieldInternalStatus = "internal_status"
+	// FieldBillingEntityMode holds the string denoting the billing_entity_mode field in the database.
+	FieldBillingEntityMode = "billing_entity_mode"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -38,6 +40,7 @@ var Columns = []string{
 	FieldName,
 	FieldStatus,
 	FieldInternalStatus,
+	FieldBillingEntityMode,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldBillingDetails,
@@ -61,6 +64,8 @@ var (
 	DefaultStatus string
 	// DefaultInternalStatus holds the default value on creation for the "internal_status" field.
 	DefaultInternalStatus string
+	// DefaultBillingEntityMode holds the default value on creation for the "billing_entity_mode" field.
+	DefaultBillingEntityMode string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -92,6 +97,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByInternalStatus orders the results by the internal_status field.
 func ByInternalStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInternalStatus, opts...).ToFunc()
+}
+
+// ByBillingEntityMode orders the results by the billing_entity_mode field.
+func ByBillingEntityMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingEntityMode, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
