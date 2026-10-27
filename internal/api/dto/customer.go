@@ -84,6 +84,10 @@ type CreateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// billing_entity_id is the billing entity that bills this customer; defaults to the environment's
+	// default entity. Accepted only once billing entities are enabled, and never changes afterwards.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -136,6 +140,9 @@ type UpdateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// billing_entity_id cannot be changed; sending it is rejected
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
@@ -252,6 +259,12 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.BillingEntityID != nil {
+		return ierr.NewError("billing_entity_id cannot be changed").
+			WithHint("A customer's billing entity is set at creation and cannot be changed").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate timezone is a valid IANA timezone name
