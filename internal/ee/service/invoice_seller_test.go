@@ -61,6 +61,25 @@ func (s *BillingEntityServiceSuite) TestSellerFor() {
 		s.Equal("Old EU B.V.", got.LegalName)
 	})
 
+	s.Run("voided_keeps_snapshot", func() {
+		s.ClearStores()
+		s.setMode(types.BillingEntityModeEnabled)
+		s.addEntity("be_eu", env, "EU", false)
+		s.addCustomer("c1", lo.ToPtr("be_eu"))
+		inv := &invoice.Invoice{
+			ID:             "inv_1",
+			CustomerID:     "c1",
+			InvoiceStatus:  types.InvoiceStatusVoided,
+			SellerSnapshot: &types.SellerSnapshot{BillingEntityID: "be_eu", LegalName: "Old EU B.V."},
+		}
+		s.renameEntity("be_eu", "New EU B.V.")
+
+		got, err := s.invoiceSvc().sellerFor(s.GetContext(), inv)
+		s.Require().NoError(err)
+		s.Require().NotNil(got)
+		s.Equal("Old EU B.V.", got.LegalName)
+	})
+
 	s.Run("draft_uses_current_entity", func() {
 		s.ClearStores()
 		s.setMode(types.BillingEntityModeEnabled)

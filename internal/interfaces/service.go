@@ -18,6 +18,7 @@ import (
 type BillingEntityGuard interface {
 	CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error)
 	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
+	SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error)
 	// RequireCustomerIntegrations returns a validation error when the customer's entity has no integrations.
 	RequireCustomerIntegrations(ctx context.Context, customerID string) error
 }

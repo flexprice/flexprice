@@ -1,8 +1,8 @@
 -- migrate:up
 -- Fills each counter row with its environment's current invoice prefix (stored
 -- invoice_config, else the default INV). Only empty rows are touched, so a re-run is a no-op.
-SET lock_timeout = '3s';
-SET statement_timeout = '60s';
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '60s';
 
 UPDATE "invoice_sequences" s
 SET "prefix" = COALESCE(
