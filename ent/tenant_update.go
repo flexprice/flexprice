@@ -71,6 +71,20 @@ func (_u *TenantUpdate) SetNillableInternalStatus(v *string) *TenantUpdate {
 	return _u
 }
 
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_u *TenantUpdate) SetBillingEntityMode(v string) *TenantUpdate {
+	_u.mutation.SetBillingEntityMode(v)
+	return _u
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_u *TenantUpdate) SetNillableBillingEntityMode(v *string) *TenantUpdate {
+	if v != nil {
+		_u.SetBillingEntityMode(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *TenantUpdate) SetUpdatedAt(v time.Time) *TenantUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -181,6 +195,9 @@ func (_u *TenantUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.InternalStatus(); ok {
 		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.BillingEntityMode(); ok {
+		_spec.SetField(tenant.FieldBillingEntityMode, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -254,6 +271,20 @@ func (_u *TenantUpdateOne) SetInternalStatus(v string) *TenantUpdateOne {
 func (_u *TenantUpdateOne) SetNillableInternalStatus(v *string) *TenantUpdateOne {
 	if v != nil {
 		_u.SetInternalStatus(*v)
+	}
+	return _u
+}
+
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_u *TenantUpdateOne) SetBillingEntityMode(v string) *TenantUpdateOne {
+	_u.mutation.SetBillingEntityMode(v)
+	return _u
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_u *TenantUpdateOne) SetNillableBillingEntityMode(v *string) *TenantUpdateOne {
+	if v != nil {
+		_u.SetBillingEntityMode(*v)
 	}
 	return _u
 }
@@ -397,6 +428,9 @@ func (_u *TenantUpdateOne) sqlSave(ctx context.Context) (_node *Tenant, err erro
 	}
 	if value, ok := _u.mutation.InternalStatus(); ok {
 		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BillingEntityMode(); ok {
+		_spec.SetField(tenant.FieldBillingEntityMode, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)

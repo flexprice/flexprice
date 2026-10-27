@@ -31,6 +31,12 @@ func (InvoiceSequence) Fields() []ent.Field {
 				"postgres": "varchar(6)",
 			}).
 			NotEmpty(),
+		field.String("prefix").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
 		field.Int64("last_value").
 			SchemaType(map[string]string{
 				"postgres": "bigint",
@@ -61,5 +67,8 @@ func (InvoiceSequence) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "year_month").
 			Unique(),
+		index.Fields("tenant_id", "environment_id", "prefix", "year_month").
+			Unique().
+			StorageKey("idx_invoice_sequences_tenant_env_prefix_month"),
 	}
 }

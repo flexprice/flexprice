@@ -55,6 +55,20 @@ func (_c *TenantCreate) SetNillableInternalStatus(v *string) *TenantCreate {
 	return _c
 }
 
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_c *TenantCreate) SetBillingEntityMode(v string) *TenantCreate {
+	_c.mutation.SetBillingEntityMode(v)
+	return _c
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_c *TenantCreate) SetNillableBillingEntityMode(v *string) *TenantCreate {
+	if v != nil {
+		_c.SetBillingEntityMode(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *TenantCreate) SetCreatedAt(v time.Time) *TenantCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -152,6 +166,10 @@ func (_c *TenantCreate) defaults() {
 		v := tenant.DefaultInternalStatus
 		_c.mutation.SetInternalStatus(v)
 	}
+	if _, ok := _c.mutation.BillingEntityMode(); !ok {
+		v := tenant.DefaultBillingEntityMode
+		_c.mutation.SetBillingEntityMode(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := tenant.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -181,6 +199,9 @@ func (_c *TenantCreate) check() error {
 	}
 	if _, ok := _c.mutation.InternalStatus(); !ok {
 		return &ValidationError{Name: "internal_status", err: errors.New(`ent: missing required field "Tenant.internal_status"`)}
+	}
+	if _, ok := _c.mutation.BillingEntityMode(); !ok {
+		return &ValidationError{Name: "billing_entity_mode", err: errors.New(`ent: missing required field "Tenant.billing_entity_mode"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Tenant.created_at"`)}
@@ -234,6 +255,10 @@ func (_c *TenantCreate) createSpec() (*Tenant, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.InternalStatus(); ok {
 		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
 		_node.InternalStatus = value
+	}
+	if value, ok := _c.mutation.BillingEntityMode(); ok {
+		_spec.SetField(tenant.FieldBillingEntityMode, field.TypeString, value)
+		_node.BillingEntityMode = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(tenant.FieldCreatedAt, field.TypeTime, value)

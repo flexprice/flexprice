@@ -54,6 +54,11 @@ func (Tenant) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			Default("trialing"),
+		field.String("billing_entity_mode").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default("off"),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now),
