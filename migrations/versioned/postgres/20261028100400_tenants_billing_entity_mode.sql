@@ -1,7 +1,7 @@
 -- migrate:up
 -- ADD COLUMN with a constant default is metadata-only on PostgreSQL 11+, so this
 -- holds only a brief lock and needs no backfill.
-SET lock_timeout = '3s';
+SET LOCAL lock_timeout = '3s';
 
 ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "billing_entity_mode" varchar(20) NOT NULL DEFAULT 'off';
 

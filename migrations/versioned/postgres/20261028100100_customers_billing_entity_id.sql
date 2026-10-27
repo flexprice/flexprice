@@ -1,6 +1,6 @@
 -- migrate:up
-SET lock_timeout = '3s';
-SET statement_timeout = '30s';
+SET LOCAL lock_timeout = '3s';
+SET LOCAL statement_timeout = '30s';
 
 ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "billing_entity_id" varchar(50) NULL;
 

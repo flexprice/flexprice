@@ -208,8 +208,9 @@ func (h *handler) skipForBillingEntity(ctx context.Context, event *types.Webhook
 	}
 
 	var ids struct {
-		CustomerID string `json:"customer_id"`
-		InvoiceID  string `json:"invoice_id"`
+		CustomerID     string `json:"customer_id"`
+		InvoiceID      string `json:"invoice_id"`
+		SubscriptionID string `json:"subscription_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &ids); err != nil {
 		return false, nil
@@ -222,6 +223,8 @@ func (h *handler) skipForBillingEntity(ctx context.Context, event *types.Webhook
 		served, err = h.deps.EntityGuard.CustomerServesIntegrations(ctx, ids.CustomerID)
 	case ids.InvoiceID != "":
 		served, err = h.deps.EntityGuard.InvoiceServesIntegrations(ctx, ids.InvoiceID)
+	case ids.SubscriptionID != "":
+		served, err = h.deps.EntityGuard.SubscriptionServesIntegrations(ctx, ids.SubscriptionID)
 	default:
 		return false, nil
 	}
