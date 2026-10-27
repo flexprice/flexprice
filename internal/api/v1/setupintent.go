@@ -22,14 +22,16 @@ import (
 type SetupIntentHandler struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	entityGuard        interfaces.BillingEntityGuard
 	config             *config.Configuration
 	log                *logger.Logger
 }
 
-func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
+func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, entityGuard interfaces.BillingEntityGuard, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
 	return &SetupIntentHandler{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		entityGuard:        entityGuard,
 		config:             cfg,
 		log:                log,
 	}
@@ -62,6 +64,11 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
 		h.log.Error(c.Request.Context(), "Setup Intent request validation failed", "error", err)
+		c.Error(err)
+		return
+	}
+
+	if err := h.entityGuard.RequireCustomerIntegrations(c.Request.Context(), customerID); err != nil {
 		c.Error(err)
 		return
 	}

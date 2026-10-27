@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -27,6 +28,7 @@ type Handler interface {
 type Deps struct {
 	ConnectionRepo connection.Repository
 	EIMRepo        entityintegrationmapping.Repository
+	EntityGuard    interfaces.BillingEntityGuard
 	Logger         *logger.Logger
 	Config         *config.Configuration
 	PubSub         pubsub.PubSub
@@ -185,5 +187,46 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 		"environment_id", event.EnvironmentID,
 	)
 
+	skip, err := h.skipForBillingEntity(ctx, &event)
+	if err != nil {
+		return h.processIntegrationError(err, &event, msg.UUID, "billing_entity_guard")
+	}
+	if skip {
+		h.deps.Logger.Info(ctx, "skipping integration for non-default billing entity",
+			"message_uuid", msg.UUID,
+			"event_name", event.EventName)
+		return nil
+	}
+
 	return h.processIntegrationError(processor(ctx, &event, msg), &event, msg.UUID, "dispatch")
+}
+
+// skipForBillingEntity reports whether the event's customer belongs to a non-default billing entity.
+func (h *handler) skipForBillingEntity(ctx context.Context, event *types.WebhookEvent) (bool, error) {
+	if h.deps.EntityGuard == nil {
+		return false, nil
+	}
+
+	var ids struct {
+		CustomerID string `json:"customer_id"`
+		InvoiceID  string `json:"invoice_id"`
+	}
+	if err := json.Unmarshal(event.Payload, &ids); err != nil {
+		return false, nil
+	}
+
+	var served bool
+	var err error
+	switch {
+	case ids.CustomerID != "":
+		served, err = h.deps.EntityGuard.CustomerServesIntegrations(ctx, ids.CustomerID)
+	case ids.InvoiceID != "":
+		served, err = h.deps.EntityGuard.InvoiceServesIntegrations(ctx, ids.InvoiceID)
+	default:
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !served, nil
 }
