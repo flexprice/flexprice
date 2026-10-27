@@ -1838,6 +1838,9 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 	response := &dto.SubscriptionResponseV2{
 		Subscription: sub,
 	}
+	if err := fillSubscriptionV2BillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
 
 	// Compare sub.SyncedPriceSequence against the plan's current max
 	// prices.sequence — when the sub is behind, plan-price changes have not

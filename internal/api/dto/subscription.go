@@ -957,6 +957,8 @@ type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse] // @n
 // with optional expanded fields based on the request expand parameter
 type SubscriptionResponseV2 struct {
 	*subscription.Subscription
+	// billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities
+	BillingEntityID *string `json:"billing_entity_id"`
 
 	// Plan is expanded only if "plan" is in expand parameter
 	Plan *PlanResponse `json:"plan,omitempty"`

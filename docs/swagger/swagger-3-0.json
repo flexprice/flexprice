@@ -29977,6 +29977,10 @@
           "billing_cycle": {
             "$ref": "#/components/schemas/types.BillingCycle"
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities"
+          },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
