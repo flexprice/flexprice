@@ -137,7 +137,8 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 			Mark(ierr.ErrValidation)
 	}
 
-	return nil
+	// 11. child and parent customers must share a billing entity
+	return requireSameBillingEntity(ctx, s.ServiceParams, child.CustomerID, parentSub.CustomerID)
 }
 
 // addToGroupedInvoicing fetches the child by ID, validates all constraints, then persists the
