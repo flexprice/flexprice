@@ -540,6 +540,8 @@ type TopUpWalletResponse struct {
 // WalletBalanceResponse represents the response for getting wallet balance
 type WalletBalanceResponse struct {
 	*wallet.Wallet
+	// billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists of tenants with billing entities
+	BillingEntityID           *string                `json:"billing_entity_id,omitempty"`
 	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
 	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 	BalanceUpdatedAt          *time.Time             `json:"balance_updated_at,omitempty"`

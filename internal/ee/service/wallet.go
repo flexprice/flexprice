@@ -389,6 +389,9 @@ func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID s
 	for i, w := range wallets {
 		response[i] = dto.FromWallet(w)
 	}
+	if err := fillWalletBillingEntityIDs(ctx, s.ServiceParams, response...); err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }
@@ -2895,6 +2898,9 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 				Wallet: w,
 			}
 		}
+	}
+	if err := fillWalletBalanceBillingEntityIDs(ctx, s.ServiceParams, response...); err != nil {
+		return nil, err
 	}
 	return response, nil
 }

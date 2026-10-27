@@ -245,6 +245,44 @@ func (s *billingEntityService) EffectiveEntity(ctx context.Context, cust *custom
 }
 
 func (s *billingEntityService) CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error) {
+	if off, err := s.entitiesOff(ctx); err != nil || off {
+		return off, err
+	}
+	return s.customerServesIntegrations(ctx, customerID)
+}
+
+func (s *billingEntityService) InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error) {
+	if off, err := s.entitiesOff(ctx); err != nil || off {
+		return off, err
+	}
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return false, err
+	}
+	return s.customerServesIntegrations(ctx, inv.CustomerID)
+}
+
+func (s *billingEntityService) SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error) {
+	if off, err := s.entitiesOff(ctx); err != nil || off {
+		return off, err
+	}
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return false, err
+	}
+	return s.customerServesIntegrations(ctx, sub.CustomerID)
+}
+
+// entitiesOff reports whether the tenant has billing entities off, so every record is served without a lookup.
+func (s *billingEntityService) entitiesOff(ctx context.Context) (bool, error) {
+	mode, err := s.mode(ctx)
+	if err != nil {
+		return false, err
+	}
+	return mode == types.BillingEntityModeOff, nil
+}
+
+func (s *billingEntityService) customerServesIntegrations(ctx context.Context, customerID string) (bool, error) {
 	cust, err := s.CustomerRepo.Get(ctx, customerID)
 	if err != nil {
 		return false, err
@@ -254,22 +292,6 @@ func (s *billingEntityService) CustomerServesIntegrations(ctx context.Context, c
 		return false, err
 	}
 	return entity == nil || entity.IsDefault, nil
-}
-
-func (s *billingEntityService) InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error) {
-	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return false, err
-	}
-	return s.CustomerServesIntegrations(ctx, inv.CustomerID)
-}
-
-func (s *billingEntityService) SubscriptionServesIntegrations(ctx context.Context, subscriptionID string) (bool, error) {
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return false, err
-	}
-	return s.CustomerServesIntegrations(ctx, sub.CustomerID)
 }
 
 func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntityID string) error {

@@ -32222,6 +32222,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "billing_entity_id": {
+            "type": "string",
+            "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists of tenants with billing entities"
+          },
           "config": {
             "$ref": "#/components/schemas/types.WalletConfig"
           },

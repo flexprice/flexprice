@@ -30160,6 +30160,10 @@ const docTemplate = `{
                 "balance_updated_at": {
                     "type": "string"
                 },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists of tenants with billing entities",
+                    "type": "string"
+                },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
                 },
