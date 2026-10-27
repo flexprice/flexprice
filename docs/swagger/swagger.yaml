@@ -2649,9 +2649,6 @@ definitions:
         type: integer
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
-    required:
-    - feature_id
-    - feature_type
     type: object
   CreateEntityIntegrationMappingRequest:
     properties:
@@ -3261,6 +3258,22 @@ definitions:
     - interval
     - job_config
     type: object
+  CreateSubscriptionGrantRequest:
+    properties:
+      aggregation_mode:
+        $ref: '#/definitions/types.EntitlementAggregationMode'
+      grant_allocation_behavior:
+        $ref: '#/definitions/types.EntitlementGrantAllocationBehavior'
+      grant_duration_unit:
+        $ref: '#/definitions/types.EntitlementGrantDurationUnit'
+      grant_duration_value:
+        type: integer
+      grant_quota:
+        type: string
+    required:
+    - grant_duration_unit
+    - grant_quota
+    type: object
   CreateSubscriptionLineItemRequest:
     properties:
       commitment_amount:
@@ -3470,6 +3483,12 @@ definitions:
           Accepts coupon_code; optionally targets a line item via price_id.
         items:
           $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
+      subscription_grants:
+        description: SubscriptionGrants are dollar allowances shared by every usage
+          line, created with the subscription.
+        items:
+          $ref: '#/definitions/CreateSubscriptionGrantRequest'
         type: array
       subscription_status:
         allOf:
@@ -4216,6 +4235,8 @@ definitions:
           grant config turns the entitlement into a time-boxed bucket source.
       grant_quota:
         type: string
+      grant_scope:
+        $ref: '#/definitions/types.EntitlementGrantScopeEntityType'
       id:
         type: string
       is_enabled:
@@ -5214,6 +5235,12 @@ definitions:
           Accepts coupon_code; optionally targets a line item via price_id.
         items:
           $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
+      subscription_grants:
+        description: SubscriptionGrants are dollar allowances shared by every usage
+          line, created with the subscription.
+        items:
+          $ref: '#/definitions/CreateSubscriptionGrantRequest'
         type: array
       tax_rate_overrides:
         items:
@@ -7815,8 +7842,19 @@ definitions:
         type: array
       plan_id:
         type: string
+      subscription_grants:
+        $ref: '#/definitions/SubscriptionGrantsResponse'
       subscription_id:
         type: string
+    type: object
+  SubscriptionGrantsResponse:
+    properties:
+      entitlements:
+        items:
+          $ref: '#/definitions/EntitlementResponse'
+        type: array
+      grant_state:
+        $ref: '#/definitions/GrantState'
     type: object
   SubscriptionInheritanceConfig:
     properties:
@@ -11611,6 +11649,13 @@ definitions:
         items:
           $ref: '#/definitions/types.FilterCondition'
         type: array
+      grant_scopes:
+        description: |-
+          GrantScopes selects entitlements by grant scope. Empty means feature only, so
+          subscription grants, which have no feature, never reach feature-based reads.
+        items:
+          $ref: '#/definitions/types.EntitlementGrantScopeEntityType'
+        type: array
       has_grant_config:
         description: HasGrantConfig filters on grant-config presence (grant_quota
           set or not).
@@ -14932,6 +14977,16 @@ definitions:
     - CommitmentStatusActive
     - CommitmentStatusEnded
     - CommitmentStatusTerminated
+  types.EntitlementGrantScopeEntityType:
+    enum:
+    - feature
+    - subscription
+    - group
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantScopeFeature
+    - EntitlementGrantScopeSubscription
+    - EntitlementGrantScopeGroup
   types.ImprovementDirection:
     enum:
     - higher

@@ -93,7 +93,7 @@ type EntitlementFilter struct {
 
 	// GrantScopes selects entitlements by grant scope. Empty means feature only, so
 	// subscription grants, which have no feature, never reach feature-based reads.
-	GrantScopes []EntitlementGrantScopeEntityType `form:"-" json:"-"`
+	GrantScopes []EntitlementGrantScopeEntityType `form:"grant_scopes" json:"grant_scopes,omitempty"`
 }
 
 // EffectiveGrantScopes is the scopes a filter selects, feature when none are named.
@@ -128,6 +128,12 @@ func (f EntitlementFilter) Validate() error {
 
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, scope := range f.GrantScopes {
+		if err := scope.Validate(); err != nil {
 			return err
 		}
 	}

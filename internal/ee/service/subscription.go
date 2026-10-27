@@ -423,6 +423,11 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 	}
+	for _, grantReq := range req.SubscriptionGrants {
+		if _, err = NewEntitlementService(s.ServiceParams).CreateEntitlement(ctx, grantReq.ToCreateEntitlementRequest(sub.ID)); err != nil {
+			return nil, err
+		}
+	}
 	// Prepare credit grants
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	var creditGrantRequests []dto.CreateCreditGrantRequest
@@ -6998,14 +7003,45 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlementsForSubscripti
 		}
 	}
 
+	subscriptionGrants, err := s.subscriptionGrantsView(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+
 	// Build final response
 	response := &dto.SubscriptionEntitlementsResponse{
-		SubscriptionID: sub.ID,
-		PlanID:         sub.PlanID,
-		Features:       aggregatedFeatures,
+		SubscriptionID:     sub.ID,
+		PlanID:             sub.PlanID,
+		Features:           aggregatedFeatures,
+		SubscriptionGrants: subscriptionGrants,
 	}
 
 	return response, nil
+}
+
+// subscriptionGrantsView returns the subscription's grants and their ledger, or nil when it has none.
+func (s *subscriptionService) subscriptionGrantsView(ctx context.Context, sub *subscription.Subscription) (*dto.SubscriptionGrantsResponse, error) {
+	filter := types.NewNoLimitEntitlementFilter().
+		WithEntityIDs([]string{sub.ID}).
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
+		WithStatus(types.StatusPublished)
+	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{types.EntitlementGrantScopeSubscription}
+	ecs, err := s.EntitlementRepo.List(ctx, filter)
+	if err != nil || len(ecs) == 0 {
+		return nil, err
+	}
+
+	state, err := NewEntitlementGrantService(s.ServiceParams).SubscriptionGrantState(ctx, sub, time.Now().UTC())
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load subscription grant state, returning grants without it",
+			"error", err, "subscription_id", sub.ID)
+	}
+	return &dto.SubscriptionGrantsResponse{
+		Entitlements: lo.Map(ecs, func(ec *entitlement.Entitlement, _ int) *dto.EntitlementResponse {
+			return &dto.EntitlementResponse{Entitlement: ec}
+		}),
+		GrantState: state,
+	}, nil
 }
 
 // GetAggregatedSubscriptionEntitlements retrieves and aggregates all entitlements for a subscription

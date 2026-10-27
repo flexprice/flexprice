@@ -18940,10 +18940,6 @@
         },
         "CreateEntitlementRequest": {
             "type": "object",
-            "required": [
-                "feature_id",
-                "feature_type"
-            ],
             "properties": {
                 "aggregation_mode": {
                     "$ref": "#/definitions/types.EntitlementAggregationMode"
@@ -19752,6 +19748,30 @@
                 }
             }
         },
+        "CreateSubscriptionGrantRequest": {
+            "type": "object",
+            "required": [
+                "grant_duration_unit",
+                "grant_quota"
+            ],
+            "properties": {
+                "aggregation_mode": {
+                    "$ref": "#/definitions/types.EntitlementAggregationMode"
+                },
+                "grant_allocation_behavior": {
+                    "$ref": "#/definitions/types.EntitlementGrantAllocationBehavior"
+                },
+                "grant_duration_unit": {
+                    "$ref": "#/definitions/types.EntitlementGrantDurationUnit"
+                },
+                "grant_duration_value": {
+                    "type": "integer"
+                },
+                "grant_quota": {
+                    "type": "string"
+                }
+            }
+        },
         "CreateSubscriptionLineItemRequest": {
             "type": "object",
             "properties": {
@@ -20001,6 +20021,13 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
+                "subscription_grants": {
+                    "description": "SubscriptionGrants are dollar allowances shared by every usage line, created with the subscription.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateSubscriptionGrantRequest"
                     }
                 },
                 "subscription_status": {
@@ -20937,6 +20964,9 @@
                 },
                 "grant_quota": {
                     "type": "string"
+                },
+                "grant_scope": {
+                    "$ref": "#/definitions/types.EntitlementGrantScopeEntityType"
                 },
                 "id": {
                     "type": "string"
@@ -22278,6 +22308,13 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
+                "subscription_grants": {
+                    "description": "SubscriptionGrants are dollar allowances shared by every usage line, created with the subscription.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CreateSubscriptionGrantRequest"
                     }
                 },
                 "tax_rate_overrides": {
@@ -25676,8 +25713,25 @@
                 "plan_id": {
                     "type": "string"
                 },
+                "subscription_grants": {
+                    "$ref": "#/definitions/SubscriptionGrantsResponse"
+                },
                 "subscription_id": {
                     "type": "string"
+                }
+            }
+        },
+        "SubscriptionGrantsResponse": {
+            "type": "object",
+            "properties": {
+                "entitlements": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/EntitlementResponse"
+                    }
+                },
+                "grant_state": {
+                    "$ref": "#/definitions/GrantState"
                 }
             }
         },
@@ -30658,6 +30712,13 @@
                         "$ref": "#/definitions/types.FilterCondition"
                     }
                 },
+                "grant_scopes": {
+                    "description": "GrantScopes selects entitlements by grant scope. Empty means feature only, so\nsubscription grants, which have no feature, never reach feature-based reads.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.EntitlementGrantScopeEntityType"
+                    }
+                },
                 "has_grant_config": {
                     "description": "HasGrantConfig filters on grant-config presence (grant_quota set or not).",
                     "type": "boolean"
@@ -34876,6 +34937,19 @@
                 "CommitmentStatusActive",
                 "CommitmentStatusEnded",
                 "CommitmentStatusTerminated"
+            ]
+        },
+        "types.EntitlementGrantScopeEntityType": {
+            "type": "string",
+            "enum": [
+                "feature",
+                "subscription",
+                "group"
+            ],
+            "x-enum-varnames": [
+                "EntitlementGrantScopeFeature",
+                "EntitlementGrantScopeSubscription",
+                "EntitlementGrantScopeGroup"
             ]
         },
         "types.ImprovementDirection": {

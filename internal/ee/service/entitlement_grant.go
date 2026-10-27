@@ -33,6 +33,8 @@ type EntitlementGrantService interface {
 	// built during the pass so the evaluator can reuse them.
 	EnsureGrantsForSubscriptions(ctx context.Context, cust *customer.Customer, subs []*subscription.Subscription, at time.Time) ([]*entitlementgrant.EntitlementGrant, *grantEvalMeta, error)
 	GrantStateByFeature(ctx context.Context, sub *subscription.Subscription, at time.Time) (map[string]*dto.GrantState, error)
+	// SubscriptionGrantState is the ledger of the subscription's own grants, or nil when it has none.
+	SubscriptionGrantState(ctx context.Context, sub *subscription.Subscription, at time.Time) (*dto.GrantState, error)
 
 	// LiveGrantsByFeature is the subscription's open windows at `at`, keyed by feature.
 	LiveGrantsByFeature(ctx context.Context, sub *subscription.Subscription, at time.Time) (map[string][]*entitlementgrant.EntitlementGrant, error)
@@ -1158,6 +1160,32 @@ func (s *entitlementGrantService) GrantStateByFeature(
 	sub *subscription.Subscription,
 	at time.Time,
 ) (map[string]*dto.GrantState, error) {
+	return s.grantStateBy(ctx, sub, types.EntitlementGrantScopeFeature, at,
+		func(g *entitlementgrant.EntitlementGrant) string { return g.FeatureID() })
+}
+
+// SubscriptionGrantState is the ledger of the subscription's own grants, or nil when it has none.
+func (s *entitlementGrantService) SubscriptionGrantState(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	at time.Time,
+) (*dto.GrantState, error) {
+	states, err := s.grantStateBy(ctx, sub, types.EntitlementGrantScopeSubscription, at,
+		func(g *entitlementgrant.EntitlementGrant) string { return g.ScopeEntityID })
+	if err != nil || sub == nil {
+		return nil, err
+	}
+	return states[sub.ID], nil
+}
+
+// grantStateBy groups the cycle's windows of one scope into ledgers keyed by keyOf.
+func (s *entitlementGrantService) grantStateBy(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	scope types.EntitlementGrantScopeEntityType,
+	at time.Time,
+	keyOf func(*entitlementgrant.EntitlementGrant) string,
+) (map[string]*dto.GrantState, error) {
 	if sub == nil || s.EntitlementGrantRepo == nil {
 		return nil, nil
 	}
@@ -1165,7 +1193,7 @@ func (s *entitlementGrantService) GrantStateByFeature(
 	filter := types.NewNoLimitEntitlementGrantFilter().
 		WithCustomerIDs(sub.CustomerID).
 		WithSubscriptionIDs(sub.ID).
-		WithScopeEntityType(types.EntitlementGrantScopeFeature)
+		WithScopeEntityType(scope)
 	filter.WithCycleOverlap(sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 
 	// Capped in the query: an hourly allowance leaves hundreds of rows in a monthly
@@ -1180,14 +1208,14 @@ func (s *entitlementGrantService) GrantStateByFeature(
 
 	out := make(map[string]*dto.GrantState)
 	for _, g := range grants {
-		if g == nil || !g.IsFeatureScoped() {
+		if g == nil || g.ScopeEntityType != scope {
 			continue
 		}
-		featureID := g.FeatureID()
-		state, ok := out[featureID]
+		key := keyOf(g)
+		state, ok := out[key]
 		if !ok {
 			state = &dto.GrantState{Allowances: make([]*dto.GrantAllowanceState, 0, 4)}
-			out[featureID] = state
+			out[key] = state
 		}
 
 		// Null for an unlimited window: a number there reads as a balance the customer

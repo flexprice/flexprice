@@ -191,12 +191,8 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		if err := s.assertSingleContributor(txCtx, e); err != nil {
 			return err
 		}
-		if sub, ok := entity.(*subscription.Subscription); ok && isFeatureAllowance(e) {
-			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{
-				entitlements: []*entitlement.Entitlement{e},
-			}); err != nil {
-				return err
-			}
+		if err := s.checkFeatureAllowanceAgainstSubscriptionGrants(txCtx, e, entity); err != nil {
+			return err
 		}
 
 		created, err := s.EntitlementRepo.Create(txCtx, e)
@@ -407,15 +403,8 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 			entitlements[i] = ent
 		}
 
-		// A feature allowance on a subscription with a subscription grant would make the same spend free twice.
-		for subscriptionID, sub := range subscriptionsByID {
-			allowances := lo.Filter(entitlements, func(e *entitlement.Entitlement, _ int) bool {
-				return e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION && e.EntityID == subscriptionID && isFeatureAllowance(e)
-			})
-			if len(allowances) == 0 {
-				continue
-			}
-			if err := newSubscriptionGrantGuard(s.ServiceParams).checkIfGranted(txCtx, sub, subscriptionGrantChange{entitlements: allowances}); err != nil {
+		for _, e := range entitlements {
+			if err := s.checkFeatureAllowanceAgainstSubscriptionGrants(txCtx, e, subscriptionsByID[e.EntityID]); err != nil {
 				return err
 			}
 		}
@@ -497,6 +486,10 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
+
+	if result.IsSubscriptionScoped() {
+		return response, nil
+	}
 
 	// Add expanded fields
 	fetaureService := NewFeatureService(s.ServiceParams)
@@ -580,8 +573,8 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 	addonsByID := make(map[string]*addon.Addon)
 
 	if expand.Has(types.ExpandFeatures) {
-		featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-			return e.FeatureID
+		featureIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.FeatureID, e.FeatureID != ""
 		})
 
 		if len(featureIDs) > 0 {
@@ -835,6 +828,11 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.assertSingleContributor(txCtx, existing); err != nil {
 			return err
+		}
+		if !isFeatureAllowance(&stored) {
+			if err := s.checkFeatureAllowanceAgainstSubscriptionGrants(txCtx, existing, nil); err != nil {
+				return err
+			}
 		}
 
 		updated, err := s.EntitlementRepo.Update(txCtx, existing)
@@ -1145,4 +1143,28 @@ func (s *entitlementService) entitlementAlertsEnabled(ctx context.Context) (bool
 		return false, err
 	}
 	return cfg.IsAlertEnabled(), nil
+}
+
+// checkFeatureAllowanceAgainstSubscriptionGrants refuses a feature allowance that would reach a
+// subscription with a subscription grant, directly or through its plan or addon.
+func (s *entitlementService) checkFeatureAllowanceAgainstSubscriptionGrants(ctx context.Context, e *entitlement.Entitlement, owner any) error {
+	if !isFeatureAllowance(e) {
+		return nil
+	}
+	guard := newSubscriptionGrantGuard(s.ServiceParams)
+	change := subscriptionGrantChange{entitlements: []*entitlement.Entitlement{e}}
+	switch e.EntityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		sub, ok := owner.(*subscription.Subscription)
+		if !ok || sub == nil {
+			var err error
+			if sub, err = s.SubRepo.Get(ctx, e.EntityID); err != nil {
+				return err
+			}
+		}
+		return guard.checkIfGranted(ctx, sub, change)
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		return guard.checkCatalogChange(ctx, e.EntityType, e.EntityID, func(*subscription.Subscription) subscriptionGrantChange { return change })
+	}
+	return nil
 }

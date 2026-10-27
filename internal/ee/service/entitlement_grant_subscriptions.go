@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -76,9 +77,10 @@ func isFeatureAllowance(e *entitlement.Entitlement) bool {
 }
 
 // subscriptionGrantChange is a write about to land on a subscription: line items it adds or
-// replaces and entitlements it adds.
+// replaces, prices not stored yet, and entitlements it adds.
 type subscriptionGrantChange struct {
 	items        []*subscription.SubscriptionLineItem
+	prices       []*priceDomain.Price
 	entitlements []*entitlement.Entitlement
 }
 
@@ -92,6 +94,10 @@ func newSubscriptionGrantGuard(params ServiceParams) *subscriptionGrantGuard {
 
 // hasSubscriptionGrant reports whether the subscription has a published subscription grant.
 func (g *subscriptionGrantGuard) hasSubscriptionGrant(ctx context.Context, subID string) (bool, error) {
+	// Partially wired test services have no entitlement store, and so no subscription grants.
+	if g.EntitlementRepo == nil {
+		return false, nil
+	}
 	filter := types.NewNoLimitEntitlementFilter().
 		WithEntityIDs([]string{subID}).
 		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
@@ -178,7 +184,7 @@ func (g *subscriptionGrantGuard) load(ctx context.Context, sub *subscription.Sub
 	if err != nil {
 		return subscriptionGrantState{}, err
 	}
-	priceByID := lo.KeyBy(prices, func(p *priceDomain.Price) string { return p.ID })
+	priceByID := lo.KeyBy(append(prices, change.prices...), func(p *priceDomain.Price) string { return p.ID })
 	meters, err := g.MeterRepo.ListByIDs(ctx, meterIDs)
 	if err != nil {
 		return subscriptionGrantState{}, err
@@ -295,6 +301,100 @@ func (s *entitlementService) subscriptionGrantConfigs(ctx context.Context, subID
 		WithStatus(types.StatusPublished)
 	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{types.EntitlementGrantScopeSubscription}
 	return s.EntitlementRepo.List(ctx, filter)
+}
+
+// checkCatalogChange refuses a plan or addon change that would break the subscription grant on any
+// subscription using that plan or addon. change builds the write as it lands on one subscription.
+func (g *subscriptionGrantGuard) checkCatalogChange(
+	ctx context.Context,
+	entityType types.EntitlementEntityType,
+	entityID string,
+	change func(sub *subscription.Subscription) subscriptionGrantChange,
+) error {
+	subs, err := g.grantedSubscriptions(ctx, entityType, entityID)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		if err := g.check(ctx, sub, change(sub)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// grantedSubscriptions returns the live subscriptions with a subscription grant that use the plan or addon.
+func (g *subscriptionGrantGuard) grantedSubscriptions(ctx context.Context, entityType types.EntitlementEntityType, entityID string) ([]*subscription.Subscription, error) {
+	if g.EntitlementRepo == nil {
+		return nil, nil
+	}
+	filter := types.NewNoLimitEntitlementFilter().
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION).
+		WithStatus(types.StatusPublished)
+	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{types.EntitlementGrantScopeSubscription}
+	ecs, err := g.EntitlementRepo.List(ctx, filter)
+	if err != nil || len(ecs) == 0 {
+		return nil, err
+	}
+	subIDs := lo.Uniq(lo.Map(ecs, func(ec *entitlement.Entitlement, _ int) string { return ec.EntityID }))
+
+	if entityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+		assocFilter := types.NewNoLimitAddonAssociationFilter()
+		assocFilter.AddonIDs = []string{entityID}
+		assocFilter.EntityIDs = subIDs
+		assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+		assocs, err := g.AddonAssociationRepo.List(ctx, assocFilter)
+		if err != nil {
+			return nil, err
+		}
+		subIDs = lo.Uniq(lo.Map(assocs, func(a *addonassociation.AddonAssociation, _ int) string { return a.EntityID }))
+		if len(subIDs) == 0 {
+			return nil, nil
+		}
+	}
+
+	subFilter := types.NewNoLimitSubscriptionFilter()
+	subFilter.SubscriptionIDs = subIDs
+	subFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusDraft,
+	}
+	if entityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		subFilter.PlanID = entityID
+	}
+	return g.SubRepo.List(ctx, subFilter)
+}
+
+// priceChange is how a new plan or addon price lands on a subscription: one line, or nothing when the
+// price's cadence or currency keeps it off that subscription.
+func priceChange(p *priceDomain.Price) func(sub *subscription.Subscription) subscriptionGrantChange {
+	return func(sub *subscription.Subscription) subscriptionGrantChange {
+		candidates := []*dto.PriceResponse{{Price: p}}
+		lands := filterValidPricesForSubscription(candidates, sub, nil)
+		if p.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
+			lands = filterAddonPricesForSubscription(candidates, sub)
+		}
+		if len(lands) == 0 {
+			return subscriptionGrantChange{}
+		}
+		return subscriptionGrantChange{
+			items:  []*subscription.SubscriptionLineItem{pendingLineFromPrice(sub, p)},
+			prices: []*priceDomain.Price{p},
+		}
+	}
+}
+
+func pendingLineFromPrice(sub *subscription.Subscription, p *priceDomain.Price) *subscription.SubscriptionLineItem {
+	return &subscription.SubscriptionLineItem{
+		ID:                 "pending_" + p.ID,
+		SubscriptionID:     sub.ID,
+		PriceID:            p.ID,
+		PriceType:          p.Type,
+		MeterID:            p.MeterID,
+		BillingPeriod:      p.BillingPeriod,
+		BillingPeriodCount: p.BillingPeriodCount,
+	}
 }
 
 // updateSubscriptionGrant changes a subscription grant's quota. The live window closes and a successor

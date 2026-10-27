@@ -113,6 +113,13 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
+	if p.Type == types.PRICE_TYPE_USAGE && (p.EntityType == types.PRICE_ENTITY_TYPE_PLAN || p.EntityType == types.PRICE_ENTITY_TYPE_ADDON) {
+		owner := lo.Ternary(p.EntityType == types.PRICE_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_ADDON)
+		if err := newSubscriptionGrantGuard(s.ServiceParams).checkCatalogChange(ctx, owner, p.EntityID, priceChange(p)); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}

@@ -450,9 +450,11 @@ type SubscriptionCreationConfig struct {
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
-	OverrideLineItems    []OverrideLineItemRequest       `json:"override_line_items,omitempty" validate:"omitempty,dive"`
-	OverrideEntitlements []OverrideEntitlementRequest    `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
-	Addons               []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
+	OverrideLineItems    []OverrideLineItemRequest    `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+	OverrideEntitlements []OverrideEntitlementRequest `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
+	// SubscriptionGrants are dollar allowances shared by every usage line, created with the subscription.
+	SubscriptionGrants []CreateSubscriptionGrantRequest `json:"subscription_grants,omitempty" validate:"omitempty,dive"`
+	Addons             []AddAddonToSubscriptionRequest  `json:"addons,omitempty" validate:"omitempty,dive"`
 	// LineItems are extra (non-plan) line items added at creation.
 	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
 	Phases    []SubscriptionPhaseCreateRequest    `json:"phases,omitempty" validate:"omitempty,dive"`
@@ -1685,6 +1687,29 @@ type OverrideLineItemRequest struct {
 }
 
 // OverrideEntitlementRequest allows overriding entitlement values for a subscription
+// CreateSubscriptionGrantRequest is a subscription grant created together with its subscription.
+type CreateSubscriptionGrantRequest struct {
+	GrantQuota              *decimal.Decimal                         `json:"grant_quota" swaggertype:"string" validate:"required"`
+	GrantDurationUnit       types.EntitlementGrantDurationUnit       `json:"grant_duration_unit" validate:"required"`
+	GrantDurationValue      *int                                     `json:"grant_duration_value,omitempty"`
+	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
+	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+}
+
+// ToCreateEntitlementRequest is the POST /entitlements request for this grant on the subscription.
+func (r CreateSubscriptionGrantRequest) ToCreateEntitlementRequest(subscriptionID string) CreateEntitlementRequest {
+	return CreateEntitlementRequest{
+		EntityType:              types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:                subscriptionID,
+		GrantMeasure:            types.EntitlementGrantMeasureAmount,
+		GrantQuota:              r.GrantQuota,
+		GrantDurationUnit:       r.GrantDurationUnit,
+		GrantDurationValue:      r.GrantDurationValue,
+		GrantAllocationBehavior: r.GrantAllocationBehavior,
+		AggregationMode:         r.AggregationMode,
+	}
+}
+
 type OverrideEntitlementRequest struct {
 	// EntitlementID references the plan/addon entitlement to override
 	EntitlementID string `json:"entitlement_id" validate:"required"`
