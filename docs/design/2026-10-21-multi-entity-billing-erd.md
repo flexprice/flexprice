@@ -28,7 +28,7 @@ that sells to them.
 
 | Phase | Goal | Visible to |
 | --- | --- | --- |
-| 0. Foundation | Schema, tenant switch, entity filter and response field, enablement backfill. No behaviour change | Nobody |
+| 0. Foundation | Schema, tenant switch, entity filter and response field, enable endpoint. No behaviour change | Nobody |
 | 1. Invoices per entity (Goal 1) | Invoices carry the issuing entity's seller details, numbering and tax | Internal tenants, design partners |
 | 2. Payments per entity (Goal 2) | Each entity has its own gateway and accounting connections; payments, webhooks and refunds use the entity's account | All tenants |
 
@@ -36,10 +36,13 @@ Phase 1 stays internal: a second entity must never collect money through the fir
 
 Non-goals for this release:
 
-- Moving an existing customer to another entity.
+- Moving an existing customer or connection to another entity. Everything that exists at enablement
+  stays with the default entity.
 - One customer billed by more than one entity (see §13, open question 1).
+- Changing which entity is the default.
 - Entity-level user permissions.
 - An all-entities reporting view.
+- An entity filter on exports and scheduled tasks.
 - Any change to usage events or metering.
 
 ## 3. Concepts and scope
@@ -52,7 +55,7 @@ and production use different gateway accounts.
 flowchart TD
   T["Acme (tenant) · multi-entity enabled"] --> E[Production environment]
   E --> C["Shared catalog<br/>plans, prices, meters, coupons"]
-  E --> US["Acme Inc.<br/>US seller, tax, series, Stripe US"]
+  E --> US["Acme Inc. (default)<br/>US seller, tax, series, Stripe US"]
   E --> IN["Acme India Pvt. Ltd.<br/>India seller, tax, series, Razorpay"]
   US --> UC[US customers → subscriptions, invoices, wallets]
   IN --> IC[Indian customers → subscriptions, invoices, wallets]
@@ -65,7 +68,11 @@ flowchart TD
 | Environment (shared) | Products, plans, prices, meters, features, add-ons, coupons and their redemption caps, credit rules, invoice template and branding |
 | Billing entity | Seller identity, tax setup, invoice numbering, gateway and accounting connections, customers |
 | Customer's records | Subscriptions, invoices, credit notes, wallets, credits, payments, refunds — belong to the customer's entity, derived through the customer |
-| Issued record | A finalized invoice freezes its seller details and entity; a payment keeps the exact gateway account it used |
+| Issued record | A finalized invoice freezes its seller details and entity |
+
+The **default entity** is the one created in each environment when the tenant enables the feature. It
+owns everything that existed before enablement, receives creates that name no entity, and can never be
+changed or disabled.
 
 **Decided: entities are scoped at customer level.** The customer decides the entity; everything created
 for the customer belongs to it and can never change it. Customer `external_id` stays unique per
@@ -79,21 +86,25 @@ entities an invoicing concern and leaves ingestion and aggregation untouched.
 
 ## 4. Invariants
 
-1. **Off means unchanged.** For a tenant with the feature off, every SQL query, cache key, webhook route
-   and API response behaves as today (responses only gain a `billing_entity_id` that stays null).
+1. **Off means unchanged behaviour.** For a tenant with the feature off, every API response, webhook
+   route and invoice behaves as today (responses only gain a `billing_entity_id` that stays null).
+   Internal SQL may change where the schema requires it (§11).
 2. **No entity field, no break.** API calls that send no `billing_entity_id` work in both modes. When
    enabled, customer and connection creates use the default entity and lists span all entities.
 3. **The customer decides the entity.** Only `customers` and `connections` store `billing_entity_id`,
-   and it is immutable. Every other record derives its entity through its customer or invoice.
+   and it is immutable. NULL means the default entity. Every other record derives its entity through its
+   customer or invoice.
 4. **One record, one entity.** No invoice, grouped or delegated invoice, wallet debit or tax application
    mixes entities.
 5. **Catalog is shared.** Plans, prices, meters, features, add-ons and coupons carry no entity.
-6. **Money follows the entity.** A payment or refund uses a connection owned by the invoice's entity and
-   records the exact `connection_id`. No fallback to another entity's connection.
+6. **Money follows the entity.** A payment or refund uses the connection that its derived entity owns
+   for that provider. An enabled tenant's gateway call with no entity errors; it never falls back to
+   another entity's connection.
 7. **Issued documents are frozen.** Invoice numbers, amounts and finalized seller details (including the
    entity id) never change.
-8. **Irreversible switch.** `off → enabling → enabled`. Only a failed `enabling` returns to `off`.
-9. **Usage events stay as they are.** No change to ingestion or ClickHouse schemas.
+8. **Irreversible switch.** `off → enabled`, never back.
+9. **Fixed default.** The default entity is created at enablement and can never be changed or disabled.
+10. **Usage events stay as they are.** No change to ingestion or ClickHouse schemas.
 
 ## 5. Tenant opt-in
 
@@ -104,18 +115,13 @@ API). Tenants that never enable it keep today's behaviour permanently.
 ```mermaid
 stateDiagram-v2
   [*] --> off
-  off --> enabling: admin enables (irreversible)
-  enabling --> enabled: every environment reconciles
-  enabling --> off: backfill fails, nothing visible changed
+  off --> enabled: admin enables (irreversible)
   note right of off
     billing_entity_id stays NULL.
     Entity filter and body field rejected.
   end note
-  note right of enabling
-    New customers and connections stamped with the default entity.
-    Backfill runs; field still null in responses.
-  end note
   note right of enabled
+    Default entity per environment; NULL rows belong to it.
     Creates take the body entity, else default.
     Lists accept the entity filter; switcher in dashboard.
   end note
@@ -128,10 +134,10 @@ stateDiagram-v2
 | API with `billing_entity_id` (filter or body) | 400: no entities exist | Acts on that entity after env check |
 | Request bodies | Unchanged | Customer and connection create gain optional `billing_entity_id` |
 | Responses | `+ billing_entity_id` (null) | `+ billing_entity_id` |
-| Existing webhook URLs | Unchanged | Resolve to default entity's connection |
+| Seller details | Tenant billing details | Maintained per entity under Entities; tenant billing details keep only self-billing |
+| Existing webhook URLs | Unchanged | Serve the default entity's connection |
 
 Enabling with only the default entity changes nothing a customer or API client can observe.
-Environments created after enablement get a default entity at creation.
 
 ## 6. Flows: before and after enablement
 
@@ -165,17 +171,18 @@ flowchart TB
 | Usage events, attribution, analytics, alerts | By `external_customer_id` | Unchanged; entity derived through the customer |
 | Generate invoice (subscription, one-off, credit purchase) | Same calculation order | Unchanged calculation; invoice belongs to the customer's entity |
 | Grouped / consolidated invoice | Any customers | All participants share one entity |
-| Invoice number | One sequence per env | Default entity continues the existing sequence; each other entity has its own sequence and a required distinct prefix |
-| Seller on invoice and PDF | Tenant billing details | Issuing entity's details, frozen at finalization |
+| Invoice number | One sequence per env | Default entity continues the existing sequence; each other entity has its own sequence and a distinct prefix |
+| Seller on invoice, PDF and hosted page | Tenant billing details | Customer's entity's details; frozen into `seller_snapshot` at finalization |
 | Tax | Tenant → customer → subscription | Entity → customer → subscription |
 | Wallets, credit grants, top-ups | Per customer | Per customer, so per entity; balances never cross entities |
 | Coupons | Per env | Per env; redemption caps count across entities |
-| Gateway connections (Phase 2) | One per provider per env | Each connection belongs to an entity |
-| Auto-charge, checkout, payment links (Phase 2) | Env's connection | Invoice entity's connection |
+| Gateway connections (Phase 2) | One per provider per env | One per provider per entity |
+| Auto-charge, checkout, payment links (Phase 2) | Env's connection | The customer's entity's connection |
 | Gateway webhooks (Phase 2) | One URL per provider per env | One URL per connection; existing URLs serve the default entity |
-| Refunds (Phase 2) | Provider connection | The exact connection the payment used |
+| Refunds (Phase 2) | Provider connection | The payment's entity's connection for that provider |
 | Accounting / CRM sync (Phase 2) | One connection per provider | Per entity connection |
-| Lists, exports, basic reports | Whole env | Whole env; optional `billing_entity_id` filter narrows to one entity |
+| Lists, basic reports | Whole env | Whole env; optional `billing_entity_id` filter narrows to one entity |
+| Exports, scheduled tasks | Whole env | Unchanged: whole env, no entity filter |
 | Get record by ID | Works | Works for any entity; response shows its entity |
 | Environment clone | Catalog and settings | Also entity profiles; connections not copied |
 
@@ -197,11 +204,11 @@ erDiagram
   CUSTOMER ||--o{ INVOICE : receives
   INVOICE ||--o{ CREDIT_NOTE : adjusts
   INVOICE ||--o{ PAYMENT : collects
-  CONNECTION ||--o{ PAYMENT : processes
   PAYMENT ||--o{ REFUND : reverses
+  CONNECTION ||--o{ ENTITY_INTEGRATION_MAPPING : maps
 
   TENANT {
-    string billing_entity_mode "new: off, enabling, enabled"
+    string billing_entity_mode "new: off, enabled"
   }
   BILLING_ENTITY {
     string id PK
@@ -215,23 +222,23 @@ erDiagram
     string invoice_number_prefix
   }
   CUSTOMER {
-    string billing_entity_id "new"
+    string billing_entity_id "new, NULL = default"
   }
   CONNECTION {
-    string billing_entity_id "new"
+    string billing_entity_id "new, NULL = default"
   }
   INVOICE {
     jsonb seller_snapshot "new"
   }
-  PAYMENT {
-    string connection_id "new"
+  INVOICE_SEQUENCE {
+    string billing_entity_id "new, '' = default"
   }
-  REFUND {
-    string connection_id "new"
+  ENTITY_INTEGRATION_MAPPING {
+    string connection_id "new (Phase 2), '' = default"
   }
 ```
 
-All changes are additive and nullable. Off tenants keep `NULL` everywhere and never read the new columns.
+All changes are additive. Existing rows keep their current values and need no backfill.
 
 ### 7.1 New table `billing_entities`
 
@@ -242,11 +249,13 @@ All changes are additive and nullable. Off tenants keep `NULL` everywhere and ne
 | `id` | varchar(50) | Prefix `be_` |
 | `name` | varchar(255) | Display name in the switcher |
 | `legal_name` | varchar(255) | Seller name on invoices |
-| `is_default` | bool | Partial unique index `(tenant_id, environment_id) WHERE is_default AND status='published'` |
-| `entity_status` | varchar(20) | `active` / `disabled` |
-| `seller_details` | jsonb | Same shape as `TenantBillingDetails` |
+| `is_default` | bool | Set at enablement, never moves. Partial unique index `(tenant_id, environment_id) WHERE is_default AND status='published'` |
+| `entity_status` | varchar(20) | `active` / `disabled`; the default entity is always `active` |
+| `seller_details` | jsonb | Same shape as `TenantBillingDetails`; the default entity's copy is taken from the tenant's billing details at enablement |
 | `tax_identifiers` | jsonb | Seller tax IDs printed on invoices |
-| `invoice_number_prefix` | varchar(20), nullable | Required for non-default entities; unique among the environment's entities and different from the env prefix; NULL = env `invoice_config` prefix |
+| `invoice_number_prefix` | varchar(20), nullable | Required for non-default entities; NULL = env `invoice_config` prefix. Editable; on create and edit it must differ from the other entities' prefixes and from the env prefix |
+
+Editing the env `invoice_config` prefix is rejected if an entity uses that prefix.
 
 ### 7.2 Tenant mode
 
@@ -254,13 +263,17 @@ All changes are additive and nullable. Off tenants keep `NULL` everywhere and ne
 
 ### 7.3 `billing_entity_id` on customers and connections
 
-Nullable `varchar(50)`, immutable once set. Index `(tenant_id, environment_id, billing_entity_id, …)`
-matching each table's main list index, built `CONCURRENTLY`.
+Nullable `varchar(50)`, immutable once written. NULL means the default entity, for rows created before
+and after enablement alike. Index `(tenant_id, environment_id, billing_entity_id, …)` matching each
+table's main list index, built `CONCURRENTLY`.
 
-| Table | Value comes from |
+| Table | Value on create |
 | --- | --- |
-| `customers` | Body `billing_entity_id` on create, else the default entity |
-| `connections` | Body `billing_entity_id` on create, else the default entity |
+| `customers` | Body `billing_entity_id`; absent or the default's ID stores NULL |
+| `connections` | Body `billing_entity_id`; absent or the default's ID stores NULL |
+
+The connection duplicate check widens from one published connection per provider per environment to one
+per provider per entity, still excluding S3 and GCS.
 
 ### 7.4 Derived entity
 
@@ -280,6 +293,9 @@ tokens.
 
 Derivation reads customers in any status, so records of deleted or archived customers keep their entity.
 
+A record's connection is derived the same way: its entity's connection for the record's provider
+(`payment_gateway` on payments). Payments and refunds store no `connection_id`.
+
 An entity column on invoices is added only if invoices can belong to a different entity than their
 customer, customer reassignment becomes supported, or measured query performance needs it. If
 reassignment is introduced, invoice entity ids are populated before customers may move.
@@ -288,23 +304,33 @@ reassignment is introduced, invoice entity ids are populated before customers ma
 
 | Table | Change | Why |
 | --- | --- | --- |
-| `invoices` | Add `seller_snapshot` jsonb, set at finalization: entity id, seller details, tax IDs | Issued invoices keep their seller and issuing entity; historical rows stay NULL and render from the current source |
+| `invoices` | Add `seller_snapshot` jsonb for enabled tenants: entity id, seller details, tax IDs | Issued invoices keep their seller and issuing entity |
 | `invoice_sequences` | Add `billing_entity_id` NOT NULL default `''`; unique key `(tenant_id, environment_id, billing_entity_id, year_month)` | Default entity keeps writing the `''` row so its sequence continues; `ON CONFLICT` works without `NULLS NOT DISTINCT` |
 | `invoices` unique `(tenant_id, environment_id, invoice_number)` | Keep | Distinct prefix per entity prevents collisions without rebuilding a hot index |
-| `entity_integration_mappings` | Add `connection_id`; add it to the unique key | A shared plan or price can map to two Stripe accounts |
-| `payments`, `refunds` | Add `connection_id` | Refunds and webhooks resolve the original account |
+| `entity_integration_mappings` (Phase 2) | Add `connection_id` NOT NULL default `''`; add it to the unique key; written on every new row | A shared plan or price maps to one external id per provider account; `''` = default entity's connection |
 | `tax_associations` | New `entity_type = billing_entity` | Entity-level tax defaults; tenant-level rows are treated as the default entity's |
 
-**Invoice numbering (decided).** Each entity gets its own counter and a required distinct prefix. The
-counter's entity is read from the invoice's customer at finalization. Without the distinct prefix, two
-entities with separate counters would both produce e.g. `INV-202610-00001` and the second would fail the
-unique index.
+**Invoice numbering (decided).** Each entity gets its own counter and a distinct prefix. The counter's
+entity is read from the invoice's customer at finalization. Without the distinct prefix, two entities
+with separate counters would both produce e.g. `INV-202610-00001` and the second would fail the unique
+index.
+
+**Seller snapshot.** For enabled tenants:
+
+1. Written in the same transaction as finalization, so no finalized invoice exists without one.
+2. Written only if empty; a finalization retry never overwrites it.
+3. Every PDF and hosted page of a finalized invoice reads the seller from it, including forced rebuilds.
+   Drafts read the customer's entity.
+4. Invoices finalized before enablement have no snapshot; their stored PDF stays as it is, and a forced
+   rebuild uses the default entity's details.
+
+Off tenants keep reading the tenant's billing details, as today.
 
 ## 8. API design
 
 ### 8.1 Entity selection
 
-The entity is passed as request data, never as a header or request context.
+The entity is passed as request data, never as a header.
 
 | Request | Entity comes from |
 | --- | --- |
@@ -316,7 +342,6 @@ The entity is passed as request data, never as a header or request context.
 | Tenant mode | `billing_entity_id` absent | `billing_entity_id` present |
 | --- | --- | --- |
 | `off` | Same as today | 400 `billing_entities_not_enabled`: no entities exist |
-| `enabling` | Same as today; new customers and connections stamped with the default entity | 400 `billing_entities_not_enabled`: entities not usable until enabled |
 | `enabled` | Creates use the default entity; lists span all entities | That entity, after checking it belongs to the env and is active (disabled: reads only) |
 
 Tenant mode comes from a cached tenant lookup.
@@ -325,18 +350,18 @@ Tenant mode comes from a cached tenant lookup.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/v1/tenants/billing-entities/enable` | Tenant admin only. Body: default entity profile. Starts the enablement workflow, returns `enabling` |
-| `GET` | `/v1/tenants/billing-entities/status` | Mode and per-environment progress |
+| `POST` | `/v1/tenants/billing-entities/enable` | Tenant admin only. Body: default entity profile. Enables in one transaction (§11), returns `enabled` |
+| `GET` | `/v1/tenants/billing-entities/status` | Current mode |
 | `GET` / `POST` | `/v1/billing-entities` | List / create in the current environment. Requires `enabled` |
 | `GET` / `PUT` | `/v1/billing-entities/:id` | Read / edit profile; edits apply to future invoices |
-| `POST` | `/v1/billing-entities/:id/disable` | Refused while active subscriptions or draft invoices exist |
+| `POST` | `/v1/billing-entities/:id/disable` | Non-default entities only; refused while active subscriptions or draft invoices exist. A disabled entity takes no new customers or connections; its invoices can still be paid and refunded and its webhooks still arrive |
 | `POST` | `/v1/webhooks/{provider}/:tenant_id/:environment_id/:connection_id` | Connection-scoped webhook routes (Phase 2) |
 
 ### 8.3 Changes to existing endpoints
 
 - Responses gain `billing_entity_id` on top-level billing resources, in Get, List and webhook payloads
-  alike. Additive, SDK-compatible. Null until the tenant is `enabled`. ID only; names and profiles come
-  from `/v1/billing-entities`.
+  alike. Additive, SDK-compatible. Null until the tenant is `enabled`; afterwards a stored NULL is
+  returned as the default entity's ID. ID only; names and profiles come from `/v1/billing-entities`.
 
 | Resource | `billing_entity_id` in response |
 | --- | --- |
@@ -348,28 +373,30 @@ Tenant mode comes from a cached tenant lookup.
 - Customer and connection create bodies gain optional `billing_entity_id`. No other request body changes.
 - List and search filters gain optional `billing_entity_id`.
 - Duplicate provider connections are allowed across entities, not within one.
-- Existing `/v1/webhooks/{provider}/:tenant_id/:environment_id` routes resolve to the default entity's
+- Existing `/v1/webhooks/{provider}/:tenant_id/:environment_id` routes serve the default entity's
   connection.
 
 ## 9. Repository filtering and responses
 
-The `billing_entity_id` filter adds a predicate only when set. It is rejected unless the tenant is
-`enabled`, so off tenants run identical SQL.
+The `billing_entity_id` filter adds a predicate only when set, and is rejected unless the tenant is
+`enabled`.
 
 | Records | Filter predicate |
 | --- | --- |
-| Customers, connections | `billing_entity_id = ?` |
+| Customers, connections | Default entity: `billing_entity_id IS NULL`; other: `billing_entity_id = ?` |
 | Invoices, subscriptions, wallets, credit notes | `customer_id` in the entity's customers |
 | Refunds | `invoice_id` in the entity's invoices |
 | Payments | By `destination_type`: the entity's invoices or customers |
 
 | Operation | Rule |
 | --- | --- |
-| Create customer or connection | Stamp the body entity, else the default entity |
+| Create customer or connection | Store the body entity; the default entity is stored as NULL |
 | Create of other records | Nothing stored; same-entity checks where two customers meet (delegated, grouped invoices) |
 | Get / update / delete by ID | No entity filter; response shows `billing_entity_id` |
 | Lookup by `external_customer_id` | Environment-scoped, as today |
 | Catalog tables | Never filtered by entity |
+
+One shared filter helper is the only way to filter by entity, so the NULL rule lives in one place.
 
 Derived `billing_entity_id` in responses is filled by the service with one batch lookup per page (two for
 payments), never one lookup per row.
@@ -379,26 +406,41 @@ the same keys.
 
 ## 10. Background paths and integrations
 
-Background work has no request entity. Before any step that issues, prices, taxes or collects, it reads
-the entity from the record's customer. Temporal payloads need no change; activities re-read the record,
-so retries never replay a stale entity.
+**Connection resolution.** Before any gateway or integration call, the service reads the entity from
+the record and puts it in `ctx` (like the environment ID today). `GetByProvider(ctx, p)` keeps its
+signature and reads that entity.
 
-| Path | Entity source |
-| --- | --- |
-| Billing / renewal workflows | Subscription's customer |
-| Invoice finalize, number, PDF | Invoice's customer; frozen into `seller_snapshot` at finalization |
-| Provider sync workflows | Record's entity → its connection (optional `connection_id` in new payloads) |
-| Kafka event consumers | Not needed |
-| Customer created from a gateway webhook | The connection's entity |
-| Onboarding, environment clone | Default entity; clone copies entity profiles, not connections |
+| Tenant | Entity in `ctx` | `GetByProvider` returns |
+| --- | --- | --- |
+| Off | — | First published connection, as today |
+| Enabled | Set | That entity's connection; error if it has none |
+| Enabled | Missing | Error; never the default entity's connection |
+
+The entity is never read from the request. Legacy webhook routes set the default entity; connection-scoped
+routes set the connection's entity. A connection's provider account never changes once used (credential
+rotation is fine; another account means a new connection), and retired connections stay readable by ID
+for refunds and late webhooks.
+
+| Job | Entity source | Payload change |
+| --- | --- | --- |
+| Billing, renewal, invoice and subscription workflows | Activity re-reads the record and sets its customer's entity | No |
+| Invoice finalize, number, PDF | Invoice's customer; frozen into `seller_snapshot` at finalization | No |
+| Customer and invoice provider syncs | Record's customer's entity → its connection | No |
+| Catalog syncs (`price_sync`, `price_sync_v2`, `addon_price_sync`, `quickbooks_price_sync`) | Phase 1: the default entity's connection. Phase 2: one run per connection | Phase 2: `connection_id` |
+| Exports, scheduled tasks | None; whole environment | No |
+| Kafka event consumers, usage alerts | Not needed | No |
+| Customer created from a gateway webhook | The connection's entity | No |
+| Onboarding, environment clone | Default entity; clone copies entity profiles, not connections | No |
+
+Activities re-read the record, so retries never replay a stale entity.
 
 ```mermaid
 flowchart TB
   subgraph Outbound
     direction LR
-    I[Invoice to collect] --> F{Connection for provider + invoice entity?}
-    F -- found --> C[Charge that account, save connection_id]
-    F -- none --> G[Manual payment only: Phase 1 guard, never fall back]
+    I[Invoice to collect] --> F{Connection for provider + customer's entity?}
+    F -- found --> C[Charge that account]
+    F -- none --> G[Error: manual payment only, never fall back]
   end
   subgraph Inbound
     direction LR
@@ -410,37 +452,36 @@ flowchart TB
   style Inbound fill:none,stroke:#94a3b8
 ```
 
-| Method | Use |
-| --- | --- |
-| `GetByProvider(ctx, p)` | Same signature; for enabled tenants resolves to the default entity's connection |
-| `GetByProviderForEntity(ctx, p, entityID)` | New; entity comes from a record |
-| `Get(ctx, connectionID)` | Refunds, webhooks, retries that already know the account |
-
-Catalog sync writes one `entity_integration_mappings` row per connection.
+Catalog sync writes one `entity_integration_mappings` row per connection (Phase 2).
 
 ## 11. Enablement and migration
 
-One Temporal workflow per tenant; tenants that stay off are never migrated.
+The enable endpoint runs one database transaction; tenants that stay off are never touched.
 
 ```mermaid
 flowchart LR
-  A[Admin enables in Tenant Settings] --> B[Mode = enabling; new customers and connections stamped]
-  B --> C[Create default entity per env from tenant billing details]
-  C --> D[Backfill customers and connections in batches]
-  D --> E[Reconcile counts, totals, sequence heads]
-  E --> F{All envs pass?}
-  F -- yes --> G[Mode = enabled; switcher appears]
-  F -- no --> H[Mode = off; stamped rows harmless]
+  A[Admin enables in Tenant Settings] --> B[Per environment: create default entity, seller details copied from tenant billing details]
+  B --> C[Mode = enabled]
+  C --> D[Clear tenant cache; switcher appears]
 ```
 
-Backfill order (`WHERE tenant_id = ? AND environment_id = ? AND billing_entity_id IS NULL`, batches of
-1,000, idempotent): `connections` → `customers` → `payments`, `refunds` (set `connection_id`) →
-`entity_integration_mappings` (set `connection_id`). `invoice_sequences` needs no backfill.
+- **No backfill.** Existing customers and connections stay NULL, which means the default entity.
+- **Stale caches are harmless.** A pod that still sees `off` for up to 2 minutes (in-memory tenant cache)
+  only rejects the entity filter and body field; NULL rows mean the default entity in both modes.
+- **Environments created at the same moment.** Looking up the default entity creates it if missing; the
+  partial unique index on `is_default` makes concurrent creates safe. Environments created after
+  enablement get their default entity at creation.
 
-Reconciliation per environment: zero NULL customers and connections; row counts unchanged; invoice
-totals, amounts paid and wallet balances unchanged; every invoice sequence head unchanged.
+**`invoice_sequences` rollout** (Phase 1), so the `ON CONFLICT` target always matches a unique index:
 
-Deploy order: columns and concurrent indexes first, code that reads them second, enablement API last.
+1. Migration: add `billing_entity_id` NOT NULL default `''` and the new unique index
+   `(tenant_id, environment_id, billing_entity_id, year_month)` beside the old one.
+2. Deploy: the SQL uses `ON CONFLICT (tenant_id, environment_id, billing_entity_id, year_month)` and
+   always passes the entity (`''` for off tenants and the default entity).
+3. Migration: drop the old unique index. While both exist only `''` rows exist, so they never disagree.
+
+Deploy order for the other columns: columns and concurrent indexes first, code that reads them second,
+enable endpoint last.
 
 ### 11.1 Code touchpoints and PR plan
 
@@ -449,9 +490,10 @@ Deploy order: columns and concurrent indexes first, code that reads them second,
 | Filters | List filter types for customers, connections, invoices, subscriptions, wallets, credit notes, payments, refunds | Optional `billing_entity_id` and its predicate (§9) |
 | Requests | Customer and connection create DTOs | Optional `billing_entity_id` |
 | Responses | Service response builders and webhook payloads | Batch-fill derived `billing_entity_id` |
-| Connections | `internal/repository/ent/connection.go` + 58 `GetByProvider` call sites | Entity-aware lookup; explicit entity or connection |
+| Connections | `internal/repository/ent/connection.go`, `internal/ee/service/connection.go` | `GetByProvider` reads the `ctx` entity; duplicate check per entity |
+| Context | `internal/types/context.go` + service entry points (collect, sync, refund, checkout) | Set the record's entity in `ctx` |
 | Numbering | `internal/repository/ent/invoice.go` `GetNextInvoiceNumber` | Entity in sequence key and prefix |
-| Seller, tax | `internal/ee/service/invoice.go` `getBillerInfo`, `internal/types/taxassociation.go`, `internal/ee/service/customer.go` | Snapshot; `billing_entity` tax level |
+| Seller, tax | `internal/ee/service/invoice.go` `getBillerInfo`, `internal/ee/service/hosted_invoice.go`, `internal/types/taxassociation.go`, `internal/ee/service/customer.go` | Snapshot; `billing_entity` tax level |
 | Webhooks | `internal/api/router.go`, `internal/api/v1/webhook.go` | Connection-scoped routes |
 | Mappings | `ent/schema/entityintegrationmapping.go` | `connection_id` in unique key |
 
@@ -459,11 +501,11 @@ Deploy order: columns and concurrent indexes first, code that reads them second,
 | --- | --- |
 | 0 | Schema: `billing_entities`, `tenants.billing_entity_mode`, customer and connection columns, concurrent indexes |
 | 0 | Mode checks, entity filter, create body field, derived response field |
-| 0 | Enablement workflow, reconciliation, enable/status API |
-| 1 | Entity CRUD, same-entity checks |
-| 1 | Per-entity numbering, seller snapshot, PDF, tax level |
-| 1 | Connection filter guard and fail-safe audit of all `GetByProvider` call sites |
-| 2 | Multiple connections per provider, mappings, payment/refund `connection_id` |
+| 0 | Enable/status endpoints |
+| 1 | Entity CRUD, prefix checks, disable, same-entity checks |
+| 1 | Per-entity numbering (`invoice_sequences` rollout), seller snapshot, PDF and hosted page, tax level |
+| 1 | `ctx` entity at every service entry point; `GetByProvider` errors without it for enabled tenants |
+| 2 | Multiple connections per provider, mappings `connection_id`, per-connection catalog sync |
 | 2 | Connection-scoped webhooks, sync workflows, OAuth flows |
 | 1–2 | Dashboard: Tenant Settings switch, entity switcher, entity forms |
 
@@ -472,22 +514,24 @@ Deploy order: columns and concurrent indexes first, code that reads them second,
 Phase 0
 
 - [ ] Off tenants pass the full unit, integration and `integration-testing-suite` runs unchanged, including calls without `billing_entity_id`.
-- [ ] SQL snapshot test: repository queries without a `billing_entity_id` filter contain no entity predicate.
-- [ ] Enabling an internal tenant leaves every invoice number, amount, status, balance and issued PDF unchanged; a forced failure returns to off.
+- [ ] Repository queries without a `billing_entity_id` filter contain no entity predicate.
+- [ ] Filtering by the default entity returns the NULL rows.
+- [ ] Enabling an internal tenant leaves every invoice number, amount, status, balance and issued PDF unchanged.
 
 Phase 1
 
 - [ ] One environment issues invoices from two entities with different seller details, numbering and tax.
+- [ ] Off tenants' invoice numbers continue unchanged across the `invoice_sequences` rollout.
 - [ ] Cross-entity rejections: delegated invoice, grouped invoice, wallet debit, tax link.
 - [ ] Editing seller details does not change issued invoices.
-- [ ] A non-default entity cannot reach any gateway charge, checkout or sync.
+- [ ] An enabled tenant's gateway call without an entity errors; a non-default entity cannot reach any gateway charge, checkout or sync.
 
 Phase 2
 
 - [ ] Stripe for the US and Razorpay for India in one environment.
 - [ ] Two entities with separate Stripe accounts charge, receive webhooks (including out of order) and refund correctly.
 - [ ] Existing webhook URLs keep working for the default entity.
-- [ ] Old Temporal payloads replay correctly; connection cache isolation across entities.
+- [ ] One plan syncs to two Stripe accounts; connection cache isolation across entities.
 
 ## 13. Open questions
 
@@ -496,14 +540,16 @@ Phase 2
 | 1 | Can one buyer be billed under different entities? | If yes, the buyer gets a separate customer under each entity, each with its own config (external ID, billing details, tax, currency, payment methods, wallets) and its own usage stream. One customer across entities needs subscription-level entities and per-subscription usage attribution; out of scope now |
 | 2 | Accounting and CRM connectors (QuickBooks, Zoho Books, HubSpot, Tabs) in Phase 2? | Yes; each company's books stay separate |
 | 3 | Stripe Tax for non-default entities in Phase 1 | Native tax only until Phase 2 |
-| 4 | Disabling an entity with drafts or scheduled work | Block disable while drafts or active subscriptions exist |
-| 5 | All-entities reporting view | Defer; design after Phase 2 |
+| 4 | All-entities reporting view | Defer; design after Phase 2 |
 
-Decided: customer-level entities; tenant-level irreversible switch; mode on `tenants`; entity stored
-only on customers and connections, derived everywhere else; entity selected by list filters and
-customer/connection create bodies, no header; lists without a filter span all entities; responses carry
-`billing_entity_id` on top-level billing resources; get-by-ID not entity-scoped; per-entity invoice
-counter with required distinct prefix; credit notes keep their random `CN-` IDs, unchanged; no backfill needed for environments created after enablement.
+Decided: customer-level entities; tenant-level irreversible switch with no backfill; mode on `tenants`;
+one fixed default entity per environment, stored as NULL; entity stored only on customers and
+connections, derived everywhere else, including payment and refund connections; entity selected by list
+filters and customer/connection create bodies, no header; lists without a filter span all entities;
+responses carry `billing_entity_id` on top-level billing resources; get-by-ID not entity-scoped; gateway
+lookups take the entity from the record via `ctx` and error without it; per-entity invoice counter with a
+distinct prefix; credit notes keep their random `CN-` IDs, unchanged; seller snapshot for enabled tenants;
+exports unchanged; disable only for non-default entities without active subscriptions or drafts.
 
 ## 14. References
 
