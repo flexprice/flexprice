@@ -10,6 +10,7 @@ import (
 
 	cerrors "github.com/cockroachdb/errors"
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
+	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -295,8 +296,16 @@ func TestRemoveUser(t *testing.T) {
 		teammate, err := d.users.GetByEmail(ctx, "teammate@acme.com")
 		require.NoError(t, err)
 
+		key := &secret.Secret{ID: "key-1", UserID: teammate.ID, EnvironmentID: "env-1"}
+		key.TenantID = tenantID
+		key.Status = types.StatusPublished
+		require.NoError(t, d.params.SecretRepo.Create(ctx, key))
+
 		resp, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
 		require.NoError(t, err)
+		revoked, err := d.params.SecretRepo.Get(types.SetTenantID(ctx, tenantID), "key-1")
+		require.NoError(t, err)
+		assert.Equal(t, types.StatusDeleted, revoked.Status)
 		assert.Equal(t, &admindto.RemoveUserResponse{
 			UserID:   teammate.ID,
 			Email:    "teammate@acme.com",

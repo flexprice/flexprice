@@ -5,6 +5,7 @@ import (
 
 	admindto "github.com/flexprice/flexprice/internal/api/dto/admin"
 	"github.com/flexprice/flexprice/internal/auth"
+	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -74,8 +75,7 @@ func (s *userService) AddUser(ctx context.Context, req admindto.AddUserRequest) 
 	return admindto.NewUserResponse(u), nil
 }
 
-// RemoveUser removes a person from their tenant: it archives their row, then deletes their
-// Supabase login. API keys they created keep working.
+// RemoveUser archives a person, revokes their API keys, then deletes their Supabase login.
 func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserRequest) (*admindto.RemoveUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -103,6 +103,7 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 	}
 
 	ctx = types.SetTenantID(ctx, req.TenantID)
+	var revoked []*domainSecret.Secret
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Same lock as the dashboard's remove, so two removals cannot both pass the last-user check.
 		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + req.TenantID}); err != nil {
@@ -129,6 +130,10 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 				Mark(ierr.ErrValidation)
 		}
 
+		revoked, err = s.SecretRepo.RevokeByUserID(ctx, target.ID)
+		if err != nil {
+			return err
+		}
 		if err := s.UserRepo.Delete(ctx, target.ID); err != nil {
 			return err
 		}
@@ -138,6 +143,8 @@ func (s *userService) RemoveUser(ctx context.Context, req admindto.RemoveUserReq
 	if err != nil {
 		return nil, err
 	}
+	s.SecretRepo.InvalidateCache(ctx, revoked)
+	s.UserRepo.DeleteCache(ctx, target.ID)
 
 	s.Logger.Info(ctx, "removed user from tenant", "tenant_id", req.TenantID, "user_id", target.ID)
 	return admindto.NewRemoveUserResponse(target), nil

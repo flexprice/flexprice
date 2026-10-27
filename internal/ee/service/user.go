@@ -54,6 +54,7 @@ type userService struct {
 	rbacService     *rbac.RBACService
 	settingsService SettingsService
 	logger          *logger.Logger
+	newProvider     func(*config.Configuration) authProvider.Provider
 }
 
 func NewUserService(
@@ -895,8 +896,23 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	}
 
 	tenantID := existingUser.TenantID
-	provider := authProvider.NewProvider(s.cfg)
+	newProvider := s.newProvider
+	if newProvider == nil {
+		newProvider = authProvider.NewProvider
+	}
+	provider := newProvider(s.cfg)
 
+	if existingUser.Status != types.StatusPublished {
+		revoked, err := s.secretRepo.RevokeByUserID(ctx, id)
+		if err != nil {
+			return err
+		}
+		s.secretRepo.InvalidateCache(ctx, revoked)
+		s.userRepo.DeleteCache(ctx, id)
+		return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
+	}
+
+	var revoked []*domainSecret.Secret
 	err = s.db.WithTx(ctx, func(ctx context.Context) error {
 		if err := s.db.LockWithWait(ctx, postgres.LockRequest{Key: "user_removal:" + tenantID}); err != nil {
 			return ierr.WithError(err).
@@ -917,7 +933,8 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 				Mark(ierr.ErrValidation)
 		}
 
-		if err := provider.RemoveUser(ctx, id); err != nil {
+		revoked, err = s.secretRepo.RevokeByUserID(ctx, id)
+		if err != nil {
 			return err
 		}
 
@@ -925,6 +942,18 @@ func (s *userService) RemoveUser(ctx context.Context, id string) error {
 	})
 	if err != nil {
 		return err
+	}
+	s.secretRepo.InvalidateCache(ctx, revoked)
+	s.userRepo.DeleteCache(ctx, id)
+
+	return s.removeProviderLogin(ctx, provider, actorUserID, id, tenantID)
+}
+
+func (s *userService) removeProviderLogin(ctx context.Context, provider authProvider.Provider, actorUserID, id, tenantID string) error {
+	if err := provider.RemoveUser(ctx, id); err != nil && !ierr.IsNotFound(err) {
+		return ierr.WithError(err).
+			WithHint("Failed to remove login for user " + id).
+			Mark(ierr.ErrInternal)
 	}
 
 	s.logger.Info(ctx, "user removed from tenant",
