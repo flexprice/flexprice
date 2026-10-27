@@ -258,6 +258,9 @@ All changes are additive. Existing rows keep their current values and need no ba
 | `tax_identifiers` | jsonb | Seller tax IDs printed on invoices |
 | `invoice_number_prefix` | varchar(20), nullable | Required for non-default entities; NULL = env `invoice_config` prefix. Editable; see prefix rule below |
 
+`billing_entities` is not recorded in the activity log; customer activity snapshots carry
+`billing_entity_id`.
+
 **Prefix rule.** An entity cannot set prefix `P` (on create or edit) if `P` is another entity's current
 prefix or any invoice in the environment numbered `P<separator>…` belongs to another entity. The env
 `invoice_config` prefix counts as the default entity's and its edits are checked the same way. Checking
@@ -502,8 +505,7 @@ flowchart LR
    always passes the entity (`''` for off tenants and the default entity).
 3. Migration: drop the old unique index. While both exist only `''` rows exist, so they never disagree.
 
-Deploy order for the other columns: columns and concurrent indexes first, code that reads them second,
-enable endpoint last.
+Deploy order for the other columns: columns and concurrent indexes before the code that reads them.
 
 ### 11.1 Code touchpoints and PR plan
 
