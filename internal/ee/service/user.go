@@ -610,7 +610,7 @@ func (s *userService) CreatePasswordLink(ctx context.Context, id string) (*dto.P
 			Mark(ierr.ErrValidation)
 	}
 
-	if !lo.Contains(types.GetRoles(ctx), types.RoleSuperAdmin.String()) {
+	if !types.IsSuperAdminUser(ctx) {
 		return nil, ierr.NewError("only super_admin can create password links").
 			WithHint("Ask a tenant super_admin to create this link").
 			Mark(ierr.ErrPermissionDenied)

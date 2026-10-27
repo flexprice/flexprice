@@ -1924,4 +1924,11 @@ func (s *UserServiceSuite) TestSuperAdminChecksRejectServiceAccounts() {
 		s.Require().Error(err)
 		s.True(ierr.IsPermissionDenied(err))
 	})
+
+	s.Run("create_password_link_denied", func() {
+		link, err := s.userService.CreatePasswordLink(ctx, "user-1")
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err), "got %v", err)
+		s.Nil(link)
+	})
 }
