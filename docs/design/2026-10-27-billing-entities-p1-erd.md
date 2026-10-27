@@ -76,8 +76,8 @@ Variation: the tenant is off → the filter is rejected and records show no enti
 **UC6 — Tenant that never enables keeps working as today.**
 1. The tenant creates customers, issues invoices and collects payments exactly as today.
 
-Variation: the admin changes the environment invoice prefix mid-period → the new prefix starts its own
-series instead of continuing the old prefix's counter.
+Variation: the admin changes the environment invoice prefix mid-period → from the follow-up numbering
+release on, the new prefix starts its own series instead of continuing the old prefix's counter.
 
 ## 3. Scope
 <!-- erd:locked -->
@@ -289,11 +289,11 @@ Migration notes:
   against the migrated schema. `invoice_sequences` therefore changes in two releases:
   1. **This change:** add `prefix` nullable, fill existing rows with their environment's effective
      prefix (stored setting, else the default), build the new unique index beside the old one. New code
-     first adopts any row of its period still missing a prefix, then upserts on the new key; old pods keep
-     using the old key on the same rows.
-  2. **Follow-up release:** fill remaining empty prefixes, make `prefix` required and drop the old unique
-     index. Until it is deployed, prefixes other than the environment prefix cannot get their own row, so
-     no tenant is enabled before it.
+     keeps upserting on the old key and records the current prefix on the row, so numbering behaves
+     exactly as today; old pods keep using the old key on the same rows.
+  2. **Follow-up release:** fill remaining empty prefixes, make `prefix` required, drop the old unique
+     index and switch the upsert to the new key. Until it is deployed, prefixes other than the
+     environment prefix cannot get their own row, so no tenant is enabled before it.
 
 ### 9.2 API contracts
 
@@ -502,6 +502,6 @@ flowchart LR
 | Large tenants make the backfill slow | Low / Low: billing keeps working during `enabling` | Batches of 1,000; progress logged |
 | Tenants expect the series to continue after a mid-period prefix change | Low / Low | Documented in release notes (UC6) |
 
-| Question | Owner | Blocks |
-|---|---|---|
-| Should the hosted invoice page hide its payment option for non-default entities, or show "pay offline" text? | Paras | FR-20 |
+| Question | Answer |
+|---|---|
+| Should the hosted invoice page hide its payment option for non-default entities, or show "pay offline" text? | Hide it: the hosted invoice response sends `pay.enabled: false`, so the page shows no pay option, and the hosted Pay endpoint rejects the request (2026-10-28). |
