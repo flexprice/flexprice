@@ -123,3 +123,48 @@ func (h *BillingEntityHandler) UpdateBillingEntity(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Enable billing entities
+// @ID enableBillingEntities
+// @Description Start enabling billing entities for the tenant. Every environment gets a default entity and existing customers are assigned to it. Irreversible.
+// @Tags Billing Entities
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.BillingEntityModeResponse "Already enabled"
+// @Success 202 {object} dto.BillingEntityModeResponse "Enabling started"
+// @Failure 400 {object} ierr.ErrorResponse "An environment uses an external tax engine"
+// @Failure 403 {object} ierr.ErrorResponse "Not a super admin"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /tenants/billing-entities/enable [post]
+func (h *BillingEntityHandler) EnableBillingEntities(c *gin.Context) {
+	mode, err := h.service.Enable(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	status := http.StatusAccepted
+	if mode == types.BillingEntityModeEnabled {
+		status = http.StatusOK
+	}
+	c.JSON(status, dto.BillingEntityModeResponse{Mode: mode})
+}
+
+// @Summary Get billing entities status
+// @ID getBillingEntitiesStatus
+// @Description Whether billing entities are off, enabling or enabled for the tenant.
+// @Tags Billing Entities
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.BillingEntityModeResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /tenants/billing-entities/status [get]
+func (h *BillingEntityHandler) GetBillingEntitiesStatus(c *gin.Context) {
+	mode, err := h.service.Status(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.BillingEntityModeResponse{Mode: mode})
+}
