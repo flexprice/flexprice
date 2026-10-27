@@ -27,6 +27,9 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 	if err != nil {
 		return nil, err
 	}
+	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID); err != nil {
+		return nil, err
+	}
 
 	provider, gw, err := s.methodProviderFor(ctx, customerID,
 		types.IntegrationCapabilityAddPaymentMethod, req.PaymentProvider)

@@ -76,6 +76,10 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, inv.CustomerID); err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})
 	if err != nil {
 		return err
@@ -94,6 +98,9 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 
 func (s *integrationSyncService) syncCustomer(ctx context.Context, customerID string) error {
 	if _, err := s.CustomerRepo.Get(ctx, customerID); err != nil {
+		return err
+	}
+	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID); err != nil {
 		return err
 	}
 

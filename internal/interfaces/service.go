@@ -13,6 +13,15 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// BillingEntityGuard tells whether a record's customer may use the environment's integrations:
+// only customers without a billing entity, or of the default entity, may.
+type BillingEntityGuard interface {
+	CustomerServesIntegrations(ctx context.Context, customerID string) (bool, error)
+	InvoiceServesIntegrations(ctx context.Context, invoiceID string) (bool, error)
+	// RequireCustomerIntegrations returns a validation error when the customer's entity has no integrations.
+	RequireCustomerIntegrations(ctx context.Context, customerID string) error
+}
+
 // CustomerService defines the interface for customer operations
 type CustomerService interface {
 	CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error)
