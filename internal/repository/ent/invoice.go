@@ -1033,7 +1033,7 @@ func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timez
 	}
 }
 
-func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error) {
+func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error) {
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "get_next_invoice_number", map[string]interface{}{})
@@ -1043,17 +1043,19 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict
+	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict.
+	// One counter per period, keyed without the prefix until the old unique index is dropped.
 	query := `
-		INSERT INTO invoice_sequences (tenant_id,environment_id,year_month, last_value, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		INSERT INTO invoice_sequences (tenant_id,environment_id,year_month, prefix, last_value, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON CONFLICT (tenant_id, environment_id, year_month) DO UPDATE
 		SET last_value = invoice_sequences.last_value + 1,
+			prefix = EXCLUDED.prefix,
 			updated_at = CURRENT_TIMESTAMP
 		RETURNING last_value`
 
 	var lastValue int64
-	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, invoiceConfig.InvoiceNumberStartSequence)
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, prefix, invoiceConfig.InvoiceNumberStartSequence)
 	if err != nil {
 		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
@@ -1072,6 +1074,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 
 	r.logger.Info(ctx, "generated invoice number",
 		"tenant_id", tenantID,
+		"prefix", prefix,
 		"year_month", yearMonth,
 		"sequence", lastValue)
 
@@ -1079,7 +1082,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	sequenceFormat := fmt.Sprintf("%%0%dd", invoiceConfig.InvoiceNumberSuffixLength)
 	paddedSequence := fmt.Sprintf(sequenceFormat, lastValue)
 
-	return fmt.Sprintf("%s%s%s%s%s", invoiceConfig.InvoiceNumberPrefix, invoiceConfig.InvoiceNumberSeparator, yearMonth, invoiceConfig.InvoiceNumberSeparator, paddedSequence), nil
+	return fmt.Sprintf("%s%s%s%s%s", prefix, invoiceConfig.InvoiceNumberSeparator, yearMonth, invoiceConfig.InvoiceNumberSeparator, paddedSequence), nil
 }
 
 func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {

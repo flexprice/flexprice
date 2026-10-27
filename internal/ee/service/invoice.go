@@ -1514,11 +1514,19 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			if err != nil {
 				return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
 			}
-			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig)
+			prefix, err := s.numberPrefixFor(txCtx, lockedInv, &invoiceConfig)
+			if err != nil {
+				return err
+			}
+			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig, prefix)
 			if err != nil {
 				return err
 			}
 			lockedInv.InvoiceNumber = &invoiceNumber
+		}
+
+		if err := s.applySellerSnapshot(txCtx, lockedInv); err != nil {
+			return err
 		}
 
 		// Trial-start invoices are always $0 but must NOT be auto-succeeded here.

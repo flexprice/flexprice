@@ -451,7 +451,7 @@ func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID 
 	return nil, ierr.NewError("invoice not found").WithHint("invoice not found for period").Mark(ierr.ErrNotFound)
 }
 
-func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error) {
+func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	invoices, err := s.List(ctx, filter)
 	if err != nil {

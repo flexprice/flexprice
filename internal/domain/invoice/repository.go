@@ -46,7 +46,8 @@ type Repository interface {
 
 	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
 	// Format: INV-YYYYMM-XXXXX
-	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error)
+	// The prefix is recorded on the period's counter row and printed in the number.
+	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error)
 
 	// CustomerIDsByInvoiceIDs maps each found invoice ID to its customer ID.
 	CustomerIDsByInvoiceIDs(ctx context.Context, ids []string) (map[string]string, error)

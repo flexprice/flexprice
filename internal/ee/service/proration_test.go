@@ -175,7 +175,7 @@ func (s *ProrationServiceSuite) setupTestData() {
 		InvoiceNumberStartSequence: 1,
 		InvoiceNumberSeparator:     "-",
 		InvoiceNumberSuffixLength:  5,
-	})
+	}, "INV")
 	s.NoError(err)
 
 	nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), s.testData.subscription.ID)
