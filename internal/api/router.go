@@ -508,6 +508,8 @@ func NewRouter(
 		{
 			tenantRoutes.PUT("/update", write(types.EntityTenant, types.ActionWrite), handlers.Tenant.UpdateTenant)
 			tenantRoutes.GET("/billing", observe(types.EntityTenant), handlers.SelfBilling.TenantBilling)
+			tenantRoutes.POST("/billing-entities/enable", write(types.EntityTenant, types.ActionWrite, superAdminOnly), handlers.BillingEntity.EnableBillingEntities)
+			tenantRoutes.GET("/billing-entities/status", observe(types.EntityTenant), handlers.BillingEntity.GetBillingEntitiesStatus)
 			tenantRoutes.GET("/:id", observe(types.EntityTenant), handlers.Tenant.GetTenantByID)
 		}
 
