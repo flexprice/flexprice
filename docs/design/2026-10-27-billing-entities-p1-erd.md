@@ -130,7 +130,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-15 | `billing_entity_id` in a request body or filter is rejected unless the tenant is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling tenant → 400 `billing_entities_not_enabled`; other environment's entity → 400. |
 | FR-16 | An invoice's number comes from the counter of its prefix and period: the customer's entity's prefix, or the environment prefix for a customer without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
 | FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details, tax IDs. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
-| FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown. |
+| FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown; invoice issued before enable → tenant shown. |
 | FR-19 | For customers with an entity, biller tax IDs come from the entity. | UC4 | Entity with a GSTIN → GSTIN on the PDF. |
 | FR-20 | Invoices of a non-default entity's customers are never auto-charged, never get checkout, payment links or saved payment methods, and their customers, invoices and subscriptions are never synced to integrations. | UC4 | Non-default customer with `charge_automatically` → invoice stays pending, no gateway call; checkout or payment method request → 400; no sync workflow started. |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
@@ -439,11 +439,13 @@ flowchart TD
   S -- no --> D[Done]
   SN --> D
   D --> R[Render PDF / hosted page]
-  R --> Q{Finalized with snapshot?}
+  R --> Q{Has snapshot?}
   Q -- yes --> B1[Seller from snapshot]
-  Q -- no --> E{Customer has an entity?}
+  Q -- no --> I{Draft?}
+  I -- no --> B3[Seller from the tenant, as today]
+  I -- yes --> E{Customer has an entity?}
   E -- yes --> B2[Seller from the entity now]
-  E -- no --> B3[Seller from the tenant, as today]
+  E -- no --> B3
 ```
 
 During `enabling`, a customer the backfill has not reached yet belongs to its environment's default
