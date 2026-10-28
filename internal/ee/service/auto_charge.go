@@ -36,6 +36,10 @@ func fetchGatewayWithAutoChargeSupport(
 	if err != nil {
 		return "", err
 	}
+	gateways, err = resolver.preferredFirst(ctx, req.CustomerID, gateways)
+	if err != nil {
+		return "", err
+	}
 
 	for _, gw := range gateways {
 		if !lo.Contains(gatewayCapabilities[gw], types.IntegrationCapabilityAutoCharge) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -64,6 +65,10 @@ func (s *PaymentProviderResolver) ListProviders(ctx context.Context, customerID 
 	}
 
 	gateways, err := s.ConfiguredGateways(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gateways, err = s.preferredFirst(ctx, customerID, gateways)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +142,12 @@ func (s *PaymentProviderResolver) ResolveProvider(
 			Mark(ierr.ErrValidation)
 	}
 
+	if preferred, ok, err := s.preferredGateway(ctx, customerID); err != nil {
+		return "", err
+	} else if ok && lo.Contains(candidates, preferred) {
+		return preferred, nil
+	}
+
 	switch len(candidates) {
 	case 1:
 		return candidates[0], nil
@@ -187,4 +198,40 @@ func (s *PaymentProviderResolver) scopeToCustomer(ctx context.Context, customerI
 		return ctx, nil
 	}
 	return NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+}
+
+// preferredGateway returns the gateway of the customer's preferred connection while that connection is still in scope.
+func (s *PaymentProviderResolver) preferredGateway(ctx context.Context, customerID string) (types.PaymentGatewayType, bool, error) {
+	if customerID == "" {
+		return "", false, nil
+	}
+	filter := types.NewNoLimitConnectionAssociationFilter()
+	filter.EntityType = types.ConnectionAssociationEntityTypeCustomer
+	filter.EntityIDs = []string{customerID}
+	associations, err := s.ConnectionAssociationRepo.List(ctx, filter)
+	if err != nil || len(associations) == 0 {
+		return "", false, err
+	}
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	conn, found := lo.Find(connections, func(c *connection.Connection) bool {
+		return c != nil && c.ID == associations[0].ConnectionID
+	})
+	if !found {
+		return "", false, nil
+	}
+	gw, ok := types.PaymentGatewayFromSecretProvider(conn.ProviderType)
+	return gw, ok, nil
+}
+
+// preferredFirst moves the customer's preferred gateway to the front, keeping the rest in order.
+func (s *PaymentProviderResolver) preferredFirst(ctx context.Context, customerID string, gateways []types.PaymentGatewayType) ([]types.PaymentGatewayType, error) {
+	preferred, ok, err := s.preferredGateway(ctx, customerID)
+	if err != nil || !ok || !lo.Contains(gateways, preferred) {
+		return gateways, err
+	}
+	rest := lo.Without(gateways, preferred)
+	return append([]types.PaymentGatewayType{preferred}, rest...), nil
 }

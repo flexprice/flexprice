@@ -76,6 +76,7 @@ func (s *CheckoutCreateDraftSubscriptionSuite) buildParams() ServiceParams {
 		AddonRepo:                    s.GetStores().AddonRepo,
 		AddonAssociationRepo:         s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
+		ConnectionAssociationRepo:    s.GetStores().ConnectionAssociationRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
 		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                  s.GetStores().TaxRateRepo,

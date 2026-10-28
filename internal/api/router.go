@@ -337,6 +337,8 @@ func NewRouter(
 			customer.GET("/:id/wallets", observe(types.EntityWallet), handlers.Wallet.GetWalletsByCustomerID)
 			customer.GET("/:id/invoices/summary", observe(types.EntityInvoice), handlers.Invoice.GetCustomerInvoiceSummary)
 			customer.GET("/:id/payment-methods", read(types.EntityCustomer, types.ActionRead), handlers.Customer.ListPaymentMethods)
+			customer.PUT("/:id/preferred-connection", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.SetPreferredConnection)
+			customer.DELETE("/:id/preferred-connection", write(types.EntityCustomer, types.ActionWrite), handlers.Customer.ClearPreferredConnection)
 			customer.GET("/wallets", observe(types.EntityWallet), handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation. Minting a session token is an

@@ -34,6 +34,8 @@ type CustomerService interface {
 	UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
 	DeleteCustomer(ctx context.Context, id string) error
 	GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error)
+	SetPreferredConnection(ctx context.Context, customerID, connectionID string) (*dto.CustomerResponse, error)
+	ClearPreferredConnection(ctx context.Context, customerID string) (*dto.CustomerResponse, error)
 
 	// Credit grant applications
 	GetUpcomingCreditGrantApplications(ctx context.Context, customerID string) (*dto.ListCreditGrantApplicationsResponse, error)
