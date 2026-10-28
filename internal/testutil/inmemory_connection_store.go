@@ -69,10 +69,9 @@ func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider ty
 		if err != nil {
 			return nil, err
 		}
-		if c.ProviderType != provider {
-			return nil, notFound
+		if c.ProviderType == provider {
+			return c, nil
 		}
-		return c, nil
 	}
 
 	connections, err := s.ListPublishedInScope(ctx)
