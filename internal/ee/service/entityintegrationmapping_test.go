@@ -39,6 +39,7 @@ func (s *EntityIntegrationMappingServiceSuite) setupService() {
 		ConnectionRepo:               stores.ConnectionRepo,
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
+		TenantRepo:                   stores.TenantRepo,
 	})
 }
 

@@ -28,6 +28,7 @@ func (s *PaymentProviderResolverSuite) SetupTest() {
 		Config:         s.GetConfig(),
 		DB:             s.GetDB(),
 		ConnectionRepo: s.GetStores().ConnectionRepo,
+		TenantRepo:     s.GetStores().TenantRepo,
 	})
 }
 

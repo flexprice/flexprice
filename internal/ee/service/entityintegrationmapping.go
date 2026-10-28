@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -222,15 +223,44 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 	return nil
 }
 
+// linkConnections scopes ctx to the linked customer, invoice or subscription and returns its connections
+// for the provider. Other entity types keep the environment's connections.
+func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, req dto.LinkIntegrationMappingRequest) (context.Context, []*connection.Connection, error) {
+	provider := types.SecretProvider(req.ProviderType)
+	scope := NewBillingEntityService(s.ServiceParams)
+
+	var err error
+	switch req.EntityType {
+	case types.IntegrationEntityTypeCustomer:
+		ctx, err = scope.ScopeToCustomer(ctx, req.EntityID)
+	case types.IntegrationEntityTypeInvoice:
+		ctx, err = scope.ScopeToInvoice(ctx, req.EntityID)
+	case types.IntegrationEntityTypeSubscription:
+		ctx, err = scope.ScopeToSubscription(ctx, req.EntityID)
+	default:
+		connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
+			QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
+			ProviderType: provider,
+		})
+		return ctx, connections, err
+	}
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	inScope, err := s.ConnectionRepo.ListPublishedInScope(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	return ctx, lo.Filter(inScope, func(c *connection.Connection, _ int) bool { return c.ProviderType == provider }), nil
+}
+
 func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
-		QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
-		ProviderType: types.SecretProvider(req.ProviderType),
-	})
+	ctx, connections, err := s.linkConnections(ctx, req)
 	if err != nil {
 		return nil, err
 	}
