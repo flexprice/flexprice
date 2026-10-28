@@ -630,7 +630,7 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		}
 	case types.TemporalBillingEntityEnableWorkflow:
 		if input, ok := params.(models.BillingEntityEnableWorkflowInput); ok {
-			return input.TenantID
+			return input.TenantID + "-" + input.EnvironmentID
 		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
@@ -1781,7 +1781,7 @@ func (s *temporalService) buildEnvironmentCloneInput(_ context.Context, tenantID
 	return input, nil
 }
 
-func (s *temporalService) buildBillingEntityEnableInput(_ context.Context, tenantID, _, userID string, params interface{}) (interface{}, error) {
+func (s *temporalService) buildBillingEntityEnableInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
 	input, ok := params.(models.BillingEntityEnableWorkflowInput)
 	if !ok {
 		return nil, errors.NewError("invalid input for billing entity enable workflow").
@@ -1789,6 +1789,7 @@ func (s *temporalService) buildBillingEntityEnableInput(_ context.Context, tenan
 			Mark(errors.ErrValidation)
 	}
 	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
 	input.UserID = userID
 	if err := input.Validate(); err != nil {
 		return nil, err

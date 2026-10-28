@@ -12,7 +12,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// BillingEntityService owns billing entities and the tenant's billing entity mode.
+// BillingEntityService owns billing entities and each environment's billing entity mode.
 type BillingEntityService interface {
 	BillingEntityEnabler
 
@@ -28,8 +28,6 @@ type BillingEntityService interface {
 	RequireCustomerIntegrations(ctx context.Context, customerID string) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
-	// EnsureDefaultForEnvironment gives a new environment its default entity once the tenant is enabling or enabled.
-	EnsureDefaultForEnvironment(ctx context.Context, environmentID string) error
 
 	Create(ctx context.Context, req dto.CreateBillingEntityRequest) (*dto.BillingEntityResponse, error)
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
@@ -46,18 +44,18 @@ func NewBillingEntityService(params ServiceParams) BillingEntityService {
 }
 
 // billingEntityEnableLockKey is taken shared by writes that depend on the mode and exclusively by enablement.
-func billingEntityEnableLockKey(tenantID string) string {
-	return "billing_entity_enable:" + tenantID
+func billingEntityEnableLockKey(ctx context.Context) string {
+	return "billing_entity_enable:" + types.GetTenantID(ctx) + ":" + types.GetEnvironmentID(ctx)
 }
 
 func errBillingEntitiesNotEnabled() error {
 	return ierr.NewError("billing entities are not enabled").
-		WithHint("Billing entities are not enabled for this tenant").
+		WithHint("Billing entities are not enabled in this environment").
 		Mark(ierr.ErrBillingEntitiesNotEnabled)
 }
 
 func (s *billingEntityService) mode(ctx context.Context) (types.BillingEntityMode, error) {
-	return s.TenantRepo.GetBillingEntityMode(ctx, types.GetTenantID(ctx))
+	return s.EnvironmentRepo.GetBillingEntityMode(ctx, types.GetEnvironmentID(ctx))
 }
 
 func (s *billingEntityService) requireEnabled(ctx context.Context) error {
@@ -73,7 +71,7 @@ func (s *billingEntityService) requireEnabled(ctx context.Context) error {
 
 func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error {
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.DB.LockSharedWithWait(txCtx, postgres.LockRequest{Key: billingEntityEnableLockKey(types.GetTenantID(txCtx))}); err != nil {
+		if err := s.DB.LockSharedWithWait(txCtx, postgres.LockRequest{Key: billingEntityEnableLockKey(txCtx)}); err != nil {
 			return err
 		}
 		mode, err := s.mode(txCtx)
@@ -273,7 +271,7 @@ func (s *billingEntityService) SubscriptionServesIntegrations(ctx context.Contex
 	return s.customerServesIntegrations(ctx, sub.CustomerID)
 }
 
-// entitiesOff reports whether the tenant has billing entities off, so every record is served without a lookup.
+// entitiesOff reports whether the environment has billing entities off, so every record is served without a lookup.
 func (s *billingEntityService) entitiesOff(ctx context.Context) (bool, error) {
 	mode, err := s.mode(ctx)
 	if err != nil {
@@ -400,18 +398,6 @@ func (s *billingEntityService) Update(ctx context.Context, id string, req dto.Up
 		return nil, err
 	}
 	return &dto.BillingEntityResponse{BillingEntity: updated}, nil
-}
-
-func (s *billingEntityService) EnsureDefaultForEnvironment(ctx context.Context, environmentID string) error {
-	mode, err := s.mode(ctx)
-	if err != nil {
-		return err
-	}
-	if mode == types.BillingEntityModeOff {
-		return nil
-	}
-	_, err = s.GetOrCreateDefault(types.SetEnvironmentID(ctx, environmentID))
-	return err
 }
 
 // requireIntegrationsForCustomer rejects an integration request for a customer of a non-default billing entity.

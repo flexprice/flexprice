@@ -36157,21 +36157,22 @@ func (m *EntityIntegrationMappingMutation) ResetEdge(name string) error {
 // EnvironmentMutation represents an operation that mutates the Environment nodes in the graph.
 type EnvironmentMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *string
-	tenant_id     *string
-	status        *string
-	created_at    *time.Time
-	updated_at    *time.Time
-	created_by    *string
-	updated_by    *string
-	name          *string
-	_type         *string
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*Environment, error)
-	predicates    []predicate.Environment
+	op                  Op
+	typ                 string
+	id                  *string
+	tenant_id           *string
+	status              *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	created_by          *string
+	updated_by          *string
+	name                *string
+	_type               *string
+	billing_entity_mode *string
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*Environment, error)
+	predicates          []predicate.Environment
 }
 
 var _ ent.Mutation = (*EnvironmentMutation)(nil)
@@ -36592,6 +36593,42 @@ func (m *EnvironmentMutation) ResetType() {
 	m._type = nil
 }
 
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (m *EnvironmentMutation) SetBillingEntityMode(s string) {
+	m.billing_entity_mode = &s
+}
+
+// BillingEntityMode returns the value of the "billing_entity_mode" field in the mutation.
+func (m *EnvironmentMutation) BillingEntityMode() (r string, exists bool) {
+	v := m.billing_entity_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingEntityMode returns the old "billing_entity_mode" field's value of the Environment entity.
+// If the Environment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EnvironmentMutation) OldBillingEntityMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingEntityMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingEntityMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingEntityMode: %w", err)
+	}
+	return oldValue.BillingEntityMode, nil
+}
+
+// ResetBillingEntityMode resets all changes to the "billing_entity_mode" field.
+func (m *EnvironmentMutation) ResetBillingEntityMode() {
+	m.billing_entity_mode = nil
+}
+
 // Where appends a list predicates to the EnvironmentMutation builder.
 func (m *EnvironmentMutation) Where(ps ...predicate.Environment) {
 	m.predicates = append(m.predicates, ps...)
@@ -36626,7 +36663,7 @@ func (m *EnvironmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EnvironmentMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.tenant_id != nil {
 		fields = append(fields, environment.FieldTenantID)
 	}
@@ -36650,6 +36687,9 @@ func (m *EnvironmentMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, environment.FieldType)
+	}
+	if m.billing_entity_mode != nil {
+		fields = append(fields, environment.FieldBillingEntityMode)
 	}
 	return fields
 }
@@ -36675,6 +36715,8 @@ func (m *EnvironmentMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case environment.FieldType:
 		return m.GetType()
+	case environment.FieldBillingEntityMode:
+		return m.BillingEntityMode()
 	}
 	return nil, false
 }
@@ -36700,6 +36742,8 @@ func (m *EnvironmentMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldName(ctx)
 	case environment.FieldType:
 		return m.OldType(ctx)
+	case environment.FieldBillingEntityMode:
+		return m.OldBillingEntityMode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Environment field %s", name)
 }
@@ -36764,6 +36808,13 @@ func (m *EnvironmentMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
+		return nil
+	case environment.FieldBillingEntityMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingEntityMode(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Environment field %s", name)
@@ -36852,6 +36903,9 @@ func (m *EnvironmentMutation) ResetField(name string) error {
 		return nil
 	case environment.FieldType:
 		m.ResetType()
+		return nil
+	case environment.FieldBillingEntityMode:
+		m.ResetBillingEntityMode()
 		return nil
 	}
 	return fmt.Errorf("unknown Environment field %s", name)
@@ -95101,21 +95155,20 @@ func (m *TaxRateMutation) ResetEdge(name string) error {
 // TenantMutation represents an operation that mutates the Tenant nodes in the graph.
 type TenantMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	name                *string
-	status              *string
-	internal_status     *string
-	billing_entity_mode *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	billing_details     *schema.TenantBillingDetails
-	metadata            *map[string]string
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*Tenant, error)
-	predicates          []predicate.Tenant
+	op              Op
+	typ             string
+	id              *string
+	name            *string
+	status          *string
+	internal_status *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	billing_details *schema.TenantBillingDetails
+	metadata        *map[string]string
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*Tenant, error)
+	predicates      []predicate.Tenant
 }
 
 var _ ent.Mutation = (*TenantMutation)(nil)
@@ -95330,42 +95383,6 @@ func (m *TenantMutation) ResetInternalStatus() {
 	m.internal_status = nil
 }
 
-// SetBillingEntityMode sets the "billing_entity_mode" field.
-func (m *TenantMutation) SetBillingEntityMode(s string) {
-	m.billing_entity_mode = &s
-}
-
-// BillingEntityMode returns the value of the "billing_entity_mode" field in the mutation.
-func (m *TenantMutation) BillingEntityMode() (r string, exists bool) {
-	v := m.billing_entity_mode
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldBillingEntityMode returns the old "billing_entity_mode" field's value of the Tenant entity.
-// If the Tenant object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TenantMutation) OldBillingEntityMode(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldBillingEntityMode is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldBillingEntityMode requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldBillingEntityMode: %w", err)
-	}
-	return oldValue.BillingEntityMode, nil
-}
-
-// ResetBillingEntityMode resets all changes to the "billing_entity_mode" field.
-func (m *TenantMutation) ResetBillingEntityMode() {
-	m.billing_entity_mode = nil
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (m *TenantMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -95570,7 +95587,7 @@ func (m *TenantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TenantMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 7)
 	if m.name != nil {
 		fields = append(fields, tenant.FieldName)
 	}
@@ -95579,9 +95596,6 @@ func (m *TenantMutation) Fields() []string {
 	}
 	if m.internal_status != nil {
 		fields = append(fields, tenant.FieldInternalStatus)
-	}
-	if m.billing_entity_mode != nil {
-		fields = append(fields, tenant.FieldBillingEntityMode)
 	}
 	if m.created_at != nil {
 		fields = append(fields, tenant.FieldCreatedAt)
@@ -95609,8 +95623,6 @@ func (m *TenantMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case tenant.FieldInternalStatus:
 		return m.InternalStatus()
-	case tenant.FieldBillingEntityMode:
-		return m.BillingEntityMode()
 	case tenant.FieldCreatedAt:
 		return m.CreatedAt()
 	case tenant.FieldUpdatedAt:
@@ -95634,8 +95646,6 @@ func (m *TenantMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldStatus(ctx)
 	case tenant.FieldInternalStatus:
 		return m.OldInternalStatus(ctx)
-	case tenant.FieldBillingEntityMode:
-		return m.OldBillingEntityMode(ctx)
 	case tenant.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case tenant.FieldUpdatedAt:
@@ -95673,13 +95683,6 @@ func (m *TenantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInternalStatus(v)
-		return nil
-	case tenant.FieldBillingEntityMode:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetBillingEntityMode(v)
 		return nil
 	case tenant.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -95781,9 +95784,6 @@ func (m *TenantMutation) ResetField(name string) error {
 		return nil
 	case tenant.FieldInternalStatus:
 		m.ResetInternalStatus()
-		return nil
-	case tenant.FieldBillingEntityMode:
-		m.ResetBillingEntityMode()
 		return nil
 	case tenant.FieldCreatedAt:
 		m.ResetCreatedAt()

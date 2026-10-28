@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -33,6 +34,7 @@ func (s *BillingEntityServiceSuite) SetupTest() {
 		Config:             s.GetConfig(),
 		DB:                 s.GetDB(),
 		TenantRepo:         s.GetStores().TenantRepo,
+		EnvironmentRepo:    s.GetStores().EnvironmentRepo,
 		CustomerRepo:       s.GetStores().CustomerRepo,
 		InvoiceRepo:        s.GetStores().InvoiceRepo,
 		SubRepo:            s.GetStores().SubscriptionRepo,
@@ -48,7 +50,9 @@ func (s *BillingEntityServiceSuite) setMode(mode types.BillingEntityMode) {
 	ctx := s.GetContext()
 	t := &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Acme", Status: types.StatusPublished}
 	_ = s.GetStores().TenantRepo.Create(ctx, t)
-	s.Require().NoError(s.GetStores().TenantRepo.SetBillingEntityMode(ctx, t.ID, mode))
+	env := &environment.Environment{ID: types.GetEnvironmentID(ctx), Name: "Test", Type: types.EnvironmentDevelopment}
+	_ = s.GetStores().EnvironmentRepo.Create(ctx, env)
+	s.Require().NoError(s.GetStores().EnvironmentRepo.SetBillingEntityMode(ctx, env.ID, mode))
 }
 
 func (s *BillingEntityServiceSuite) addEntity(id, environmentID, prefix string, isDefault bool) *billingentity.BillingEntity {

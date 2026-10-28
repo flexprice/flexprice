@@ -129,3 +129,27 @@ func (s *InMemoryEnvironmentStore) Clear() {
 
 	s.environments = make(map[string]*environment.Environment)
 }
+
+func (s *InMemoryEnvironmentStore) GetBillingEntityMode(ctx context.Context, id string) (types.BillingEntityMode, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Suites that never create the environment run with entities off.
+	env, ok := s.environments[id]
+	if !ok {
+		return types.BillingEntityModeOff, nil
+	}
+	return env.BillingEntityMode.Normalize(), nil
+}
+
+func (s *InMemoryEnvironmentStore) SetBillingEntityMode(ctx context.Context, id string, mode types.BillingEntityMode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	env, ok := s.environments[id]
+	if !ok {
+		return ierr.NewError("environment not found").Mark(ierr.ErrNotFound)
+	}
+	env.BillingEntityMode = mode
+	return nil
+}

@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entEnvironment "github.com/flexprice/flexprice/ent/environment"
@@ -259,6 +260,65 @@ func (r *environmentRepository) CountByType(ctx context.Context, envType types.E
 
 // Environments are scoped to a tenant (not to an environment), so the cache key
 // is keyed by tenant + environment ID only, mirroring the Get query filter.
+func (r *environmentRepository) GetBillingEntityMode(ctx context.Context, id string) (types.BillingEntityMode, error) {
+	span := StartRepositorySpan(ctx, "environment", "get_billing_entity_mode", map[string]interface{}{
+		"environment_id": id,
+	})
+	defer FinishSpan(span)
+
+	row, err := r.client.Reader(ctx).Environment.Query().
+		Where(
+			entEnvironment.ID(id),
+			entEnvironment.TenantID(types.GetTenantID(ctx)),
+		).
+		Select(entEnvironment.FieldBillingEntityMode).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return "", ierr.WithError(err).
+				WithHintf("Environment %s was not found", id).
+				Mark(ierr.ErrNotFound)
+		}
+		return "", ierr.WithError(err).
+			WithHint("Failed to read billing entity mode").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return types.BillingEntityMode(row.BillingEntityMode).Normalize(), nil
+}
+
+func (r *environmentRepository) SetBillingEntityMode(ctx context.Context, id string, mode types.BillingEntityMode) error {
+	span := StartRepositorySpan(ctx, "environment", "set_billing_entity_mode", map[string]interface{}{
+		"environment_id": id,
+		"mode":           mode,
+	})
+	defer FinishSpan(span)
+
+	_, err := r.client.Writer(ctx).Environment.
+		UpdateOneID(id).
+		Where(entEnvironment.TenantID(types.GetTenantID(ctx))).
+		SetBillingEntityMode(string(mode)).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Environment %s was not found", id).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update billing entity mode").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	r.DeleteCache(ctx, id)
+	return nil
+}
+
 func (r *environmentRepository) SetCache(ctx context.Context, env *domainEnvironment.Environment) {
 	span, ctx := cache.StartInMemoryCacheSpan(ctx, "environment", "set", map[string]interface{}{
 		"environment_id": env.ID,

@@ -56,7 +56,7 @@ type BillingEntityResponse struct {
 
 type ListBillingEntitiesResponse = types.ListResponse[*BillingEntityResponse]
 
-// BillingEntityModeResponse is the tenant's billing entities state.
+// BillingEntityModeResponse is the environment's billing entities state.
 type BillingEntityModeResponse struct {
 	Mode types.BillingEntityMode `json:"mode"`
 }

@@ -255,7 +255,7 @@ func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types
 }
 
 // AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.
-func (s *InMemoryCustomerStore) AssignDefaultBillingEntities(ctx context.Context, tenantID string, limit int) (int, error) {
+func (s *InMemoryCustomerStore) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
 	return 0, ierr.NewError("not supported by the in-memory customer store").Mark(ierr.ErrNotImplemented)
 }
 

@@ -29,7 +29,7 @@ type Customer struct {
 	// BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.
 	BillingCurrency *string `db:"billing_currency" json:"billing_currency,omitempty"`
 
-	// BillingEntityID is the entity that bills the customer; nil while the tenant has no billing entities. Never changes once set.
+	// BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.
 	BillingEntityID *string `db:"billing_entity_id" json:"billing_entity_id"`
 
 	ContactPersons []*ContactPerson `db:"contact_persons" json:"contact_persons,omitempty" activity:"drop"`

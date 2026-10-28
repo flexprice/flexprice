@@ -546,6 +546,7 @@ func (s *TaxCalculationSuite) SetupTest() {
 		SettingsRepo:       st.SettingsRepo,
 		ConnectionRepo:     st.ConnectionRepo,
 		TenantRepo:         st.TenantRepo,
+		EnvironmentRepo:    st.EnvironmentRepo,
 	})
 }
 
