@@ -126,7 +126,7 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, ser
 			"error", err, "event_type", EventCustomerCreated)
 		return nil
 	}
-	err := h.syncSvc.ProcessCustomerCreatedWebhook(ctx, &event.Data, services.CustomerService, services.BillingEntityScope)
+	err := h.syncSvc.ProcessCustomerCreatedWebhook(ctx, &event.Data, services.CustomerService)
 	if err != nil {
 		h.logger.Error(ctx, "failed to process customer.created webhook",
 			"error", err, "paddle_customer_id", event.Data.ID)
@@ -145,9 +145,16 @@ func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byt
 			"error", err, "event_type", EventSubscriptionActivated)
 		return nil
 	}
-	if subID := h.syncSvc.ExtractFlexSubIDFromCustomData(event.Data.CustomData); subID != "" &&
-		!webhookscope.Subscription(ctx, services.BillingEntityScope, services.SubscriptionService, h.logger, subID) {
-		return nil
+	if subID := h.syncSvc.ExtractFlexSubIDFromCustomData(event.Data.CustomData); subID != "" {
+		inScope, err := webhookscope.Subscription(ctx, services.BillingEntityScope, services.SubscriptionService, h.logger, subID)
+		if err != nil {
+			h.logger.Error(ctx, "failed to process subscription.activated webhook",
+				"error", err, "paddle_sub_id", event.Data.ID)
+			return nil
+		}
+		if !inScope {
+			return nil
+		}
 	}
 	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, &event.Data, services.SubscriptionService)
 	if err != nil {

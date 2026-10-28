@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainconn "github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -284,13 +285,11 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 		return nil
 	}
 
-	custFilter := types.NewNoLimitCustomerFilter()
-	custFilter.Email = email
-	custList, err := deps.CustomerService.GetCustomers(ctx, custFilter)
+	match, err := webhookscope.CustomerByEmail(ctx, deps.CustomerService, email)
 	if err != nil {
 		return err
 	}
-	if custList != nil && len(custList.Items) > 0 {
+	if match != nil {
 		h.logger.Debug(ctx, "zoho webhook: FlexPrice customer with same email exists, skipping create",
 			"email", email,
 			"zoho_contact_id", c.ContactID)

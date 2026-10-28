@@ -150,7 +150,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"razorpay_payment_id", payment.ID,
 		"flexprice_payment_id", flexpricePaymentID)
 
-	if !webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, flexpricePaymentID) {
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
 		return nil
 	}
 
@@ -291,7 +291,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		"razorpay_payment_id", payment.ID,
 		"flexprice_payment_id", flexpricePaymentID)
 
-	if !webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, flexpricePaymentID) {
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
 		return nil
 	}
 
@@ -513,6 +513,18 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	}
 
 	return nil
+}
+
+// paymentInScope is false when the payment is another entity's or its entity cannot be read; the event is never retried, as for a failed payment lookup.
+func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) bool {
+	ok, err := webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to read the billing entity of the webhook payment, skipping event",
+			"error", err,
+			"flexprice_payment_id", paymentID)
+		return false
+	}
+	return ok
 }
 
 // handleCheckoutSessionForPayment completes pending checkout sessions and refunds

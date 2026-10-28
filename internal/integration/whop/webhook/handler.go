@@ -193,7 +193,14 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 			"plan_id", data.Plan.ID)
 		return nil
 	}
-	if !webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID) {
+	inScope, err := webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to read the billing entity of the plan's customer, skipping event",
+			"error", err,
+			"customer_id", customerID)
+		return nil
+	}
+	if !inScope {
 		return nil
 	}
 

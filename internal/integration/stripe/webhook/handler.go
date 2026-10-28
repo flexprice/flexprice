@@ -201,8 +201,9 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			"payment_intent_id", paymentIntent.ID,
 			"flexprice_payment_id", flexpricePaymentID)
 
-		if !h.paymentInScope(ctx, flexpricePaymentID, services) {
-			return nil
+		inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services)
+		if err != nil || !inScope {
+			return err
 		}
 
 		// Off-session charges never raise checkout.session.completed, so this is the only
@@ -286,7 +287,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		"payment_intent_id", paymentIntentID,
 		"flexprice_payment_id", flexpricePaymentID)
 
-	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
+	if inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services); err != nil || !inScope {
 		return nil
 	}
 
@@ -399,7 +400,15 @@ func (h *Handler) handleSetupIntentSucceeded(ctx context.Context, event *stripea
 		return nil
 	}
 
-	if !webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID) {
+	inScope, err := webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to read the billing entity of the setup intent's customer, skipping event",
+			"error", err,
+			"customer_id", customerID,
+			"event_id", event.ID)
+		return nil
+	}
+	if !inScope {
 		return nil
 	}
 
@@ -432,8 +441,16 @@ func (h *Handler) handleSetupIntentSucceeded(ctx context.Context, event *stripea
 
 // Helper methods
 
-func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) bool {
-	return webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+// paymentInScope logs a lookup failure; callers decide whether it is retried.
+func (h *Handler) paymentInScope(ctx context.Context, paymentID, eventID string, services *ServiceDependencies) (bool, error) {
+	ok, err := webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to read the billing entity of the webhook payment",
+			"error", err,
+			"flexprice_payment_id", paymentID,
+			"event_id", eventID)
+	}
+	return ok, err
 }
 
 // getConnection retrieves the Stripe connection for the given environment
@@ -971,8 +988,9 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
-		return nil
+	inScope, err := h.paymentInScope(ctx, flexpricePaymentID, event.ID, services)
+	if err != nil || !inScope {
+		return err
 	}
 
 	piID := ""
