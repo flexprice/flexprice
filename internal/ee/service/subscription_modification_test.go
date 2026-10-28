@@ -60,6 +60,7 @@ func (s *SubscriptionModificationServiceSuite) buildServiceParams() ServiceParam
 		EventRepo:                  s.GetStores().EventRepo,
 		MeterRepo:                  s.GetStores().MeterRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
+		ConnectionAssociationRepo:  s.GetStores().ConnectionAssociationRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		HostedInvoiceTokenRepo:     s.GetStores().HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,

@@ -129,6 +129,7 @@ func (s *BillingActivitiesSuite) newServiceParams() service.ServiceParams {
 		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
+		ConnectionAssociationRepo:  s.GetStores().ConnectionAssociationRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		EventPublisher:             s.GetPublisher(),

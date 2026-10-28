@@ -526,3 +526,55 @@ func (h *CustomerHandler) ListPaymentMethods(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Set customer preferred connection
+// @ID setCustomerPreferredConnection
+// @Description Use when a customer should be charged through a specific payment connection. The connection must be one the customer's billing entity can use; gateway choice prefers it while it stays usable.
+// @Tags Customers
+// @x-scope "write"
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Param request body dto.SetPreferredConnectionRequest true "Preferred connection"
+// @Success 200 {object} dto.CustomerResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request or connection not allowed for customer"
+// @Failure 404 {object} ierr.ErrorResponse "Customer not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/{id}/preferred-connection [put]
+func (h *CustomerHandler) SetPreferredConnection(c *gin.Context) {
+	var req dto.SetPreferredConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("connection_id is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.service.SetPreferredConnection(c.Request.Context(), c.Param("id"), req.ConnectionID)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Clear customer preferred connection
+// @ID clearCustomerPreferredConnection
+// @Description Use when a customer should no longer have a preferred payment connection and gateway choice should go back to the default flow.
+// @Tags Customers
+// @x-scope "write"
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Success 200 {object} dto.CustomerResponse
+// @Failure 404 {object} ierr.ErrorResponse "Customer not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/{id}/preferred-connection [delete]
+func (h *CustomerHandler) ClearPreferredConnection(c *gin.Context) {
+	resp, err := h.service.ClearPreferredConnection(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}

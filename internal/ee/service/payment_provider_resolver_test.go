@@ -1,10 +1,13 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/connectionassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -24,11 +27,12 @@ func (s *PaymentProviderResolverSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ClearStores()
 	s.svc = NewPaymentProviderResolver(ServiceParams{
-		Logger:         s.GetLogger(),
-		Config:         s.GetConfig(),
-		DB:             s.GetDB(),
-		ConnectionRepo: s.GetStores().ConnectionRepo,
-		TenantRepo:     s.GetStores().TenantRepo,
+		Logger:                    s.GetLogger(),
+		Config:                    s.GetConfig(),
+		DB:                        s.GetDB(),
+		ConnectionRepo:            s.GetStores().ConnectionRepo,
+		ConnectionAssociationRepo: s.GetStores().ConnectionAssociationRepo,
+		TenantRepo:                s.GetStores().TenantRepo,
 	})
 }
 
@@ -187,4 +191,111 @@ func (s *PaymentProviderResolverSuite) TestGatewayCapabilitiesMatchFactory() {
 func checkoutProviderFor(gw types.PaymentGatewayType) (types.CheckoutPaymentProvider, bool) {
 	p := types.CheckoutPaymentProvider(gw)
 	return p, p.Validate() == nil && p != ""
+}
+
+func (s *PaymentProviderResolverSuite) prefer(ctx context.Context, customerID string, provider types.SecretProvider) *connectionassociation.ConnectionAssociation {
+	a := &connectionassociation.ConnectionAssociation{
+		ID:            "ca_" + string(provider),
+		EntityType:    types.ConnectionAssociationEntityTypeCustomer,
+		EntityID:      customerID,
+		ConnectionID:  "conn_" + string(provider),
+		ProviderType:  provider,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	a.Status = types.StatusPublished
+	s.NoError(s.GetStores().ConnectionAssociationRepo.Create(ctx, a))
+	return a
+}
+
+func (s *PaymentProviderResolverSuite) TestResolveProviderPreference() {
+	ctx := s.GetContext()
+
+	s.Run("preferred_capable_two_candidates", func() {
+		s.ClearStores()
+		s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
+		s.prefer(ctx, "cust_1", types.SecretProviderRazorpay)
+
+		gw, err := s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityCheckout, "")
+		s.NoError(err)
+		s.Equal(types.PaymentGatewayTypeRazorpay, gw)
+
+		got, err := s.svc.ListProviders(ctx, "cust_1")
+		s.NoError(err)
+		s.Equal(types.PaymentGatewayTypeRazorpay, got[0].Gateway)
+	})
+
+	s.Run("preferred_archived", func() {
+		s.ClearStores()
+		s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
+		a := s.prefer(ctx, "cust_1", types.SecretProviderRazorpay)
+		s.NoError(s.GetStores().ConnectionAssociationRepo.Delete(ctx, a))
+
+		_, err := s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityCheckout, "")
+		s.True(ierr.IsValidation(err))
+	})
+
+	s.Run("preferred_other_entity", func() {
+		s.ClearStores()
+		s.connect(types.SecretProviderChargebee, types.SecretProviderStripe, types.SecretProviderRazorpay)
+		stores := s.GetStores()
+		for provider, entity := range map[types.SecretProvider]string{
+			types.SecretProviderChargebee: "be_1",
+			types.SecretProviderStripe:    "be_1",
+			types.SecretProviderRazorpay:  "be_2",
+		} {
+			conn, err := stores.ConnectionRepo.Get(ctx, "conn_"+string(provider))
+			s.NoError(err)
+			conn.BillingEntityID = lo.ToPtr(entity)
+			s.NoError(stores.ConnectionRepo.Update(ctx, conn))
+		}
+		s.prefer(ctx, "cust_1", types.SecretProviderRazorpay)
+
+		_, err := s.svc.ResolveProvider(types.SetBillingEntityID(ctx, "be_1"), "cust_1", types.IntegrationCapabilityCheckout, "")
+		s.True(ierr.IsValidation(err))
+	})
+
+	s.Run("requested_wins_over_preferred", func() {
+		s.ClearStores()
+		s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
+		s.prefer(ctx, "cust_1", types.SecretProviderRazorpay)
+
+		gw, err := s.svc.ResolveProvider(ctx, "cust_1", types.IntegrationCapabilityCheckout, types.PaymentGatewayTypeChargebee)
+		s.NoError(err)
+		s.Equal(types.PaymentGatewayTypeChargebee, gw)
+	})
+}
+
+// chargeableOnCall reports a saved method only on the nth gateway it is asked about.
+type chargeableOnCall struct {
+	stubAutoChargeCheckoutProvider
+	n, calls int
+}
+
+func (p *chargeableOnCall) HasAutoChargeableMethod(context.Context, interfaces.HasAutoChargeableMethodRequest) (bool, error) {
+	p.calls++
+	return p.calls == p.n, nil
+}
+
+func (s *PaymentProviderResolverSuite) TestAutoChargeOrder_PreferredFirst() {
+	ctx := s.GetContext()
+	run := func(preferred types.SecretProvider, connected ...types.SecretProvider) types.PaymentGatewayType {
+		s.ClearStores()
+		s.connect(connected...)
+		s.prefer(ctx, "cust_1", preferred)
+		s.GetIntegrationFactory().SetCheckoutProvider(&chargeableOnCall{n: 2})
+		defer s.GetIntegrationFactory().SetCheckoutProvider(nil)
+
+		params := s.svc.ServiceParams
+		params.IntegrationFactory = s.GetIntegrationFactory()
+		gw, err := fetchGatewayWithAutoChargeSupport(ctx, params, nil, interfaces.HasAutoChargeableMethodRequest{CustomerID: "cust_1"})
+		s.NoError(err)
+		return gw
+	}
+
+	s.Equal(types.PaymentGatewayTypeStripe,
+		run(types.SecretProviderRazorpay, types.SecretProviderRazorpay, types.SecretProviderStripe))
+	// The preferred gateway is asked first; the rest keep alphabetical order.
+	s.Equal(types.PaymentGatewayTypeChargebee,
+		run(types.SecretProviderStripe, types.SecretProviderChargebee, types.SecretProviderRazorpay, types.SecretProviderStripe))
 }

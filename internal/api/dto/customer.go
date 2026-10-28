@@ -150,6 +150,13 @@ type UpdateCustomerRequest struct {
 type CustomerResponse struct {
 	*customer.Customer
 	Integrations []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
+	// PreferredConnectionID is the customer's preferred payment connection; null when unset
+	PreferredConnectionID *string `json:"preferred_connection_id"`
+}
+
+// SetPreferredConnectionRequest sets the customer's preferred payment connection.
+type SetPreferredConnectionRequest struct {
+	ConnectionID string `json:"connection_id" binding:"required"`
 }
 
 func EmptyCustomerResponse() *CustomerResponse {
