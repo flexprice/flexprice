@@ -1104,14 +1104,13 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// One counter per period, keyed without the prefix. The statements name no unique index,
-	// so they keep working while the sequence indexes change.
+	// One counter per prefix and period. The statements name no unique index, so a later
+	// index change cannot break them mid-rollout.
 	incrementQuery := `
 		UPDATE invoice_sequences
 		SET last_value = last_value + 1,
-			prefix = $4,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE tenant_id = $1 AND environment_id = $2 AND year_month = $3
+		WHERE tenant_id = $1 AND environment_id = $2 AND prefix = $4 AND year_month = $3
 		RETURNING last_value`
 	insertQuery := `
 		INSERT INTO invoice_sequences (tenant_id, environment_id, year_month, prefix, last_value, created_at, updated_at)

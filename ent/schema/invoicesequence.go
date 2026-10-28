@@ -65,8 +65,6 @@ func (InvoiceSequence) Edges() []ent.Edge {
 // Indexes of the InvoiceSequence.
 func (InvoiceSequence) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "environment_id", "year_month").
-			Unique(),
 		index.Fields("tenant_id", "environment_id", "prefix", "year_month").
 			Unique().
 			StorageKey("idx_invoice_sequences_tenant_env_prefix_month"),

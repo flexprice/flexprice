@@ -1887,11 +1887,6 @@ var (
 		PrimaryKey: []*schema.Column{InvoiceSequencesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "invoicesequence_tenant_id_environment_id_year_month",
-				Unique:  true,
-				Columns: []*schema.Column{InvoiceSequencesColumns[1], InvoiceSequencesColumns[2], InvoiceSequencesColumns[3]},
-			},
-			{
 				Name:    "idx_invoice_sequences_tenant_env_prefix_month",
 				Unique:  true,
 				Columns: []*schema.Column{InvoiceSequencesColumns[1], InvoiceSequencesColumns[2], InvoiceSequencesColumns[4], InvoiceSequencesColumns[3]},
