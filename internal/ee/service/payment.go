@@ -767,9 +767,9 @@ func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types
 		EntityType:    types.SystemEntityTypePayment,
 		EntityID:      paymentID,
 	}
-	types.AfterCommit(ctx, func() {
+	types.AfterCommit(ctx, func(ctx context.Context) {
 		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-			s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+			s.Logger.Error(ctx,"failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 		}
 	})
 }
