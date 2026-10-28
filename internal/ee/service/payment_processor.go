@@ -1070,6 +1070,11 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 	if p.ConnectionRepo == nil {
 		return
 	}
+	ctx, err := NewBillingEntityService(p.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to resolve billing entity for mark-paid", "error", err, "invoice_id", invoiceID)
+		return
+	}
 
 	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
 	if err != nil {

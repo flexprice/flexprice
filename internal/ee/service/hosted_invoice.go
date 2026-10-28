@@ -208,19 +208,31 @@ func (s *hostedInvoiceService) payGateway(ctx context.Context, inv *dto.InvoiceR
 		return "", false, nil
 	}
 
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return "", false, err
+	}
+
 	providers, err := NewPaymentProviderResolver(s.ServiceParams).ListProviders(ctx, inv.CustomerID)
 	if err != nil {
 		return "", false, err
 	}
-	provider, found := lo.Find(providers, func(p ProviderCapabilities) bool {
-		return lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
+	for _, p := range providers {
+		canLink := lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
 			return c.Type == types.IntegrationCapabilityPaymentLink
 		})
-	})
-	if !found {
-		return "", false, nil
+		if !canLink {
+			continue
+		}
+		connected, err := providerConnected(ctx, s.ServiceParams, types.SecretProvider(p.Gateway))
+		if err != nil {
+			return "", false, err
+		}
+		if connected {
+			return p.Gateway, true, nil
+		}
 	}
-	return provider.Gateway, true, nil
+	return "", false, nil
 }
 
 func errHostedInvoiceLinkNotValid() error {
