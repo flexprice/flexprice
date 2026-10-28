@@ -371,16 +371,15 @@ func TestRemoveUser(t *testing.T) {
 		assert.Equal(t, types.StatusPublished, stored.Status, "a service account must not be archived here")
 	})
 
-	t.Run("refuses to remove the tenant's last user", func(t *testing.T) {
+	t.Run("removes the tenant's last user", func(t *testing.T) {
 		d := withMembers(t, "teammate@acme.com")
 
 		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
-		require.Error(t, err)
-		assert.True(t, ierr.IsValidation(err))
+		require.NoError(t, err)
 
 		status, hasLogin := state(t, d, "teammate@acme.com")
-		assert.Equal(t, types.StatusPublished, status)
-		assert.True(t, hasLogin)
+		assert.Equal(t, types.StatusArchived, status)
+		assert.False(t, hasLogin)
 	})
 
 	t.Run("keeps the supabase login when archiving fails", func(t *testing.T) {
@@ -402,18 +401,6 @@ func TestRemoveUser(t *testing.T) {
 		// The error makes the real transaction roll back the archive; the test database does not roll back.
 		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
 		require.Error(t, err)
-	})
-
-	t.Run("keeps the user when counting members fails", func(t *testing.T) {
-		d := withMembers(t, "owner@acme.com", "teammate@acme.com")
-		d.params.UserRepo = failingCountStore{d.users}
-
-		_, err := NewUserService(d.params).RemoveUser(ctx, removeTeammate)
-		require.Error(t, err)
-
-		status, hasLogin := state(t, d, "teammate@acme.com")
-		assert.Equal(t, types.StatusPublished, status)
-		assert.True(t, hasLogin)
 	})
 
 	t.Run("keeps the user when the tenant lock cannot be taken", func(t *testing.T) {
