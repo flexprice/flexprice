@@ -92,7 +92,7 @@ func (a *ReportActivities) reportForTenant(
 ) {
 	marketplaceConns := make([]*marketplaceConnection, 0, len(conns))
 	for _, conn := range conns {
-		marketplaceConn, err := a.reporter.prepareMarketplaceConnection(ctx, conn)
+		marketplaceConn, err := a.reporter.prepareMarketplaceConnection(types.SetConnectionID(ctx, conn.ID), conn)
 		if err != nil {
 			continue // already logged inside prepareMarketplaceConnection at the stage that failed
 		}

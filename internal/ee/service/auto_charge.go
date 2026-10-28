@@ -26,6 +26,11 @@ func fetchGatewayWithAutoChargeSupport(
 		return "", nil
 	}
 
+	ctx, err := NewBillingEntityService(params).ScopeToCustomer(ctx, req.CustomerID)
+	if err != nil {
+		return "", err
+	}
+
 	gateways, err := NewPaymentProviderResolver(params).ConfiguredGateways(ctx)
 	if err != nil {
 		return "", err

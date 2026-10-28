@@ -101,6 +101,7 @@ func (a *SnapshotActivities) MarketplaceUsageSnapshotActivity(
 		for _, conn := range conns {
 			ctx := types.SetTenantID(ctx, conn.TenantID)
 			ctx = types.SetEnvironmentID(ctx, conn.EnvironmentID)
+			ctx = types.SetConnectionID(ctx, conn.ID)
 			a.processConnection(ctx, conn, input, run)
 		}
 	}

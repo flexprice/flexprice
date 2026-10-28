@@ -42,17 +42,17 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 }
 
 func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID string) error {
-	connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-	})
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, conn := range connections {
-		if conn.Status != types.StatusPublished {
-			continue
-		}
 		integ, err := s.IntegrationFactory.GetIntegrationByProvider(ctx, conn.ProviderType)
 		if err != nil {
 			continue
