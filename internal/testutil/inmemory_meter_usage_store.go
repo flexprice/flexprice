@@ -1061,27 +1061,39 @@ func (s *InMemoryMeterUsageStore) meterUsageForExportWindow(ctx context.Context,
 	return filtered
 }
 
-// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.
-func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID mirrors ClickHouse: the latest row per meter within window,
+// ordered by meter id.
+func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string, window events.TimeRange) ([]*events.MeterUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	latestByMeterID := make(map[string]*events.MeterUsage)
 	for _, r := range s.records {
-		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
-			return &events.MeterUsage{
-				Event: events.Event{
-					ID:                 eventID,
-					ExternalCustomerID: r.ExternalCustomerID,
-					IngestedAt:         r.IngestedAt,
-					Properties:         r.Properties,
-					Timestamp:          r.Timestamp,
-				},
-				MeterID:  r.MeterID,
-				QtyTotal: r.QtyTotal,
-			}, nil
+		if r.TenantID != tenantID || r.EnvironmentID != environmentID || r.ExternalCustomerID != externalCustomerID || r.ID != eventID {
+			continue
+		}
+		if r.Timestamp.Before(window.Start) || !r.Timestamp.Before(window.End) {
+			continue
+		}
+		if latest, ok := latestByMeterID[r.MeterID]; ok && !r.IngestedAt.After(latest.IngestedAt) {
+			continue
+		}
+		latestByMeterID[r.MeterID] = &events.MeterUsage{
+			Event: events.Event{
+				ID:                 eventID,
+				ExternalCustomerID: r.ExternalCustomerID,
+				IngestedAt:         r.IngestedAt,
+				Properties:         r.Properties,
+				Timestamp:          r.Timestamp,
+			},
+			MeterID:  r.MeterID,
+			QtyTotal: r.QtyTotal,
 		}
 	}
-	return nil, nil
+
+	out := lo.Values(latestByMeterID)
+	sort.Slice(out, func(i, j int) bool { return out[i].MeterID < out[j].MeterID })
+	return out, nil
 }
 
 // GetUsageActivitySince mirrors the ClickHouse activity query: distinct

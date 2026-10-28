@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
+	"github.com/flexprice/flexprice/ent/eventdeletionrequest"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/fxrate"
 	"github.com/flexprice/flexprice/ent/group"
@@ -44,6 +45,7 @@ import (
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/meter"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -154,6 +156,7 @@ func checkColumn(t, c string) error {
 			entitlementgrant.Table:         entitlementgrant.ValidColumn,
 			entityintegrationmapping.Table: entityintegrationmapping.ValidColumn,
 			environment.Table:              environment.ValidColumn,
+			eventdeletionrequest.Table:     eventdeletionrequest.ValidColumn,
 			fxrate.Table:                   fxrate.ValidColumn,
 			feature.Table:                  feature.ValidColumn,
 			group.Table:                    group.ValidColumn,
@@ -163,6 +166,7 @@ func checkColumn(t, c string) error {
 			invoicelineitem.Table:          invoicelineitem.ValidColumn,
 			invoicesequence.Table:          invoicesequence.ValidColumn,
 			meter.Table:                    meter.ValidColumn,
+			meterusagecheckpoint.Table:     meterusagecheckpoint.ValidColumn,
 			payment.Table:                  payment.ValidColumn,
 			paymentattempt.Table:           paymentattempt.ValidColumn,
 			paymentmethod.Table:            paymentmethod.ValidColumn,

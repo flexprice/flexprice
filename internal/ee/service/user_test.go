@@ -12,7 +12,9 @@ import (
 
 	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
+	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -24,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserServiceSuite struct {
@@ -522,6 +525,324 @@ func (s *UserServiceSuite) TestInviteUser_RoleAssignment() {
 			stored, err := userRepo.GetByID(ctx, created.ID)
 			s.NoError(err)
 			s.Equal(tc.wantRoles, stored.Roles)
+		})
+	}
+}
+
+func (s *UserServiceSuite) TestCreateUser_FlexpriceReturnsInviteLink() {
+	rbacSvc, err := rbac.NewRBACService(&config.Configuration{
+		RBAC: config.RBACConfig{RolesConfigPath: "../../config/rbac/roles.json"},
+	})
+	s.Require().NoError(err)
+
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+
+	tenantRepo := testutil.NewInMemoryTenantStore()
+	_ = tenantRepo.Create(ctx, &tenant.Tenant{ID: types.DefaultTenantID, Name: "Test Tenant"})
+	secret := "test-secret-key-32-bytes-minimum!"
+	authRepo := testutil.NewInMemoryAuthRepository()
+	svc := &userService{
+		userRepo:    testutil.NewInMemoryUserStore(),
+		tenantRepo:  tenantRepo,
+		authRepo:    authRepo,
+		rbacService: rbacSvc,
+		cfg: &config.Configuration{
+			Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: secret},
+		},
+		settingsService: &settingsService{
+			ServiceParams: ServiceParams{SettingsRepo: testutil.NewInMemorySettingsStore()},
+		},
+	}
+
+	resp, err := svc.CreateUser(ctx, &dto.CreateUserRequest{
+		Type:  types.UserTypeUser,
+		Email: "invitee@example.com",
+		Roles: []string{types.RoleAllReader.String()},
+	})
+
+	s.Require().NoError(err)
+	s.Empty(resp.Password)
+	s.Zero(authRepo.Count(), "the invitee must not have a password until they set one")
+	s.Require().NotNil(resp.InviteExpiresAt)
+	s.WithinDuration(time.Now().Add(7*24*time.Hour), *resp.InviteExpiresAt, 5*time.Second)
+
+	signer, err := authProvider.NewPasswordLinkSigner(secret)
+	s.Require().NoError(err)
+	claims, err := signer.Verify(resp.InviteToken, "", time.Now())
+	s.Require().NoError(err)
+	s.Equal(resp.ID, claims.UserID)
+	s.Equal(types.DefaultTenantID, claims.TenantID)
+	s.Equal(authProvider.PasswordLinkPurposeInvite, claims.Purpose)
+}
+
+func (s *UserServiceSuite) TestCreatePasswordLink() {
+	const secret = "test-secret-key-32-bytes-minimum!"
+	const storedHash = "stored-bcrypt-hash"
+	flexpriceCfg := &config.Configuration{
+		Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: secret},
+	}
+	supabaseCfg := &config.Configuration{
+		Auth: config.AuthConfig{Provider: types.AuthProviderSupabase, Secret: secret},
+	}
+	superAdmin := []string{types.RoleSuperAdmin.String()}
+
+	tests := []struct {
+		name        string
+		callerRoles []string
+		viaAPIKey   bool
+		cfg         *config.Configuration
+		targetID    string
+		wantErr     func(error) bool
+		wantPurpose authProvider.PasswordLinkPurpose
+		wantTTL     time.Duration
+		wantHash    string
+	}{
+		{
+			name:        "member with a password gets a reset link",
+			callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "user_with_password",
+			wantPurpose: authProvider.PasswordLinkPurposeReset, wantTTL: 24 * time.Hour, wantHash: storedHash,
+		},
+		{
+			name:        "member who never set a password gets an invite link",
+			callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "user_invited",
+			wantPurpose: authProvider.PasswordLinkPurposeInvite, wantTTL: 7 * 24 * time.Hour, wantHash: "",
+		},
+		{
+			name:        "caller is not a super_admin",
+			callerRoles: []string{types.RoleAllWriter.String()}, cfg: flexpriceCfg, targetID: "user_with_password",
+			wantErr: ierr.IsPermissionDenied,
+		},
+		{
+			name:        "request made with a super_admin's API key",
+			callerRoles: superAdmin, viaAPIKey: true, cfg: flexpriceCfg, targetID: "user_with_password",
+			wantErr: ierr.IsPermissionDenied,
+		},
+		{
+			name:        "Supabase deployment",
+			callerRoles: superAdmin, cfg: supabaseCfg, targetID: "user_with_password",
+			wantErr: ierr.IsValidation,
+		},
+		{name: "empty id", callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "", wantErr: ierr.IsValidation},
+		{name: "unknown user", callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "user_missing", wantErr: ierr.IsNotFound},
+		{name: "user in another tenant", callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "user_other_tenant", wantErr: ierr.IsNotFound},
+		{name: "service account", callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "sa_1", wantErr: ierr.IsValidation},
+		{name: "removed user", callerRoles: superAdmin, cfg: flexpriceCfg, targetID: "user_removed", wantErr: ierr.IsValidation},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			ctx := testutil.SetupContext()
+			ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+			ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+			ctx = context.WithValue(ctx, types.CtxRoles, tc.callerRoles)
+			actor, source := types.Actor{Type: types.ActorTypeUser, ID: "actor-1"}, types.SourceDashboard
+			if tc.viaAPIKey {
+				actor, source = types.Actor{Type: types.ActorTypeAPIKey, ID: "secret-1"}, types.SourceAPI
+			}
+			ctx = types.SetActor(ctx, actor, source)
+
+			userRepo := testutil.NewInMemoryUserStore()
+			seed := func(id string, userType types.UserType, status types.Status, tenantID string) {
+				u := &user.User{ID: id, Email: id + "@example.com", Type: userType, BaseModel: types.GetDefaultBaseModel(ctx)}
+				u.Status = status
+				u.TenantID = tenantID
+				s.Require().NoError(userRepo.Create(ctx, u))
+			}
+			seed("user_with_password", types.UserTypeUser, types.StatusPublished, types.DefaultTenantID)
+			seed("user_invited", types.UserTypeUser, types.StatusPublished, types.DefaultTenantID)
+			seed("user_other_tenant", types.UserTypeUser, types.StatusPublished, "tenant_other")
+			seed("sa_1", types.UserTypeServiceAccount, types.StatusPublished, types.DefaultTenantID)
+			seed("user_removed", types.UserTypeUser, types.StatusArchived, types.DefaultTenantID)
+
+			authRepo := testutil.NewInMemoryAuthRepository()
+			s.Require().NoError(authRepo.CreateAuth(ctx, domainAuth.NewAuth("user_with_password", types.AuthProviderFlexprice, storedHash)))
+
+			svc := &userService{userRepo: userRepo, authRepo: authRepo, cfg: tc.cfg, logger: testLogger(s.T())}
+
+			link, err := svc.CreatePasswordLink(ctx, tc.targetID)
+
+			if tc.wantErr != nil {
+				s.Nil(link)
+				s.True(tc.wantErr(err), "unexpected error: %v", err)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(string(tc.wantPurpose), link.Purpose)
+			s.WithinDuration(time.Now().Add(tc.wantTTL), link.ExpiresAt, 5*time.Second)
+
+			signer, err := authProvider.NewPasswordLinkSigner(secret)
+			s.Require().NoError(err)
+			claims, err := signer.Verify(link.Token, tc.wantHash, time.Now())
+			s.Require().NoError(err, "the link must be bound to the member's current password state")
+			s.Equal(tc.targetID, claims.UserID)
+			s.Equal(types.DefaultTenantID, claims.TenantID)
+		})
+	}
+}
+
+func (s *UserServiceSuite) TestChangePassword() {
+	const secret = "test-secret-key-32-bytes-minimum!"
+	flexpriceCfg := &config.Configuration{
+		Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: secret},
+	}
+	supabaseCfg := &config.Configuration{
+		Auth: config.AuthConfig{Provider: types.AuthProviderSupabase, Secret: secret},
+	}
+	asUser := func(userID string, source types.Source) context.Context {
+		ctx := context.WithValue(testutil.SetupContext(), types.CtxUserID, userID)
+		return types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: userID}, source)
+	}
+
+	newService := func(cfg *config.Configuration) (*userService, *testutil.InMemoryAuthRepository, string) {
+		authRepo := testutil.NewInMemoryAuthRepository()
+		oldHash, err := authProvider.HashPassword("old-password-1")
+		s.Require().NoError(err)
+		s.Require().NoError(authRepo.CreateAuth(testutil.SetupContext(), domainAuth.NewAuth("user_member", types.AuthProviderFlexprice, oldHash)))
+		return &userService{
+			authRepo: authRepo,
+			db:       testutil.NewMockPostgresClient(nil),
+			cfg:      cfg,
+			logger:   testLogger(s.T()),
+		}, authRepo, oldHash
+	}
+
+	s.Run("a logged-in user sets a new password without the current one", func() {
+		svc, authRepo, oldHash := newService(flexpriceCfg)
+		signer, err := authProvider.NewPasswordLinkSigner(secret)
+		s.Require().NoError(err)
+		openLink, err := signer.Sign(authProvider.PasswordLinkClaims{
+			UserID: "user_member", TenantID: types.DefaultTenantID,
+			Purpose: authProvider.PasswordLinkPurposeReset, ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		}, oldHash)
+		s.Require().NoError(err)
+
+		err = svc.ChangePassword(asUser("user_member", types.SourceDashboard), &dto.ChangePasswordRequest{Password: "new-password-2"})
+
+		s.Require().NoError(err)
+		stored, err := authRepo.GetAuthByUserID(testutil.SetupContext(), "user_member")
+		s.Require().NoError(err)
+		s.NoError(bcrypt.CompareHashAndPassword([]byte(stored.Token), []byte("new-password-2")))
+		s.Error(bcrypt.CompareHashAndPassword([]byte(stored.Token), []byte("old-password-1")))
+		_, err = signer.Verify(openLink, stored.Token, time.Now())
+		s.True(ierr.IsNotFound(err), "an open reset link must stop working once the password changes")
+	})
+
+	refused := []struct {
+		name     string
+		ctx      context.Context
+		cfg      *config.Configuration
+		password string
+		wantErr  func(error) bool
+	}{
+		{name: "request made with an API key", ctx: asUser("user_member", types.SourceAPI), cfg: flexpriceCfg, password: "new-password-2", wantErr: ierr.IsPermissionDenied},
+		{name: "no signed-in user", ctx: testutil.SetupContext(), cfg: flexpriceCfg, password: "new-password-2", wantErr: ierr.IsPermissionDenied},
+		{name: "shorter than 8 characters", ctx: asUser("user_member", types.SourceDashboard), cfg: flexpriceCfg, password: "short12", wantErr: ierr.IsValidation},
+		{name: "longer than 72 bytes", ctx: asUser("user_member", types.SourceDashboard), cfg: flexpriceCfg, password: strings.Repeat("a", 73), wantErr: ierr.IsValidation},
+		{name: "account without a password, such as an SSO user", ctx: asUser("user_sso", types.SourceDashboard), cfg: flexpriceCfg, password: "new-password-2", wantErr: ierr.IsValidation},
+		{name: "Supabase deployment", ctx: asUser("user_member", types.SourceDashboard), cfg: supabaseCfg, password: "new-password-2", wantErr: ierr.IsValidation},
+	}
+	for _, tc := range refused {
+		s.Run(tc.name, func() {
+			svc, authRepo, oldHash := newService(tc.cfg)
+
+			err := svc.ChangePassword(tc.ctx, &dto.ChangePasswordRequest{Password: tc.password})
+
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+			stored, getErr := authRepo.GetAuthByUserID(testutil.SetupContext(), "user_member")
+			s.Require().NoError(getErr)
+			s.Equal(oldHash, stored.Token, "a refused change must leave the password as it was")
+		})
+	}
+}
+
+// otherTenantUserRepo returns another tenant's copy of a user, as a repository that
+// skipped its tenant filter would.
+type otherTenantUserRepo struct{ user.Repository }
+
+func (r otherTenantUserRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
+	found, err := r.Repository.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	other := *found
+	other.TenantID = "tenant_other"
+	return &other, nil
+}
+
+func (s *UserServiceSuite) TestCreatePasswordLink_Failures() {
+	const secret = "test-secret-key-32-bytes-minimum!"
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+	ctx = context.WithValue(ctx, types.CtxRoles, []string{types.RoleSuperAdmin.String()})
+	ctx = types.SetActor(ctx, types.Actor{Type: types.ActorTypeUser, ID: "actor-1"}, types.SourceDashboard)
+
+	tests := []struct {
+		name    string
+		secret  string
+		inject  func(svc *userService)
+		wantErr func(error) bool
+	}{
+		{name: "password lookup fails", secret: secret, inject: func(svc *userService) { svc.authRepo = failingAuthRepo{svc.authRepo} }, wantErr: ierr.IsDatabase},
+		{name: "auth secret is not set", secret: "", inject: func(*userService) {}, wantErr: ierr.IsSystem},
+		{name: "repository returns another tenant's user", secret: secret, inject: func(svc *userService) { svc.userRepo = otherTenantUserRepo{svc.userRepo} }, wantErr: ierr.IsNotFound},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			userRepo := testutil.NewInMemoryUserStore()
+			member := &user.User{ID: "user_member", Email: "user_member@example.com", Type: types.UserTypeUser, BaseModel: types.GetDefaultBaseModel(ctx)}
+			member.Status = types.StatusPublished
+			s.Require().NoError(userRepo.Create(ctx, member))
+			svc := &userService{
+				userRepo: userRepo,
+				authRepo: testutil.NewInMemoryAuthRepository(),
+				cfg:      &config.Configuration{Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: tc.secret}},
+				logger:   testLogger(s.T()),
+			}
+			tc.inject(svc)
+
+			link, err := svc.CreatePasswordLink(ctx, "user_member")
+
+			s.Nil(link)
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+		})
+	}
+}
+
+func (s *UserServiceSuite) TestChangePassword_Failures() {
+	const storedHash = "stored-bcrypt-hash"
+	ctx := types.SetActor(context.WithValue(testutil.SetupContext(), types.CtxUserID, "user_member"),
+		types.Actor{Type: types.ActorTypeUser, ID: "user_member"}, types.SourceDashboard)
+
+	tests := []struct {
+		name    string
+		inject  func(svc *userService)
+		wantErr func(error) bool
+	}{
+		{name: "password lookup fails", inject: func(svc *userService) { svc.authRepo = failingAuthRepo{svc.authRepo} }, wantErr: ierr.IsDatabase},
+		{name: "lock cannot be taken", inject: func(svc *userService) { svc.db = failingLockDB{svc.db} }, wantErr: ierr.IsInternal},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			authRepo := testutil.NewInMemoryAuthRepository()
+			s.Require().NoError(authRepo.CreateAuth(ctx, domainAuth.NewAuth("user_member", types.AuthProviderFlexprice, storedHash)))
+			svc := &userService{
+				authRepo: authRepo,
+				db:       testutil.NewMockPostgresClient(nil),
+				cfg:      &config.Configuration{Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice, Secret: "test-secret-key-32-bytes-minimum!"}},
+				logger:   testLogger(s.T()),
+			}
+			tc.inject(svc)
+
+			err := svc.ChangePassword(ctx, &dto.ChangePasswordRequest{Password: "new-password-2"})
+
+			s.True(tc.wantErr(err), "unexpected error: %v", err)
+			stored, getErr := authRepo.GetAuthByUserID(ctx, "user_member")
+			s.Require().NoError(getErr)
+			s.Equal(storedHash, stored.Token, "a failed change must leave the password as it was")
 		})
 	}
 }
@@ -1614,5 +1935,12 @@ func (s *UserServiceSuite) TestSuperAdminChecksRejectServiceAccounts() {
 		err := s.userService.RemoveUser(ctx, "user-1")
 		s.Require().Error(err)
 		s.True(ierr.IsPermissionDenied(err))
+	})
+
+	s.Run("create_password_link_denied", func() {
+		link, err := s.userService.CreatePasswordLink(ctx, "user-1")
+		s.Require().Error(err)
+		s.True(ierr.IsPermissionDenied(err), "got %v", err)
+		s.Nil(link)
 	})
 }

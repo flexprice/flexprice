@@ -4150,7 +4150,7 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 			}
 
 			// Call the function under test using the real event service
-			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil)
+			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil, nil)
 
 			// Create mock events in the event store for our test data
 			for _, event := range tt.totalUsageEvents {

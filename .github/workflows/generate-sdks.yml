@@ -189,12 +189,16 @@ jobs:
 
       # Overwrite Speakeasy version in artifacts with resolved version only
       - name: Apply resolved version to SDK artifacts
-        run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
+        env:
+          RESOLVED_VERSION: ${{ needs.version-check.outputs.version }}
+        run: ./scripts/force-sdk-version.sh "$RESOLVED_VERSION"
 
       - name: Generate job summary
+        env:
+          RESOLVED_VERSION: ${{ needs.version-check.outputs.version }}
         run: |
           echo "## Generate SDKs" >> $GITHUB_STEP_SUMMARY
-          echo "**Resolved version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** $RESOLVED_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
@@ -375,56 +379,59 @@ jobs:
           path: ${{ matrix.artifact }}
 
       - name: Set target repo
+        env:
+          LANG_KEY: ${{ matrix.lang }}
+          DEFAULT_REPO: ${{ matrix.default_repo }}
         run: |
-          case "${{ matrix.lang }}" in
-            go)         echo "REPO=${SDK_GO_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            python)     echo "REPO=${SDK_PYTHON_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            typescript) echo "REPO=${SDK_TYPESCRIPT_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
-            mcp)        echo "REPO=${SDK_MCP_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+          case "$LANG_KEY" in
+            go)         echo "REPO=${SDK_GO_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            python)     echo "REPO=${SDK_PYTHON_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            typescript) echo "REPO=${SDK_TYPESCRIPT_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
+            mcp)        echo "REPO=${SDK_MCP_REPO:-$DEFAULT_REPO}" >> $GITHUB_ENV ;;
           esac
 
       - name: Push SDK to repo
+        env:
+          LANG_KEY: ${{ matrix.lang }}
+          ARTIFACT: ${{ matrix.artifact }}
         run: |
           # Use resolved version only (from version-check)
-          VERSION="${{ env.VERSION }}"
           [ -z "$VERSION" ] && VERSION="0.0.0"
-          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/${{ env.REPO }}.git /tmp/sdk-repo
+          git clone "https://x-access-token:${SDK_DEPLOY_GIT_TOKEN}@github.com/${REPO}.git" /tmp/sdk-repo
           cd /tmp/sdk-repo
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
-          cp -r "$GITHUB_WORKSPACE/${{ matrix.artifact }}/." /tmp/sdk-repo/
+          cp -r "$GITHUB_WORKSPACE/$ARTIFACT/." /tmp/sdk-repo/
           [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" /tmp/sdk-repo/
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           if [ -n "$(git status --porcelain)" ]; then
             git add .
-            git commit -m "Release ${{ matrix.lang }} SDK v${VERSION}"
+            git commit -m "Release ${LANG_KEY} SDK v${VERSION}"
             if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
-              git tag -a "v${VERSION}" -m "${{ matrix.lang }} SDK version ${VERSION}"
+              git tag -a "v${VERSION}" -m "${LANG_KEY} SDK version ${VERSION}"
             fi
             git push origin main
             git push origin "v${VERSION}" 2>/dev/null || true
           fi
-          echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
+          echo "Pushed ${LANG_KEY} SDK to ${REPO}"
 
       - name: Create Go SDK GitHub release
         if: matrix.lang == 'go'
         env:
           GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
         run: |
-          VERSION="${{ env.VERSION }}"
           [ -z "$VERSION" ] && VERSION="0.0.0"
           TAG="v${VERSION}"
           TITLE="Go SDK ${TAG}"
-          NOTES="Automated release for Go SDK ${TAG}."
 
-          if gh release view "$TAG" --repo "${{ env.REPO }}" >/dev/null 2>&1; then
-            echo "Release $TAG already exists in ${{ env.REPO }}; skipping."
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists in $REPO; skipping."
           else
             gh release create "$TAG" \
-              --repo "${{ env.REPO }}" \
+              --repo "$REPO" \
               --title "$TITLE" \
               --notes "Automated release for Go SDK ${TAG}."
-            echo "Created release $TAG in ${{ env.REPO }}."
+            echo "Created release $TAG in $REPO."
           fi
 
   # ---------------------------------------------------------------------------
@@ -450,7 +457,7 @@ jobs:
           TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/javascript-sdk}"
           MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-server}"
           echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
-          echo "**Resolved version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY

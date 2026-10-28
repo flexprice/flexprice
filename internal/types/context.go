@@ -58,6 +58,13 @@ func GetTenantID(ctx context.Context) string {
 	return ""
 }
 
+// WithRequestID carries the request id down to anything that stamps it on a row
+// or an error. The HTTP middleware sets it, and a caller that arrives without the
+// middleware sets its own so the id is never empty downstream.
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, CtxRequestID, requestID)
+}
+
 func GetRequestID(ctx context.Context) string {
 	if requestID, ok := ctx.Value(CtxRequestID).(string); ok {
 		return requestID

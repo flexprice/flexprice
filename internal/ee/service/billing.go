@@ -105,9 +105,12 @@ type billingService struct {
 }
 
 func NewBillingService(params ServiceParams) BillingService {
-	return &billingService{
-		ServiceParams: params,
-	}
+	return newBillingService(params)
+}
+
+// newBillingService hands same-package callers the concrete type, for helpers beyond the public API.
+func newBillingService(params ServiceParams) *billingService {
+	return &billingService{ServiceParams: params}
 }
 
 // bucketedMeterCost holds the result of calculating cost for a bucketed meter
@@ -873,7 +876,7 @@ func (s *billingService) CalculateUsageCharges(
 	if err != nil {
 		return nil, err
 	}
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 
 	commitments, err := s.newCommitmentLoader(
 		ctx, sub, periodStart, periodEnd, time.Now().UTC(), rawChargesByLine(sub, usage), meterMap, "",
@@ -2561,9 +2564,9 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),
 		PaymentStatus:    lo.ToPtr(types.PaymentStatusPending),
 		Currency:         sub.Currency,
-		AmountDue:        result.TotalAmount,
-		Total:            result.TotalAmount,
-		Subtotal:         result.TotalAmount,
+		AmountDue:        decimal.Max(result.TotalAmount, decimal.Zero),
+		Total:            decimal.Max(result.TotalAmount, decimal.Zero),
+		Subtotal:         decimal.Max(result.TotalAmount, decimal.Zero),
 		Description:      description,
 		DueDate:          lo.ToPtr(invoiceDueDate),
 		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
@@ -2993,7 +2996,7 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		}
 
 		// Get all entitlements for this subscription (plan + addons)
-		subEntitlements, err := subscriptionService.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+		subEntitlements, err := subscriptionService.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, time.Now().UTC())
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get subscription entitlements, skipping",
 				"subscription_id", sub.ID,
@@ -3083,7 +3086,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		return nil, err
 	}
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 
 	// get customer
 	customer, err := s.CustomerRepo.Get(ctx, customerID)

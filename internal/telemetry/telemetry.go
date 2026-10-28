@@ -102,15 +102,13 @@ func (r *Reporter) reportInstallInit(ctx context.Context) {
 	r.send(ctx, EventInstallInit, newInstallPayload(r))
 }
 
-// ReportEvent fires a lightweight ping for a real system event consumed off
-// the webhook topic. event.Payload is redacted (see redact.go) before it's
-// sent, since webhook payloads can carry customer PII and financial data
-// depending on event type. Dispatches off the caller's goroutine so a
-// stalled collector never delays webhook delivery; capped by inflight so a
-// persistent stall can't pile up unbounded goroutines. Best-effort: a
-// dropped or failed send is fine, this is telemetry, not delivery.
+// ReportEvent pings the collector for event names isTrackedEventName allows,
+// with a redacted payload (redact.go), dispatched off the caller's goroutine.
 func (r *Reporter) ReportEvent(ctx context.Context, event *types.WebhookEvent) {
 	if reason := r.disabledReason(); reason != "" {
+		return
+	}
+	if !isTrackedEventName(string(event.EventName)) {
 		return
 	}
 

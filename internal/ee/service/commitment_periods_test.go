@@ -344,3 +344,53 @@ func TestClipCommitmentPeriod_PartialFloorsSumToTheRoundedWhole(t *testing.T) {
 		})
 	}
 }
+
+// A year from 15 Jan 2027 starts and ends mid-period: its first and last periods prorate against their full
+// months, 17 and 14 of 31 days, and the partial invoices of the last sum to its rounded floor.
+func TestCommitmentPeriods_MidPeriodEndProratesTheLastPeriod(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(1, 0, 0)
+	lastMonth := time.Date(2028, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := &commitment.Commitment{
+		Type:        types.COMMITMENT_TYPE_AMOUNT,
+		Value:       decimal.NewFromInt(100),
+		Currency:    "usd",
+		Measurement: types.CommitmentMeasurementBillingPeriod,
+		Timezone:    "UTC",
+		StartDate:   start,
+		EndDate:     end,
+	}
+
+	periods, err := commitmentPeriods(c, monthlySub(jan), identityAmount, "")
+	require.NoError(t, err)
+	require.Len(t, periods, 13)
+	last := periods[12]
+	require.Equal(t, lastMonth, last.Start)
+	require.Equal(t, end, last.End)
+	require.Equal(t, lastMonth, last.FullStart)
+	require.Equal(t, lastMonth.AddDate(0, 1, 0), last.FullEnd)
+	require.False(t, last.Clipped)
+	require.True(t, periods[0].Amount.Round(8).Equal(decimal.RequireFromString("54.83870968")), "first=%s", periods[0].Amount)
+	require.True(t, last.Amount.Round(8).Equal(decimal.RequireFromString("45.16129032")), "last=%s", last.Amount)
+	require.True(t, commitmentValue(periods).Round(8).Equal(decimal.NewFromInt(1200)), "total=%s", commitmentValue(periods))
+
+	split := time.Date(2028, 1, 10, 0, 0, 0, 0, time.UTC)
+	before := clipCommitmentPeriod(c, last, lastMonth, split, identityAmount, "", jan)
+	after := clipCommitmentPeriod(c, last, split, lastMonth.AddDate(0, 1, 0), identityAmount, "", jan)
+	require.True(t, before.Clipped)
+	require.True(t, before.Amount.Equal(decimal.RequireFromString("29.03")), "before=%s", before.Amount)
+	require.True(t, after.Clipped)
+	require.Equal(t, end, after.End)
+	require.True(t, after.Amount.Equal(decimal.RequireFromString("16.13")), "after=%s", after.Amount)
+	require.True(t, before.Amount.Add(after.Amount).Equal(decimal.RequireFromString("45.16")))
+
+	daily := *c
+	daily.Type, daily.Measurement, daily.Value = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow, decimal.NewFromInt(1)
+	periods, err = commitmentPeriods(&daily, monthlySub(jan), identityAmount, types.WindowSizeDay)
+	require.NoError(t, err)
+	require.Len(t, periods, 13)
+	require.Equal(t, int64(17), periods[0].ActiveBuckets)
+	require.Equal(t, int64(14), periods[12].ActiveBuckets) // 1 to 14 Jan; the 15 Jan bucket starts at the end
+	require.True(t, commitmentValue(periods).Equal(decimal.NewFromInt(365)), "total=%s", commitmentValue(periods))
+}

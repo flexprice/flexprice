@@ -105,7 +105,6 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event
 		return h.handleSubscriptionCancellation(ctx, event, environmentID, services)
 
 	default:
-		h.logger.Info(ctx, "unhandled Stripe webhook event type", "type", event.Type)
 		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}

@@ -1046,10 +1046,7 @@ func (s *entitlementService) resettleGrantWindows(
 	return err
 }
 
-// assertSingleContributor refuses an override where several entitlements already feed the
-// feature. One allowance field cannot address more than one of them: additive pools them,
-// so the customer lands above the number typed, and parallel leaves it ambiguous which
-// was meant. Lifting this needs per-allowance editing, not a change here.
+// assertSingleContributor rejects overrides where multiple entitlements contribute to the feature.
 func (s *entitlementService) assertSingleContributor(ctx context.Context, e *entitlement.Entitlement) error {
 	if !e.IsSubscriptionOverride() {
 		return nil

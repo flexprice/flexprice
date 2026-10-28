@@ -196,6 +196,49 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SkipsNonUs
 	s.Empty(debits, "no wallets should be debited when invoice has no usage items")
 }
 
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_AppliesPerPositiveUsageLine() {
+	svc := s.getServiceImpl()
+
+	usage := s.createLineItemForCalculation(decimal.NewFromInt(50), nil, decimal.Zero)
+	compute := s.createLineItemForCalculation(decimal.RequireFromString("0.5"), nil, decimal.Zero)
+	fixed := s.createLineItemForCalculation(decimal.NewFromInt(20), lo.ToPtr(string(types.PRICE_TYPE_FIXED)), decimal.Zero)
+	refund := s.createLineItemForCalculation(decimal.NewFromInt(-45), nil, decimal.Zero)
+	inv := s.createInvoiceForCalculation("inv_net_cap", "USD", []*invoice.InvoiceLineItem{usage, compute, fixed, refund})
+
+	wallets := []*wallet.Wallet{
+		s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromInt(100)),
+	}
+
+	debits, err := svc.CalculateCreditAdjustments(inv, wallets)
+	s.Require().NoError(err)
+
+	// Credits cover each positive usage line; fixed and negative lines receive none.
+	s.True(decimal.RequireFromString("50.5").Equal(debits["wallet_1"]), "debit %s", debits["wallet_1"])
+	s.True(decimal.NewFromInt(50).Equal(usage.PrepaidCreditsApplied))
+	s.True(decimal.RequireFromString("0.5").Equal(compute.PrepaidCreditsApplied))
+	s.True(fixed.PrepaidCreditsApplied.IsZero())
+	s.True(refund.PrepaidCreditsApplied.IsZero())
+}
+
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NegativeNetUsageStillPaysPositiveLine() {
+	svc := s.getServiceImpl()
+
+	usage := s.createLineItemForCalculation(decimal.NewFromInt(100), nil, decimal.Zero)
+	refund := s.createLineItemForCalculation(decimal.NewFromInt(-130), nil, decimal.Zero)
+	inv := s.createInvoiceForCalculation("inv_net_negative", "USD", []*invoice.InvoiceLineItem{usage, refund})
+
+	wallets := []*wallet.Wallet{
+		s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromInt(100)),
+	}
+
+	debits, err := svc.CalculateCreditAdjustments(inv, wallets)
+	s.Require().NoError(err)
+
+	s.True(decimal.NewFromInt(100).Equal(debits["wallet_1"]))
+	s.True(decimal.NewFromInt(100).Equal(usage.PrepaidCreditsApplied))
+	s.True(refund.PrepaidCreditsApplied.IsZero())
+}
+
 func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWalletsConsumedInOrder() {
 	svc := s.getServiceImpl()
 
@@ -352,4 +395,40 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_FiatInvoic
 	s.True(decimal.NewFromInt(30).Equal(debits["wallet_usd"]))
 	s.True(decimal.NewFromInt(30).Equal(inv.LineItems[0].PrepaidCreditsApplied))
 	s.Nil(inv.LineItems[0].CustomCurrency, "no denomination is created for a fiat invoice")
+}
+
+func TestUsageNet(t *testing.T) {
+	usage := lo.ToPtr(string(types.PRICE_TYPE_USAGE))
+	fixed := lo.ToPtr(string(types.PRICE_TYPE_FIXED))
+	line := func(priceType *string, amount, discount int64) *invoice.InvoiceLineItem {
+		return &invoice.InvoiceLineItem{PriceType: priceType, Amount: decimal.NewFromInt(amount), LineItemDiscount: decimal.NewFromInt(discount)}
+	}
+
+	tests := []struct {
+		name  string
+		lines []*invoice.InvoiceLineItem
+		want  int64
+	}{
+		{"negative line does not offset positive", []*invoice.InvoiceLineItem{line(usage, 50, 0), line(usage, -45, 0)}, 50},
+		{"discounts reduce the net", []*invoice.InvoiceLineItem{line(usage, 50, 10), line(usage, -20, 0)}, 40},
+		{"fixed lines are ignored", []*invoice.InvoiceLineItem{line(usage, 50, 0), line(fixed, 20, 0), line(usage, -45, 0)}, 50},
+		{"net negative still includes positive line", []*invoice.InvoiceLineItem{line(usage, 100, 0), line(usage, -130, 0)}, 100},
+		{
+			"reads the custom-currency denomination",
+			[]*invoice.InvoiceLineItem{{
+				PriceType:      usage,
+				Amount:         decimal.NewFromInt(5),
+				CustomCurrency: &types.CustomCurrencyLineItem{Amount: decimal.NewFromInt(50)},
+			}},
+			50,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := usageNet(&invoice.Invoice{LineItems: tt.lines})
+			if !got.Equal(decimal.NewFromInt(tt.want)) {
+				t.Fatalf("usageNet = %s, want %d", got, tt.want)
+			}
+		})
+	}
 }

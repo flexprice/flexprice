@@ -8,6 +8,10 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
+	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -107,6 +111,9 @@ func (s *BillingActivitiesSuite) newServiceParams() service.ServiceParams {
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:            s.GetStores().EntitlementRepo,
+		EntitlementGrantRepo:       s.GetStores().EntitlementGrantRepo,
+		MeterUsageCheckpointRepo:   s.GetStores().MeterUsageCheckpointRepo,
+		AlertRepo:                  s.GetStores().AlertRepo,
 		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
@@ -506,4 +513,170 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_EndDateWhilePause
 	completed, err := s.GetStores().SubscriptionRepo.GetPause(ctx, pause.ID)
 	s.Require().NoError(err)
 	s.Equal(types.PauseStatusCompleted, completed.PauseStatus)
+}
+
+func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_QuietNeverCycleOpensAndEvaluatesOnce() {
+	s.WithEnvironment("env_rollover_grants")
+	ctx := s.GetContext()
+	envID := types.GetEnvironmentID(ctx)
+	now := time.Now().UTC()
+	currentStart := now.Add(-time.Minute)
+	cust := &customer.Customer{ID: "customer-rollover", ExternalID: "external-rollover", EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	p := &plan.Plan{ID: "plan-rollover", Name: "Storage", EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, p))
+	m := &meter.Meter{ID: "meter-rollover", EventName: "storage", ResetUsage: types.ResetUsageNever,
+		Aggregation: meter.Aggregation{Type: types.AggregationSum}, EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	f := &feature.Feature{ID: "feature-rollover", Type: types.FeatureTypeMetered, MeterID: m.ID, EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+	ec := &entitlement.Entitlement{ID: "ec-rollover", EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN, EntityID: p.ID,
+		FeatureID: f.ID, FeatureType: types.FeatureTypeMetered, IsEnabled: true, GrantMeasure: types.EntitlementGrantMeasureQuantity,
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod, GrantQuota: lo.ToPtr(decimal.NewFromInt(100)),
+		EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, ec)
+	s.Require().NoError(err)
+	sub := &subscription.Subscription{ID: "sub-rollover", CustomerID: cust.ID, PlanID: p.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive, SubscriptionType: types.SubscriptionTypeStandalone,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		StartDate: currentStart.AddDate(0, -1, 0), CurrentPeriodStart: currentStart.AddDate(0, -1, 0), CurrentPeriodEnd: currentStart,
+		EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	previous := entitlementgrant.NewEntitlementGrantBuilder(nil).
+		WithID("grant-rollover-previous").WithEntitlementConfigID(ec.ID).WithCustomerID(cust.ID).
+		WithSubscriptionID(sub.ID).WithScope(types.EntitlementGrantScopeFeature, f.ID).
+		WithMeasure(types.EntitlementGrantMeasureQuantity).WithQuota(decimal.NewFromInt(100)).
+		WithUsage(decimal.NewFromInt(120)).WithWindow(sub.StartDate, currentStart).
+		WithGrantStatus(types.EntitlementGrantStatusExhausted).WithLastComputedAt(&currentStart).
+		WithEnvironmentID(envID).WithBaseModel(types.GetDefaultBaseModel(ctx)).Build()
+	_, err = s.GetStores().EntitlementGrantRepo.Create(ctx, previous)
+	s.Require().NoError(err)
+	s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+		Event: events.Event{ID: "event-previous-period", TenantID: types.GetTenantID(ctx), EnvironmentID: envID,
+			ExternalCustomerID: cust.ExternalID, Timestamp: currentStart.Add(-time.Hour)},
+		MeterID: m.ID, QtyTotal: decimal.NewFromInt(120),
+	}}))
+	params := s.newServiceParams()
+	_, err = service.NewMeterUsageService(params).SaveUsageCheckpoint(ctx, service.CheckpointedUsageRequest{
+		CustomerID: cust.ID, ExternalCustomerIDs: []string{cust.ExternalID}, MeterID: m.ID,
+		AggregationType: types.AggregationSum, Until: currentStart,
+	}, nil)
+	s.Require().NoError(err)
+	activities := NewBillingActivities(service.NewSubscriptionService(params), params, s.GetLogger())
+	input := subscriptionModels.UpdateSubscriptionPeriodActivityInput{SubscriptionID: sub.ID,
+		PeriodStart: currentStart, PeriodEnd: currentStart.AddDate(0, 1, 0),
+		TenantID: types.GetTenantID(ctx), EnvironmentID: envID, UserID: types.GetUserID(ctx)}
+	var firstID string
+	for retry := 0; retry < 2; retry++ {
+		_, err := activities.UpdateCurrentPeriodActivity(context.Background(), input)
+		s.Require().NoError(err)
+		rows, err := s.GetStores().EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
+			WithSubscriptionIDs(sub.ID).WithCycleOverlap(input.PeriodStart, input.PeriodEnd))
+		s.Require().NoError(err)
+		s.Require().Len(rows, 1)
+		g := rows[0]
+		if retry == 0 {
+			firstID = g.ID
+		}
+		s.Equal(firstID, g.ID)
+		s.True(g.ValidFrom.Equal(currentStart))
+		s.True(g.ValidTo.Equal(input.PeriodEnd))
+		s.Equal("100", g.Quota.String())
+		s.Equal("120", g.Usage.String())
+		s.Equal(types.EntitlementGrantStatusExhausted, g.GrantStatus)
+		s.NotNil(g.LastComputedAt)
+	}
+}
+
+// A grouped child on the parent's customer still opens its NEVER allowance when the parent has none.
+func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_RefreshesSameCustomerGroupedChild() {
+	s.WithEnvironment("env_rollover_grouped")
+	ctx := s.GetContext()
+	envID := types.GetEnvironmentID(ctx)
+	currentStart := time.Now().UTC().Add(-time.Minute)
+	cust := &customer.Customer{ID: "customer-grouped", ExternalID: "external-grouped", EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	plainPlan := &plan.Plan{ID: "plan-grouped-parent", Name: "Base", EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, plainPlan))
+	neverPlan := &plan.Plan{ID: "plan-grouped-child", Name: "Storage", EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, neverPlan))
+	m := &meter.Meter{ID: "meter-grouped", EventName: "storage", ResetUsage: types.ResetUsageNever,
+		Aggregation: meter.Aggregation{Type: types.AggregationSum}, EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	f := &feature.Feature{ID: "feature-grouped", Type: types.FeatureTypeMetered, MeterID: m.ID, EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, &entitlement.Entitlement{ID: "ec-grouped", EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID: neverPlan.ID, FeatureID: f.ID, FeatureType: types.FeatureTypeMetered, IsEnabled: true,
+		GrantMeasure: types.EntitlementGrantMeasureQuantity, GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		GrantQuota: lo.ToPtr(decimal.NewFromInt(100)), EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)})
+	s.Require().NoError(err)
+	newSub := func(id, planID string, subType types.SubscriptionType, parentID *string) *subscription.Subscription {
+		sub := &subscription.Subscription{ID: id, CustomerID: cust.ID, PlanID: planID, ParentSubscriptionID: parentID,
+			SubscriptionStatus: types.SubscriptionStatusActive, SubscriptionType: subType,
+			Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+			StartDate: currentStart.AddDate(0, -1, 0), CurrentPeriodStart: currentStart.AddDate(0, -1, 0), CurrentPeriodEnd: currentStart,
+			EnvironmentID: envID, BaseModel: types.GetDefaultBaseModel(ctx)}
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+		return sub
+	}
+	parent := newSub("sub-grouped-parent", plainPlan.ID, types.SubscriptionTypeParent, nil)
+	child := newSub("sub-grouped-child", neverPlan.ID, types.SubscriptionTypeGroupedInvoicing, lo.ToPtr(parent.ID))
+
+	params := s.newServiceParams()
+	activities := NewBillingActivities(service.NewSubscriptionService(params), params, s.GetLogger())
+	periodEnd := currentStart.AddDate(0, 1, 0)
+	_, err = activities.UpdateCurrentPeriodActivity(context.Background(), subscriptionModels.UpdateSubscriptionPeriodActivityInput{
+		SubscriptionID: parent.ID, PeriodStart: currentStart, PeriodEnd: periodEnd,
+		TenantID: types.GetTenantID(ctx), EnvironmentID: envID, UserID: types.GetUserID(ctx)})
+	s.Require().NoError(err)
+	rows, err := s.GetStores().EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
+		WithSubscriptionIDs(child.ID).WithCycleOverlap(currentStart, periodEnd))
+	s.Require().NoError(err)
+	s.Require().Len(rows, 1)
+	s.Equal("100", rows[0].Quota.String())
+	s.NotNil(rows[0].LastComputedAt)
+}
+
+func (s *BillingActivitiesSuite) TestRolloverSkipsSubscriptionsWithoutNeverMeterGrants() {
+	ctx := s.GetContext()
+	f := &feature.Feature{ID: "feature-normal-rollover", Type: types.FeatureTypeMetered,
+		MeterID: s.testData.meter.ID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, f))
+	ec := &entitlement.Entitlement{ID: "ec-normal-rollover", EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+		EntityID: s.testData.plan.ID, FeatureID: f.ID, FeatureType: types.FeatureTypeMetered, IsEnabled: true,
+		GrantMeasure:      types.EntitlementGrantMeasureQuantity,
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		GrantQuota:        lo.ToPtr(decimal.NewFromInt(100)), BaseModel: types.GetDefaultBaseModel(ctx)}
+	_, err := s.GetStores().EntitlementRepo.Create(ctx, ec)
+	s.Require().NoError(err)
+	now := time.Now().UTC()
+	sub := &subscription.Subscription{ID: "sub-normal-rollover", CustomerID: s.testData.customer.ID,
+		PlanID: s.testData.plan.ID, SubscriptionStatus: types.SubscriptionStatusActive,
+		SubscriptionType: types.SubscriptionTypeStandalone, StartDate: now.Add(-time.Minute),
+		CurrentPeriodStart: now.Add(-time.Minute), CurrentPeriodEnd: now.AddDate(0, 1, 0),
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1,
+		BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	params := s.newServiceParams()
+	activities := NewBillingActivities(service.NewSubscriptionService(params), params, s.GetLogger())
+	activities.refreshEntitlementGrantsAfterRollover(ctx, sub)
+	grants, err := s.GetStores().EntitlementGrantRepo.List(ctx,
+		types.NewNoLimitEntitlementGrantFilter().WithSubscriptionIDs(sub.ID))
+	s.Require().NoError(err)
+	s.Empty(grants)
+}
+
+func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_DoesNotRefreshCancelledSubscription() {
+	ctx := s.GetContext()
+	s.WithEnvironment("env_cancelled_rollover")
+	ctx = s.GetContext()
+	sub := &subscription.Subscription{ID: "sub-cancelled-rollover", CustomerID: "no-customer",
+		SubscriptionStatus: types.SubscriptionStatusCancelled, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	activities := NewBillingActivities(nil, s.newServiceParams(), s.GetLogger())
+	_, err := activities.UpdateCurrentPeriodActivity(context.Background(), subscriptionModels.UpdateSubscriptionPeriodActivityInput{
+		SubscriptionID: sub.ID, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+		PeriodStart: time.Now().UTC(), PeriodEnd: time.Now().UTC().AddDate(0, 1, 0),
+	})
+	s.NoError(err)
 }

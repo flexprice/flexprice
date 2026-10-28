@@ -187,8 +187,8 @@ func (s *commitmentService) validateAgainstSubscription(
 		return ierr.Validationf("start_date cannot be before the subscription start %s", sub.StartDate.Format(time.RFC3339))
 	}
 
-	if err := validateBoundary(sub, req.EndDate); err != nil {
-		return err
+	if sub.EndDate != nil && req.EndDate.After(*sub.EndDate) {
+		return ierr.Validationf("end_date cannot be after the subscription end %s", sub.EndDate.Format(time.RFC3339))
 	}
 
 	if req.Scope.EntityType == types.CommitmentScopeSubscription && req.Scope.EntityID != sub.ID {
@@ -310,8 +310,8 @@ func billsEverySubscriptionPeriod(sub *subscription.Subscription, period types.B
 }
 
 // validateOverlaps requires commitments sharing a line item and still allocating to differ in priority, and
-// all overlapping ones to agree on type, measurement, bucket size (for windows) and overage rate; a terminated
-// commitment still counts for the latter through the end of the billing period it was terminated in.
+// all overlapping ones to agree on type, measurement, bucket size (for windows) and overage rate; for the latter
+// a commitment counts through the end of the billing period holding its effective end.
 func (s *commitmentService) validateOverlaps(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
@@ -326,6 +326,11 @@ func (s *commitmentService) validateOverlaps(
 		return err
 	}
 
+	reqSpanEnd, err := inForceEnd(cc.Sub, &commitment.Commitment{StartDate: req.StartDate, EndDate: req.EndDate})
+	if err != nil {
+		return err
+	}
+
 	lineIDs := lo.Map(lines, func(li *subscription.SubscriptionLineItem, _ int) string {
 		return li.ID
 	})
@@ -335,7 +340,7 @@ func (s *commitmentService) validateOverlaps(
 			return err
 		}
 
-		if !spanEnd.After(other.StartDate) || !other.StartDate.Before(req.EndDate) || !req.StartDate.Before(spanEnd) {
+		if !spanEnd.After(other.StartDate) || !other.StartDate.Before(reqSpanEnd) || !req.StartDate.Before(spanEnd) {
 			continue
 		}
 
@@ -344,7 +349,7 @@ func (s *commitmentService) validateOverlaps(
 			other.ScopeEntityID,
 			cc,
 			maxTime(req.StartDate, other.StartDate),
-			minTime(req.EndDate, spanEnd),
+			minTime(reqSpanEnd, spanEnd),
 		)
 		otherLineIDs := lo.Map(otherLines, func(li *subscription.SubscriptionLineItem, _ int) string {
 			return li.ID
@@ -353,7 +358,8 @@ func (s *commitmentService) validateOverlaps(
 			continue
 		}
 
-		if other.Priority == req.Priority && req.StartDate.Before(other.EffectiveEnd()) {
+		allocatingTogether := req.StartDate.Before(other.EffectiveEnd()) && other.StartDate.Before(req.EndDate)
+		if allocatingTogether && other.Priority == req.Priority {
 			return ierr.Validationf("priority %d is already used by overlapping commitment %s", req.Priority, other.ID)
 		}
 
@@ -394,27 +400,32 @@ func (s *commitmentService) validateOverlaps(
 	return nil
 }
 
-// inForceEnd returns when a commitment stops constraining others: its end, or for a terminated one the end of
-// the billing period holding its cutoff.
+// inForceEnd returns when a commitment stops constraining others: the end of the subscription billing period
+// holding its effective end, whose invoice still bills it. One ended at or before its start spans nothing.
 func inForceEnd(sub *subscription.Subscription, c *commitment.Commitment) (time.Time, error) {
-	if c.TerminatedAt == nil {
-		return c.EndDate, nil
-	}
-
-	return terminatedSpanEnd(sub, c)
-}
-
-// terminatedSpanEnd returns the end of the subscription billing period holding a terminated commitment's
-// effective end; a commitment terminated at or before its start spans nothing.
-func terminatedSpanEnd(sub *subscription.Subscription, c *commitment.Commitment) (time.Time, error) {
 	endedAt := c.EffectiveEnd()
 	if !endedAt.After(c.StartDate) {
 		return endedAt, nil
 	}
 
+	// Run the periods one billing date past endedAt, so the period holding it is not cut at endedAt.
+	horizon, err := types.NextBillingDate(&types.NextBillingDateParams{
+		CurrentPeriodStart:  endedAt,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.Timezone,
+	})
+	if err != nil {
+		return time.Time{}, ierr.WithError(err).
+			WithHint("Failed to compute billing periods for commitment").
+			Mark(ierr.ErrInternal)
+	}
+
 	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
 		InitialPeriodStart: sub.StartDate,
-		EndDate:            &c.EndDate,
+		EndDate:            &horizon,
 		Anchor:             sub.BillingAnchor,
 		PeriodCount:        sub.BillingPeriodCount,
 		BillingPeriod:      sub.BillingPeriod,
@@ -455,76 +466,6 @@ func (s *commitmentService) sameOverage(
 	}
 
 	return p.BillingModel == types.BILLING_MODEL_FLAT_FEE && p.Amount.Equal(lo.FromPtr(req.OveragePrice.Amount)), nil
-}
-
-// validateBoundary requires end to fall on a subscription billing-period end or the subscription end,
-// and never after the subscription end.
-func validateBoundary(sub *subscription.Subscription, end time.Time) error {
-	if sub.EndDate != nil {
-		if end.Equal(*sub.EndDate) {
-			return nil
-		}
-
-		if end.After(*sub.EndDate) {
-			return ierr.Validationf("end_date cannot be after the subscription end %s", sub.EndDate.Format(time.RFC3339))
-		}
-	}
-
-	// Extend one period past end so the last period is not clipped at end.
-	horizon, err := types.NextBillingDate(&types.NextBillingDateParams{
-		CurrentPeriodStart: end,
-		BillingAnchor:      sub.BillingAnchor,
-		Unit:               sub.BillingPeriodCount,
-		Period:             sub.BillingPeriod,
-		Timezone:           sub.Timezone,
-	})
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to compute billing periods for commitment").
-			Mark(ierr.ErrInternal)
-	}
-
-	periods, err := types.CalculateBillingPeriods(&types.CalculateBillingPeriodsParams{
-		InitialPeriodStart: sub.StartDate,
-		EndDate:            &horizon,
-		Anchor:             sub.BillingAnchor,
-		PeriodCount:        sub.BillingPeriodCount,
-		BillingPeriod:      sub.BillingPeriod,
-		Timezone:           sub.Timezone,
-	})
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to compute billing periods for commitment").
-			Mark(ierr.ErrInternal)
-	}
-
-	var before, after *time.Time
-	for _, p := range periods {
-		switch {
-		case p.End.Equal(end):
-			return nil
-		case p.End.Before(end):
-			before = lo.ToPtr(p.End)
-		case after == nil:
-			after = lo.ToPtr(p.End)
-		}
-	}
-
-	const layout = "2 Jan 2006"
-	switch {
-	case before != nil && after != nil:
-		return ierr.Validationf(
-			"end_date must fall on a billing date; nearest are %s and %s",
-			before.Format(layout),
-			after.Format(layout),
-		)
-	case after != nil:
-		return ierr.Validationf("end_date must fall on a billing date; nearest is %s", after.Format(layout))
-	case before != nil:
-		return ierr.Validationf("end_date must fall on a billing date; nearest is %s", before.Format(layout))
-	}
-
-	return ierr.Validation("end_date must fall on a billing date")
 }
 
 // entitledMeter returns the first of the meters carrying an enabled metered entitlement on the
@@ -639,8 +580,8 @@ func rejectLegacyCommitmentInScope(
 	return nil
 }
 
-// overlapsLine reports whether the line's billing interval overlaps the commitment's term, extended for a
-// terminated one.
+// overlapsLine reports whether the line's billing interval overlaps the commitment's term, extended to the end
+// of the billing period holding its effective end.
 func overlapsLine(sub *subscription.Subscription, c *commitment.Commitment, li *subscription.SubscriptionLineItem) (bool, error) {
 	spanEnd, err := inForceEnd(sub, c)
 	if err != nil {
@@ -762,11 +703,13 @@ func checkLineItemCommitmentDetach(
 			op := cc.Prices[other.PriceID]
 			return other.ID != li.ID && other.PriceType == types.PRICE_TYPE_USAGE && op != nil && commitmentCoversLine(c, other, op)
 		})
-		if !coversContinuously(remaining, from, end) {
+		if gap, uncovered := coverageGap(remaining, from, end); uncovered {
 			return ierr.Validationf(
-				"line item %s is the last line in scope of binding commitment %s for part of its term; terminate the commitment first",
+				"ending line item %s breaks binding commitment %s's scope coverage at %s, inside its term ending %s; keep a covering line through the term or terminate the commitment first",
 				li.ID,
 				c.ID,
+				gap.Format(time.RFC3339),
+				end.Format(time.RFC3339),
 			)
 		}
 	}
@@ -774,27 +717,31 @@ func checkLineItemCommitmentDetach(
 	return nil
 }
 
-// coversContinuously reports whether the lines together run through all of [from, to) without a gap.
-func coversContinuously(lines []*subscription.SubscriptionLineItem, from, to time.Time) bool {
+// coverageGap returns the first instant of [from, to) the lines leave uncovered, and whether one exists.
+func coverageGap(lines []*subscription.SubscriptionLineItem, from, to time.Time) (time.Time, bool) {
 	sorted := append([]*subscription.SubscriptionLineItem(nil), lines...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].StartDate.Before(sorted[j].StartDate) })
 
 	covered := from
 	for _, li := range sorted {
 		if !covered.Before(to) {
-			return true
+			return time.Time{}, false
 		}
 
 		if li.StartDate.After(covered) {
-			return false
+			return covered, true
 		}
 
 		if li.EndDate.IsZero() {
-			return true
+			return time.Time{}, false
 		}
 
 		covered = maxTime(covered, li.EndDate)
 	}
 
-	return !covered.Before(to)
+	if covered.Before(to) {
+		return covered, true
+	}
+
+	return time.Time{}, false
 }

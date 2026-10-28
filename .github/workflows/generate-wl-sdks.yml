@@ -95,6 +95,7 @@ jobs:
         index: ${{ fromJson(needs.matrix-setup.outputs.indices || '[0]') }}
     env:
       SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+      RESOLVED_VERSION: ${{ needs.matrix-setup.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -104,8 +105,9 @@ jobs:
       - name: Parse and export client config
         env:
           WL_SDK_CONFIG: ${{ secrets.WL_SDK_CONFIG }}
+          MATRIX_INDEX: ${{ matrix.index }}
         run: |
-          INDEX=${{ matrix.index }}
+          INDEX="$MATRIX_INDEX"
           CONFIG="$WL_SDK_CONFIG"
 
           # Mask sensitive values BEFORE writing them anywhere
@@ -203,7 +205,7 @@ jobs:
         run: unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
       - name: Generate SDKs
-        run: make sdk-all VERSION=${{ needs.matrix-setup.outputs.version }}
+        run: make sdk-all VERSION="$RESOLVED_VERSION"
 
       - name: Apply white-label branding to custom files
         run: bash scripts/apply-wl-custom-branding.sh
@@ -224,11 +226,11 @@ jobs:
         run: make ts-sdk-check
 
       - name: Apply resolved version to artifacts
-        run: ./scripts/force-sdk-version.sh "${{ needs.matrix-setup.outputs.version }}"
+        run: ./scripts/force-sdk-version.sh "$RESOLVED_VERSION"
 
       - name: Push Go SDK to client repo
         run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          VERSION="$RESOLVED_VERSION"
           git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_GO_REPO}.git /tmp/wl-go-sdk
           cd /tmp/wl-go-sdk
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -247,7 +249,7 @@ jobs:
 
       - name: Push Python SDK to client repo
         run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          VERSION="$RESOLVED_VERSION"
           git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_PYTHON_REPO}.git /tmp/wl-python-sdk
           cd /tmp/wl-python-sdk
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -266,7 +268,7 @@ jobs:
 
       - name: Push TypeScript SDK to client repo
         run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          VERSION="$RESOLVED_VERSION"
           git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_TS_REPO}.git /tmp/wl-ts-sdk
           cd /tmp/wl-ts-sdk
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -285,7 +287,7 @@ jobs:
 
       - name: Push MCP to client repo
         run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          VERSION="$RESOLVED_VERSION"
           git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_MCP_REPO}.git /tmp/wl-mcp
           cd /tmp/wl-mcp
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -304,7 +306,7 @@ jobs:
 
       - name: Create Go SDK GitHub release
         run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          VERSION="$RESOLVED_VERSION"
           TAG="v${VERSION}"
           GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release view "$TAG" --repo "${WL_GO_REPO}" > /dev/null 2>&1 && \
             echo "Release $TAG already exists in ${WL_GO_REPO}, skipping." || \
@@ -352,13 +354,16 @@ jobs:
       contents: read
     steps:
       - name: Report results
+        env:
+          RESOLVED_VERSION: ${{ needs.matrix-setup.outputs.version }}
+          GENERATE_RESULT: ${{ needs.generate-wl.result }}
         run: |
           echo "## White-label SDK Generation" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.matrix-setup.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Overall result:** ${{ needs.generate-wl.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $RESOLVED_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall result:** $GENERATE_RESULT" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.generate-wl.result }}" = "success" ]; then
+          if [ "$GENERATE_RESULT" = "success" ]; then
             echo "All white-label SDKs generated and published successfully." >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.generate-wl.result }}" = "failure" ]; then
+          elif [ "$GENERATE_RESULT" = "failure" ]; then
             echo "One or more white-label SDK generations failed. Check individual job logs above." >> $GITHUB_STEP_SUMMARY
           fi

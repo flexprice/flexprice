@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -89,6 +90,7 @@ type ServiceParams struct {
 	ProcessedEventRepo           events.ProcessedEventRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -144,6 +146,8 @@ type ServiceParams struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	EventDeletionRequestRepo     events.DeletionRequestRepository
+	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -196,6 +200,7 @@ func NewServiceParams(
 	processedEventRepo events.ProcessedEventRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
+	meterUsageCheckpointRepo meterusagecheckpoint.Repository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -260,6 +265,8 @@ func NewServiceParams(
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
+	eventDeletionRequestRepo events.DeletionRequestRepository,
+	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -276,6 +283,7 @@ func NewServiceParams(
 		ProcessedEventRepo:           processedEventRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
+		MeterUsageCheckpointRepo:     meterUsageCheckpointRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
@@ -340,5 +348,7 @@ func NewServiceParams(
 		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
+		EventDeletionRequestRepo:     eventDeletionRequestRepo,
+		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}
 }

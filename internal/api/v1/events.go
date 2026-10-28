@@ -24,16 +24,18 @@ type EventsHandler struct {
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
 	meterUsageService            service.MeterUsageService
+	eventDeletionService         service.EventDeletionService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, eventDeletionService service.EventDeletionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
 		meterUsageService:            meterUsageService,
+		eventDeletionService:         eventDeletionService,
 		config:                       config,
 		log:                          log,
 	}
@@ -650,4 +652,38 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// @Summary Delete events
+// @ID deleteEvents
+// @Description Hard-deletes ingested events and the meter usage they produced for the named customers and period, optionally narrowed by feature or by exact event id. Refused when anything in scope has already been invoiced. Irreversible.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "delete"
+// @Param request body dto.DeleteEventsRequest true "Deletion scope"
+// @Success 200 {object} dto.DeleteEventsResponse
+// @Header 200 {string} X-Request-ID "Identifies this deletion in deleted_events_logs"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request, or a guard refused the deletion"
+// @Failure 403 {object} ierr.ErrorResponse "Caller lacks the capability, or is a service account"
+// @Failure 409 {object} ierr.ErrorResponse "A deletion is already in progress for a customer in this request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/delete [post]
+func (h *EventsHandler) DeleteEvents(c *gin.Context) {
+	var req dto.DeleteEventsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.eventDeletionService.Delete(c.Request.Context(), &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }

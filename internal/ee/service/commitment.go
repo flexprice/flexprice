@@ -868,7 +868,7 @@ func (s *commitmentService) checkPriceAttach(
 }
 
 // commitmentsInScope returns commitments in force after `at` and starting before `until` (nil when open-ended)
-// whose scope includes the new usage price. A terminated commitment stays in force through its extended span.
+// whose scope includes the new usage price. A commitment stays in force through the billing period holding its effective end.
 func (s *commitmentService) commitmentsInScope(
 	ctx context.Context,
 	sub *subscription.Subscription,

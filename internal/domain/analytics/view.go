@@ -269,5 +269,6 @@ type ResolvedView struct {
 	Time       TimeSpec
 	Sort       []*SortSpec
 	Limit      int
+	Offset     int
 	Compare    string
 }

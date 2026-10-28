@@ -732,6 +732,32 @@ func (p *paymentProcessor) handlePostProcessing(ctx context.Context, paymentObj 
 	}
 }
 
+// deletionGatedInvoice reports whether an event deletion covers this invoice's
+// period, in which case a paid draft stays draft rather than sealing usage that
+// is about to be removed. The finalization cron takes it over once the deletion
+// closes. A subscription_create invoice is the exception: IsFinalizationDue
+// refuses those, so one parked here has to be finalized by hand.
+func (p *paymentProcessor) deletionGatedInvoice(ctx context.Context, inv *invoice.Invoice) bool {
+	invoiceService := NewInvoiceService(p.ServiceParams).(*invoiceService)
+	gatedDeletion, err := invoiceService.isInvoiceGatedOnEventDeletion(ctx, inv)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to read the event deletion gate, leaving the paid invoice in draft",
+			"error", err,
+			"invoice_id", inv.ID,
+		)
+		return true
+	}
+	if gatedDeletion == nil {
+		return false
+	}
+
+	p.Logger.Info(ctx, "not finalizing a paid draft while an event deletion is in progress",
+		"invoice_id", inv.ID,
+		"request_id", gatedDeletion.RequestID,
+	)
+	return true
+}
+
 func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paymentObj *payment.Payment) error {
 	// Get the invoice
 	invoice, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
@@ -785,7 +811,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if invoice.AmountRemaining.IsZero() {
 		invoice.PaymentStatus = types.PaymentStatusSucceeded
 		// Finalize invoice if it's still in draft state
-		if invoice.InvoiceStatus == types.InvoiceStatusDraft {
+		if invoice.InvoiceStatus == types.InvoiceStatusDraft && !p.deletionGatedInvoice(ctx, invoice) {
 			invoice.InvoiceStatus = types.InvoiceStatusFinalized
 			finalizedAt := time.Now().UTC()
 			invoice.FinalizedAt = &finalizedAt

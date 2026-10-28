@@ -69,6 +69,7 @@ const (
 	UUID_PREFIX_FEATURE                    = "feat"
 	UUID_PREFIX_EVENT                      = "event"
 	UUID_PREFIX_METER                      = "meter"
+	UUID_PREFIX_METER_USAGE_CHECKPOINT     = "muc"
 	UUID_PREFIX_PLAN                       = "plan"
 	UUID_PREFIX_PRICE                      = "price"
 	UUID_PREFIX_INVOICE                    = "inv"
@@ -124,6 +125,7 @@ const (
 	UUID_PREFIX_FX_RATE                    = "fxr"
 	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
 
 	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
 	UUID_PREFIX_COMMITMENT = "cmt"

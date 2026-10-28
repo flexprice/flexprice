@@ -150,9 +150,9 @@ func (i *InvoiceLineItem) ProjectCustomCurrency(cc *types.CustomCurrency, fiatCu
 
 // Validate validates the invoice line item.
 // Amount may be negative: a credit line (e.g. unused time on a plan being replaced) sits on the
-// same invoice as the charges it offsets. Non-negativity is enforced on the invoice aggregates.
+// same invoice as the charges it offsets. Usage quantities may also be signed.
 func (i *InvoiceLineItem) Validate() error {
-	if i.Quantity.IsNegative() {
+	if i.Quantity.IsNegative() && lo.FromPtr(i.PriceType) != string(types.PRICE_TYPE_USAGE) {
 		return ierr.NewError("invoice line item validation failed").WithHint("quantity must be non negative").Mark(ierr.ErrValidation)
 	}
 

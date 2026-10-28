@@ -208,13 +208,51 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 		"new_period_start", input.PeriodStart,
 		"new_period_end", input.PeriodEnd)
 
-	if err := s.advanceGroupedInvoicingChildrenPeriod(ctx, sub, input.PeriodStart, input.PeriodEnd); err != nil {
+	children, err := s.advanceGroupedInvoicingChildrenPeriod(ctx, sub, input.PeriodStart, input.PeriodEnd)
+	if err != nil {
 		return nil, err
 	}
+	s.refreshEntitlementGrantsAfterRollover(ctx, append([]*subscription.Subscription{sub}, children...)...)
 
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil
+}
+
+// refreshEntitlementGrantsAfterRollover refreshes each customer once when any of the
+// advanced subscriptions holds a NEVER-meter grant, so a quiet period still opens its allowance.
+func (s *BillingActivities) refreshEntitlementGrantsAfterRollover(ctx context.Context, subs ...*subscription.Subscription) {
+	if s.serviceParams.EntitlementGrantRepo == nil {
+		return
+	}
+	refreshed := make(map[string]bool, len(subs))
+	for _, sub := range subs {
+		if refreshed[sub.CustomerID] || !s.hasNeverResetGrant(ctx, sub) {
+			continue
+		}
+		refreshed[sub.CustomerID] = true
+		if err := service.NewAlertService(s.serviceParams).RefreshEntitlementGrantsForCustomer(ctx, sub.CustomerID); err != nil {
+			s.logger.Error(ctx, "entitlement grant refresh after rollover failed",
+				"error", err, "subscription_id", sub.ID)
+		}
+	}
+}
+
+// hasNeverResetGrant reports whether a live subscription has a grant entitlement on a never-reset meter.
+func (s *BillingActivities) hasNeverResetGrant(ctx context.Context, sub *subscription.Subscription) bool {
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
+		return false
+	}
+	entitlements, err := s.subscriptionService.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+	if err != nil {
+		s.logger.Error(ctx, "failed to resolve entitlements for rollover refresh",
+			"error", err, "subscription_id", sub.ID)
+		return false
+	}
+	return lo.SomeBy(entitlements, func(ec *dto.EntitlementResponse) bool {
+		return ec != nil && ec.Entitlement != nil && ec.HasGrantConfig() &&
+			ec.Feature != nil && ec.Feature.Meter != nil && ec.Feature.Meter.ResetUsage == types.ResetUsageNever
+	})
 }
 
 func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
@@ -222,9 +260,9 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 	parent *subscription.Subscription,
 	periodStart time.Time,
 	periodEnd time.Time,
-) error {
+) ([]*subscription.Subscription, error) {
 	if parent.SubscriptionType != types.SubscriptionTypeParent {
-		return nil
+		return nil, nil
 	}
 
 	filter := types.NewNoLimitSubscriptionFilter()
@@ -241,7 +279,7 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 		s.logger.Error(ctx, "failed to list grouped_invoicing children for period cascade",
 			"error", err,
 			"parent_subscription_id", parent.ID)
-		return err
+		return nil, err
 	}
 
 	for _, child := range children {
@@ -252,11 +290,11 @@ func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
 				"error", err,
 				"child_subscription_id", child.ID,
 				"parent_subscription_id", parent.ID)
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return children, nil
 }
 
 // Lets late-arriving events and pipeline lag settle.

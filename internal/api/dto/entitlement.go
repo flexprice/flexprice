@@ -15,10 +15,11 @@ import (
 
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
-	PlanID              string                            `json:"plan_id,omitempty"`
-	FeatureID           string                            `json:"feature_id" binding:"required"`
-	FeatureType         types.FeatureType                 `json:"feature_type" binding:"required"`
-	IsEnabled           bool                              `json:"is_enabled"`
+	PlanID      string            `json:"plan_id,omitempty"`
+	FeatureID   string            `json:"feature_id" binding:"required"`
+	FeatureType types.FeatureType `json:"feature_type" binding:"required"`
+	IsEnabled   bool              `json:"is_enabled"`
+	// Deprecated: use grant_quota; a metered usage_limit is converted to a grant on create.
 	UsageLimit          *int64                            `json:"usage_limit"`
 	UsageResetPeriod    types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
 	IsSoftLimit         bool                              `json:"is_soft_limit"`
@@ -150,7 +151,8 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 
 // UpdateEntitlementRequest represents the request to update an existing entitlement
 type UpdateEntitlementRequest struct {
-	IsEnabled        *bool                             `json:"is_enabled"`
+	IsEnabled *bool `json:"is_enabled"`
+	// Deprecated: use grant_quota.
 	UsageLimit       *int64                            `json:"usage_limit"`
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
 	IsSoftLimit      *bool                             `json:"is_soft_limit"`

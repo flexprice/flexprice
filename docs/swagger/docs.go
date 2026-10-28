@@ -4849,6 +4849,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/events/delete": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Hard-deletes ingested events and the meter usage they produced for the named customers and period, optionally narrowed by feature or by exact event id. Refused when anything in scope has already been invoiced. Irreversible.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Delete events",
+                "operationId": "deleteEvents",
+                "parameters": [
+                    {
+                        "description": "Deletion scope",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/DeleteEventsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/DeleteEventsResponse"
+                        },
+                        "headers": {
+                            "X-Request-ID": {
+                                "type": "string",
+                                "description": "Identifies this deletion in deleted_events_logs"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request, or a guard refused the deletion",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Caller lacks the capability, or is a service account",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "A deletion is already in progress for a customer in this request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
         "/events/lookup": {
             "get": {
                 "security": [
@@ -17984,31 +18055,70 @@ const docTemplate = `{
         "CommitmentUsageBreakdown": {
             "type": "object",
             "properties": {
+                "applies_from": {
+                    "description": "AppliesFrom/To is the stretch of the queried window the commitment covers; usage outside it\nbills as overage and is not counted here.",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "applies_to": {
+                    "type": "string",
+                    "format": "date-time"
+                },
                 "billed_amount": {
+                    "description": "BilledAmount is what the stretch bills for this commitment: used plus, when binding, the true-up.",
                     "type": "string"
                 },
-                "capacity": {
-                    "type": "string"
+                "binding": {
+                    "type": "boolean"
                 },
                 "commitment_id": {
+                    "type": "string"
+                },
+                "committed": {
+                    "description": "Committed is the full capacity for the stretch; its amount is the floor a binding commitment owes.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CommitmentUsageValue"
+                        }
+                    ]
+                },
+                "currency": {
                     "type": "string"
                 },
                 "invoice_label": {
                     "type": "string"
                 },
-                "period_amount": {
-                    "type": "string"
+                "measurement": {
+                    "$ref": "#/definitions/types.CommitmentMeasurement"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.CommitmentType"
                 },
                 "unused": {
-                    "type": "string"
+                    "description": "Unused is the remaining capacity; for a binding commitment its amount is the true-up still owed.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CommitmentUsageValue"
+                        }
+                    ]
                 },
                 "used": {
+                    "description": "Used is the capacity consumed so far and the value those units bill within the commitment.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CommitmentUsageValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "CommitmentUsageValue": {
+            "type": "object",
+            "properties": {
+                "amount": {
                     "type": "string"
                 },
-                "value_unused": {
-                    "type": "string"
-                },
-                "value_within": {
+                "quantity": {
                     "type": "string"
                 }
             }
@@ -21134,6 +21244,63 @@ const docTemplate = `{
                 "effective_date": {
                     "description": "EffectiveDate is optional; when set (subscription scope) the grant end date is set to this time.",
                     "type": "string"
+                }
+            }
+        },
+        "DeleteEventsRequest": {
+            "type": "object",
+            "required": [
+                "external_customer_ids",
+                "period_end",
+                "period_start"
+            ],
+            "properties": {
+                "event_ids": {
+                    "description": "EventIDs narrows the deletion to exact event ids. Requires exactly one\ncustomer and no feature_ids.",
+                    "type": "array",
+                    "maxItems": 1000,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "external_customer_ids": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "feature_ids": {
+                    "description": "FeatureIDs narrows the deletion to the meters these features resolve to.",
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "period_end": {
+                    "type": "string",
+                    "example": "2026-03-28T00:00:00Z"
+                },
+                "period_start": {
+                    "type": "string",
+                    "example": "2026-03-01T00:00:00Z"
+                },
+                "skip_payload": {
+                    "description": "SkipPayload stores the audit row's properties as '' so the deletion leaves\nno payload copy. Defaults to true: a deletion is usually an erasure, and\nkeeping the payload would defeat it. Send false to retain it.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "DeleteEventsResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_events": {
+                    "type": "integer"
+                },
+                "deleted_meter_usage_rows": {
+                    "type": "integer"
                 }
             }
         },
@@ -25026,6 +25193,10 @@ const docTemplate = `{
                 },
                 "limit": {
                     "type": "integer"
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "range": {
                     "type": "string",
@@ -32349,6 +32520,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.PaymentStatus"
                     }
                 },
+                "period_end_gt": {
+                    "description": "period_end_gt filters invoices with period_end \u003e value",
+                    "type": "string"
+                },
                 "period_end_gte": {
                     "description": "period_end_gte filters invoices with period_end \u003e= value",
                     "type": "string"
@@ -32359,6 +32534,10 @@ const docTemplate = `{
                 },
                 "period_start_gte": {
                     "description": "period_start_gte filters invoices with period_start \u003e= value",
+                    "type": "string"
+                },
+                "period_start_lt": {
+                    "description": "period_start_lt filters invoices with period_start \u003c value",
                     "type": "string"
                 },
                 "period_start_lte": {

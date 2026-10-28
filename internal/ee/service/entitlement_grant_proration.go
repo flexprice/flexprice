@@ -28,6 +28,7 @@ const (
 	grantProrationSourceAddonAttach        grantProrationSource = "addon_attach"
 	grantProrationSourceAddonDetach        grantProrationSource = "addon_detach"
 	grantProrationSourceAddonsModify       grantProrationSource = "addons_modify"
+	grantProrationSourcePlanChange         grantProrationSource = "plan_change"
 	// Not an addon change: an entitlement was deleted outright.
 	grantProrationSourceEntitlementGone grantProrationSource = "entitlement_deleted"
 )
@@ -88,14 +89,21 @@ func (s *subscriptionGrantService) resolveGrantProration(
 			continue
 		}
 
+		// A never-reset allowance is measured against the running total, so it takes the full quota.
+		neverReset, err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).isNeverResetMeter(ctx, featureID)
+		if err != nil {
+			return nil, err
+		}
+		prorate := behavior == types.ProrationBehaviorCreateProrations && !neverReset
+
 		prorationDate := p.Start
-		if behavior == types.ProrationBehaviorCreateProrations && effectiveDate.After(p.Start) {
+		if prorate && effectiveDate.After(p.Start) {
 			prorationDate = effectiveDate
 		}
 
 		// Same coefficient as the charge; e.g. 100 units attached Jan 20 in [Jan 1, Feb 1) → 38.71 (12/31).
 		coefficient, full := decimal.NewFromInt(1), p
-		if behavior == types.ProrationBehaviorCreateProrations {
+		if prorate {
 			serviceablePeriod := types.Period{Start: prorationDate, End: p.End}
 			coefficient, full, err = proration.CalculateProrationCoefficient(sub, sub.BillingPeriod, sub.BillingPeriodCount,
 				serviceablePeriod, types.StrategySecondBased)
@@ -158,6 +166,19 @@ func (s *subscriptionGrantService) resolveGrantProration(
 	return grants, nil
 }
 
+// survivingParallelSlots is the set of surviving parallel config IDs the incoming configs do
+// not share; a re-attached addon reuses its config ID, and so its slot, and must still close.
+func survivingParallelSlots(surviving, incoming []*entitlement.Entitlement) map[string]bool {
+	incomingIDs := lo.SliceToMap(incoming, func(ec *entitlement.Entitlement) (string, bool) { return ec.ID, true })
+	keep := make(map[string]bool, len(surviving))
+	for _, ec := range surviving {
+		if ec != nil && !incomingIDs[ec.ID] && defaultedMode(ec.AggregationMode) == types.EntitlementAggregationModeParallel {
+			keep[ec.ID] = true
+		}
+	}
+	return keep
+}
+
 func shouldOpenGrantManually(featureECs []*entitlement.Entitlement) bool {
 	if len(featureECs) == 0 {
 		return false
@@ -200,17 +221,20 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 	toClose, carryForward := s.removalClosures(ctx, cfg, liveByFeature)
 
 	// Close every live window of every feature an addition touches, not only the ones this
-	// path reopens. A window this path does not own — a day cadence, or a parallel slot —
-	// would otherwise hold its slot until it expires and hide the incoming quota until then.
-	for featureID := range incomingByFeature {
-		toClose = append(toClose, liveByFeature[featureID]...)
+	// path reopens: a day-cadence window would otherwise hide the incoming quota until it
+	// expires. A surviving parallel config owns its slot, so its window stays open with its balance.
+	for featureID, incoming := range incomingByFeature {
+		keep := survivingParallelSlots(cfg.survivingECsByFeature[featureID], incoming)
+		toClose = append(toClose, lo.Reject(liveByFeature[featureID], func(g *entitlementgrant.EntitlementGrant, _ int) bool {
+			return keep[g.EntitlementConfigID]
+		})...)
 	}
 
-	grantSvc := NewEntitlementGrantService(s.ServiceParams)
+	grantSvc := &entitlementGrantService{ServiceParams: s.ServiceParams}
 
 	// A feature with both directions names its pooled row twice.
 	closedByID, err := grantSvc.CloseEntitlementGrants(ctx, lo.UniqBy(lo.Compact(toClose),
-		func(g *entitlementgrant.EntitlementGrant) string { return g.ID }), at)
+		func(g *entitlementgrant.EntitlementGrant) string { return g.ID }), at, false)
 	if err != nil {
 		return err
 	}
@@ -236,17 +260,30 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 			IncomingECs: incoming,
 		}
 
-		// Stamp the successor onto the window that was actually written, so the segments tile
-		// and the predecessor's unspent balance carries. Whether a config still funds the
-		// feature is irrelevant: quota already granted belongs to the customer for the rest of
-		// the cycle, so it carries even when the config that bought it is the one leaving.
-		predecessorGrant := lo.FirstOrEmpty(liveByFeature[featureID])
-		if closed := closedByID[predecessorGrant.GetID()]; closed != nil {
-			req.Closed = closed
-			req.New = entitlementgrant.NewEntitlementGrantBuilder(grantToAdd).
-				WithWindow(closed.ValidTo, grantToAdd.ValidTo).
-				Build()
+		neverReset, err := grantSvc.isNeverResetMeter(ctx, featureID)
+		if err != nil {
+			return err
 		}
+
+		predecessorGrant := lo.FirstOrEmpty(liveByFeature[featureID])
+		closed := closedByID[predecessorGrant.GetID()]
+
+		existingQuota := decimal.Zero
+		for _, ec := range surviving {
+			existingQuota = existingQuota.Add(lo.FromPtr(ec.GrantQuota))
+		}
+		if !neverReset && closed != nil {
+			existingQuota, _ = closed.Remaining()
+		}
+		// E.g. incoming 150, old remaining 20, no surviving configs: normal gets 170; NEVER gets 150.
+		quota := grantToAdd.Quota.Add(existingQuota)
+
+		newGrant := entitlementgrant.NewEntitlementGrantBuilder(grantToAdd).WithQuota(quota)
+		if closed != nil {
+			req.Closed = closed
+			newGrant.WithWindow(closed.ValidTo, grantToAdd.ValidTo)
+		}
+		req.New = newGrant.Build()
 
 		reqs = append(reqs, req)
 	}
@@ -257,12 +294,23 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 			continue
 		}
 
-		// Zero delta: the successor's quota is whatever the closed window had left.
+		neverReset, err := grantSvc.isNeverResetMeter(ctx, featureID)
+		if err != nil {
+			return err
+		}
+
+		quota := decimal.Zero
+		for _, ec := range cfg.survivingECsByFeature[featureID] {
+			quota = quota.Add(lo.FromPtr(ec.GrantQuota))
+		}
+		if !neverReset {
+			quota, _ = closed.Remaining()
+		}
 		reqs = append(reqs, OpenFeatureBasedEntitlementGrantsRequest{
 			FeatureID: featureID,
 			Closed:    closed,
 			New: entitlementgrant.NewEntitlementGrantBuilder(pooled).
-				WithQuota(decimal.Zero).
+				WithQuota(quota).
 				WithWindow(closed.ValidTo, pooled.ValidTo).
 				WithMetadata(types.Metadata{
 					"proration_source":   cfg.origin().String(),
@@ -270,6 +318,8 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 				}).
 				Build(),
 			ExistingECs: cfg.survivingECsByFeature[featureID],
+			// An unlimited incoming config has no prorated segment, so it joins here to set the slot.
+			IncomingECs: incomingByFeature[featureID],
 		})
 	}
 	if len(reqs) == 0 {

@@ -234,6 +234,16 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceCheckoutGated(invoice.ID, "pay")
 	}
 
+	// Paying a draft in full finalizes it outside FinalizeInvoice, the one path that
+	// takes the deletion gate, so it would seal usage the deletion is about to remove.
+	gatedDeletion, err := invSvc.isInvoiceGatedOnEventDeletion(ctx, invoice)
+	if err != nil {
+		return err
+	}
+	if gatedDeletion != nil {
+		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
+	}
+
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		return ierr.NewError("invoice is already paid").

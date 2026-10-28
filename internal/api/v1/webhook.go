@@ -270,6 +270,13 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	})
 }
 
+const hubspotTimestampToleranceMs = int64(300000)
+
+func hubspotTimestampFresh(timestampMs, nowMs int64) bool {
+	skew := nowMs - timestampMs
+	return skew <= hubspotTimestampToleranceMs && skew >= -hubspotTimestampToleranceMs
+}
+
 func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Always return 200 OK to HubSpot to prevent retries
 	// We log errors internally but don't expose them to HubSpot
@@ -352,9 +359,8 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	}
 
 	currentTime := time.Now().UnixMilli()
-	maxAllowedTimestamp := int64(300000) // 5 minutes in milliseconds
-	if currentTime-timestampInt > maxAllowedTimestamp {
-		h.logger.Info(context.Background(), "timestamp too old, rejecting webhook",
+	if !hubspotTimestampFresh(timestampInt, currentTime) {
+		h.logger.Debug(c.Request.Context(), "timestamp outside tolerance, rejecting webhook",
 			"timestamp", timestampInt,
 			"current_time", currentTime,
 			"age_ms", currentTime-timestampInt)
@@ -699,9 +705,11 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 }
 
 func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
-	// Always return 200 OK to QuickBooks to prevent retries
-	// We log errors internally but don't expose them to QuickBooks
+	// Aborted rejections keep their own status.
 	defer func() {
+		if c.IsAborted() {
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Webhook received",
 		})
@@ -724,14 +732,20 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	// Get QuickBooks signature from headers
 	signature := c.GetHeader("intuit-signature")
+	if signature == "" {
+		h.logger.Error(c.Request.Context(), "quickbooks webhook rejected",
+			"error", "missing intuit-signature header",
+			"operation", "quickbooks_webhook_verify",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing intuit-signature header"})
+		return
+	}
 
-	// Log webhook receipt (without sensitive data)
 	h.logger.Debug(context.Background(), "received QuickBooks webhook",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
-		"has_signature", signature != "",
 		"body_length", len(body))
 
 	// Set context with tenant and environment IDs
@@ -746,29 +760,19 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	// Verify webhook signature (if signature provided)
-	if signature != "" {
-		err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
-		if err != nil {
-			h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
-				"tenant_id", tenantID,
-				"error", err,
-				"environment_id", environmentID)
-			// Don't return 401 - QuickBooks expects 200
-			return
-		}
-		h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
+	err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
+	if err != nil {
+		h.logger.Error(ctx, "failed to verify QuickBooks webhook signature",
 			"tenant_id", tenantID,
+			"error", err,
 			"environment_id", environmentID)
-	} else {
-		h.logger.Info(context.Background(), "QuickBooks webhook received without signature",
-			"tenant_id", tenantID,
-			"environment_id", environmentID,
-			"note", "Consider configuring webhook verifier token for security")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid webhook signature"})
+		return
 	}
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &quickbookswebhook.ServiceDependencies{
+		DB:             h.db,
 		PaymentService: h.paymentService,
 		InvoiceService: h.invoiceService,
 	}
@@ -776,16 +780,34 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Handle the webhook event
 	err = qbIntegration.WebhookHandler.HandleWebhook(ctx, body, serviceDeps)
 	if err != nil {
-		h.logger.Error(context.Background(), "failed to handle QuickBooks webhook event",
+		h.logger.Error(ctx, "failed to handle QuickBooks webhook event",
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
+		status := http.StatusInternalServerError
+		if allValidationErrors(err) {
+			status = http.StatusBadRequest
+		}
+		c.AbortWithStatusJSON(status, gin.H{"error": "Webhook processing failed"})
 		return
 	}
 
 	h.logger.Info(context.Background(), "successfully processed QuickBooks webhook",
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
+}
+
+// allValidationErrors reports whether every joined leaf is a validation error.
+func allValidationErrors(err error) bool {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, e := range joined.Unwrap() {
+			if !allValidationErrors(e) {
+				return false
+			}
+		}
+		return true
+	}
+	return ierr.IsValidation(err)
 }
 
 func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {

@@ -10,6 +10,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	domainSettings "github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
@@ -216,6 +217,31 @@ func (s *RawEventConsumptionSuite) TestProcessMessage_FilterBehavior() {
 // ---------------------------------------------------------------------------
 // Edge-case tests (kept separate as they need special setup)
 // ---------------------------------------------------------------------------
+
+func (s *RawEventConsumptionSuite) TestBatchOutcomesCounted() {
+	r := metricstest.Install(s.T())
+	s.makeFilterSetting(true, []string{"org_001"})
+
+	batch := RawEventBatch{
+		TenantID:      testTenantID,
+		EnvironmentID: testEnvironmentID,
+		Data: []json.RawMessage{
+			json.RawMessage(validBentoPayload("org_001", "evt_1")),
+			json.RawMessage(validBentoPayload("org_002", "evt_2")),
+			json.RawMessage(validBentoPayload("org_003", "evt_3")),
+		},
+	}
+	count := func(outcome string) int64 {
+		return r.Sum("raw_events.processed", map[string]string{"outcome": outcome})
+	}
+	successBefore, skippedBefore, errorBefore := count("success"), count("skipped"), count("error")
+
+	s.Require().NoError(s.svc.processMessage(context.Background(), buildBatchMsg(batch)))
+
+	s.Equal(successBefore+1, count("success"))
+	s.Equal(skippedBefore+2, count("skipped"))
+	s.Equal(errorBefore, count("error"))
+}
 
 // TestInvalidBentoEvent_SkippedBeforeFilterCheck — invalid events are dropped before the
 // filter check; a valid+allowed event in the same batch still gets through.

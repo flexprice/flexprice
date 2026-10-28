@@ -501,7 +501,7 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
-	response, err := h.service.GetAggregatedSubscriptionEntitlements(c.Request.Context(), id, &req)
+	response, err := h.service.GetActiveAggregatedSubscriptionEntitlements(c.Request.Context(), id, &req)
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to get subscription entitlements", "error", err)
 		c.Error(err)

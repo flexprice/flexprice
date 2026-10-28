@@ -42,7 +42,7 @@ type capacityPool struct {
 type usageLine struct {
 	Item         *subscription.SubscriptionLineItem
 	Price        *price.Price
-	OveragePrice *price.Price // prices on-demand instead of Price when a covering commitment sets one
+	OveragePrice *price.Price // prices overage instead of Price when a covering commitment sets one
 	Quantity     decimal.Decimal
 	Cost         decimal.Decimal
 	Usage        []decimal.Decimal // quantity for quantity stacks, cost for amount stacks
@@ -52,7 +52,7 @@ type usageLine struct {
 // allocation is the result of filling a stack.
 type allocation struct {
 	Commitments []commitmentAllocation // aligned with stack.Commitments
-	OnDemand    [][]decimal.Decimal    // [line][window], aligned with stack.Lines and stack.Windows
+	Overage     [][]decimal.Decimal    // [line][window], aligned with stack.Lines and stack.Windows
 }
 
 // commitmentAllocation is what one commitment absorbed.
@@ -130,21 +130,21 @@ func (s *commitmentStack) validate() error {
 
 // allocate fills the stack as a waterfall. For each window, commitments drain their pool across
 // their lines in order; each is filled to capacity before the next receives anything, and whatever
-// usage is left after the last one is on-demand.
+// usage is left after the last one is overage.
 func allocate(stack *commitmentStack) (*allocation, error) {
 	if err := stack.validate(); err != nil {
 		return nil, err
 	}
 
-	// What each line still has per window; whatever the waterfall leaves is on-demand.
-	onDemand := make([][]decimal.Decimal, len(stack.Lines))
+	// What each line still has per window; whatever the waterfall leaves is overage.
+	overage := make([][]decimal.Decimal, len(stack.Lines))
 	for i, line := range stack.Lines {
-		onDemand[i] = append([]decimal.Decimal(nil), line.Usage...)
+		overage[i] = append([]decimal.Decimal(nil), line.Usage...)
 	}
 
 	out := &allocation{
 		Commitments: make([]commitmentAllocation, len(stack.Commitments)),
-		OnDemand:    onDemand,
+		Overage:     overage,
 	}
 
 	remaining := make([][]decimal.Decimal, len(stack.Commitments))
@@ -181,7 +181,7 @@ func allocate(stack *commitmentStack) (*allocation, error) {
 					break
 				}
 
-				left := &onDemand[stackIndex[ci][li]][w]
+				left := &overage[stackIndex[ci][li]][w]
 				take := decimal.Min(*pool, *left)
 				if !take.IsPositive() {
 					continue
@@ -229,8 +229,8 @@ type lineRenderer struct {
 	cost        lineCost
 }
 
-// commitmentInvoiceLines renders each stack and its allocation (index-aligned) as within, true-up
-// and on-demand invoice lines.
+// commitmentInvoiceLines renders each stack and its allocation (index-aligned) as utilized, true-up
+// and overage invoice lines.
 func commitmentInvoiceLines(
 	stacks []*commitmentStack,
 	allocs []*allocation,
@@ -246,15 +246,15 @@ func commitmentInvoiceLines(
 		}
 
 		for li, line := range stack.Lines {
-			out = append(out, r.onDemandLines(stack, line, allocs[si].OnDemand[li])...)
+			out = append(out, r.overageLines(stack, line, allocs[si].Overage[li])...)
 		}
 	}
 
 	return out
 }
 
-// commitmentLines renders one commitment's within lines and its true-up; for a binding commitment the rows sum
-// to the rounded period amount, and a partial period's within is capped there. A quantity commitment prices its
+// commitmentLines renders one commitment's utilized lines and its true-up; for a binding commitment the rows sum
+// to the rounded period amount, and a partial period's utilized value is capped there. A quantity commitment prices its
 // whole usage once on the committed price, so tiers walk the total, and splits that value across lines by quantity.
 func (r lineRenderer) commitmentLines(
 	stack *commitmentStack,
@@ -278,26 +278,26 @@ func (r lineRenderer) commitmentLines(
 			qty, amount = proportionalQuantity(line, share), share
 		}
 
-		rows = append(rows, r.row(sc.C, line, types.CommitmentLineWithin, sc.C.InvoiceLabel, qty, amount))
+		rows = append(rows, r.row(sc.C, line, types.CommitmentLineUtilized, sc.C.InvoiceLabel, qty, amount))
 	}
 
-	withinValue := r.absorbDrift(rows, usedValue)
+	utilizedValue := r.absorbDrift(rows, usedValue)
 	if !sc.C.Binding {
 		return rows
 	}
 
 	floor := types.RoundToCurrencyPrecision(sc.Period.Amount, r.currency)
-	if sc.Period.Clipped && withinValue.GreaterThan(floor) {
+	if sc.Period.Clipped && utilizedValue.GreaterThan(floor) {
 		// A partial floor is the period's value accrued in this window; usage valued from tier zero cannot exceed it.
 		for i := range rows {
-			rows[i].Amount = types.RoundToCurrencyPrecision(rows[i].Amount.Mul(floor).Div(withinValue), r.currency)
+			rows[i].Amount = types.RoundToCurrencyPrecision(rows[i].Amount.Mul(floor).Div(utilizedValue), r.currency)
 		}
 
 		r.absorbDrift(rows, floor)
 		return rows
 	}
 
-	trueUp := floor.Sub(withinValue)
+	trueUp := floor.Sub(utilizedValue)
 	if !trueUp.IsPositive() {
 		return rows
 	}
@@ -356,28 +356,28 @@ func (r lineRenderer) absorbDrift(rows []dto.CreateInvoiceLineItemRequest, usedV
 	return sum
 }
 
-// onDemandLines prices one line's usage left after the whole stack was filled. On-demand belongs
+// overageLines prices one line's usage left after the whole stack was filled. Overage belongs
 // to the stack, not to any one commitment, so its rows carry no commitment id.
-func (r lineRenderer) onDemandLines(
+func (r lineRenderer) overageLines(
 	stack *commitmentStack,
 	line *usageLine,
 	windows []decimal.Decimal,
 ) []dto.CreateInvoiceLineItemRequest {
 	qty, amount := decimal.Zero, decimal.Zero
-	// The line's own price charges on-demand units at the margin above the covered ones, per bucket for bucketed
-	// lines; an overage price charges the period's on-demand total afresh.
+	// The line's own price charges overage units at the margin above the covered ones, per bucket for bucketed
+	// lines; an overage price charges the period's overage total afresh.
 	perWindow := line.PerWindow && line.OveragePrice == nil
-	for w, od := range windows {
-		if !od.IsPositive() {
+	for w, units := range windows {
+		if !units.IsPositive() {
 			continue
 		}
 
-		qty = qty.Add(od)
+		qty = qty.Add(units)
 		switch {
 		case stack.Type == types.COMMITMENT_TYPE_AMOUNT:
-			amount = amount.Add(od)
+			amount = amount.Add(units)
 		case perWindow:
-			amount = amount.Add(r.marginalCost(line.Price, line.Usage[w], od))
+			amount = amount.Add(r.marginalCost(line.Price, line.Usage[w], units))
 		}
 	}
 
@@ -391,12 +391,12 @@ func (r lineRenderer) onDemandLines(
 
 	switch {
 	case qty.IsPositive() && stack.Type == types.COMMITMENT_TYPE_AMOUNT:
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOnDemand, line.displayName(), proportionalQuantity(line, qty), amount)}
+		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), proportionalQuantity(line, qty), amount)}
 	case qty.IsPositive():
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOnDemand, line.displayName(), qty, amount)}
+		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), qty, amount)}
 	case stack.Type == types.COMMITMENT_TYPE_AMOUNT && line.Cost.IsZero() && line.Quantity.IsPositive():
 		// Free usage takes no capacity, but its quantity still shows on the invoice.
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOnDemand, line.displayName(), line.Quantity, decimal.Zero)}
+		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), line.Quantity, decimal.Zero)}
 	}
 
 	return nil

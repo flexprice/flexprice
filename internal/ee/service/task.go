@@ -109,6 +109,7 @@ func (s *taskService) openImportReader(ctx context.Context, t *task.Task) (*byte
 func (s *taskService) chunkProcessorFor(entityType types.EntityType) (ChunkProcessor, error) {
 	switch entityType {
 	case types.EntityTypeEvents:
+		deletionWindow := NewEventDeletionWindowService(s.ServiceParams)
 		eventSvc := NewEventService(
 			s.EventRepo,
 			s.MeterRepo,
@@ -116,6 +117,7 @@ func (s *taskService) chunkProcessorFor(entityType types.EntityType) (ChunkProce
 			s.Logger,
 			s.Config,
 			s.TracingSvc,
+			deletionWindow,
 		)
 		return &EventsChunkProcessor{eventService: eventSvc, logger: s.Logger}, nil
 	case types.EntityTypeCustomers:

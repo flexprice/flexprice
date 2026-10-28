@@ -1248,6 +1248,12 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.PeriodEndLTE != nil {
 		query = query.Where(invoice.PeriodEndLTE(*f.PeriodEndLTE))
 	}
+	if f.PeriodStartLT != nil {
+		query = query.Where(invoice.PeriodStartLT(*f.PeriodStartLT))
+	}
+	if f.PeriodEndGT != nil {
+		query = query.Where(invoice.PeriodEndGT(*f.PeriodEndGT))
+	}
 	if f.FinalizedAtGTE != nil {
 		query = query.Where(invoice.FinalizedAtGTE(*f.FinalizedAtGTE))
 	}

@@ -980,14 +980,12 @@ func (s *SubscriptionChangeV2Suite) TestCharacterisePlanChange_Upgrade_FullEntit
 	s.Run("entitlement_grants", func() {
 		closed, err := s.GetStores().EntitlementGrantRepo.Get(ctx, closingGrant.ID)
 		s.Require().NoError(err)
-		s.True(closed.ValidTo.Equal(at), "the outgoing plan's window ends at the swap")
-		s.True(closed.ValidFrom.Equal(s.td.periodStart), "closing must not move the window start")
+		s.True(closed.ValidTo.Equal(s.td.periodEnd), "without an incoming grant config, the existing window expires naturally")
+		s.True(closed.ValidFrom.Equal(s.td.periodStart))
 
-		// TODAY no successor is opened for the target plan's entitlement: the swap closes
-		// and leaves the feature ungranted until the evaluator's next tick. Addon attach
-		// opens the successor itself. Divergence 5 is what adds a second row here.
-		s.Len(s.allEntitlementGrants(), 1,
-			"TODAY: a plan change closes windows but opens no successors")
+		// These fixtures use legacy entitlements, without grant configuration, so
+		// the shared addon flow does not open a successor.
+		s.Len(s.allEntitlementGrants(), 1)
 	})
 
 	s.Run("money", func() {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +119,17 @@ func TestGenerateSessionTokenTimeoutBoundaries(t *testing.T) {
 			assert.Equal(t, "cust_1", claims.CustomerID)
 		})
 	}
+}
+
+// Self-hosted invitees set their own password through a link, so the invite carries none.
+func TestUserInvite_ReturnsIDWithoutPassword(t *testing.T) {
+	ctx := types.SetTenantID(context.Background(), "t_tenant1")
+
+	resp, err := newTestAuth().UserInvite(ctx, UserInviteRequest{Email: "invitee@example.com"})
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(resp.ID, types.UUID_PREFIX_USER+"_"), "got %q", resp.ID)
+	assert.Empty(t, resp.Password)
 }
 
 func TestValidateToken_RejectsMissingTenant(t *testing.T) {

@@ -37,12 +37,13 @@ type EventService interface {
 }
 
 type eventService struct {
-	eventRepo  events.Repository
-	meterRepo  meter.Repository
-	publisher  publisher.EventPublisher
-	logger     *logger.Logger
-	config     *config.Configuration
-	tracingSvc *tracing.Service
+	eventRepo      events.Repository
+	meterRepo      meter.Repository
+	publisher      publisher.EventPublisher
+	logger         *logger.Logger
+	config         *config.Configuration
+	tracingSvc     *tracing.Service
+	deletionWindow EventDeletionWindowService
 }
 
 func NewEventService(
@@ -52,15 +53,35 @@ func NewEventService(
 	logger *logger.Logger,
 	config *config.Configuration,
 	tracingSvc *tracing.Service,
+	deletionWindow EventDeletionWindowService,
 ) EventService {
 	return &eventService{
-		eventRepo:  eventRepo,
-		meterRepo:  meterRepo,
-		publisher:  publisher,
-		logger:     logger,
-		config:     config,
-		tracingSvc: tracingSvc,
+		eventRepo:      eventRepo,
+		meterRepo:      meterRepo,
+		publisher:      publisher,
+		logger:         logger,
+		config:         config,
+		tracingSvc:     tracingSvc,
+		deletionWindow: deletionWindow,
 	}
+}
+
+// refuseDuringDeletion rejects an event belonging to a deletion still running for
+// that customer. Refused here rather than held at the consumer: a held message
+// blocks its whole Kafka partition, which carries other customers and other
+// tenants. Only the named customer is affected, and the caller can retry.
+func (s *eventService) refuseDuringDeletion(ctx context.Context, event *events.Event) error {
+	if s.deletionWindow == nil || !s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		return nil
+	}
+
+	return ierr.NewError("an event deletion is in progress for this customer and period").
+		WithHint("Retry once the running deletion for this customer finishes").
+		WithReportableDetails(map[string]interface{}{
+			"external_customer_id": event.ExternalCustomerID,
+			"timestamp":            event.Timestamp,
+		}).
+		Mark(ierr.ErrAlreadyExists)
 }
 
 func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.IngestEventRequest) error {
@@ -69,6 +90,10 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 	}
 
 	event := createEventRequest.ToEvent(ctx)
+
+	if err := s.refuseDuringDeletion(ctx, event); err != nil {
+		return err
+	}
 
 	if err := s.publisher.Publish(ctx, event); err != nil {
 		// Log the error but don't fail the request
@@ -113,6 +138,9 @@ func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.Bul
 			return err
 		}
 		event := createEventRequest.ToEvent(ctx)
+		if err := s.refuseDuringDeletion(ctx, event); err != nil {
+			return err
+		}
 		createEventRequest.EventID = event.ID
 		domainEvents = append(domainEvents, event)
 	}

@@ -547,6 +547,10 @@ type InvoiceFilter struct {
 	PeriodEndGTE *time.Time `json:"period_end_gte,omitempty" form:"period_end_gte" validate:"omitempty,time_rfc3339"`
 	// period_end_lte filters invoices with period_end <= value
 	PeriodEndLTE *time.Time `json:"period_end_lte,omitempty" form:"period_end_lte" validate:"omitempty,time_rfc3339"`
+	// period_start_lt filters invoices with period_start < value
+	PeriodStartLT *time.Time `json:"period_start_lt,omitempty" form:"period_start_lt" validate:"omitempty,time_rfc3339"`
+	// period_end_gt filters invoices with period_end > value
+	PeriodEndGT *time.Time `json:"period_end_gt,omitempty" form:"period_end_gt" validate:"omitempty,time_rfc3339"`
 
 	// finalized_at_gte filters invoices finalized at or after the given instant
 	FinalizedAtGTE *time.Time `json:"finalized_at_gte,omitempty" form:"finalized_at_gte" validate:"omitempty,time_rfc3339"`

@@ -332,7 +332,7 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 			invCtx = types.SetEnvironmentID(invCtx, inv.EnvironmentID)
 			invCtx = types.SetUserID(invCtx, inv.CreatedBy)
 
-			due, err := invoiceService.IsFinalizationDue(invCtx, inv.ID)
+			due, err := invoiceService.IsInvoiceFinalizationDue(invCtx, inv)
 			if err != nil {
 				logger.Error("Failed to check finalization due", "invoice_id", inv.ID, "error", err)
 				result.FailedCount++

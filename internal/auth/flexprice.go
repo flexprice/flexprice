@@ -11,7 +11,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/sethvargo/go-password/password"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -347,7 +346,8 @@ func (f *flexpriceAuth) GenerateCheckoutToken(extraClaims map[string]interface{}
 	return signed, nil
 }
 
-// UserInvite provisions a user in the configured auth provider and returns the newly created user ID and password.
+// UserInvite allocates the invitee's user ID only. They have no password until
+// they set one through an invite link, so no auth record is returned.
 func (f *flexpriceAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*UserInviteResponse, error) {
 	tenantID := types.GetTenantID(ctx)
 	if tenantID == "" {
@@ -356,23 +356,5 @@ func (f *flexpriceAuth) UserInvite(ctx context.Context, req UserInviteRequest) (
 			Mark(ierr.ErrValidation)
 	}
 
-	// Generate an initial password (no auth token issuance here).
-	password, err := password.Generate(16, 4, 2, false, false)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-
-	// Flexprice auth provisioning here is about allocating a user ID and returning
-	// the hashed password as an auth record so the caller can persist it (no auth token issuance).
-	userID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER)
-	return &UserInviteResponse{
-		ID:         userID,
-		Password:   password,
-		AuthRecord: auth.NewAuth(userID, types.AuthProviderFlexprice, string(hashedPassword)),
-	}, nil
+	return &UserInviteResponse{ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER)}, nil
 }

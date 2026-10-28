@@ -54,7 +54,68 @@ func (s *EventServiceSuite) SetupTest() {
 		s.logger,
 		s.config,
 		nil, // tracing disabled in unit tests
+		nil, // no deletion window: these tests run no deletion
 	)
+}
+
+// deletionWindowFor mirrors the real window: one customer's deletion, tested
+// against the real period check rather than a reimplementation of it.
+type deletionWindowFor struct{ request *events.DeletionRequest }
+
+func (w deletionWindowFor) IsSuppressed(_ context.Context, externalCustomerID string, ts time.Time) bool {
+	if w.request.ExternalCustomerID != externalCustomerID {
+		return false
+	}
+	return w.request.IncludesTimestamp(ts)
+}
+
+// deletingCustomerWindow is a deletion running over March for one customer.
+func (s *EventServiceSuite) deletingCustomerWindow() deletionWindowFor {
+	return deletionWindowFor{request: &events.DeletionRequest{
+		ExternalCustomerID: "customer-deleting",
+		PeriodStart:        time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:          time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+	}}
+}
+
+func (s *EventServiceSuite) serviceWithDeletionWindow() EventService {
+	return NewEventService(s.eventRepo, nil, s.publisher, s.logger, s.config, nil, s.deletingCustomerWindow())
+}
+
+func (s *EventServiceSuite) ingest(eventID, externalCustomerID string, ts time.Time) error {
+	return s.serviceWithDeletionWindow().CreateEvent(s.ctx, &dto.IngestEventRequest{
+		EventID:            eventID,
+		ExternalCustomerID: externalCustomerID,
+		EventName:          "api_request",
+		Timestamp:          ts,
+	})
+}
+
+// Refused at ingestion so it never reaches Kafka, where a held message would
+// block the partition for everyone sharing it.
+func (s *EventServiceSuite) TestCreateEvent_RefusedForTheDeletingCustomerInPeriod() {
+	err := s.ingest("evt_in_period", "customer-deleting", time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC))
+
+	s.Error(err)
+	s.False(s.publisher.HasEvent("evt_in_period"), "nothing may reach Kafka for that customer and period")
+}
+
+// The block is the deleted period only. The same customer keeps ingesting
+// everything outside it.
+func (s *EventServiceSuite) TestCreateEvent_AcceptedForTheDeletingCustomerOutsidePeriod() {
+	s.NoError(s.ingest("evt_after", "customer-deleting", time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)))
+	s.True(s.publisher.HasEvent("evt_after"), "period_end is exclusive, so this one is outside")
+
+	s.NoError(s.ingest("evt_before", "customer-deleting", time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC)))
+	s.True(s.publisher.HasEvent("evt_before"))
+}
+
+// The block is that one customer only. The rest of the tenant is untouched,
+// in the deleted period and outside it alike.
+func (s *EventServiceSuite) TestCreateEvent_AcceptedForAnotherCustomerOfTheSameTenant() {
+	s.NoError(s.ingest("evt_other", "customer-other", time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC)))
+
+	s.True(s.publisher.HasEvent("evt_other"), "another customer ingests normally mid-deletion")
 }
 
 func (s *EventServiceSuite) TearDownTest() {
@@ -362,6 +423,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 		s.logger,
 		s.config,
 		nil, // tracing disabled in unit tests
+		nil, // no deletion window: these tests run no deletion
 	)
 
 	// Setup test events

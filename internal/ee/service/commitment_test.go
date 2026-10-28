@@ -780,11 +780,22 @@ func (s *CommitmentServiceSuite) requireValidation(err error, contains ...string
 	}
 }
 
-func (s *CommitmentServiceSuite) TestValidation_V1_EndDateNotOnBillingBoundary() {
+// A $300 floor ending 16 Apr is worth January to March in full and 15 of April's 30 days.
+func (s *CommitmentServiceSuite) TestValidation_V1_AcceptsEndDateMidPeriod() {
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
-	req.EndDate = time.Date(2027, 4, 23, 0, 0, 0, 0, time.UTC)
-	_, err := s.svc.Create(s.GetContext(), req)
-	s.requireValidation(err, "1 Apr 2027", "1 May 2027")
+	req.Type, req.CommittedPrice, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, dec("300")
+	req.EndDate = time.Date(2027, 4, 16, 0, 0, 0, 0, time.UTC)
+	preview, err := s.svc.Preview(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	for _, v := range []*decimal.Decimal{preview.CommitmentValue, created.CommitmentValue, got.CommitmentValue} {
+		s.True(v.Equal(dec("1050")), "got %s", v)
+	}
 }
 
 func (s *CommitmentServiceSuite) TestValidation_V2_QuantityOverGroupWithTwoMeters() {
@@ -1178,7 +1189,11 @@ func (s *CommitmentServiceSuite) TestValidation_EndDateAfterSubscriptionEnd() {
 	sub.EndDate = lo.ToPtr(sub.StartDate.AddDate(0, 6, 0))
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
 
-	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID) // ends 12 months in, on a billing date
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID) // ends 12 months in
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.requireValidation(err, "subscription end")
+
+	req.EndDate = sub.EndDate.Add(time.Second)
 	_, err = s.svc.Create(s.GetContext(), req)
 	s.requireValidation(err, "subscription end")
 

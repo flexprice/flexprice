@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -174,6 +175,10 @@ func NewFeatureRepository(p RepositoryParams) feature.Repository {
 
 func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 	return entRepo.NewEntitlementRepository(p.EntClient, p.Logger, p.InMemoryCache, p.RedisCache)
+}
+
+func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.Repository {
+	return entRepo.NewMeterUsageCheckpointRepository(p.EntClient, p.Logger)
 }
 
 func NewCommitmentRepository(p RepositoryParams) commitment.Repository {
@@ -346,4 +351,12 @@ func NewSelfBillingClickHouseRepository(p RepositoryParams) domainsb.ClickHouseR
 
 func NewSelfBillingPostgresRepository(p RepositoryParams) domainsb.PostgresRepository {
 	return entRepo.NewSelfBillingRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionRequestRepository(p RepositoryParams) events.DeletionRequestRepository {
+	return entRepo.NewEventDeletionRequestRepository(p.EntClient, p.Logger)
+}
+
+func NewEventDeletionLogRepository(p RepositoryParams) events.DeletedEventsLogRepository {
+	return clickhouseRepo.NewEventDeletionLogRepository(p.ClickHouseDB, p.Logger)
 }

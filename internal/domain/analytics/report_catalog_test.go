@@ -61,3 +61,22 @@ func TestReportCatalog_UnknownAndCopy(t *testing.T) {
 	b := ReportCatalog()
 	assert.NotEqual(t, "mutated", b[0].Name)
 }
+
+func TestReportQueryOffsetValidation(t *testing.T) {
+	e, ok := LookupReport(string(types.MetricInvoiceTotal))
+	require.True(t, ok)
+	base := ReportQuery{Shape: string(types.ShapeBreakdown), Dimensions: []string{"customer_id"}, Limit: 10, Offset: 10}
+	require.NoError(t, base.ValidateAgainst(e, 1000))
+
+	noLimit := base
+	noLimit.Limit = 0
+	require.Error(t, noLimit.ValidateAgainst(e, 1000))
+
+	negative := base
+	negative.Offset = -1
+	require.Error(t, negative.ValidateAgainst(e, 1000))
+
+	sorted := base
+	sorted.Sort = []ReportQuerySort{{Field: "customer_id", Dir: "asc"}}
+	require.Error(t, sorted.ValidateAgainst(e, 1000))
+}

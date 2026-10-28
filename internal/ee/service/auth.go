@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -17,6 +19,8 @@ import (
 type AuthService interface {
 	SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error)
 	Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error)
+	CheckPasswordLink(ctx context.Context, req *dto.CheckPasswordLinkRequest) (*dto.PasswordLinkDetailsResponse, error)
+	SetPassword(ctx context.Context, req *dto.SetPasswordRequest) error
 }
 
 type authService struct {
@@ -38,6 +42,7 @@ func NewAuthService(
 
 // SignUp creates a new user and returns an auth token
 func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.AuthResponse, error) {
+	req.Email = types.NormalizeEmail(req.Email)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -259,20 +264,27 @@ func (s *authService) refusePasswordLoginUnderSSO(ctx context.Context, user *use
 		Mark(ierr.ErrPermissionDenied)
 }
 
+// invalidLoginError is the one answer for every refused login. It is built fresh
+// instead of wrapping the cause, because a wrapped cause keeps its own error kind
+// and the response would then answer 400 or 404 on some requests.
+func invalidLoginError(reason string) error {
+	return ierr.NewErrorf("login refused: %s", reason).
+		WithHint("Invalid email or password").
+		Mark(ierr.ErrPermissionDenied)
+}
+
 // Login authenticates a user and returns an auth token
 func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.AuthResponse, error) {
-	user, err := s.UserRepo.GetByEmail(ctx, req.Email)
+	user, err := s.UserRepo.GetByEmail(ctx, types.NormalizeEmail(req.Email))
 	if err != nil {
 		// Only normalize the not-found case: an unknown email must return the
 		// same "invalid credentials" response as a valid email with a wrong
-		// password (both ErrPermissionDenied / 401), otherwise the distinct
+		// password (both ErrPermissionDenied / 403), otherwise the distinct
 		// not-found status enables account enumeration on this unauthenticated,
 		// unthrottled endpoint. Other errors (e.g. a database failure) must
 		// propagate as-is so they surface as server errors, not bad credentials.
 		if ierr.IsNotFound(err) {
-			return nil, ierr.WithError(err).
-				WithHint("Invalid email or password").
-				Mark(ierr.ErrPermissionDenied)
+			return nil, invalidLoginError("unknown email")
 		}
 		return nil, err
 	}
@@ -294,6 +306,10 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	if s.authProvider.GetProvider() == types.AuthProviderFlexprice {
 		auth, err = s.AuthRepo.GetAuthByUserID(ctx, user.ID)
 		if err != nil {
+			// An invitee has no password until they use their link; answer as for a wrong password.
+			if ierr.IsNotFound(err) {
+				return nil, invalidLoginError("no password set yet")
+			}
 			return nil, err
 		}
 	}
@@ -308,9 +324,7 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	if err != nil {
 		// Same generic response as the unknown-email and identity-mismatch cases
 		// so none of the three is distinguishable to an enumerating caller.
-		return nil, ierr.WithError(err).
-			WithHint("Invalid email or password").
-			Mark(ierr.ErrPermissionDenied)
+		return nil, invalidLoginError(err.Error())
 	}
 
 	if authResponse.ID != user.ID {
@@ -326,4 +340,118 @@ func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Au
 	}
 
 	return response, nil
+}
+
+// CheckPasswordLink tells the set-password page what a link is for and whose it is.
+func (s *authService) CheckPasswordLink(ctx context.Context, req *dto.CheckPasswordLinkRequest) (*dto.PasswordLinkDetailsResponse, error) {
+	claims, target, _, err := s.resolvePasswordLink(ctx, req.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PasswordLinkDetailsResponse{
+		Purpose: string(claims.Purpose),
+		Email:   target.Email,
+	}, nil
+}
+
+// SetPassword saves the password chosen through a one-time link. The new hash
+// invalidates this link and every other link issued against the old one.
+func (s *authService) SetPassword(ctx context.Context, req *dto.SetPasswordRequest) error {
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	// The link is checked before bcrypt runs, so a made-up token costs the server no hashing.
+	claims, _, _, err := s.resolvePasswordLink(ctx, req.Token)
+	if err != nil {
+		return err
+	}
+
+	hashedPassword, err := authProvider.HashPassword(req.Password)
+	if err != nil {
+		return err
+	}
+
+	var purpose authProvider.PasswordLinkPurpose
+	err = s.DB.WithTx(types.SetTenantID(ctx, claims.TenantID), func(txCtx context.Context) error {
+		// One request per user at a time; the check below then refuses every link but the first.
+		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "password_link:" + claims.UserID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to set password").
+				Mark(ierr.ErrInternal)
+		}
+
+		verified, target, existingAuth, err := s.resolvePasswordLink(txCtx, req.Token)
+		if err != nil {
+			return err
+		}
+		purpose = verified.Purpose
+
+		if existingAuth == nil {
+			return s.AuthRepo.CreateAuth(txCtx, auth.NewAuth(target.ID, types.AuthProviderFlexprice, hashedPassword))
+		}
+		existingAuth.Token = hashedPassword
+		existingAuth.UpdatedAt = time.Now().UTC()
+		return s.AuthRepo.UpdateAuth(txCtx, existingAuth)
+	})
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Info(ctx, "password set from link",
+		"user_id", claims.UserID,
+		"tenant_id", claims.TenantID,
+		"purpose", purpose,
+	)
+	return nil
+}
+
+// resolvePasswordLink runs every check a link must pass. It returns the link's
+// claims, its user, and the user's password row (nil when they have none yet).
+func (s *authService) resolvePasswordLink(ctx context.Context, token string) (*authProvider.PasswordLinkClaims, *user.User, *auth.Auth, error) {
+	if s.authProvider.GetProvider() != types.AuthProviderFlexprice {
+		return nil, nil, nil, authProvider.NewInvalidPasswordLinkError()
+	}
+
+	token = strings.TrimSpace(token)
+	claims, err := authProvider.ReadPasswordLinkClaims(token)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// The visitor has no session, so the tenant comes from the link; the signature check below covers it.
+	tenantCtx := types.SetTenantID(ctx, claims.TenantID)
+	target, err := s.UserRepo.GetByID(tenantCtx, claims.UserID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return nil, nil, nil, authProvider.NewInvalidPasswordLinkError()
+		}
+		return nil, nil, nil, err
+	}
+	if target.TenantID != claims.TenantID || target.Type != types.UserTypeUser || target.Status != types.StatusPublished {
+		return nil, nil, nil, authProvider.NewInvalidPasswordLinkError()
+	}
+
+	currentPasswordHash := ""
+	existingAuth, err := s.AuthRepo.GetAuthByUserID(tenantCtx, target.ID)
+	switch {
+	case err == nil:
+		currentPasswordHash = existingAuth.Token
+	case ierr.IsNotFound(err):
+		existingAuth = nil
+	default:
+		return nil, nil, nil, err
+	}
+
+	signer, err := authProvider.NewPasswordLinkSigner(s.Config.Auth.Secret)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	verified, err := signer.Verify(token, currentPasswordHash, time.Now())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return verified, target, existingAuth, nil
 }
