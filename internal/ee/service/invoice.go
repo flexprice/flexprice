@@ -3392,30 +3392,33 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
-	// Non-default billing entities have no gateway: the invoice stays pending and is paid manually.
-	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, inv.CustomerID, "invoice_auto_payment"); err != nil || skip {
+	// Non-default billing entities have no gateway: only the card charge is skipped, wallets still pay.
+	served, err := NewBillingEntityService(s.ServiceParams).CustomerServesIntegrations(ctx, inv.CustomerID)
+	if err != nil {
 		return err
 	}
 
-	// If Stripe outbound invoice sync is enabled for this tenant/environment,
-	// skip automatic payment and let Stripe/record-payment flows be the source of truth.
-	conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
-	if connErr == nil && conn != nil && conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Info(ctx, "stripe invoice sync enabled, skipping automatic payment processing",
-			"invoice_id", inv.ID,
-			"subscription_id", lo.FromPtr(inv.SubscriptionID),
-			"flow_type", flowType)
-		return nil
-	}
+	if served {
+		// If Stripe outbound invoice sync is enabled for this tenant/environment,
+		// skip automatic payment and let Stripe/record-payment flows be the source of truth.
+		conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+		if connErr == nil && conn != nil && conn.IsInvoiceOutboundEnabled() {
+			s.Logger.Info(ctx, "stripe invoice sync enabled, skipping automatic payment processing",
+				"invoice_id", inv.ID,
+				"subscription_id", lo.FromPtr(inv.SubscriptionID),
+				"flow_type", flowType)
+			return nil
+		}
 
-	// Fallback guard: if mapping already exists in Stripe, also skip automatic payment.
-	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
-	if err == nil && stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-		s.Logger.Info(ctx, "invoice is synced to Stripe, skipping automatic payment processing",
-			"invoice_id", inv.ID,
-			"subscription_id", lo.FromPtr(inv.SubscriptionID),
-			"flow_type", flowType)
-		return nil
+		// Fallback guard: if mapping already exists in Stripe, also skip automatic payment.
+		stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err == nil && stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
+			s.Logger.Info(ctx, "invoice is synced to Stripe, skipping automatic payment processing",
+				"invoice_id", inv.ID,
+				"subscription_id", lo.FromPtr(inv.SubscriptionID),
+				"flow_type", flowType)
+			return nil
+		}
 	}
 
 	// Use parameters if provided, otherwise get from subscription
