@@ -80,7 +80,7 @@ among the customer's allowed connections.
    variation.
 3. A refund of an earlier payment goes through the connection that took it.
 
-Variation: the connection that took the payment was removed → the refund fails with an error. Customers
+Variation: the connection that took the payment was removed → the refund fails and the customer is credited to their wallet. Customers
 and saved payment methods are not copied to the new account; the admin re-syncs them.
 
 ## 3. Scope
@@ -124,7 +124,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-5 | A connection's owner can be changed to another entity that has no connection for the provider; customers and saved payment methods are not copied. | UC6 | Move Stripe 2 from X to Y (Y without Stripe) → saved; Y already has Stripe → 409. |
 | FR-6 | Every provider call for a record uses the connection owned by the record's customer's entity; with none, the call behaves as if the provider were not connected. A call never uses another entity's connection. | UC2, UC3 | X on Stripe 1, Y on Stripe 2: charge Y's invoice → Stripe 2 only. Y without Razorpay: Razorpay payment link for Y → 400 provider not connected. |
 | FR-7 | For an entity with a connection for the provider, auto-charge, checkout, payment links, saved payment methods, hosted invoice payment and wallet top-up links work as for the default entity; Phase 1's guard applies only when the entity has no connection for that provider. | UC2 | Non-default customer with saved Stripe card and `charge_automatically` → charged through the entity's Stripe; hosted page shows `pay.enabled: true`. |
-| FR-8 | Gateway choice: an explicitly requested provider; else the customer's preferred connection if usable; else today's rule over the customer's allowed connections. | UC2, UC5 | Customer prefers Razorpay, has a Stripe card only → auto-charge falls back to Stripe; payment link without provider → Razorpay. |
+| FR-8 | Gateway choice: an explicitly requested provider; else the customer's preferred connection if usable; else today's rule over the customer's allowed connections. | UC2, UC5 | Customer prefers Razorpay, has a Stripe card only → auto-charge falls back to Stripe; hosted invoice Pay → Razorpay. A payment link created through the API still names its provider. |
 | FR-9 | A payment taken through a gateway records the connection that took it. | UC2 | Payment response and record show `connection_id` of the entity's connection. |
 | FR-10 | Customer, invoice, subscription and payment syncs go to the entity's connection for each syncing provider and are skipped when it has none. | UC3 | Y on QuickBooks realm B → Y's invoice appears in realm B, not realm A; Y without Zoho → no Zoho sync started. |
 | FR-11 | Catalog sync pushes plans, prices and add-ons to every connection of the provider and records the external IDs per connection. | UC3 | Price P synced with Stripe 1 and Stripe 2 → two mappings with different external IDs; re-sync does not duplicate. |
@@ -134,7 +134,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-15 | A customer can be given and cleared a preferred gateway connection, which must be a gateway connection the customer may use: their entity's in an enabled environment, the environment's otherwise. | UC5 | Set to X's Stripe for a Y customer → 400; set to own entity's Razorpay → saved; clear → removed. |
 | FR-16 | A preferred connection that is removed, owned by another entity or lacks a usable saved method is skipped without error. | UC5 | Remove the preferred connection → next charge uses today's choice. |
 | FR-17 | A connection can be removed whatever the state of its entity's invoices and subscriptions; its ownership and preferences go with it. | UC6 | Remove Y's Stripe with open invoices → 200; Y's next charge → no gateway, invoice stays pending. |
-| FR-18 | A gateway refund uses the connection recorded on the payment; a payment without one uses the connection of its customer's entity for the payment's provider. A removed connection fails the refund. | UC6 | Y moves from Razorpay A to Razorpay B, refund a payment taken in A → refunded in A; A removed → 400 naming the connection. |
+| FR-18 | A gateway refund uses the connection recorded on the payment; a payment without one uses the connection of its customer's entity for the payment's provider. A removed connection fails the refund, and the customer is credited to their wallet instead. | UC6 | Y moves from Razorpay A to Razorpay B, refund a payment taken in A → refunded in A; A removed → refund failed with "the connection that took this payment was removed", wallet credited. |
 
 ## 5. Non-functional requirements
 <!-- erd:locked -->
@@ -331,7 +331,6 @@ Customer Get and List responses carry `preferred_connection_id` (null when unset
 | Connection already exists for this entity | 409 | FR-2, FR-5 |
 | Connection not allowed for customer | 400 | Preference outside the customer's allowed connections, or not a gateway (FR-15) |
 | Provider not connected | 400 | Payment link, checkout or payment method for an entity without that provider (FR-6) |
-| Refund connection removed | 400 | FR-18 |
 | Unknown or mismatched connection | 404 | Webhook URL names a connection of another provider, tenant or environment |
 
 ### 9.3 Flows
