@@ -102,6 +102,13 @@ func (h *WebhookHandler) webhookContext(c *gin.Context, provider types.SecretPro
 		ctx, err = h.billingEntityService.ScopeToConnection(ctx, connectionID, provider)
 	} else {
 		ctx, err = h.billingEntityService.ScopeToDefault(ctx)
+		// The old URL never read the tenant, so an unknown one is handled as before, with no entity.
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "webhook tenant not found, handling without a billing entity",
+				"tenant_id", c.Param("tenant_id"),
+				"environment_id", c.Param("environment_id"))
+			err = nil
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -110,10 +117,10 @@ func (h *WebhookHandler) webhookContext(c *gin.Context, provider types.SecretPro
 	return ctx, nil
 }
 
-// rejectWebhookContext answers 404 for an unknown or mismatched connection and 500 otherwise.
+// rejectWebhookContext answers 404 for an unknown or mismatched connection in the URL and 500 otherwise.
 func (h *WebhookHandler) rejectWebhookContext(c *gin.Context, err error) {
 	ctx := c.Request.Context()
-	if ierr.IsNotFound(err) {
+	if ierr.IsNotFound(err) && c.Param("connection_id") != "" {
 		h.logger.Info(ctx, "webhook connection not found",
 			"tenant_id", c.Param("tenant_id"),
 			"environment_id", c.Param("environment_id"),

@@ -359,8 +359,9 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		externalID = lookupKey
 		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
 		if err == nil && existing != nil {
-			if !webhookscope.Customer(ctx, scope, s.logger, existing.Customer.ID) {
-				return nil
+			inScope, err := webhookscope.Customer(ctx, scope, s.logger, existing.Customer.ID)
+			if err != nil || !inScope {
+				return err
 			}
 
 			conn, err := s.client.GetConnection(ctx)

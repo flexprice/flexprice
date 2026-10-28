@@ -160,8 +160,16 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 	return nil
 }
 
+// paymentInScope is false when the payment is another entity's or its entity cannot be read; the event is not retried, as for a failed payment lookup.
 func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) bool {
-	return webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+	ok, err := webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to read the billing entity of the webhook payment, skipping event",
+			"error", err,
+			"flexprice_payment_id", paymentID)
+		return false
+	}
+	return ok
 }
 
 // handlePaymentLifecycle handles payments that Flexprice initiated (CUSTOMER tokenization or INVOICE autopay).
