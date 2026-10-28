@@ -834,6 +834,8 @@ type ConnectionFilter struct {
 	Sort          []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 	ConnectionIDs []string           `json:"connection_ids,omitempty" form:"connection_ids" validate:"omitempty"`
 	ProviderType  SecretProvider     `json:"provider_type,omitempty" form:"provider_type" validate:"omitempty"`
+	// BillingEntityID keeps only connections owned by this billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id" validate:"omitempty"`
 }
 
 // NewConnectionFilter creates a new ConnectionFilter with default values

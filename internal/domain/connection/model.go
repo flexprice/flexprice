@@ -15,6 +15,8 @@ type Connection struct {
 	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
 	SyncConfig          *types.SyncConfig        `db:"sync_config" json:"sync_config,omitempty"`
 	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
+	// BillingEntityID is the owning billing entity, read from its owner association; nil off tenant and for storage
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 	types.BaseModel
 }
 

@@ -42,34 +42,48 @@ func (s *InMemoryConnectionStore) Get(ctx context.Context, id string) (*connecti
 	return copyConnection(item), nil
 }
 
-func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider types.SecretProvider) (*connection.Connection, error) {
-	// Create a filter function that matches by provider_type, tenant_id, environment (from ctx), and published status
-	filterFn := func(ctx context.Context, c *connection.Connection, _ interface{}) bool {
-		return c.ProviderType == provider &&
-			c.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, c.EnvironmentID) &&
-			c.Status == types.StatusPublished
-	}
-
-	// List all connections with our filter
-	connections, err := s.store.List(ctx, nil, filterFn, nil)
+func (s *InMemoryConnectionStore) GetUnscoped(ctx context.Context, id string) (*connection.Connection, error) {
+	item, err := s.store.Get(ctx, id)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list connections").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
-
-	if len(connections) == 0 {
+	if !CheckTenantFilter(ctx, item.TenantID) || !CheckEnvironmentFilter(ctx, item.EnvironmentID) {
 		return nil, ierr.NewError("connection not found").
-			WithHintf("Connection with provider %s was not found in this environment", provider).
-			WithReportableDetails(map[string]any{
-				"provider_type": provider,
-				"tenant_id":     types.GetTenantID(ctx),
-			}).
+			WithHintf("Connection with ID %s was not found", id).
 			Mark(ierr.ErrNotFound)
 	}
+	return copyConnection(item), nil
+}
 
-	return copyConnection(connections[0]), nil
+func (s *InMemoryConnectionStore) GetByProvider(ctx context.Context, provider types.SecretProvider) (*connection.Connection, error) {
+	notFound := ierr.NewError("connection not found").
+		WithHintf("Connection with provider %s was not found in this environment", provider).
+		WithReportableDetails(map[string]any{
+			"provider_type": provider,
+			"tenant_id":     types.GetTenantID(ctx),
+		}).
+		Mark(ierr.ErrNotFound)
+
+	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
+		c, err := s.GetUnscoped(ctx, pinnedID)
+		if err != nil {
+			return nil, err
+		}
+		if c.ProviderType != provider {
+			return nil, notFound
+		}
+		return c, nil
+	}
+
+	connections, err := s.ListPublishedInScope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, ok := lo.Find(connections, func(c *connection.Connection) bool { return c.ProviderType == provider })
+	if !ok {
+		return nil, notFound
+	}
+	return c, nil
 }
 
 func (s *InMemoryConnectionStore) ListPublishedByProvider(ctx context.Context, provider types.SecretProvider) ([]*connection.Connection, error) {
@@ -90,6 +104,14 @@ func (s *InMemoryConnectionStore) ListPublishedByProvider(ctx context.Context, p
 
 func (s *InMemoryConnectionStore) ListAllPublished(ctx context.Context) ([]*connection.Connection, error) {
 	return s.List(ctx, types.NewNoLimitConnectionFilter())
+}
+
+func (s *InMemoryConnectionStore) ListPublishedInScope(ctx context.Context) ([]*connection.Connection, error) {
+	connections, err := s.ListAllPublished(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return connection.InScope(ctx, connections), nil
 }
 
 func (s *InMemoryConnectionStore) List(ctx context.Context, filter *types.ConnectionFilter) ([]*connection.Connection, error) {
@@ -158,6 +180,10 @@ func connectionFilterFn(ctx context.Context, c *connection.Connection, filter in
 		return false
 	}
 
+	if f.BillingEntityID != "" && lo.FromPtr(c.BillingEntityID) != f.BillingEntityID {
+		return false
+	}
+
 	// Apply time range filter if present
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && c.CreatedAt.Before(*f.StartTime) {
@@ -200,6 +226,7 @@ func copyConnection(c *connection.Connection) *connection.Connection {
 		Metadata:            cloneConnectionMetadataMap(c.Metadata),
 		SyncConfig:          cloneSyncConfig(c.SyncConfig),
 		EnvironmentID:       c.EnvironmentID,
+		BillingEntityID:     lo.EmptyableToPtr(lo.FromPtr(c.BillingEntityID)),
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,
 			Status:    c.Status,
