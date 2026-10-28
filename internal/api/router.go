@@ -446,8 +446,6 @@ func NewRouter(
 		{
 			tenantRoutes.PUT("/update", write(types.EntityTenant, types.ActionWrite), handlers.Tenant.UpdateTenant)
 			tenantRoutes.GET("/billing", handlers.SelfBilling.TenantBilling)
-			tenantRoutes.POST("/billing-entities/enable", write(types.EntityTenant, types.ActionWrite, superAdminOnly), handlers.BillingEntity.EnableBillingEntities)
-			tenantRoutes.GET("/billing-entities/status", handlers.BillingEntity.GetBillingEntitiesStatus)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
 		}
 
@@ -582,6 +580,8 @@ func NewRouter(
 		billingEntities := v1Private.Group("/billing-entities")
 		{
 			billingEntities.GET("", handlers.BillingEntity.ListBillingEntities)
+			billingEntities.POST("/enable", write(types.EntityBillingEntity, types.ActionWrite, superAdminOnly), handlers.BillingEntity.EnableBillingEntities)
+			billingEntities.GET("/status", handlers.BillingEntity.GetBillingEntitiesStatus)
 			billingEntities.POST("", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.CreateBillingEntity)
 			billingEntities.GET("/:id", handlers.BillingEntity.GetBillingEntity)
 			billingEntities.PUT("/:id", write(types.EntityBillingEntity, types.ActionWrite), handlers.BillingEntity.UpdateBillingEntity)

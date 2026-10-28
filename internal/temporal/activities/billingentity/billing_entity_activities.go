@@ -23,6 +23,7 @@ func NewBillingEntityActivities(params service.ServiceParams) *BillingEntityActi
 
 func scopedCtx(ctx context.Context, in models.BillingEntityEnableWorkflowInput) context.Context {
 	ctx = types.SetTenantID(ctx, in.TenantID)
+	ctx = types.SetEnvironmentID(ctx, in.EnvironmentID)
 	ctx = types.SetUserID(ctx, in.UserID)
 	return types.WithForceWriter(ctx)
 }
@@ -52,7 +53,10 @@ func (a *BillingEntityActivities) AssignBillingEntityCustomers(ctx context.Conte
 		}
 	}
 
-	a.params.Logger.Info(ctx, "assigned customers to default billing entities", "tenant_id", in.TenantID, "customers", total)
+	a.params.Logger.Info(ctx, "assigned customers to default billing entities",
+		"tenant_id", in.TenantID,
+		"environment_id", in.EnvironmentID,
+		"customers", total)
 	return nil
 }
 

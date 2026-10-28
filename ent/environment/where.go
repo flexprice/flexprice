@@ -104,6 +104,11 @@ func Type(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldEQ(FieldType, v))
 }
 
+// BillingEntityMode applies equality check predicate on the "billing_entity_mode" field. It's identical to BillingEntityModeEQ.
+func BillingEntityMode(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldBillingEntityMode, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldEQ(FieldTenantID, v))
@@ -592,6 +597,71 @@ func TypeEqualFold(v string) predicate.Environment {
 // TypeContainsFold applies the ContainsFold predicate on the "type" field.
 func TypeContainsFold(v string) predicate.Environment {
 	return predicate.Environment(sql.FieldContainsFold(FieldType, v))
+}
+
+// BillingEntityModeEQ applies the EQ predicate on the "billing_entity_mode" field.
+func BillingEntityModeEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEQ(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeNEQ applies the NEQ predicate on the "billing_entity_mode" field.
+func BillingEntityModeNEQ(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldNEQ(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeIn applies the In predicate on the "billing_entity_mode" field.
+func BillingEntityModeIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldIn(FieldBillingEntityMode, vs...))
+}
+
+// BillingEntityModeNotIn applies the NotIn predicate on the "billing_entity_mode" field.
+func BillingEntityModeNotIn(vs ...string) predicate.Environment {
+	return predicate.Environment(sql.FieldNotIn(FieldBillingEntityMode, vs...))
+}
+
+// BillingEntityModeGT applies the GT predicate on the "billing_entity_mode" field.
+func BillingEntityModeGT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGT(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeGTE applies the GTE predicate on the "billing_entity_mode" field.
+func BillingEntityModeGTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldGTE(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeLT applies the LT predicate on the "billing_entity_mode" field.
+func BillingEntityModeLT(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLT(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeLTE applies the LTE predicate on the "billing_entity_mode" field.
+func BillingEntityModeLTE(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldLTE(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeContains applies the Contains predicate on the "billing_entity_mode" field.
+func BillingEntityModeContains(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContains(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeHasPrefix applies the HasPrefix predicate on the "billing_entity_mode" field.
+func BillingEntityModeHasPrefix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasPrefix(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeHasSuffix applies the HasSuffix predicate on the "billing_entity_mode" field.
+func BillingEntityModeHasSuffix(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldHasSuffix(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeEqualFold applies the EqualFold predicate on the "billing_entity_mode" field.
+func BillingEntityModeEqualFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldEqualFold(FieldBillingEntityMode, v))
+}
+
+// BillingEntityModeContainsFold applies the ContainsFold predicate on the "billing_entity_mode" field.
+func BillingEntityModeContainsFold(v string) predicate.Environment {
+	return predicate.Environment(sql.FieldContainsFold(FieldBillingEntityMode, v))
 }
 
 // And groups predicates with the AND operator between them.

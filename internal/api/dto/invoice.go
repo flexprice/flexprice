@@ -1243,7 +1243,7 @@ func (r *ApplyTaxRequest) Validate() error {
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	invoice.Invoice
-	// billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities
+	// billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities
 	BillingEntityID *string `json:"billing_entity_id"`
 
 	// overpaid_amount is the amount overpaid if payment_status is OVERPAID (amount_paid - total)

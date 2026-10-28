@@ -126,17 +126,17 @@ func (h *BillingEntityHandler) UpdateBillingEntity(c *gin.Context) {
 
 // @Summary Enable billing entities
 // @ID enableBillingEntities
-// @Description Start enabling billing entities for the tenant. Every environment gets a default entity and existing customers are assigned to it. Irreversible.
+// @Description Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.
 // @Tags Billing Entities
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.BillingEntityModeResponse "Already enabled"
 // @Success 202 {object} dto.BillingEntityModeResponse "Enabling started"
-// @Failure 400 {object} ierr.ErrorResponse "An environment uses an external tax engine"
+// @Failure 400 {object} ierr.ErrorResponse "The environment uses an external tax engine"
 // @Failure 403 {object} ierr.ErrorResponse "Not a super admin"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /tenants/billing-entities/enable [post]
+// @Router /billing-entities/enable [post]
 func (h *BillingEntityHandler) EnableBillingEntities(c *gin.Context) {
 	mode, err := h.service.Enable(c.Request.Context())
 	if err != nil {
@@ -152,14 +152,14 @@ func (h *BillingEntityHandler) EnableBillingEntities(c *gin.Context) {
 
 // @Summary Get billing entities status
 // @ID getBillingEntitiesStatus
-// @Description Whether billing entities are off, enabling or enabled for the tenant.
+// @Description Whether billing entities are off, enabling or enabled in the environment.
 // @Tags Billing Entities
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.BillingEntityModeResponse
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /tenants/billing-entities/status [get]
+// @Router /billing-entities/status [get]
 func (h *BillingEntityHandler) GetBillingEntitiesStatus(c *gin.Context) {
 	mode, err := h.service.Status(c.Request.Context())
 	if err != nil {

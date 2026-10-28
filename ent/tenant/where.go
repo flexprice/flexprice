@@ -79,11 +79,6 @@ func InternalStatus(v string) predicate.Tenant {
 	return predicate.Tenant(sql.FieldEQ(FieldInternalStatus, v))
 }
 
-// BillingEntityMode applies equality check predicate on the "billing_entity_mode" field. It's identical to BillingEntityModeEQ.
-func BillingEntityMode(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldEQ(FieldBillingEntityMode, v))
-}
-
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Tenant {
 	return predicate.Tenant(sql.FieldEQ(FieldCreatedAt, v))
@@ -287,71 +282,6 @@ func InternalStatusEqualFold(v string) predicate.Tenant {
 // InternalStatusContainsFold applies the ContainsFold predicate on the "internal_status" field.
 func InternalStatusContainsFold(v string) predicate.Tenant {
 	return predicate.Tenant(sql.FieldContainsFold(FieldInternalStatus, v))
-}
-
-// BillingEntityModeEQ applies the EQ predicate on the "billing_entity_mode" field.
-func BillingEntityModeEQ(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldEQ(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeNEQ applies the NEQ predicate on the "billing_entity_mode" field.
-func BillingEntityModeNEQ(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldNEQ(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeIn applies the In predicate on the "billing_entity_mode" field.
-func BillingEntityModeIn(vs ...string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldIn(FieldBillingEntityMode, vs...))
-}
-
-// BillingEntityModeNotIn applies the NotIn predicate on the "billing_entity_mode" field.
-func BillingEntityModeNotIn(vs ...string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldNotIn(FieldBillingEntityMode, vs...))
-}
-
-// BillingEntityModeGT applies the GT predicate on the "billing_entity_mode" field.
-func BillingEntityModeGT(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldGT(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeGTE applies the GTE predicate on the "billing_entity_mode" field.
-func BillingEntityModeGTE(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldGTE(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeLT applies the LT predicate on the "billing_entity_mode" field.
-func BillingEntityModeLT(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldLT(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeLTE applies the LTE predicate on the "billing_entity_mode" field.
-func BillingEntityModeLTE(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldLTE(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeContains applies the Contains predicate on the "billing_entity_mode" field.
-func BillingEntityModeContains(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldContains(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeHasPrefix applies the HasPrefix predicate on the "billing_entity_mode" field.
-func BillingEntityModeHasPrefix(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldHasPrefix(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeHasSuffix applies the HasSuffix predicate on the "billing_entity_mode" field.
-func BillingEntityModeHasSuffix(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldHasSuffix(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeEqualFold applies the EqualFold predicate on the "billing_entity_mode" field.
-func BillingEntityModeEqualFold(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldEqualFold(FieldBillingEntityMode, v))
-}
-
-// BillingEntityModeContainsFold applies the ContainsFold predicate on the "billing_entity_mode" field.
-func BillingEntityModeContainsFold(v string) predicate.Tenant {
-	return predicate.Tenant(sql.FieldContainsFold(FieldBillingEntityMode, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

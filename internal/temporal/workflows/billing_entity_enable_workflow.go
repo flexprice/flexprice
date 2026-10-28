@@ -15,8 +15,8 @@ const (
 	ActivityCompleteBillingEntityEnable  = "CompleteBillingEntityEnable"
 )
 
-// BillingEntityEnableWorkflow creates the default entities, assigns existing customers to them in
-// batches and moves the tenant to enabled. Every step is safe to rerun.
+// BillingEntityEnableWorkflow creates the environment's default entity, assigns existing customers to it in
+// batches and moves the environment to enabled. Every step is safe to rerun.
 func BillingEntityEnableWorkflow(ctx workflow.Context, in models.BillingEntityEnableWorkflowInput) error {
 	if err := in.Validate(); err != nil {
 		return err

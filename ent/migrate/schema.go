@@ -1174,6 +1174,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "billing_entity_mode", Type: field.TypeString, Default: "off", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 	}
 	// EnvironmentsTable holds the schema information for the "environments" table.
 	EnvironmentsTable = &schema.Table{
@@ -2903,7 +2904,6 @@ var (
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "internal_status", Type: field.TypeString, Default: "trialing", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "billing_entity_mode", Type: field.TypeString, Default: "off", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "billing_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -2918,7 +2918,7 @@ var (
 			{
 				Name:    "idx_tenant_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{TenantsColumns[5]},
+				Columns: []*schema.Column{TenantsColumns[4]},
 			},
 		},
 	}

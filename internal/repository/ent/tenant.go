@@ -11,7 +11,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 type tenantRepository struct {
@@ -189,56 +188,6 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, tenant.ID)
-	return nil
-}
-
-func (r *tenantRepository) GetBillingEntityMode(ctx context.Context, tenantID string) (types.BillingEntityMode, error) {
-	span := StartRepositorySpan(ctx, "tenant", "get_billing_entity_mode", map[string]interface{}{
-		"tenant_id": tenantID,
-	})
-	defer FinishSpan(span)
-
-	row, err := r.client.Reader(ctx).Tenant.Query().
-		Where(entTenant.ID(tenantID)).
-		Select(entTenant.FieldBillingEntityMode).
-		Only(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return "", ierr.WithError(err).
-				WithHintf("Tenant %s was not found", tenantID).
-				Mark(ierr.ErrNotFound)
-		}
-		return "", ierr.WithError(err).
-			WithHint("Failed to read billing entity mode").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return types.BillingEntityMode(row.BillingEntityMode).Normalize(), nil
-}
-
-func (r *tenantRepository) SetBillingEntityMode(ctx context.Context, tenantID string, mode types.BillingEntityMode) error {
-	span := StartRepositorySpan(ctx, "tenant", "set_billing_entity_mode", map[string]interface{}{
-		"tenant_id": tenantID,
-		"mode":      mode,
-	})
-	defer FinishSpan(span)
-
-	_, err := r.client.Writer(ctx).Tenant.
-		UpdateOneID(tenantID).
-		SetBillingEntityMode(string(mode)).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return ierr.WithError(err).
-			WithHint("Failed to update billing entity mode").
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	r.DeleteCache(ctx, tenantID)
 	return nil
 }
 

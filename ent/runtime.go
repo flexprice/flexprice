@@ -1212,6 +1212,10 @@ func init() {
 	environmentDescType := environmentFields[2].Descriptor()
 	// environment.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	environment.TypeValidator = environmentDescType.Validators[0].(func(string) error)
+	// environmentDescBillingEntityMode is the schema descriptor for billing_entity_mode field.
+	environmentDescBillingEntityMode := environmentFields[3].Descriptor()
+	// environment.DefaultBillingEntityMode holds the default value on creation for the billing_entity_mode field.
+	environment.DefaultBillingEntityMode = environmentDescBillingEntityMode.Default.(string)
 	eventdeletionrequestMixin := schema.EventDeletionRequest{}.Mixin()
 	eventdeletionrequestMixinFields0 := eventdeletionrequestMixin[0].Fields()
 	_ = eventdeletionrequestMixinFields0
@@ -2902,22 +2906,18 @@ func init() {
 	tenantDescInternalStatus := tenantFields[3].Descriptor()
 	// tenant.DefaultInternalStatus holds the default value on creation for the internal_status field.
 	tenant.DefaultInternalStatus = tenantDescInternalStatus.Default.(string)
-	// tenantDescBillingEntityMode is the schema descriptor for billing_entity_mode field.
-	tenantDescBillingEntityMode := tenantFields[4].Descriptor()
-	// tenant.DefaultBillingEntityMode holds the default value on creation for the billing_entity_mode field.
-	tenant.DefaultBillingEntityMode = tenantDescBillingEntityMode.Default.(string)
 	// tenantDescCreatedAt is the schema descriptor for created_at field.
-	tenantDescCreatedAt := tenantFields[5].Descriptor()
+	tenantDescCreatedAt := tenantFields[4].Descriptor()
 	// tenant.DefaultCreatedAt holds the default value on creation for the created_at field.
 	tenant.DefaultCreatedAt = tenantDescCreatedAt.Default.(func() time.Time)
 	// tenantDescUpdatedAt is the schema descriptor for updated_at field.
-	tenantDescUpdatedAt := tenantFields[6].Descriptor()
+	tenantDescUpdatedAt := tenantFields[5].Descriptor()
 	// tenant.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	tenant.DefaultUpdatedAt = tenantDescUpdatedAt.Default.(func() time.Time)
 	// tenant.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	tenant.UpdateDefaultUpdatedAt = tenantDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// tenantDescBillingDetails is the schema descriptor for billing_details field.
-	tenantDescBillingDetails := tenantFields[7].Descriptor()
+	tenantDescBillingDetails := tenantFields[6].Descriptor()
 	// tenant.DefaultBillingDetails holds the default value on creation for the billing_details field.
 	tenant.DefaultBillingDetails = tenantDescBillingDetails.Default.(schema.TenantBillingDetails)
 	usagerecordMixin := schema.UsageRecord{}.Mixin()

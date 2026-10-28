@@ -1633,6 +1633,94 @@ const docTemplate = `{
                 }
             }
         },
+        "/billing-entities/enable": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Enable billing entities",
+                "operationId": "enableBillingEntities",
+                "responses": {
+                    "200": {
+                        "description": "Already enabled",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "202": {
+                        "description": "Enabling started",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "The environment uses an external tax engine",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Not a super admin",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing-entities/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Whether billing entities are off, enabling or enabled in the environment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Get billing entities status",
+                "operationId": "getBillingEntitiesStatus",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/billing-entities/{id}": {
             "get": {
                 "security": [
@@ -12930,94 +13018,6 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
-        "/tenants/billing-entities/enable": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Start enabling billing entities for the tenant. Every environment gets a default entity and existing customers are assigned to it. Irreversible.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Billing Entities"
-                ],
-                "summary": "Enable billing entities",
-                "operationId": "enableBillingEntities",
-                "responses": {
-                    "200": {
-                        "description": "Already enabled",
-                        "schema": {
-                            "$ref": "#/definitions/BillingEntityModeResponse"
-                        }
-                    },
-                    "202": {
-                        "description": "Enabling started",
-                        "schema": {
-                            "$ref": "#/definitions/BillingEntityModeResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "An environment uses an external tax engine",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Not a super admin",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tenants/billing-entities/status": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Whether billing entities are off, enabling or enabled for the tenant.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Billing Entities"
-                ],
-                "summary": "Get billing entities status",
-                "operationId": "getBillingEntitiesStatus",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/BillingEntityModeResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/tenants/update": {
             "put": {
                 "security": [
@@ -21303,7 +21303,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "created_at": {
@@ -21600,7 +21600,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billing_entity_id": {
-                    "description": "BillingEntityID is the entity that bills the customer; nil while the tenant has no billing entities. Never changes once set.",
+                    "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.",
                     "type": "string"
                 },
                 "contact": {
@@ -23708,7 +23708,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "billing_period": {
@@ -24678,7 +24678,7 @@ const docTemplate = `{
                     }
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "created_at": {
@@ -25337,7 +25337,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "cancelled_at": {
@@ -27514,7 +27514,7 @@ const docTemplate = `{
                     ]
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "billing_period": {
@@ -27775,7 +27775,7 @@ const docTemplate = `{
                     ]
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "billing_period": {
@@ -30161,7 +30161,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists of tenants with billing entities",
+                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities",
                     "type": "string"
                 },
                 "config": {
@@ -30260,7 +30260,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billing_entity_id": {
-                    "description": "billing_entity_id is the billing entity of the record's customer; null when the tenant has no billing entities",
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "config": {
@@ -30682,7 +30682,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billing_entity_id": {
-                    "description": "BillingEntityID is the entity that bills the customer; nil while the tenant has no billing entities. Never changes once set.",
+                    "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.",
                     "type": "string"
                 },
                 "contact": {

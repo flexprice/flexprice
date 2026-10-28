@@ -611,10 +611,11 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	r.redisCache.Delete(ctx, cacheKey)
 }
 
-func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, tenantID string, limit int) (int, error) {
+func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
 	span := StartRepositorySpan(ctx, "customer", "assign_default_billing_entities", map[string]interface{}{
-		"tenant_id": tenantID,
-		"limit":     limit,
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"limit":          limit,
 	})
 	defer FinishSpan(span)
 
@@ -632,16 +633,16 @@ func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, t
 				AND be.environment_id = c.environment_id
 				AND be.is_default
 				AND be.status = 'published'
-			WHERE c.tenant_id = $1 AND c.billing_entity_id IS NULL
-			LIMIT $2
+			WHERE c.tenant_id = $1 AND c.environment_id = $2 AND c.billing_entity_id IS NULL
+			LIMIT $3
 		)
 		UPDATE customers c
 		SET billing_entity_id = batch.billing_entity_id
 		FROM batch
 		WHERE c.id = batch.id AND c.billing_entity_id IS NULL
-		RETURNING c.id, c.environment_id`
+		RETURNING c.id`
 
-	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, batchLimit)
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, batchLimit)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
@@ -650,17 +651,17 @@ func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, t
 	}
 	defer rows.Close()
 
-	tenantCtx := types.SetTenantID(ctx, tenantID)
+	envCtx := types.SetEnvironmentID(types.SetTenantID(ctx, tenantID), environmentID)
 	count := 0
 	for rows.Next() {
-		var id, environmentID string
-		if err := rows.Scan(&id, &environmentID); err != nil {
+		var id string
+		if err := rows.Scan(&id); err != nil {
 			SetSpanError(span, err)
 			return count, ierr.WithError(err).
 				WithHint("Failed to read assigned customers").
 				Mark(ierr.ErrDatabase)
 		}
-		r.DeleteCache(types.SetEnvironmentID(tenantCtx, environmentID), &domainCustomer.Customer{ID: id})
+		r.DeleteCache(envCtx, &domainCustomer.Customer{ID: id})
 		count++
 	}
 	if err := rows.Err(); err != nil {

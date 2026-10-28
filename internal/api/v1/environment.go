@@ -127,13 +127,17 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.CheckCloneAllowed(c.Request.Context()); err != nil {
+	// Validate that the source environment exists
+	if _, err := h.service.GetEnvironment(c.Request.Context(), sourceEnvID); err != nil {
 		c.Error(err)
 		return
 	}
 
-	// Validate that the source environment exists
-	if _, err := h.service.GetEnvironment(c.Request.Context(), sourceEnvID); err != nil {
+	cloneEnvIDs := []string{sourceEnvID}
+	if req.TargetEnvironmentID != "" {
+		cloneEnvIDs = append(cloneEnvIDs, req.TargetEnvironmentID)
+	}
+	if err := h.service.CheckCloneAllowed(c.Request.Context(), cloneEnvIDs...); err != nil {
 		c.Error(err)
 		return
 	}

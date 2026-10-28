@@ -3907,7 +3907,7 @@ definitions:
     properties:
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       created_at:
         type: string
@@ -4130,7 +4130,7 @@ definitions:
         type: string
       billing_entity_id:
         description: BillingEntityID is the entity that bills the customer; nil while
-          the tenant has no billing entities. Never changes once set.
+          the environment has no billing entities. Never changes once set.
         type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
@@ -5677,7 +5677,7 @@ definitions:
         type: string
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       billing_period:
         description: billing_period describes the billing period this invoice covers
@@ -6381,7 +6381,7 @@ definitions:
         type: array
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       created_at:
         type: string
@@ -6850,7 +6850,7 @@ definitions:
         type: integer
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       cancelled_at:
         type: string
@@ -8388,7 +8388,7 @@ definitions:
           calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
@@ -8604,7 +8604,7 @@ definitions:
           calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
@@ -10304,7 +10304,7 @@ definitions:
         type: string
       billing_entity_id:
         description: billing_entity_id is the billing entity of the wallet's customer;
-          set on customer wallet lists of tenants with billing entities
+          set on customer wallet lists in environments with billing entities
         type: string
       config:
         $ref: '#/definitions/types.WalletConfig'
@@ -10384,7 +10384,7 @@ definitions:
         type: string
       billing_entity_id:
         description: billing_entity_id is the billing entity of the record's customer;
-          null when the tenant has no billing entities
+          null when the environment has no billing entities
         type: string
       config:
         $ref: '#/definitions/types.WalletConfig'
@@ -10695,7 +10695,7 @@ definitions:
         type: string
       billing_entity_id:
         description: BillingEntityID is the entity that bills the customer; nil while
-          the tenant has no billing entities. Never changes once set.
+          the environment has no billing entities. Never changes once set.
         type: string
       contact:
         description: Contact is an optional contact number for the customer (e.g.
@@ -17381,6 +17381,63 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update a billing entity
+      tags:
+      - Billing Entities
+  /billing-entities/enable:
+    post:
+      consumes:
+      - application/json
+      description: Start enabling billing entities in the environment. The environment
+        gets a default entity and its existing customers are assigned to it. Irreversible.
+      operationId: enableBillingEntities
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Already enabled
+          schema:
+            $ref: '#/definitions/BillingEntityModeResponse'
+        "202":
+          description: Enabling started
+          schema:
+            $ref: '#/definitions/BillingEntityModeResponse'
+        "400":
+          description: The environment uses an external tax engine
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Not a super admin
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Enable billing entities
+      tags:
+      - Billing Entities
+  /billing-entities/status:
+    get:
+      consumes:
+      - application/json
+      description: Whether billing entities are off, enabling or enabled in the environment.
+      operationId: getBillingEntitiesStatus
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingEntityModeResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get billing entities status
       tags:
       - Billing Entities
   /checkout/sessions:
@@ -24860,63 +24917,6 @@ paths:
       tags:
       - SelfBilling
       x-scope: read
-  /tenants/billing-entities/enable:
-    post:
-      consumes:
-      - application/json
-      description: Start enabling billing entities for the tenant. Every environment
-        gets a default entity and existing customers are assigned to it. Irreversible.
-      operationId: enableBillingEntities
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Already enabled
-          schema:
-            $ref: '#/definitions/BillingEntityModeResponse'
-        "202":
-          description: Enabling started
-          schema:
-            $ref: '#/definitions/BillingEntityModeResponse'
-        "400":
-          description: An environment uses an external tax engine
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "403":
-          description: Not a super admin
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Enable billing entities
-      tags:
-      - Billing Entities
-  /tenants/billing-entities/status:
-    get:
-      consumes:
-      - application/json
-      description: Whether billing entities are off, enabling or enabled for the tenant.
-      operationId: getBillingEntitiesStatus
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/BillingEntityModeResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get billing entities status
-      tags:
-      - Billing Entities
   /tenants/update:
     put:
       consumes:
