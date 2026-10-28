@@ -104,6 +104,14 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 			Mark(ierr.ErrValidation)
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, sub.CustomerID)
+	if err != nil {
+		s.Logger.Error(ctx, "marketplace agreement registration failed",
+			"subscription_id", req.SubscriptionID, "customer_id", req.CustomerID, "plan_id", req.PlanID,
+			"error", err, "stage", "scope_billing_entity")
+		return nil, err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, req.Provider)
 	if err != nil {
 		s.Logger.Error(ctx, "marketplace agreement registration failed",

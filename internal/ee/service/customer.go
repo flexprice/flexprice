@@ -320,8 +320,16 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
-	s.syncCustomerUpdateToZoho(ctx, cust)
-	s.syncCustomerUpdateToStripe(ctx, &before, cust)
+
+	syncCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, cust.ID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to resolve billing entity, customer update not pushed to integrations",
+			"error", err,
+			"customer_id", cust.ID)
+		return &dto.CustomerResponse{Customer: cust}, nil
+	}
+	s.syncCustomerUpdateToZoho(syncCtx, cust)
+	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
