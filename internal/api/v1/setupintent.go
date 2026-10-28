@@ -219,17 +219,23 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 		return
 	}
 
-	// Get Stripe integration
-	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
+	ctx, err := h.entityScope.ScopeToCustomer(c.Request.Context(), customerID)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
 		c.Error(err)
 		return
 	}
 
-	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(c.Request.Context(), customerID, &req, h.customerService)
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to list Customer Payment Methods", "error", err)
+		h.log.Error(ctx, "Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(ctx, customerID, &req, h.customerService)
+	if err != nil {
+		h.log.Error(ctx, "Failed to list Customer Payment Methods", "error", err)
 		c.Error(err)
 		return
 	}
