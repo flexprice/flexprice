@@ -208,6 +208,7 @@ func NewPaymentResponse(p *payment.Payment) *PaymentResponse {
 		GatewayPaymentID:  p.GatewayPaymentID,
 		GatewayTrackingID: p.GatewayTrackingID,
 		GatewayMetadata:   p.GatewayMetadata,
+		ConnectionID:      p.ConnectionID,
 		Metadata:          p.Metadata,
 		SucceededAt:       p.SucceededAt,
 		FailedAt:          p.FailedAt,

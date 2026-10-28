@@ -1645,6 +1645,11 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 
 // GetRefundProvider returns ErrNotImplemented for gateways without a v1 refund
 // adapter — Moyasar's API refunds only in full, so it cannot back this ledger.
+// SupportsGatewayRefund reports whether the gateway can issue refunds, without any connection lookup.
+func (f *Factory) SupportsGatewayRefund(gateway types.PaymentGatewayType) bool {
+	return gateway == types.PaymentGatewayTypeRazorpay || gateway == types.PaymentGatewayTypeChargebee
+}
+
 func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGatewayType) (interfaces.RefundProvider, error) {
 	switch gateway {
 	case types.PaymentGatewayTypeRazorpay:
