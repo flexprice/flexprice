@@ -353,6 +353,9 @@ func (s *billingEntityService) ScopeToConnection(ctx context.Context, connection
 func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error) {
 	connectionID := lo.FromPtr(p.ConnectionID)
 	if connectionID == "" {
+		if off, err := s.entitiesOff(ctx); err != nil || off {
+			return ctx, err
+		}
 		customerID, err := s.PaymentRepo.GetLinkedCustomerID(ctx, p.ID)
 		if err != nil || customerID == "" {
 			return ctx, err

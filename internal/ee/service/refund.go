@@ -383,6 +383,14 @@ func (s *refundService) chargeCurrencyCreditFor(ctx context.Context, inv *invoic
 }
 
 func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refund) error {
+	gateway := types.PaymentGatewayType(lo.FromPtr(row.PaymentGateway))
+	if !s.IntegrationFactory.SupportsGatewayRefund(gateway) {
+		s.Logger.Info(ctx, "gateway cannot refund, falling back to wallet",
+			"refund_id", row.ID,
+			"gateway", lo.FromPtr(row.PaymentGateway))
+		return s.Fail(ctx, row.ID, "gateway does not support refunds")
+	}
+
 	p, err := s.paymentFor(ctx, row)
 	if err != nil {
 		return err
@@ -393,14 +401,8 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 		return err
 	}
 
-	provider, err := s.IntegrationFactory.GetRefundProvider(gatewayCtx, types.PaymentGatewayType(lo.FromPtr(row.PaymentGateway)))
+	provider, err := s.IntegrationFactory.GetRefundProvider(gatewayCtx, gateway)
 	if err != nil {
-		if ierr.IsNotImplemented(err) {
-			s.Logger.Info(ctx, "gateway cannot refund, falling back to wallet",
-				"refund_id", row.ID,
-				"gateway", lo.FromPtr(row.PaymentGateway))
-			return s.Fail(ctx, row.ID, "gateway does not support refunds")
-		}
 		return err
 	}
 
