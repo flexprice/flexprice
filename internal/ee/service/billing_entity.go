@@ -28,7 +28,7 @@ type BillingEntityService interface {
 	ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error)
 	ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error)
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
-	// ScopeToDefault puts the environment's default entity in ctx; off tenants get ctx unchanged.
+	// ScopeToDefault puts the environment's default entity in ctx; off environments get ctx unchanged.
 	ScopeToDefault(ctx context.Context) (context.Context, error)
 	// ScopeToPayment pins the connection that took the payment, else its customer's entity; publishedOnly rejects a removed connection.
 	ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error)

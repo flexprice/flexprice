@@ -289,6 +289,7 @@ func (s *BillingEntityServiceSuite) TestSetPreferredConnection() {
 				Logger:                    s.GetLogger(),
 				DB:                        s.GetDB(),
 				TenantRepo:                stores.TenantRepo,
+				EnvironmentRepo:           stores.EnvironmentRepo,
 				CustomerRepo:              stores.CustomerRepo,
 				BillingEntityRepo:         stores.BillingEntityRepo,
 				ConnectionRepo:            stores.ConnectionRepo,

@@ -48,6 +48,7 @@ func (s *MarketplaceServiceSuite) setupService() {
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		ConnectionRepo:               stores.ConnectionRepo,
 		TenantRepo:                   stores.TenantRepo,
+		EnvironmentRepo:              stores.EnvironmentRepo,
 	})
 }
 
