@@ -22,7 +22,7 @@ Flexprice or runs a separate Flexprice tenant per entity.
 India on Razorpay, or two separate Stripe accounts. A customer is charged, synced and refunded only
 through their entity's accounts, never another entity's, and inbound webhooks are applied as the entity
 whose account sent them. A customer can be given a preferred payment connection from among their
-entity's. Tenants that never enable billing entities keep today's behaviour.
+entity's. Environments that never enable billing entities keep today's behaviour.
 
 ## 2. Use cases
 <!-- erd:locked -->
@@ -33,7 +33,7 @@ entity's. Tenants that never enable billing entities keep today's behaviour.
    do not.
 3. Admin copies the connection's own webhook URL into the provider account.
 
-Variation: the entity already has a connection for that provider → rejected. The tenant is off → naming
+Variation: the entity already has a connection for that provider → rejected. The environment is off → naming
 an entity is rejected and the environment keeps one connection per provider, as today. Storage exports
 (S3, GCS) stay environment-wide and belong to no entity.
 
@@ -66,7 +66,7 @@ the late event is still verified and applied.
 
 **UC5 — Tenant admin sets a customer's preferred payment connection.**
 1. Admin picks one of the gateway connections the customer may use: their entity's, or the
-   environment's when the tenant is off.
+   environment's when the environment is off.
 2. Auto-charge, payment links, checkout and saved payment methods try that connection first.
 
 Variation: the connection is not one the customer may use → rejected. The preferred connection is later
@@ -87,7 +87,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 <!-- erd:locked -->
 
 **In**
-- Several connections per provider per environment for enabled tenants, each belonging to one entity (UC1).
+- Several connections per provider per environment for enabled environments, each belonging to one entity (UC1).
 - Entity ownership for every integration provider except storage exports (UC1).
 - Existing connections owned by the default entity at enablement (UC1).
 - Connect by API key or OAuth for a chosen entity (UC1).
@@ -117,10 +117,10 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 
 | ID | Requirement | UC | Acceptance criteria |
 |---|---|---|---|
-| FR-1 | Connection create and OAuth connect accept an optional `billing_entity_id`; absent means the default entity. It follows Phase 1's entity input rule: rejected unless the tenant is `enabled`, and must name an entity of the request's environment. | UC1 | Enabled tenant: connect with entity X → connection shows X; without → shows the default's ID. Off tenant with an entity → 400 `billing_entities_not_enabled`. |
-| FR-2 | In an `enabling` or `enabled` tenant, each connection belongs to exactly one entity and each entity has at most one published connection per provider. In an off tenant an environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off tenant → 409 as today. |
+| FR-1 | Connection create and OAuth connect accept an optional `billing_entity_id`; absent means the default entity. It follows Phase 1's entity input rule: rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC1 | Enabled environment: connect with entity X → connection shows X; without → shows the default's ID. Off environment with an entity → 400 `billing_entities_not_enabled`. |
+| FR-2 | In an `enabling` or `enabled` environment, each connection belongs to exactly one entity and each entity has at most one published connection per provider. An off environment keeps at most one published connection per provider. Storage providers keep today's rule and belong to no entity. | UC1 | Second Stripe connection for X → 409; Stripe for X and for Y → both saved; second Stripe on an off environment → 409 as today. |
 | FR-3 | Enabling makes the default entity the owner of every existing non-storage connection; a connection created while enabling belongs to the default entity. | UC1 | After enable, every connection except S3/GCS shows the default entity's ID. |
-| FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off tenants and storage). | UC1 | Filter by X → X's connections only; off tenant → field null. |
+| FR-4 | Connection list accepts an optional `billing_entity_id` filter; connection Get and List carry `billing_entity_id` (null for off environments and storage). | UC1 | Filter by X → X's connections only; off environment → field null. |
 | FR-5 | A connection's owner can be changed to another entity that has no connection for the provider; customers and saved payment methods are not copied. | UC6 | Move Stripe 2 from X to Y (Y without Stripe) → saved; Y already has Stripe → 409. |
 | FR-6 | Every provider call for a record uses the connection owned by the record's customer's entity; with none, the call behaves as if the provider were not connected. A call never uses another entity's connection. | UC2, UC3 | X on Stripe 1, Y on Stripe 2: charge Y's invoice → Stripe 2 only. Y without Razorpay: Razorpay payment link for Y → 400 provider not connected. |
 | FR-7 | For an entity with a connection for the provider, auto-charge, checkout, payment links, saved payment methods, hosted invoice payment and wallet top-up links work as for the default entity; Phase 1's guard applies only when the entity has no connection for that provider. | UC2 | Non-default customer with saved Stripe card and `charge_automatically` → charged through the entity's Stripe; hosted page shows `pay.enabled: true`. |
@@ -131,7 +131,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | FR-12 | Every connection has its own webhook URL that names the connection. An event on it is verified with that connection's secrets, including for removed connections, and only changes records of that connection's entity. | UC4 | Event on Y's URL for Y's payment → invoice paid; event on Y's URL referencing X's invoice → ignored and logged; event for a removed connection → applied. |
 | FR-13 | The existing per-environment webhook URL of each provider stays and is served by the default entity's connection. | UC4 | Event on the old Stripe URL → applied as the default entity. |
 | FR-14 | A customer created from a provider event belongs to the entity of the connection that sent it. | UC4 | Stripe 2 (Y) customer-created event → Flexprice customer with Y. |
-| FR-15 | A customer can be given and cleared a preferred gateway connection, which must be a gateway connection the customer may use: their entity's in an enabled tenant, the environment's otherwise. | UC5 | Set to X's Stripe for a Y customer → 400; set to own entity's Razorpay → saved; clear → removed. |
+| FR-15 | A customer can be given and cleared a preferred gateway connection, which must be a gateway connection the customer may use: their entity's in an enabled environment, the environment's otherwise. | UC5 | Set to X's Stripe for a Y customer → 400; set to own entity's Razorpay → saved; clear → removed. |
 | FR-16 | A preferred connection that is removed, owned by another entity or lacks a usable saved method is skipped without error. | UC5 | Remove the preferred connection → next charge uses today's choice. |
 | FR-17 | A connection can be removed whatever the state of its entity's invoices and subscriptions; its ownership and preferences go with it. | UC6 | Remove Y's Stripe with open invoices → 200; Y's next charge → no gateway, invoice stays pending. |
 | FR-18 | A gateway refund uses the connection recorded on the payment; a payment without one uses the connection of its customer's entity for the payment's provider. A removed connection fails the refund. | UC6 | Y moves from Razorpay A to Razorpay B, refund a payment taken in A → refunded in A; A removed → 400 naming the connection. |
@@ -141,7 +141,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 
 | ID | Category | Requirement (measurable) | How we verify |
 |---|---|---|---|
-| NFR-1 | Compatibility | A tenant that never enables sees identical integration behaviour, webhook URLs and responses, except the added null `billing_entity_id` and `connection_id` fields. | Full integration suite on an off tenant before and after; existing webhook URLs replayed. |
+| NFR-1 | Compatibility | An environment that never enables sees identical integration behaviour, webhook URLs and responses, except the added null `billing_entity_id` and `connection_id` fields. | Full integration suite on an off environment before and after; existing webhook URLs replayed. |
 | NFR-2 | Compatibility | API changes are additive: no field removed or renamed, every new request field optional. | OpenAPI diff shows additions only. |
 | NFR-3 | Security | No provider call for a record of entity X uses a connection owned by entity Y, including list-based choices and webhook handling. | e2e with two Stripe accounts and two QuickBooks companies; audit of every connection list read. |
 | NFR-4 | Security | A webhook is accepted only with a valid signature for the connection named in its URL. | e2e: event signed with another connection's secret → rejected. |
@@ -172,7 +172,7 @@ and saved payment methods are not copied to the new account; the admin re-syncs 
 | Connections and their API | Create, read, list, update, remove (archive) per environment; encrypted secrets; one published connection per provider, except storage | Extend: entity on create, update, list filter and response; duplicate check per entity |
 | Connection lookup by provider | The single path almost every provider client, service and webhook uses to load "the" connection, from a cached per-environment list | Extend: resolves by the entity or connection carried in the request context |
 | Published-connections cache | Per-environment cached list, cleared on every connection write | Reuse; associations cached the same way |
-| Phase 1 entity resolution | Customer's entity, default-entity fallback while enabling, mode short-circuit for off tenants | Reuse to set the entity for each provider call |
+| Phase 1 entity resolution | Customer's entity, default-entity fallback while enabling, mode short-circuit for off environments | Reuse to set the entity for each provider call |
 | Phase 1 integration guard | Skip or reject points at auto-charge, checkout, pay-first checkout, payment methods, setup intents, payments, hosted page pay, sync APIs, mark-paid dispatch, integration event dispatcher | Extend: the condition becomes "the entity has a connection for this provider" |
 | Payment provider choice | Capability map; requested → single capable → "ambiguous"; auto-charge walks gateways alphabetically for a usable saved method | Extend: candidates are the customer's allowed connections, preferred one first |
 | External ID mappings | One external ID per record per provider; "already synced" checks; upsert by record and provider | Extend: keyed by connection |
@@ -269,7 +269,7 @@ Changed tables:
 | `entity_integration_mappings` | `connection_id` | varchar(50) | yes until follow-up | External IDs per connection (FR-11) |
 | `entity_integration_mappings` | unique key | | | (tenant, environment, entity type, entity ID, provider, `connection_id`) where published, replacing the key without the connection |
 
-Off tenants write no association rows except customer preferences; their connections are found as today.
+Off environments write no association rows except customer preferences; their connections are found as today.
 
 Migration notes:
 - Migrations run before the new code and stay safe for old pods (NFR-6).
@@ -323,7 +323,7 @@ Customer Get and List responses carry `preferred_connection_id` (null when unset
 | Route | Serves |
 |---|---|
 | `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}/{connection_id}` | That connection, including removed ones |
-| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}` (existing) | The default entity's connection; the only connection for off tenants |
+| `POST /v1/webhooks/{provider}/{tenant_id}/{environment_id}` (existing) | The default entity's connection; the only connection for off environments |
 
 | Error | Status | When |
 |---|---|---|
@@ -346,7 +346,7 @@ request context, as Phase 1 already resolves it. Webhook routes set the connecti
 flowchart TD
   L[Lookup connection for provider P] --> W{Connection pinned in context?}
   W -- yes --> C1[That connection, if it is P; removed ones allowed]
-  W -- no --> M{Tenant mode}
+  W -- no --> M{Environment mode}
   M -- off --> C2[The environment's connection for P, as today]
   M -- enabling / enabled --> E{Entity in context?}
   E -- no --> NF[Not found]
@@ -372,7 +372,7 @@ flowchart LR
 
 "Usable" means published, still allowed for the customer, capable of the action and, for auto-charge,
 holding a usable saved method. "Allowed" means the customer's entity's connections, or the environment's
-for off tenants.
+for off environments.
 
 **Webhook** (UC4)
 
@@ -395,7 +395,7 @@ sequenceDiagram
 
 **Connection ownership**
 
-- Create in an `enabling` or `enabled` tenant writes the owner association in the same transaction,
+- Create in an `enabling` or `enabled` environment writes the owner association in the same transaction,
   under Phase 1's shared enable lock, so it cannot race the enable job.
 - Move (FR-5) archives the owner association and writes a new one in one transaction; customer
   preferences pointing at the connection stay and are skipped by FR-16 when no longer allowed.
@@ -421,7 +421,7 @@ sequenceDiagram
 ### 9.5 Frontend (portal repo)
 
 - **Integrations tab:** with entity X selected, lists X's connections; *Connect* (API key or OAuth)
-  creates the connection for X; each connection shows its own webhook URL. Off tenants see today's page.
+  creates the connection for X; each connection shows its own webhook URL. Off environments see today's page.
 - **Exports:** unchanged; S3 and GCS stay environment-wide.
 - **Connection settings:** owner entity, changeable to an entity without a connection for that provider.
 - **Customer page:** preferred payment connection selector listing only the customer's allowed gateway
@@ -432,7 +432,7 @@ sequenceDiagram
 
 | Concern | How the design handles it | NFR |
 |---|---|---|
-| Backward compatibility | Off tenants keep today's lookup, duplicate rule and URLs; new fields optional or null | NFR-1, NFR-2 |
+| Backward compatibility | Off environments keep today's lookup, duplicate rule and URLs; new fields optional or null | NFR-1, NFR-2 |
 | Isolation between entities | One lookup path that fails closed; list-based reads filtered by entity; webhook handling ignores other entities' records; mandatory audit of every connection list read | NFR-3 |
 | Webhook authenticity | Secret of the connection named in the URL; the connection must match the URL's tenant, environment and provider | NFR-4 |
 | Concurrency: enable vs connection create | Ownership written under Phase 1's shared enable lock; step 1 holds the exclusive lock | — |
@@ -442,7 +442,7 @@ sequenceDiagram
 | Failure: entity without a connection | Behaves as "not connected": invoice pending, sync skipped, 400 on requests; logged with record and entity IDs | NFR-3 |
 | Failure: late event for a removed connection | Still verified and applied through the per-connection route | — |
 | Deploy safety | Additive schema; mapping index swap tolerated by old pods; non-blocking follow-up | NFR-6 |
-| Observability | Lookup misses for enabled tenants and ignored cross-entity webhook events are logged with tenant, entity, connection and record IDs | — |
+| Observability | Lookup misses for enabled environments and ignored cross-entity webhook events are logged with tenant, entity, connection and record IDs | — |
 | Multi-tenancy | Associations are tenant- and environment-scoped; webhook connection must belong to the URL's tenant and environment | NFR-4 |
 
 ## 11. Risks & open questions
@@ -457,7 +457,7 @@ sequenceDiagram
 | Duplicate mapping rows written by old pods during the rollout | Low / Low | Follow-up fill collapses them |
 | Moving an entity to a new account leaves customers and cards behind | Medium / Medium | Documented manual re-sync (UC6) |
 
-Release order (decided 2026-10-28): Phase 0/1 → per-prefix numbering follow-up → this release → first tenant enables.
+Release order (decided 2026-10-28): Phase 0/1 → per-prefix numbering follow-up → this release → first environment enables.
 
 | Question | Owner | Blocks |
 |---|---|---|

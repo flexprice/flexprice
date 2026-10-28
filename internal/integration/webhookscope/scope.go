@@ -23,7 +23,7 @@ func Customer(ctx context.Context, scope interfaces.BillingEntityScope, log *log
 }
 
 // CustomerByEmail returns the first customer with the email in ctx's billing entity, or nil when there is none.
-// An enabling tenant refuses entity filters; every customer then belongs to the default entity, so any match is in scope.
+// An enabling environment refuses entity filters; every customer then belongs to the default entity, so any match is in scope.
 func CustomerByEmail(ctx context.Context, customers interfaces.CustomerService, email string) (*dto.CustomerResponse, error) {
 	filter := &types.CustomerFilter{
 		Email:           email,
