@@ -45,11 +45,19 @@ func CustomerByEmail(ctx context.Context, customers interfaces.CustomerService, 
 }
 
 // Payment is Customer for the payment's customer: the invoice's for an invoice payment, else its destination.
+// A payment not in this environment is ignored.
 func Payment(ctx context.Context, scope interfaces.BillingEntityScope, payments interfaces.PaymentService, invoices interfaces.InvoiceService, log *logger.Logger, paymentID string) (bool, error) {
 	if types.GetBillingEntityID(ctx) == "" {
 		return true, nil
 	}
 	p, err := payments.GetPayment(ctx, paymentID)
+	if ierr.IsNotFound(err) {
+		log.Info(ctx, "ignoring webhook event for unknown payment",
+			"tenant_id", types.GetTenantID(ctx),
+			"connection_id", types.GetConnectionID(ctx),
+			"payment_id", paymentID)
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

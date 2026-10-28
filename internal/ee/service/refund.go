@@ -398,6 +398,12 @@ func (s *refundService) dispatchToGateway(ctx context.Context, row *refund.Refun
 
 	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, true)
 	if err != nil {
+		if !ierr.IsValidation(err) {
+			return err
+		}
+		if failErr := s.Fail(ctx, row.ID, "the connection that took this payment was removed"); failErr != nil {
+			return failErr
+		}
 		return err
 	}
 

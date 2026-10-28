@@ -5,7 +5,10 @@
 DO $$
 DECLARE
   updated_rows integer;
+  previous_lock_timeout text := current_setting('lock_timeout');
 BEGIN
+  -- Session-level so it holds across the batch commits; a single statement keeps COMMIT legal.
+  PERFORM set_config('lock_timeout', '3s', false);
   LOOP
     WITH batch AS (
       SELECT m.id, r.connection_id
@@ -31,6 +34,7 @@ BEGIN
     COMMIT;
     EXIT WHEN updated_rows = 0;
   END LOOP;
+  PERFORM set_config('lock_timeout', previous_lock_timeout, false);
 END $$;
 
 -- migrate:down transaction:false

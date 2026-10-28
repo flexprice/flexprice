@@ -206,11 +206,28 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 	return nil
 }
 
-// setProviderConnection fills a missing connection with the provider's connection in ctx; none in scope leaves it nil.
+// setProviderConnection fills a missing connection with the provider's connection in scope; none leaves it nil.
+// A ctx without an entity in an environment with entities resolves it from the mapped record.
 func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
 	provider := types.SecretProvider(mapping.ProviderType)
 	if mapping.ConnectionID != nil || provider.Validate() != nil {
 		return nil
+	}
+	if types.GetBillingEntityID(ctx) == "" && types.GetConnectionID(ctx) == "" {
+		mode, err := s.EnvironmentRepo.GetBillingEntityMode(ctx, types.GetEnvironmentID(ctx))
+		if err != nil {
+			return err
+		}
+		if mode != types.BillingEntityModeOff {
+			_, connections, err := s.linkConnections(ctx, mapping.EntityType, mapping.EntityID, provider)
+			if err != nil {
+				return err
+			}
+			if len(connections) > 0 {
+				mapping.ConnectionID = lo.ToPtr(connections[0].ID)
+			}
+			return nil
+		}
 	}
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
 	if ierr.IsNotFound(err) {
@@ -225,18 +242,17 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 
 // linkConnections scopes ctx to the linked customer, invoice or subscription and returns its connections
 // for the provider. Other entity types link only when the environment has at most one such connection.
-func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, req dto.LinkIntegrationMappingRequest) (context.Context, []*connection.Connection, error) {
-	provider := types.SecretProvider(req.ProviderType)
+func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, entityType types.IntegrationEntityType, entityID string, provider types.SecretProvider) (context.Context, []*connection.Connection, error) {
 	scope := NewBillingEntityService(s.ServiceParams)
 
 	var err error
-	switch req.EntityType {
+	switch entityType {
 	case types.IntegrationEntityTypeCustomer:
-		ctx, err = scope.ScopeToCustomer(ctx, req.EntityID)
+		ctx, err = scope.ScopeToCustomer(ctx, entityID)
 	case types.IntegrationEntityTypeInvoice:
-		ctx, err = scope.ScopeToInvoice(ctx, req.EntityID)
+		ctx, err = scope.ScopeToInvoice(ctx, entityID)
 	case types.IntegrationEntityTypeSubscription:
-		ctx, err = scope.ScopeToSubscription(ctx, req.EntityID)
+		ctx, err = scope.ScopeToSubscription(ctx, entityID)
 	default:
 		connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
 			QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
@@ -250,8 +266,8 @@ func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, r
 				WithHintf("More than one %s connection exists; this mapping can't be linked to a single account", provider).
 				WithReportableDetails(map[string]any{
 					"provider_type": provider,
-					"entity_type":   req.EntityType,
-					"entity_id":     req.EntityID,
+					"entity_type":   entityType,
+					"entity_id":     entityID,
 				}).
 				Mark(ierr.ErrValidation)
 		}
@@ -273,7 +289,7 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 		return nil, err
 	}
 
-	ctx, connections, err := s.linkConnections(ctx, req)
+	ctx, connections, err := s.linkConnections(ctx, req.EntityType, req.EntityID, types.SecretProvider(req.ProviderType))
 	if err != nil {
 		return nil, err
 	}

@@ -692,7 +692,7 @@ func TestDuplicateConnection(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, duplicateConnection(tc.existing, tc.provider, tc.owner))
+			require.Equal(t, tc.want, duplicateConnection(tc.existing, tc.provider, tc.owner) != nil)
 		})
 	}
 }
