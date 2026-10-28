@@ -124,6 +124,26 @@ func (_u *EntityIntegrationMappingUpdate) SetNillableProviderEntityID(v *string)
 	return _u
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (_u *EntityIntegrationMappingUpdate) SetConnectionID(v string) *EntityIntegrationMappingUpdate {
+	_u.mutation.SetConnectionID(v)
+	return _u
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_u *EntityIntegrationMappingUpdate) SetNillableConnectionID(v *string) *EntityIntegrationMappingUpdate {
+	if v != nil {
+		_u.SetConnectionID(*v)
+	}
+	return _u
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *EntityIntegrationMappingUpdate) ClearConnectionID() *EntityIntegrationMappingUpdate {
+	_u.mutation.ClearConnectionID()
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *EntityIntegrationMappingUpdate) SetMetadata(v map[string]interface{}) *EntityIntegrationMappingUpdate {
 	_u.mutation.SetMetadata(v)
@@ -244,6 +264,12 @@ func (_u *EntityIntegrationMappingUpdate) sqlSave(ctx context.Context) (_node in
 	if value, ok := _u.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ConnectionID(); ok {
+		_spec.SetField(entityintegrationmapping.FieldConnectionID, field.TypeString, value)
+	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(entityintegrationmapping.FieldConnectionID, field.TypeString)
+	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)
 	}
@@ -363,6 +389,26 @@ func (_u *EntityIntegrationMappingUpdateOne) SetNillableProviderEntityID(v *stri
 	if v != nil {
 		_u.SetProviderEntityID(*v)
 	}
+	return _u
+}
+
+// SetConnectionID sets the "connection_id" field.
+func (_u *EntityIntegrationMappingUpdateOne) SetConnectionID(v string) *EntityIntegrationMappingUpdateOne {
+	_u.mutation.SetConnectionID(v)
+	return _u
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_u *EntityIntegrationMappingUpdateOne) SetNillableConnectionID(v *string) *EntityIntegrationMappingUpdateOne {
+	if v != nil {
+		_u.SetConnectionID(*v)
+	}
+	return _u
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *EntityIntegrationMappingUpdateOne) ClearConnectionID() *EntityIntegrationMappingUpdateOne {
+	_u.mutation.ClearConnectionID()
 	return _u
 }
 
@@ -515,6 +561,12 @@ func (_u *EntityIntegrationMappingUpdateOne) sqlSave(ctx context.Context) (_node
 	}
 	if value, ok := _u.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ConnectionID(); ok {
+		_spec.SetField(entityintegrationmapping.FieldConnectionID, field.TypeString, value)
+	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(entityintegrationmapping.FieldConnectionID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)
