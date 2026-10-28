@@ -12,6 +12,8 @@ type InitiateOAuthRequest struct {
 	Credentials map[string]string   `json:"credentials" binding:"required"` // Provider-specific credentials (all required for the provider)
 	Metadata    map[string]string   `json:"metadata" binding:"required"`    // Provider-specific metadata (all required for the provider)
 	SyncConfig  *types.SyncConfig   `json:"sync_config"`                    // Optional sync configuration for the connection
+	// BillingEntityID owns the connection; only accepted when billing entities are enabled.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // Validate validates the OAuth init request with provider-specific rules

@@ -193,8 +193,10 @@ func (r *connectionAssociationRepository) Delete(ctx context.Context, a *domainC
 
 // deleteConnectionCaches drops the cached connection reads that carry the owning billing entity.
 func (r *connectionAssociationRepository) deleteConnectionCaches(ctx context.Context, connectionID string) {
-	r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixPublishedConnections))
-	r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixConnection, connectionID))
+	afterCommit(ctx, func() {
+		r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixPublishedConnections))
+		r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixConnection, connectionID))
+	})
 }
 
 type ConnectionAssociationQuery = *ent.ConnectionAssociationQuery

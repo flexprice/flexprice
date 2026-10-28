@@ -91,7 +91,9 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
+	owner := c.BillingEntityID
 	*c = *domainConnection.FromEnt(connection)
+	c.BillingEntityID = owner
 	r.deleteAllPublishedCache(ctx)
 	return nil
 }
@@ -697,10 +699,12 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
+	owner := c.BillingEntityID
 	*c = *domainConnection.FromEnt(connection)
+	c.BillingEntityID = owner
 
 	// Invalidate cache to ensure fresh data on next read
-	r.DeleteCache(ctx, c)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
 	// Update cache with new data
 	r.SetCache(ctx, c)
 	r.deleteAllPublishedCache(ctx)
@@ -750,7 +754,7 @@ func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
-	r.DeleteCache(ctx, c)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
 	r.deleteAllPublishedCache(ctx)
 	return nil
 }
@@ -906,6 +910,7 @@ func (r *connectionRepository) DeleteCache(ctx context.Context, connection *doma
 // in ctx. Called on any create/update/delete so a newly connected, updated, or disconnected
 // integration is reflected immediately instead of waiting out the cache TTL.
 func (r *connectionRepository) deleteAllPublishedCache(ctx context.Context) {
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixPublishedConnections)
-	r.redisCache.Delete(ctx, cacheKey)
+	afterCommit(ctx, func() {
+		r.redisCache.Delete(ctx, cache.GenerateKey(ctx, cache.PrefixPublishedConnections))
+	})
 }
