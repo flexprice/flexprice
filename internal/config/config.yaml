@@ -175,10 +175,13 @@ clickhouse:
 
 reports:
   # Empty database or username disables reports.
+  address: ""
   # Login must allow setting changes.
   database: ""
   # Empty falls back to database.
   usage_database: ""
+  # Read usage from the events clickhouse, not reports.
+  usage_on_events_clickhouse: false
   username: ""
   password: ""
   max_execution_seconds: 10

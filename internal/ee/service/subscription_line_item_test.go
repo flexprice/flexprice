@@ -329,11 +329,11 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Schedu
 
 	successor := s.scheduleVersion(s.testData.lineItem.ID, 75, futureStart)
 	s.NotEqual(s.testData.lineItem.ID, successor.ID)
-	s.Equal(s.testData.lineItem.ID, successor.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(successor.PredecessorLineItemID))
 
 	predecessor := s.reloadLineItem(s.testData.lineItem.ID)
 	s.assertEndDate(predecessor, futureStart, "versioning must terminate the predecessor where the successor starts")
-	s.Equal(successor.ID, predecessor.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+	s.Equal(successor.ID, lo.FromPtr(predecessor.SuccessorLineItemID))
 
 	s.NoError(s.revertScheduledVersion(successor.ID))
 
@@ -341,7 +341,7 @@ func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_Schedu
 	restored := s.reloadLineItem(s.testData.lineItem.ID)
 	s.Equal(types.StatusPublished, restored.Status)
 	s.True(restored.EndDate.IsZero(), "reverting the scheduled version should reopen the prior line")
-	s.Empty(restored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID])
+	s.Nil(restored.SuccessorLineItemID)
 }
 
 // Reverting restores exactly the referenced predecessor. A scheduled row with no pointer
@@ -429,8 +429,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Alread
 	// the pointer to the successor that was just deleted.
 	s.NoError(s.revertScheduledVersion(successor.ID))
 	replacement := s.scheduleVersion(s.testData.lineItem.ID, 90, futureStart)
-	s.Equal(s.testData.lineItem.ID, replacement.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
-	s.Empty(replacement.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(replacement.PredecessorLineItemID))
+	s.Nil(replacement.SuccessorLineItemID,
 		"a newly created version must not inherit the predecessor's successor pointer")
 }
 
@@ -447,7 +447,7 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Schedu
 
 	stillLinked := s.reloadLineItem(successor.ID)
 	s.Equal("renamed", stillLinked.Metadata["note"])
-	s.Equal(s.testData.lineItem.ID, stillLinked.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(stillLinked.PredecessorLineItemID))
 
 	s.NoError(s.revertScheduledVersion(successor.ID))
 	s.True(s.reloadLineItem(s.testData.lineItem.ID).EndDate.IsZero(),
@@ -475,8 +475,11 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Metada
 
 	stored := s.reloadLineItem(successor.ID)
 	s.Equal("kept", stored.Metadata["note"])
-	s.Equal(s.testData.lineItem.ID, stored.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID],
+	s.Equal(s.testData.lineItem.ID, lo.FromPtr(stored.PredecessorLineItemID),
 		"a caller must not be able to repoint the predecessor")
+	s.Empty(stored.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID],
+		"a caller must not be able to plant a predecessor for the metadata fallback")
+	s.Nil(stored.SuccessorLineItemID)
 	s.Empty(stored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
 		"a caller must not be able to forge a successor")
 
@@ -511,6 +514,39 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_IgnoresCa
 
 	s.NoError(s.revertScheduledVersion(added.SubscriptionLineItem.ID))
 	s.assertEndDate(s.reloadLineItem(forgedTarget.ID), futureStart, "the forged target must be untouched")
+}
+
+// Line items versioned before the lineage columns existed hold their pointers only in
+// metadata. The delete guard and the revert must still follow them.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_LegacyMetadataLineage() {
+	futureStart := time.Now().UTC().Add(13 * 24 * time.Hour)
+	predecessorID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	successorID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+
+	s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.ID = predecessorID
+		li.EndDate = futureStart
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeySuccessorID: successorID}
+	})
+	s.stageLineItem(func(li *subscription.SubscriptionLineItem) {
+		li.ID = successorID
+		li.StartDate = futureStart
+		li.EndDate = time.Time{}
+		li.Metadata = map[string]string{types.SubscriptionLineItemMetadataKeyPredecessorID: predecessorID}
+	})
+
+	_, err := s.service.DeleteSubscriptionLineItem(s.GetContext(), predecessorID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Error(err)
+	s.Contains(err.Error(), "line item has a successor and cannot be deleted")
+
+	s.NoError(s.revertScheduledVersion(successorID))
+
+	s.Equal(types.StatusDeleted, s.reloadLineItem(successorID).Status)
+	restored := s.reloadLineItem(predecessorID)
+	s.True(restored.EndDate.IsZero(), "reverting must reopen the predecessor named in metadata")
+	s.Nil(restored.SuccessorLineItemID)
+	s.Empty(restored.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+		"the metadata pointer must be cleared too, or the fallback would still see a successor")
 }
 
 // Amending a pending change goes through the scheduled version: it gets terminated and

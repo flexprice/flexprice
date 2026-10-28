@@ -117,6 +117,13 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
+	commitmentSvc := newCommitmentService(s.ServiceParams)
+	if len(req.Commitments) > 0 {
+		if err := commitmentSvc.requireEnabled(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get and validate customer
 	var customer *customer.Customer
 	var err error
@@ -416,7 +423,6 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			return nil, err
 		}
 	}
-
 	// Prepare credit grants
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	var creditGrantRequests []dto.CreateCreditGrantRequest
@@ -511,6 +517,29 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 					}
 				}
 			}
+		}
+	}
+
+	// Inline commitments run once every line item exists, so they can scope overridden and phase-one prices.
+	for _, commitmentReq := range req.Commitments {
+		commitmentReq.SubscriptionID = sub.ID
+		switch commitmentReq.Scope.EntityType {
+		case types.CommitmentScopeSubscription:
+			commitmentReq.Scope.EntityID = lo.CoalesceOrEmpty(commitmentReq.Scope.EntityID, sub.ID)
+		case types.CommitmentScopePrice:
+			// An overridden plan price is billed through its subscription-scoped replacement.
+			if lineItemID, ok := originalPriceToLineItemMap[commitmentReq.Scope.EntityID]; ok {
+				lineItem, found := lo.Find(sub.LineItems, func(li *subscription.SubscriptionLineItem) bool {
+					return li.ID == lineItemID
+				})
+				if found {
+					commitmentReq.Scope.EntityID = lineItem.PriceID
+				}
+			}
+		}
+
+		if _, err = commitmentSvc.create(ctx, commitmentReq, commitmentCreateOptions{allowPendingSubscription: true}); err != nil {
+			return nil, err
 		}
 	}
 
@@ -1560,8 +1589,9 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 				priceUnitConfig.PriceUnitTiers = make([]dto.CreatePriceTier, len(originalPrice.PriceUnitTiers))
 				for i, tier := range originalPrice.PriceUnitTiers {
 					priceUnitConfig.PriceUnitTiers[i] = dto.CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -1575,8 +1605,9 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 				createPriceReq.Tiers = make([]dto.CreatePriceTier, len(originalPrice.Tiers))
 				for i, tier := range originalPrice.Tiers {
 					createPriceReq.Tiers[i] = dto.CreatePriceTier{
-						UpTo:       tier.UpTo,
-						UnitAmount: tier.UnitAmount,
+						UpTo:              tier.UpTo,
+						UnitAmount:        tier.UnitAmount,
+						TransformQuantity: tier.TransformQuantity,
 					}
 					createPriceReq.Tiers[i].FlatAmount = tier.FlatAmount
 				}
@@ -2188,6 +2219,12 @@ func (s *subscriptionService) CancelSubscription(
 			req.CancellationType == types.CancellationTypeScheduledDate
 		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
+		// Commitments end before the final invoice is built, so it carries their prorated true-up and settlement.
+		if req.CancellationType == types.CancellationTypeImmediate {
+			if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+				return err
+			}
+		}
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		// A cancel that ends the period early would leave its open draft behind, so the draft becomes
 		// the cancel invoice, is voided (refunding its applied credits), or moves to the cancel date.
@@ -2787,7 +2824,7 @@ func (s *subscriptionService) hydrateLineItemMeters(ctx context.Context, subscri
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
 
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 	priceService := NewPriceService(s.ServiceParams)
 
 	// Get subscription with line items
@@ -3201,6 +3238,10 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
 	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
+
+	if err := s.attachCommitmentBreakdown(ctx, subscription, response, req, usageStartTime, usageEndTime); err != nil {
+		return nil, err
+	}
 	return response, nil
 }
 
@@ -5118,6 +5159,10 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		return err
 	}
 
+	if err := NewCommitmentService(s.ServiceParams).TerminateForSubscription(ctx, req.SubscriptionID, req.EffectiveDate); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -6430,6 +6475,9 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 		response.Currency = sub.Currency
 		response.StartTime = usageStartTime
 		response.EndTime = usageEndTime
+		if err := s.attachCommitmentBreakdown(ctx, sub, response, req, usageStartTime, usageEndTime); err != nil {
+			return nil, err
+		}
 		return response, nil
 	}
 
@@ -6552,6 +6600,10 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
 
+	if err := s.attachCommitmentBreakdown(ctx, sub, response, req, usageStartTime, usageEndTime); err != nil {
+		return nil, err
+	}
+
 	s.Logger.Debug(ctx, "meter usage by subscription calculation completed",
 		"subscription_id", req.SubscriptionID,
 		"total_cost", totalCost.InexactFloat64(),
@@ -6559,6 +6611,28 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 		"currency", response.Currency)
 
 	return response, nil
+}
+
+// attachCommitmentBreakdown adds the per-commitment usage breakdown for API callers. Internal callers set
+// req.Source and run the commitment engine themselves; a lifetime window has no single billing period to break down.
+func (s *subscriptionService) attachCommitmentBreakdown(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	response *dto.GetUsageBySubscriptionResponse,
+	req *dto.GetUsageBySubscriptionRequest,
+	start, end time.Time,
+) error {
+	if req.Source != "" || req.LifetimeUsage {
+		return nil
+	}
+
+	breakdown, err := newBillingService(s.ServiceParams).commitmentUsageBreakdown(ctx, sub, response, start, end)
+	if err != nil {
+		return err
+	}
+
+	response.Commitments = breakdown
+	return nil
 }
 
 // GetSubscriptionEntitlements retrieves all entitlements associated with a subscription
@@ -6640,7 +6714,21 @@ func (s *subscriptionService) GetSubscriptionEntitlementsForSubscription(ctx con
 			WithHint("A subscription must be provided to resolve entitlements").
 			Mark(ierr.ErrValidation)
 	}
+	return s.resolveSubscriptionEntitlements(ctx, sub, time.Now().UTC(), false)
+}
 
+func (s *subscriptionService) GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*dto.EntitlementResponse, error) {
+	if sub == nil {
+		return nil, ierr.NewError("subscription is required").
+			WithHint("A subscription must be provided to resolve entitlements").
+			Mark(ierr.ErrValidation)
+	}
+	return s.resolveSubscriptionEntitlements(ctx, sub, at, true)
+}
+
+// resolveSubscriptionEntitlements combines plan, addon and override entitlements as of at.
+// activeOnly drops inactive entitlements before overrides apply, so a dropped override no longer hides its parent.
+func (s *subscriptionService) resolveSubscriptionEntitlements(ctx context.Context, sub *subscription.Subscription, at time.Time, activeOnly bool) ([]*dto.EntitlementResponse, error) {
 	// Initialize entitlement service
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
@@ -6667,7 +6755,7 @@ func (s *subscriptionService) GetSubscriptionEntitlementsForSubscription(ctx con
 		// A cancellation dated at period end keeps the entitlement to the boundary the
 		// customer paid through; one dated mid-period revokes it there. Both write
 		// addon_status=cancelled, so end_date is the only thing that tells them apart.
-		ActiveAt: lo.ToPtr(time.Now().UTC()),
+		ActiveAt: lo.ToPtr(at),
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -6733,19 +6821,39 @@ func (s *subscriptionService) GetSubscriptionEntitlementsForSubscription(ctx con
 	if err != nil {
 		return nil, err
 	}
-	subscriptionEntitlements := subscriptionEntResp.Items
+	filter := func(ents []*dto.EntitlementResponse) []*dto.EntitlementResponse {
+		return lo.Filter(ents, func(ent *dto.EntitlementResponse, _ int) bool {
+			// Billing keeps every entitlement; customer-facing reads keep only active ones.
+			return ent != nil && ent.Entitlement != nil && (!activeOnly || isEntitlementActive(ent.Entitlement, sub, at))
+		})
+	}
+	planItems := filter(planEntitlements.Items)
+	addonEntitlements = filter(addonEntitlements)
+	subscriptionEntitlements := filter(subscriptionEntResp.Items)
 
-	carryParentSourceToOverrides(planEntitlements.Items, addonEntitlements, subscriptionEntitlements)
+	carryParentSourceToOverrides(planItems, addonEntitlements, subscriptionEntitlements)
 
 	// Step 6: Filter out overridden entitlements and combine results
 	finalEntitlements := s.filterOverriddenEntitlements(
-		planEntitlements.Items,
+		planItems,
 		addonEntitlements,
 		subscriptionEntitlements,
 		sub.ID,
+		at,
 	)
 
 	return finalEntitlements, nil
+}
+
+// isEntitlementActive reports whether customer-facing reads show e at at. A grant-backed
+// entitlement stays until the cycle it ended in is over, so its grant state still shows.
+func isEntitlementActive(e *entitlement.Entitlement, sub *subscription.Subscription, at time.Time) bool {
+	if !e.HasGrantConfig() {
+		return e.IsLiveAt(at)
+	}
+	hasStarted := e.StartDate == nil || !e.StartDate.After(at)
+	endedBeforeThisCycle := e.EndDate != nil && !e.EndDate.After(sub.CurrentPeriodStart)
+	return hasStarted && !endedBeforeThisCycle
 }
 
 // filterOverriddenEntitlements removes plan/addon entitlements that have been overridden
@@ -6755,10 +6863,10 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 	addonEntitlements []*dto.EntitlementResponse,
 	subscriptionEntitlements []*dto.EntitlementResponse,
 	subscriptionID string,
+	now time.Time,
 ) []*dto.EntitlementResponse {
 	// Build a map of parent_entitlement_id -> true for quick lookup
-	// Only include subscription entitlements that are currently active (time-based check)
-	now := time.Now().UTC()
+	// Only include subscription entitlements that are active at now (time-based check)
 	overriddenIDs := make(map[string]bool)
 	activeSubEntitlements := make([]*dto.EntitlementResponse, 0, len(subscriptionEntitlements))
 
@@ -6875,7 +6983,30 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlementsForSubscripti
 	if err != nil {
 		return nil, err
 	}
+	return s.aggregateSubscriptionEntitlements(ctx, sub, req, entitlements), nil
+}
 
+// GetActiveAggregatedSubscriptionEntitlements is the aggregated view as of now, for customer-facing
+// reads; billing keeps GetAggregatedSubscriptionEntitlementsForSubscription.
+func (s *subscriptionService) GetActiveAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error) {
+	if req == nil {
+		req = &dto.GetSubscriptionEntitlementsRequest{}
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	entitlements, err := s.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	return s.aggregateSubscriptionEntitlements(ctx, sub, req, entitlements), nil
+}
+
+func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Context, sub *subscription.Subscription, req *dto.GetSubscriptionEntitlementsRequest, entitlements []*dto.EntitlementResponse) *dto.SubscriptionEntitlementsResponse {
 	// Filter by feature IDs if specified
 	if len(req.FeatureIDs) > 0 {
 		filteredEntitlements := make([]*dto.EntitlementResponse, 0)
@@ -6926,7 +7057,7 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlementsForSubscripti
 		Features:       aggregatedFeatures,
 	}
 
-	return response, nil
+	return response
 }
 
 // GetAggregatedSubscriptionEntitlements retrieves and aggregates all entitlements for a subscription

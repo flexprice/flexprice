@@ -399,6 +399,44 @@ func TestAdjustMeterUsageGrants_MergedWindows_OverlapBillsOnce(t *testing.T) {
 	}
 }
 
+func TestAdjustMeterUsageGrants_MergedWindows_SignedUsage(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		correction int64
+		want       int64
+	}{
+		{name: "positive net overage", correction: -20, want: 30},
+		{name: "zero net overage", correction: -50, want: 0},
+		{name: "negative net overage", correction: -80, want: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cross := unionT0.Add(10 * time.Minute)
+			bs, m := newMergedWindowBillingService(t, []struct {
+				at  time.Time
+				qty int64
+			}{
+				{unionT0.Add(20 * time.Minute), 50},
+				{unionT0.Add(40 * time.Minute), tt.correction},
+			})
+			grants := []*entitlementgrant.EntitlementGrant{
+				makeCrossedGrant("ec_a", 100, 150, unionT0, unionT0.Add(time.Hour), cross),
+				makeCrossedGrant("ec_b", 120, 150, unionT0, unionT0.Add(time.Hour), cross),
+			}
+			c := charge(flatPrice(2))
+			res, applied, err := bs.adjustMeterUsageGrants(context.Background(), linItem(false, false), c, grants, newTestPriceService(), m, nil, []string{"cust_ext"})
+			if err != nil || !applied {
+				t.Fatalf("applied = %v, err = %v; want true, nil", applied, err)
+			}
+			if !res.Overage.Equal(decimal.NewFromInt(tt.want)) {
+				t.Fatalf("Overage = %s; want %d", res.Overage, tt.want)
+			}
+			if c.Quantity != float64(tt.want) || c.Amount != float64(tt.want*2) {
+				t.Fatalf("quantity = %v, amount = %v; want %d, %d", c.Quantity, c.Amount, tt.want, tt.want*2)
+			}
+		})
+	}
+}
+
 func TestAdjustMeterUsageGrants_MeasurementFailurePropagates(t *testing.T) {
 	// Money movement never bills a knowingly wrong number: when the merged
 	// windows can't be measured (here: no usage repo), the error propagates

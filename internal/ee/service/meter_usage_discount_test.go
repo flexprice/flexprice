@@ -89,6 +89,8 @@ func (s *MeterUsageDiscountSuite) SetupTest() {
 		WalletRepo:               s.GetStores().WalletRepo,
 		UserRepo:                 s.GetStores().UserRepo,
 		AuthRepo:                 s.GetStores().AuthRepo,
+		SettingsRepo:             s.GetStores().SettingsRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
 		// Coupon repos — required for discount application
 		CouponRepo:            s.GetStores().CouponRepo,
 		CouponAssociationRepo: s.GetStores().CouponAssociationRepo,

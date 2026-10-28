@@ -208,6 +208,9 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetNillableQuotaCrossedAt(g.QuotaCrossedAt).
 		SetUpdatedAt(time.Now().UTC())
+	if g.QuotaCrossedAt == nil {
+		q.ClearQuotaCrossedAt()
+	}
 
 	if err := q.Exec(ctx); err != nil {
 		SetSpanError(span, err)

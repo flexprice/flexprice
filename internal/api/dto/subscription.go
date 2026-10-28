@@ -666,6 +666,10 @@ type CreateSubscriptionRequest struct {
 
 	Checkout *CheckoutParams `json:"checkout,omitempty"`
 
+	// Commitments are created with the subscription. subscription_id, and entity_id on a subscription scope,
+	// are set server-side.
+	Commitments []CreateCommitmentRequest `json:"commitments,omitempty"`
+
 	SubscriptionCreationConfig
 }
 
@@ -1029,6 +1033,36 @@ func (r *CreateSubscriptionRequest) validateCheckoutCompatibility() error {
 	return nil
 }
 
+// validateCommitments checks each inline commitment's shape on a copy, so no write happens for a bad request.
+// The subscription ID, unknown until create, stands in as "pending".
+func (r *CreateSubscriptionRequest) validateCommitments() error {
+	idempotencyKeys := make(map[string]bool, len(r.Commitments))
+	for i := range r.Commitments {
+		c := r.Commitments[i]
+		c.SubscriptionID = "pending"
+		if c.Scope.EntityType == types.CommitmentScopeSubscription && c.Scope.EntityID == "" {
+			c.Scope.EntityID = "pending"
+		}
+
+		c.ApplyDefaults(lo.CoalesceOrEmpty(r.Timezone, types.DefaultTimezone))
+		if err := c.Validate(); err != nil {
+			return err
+		}
+
+		if c.IdempotencyKey == nil {
+			continue
+		}
+
+		if idempotencyKeys[*c.IdempotencyKey] {
+			return ierr.Validationf("commitments carry the idempotency_key %s more than once", *c.IdempotencyKey)
+		}
+
+		idempotencyKeys[*c.IdempotencyKey] = true
+	}
+
+	return nil
+}
+
 func (r *CreateSubscriptionRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
@@ -1058,6 +1092,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if err := r.validateCommitments(); err != nil {
+		return err
 	}
 
 	if r.IncludePriceIDs != nil {
@@ -2071,6 +2109,38 @@ type GetUsageBySubscriptionResponse struct {
 	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
 	OverageAmount      float64                              `json:"overage_amount,omitempty"`      // Amount charged at overage rate
 	HasOverage         bool                                 `json:"has_overage"`                   // Whether any usage exceeded commitment
+	// Commitments is the per-commitment usage breakdown for the window; nil when commitments v2 is off or none apply.
+	Commitments []*CommitmentUsageBreakdown `json:"commitments,omitempty"`
+}
+
+// CommitmentUsageValue pairs a capacity quantity with its money value: meter units for quantity
+// commitments, equal to the amount for amount commitments, so used/committed is always a utilization ratio.
+type CommitmentUsageValue struct {
+	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
+	Amount   decimal.Decimal `json:"amount" swaggertype:"string"`
+}
+
+// CommitmentUsageBreakdown is one commitment's usage against its capacity for the queried window,
+// projected to the window's end the way the period invoice bills it.
+type CommitmentUsageBreakdown struct {
+	CommitmentID string                      `json:"commitment_id"`
+	InvoiceLabel string                      `json:"invoice_label"`
+	Type         types.CommitmentType        `json:"type"`
+	Measurement  types.CommitmentMeasurement `json:"measurement"`
+	Binding      bool                        `json:"binding"`
+	Currency     string                      `json:"currency"`
+	// AppliesFrom/To is the stretch of the queried window the commitment covers; usage outside it
+	// bills as overage and is not counted here.
+	AppliesFrom time.Time `json:"applies_from" format:"date-time"`
+	AppliesTo   time.Time `json:"applies_to" format:"date-time"`
+	// Committed is the full capacity for the stretch; its amount is the floor a binding commitment owes.
+	Committed CommitmentUsageValue `json:"committed"`
+	// Used is the capacity consumed so far and the value those units bill within the commitment.
+	Used CommitmentUsageValue `json:"used"`
+	// Unused is the remaining capacity; for a binding commitment its amount is the true-up still owed.
+	Unused CommitmentUsageValue `json:"unused"`
+	// BilledAmount is what the stretch bills for this commitment: used plus, when binding, the true-up.
+	BilledAmount decimal.Decimal `json:"billed_amount" swaggertype:"string"`
 }
 
 type SubscriptionUsageByMetersResponse struct {

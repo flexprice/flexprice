@@ -285,6 +285,18 @@ func (f EnvironmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EnvironmentMutation", m)
 }
 
+// The EventDeletionRequestFunc type is an adapter to allow the use of ordinary
+// function as EventDeletionRequest mutator.
+type EventDeletionRequestFunc func(context.Context, *ent.EventDeletionRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f EventDeletionRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.EventDeletionRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EventDeletionRequestMutation", m)
+}
+
 // The FXRateFunc type is an adapter to allow the use of ordinary
 // function as FXRate mutator.
 type FXRateFunc func(context.Context, *ent.FXRateMutation) (ent.Value, error)
@@ -391,6 +403,18 @@ func (f MeterFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterMutation", m)
+}
+
+// The MeterUsageCheckpointFunc type is an adapter to allow the use of ordinary
+// function as MeterUsageCheckpoint mutator.
+type MeterUsageCheckpointFunc func(context.Context, *ent.MeterUsageCheckpointMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MeterUsageCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MeterUsageCheckpointMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterUsageCheckpointMutation", m)
 }
 
 // The PaymentFunc type is an adapter to allow the use of ordinary

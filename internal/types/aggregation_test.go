@@ -2,6 +2,31 @@ package types
 
 import "testing"
 
+func TestAggregationType_Additive(t *testing.T) {
+	cases := []struct {
+		typ  AggregationType
+		want bool
+	}{
+		{AggregationSum, true},
+		{AggregationSumWithMultiplier, true},
+		{AggregationWeightedSum, true},
+		{AggregationCount, true},
+
+		{AggregationAvg, false},
+		{AggregationMax, false},
+		{AggregationLatest, false},
+		{AggregationCountUnique, false},
+		{AggregationType("BOGUS"), false},
+	}
+	for _, c := range cases {
+		t.Run(string(c.typ), func(t *testing.T) {
+			if got := c.typ.Additive(); got != c.want {
+				t.Fatalf("Additive for %s = %v, want %v", c.typ, got, c.want)
+			}
+		})
+	}
+}
+
 func TestAggregationType_SupportsExpression(t *testing.T) {
 	cases := []struct {
 		typ  AggregationType

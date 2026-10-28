@@ -27,11 +27,16 @@ func (r *InMemoryUserStore) Create(ctx context.Context, user *user.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, exists := r.users[user.Email]; exists {
+	user.Email = types.NormalizeEmail(user.Email)
+	key := user.Email
+	if key == "" || user.Status == types.StatusArchived || user.Status == types.StatusDeleted {
+		key = "inactive:" + user.ID
+	}
+	if _, exists := r.users[key]; exists {
 		return ierr.NewError("user already exists").Mark(ierr.ErrAlreadyExists)
 	}
 
-	r.users[user.Email] = user
+	r.users[key] = user
 	return nil
 }
 
@@ -40,8 +45,8 @@ func (r *InMemoryUserStore) GetByEmail(ctx context.Context, email string) (*user
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	user, exists := r.users[email]
-	if !exists {
+	user, exists := r.users[types.NormalizeEmail(email)]
+	if !exists || user.Status != types.StatusPublished {
 		return nil, ierr.NewError("user not found").Mark(ierr.ErrNotFound)
 	}
 
@@ -158,7 +163,8 @@ func (r *InMemoryUserStore) Delete(ctx context.Context, id string) error {
 				return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
 			}
 			u.Status = types.StatusArchived
-			r.users[key] = u
+			delete(r.users, key)
+			r.users["inactive:"+u.ID] = u
 			return nil
 		}
 	}

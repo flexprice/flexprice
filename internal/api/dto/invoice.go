@@ -617,7 +617,7 @@ func (r *CreateInvoiceRequest) Validate() error {
 		// Round both values to currency precision before comparing to avoid floating-point accumulation errors
 		roundedTotal := types.RoundToCurrencyPrecision(totalAmount, r.Currency)
 		roundedAmountDue := types.RoundToCurrencyPrecision(r.AmountDue, r.Currency)
-		if !roundedTotal.Equal(roundedAmountDue) {
+		if !decimal.Max(roundedTotal, decimal.Zero).Equal(roundedAmountDue) {
 			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", roundedTotal.String(), roundedAmountDue.String()).Mark(ierr.ErrValidation)
 		}
 	}
@@ -677,8 +677,8 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		InvoiceType:     r.InvoiceType,
 		Currency:        strings.ToLower(r.Currency),
 		AmountDue:       r.AmountDue,
-		Total:           r.Total,
-		Subtotal:        r.Subtotal,
+		Total:           decimal.Max(r.Total, decimal.Zero),
+		Subtotal:        decimal.Max(r.Subtotal, decimal.Zero),
 		Description:     r.Description,
 		DueDate:         r.DueDate,
 		PeriodStart:     r.PeriodStart,
@@ -874,6 +874,9 @@ type CreateInvoiceLineItemRequest struct {
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// CommitmentID links this line item to the commitment it bills; server-set only.
+	CommitmentID *string `json:"-"`
+
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
@@ -888,9 +891,9 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 	}
 
 	// Amount may be negative on any invoice type: a credit line offsets charges on the same
-	// document (plan change, multi-addon). Non-negativity is enforced on the invoice aggregates.
+	// document (plan change, multi-addon). Usage quantities may also be signed.
 
-	if r.Quantity.IsNegative() {
+	if r.Quantity.IsNegative() && lo.FromPtr(r.PriceType) != string(types.PRICE_TYPE_USAGE) {
 		return ierr.NewError("quantity must be non-negative").
 			WithHint("Quantity cannot be negative").
 			Mark(ierr.ErrValidation)
@@ -988,6 +991,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
+		CommitmentID:                r.CommitmentID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 

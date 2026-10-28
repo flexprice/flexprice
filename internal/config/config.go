@@ -617,14 +617,16 @@ type ClickHouseConfig struct {
 
 // ReportsConfig is the reports ClickHouse login.
 type ReportsConfig struct {
-	Database             string `mapstructure:"database"`
-	UsageDatabase        string `mapstructure:"usage_database"`
-	Username             string `mapstructure:"username"`
-	Password             string `mapstructure:"password"`
-	MaxExecutionSeconds  int    `mapstructure:"max_execution_seconds"`
-	MaxResultRows        int    `mapstructure:"max_result_rows"`
-	MaxRowsToRead        int64  `mapstructure:"max_rows_to_read"`
-	QueryCacheTTLSeconds int    `mapstructure:"query_cache_ttl_seconds"`
+	Address                 string `mapstructure:"address"`
+	Database                string `mapstructure:"database"`
+	UsageDatabase           string `mapstructure:"usage_database"`
+	UsageOnEventsClickHouse bool   `mapstructure:"usage_on_events_clickhouse"`
+	Username                string `mapstructure:"username"`
+	Password                string `mapstructure:"password"`
+	MaxExecutionSeconds     int    `mapstructure:"max_execution_seconds"`
+	MaxResultRows           int    `mapstructure:"max_result_rows"`
+	MaxRowsToRead           int64  `mapstructure:"max_rows_to_read"`
+	QueryCacheTTLSeconds    int    `mapstructure:"query_cache_ttl_seconds"`
 }
 
 func (c ReportsConfig) Enabled() bool {
@@ -1386,6 +1388,9 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+// devAPIKeyHash is the hash of the public dev API key in config.yaml.
+const devAPIKeyHash = "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c"
+
 const (
 	defaultClickHouseDialTimeout = 10 * time.Second
 	defaultClickHouseReadTimeout = 30 * time.Second
@@ -1396,6 +1401,7 @@ const (
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
 	"": true, // unset
+	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
 	"svix_auth_token":                                          true,
@@ -1414,6 +1420,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	}
 	if cfg.Deployment.Mode == types.ModeLocal {
 		return cfg, nil
+	}
+	if err := cfg.validateCriticalSecrets(); err != nil {
+		return nil, err
 	}
 	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
 	// Many fields carry dormant `validate:"required"` tags that were never enforced
@@ -1442,6 +1451,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	// customer uploads to their identity provider contains unusable endpoints,
 	// and the failure surfaces much later as an audience mismatch on every
 	// assertion, pointing at signatures rather than at configuration.
+	if err := cfg.validateEncryptionKey(); err != nil {
+		return nil, err
+	}
 	if err := cfg.Auth.SAML.validate(); err != nil {
 		return nil, err
 	}
@@ -1449,6 +1461,25 @@ func NewValidatedConfig() (*Configuration, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateCriticalSecrets rejects secrets that sign tokens or grant access.
+func (c Configuration) validateCriticalSecrets() error {
+	allowInsecure := os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true"
+	fail := func(err error) error {
+		if !allowInsecure {
+			return err
+		}
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed critical secret check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	if placeholderSecrets[strings.TrimSpace(c.Auth.Secret)] {
+		return fail(fmt.Errorf("auth.secret (FLEXPRICE_AUTH_SECRET) is empty or a placeholder (mode %q)", c.Deployment.Mode))
+	}
+	if _, ok := c.Auth.APIKey.Keys[devAPIKeyHash]; ok {
+		return fail(fmt.Errorf("auth.api_key.keys contains the public dev key (mode %q): set FLEXPRICE_AUTH_API_KEY_KEYS", c.Deployment.Mode))
+	}
+	return nil
 }
 
 // validateSecrets flags placeholder/dev secret values for features that are actually
@@ -1480,16 +1511,27 @@ func (c Configuration) validateSecrets() error {
 	if strings.TrimSpace(c.ClickHouse.Password) == devDBPassword {
 		bad = append(bad, "clickhouse.password (FLEXPRICE_CLICKHOUSE_PASSWORD)")
 	}
-	// NOTE: secrets.encryption_key is intentionally NOT checked. ECS prod currently decrypts
-	// with the baked value (canonical env FLEXPRICE_SECRETS_ENCRYPTION_KEY is unset there; ECS
-	// sets a different, unread name). Rejecting it would block prod boot and switching keys
-	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
-
 	if len(bad) > 0 {
 		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
 			c.Deployment.Mode, strings.Join(bad, ", "))
 	}
 	return nil
+}
+
+const defaultEncryptionKey = "super-secret-encryption-key"
+
+func (c Configuration) validateEncryptionKey() error {
+	key := strings.TrimSpace(c.Secrets.EncryptionKey)
+	if key != "" && key != defaultEncryptionKey {
+		return nil
+	}
+	err := fmt.Errorf("secrets.encryption_key is empty or the shipped default (mode %q): set FLEXPRICE_SECRETS_ENCRYPTION_KEY",
+		c.Deployment.Mode)
+	if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true" {
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed encryption key check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	return err
 }
 
 // GetDefaultConfig returns a default configuration for local development

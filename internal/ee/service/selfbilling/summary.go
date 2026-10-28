@@ -34,6 +34,7 @@ func (s *selfBillingService) Summary(ctx context.Context, tenantID string) (_ *d
 		Status:   status,
 		Invoices: lo.Map(remote.invoices, toSelfBillingInvoice),
 		Usage:    remote.usage,
+		Plan:     remote.plan,
 	}
 	if remote.subscription != nil {
 		out.SubscriptionStatus = remote.subscription.status

@@ -245,6 +245,24 @@ func resolveOtelLogsConfig(cfg *config.Configuration) (config.OtelLogsConfig, ma
 	return config.OtelLogsConfig{}, nil, false
 }
 
+// logResourceAttrs builds service.name, deployment.environment, and cloud.region.
+func logResourceAttrs(cfg *config.Configuration) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
+		semconv.ServiceName(cfg.Otel.ResolveServiceName(cfg)),
+	}
+	if cfg.Logging.Environment != "" {
+		attrs = append(attrs,
+			semconv.DeploymentEnvironmentName(cfg.Logging.Environment),
+			// SigNoz usage meter reads the legacy key.
+			attribute.String("deployment.environment", cfg.Logging.Environment),
+		)
+	}
+	if cfg.Logging.Region != "" {
+		attrs = append(attrs, semconv.CloudRegion(cfg.Logging.Region))
+	}
+	return attrs
+}
+
 // newOtelLogProvider builds a sdklog.LoggerProvider that exports via OTLP (gRPC or HTTP).
 func newOtelLogProvider(ctx context.Context, cfg *config.Configuration, logsCfg config.OtelLogsConfig, headers map[string]string) (*sdklog.LoggerProvider, error) {
 	// Insecure is shared across signals at the top-level (rare to need TLS for
@@ -290,18 +308,8 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration, logsCfg 
 		return nil, err
 	}
 
-	// Build resource with service.name, deployment.environment, and cloud.region
-	resAttrs := []attribute.KeyValue{
-		semconv.ServiceName(cfg.Otel.ResolveServiceName(cfg)),
-	}
-	if cfg.Logging.Environment != "" {
-		resAttrs = append(resAttrs, semconv.DeploymentEnvironmentName(cfg.Logging.Environment))
-	}
-	if cfg.Logging.Region != "" {
-		resAttrs = append(resAttrs, semconv.CloudRegion(cfg.Logging.Region))
-	}
 	res, err := resource.New(ctx,
-		resource.WithAttributes(resAttrs...),
+		resource.WithAttributes(logResourceAttrs(cfg)...),
 	)
 	if err != nil {
 		return nil, err

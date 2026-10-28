@@ -123,6 +123,16 @@ func NewPayloadBuilderFactory(services *Services) PayloadBuilderFactory {
 		return NewEntitlementPayloadBuilder(f.services)
 	}
 
+	for _, e := range []types.WebhookEventName{
+		types.WebhookEventCommitmentCreated,
+		types.WebhookEventCommitmentUpdated,
+		types.WebhookEventCommitmentTerminated,
+	} {
+		f.builders[e] = func() PayloadBuilder {
+			return NewCommitmentPayloadBuilder(f.services)
+		}
+	}
+
 	// wallet builders
 	f.builders[types.WebhookEventWalletCreated] = func() PayloadBuilder {
 		return NewWalletPayloadBuilder(f.services)

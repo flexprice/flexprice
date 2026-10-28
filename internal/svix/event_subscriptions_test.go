@@ -24,3 +24,10 @@ func TestAppSubscriptions_Has(t *testing.T) {
 	}
 	nilSubs.addEndpoint([]string{"x"}) // must not panic
 }
+
+func TestDashboardAccessRequestSetsExpiry(t *testing.T) {
+	req := dashboardAccessRequest()
+	if req.Expiry == nil || *req.Expiry != dashboardAccessExpirySeconds {
+		t.Fatalf("expected expiry %d, got %v", dashboardAccessExpirySeconds, req.Expiry)
+	}
+}

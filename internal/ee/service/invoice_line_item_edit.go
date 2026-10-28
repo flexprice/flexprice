@@ -18,18 +18,13 @@ func (s *invoiceService) recalculateTotalsFromLineItems(inv *invoice.Invoice, li
 	for _, li := range lineItems {
 		subtotal = subtotal.Add(li.Amount)
 	}
-	inv.Subtotal = subtotal
+	inv.Subtotal = decimal.Max(subtotal, decimal.Zero)
 
-	// Discount-first-then-tax: total = subtotal - prepaid credits - discount + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied).Sub(inv.TotalDiscount).Add(inv.TotalTax)
-	if inv.Total.IsNegative() {
-		inv.Total = decimal.Zero
-	}
+	// Discount-first-then-tax: total = subtotal - prepaid credits - discount + tax.
+	// The signed subtotal goes in so negative lines offset retained tax before the floor.
+	inv.Total = decimal.Max(subtotal.Sub(inv.TotalPrepaidCreditsApplied).Sub(inv.TotalDiscount).Add(inv.TotalTax), decimal.Zero)
 	inv.AmountDue = inv.Total
-	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
-	if inv.AmountRemaining.IsNegative() {
-		inv.AmountRemaining = decimal.Zero
-	}
+	inv.AmountRemaining = decimal.Max(inv.AmountDue.Sub(inv.AmountPaid), decimal.Zero)
 }
 
 func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItemID string, req dto.UpdateLineItemRequest) (*dto.InvoiceResponse, error) {

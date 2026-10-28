@@ -105,39 +105,52 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 }
 
 func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
-	resp, err := c.sdk.Customers.GetSubscriptionsForCustomer(ctx, extID, nil)
-	if isNotFound(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, cloudErr(err)
+	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
+	defer cancel()
+
+	// The customer endpoint excludes incomplete and paused subscriptions.
+	statuses := []sdktypes.SubscriptionStatus{
+		sdktypes.SubscriptionStatusActive,
+		sdktypes.SubscriptionStatusTrialing,
+		sdktypes.SubscriptionStatusIncomplete,
+		sdktypes.SubscriptionStatusPaused,
+		sdktypes.SubscriptionStatusDraft,
 	}
 
-	var live, cancelled *sdktypes.SubscriptionResponse
-	newer := func(s, than *sdktypes.SubscriptionResponse) bool {
-		return than == nil || lo.FromPtr(s.CreatedAt).After(lo.FromPtr(than.CreatedAt))
-	}
-
-	// Every plan counts, not just self-serve: a tenant moved to an Enterprise plan is driven by that subscription.
-	for i := range resp.ListSubscriptionsResponse.Items {
-		s := &resp.ListSubscriptionsResponse.Items[i]
-		if lo.FromPtr(s.SubscriptionStatus) == sdktypes.SubscriptionStatusCancelled {
-			if newer(s, cancelled) {
-				cancelled = s
-			}
-			continue
+	for _, filter := range [][]sdktypes.SubscriptionStatus{statuses, {sdktypes.SubscriptionStatusCancelled}} {
+		resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
+			ExternalCustomerID: lo.ToPtr(extID),
+			SubscriptionStatus: filter,
+			Limit:              lo.ToPtr(int64(1)),
+			Sort: []sdktypes.SortCondition{
+				{
+					Field:     lo.ToPtr("created_at"),
+					Direction: lo.ToPtr(sdktypes.SortDirectionDesc),
+				},
+				{
+					Field:     lo.ToPtr("id"),
+					Direction: lo.ToPtr(sdktypes.SortDirectionDesc),
+				},
+			},
+		})
+		if isNotFound(err) {
+			return nil, nil
 		}
 
-		if newer(s, live) {
-			live = s
+		if err != nil {
+			return nil, cloudErr(err)
+		}
+
+		if resp.ListSubscriptionsResponse == nil {
+			return nil, unreadablePricing()
+		}
+
+		if len(resp.ListSubscriptionsResponse.Items) > 0 {
+			return toRemoteSubscription(&resp.ListSubscriptionsResponse.Items[0]), nil
 		}
 	}
 
-	latest := lo.Ternary(live != nil, live, cancelled)
-	if latest == nil {
-		return nil, nil
-	}
-	return toRemoteSubscription(latest), nil
+	return nil, nil
 }
 
 // UpdateBillingDetails merges the tax ID into the existing metadata, since Flexprice Cloud replaces metadata wholesale.
@@ -230,15 +243,25 @@ func (c *remoteClient) PortalSession(ctx context.Context, extID string) (*portal
 
 // Summary fails on an unparseable invoice total rather than showing a wrong amount.
 func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummary, error) {
-	sub, err := c.LatestSubscription(ctx, extID)
+	sub, plan, err := c.summaryPlan(ctx, extID)
 	if err != nil {
 		return nil, err
+	}
+
+	out := &remoteSummary{
+		subscription: sub,
+		plan:         plan,
+		invoices:     []remoteInvoice{},
 	}
 
 	invoices, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{
 		ExternalCustomerID: lo.ToPtr(extID),
 		Limit:              lo.ToPtr(int64(summaryInvoiceLimit)),
 	})
+	if sub == nil && isNotFound(err) {
+		return out, nil
+	}
+
 	if err != nil {
 		return nil, cloudErr(err)
 	}
@@ -253,10 +276,8 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		return nil, err
 	}
 
-	out := &remoteSummary{
-		subscription: sub,
-		usage:        usageSummary,
-	}
+	out.usage = usageSummary
+
 	for _, inv := range invoices.ListInvoicesResponse.Items {
 		mapped, err := toRemoteInvoice(inv)
 		if err != nil {
@@ -264,6 +285,7 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		}
 		out.invoices = append(out.invoices, mapped)
 	}
+
 	return out, nil
 }
 

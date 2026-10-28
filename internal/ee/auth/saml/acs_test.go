@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -243,5 +244,24 @@ func TestExtractEmailRejectsNonEmailAttribute(t *testing.T) {
 	}
 	if got != "alice@example.com" {
 		t.Errorf("extractEmail() = %q, want it trimmed and lowercased", got)
+	}
+}
+
+func TestResolveUserMatchesPasswordAccountCaseInsensitively(t *testing.T) {
+	const tenantID = "tenant_owner"
+	repo := testutil.NewInMemoryUserStore()
+	existing := user.NewUser("Alice@Example.com", tenantID)
+	if err := repo.Create(context.Background(), existing); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := newTestProvider("https://billing.example.com")
+	ctx := types.SetTenantID(context.Background(), tenantID)
+	id, err := provider.resolveUser(ctx, service.ServiceParams{UserRepo: repo}, tenantID, types.NormalizeEmail("ALICE@example.com"), enabledConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != existing.ID {
+		t.Errorf("resolved id = %q, want %q", id, existing.ID)
 	}
 }

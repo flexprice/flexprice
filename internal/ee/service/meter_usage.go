@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -63,6 +64,15 @@ type MeterUsageService interface {
 	// GetUsageTotal returns a meter's aggregated usage total (FINAL consistency;
 	// supports a single range or multiple disjoint TimeRanges in one query).
 	GetUsageTotal(ctx context.Context, req *dto.UsageTotalRequest) (decimal.Decimal, error)
+
+	// GetCheckpointedUsage returns raw SUM usage before the cutoff using a checkpoint and its tail.
+	GetCheckpointedUsage(ctx context.Context, req CheckpointedUsageRequest) (decimal.Decimal, error)
+
+	// SaveUsageCheckpoint recomputes a cutoff from the preceding checkpoint, without double-counting retries.
+	SaveUsageCheckpoint(ctx context.Context, req CheckpointedUsageRequest, invoiceID *string) (*meterusagecheckpoint.MeterUsageCheckpoint, error)
+
+	// SaveUsageCheckpointsForSubscription records running SUM balances for the subscription's usage meters.
+	SaveUsageCheckpointsForSubscription(ctx context.Context, sub *subscription.Subscription, until time.Time, invoiceID *string) error
 
 	// GetMeterWindowCost prices the meter's usage in [from, to) through the
 	// billing path, so a mid-window price change is priced per line-item segment.
@@ -263,6 +273,11 @@ type AnalyticsData struct {
 	Groups                map[string]*group.Group
 	Currency              string
 	Params                *events.UsageAnalyticsParams
+
+	// LineTotals is each whole-priced line item's invoice-equivalent total, which its combos split by usage.
+	LineTotals map[string]decimal.Decimal
+	// LineCommitments is the utilized, overage and true-up split of the line totals v2 commitments priced.
+	LineCommitments map[string]*types.CommitmentInfo
 }
 
 // ---------------------------------------------------------------------------
@@ -510,14 +525,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		activeMeterIDs[id] = true
 	}
 
-	// 8. Build meter_id → line items map (only meters with data)
+	isAnalyticsQuery := req.WindowSize != "" || len(req.PropertyFilters) > 0 || len(req.Sources) > 0 || len(req.GroupBy) > 0
+
+	// 8. Include running SUM meters even when the requested window has no events.
 	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
 	meterAggType := make(map[string]types.AggregationType)
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
-		if !activeMeterIDs[item.MeterID] {
+		if !activeMeterIDs[item.MeterID] && (isAnalyticsQuery || !keepsRunningAggregate(result.MeterMap[item.MeterID])) {
 			continue
 		}
 		meterToLineItems[item.MeterID] = append(meterToLineItems[item.MeterID], item)
@@ -578,26 +595,15 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		// Use GetDetailedAnalytics when a window size, property/source filters, or extra
 		// group-by dimensions are requested (analytics path). Fall back to the faster
 		// GetUsageMultiMeter only for plain scalar billing queries.
-		isAnalyticsQuery := req.WindowSize != "" ||
-			len(req.PropertyFilters) > 0 ||
-			len(req.Sources) > 0 ||
-			len(req.GroupBy) > 0
-
 		if isAnalyticsQuery {
 			// Decide whether user-supplied group_by adds dimensions beyond meter_id.
 			// If yes, split the batch: commitment line items query with meter_id only
 			// (clean aggregate for applyLineItemCommitment), non-commitment items query
 			// with the full group_by (per-group breakdown in the response).
-			hasExtraGroupBy := false
-			for _, g := range req.GroupBy {
-				if g != "" && g != "meter_id" && g != "feature_id" {
-					hasExtraGroupBy = true
-					break
-				}
-			}
+			splitsLines := hasExtraGroupBy(req.GroupBy)
 
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
-			if hasExtraGroupBy {
+			if splitsLines {
 				for _, liw := range lineItemsInGroup {
 					// ForceApplyCommitment (export path) folds commitment LIs
 					// into the fan-out path so the CSV gets per-source rows for
@@ -618,13 +624,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, commitmentLIs, false, externalCustomerIDs, result); err != nil {
 				return nil, err
 			}
-			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, nonCommitmentLIs, hasExtraGroupBy, externalCustomerIDs, result); err != nil {
+			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, nonCommitmentLIs, splitsLines, externalCustomerIDs, result); err != nil {
 				return nil, err
 			}
 		} else {
-			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
-			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
-			// set by billing callers, so nothing is lost here.
 			queryParams := &events.MeterUsageQueryParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -640,10 +643,30 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 			if err != nil {
 				return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", group.AggType, err)
 			}
-
 			resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
 			for _, r := range results {
 				resultByMeter[r.MeterID] = r
+			}
+
+			// Running meters report the total since the first event; the window query keeps their event count.
+			for _, meterID := range meterIDs {
+				if !keepsRunningAggregate(result.MeterMap[meterID]) {
+					continue
+				}
+				total, err := s.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+					CustomerID: sub.CustomerID, ExternalCustomerIDs: externalCustomerIDs,
+					MeterID: meterID, AggregationType: types.AggregationSum, Until: group.End,
+					IgnoreCheckpoints: !usesCheckpoints(sub),
+				})
+				if err != nil {
+					return nil, err
+				}
+				r, ok := resultByMeter[meterID]
+				if !ok {
+					r = &events.MeterUsageAggregationResult{MeterID: meterID}
+					resultByMeter[meterID] = r
+				}
+				r.TotalValue = total
 			}
 
 			for _, liw := range lineItemsInGroup {
@@ -1014,6 +1037,16 @@ func hasUserBucketedGroupBy(groupBy []string) bool {
 	return false
 }
 
+// hasExtraGroupBy reports whether group_by asks for any dimension beyond the meter, splitting a line into combos.
+func hasExtraGroupBy(groupBy []string) bool {
+	for _, g := range groupBy {
+		if g != "" && g != "meter_id" && g != "feature_id" {
+			return true
+		}
+	}
+	return false
+}
+
 // analyticsGroupByPropertyName matches safe property names for "properties.X"
 // dims. Same shape as clickhouse.validMeterUsageGroupByPattern so the service
 // layer's validation matches what the SQL builder will actually accept.
@@ -1217,6 +1250,8 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 
 	// Call GetSubscriptionMeterUsage per subscription
 	var allUsages []*SubscriptionMeterUsage
+	lineTotals := map[string]decimal.Decimal{}
+	lineCommitments := map[string]*types.CommitmentInfo{}
 	for _, sub := range subscriptions {
 		// Skip parent subs that resolveCustomerAndSubscriptions appended for a
 		// child caller. Only those subs have sub.CustomerID != cust.ID —
@@ -1272,11 +1307,19 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			)
 			continue
 		}
+
+		totals, commitments, err := s.wholeLineTotals(ctx, usage, params, billingAnchor, subEndTime)
+		if err != nil {
+			return nil, err
+		}
+
+		maps.Copy(lineTotals, totals)
+		maps.Copy(lineCommitments, commitments)
 		allUsages = append(allUsages, usage)
 	}
 
 	// Merge into AnalyticsData
-	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params)
+	data := s.mergeSubscriptionUsagesToAnalyticsData(cust, subscriptions, allUsages, params, lineTotals, lineCommitments)
 
 	// Calculate costs inline
 	err = s.calculateCosts(ctx, data)
@@ -1308,8 +1351,12 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	subscriptions []*subscription.Subscription,
 	usages []*SubscriptionMeterUsage,
 	params *events.MeterUsageDetailedAnalyticsParams,
+	lineTotals map[string]decimal.Decimal,
+	lineCommitments map[string]*types.CommitmentInfo,
 ) *AnalyticsData {
 	data := &AnalyticsData{
+		LineTotals:            lineTotals,
+		LineCommitments:       lineCommitments,
 		Customer:              cust,
 		Subscriptions:         subscriptions,
 		SubscriptionLineItems: make(map[string]*subscription.SubscriptionLineItem),
@@ -1363,7 +1410,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		// committed minimum (and true-up, if windowed) is applied even with no usage.
 		for _, lu := range su.LineItemUsages {
 			if lu.Usage.IsZero() && lu.EventCount == 0 && len(lu.Points) == 0 && lu.BucketedResult == nil {
-				if lu.LineItem == nil || !lu.LineItem.HasAnyCommitment() {
+				if lu.LineItem == nil || (!lu.LineItem.HasAnyCommitment() && lineCommitments[lu.LineItem.ID] == nil) {
 					continue
 				}
 			}
@@ -2406,6 +2453,8 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 	// combo analytic carries its own per-combo Usage and Points, and applying
 	// commitment math per combo would over-charge — the line item's commitment
 	// would fire once per combo instead of once across the whole line item.
+	// Lines in data.LineTotals (v2 commitments, whole-line tiers under
+	// group_by) then replace these per-combo costs with usage-ratio shares.
 	//
 	// ForceApplyCommitment (internal-only, set by the CSV export path)
 	// overrides the group_by skip so bucketed commitment line items keep their
@@ -2441,7 +2490,338 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		}
 	}
 
+	amortizeLineTotals(data)
 	return nil
+}
+
+// amortizeLineTotals replaces the per-combo costs of each whole-priced line with shares of its total in proportion to
+// combo usage, so the combos sum to what the line bills; points take their combo's cost the same way.
+func amortizeLineTotals(data *AnalyticsData) {
+	combosByLine := lo.GroupBy(data.Analytics, func(a *events.DetailedUsageAnalytic) string { return a.SubLineItemID })
+	for lineID, combos := range combosByLine {
+		total, ok := data.LineTotals[lineID]
+		if !ok {
+			continue
+		}
+
+		usage := lo.Map(combos, func(a *events.DetailedUsageAnalytic, _ int) decimal.Decimal { return a.TotalUsage })
+		costs := amortize(total, usage)
+		if lineBreakdown := data.LineCommitments[lineID]; lineBreakdown != nil {
+			utilized := amortize(lineBreakdown.ComputedCommitmentUtilizedAmount, usage)
+			overage := amortize(lineBreakdown.ComputedOverageAmount, usage)
+			trueUp := amortize(lineBreakdown.ComputedTrueUpAmount, usage)
+			for i, combo := range combos {
+				costs[i] = utilized[i].Add(overage[i]).Add(trueUp[i])
+				combo.CommitmentInfo = &types.CommitmentInfo{
+					Type: lineBreakdown.Type,
+					// Utilized plus true-up: what the commitment itself bills; overage is billed outside it.
+					Amount:                           utilized[i].Add(trueUp[i]),
+					TrueUpEnabled:                    lineBreakdown.TrueUpEnabled,
+					IsWindowed:                       lineBreakdown.IsWindowed,
+					ComputedCommitmentUtilizedAmount: utilized[i],
+					ComputedOverageAmount:            overage[i],
+					ComputedTrueUpAmount:             trueUp[i],
+				}
+			}
+		}
+
+		for i, combo := range combos {
+			combo.TotalCost = costs[i]
+			for _, points := range [][]events.UsageAnalyticPoint{combo.Points, combo.BucketPoints} {
+				pointUsage := lo.Map(points, func(p events.UsageAnalyticPoint, _ int) decimal.Decimal { return p.Usage })
+				for j, cost := range amortize(combo.TotalCost, pointUsage) {
+					points[j].Cost = cost
+				}
+
+				if combo.CommitmentInfo == nil {
+					continue
+				}
+
+				utilized := amortize(combo.CommitmentInfo.ComputedCommitmentUtilizedAmount, pointUsage)
+				overage := amortize(combo.CommitmentInfo.ComputedOverageAmount, pointUsage)
+				trueUp := amortize(combo.CommitmentInfo.ComputedTrueUpAmount, pointUsage)
+				for j := range points {
+					points[j].ComputedCommitmentUtilizedAmount = utilized[j]
+					points[j].ComputedOverageAmount = overage[j]
+					points[j].ComputedTrueUpAmount = trueUp[j]
+				}
+			}
+		}
+	}
+}
+
+// amortize splits total across weights in proportion, evenly when no weight is positive; the shares sum to total.
+func amortize(total decimal.Decimal, weights []decimal.Decimal) []decimal.Decimal {
+	if !lo.SomeBy(weights, decimal.Decimal.IsPositive) {
+		weights = lo.Map(weights, func(decimal.Decimal, int) decimal.Decimal { return decimal.NewFromInt(1) })
+	}
+
+	return spreadCost(weights, total)
+}
+
+// wholeLineTotals prices each of the subscription's line items on its whole usage in the window, as its invoice line
+// would: through the v2 commitments covering it, else, when group_by splits it into combos, with its tiers walked once.
+// Filtered queries see partial usage, so they get no totals. Usage is read up to end, bucketed on billingAnchor.
+func (s *meterUsageService) wholeLineTotals(
+	ctx context.Context,
+	usage *SubscriptionMeterUsage,
+	params *events.MeterUsageDetailedAnalyticsParams,
+	billingAnchor *time.Time,
+	end time.Time,
+) (map[string]decimal.Decimal, map[string]*types.CommitmentInfo, error) {
+	if len(params.PropertyFilters) > 0 || len(params.Sources) > 0 {
+		return nil, nil, nil
+	}
+
+	charges, err := s.wholeLineCharges(ctx, usage, params, billingAnchor, end)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commitments, err := s.commitmentLineBreakdowns(ctx, usage, charges, params, billingAnchor, end)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	totals := make(map[string]decimal.Decimal, len(charges))
+	for lineID, lineBreakdown := range commitments {
+		totals[lineID] = lineBreakdown.ComputedCommitmentUtilizedAmount.Add(lineBreakdown.ComputedOverageAmount).Add(lineBreakdown.ComputedTrueUpAmount)
+	}
+
+	if !hasExtraGroupBy(params.GroupBy) {
+		return totals, commitments, nil
+	}
+
+	// A legacy commitment that still fires on the combos keeps pricing them; one the group_by skips leaves them plain.
+	legacyFires := !hasUserBucketedGroupBy(params.GroupBy) || params.ForceApplyCommitment
+	priceService := NewPriceService(s.ServiceParams)
+	for _, item := range usage.Subscription.LineItems {
+		lineCharges := charges[item.ID]
+		if len(lineCharges) == 0 || commitments[item.ID] != nil || (legacyFires && item.HasAnyCommitment()) {
+			continue
+		}
+
+		charge, m := lineCharges[0], usage.MeterMap[item.MeterID]
+		if charge.BucketedUsageResult != nil {
+			hasGroupBy := price.BucketedGroupBy(charge.Price, m) != ""
+			totals[item.ID] = calculateBucketedMeterCost(ctx, priceService, charge.Price, charge.BucketedUsageResult, hasGroupBy).Amount
+			continue
+		}
+
+		totals[item.ID] = priceService.CalculateCost(ctx, charge.Price, charge.QuantityDecimal())
+	}
+
+	return totals, commitments, nil
+}
+
+// wholeLineCharges returns one charge per line item with its whole usage in the window.
+func (s *meterUsageService) wholeLineCharges(
+	ctx context.Context,
+	usage *SubscriptionMeterUsage,
+	params *events.MeterUsageDetailedAnalyticsParams,
+	billingAnchor *time.Time,
+	end time.Time,
+) (map[string][]*dto.SubscriptionUsageByMetersResponse, error) {
+	combosByLine := lo.GroupBy(
+		lo.Filter(usage.LineItemUsages, func(lu *LineItemMeterUsage, _ int) bool {
+			return lu.LineItem != nil && lu.Price != nil && lu.Meter != nil
+		}),
+		func(lu *LineItemMeterUsage) string { return lu.LineItem.ID },
+	)
+
+	charges := make(map[string][]*dto.SubscriptionUsageByMetersResponse, len(combosByLine))
+	for lineID, combos := range combosByLine {
+		charge, err := s.wholeLineCharge(ctx, usage, combos[0].LineItem, combos, params, billingAnchor, end)
+		if err != nil {
+			return nil, err
+		}
+
+		charges[lineID] = []*dto.SubscriptionUsageByMetersResponse{charge}
+	}
+
+	return charges, nil
+}
+
+// wholeLineCharge returns the line's whole usage in the window as one charge: the sum of its combos when the aggregation
+// adds across them, else a read of the line; bucketed lines carry their per-bucket usage. A line without combos is read.
+func (s *meterUsageService) wholeLineCharge(
+	ctx context.Context,
+	usage *SubscriptionMeterUsage,
+	item *subscription.SubscriptionLineItem,
+	combos []*LineItemMeterUsage,
+	params *events.MeterUsageDetailedAnalyticsParams,
+	billingAnchor *time.Time,
+	end time.Time,
+) (*dto.SubscriptionUsageByMetersResponse, error) {
+	p, m := usage.PriceMap[item.PriceID], usage.MeterMap[item.MeterID]
+	from, to := item.GetPeriodStart(params.StartTime), item.GetPeriodEnd(end)
+	charge := &dto.SubscriptionUsageByMetersResponse{
+		SubscriptionLineItemID: item.ID,
+		MeterID:                item.MeterID,
+		Price:                  p,
+		Currency:               p.Currency,
+	}
+
+	if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
+		// Fanned-out combos carry no line-level buckets, so the line is read whole; a line with no events reads nothing.
+		hasEvents := lo.SomeBy(combos, func(lu *LineItemMeterUsage) bool { return lu.EventCount > 0 || !lu.Usage.IsZero() })
+		var result *events.AggregationResult
+		switch {
+		case len(combos) > 0 && combos[0].BucketedResult != nil:
+			result = combos[0].BucketedResult
+		case len(combos) > 0 && !hasEvents:
+			result = &events.AggregationResult{}
+		default:
+			var err error
+			result, err = s.queryBucketedMeterUsage(
+				ctx, m, p, usage.ExternalCustomerIDs, from, to, billingAnchor, params.UseFinal, nil, nil, false,
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		charge.BucketedUsageResult = result
+		charge.SetQuantityDecimal(result.Value)
+		return charge, nil
+	}
+
+	quantity := decimal.Zero
+	for _, lu := range combos {
+		quantity = quantity.Add(lu.Usage)
+	}
+
+	if len(combos) == 0 || (len(combos) > 1 && !m.Aggregation.Type.Additive()) {
+		result, err := s.repo.GetUsage(ctx, &events.MeterUsageQueryParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: usage.ExternalCustomerIDs,
+			MeterID:             item.MeterID,
+			StartTime:           from,
+			EndTime:             to,
+			AggregationType:     m.Aggregation.Type,
+			UseFinal:            params.UseFinal,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		quantity = result.TotalValue
+	}
+
+	charge.SetQuantityDecimal(quantity)
+	return charge, nil
+}
+
+// commitmentLineBreakdowns prices the v2 commitments covering the window as its invoice would and returns each covered
+// line's utilized, overage and true-up amounts. A true-up is shared across its commitment's lines by utilized value.
+func (s *meterUsageService) commitmentLineBreakdowns(
+	ctx context.Context,
+	usage *SubscriptionMeterUsage,
+	charges map[string][]*dto.SubscriptionUsageByMetersResponse,
+	params *events.MeterUsageDetailedAnalyticsParams,
+	billingAnchor *time.Time,
+	end time.Time,
+) (map[string]*types.CommitmentInfo, error) {
+	// A window ending inside the open period would prorate capacity to the query end and report
+	// covered usage as overage; the invoice floors the whole period, so the loader runs to its end.
+	projectedEnd := projectedCommitmentEnd(usage.Subscription, params.StartTime, end)
+	loader, err := newBillingService(s.ServiceParams).newCommitmentLoader(
+		ctx, usage.Subscription, params.StartTime, projectedEnd, projectedEnd, charges, usage.MeterMap, types.UsageSourceAnalytics,
+	)
+	if err != nil || len(loader.commitments) == 0 {
+		return nil, err
+	}
+
+	loader.usageEnd = end
+
+	scopeLines := lo.UniqBy(
+		lo.FlatMap(loader.commitments, func(sc *stackedCommitment, _ int) []*subscription.SubscriptionLineItem {
+			return loader.scopeByCommitment[sc.C.ID].lineItems
+		}),
+		func(item *subscription.SubscriptionLineItem) string { return item.ID },
+	)
+	isQueried := func(item *subscription.SubscriptionLineItem) bool { return len(charges[item.ID]) > 0 }
+	if !lo.SomeBy(scopeLines, isQueried) {
+		return nil, nil
+	}
+
+	// A meter filter leaves out scope lines the commitments share; they are read whole into the loader's charges so the
+	// commitments price their whole scope, and get no rows.
+	for _, item := range scopeLines {
+		if isQueried(item) || usage.PriceMap[item.PriceID] == nil || usage.MeterMap[item.MeterID] == nil {
+			continue
+		}
+
+		charge, err := s.wholeLineCharge(ctx, usage, item, nil, params, billingAnchor, end)
+		if err != nil {
+			return nil, err
+		}
+
+		charges[item.ID] = []*dto.SubscriptionUsageByMetersResponse{charge}
+	}
+
+	lines, _, err := loader.InvoiceLines(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	breakdownByLine := map[string]*types.CommitmentInfo{}
+	for _, sc := range loader.commitments {
+		for _, item := range loader.scopeByCommitment[sc.C.ID].lineItems {
+			lineBreakdown := breakdownByLine[item.ID]
+			if lineBreakdown == nil {
+				lineBreakdown = &types.CommitmentInfo{Type: sc.C.Type, IsWindowed: sc.C.Measurement == types.CommitmentMeasurementWindow}
+				breakdownByLine[item.ID] = lineBreakdown
+			}
+
+			lineBreakdown.TrueUpEnabled = lineBreakdown.TrueUpEnabled || sc.C.Binding
+		}
+	}
+
+	utilizedByCommitment := map[string]map[string]decimal.Decimal{}
+	var trueUps []dto.CreateInvoiceLineItemRequest
+	for _, line := range lines {
+		kind := types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind])
+		if kind == types.CommitmentLineTrueUp {
+			trueUps = append(trueUps, line)
+			continue
+		}
+
+		lineID := lo.FromPtr(line.SubscriptionLineItemID)
+		lineBreakdown := breakdownByLine[lineID]
+		if lineBreakdown == nil {
+			continue
+		}
+
+		if kind == types.CommitmentLineOverage {
+			lineBreakdown.ComputedOverageAmount = lineBreakdown.ComputedOverageAmount.Add(line.Amount)
+			continue
+		}
+
+		commitmentID := lo.FromPtr(line.CommitmentID)
+		if utilizedByCommitment[commitmentID] == nil {
+			utilizedByCommitment[commitmentID] = map[string]decimal.Decimal{}
+		}
+
+		utilizedByCommitment[commitmentID][lineID] = utilizedByCommitment[commitmentID][lineID].Add(line.Amount)
+		lineBreakdown.ComputedCommitmentUtilizedAmount = lineBreakdown.ComputedCommitmentUtilizedAmount.Add(line.Amount)
+	}
+
+	for _, line := range trueUps {
+		commitmentID := lo.FromPtr(line.CommitmentID)
+		scope := loader.scopeByCommitment[commitmentID].lineItems
+		utilized := lo.Map(scope, func(item *subscription.SubscriptionLineItem, _ int) decimal.Decimal {
+			return utilizedByCommitment[commitmentID][item.ID]
+		})
+
+		for i, share := range amortize(line.Amount, utilized) {
+			lineBreakdown := breakdownByLine[scope[i].ID]
+			lineBreakdown.ComputedTrueUpAmount = lineBreakdown.ComputedTrueUpAmount.Add(share)
+		}
+	}
+
+	return breakdownByLine, nil
 }
 
 // bucketedCostParams encapsulates all context needed for bucketed cost calculation.

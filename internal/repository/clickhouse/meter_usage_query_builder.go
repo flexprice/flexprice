@@ -167,6 +167,13 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		conditions = append(conditions, fmt.Sprintf("meter_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 
+	// Event id filter. Bound as one list argument rather than a placeholder per
+	// id, so a large set stays a short statement.
+	if len(params.IDs) > 0 {
+		conditions = append(conditions, "id IN (?)")
+		args = append(args, params.IDs)
+	}
+
 	// Time range: multiple OR'd windows when TimeRanges is set (one query for
 	// disjoint ranges), else the single [StartTime, EndTime) pair.
 	if len(params.TimeRanges) > 0 {

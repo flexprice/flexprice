@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/hostedinvoicetoken"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -113,6 +114,7 @@ type Stores struct {
 	AlertRepo                    alert.Repository
 	GroupRepo                    group.Repository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageCheckpointRepo     meterusagecheckpoint.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
 	AddonPriceSyncRepo           addonpricesync.Repository
 	CheckoutSessionRepo          domainCheckout.Repository
@@ -284,6 +286,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertRepo:                    NewInMemoryAlertSettingsStore(),
 		GroupRepo:                    NewInMemoryGroupStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
+		MeterUsageCheckpointRepo:     NewInMemoryMeterUsageCheckpointStore(),
 		PlanPriceSyncRepo:            planPriceSyncStore,
 		AddonPriceSyncRepo:           addonPriceSyncStore,
 		CheckoutSessionRepo:          NewInMemoryCheckoutSessionStore(),
@@ -354,6 +357,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertRepo.(*InMemoryAlertSettingsStore).Clear()
 	s.stores.GroupRepo.(*InMemoryGroupStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
+	s.stores.MeterUsageCheckpointRepo.(*InMemoryMeterUsageCheckpointStore).Clear()
 	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 	s.stores.AddonPriceSyncRepo.(*InMemoryAddonPriceSyncStore).Clear()
 	s.stores.CheckoutSessionRepo.(*InMemoryCheckoutSessionStore).Clear()

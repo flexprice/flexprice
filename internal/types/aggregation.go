@@ -41,6 +41,19 @@ func (t AggregationType) RequiresField() bool {
 	}
 }
 
+// Additive reports whether aggregating a union of disjoint event sets equals summing their aggregations.
+func (t AggregationType) Additive() bool {
+	switch t {
+	case AggregationSum,
+		AggregationSumWithMultiplier,
+		AggregationWeightedSum,
+		AggregationCount:
+		return true
+	default:
+		return false
+	}
+}
+
 // SupportsExpression returns true if the aggregation type can accept a
 // CEL expression to compute per-event quantity. Types that require a
 // string discriminator (COUNT_UNIQUE), have no per-event quantity at all

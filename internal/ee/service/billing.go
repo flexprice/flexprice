@@ -105,9 +105,12 @@ type billingService struct {
 }
 
 func NewBillingService(params ServiceParams) BillingService {
-	return &billingService{
-		ServiceParams: params,
-	}
+	return newBillingService(params)
+}
+
+// newBillingService hands same-package callers the concrete type, for helpers beyond the public API.
+func newBillingService(params ServiceParams) *billingService {
+	return &billingService{ServiceParams: params}
 }
 
 // bucketedMeterCost holds the result of calculating cost for a bucketed meter
@@ -873,11 +876,20 @@ func (s *billingService) CalculateUsageCharges(
 	if err != nil {
 		return nil, err
 	}
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
+
+	commitments, err := s.newCommitmentLoader(
+		ctx, sub, periodStart, periodEnd, time.Now().UTC(), rawChargesByLine(sub, usage), meterMap, "",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	handledByCommitments := commitments.HandledLineIDs()
 
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
+		if item.PriceType != types.PRICE_TYPE_USAGE || handledByCommitments[item.ID] {
 			continue
 		}
 
@@ -1375,6 +1387,16 @@ func (s *billingService) CalculateUsageCharges(
 				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
 			}
 		}
+	}
+
+	if len(handledByCommitments) > 0 {
+		commitmentLines, commitmentTotal, err := commitments.InvoiceLines(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		usageCharges = append(usageCharges, commitmentLines...)
+		totalUsageCost = totalUsageCost.Add(commitmentTotal)
 	}
 
 	return &dto.CalculateUsageChargesResult{LineItems: usageCharges, TotalAmount: totalUsageCost}, nil
@@ -2542,9 +2564,9 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),
 		PaymentStatus:    lo.ToPtr(types.PaymentStatusPending),
 		Currency:         sub.Currency,
-		AmountDue:        result.TotalAmount,
-		Total:            result.TotalAmount,
-		Subtotal:         result.TotalAmount,
+		AmountDue:        decimal.Max(result.TotalAmount, decimal.Zero),
+		Total:            decimal.Max(result.TotalAmount, decimal.Zero),
+		Subtotal:         decimal.Max(result.TotalAmount, decimal.Zero),
 		Description:      description,
 		DueDate:          lo.ToPtr(invoiceDueDate),
 		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
@@ -2974,7 +2996,7 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		}
 
 		// Get all entitlements for this subscription (plan + addons)
-		subEntitlements, err := subscriptionService.GetSubscriptionEntitlementsForSubscription(ctx, sub)
+		subEntitlements, err := subscriptionService.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, time.Now().UTC())
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get subscription entitlements, skipping",
 				"subscription_id", sub.ID,
@@ -3064,7 +3086,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		return nil, err
 	}
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 
 	// get customer
 	customer, err := s.CustomerRepo.Get(ctx, customerID)

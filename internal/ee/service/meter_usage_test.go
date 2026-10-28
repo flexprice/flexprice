@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -76,6 +77,7 @@ func (s *MeterUsageServiceSuite) SetupTest() {
 		CustomerRepo:             s.GetStores().CustomerRepo,
 		FeatureRepo:              s.GetStores().FeatureRepo,
 		MeterUsageRepo:           s.meterUsageRepo,
+		MeterUsageCheckpointRepo: s.GetStores().MeterUsageCheckpointRepo,
 		EnvironmentRepo:          s.GetStores().EnvironmentRepo,
 		TenantRepo:               s.GetStores().TenantRepo,
 		EventRepo:                s.GetStores().EventRepo,
@@ -84,6 +86,8 @@ func (s *MeterUsageServiceSuite) SetupTest() {
 		WalletRepo:               s.GetStores().WalletRepo,
 		UserRepo:                 s.GetStores().UserRepo,
 		AuthRepo:                 s.GetStores().AuthRepo,
+		SettingsRepo:             s.GetStores().SettingsRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
 		CouponAssociationRepo:    s.GetStores().CouponAssociationRepo,
 	})
 }
@@ -996,6 +1000,444 @@ func (s *MeterUsageServiceSuite) TestSumMeter_AnalyticsWithGroupBy() {
 		"SUM us-east unchanged: expected 100, got %s", byRegion["us-east"])
 	s.True(byRegion["us-west"].Equal(decimal.NewFromInt(200)),
 		"SUM us-west unchanged: expected 200, got %s", byRegion["us-west"])
+}
+
+// TestGroupBySource_WalksTheTiersOverTheWholeLine pins that group_by splits the line's whole-usage tier total by each
+// source's usage share instead of walking the tiers per source. MAX does not add across sources, so its line is read.
+func (s *MeterUsageServiceSuite) TestGroupBySource_WalksTheTiersOverTheWholeLine() {
+	tests := []struct {
+		name        string
+		aggregation types.AggregationType
+		lineCost    string
+		want        map[string]string
+	}{
+		{
+			name:        "sum",
+			aggregation: types.AggregationSum,
+			lineCost:    "100", // 300 units: 100 at $0.50, 200 at $0.25
+			want:        map[string]string{"api": "20", "batch": "30", "console": "50"},
+		},
+		{
+			name:        "max",
+			aggregation: types.AggregationMax,
+			lineCost:    "62.5", // peak of 150: 100 at $0.50, 50 at $0.25
+			want:        map[string]string{"api": "12.5", "batch": "18.75", "console": "31.25"},
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			ctx := s.GetContext()
+			m := s.createMeterWithAggregation(ctx, "meter_whole_line_"+tc.name, "api_call", tc.aggregation)
+			p := &price.Price{
+				ID:             "price_whole_line_" + tc.name,
+				Currency:       "usd",
+				EntityType:     types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:       "plan_1",
+				BillingModel:   types.BILLING_MODEL_TIERED,
+				TierMode:       types.BILLING_TIER_SLAB,
+				Type:           types.PRICE_TYPE_USAGE,
+				MeterID:        m.ID,
+				BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence: types.InvoiceCadenceArrear,
+				Tiers: []price.PriceTier{
+					{UpTo: lo.ToPtr(uint64(100)), UnitAmount: decimal.NewFromFloat(0.5)},
+					{UnitAmount: decimal.NewFromFloat(0.25)},
+				},
+				BaseModel: types.GetDefaultBaseModel(ctx),
+			}
+			s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+			s.createLineItemForMeter(ctx, "li_whole_line_"+tc.name, m.ID, p.ID)
+
+			for source, qty := range map[string]float64{"api": 60, "batch": 90, "console": 150} {
+				s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, source,
+					time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), qty, nil)
+			}
+
+			resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: s.customer.ExternalID,
+				MeterIDs:           []string{m.ID},
+				StartTime:          s.periodStart,
+				EndTime:            s.periodEnd,
+				GroupBy:            []string{"source"},
+			})
+			s.Require().NoError(err)
+			s.Require().Len(resp.Items, len(tc.want))
+
+			priceService := NewPriceService(ServiceParams{Logger: s.GetLogger()})
+			sum, perSourceWalk := decimal.Zero, decimal.Zero
+			for _, item := range resp.Items {
+				s.True(decimal.RequireFromString(tc.want[item.Source]).Equal(item.TotalCost),
+					"%s: want %s, got %s", item.Source, tc.want[item.Source], item.TotalCost)
+				sum = sum.Add(item.TotalCost)
+				perSourceWalk = perSourceWalk.Add(priceService.CalculateCost(ctx, p, item.TotalUsage))
+			}
+
+			s.True(sum.Equal(decimal.RequireFromString(tc.lineCost)), "sources sum to %s, line costs %s", sum, tc.lineCost)
+			s.False(sum.Equal(perSourceWalk), "per-source tier walk would bill %s", perSourceWalk)
+		})
+	}
+}
+
+// newCommitment returns a binding v2 amount commitment of value per billing period on the suite's subscription,
+// scoped to the entity and active from the period start for six months; tests adjust it before storing it.
+func (s *MeterUsageServiceSuite) newCommitment(
+	id string,
+	scopeType types.CommitmentScopeType,
+	scopeID string,
+	value string,
+) *commitment.Commitment {
+	ctx := s.GetContext()
+	return &commitment.Commitment{
+		ID:                 id,
+		SubscriptionID:     s.sub.ID,
+		CustomerID:         s.customer.ID,
+		Name:               id,
+		InvoiceLabel:       id,
+		Currency:           s.sub.Currency,
+		ScopeEntityType:    scopeType,
+		ScopeEntityID:      scopeID,
+		Type:               types.COMMITMENT_TYPE_AMOUNT,
+		Value:              dec(value),
+		Measurement:        types.CommitmentMeasurementBillingPeriod,
+		Timezone:           "UTC",
+		Priority:           1,
+		Binding:            true,
+		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
+		StartDate:          s.periodStart,
+		EndDate:            s.periodStart.AddDate(0, 6, 0),
+		CommitmentStatus:   types.CommitmentStatusActive,
+		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+}
+
+func (s *MeterUsageServiceSuite) storeCommitment(c *commitment.Commitment) {
+	_, err := s.GetStores().CommitmentRepo.Create(s.GetContext(), c)
+	s.Require().NoError(err)
+}
+
+// detailedAnalytics returns the customer's January analytics with the given filters, group_by and window.
+func (s *MeterUsageServiceSuite) detailedAnalytics(
+	meterIDs []string,
+	featureIDs []string,
+	groupBy []string,
+	window types.WindowSize,
+) *dto.GetUsageAnalyticsResponse {
+	ctx := s.GetContext()
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           meterIDs,
+		FeatureIDs:         featureIDs,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            groupBy,
+		WindowSize:         window,
+	})
+	s.Require().NoError(err)
+	return resp
+}
+
+// requireCombosSplitTheInvoice checks the combos sum to the January invoice, and their utilized, overage and true-up
+// shares to its within, overage and true-up lines.
+func (s *MeterUsageServiceSuite) requireCombosSplitTheInvoice(combos []dto.UsageAnalyticItem) {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.sub.ID)
+	s.Require().NoError(err)
+	invoice, err := NewBillingService(fullServiceParams(&s.BaseServiceTestSuite)).PrepareSubscriptionInvoiceRequest(ctx,
+		&dto.PrepareSubscriptionInvoiceRequestParams{
+			Subscription:   sub,
+			PeriodStart:    s.periodStart,
+			PeriodEnd:      s.periodEnd,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+			AsOf:           s.periodEnd,
+		})
+	s.Require().NoError(err)
+
+	invoiced := map[types.CommitmentLineKind]decimal.Decimal{}
+	invoicedTotal := decimal.Zero
+	for _, line := range invoice.LineItems {
+		kind := types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind])
+		invoiced[kind] = invoiced[kind].Add(line.Amount)
+		invoicedTotal = invoicedTotal.Add(line.Amount)
+	}
+
+	cost, utilized, overage, trueUp := decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
+	for _, combo := range combos {
+		info := combo.CommitmentInfo
+		s.Require().NotNil(info, "combo %s", combo.Source)
+		s.True(info.Amount.Equal(info.ComputedCommitmentUtilizedAmount.Add(info.ComputedTrueUpAmount)),
+			"%s commits %s", combo.Source, info.Amount)
+		cost = cost.Add(combo.TotalCost)
+		utilized = utilized.Add(info.ComputedCommitmentUtilizedAmount)
+		overage = overage.Add(info.ComputedOverageAmount)
+		trueUp = trueUp.Add(info.ComputedTrueUpAmount)
+	}
+
+	s.True(cost.Equal(invoicedTotal), "combos cost %s, invoice lines %s", cost, invoicedTotal)
+	s.True(utilized.Equal(invoiced[types.CommitmentLineUtilized]), "utilized %s, invoiced %s", utilized, invoiced[types.CommitmentLineUtilized])
+	s.True(overage.Equal(invoiced[types.CommitmentLineOverage]), "overage %s, invoiced %s", overage, invoiced[types.CommitmentLineOverage])
+	s.True(trueUp.Equal(invoiced[types.CommitmentLineTrueUp]), "true-up %s, invoiced %s", trueUp, invoiced[types.CommitmentLineTrueUp])
+}
+
+// A $150 floor over two meters prices its whole scope even when a filter asks for one: A's $40 takes 40% of the $50
+// true-up whether B is in the query or not, and B gets no rows.
+func (s *MeterUsageServiceSuite) TestCommitment_FilterPricesTheWholeScope() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	meterA := s.createMeterWithAggregation(ctx, "meter_scope_a", "api_call", types.AggregationSum)
+	meterB := s.createMeterWithAggregation(ctx, "meter_scope_b", "api_call", types.AggregationSum)
+	priceA := s.createPriceForMeter(ctx, "price_scope_a", meterA.ID, dec("1"))
+	priceB := s.createPriceForMeter(ctx, "price_scope_b", meterB.ID, dec("1"))
+	lineA := s.createLineItemForMeter(ctx, "li_scope_a", meterA.ID, priceA.ID)
+	s.createLineItemForMeter(ctx, "li_scope_b", meterB.ID, priceB.ID)
+	featureA := &feature.Feature{ID: "feat_scope_a", Name: "A", MeterID: meterA.ID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().FeatureRepo.Create(ctx, featureA))
+	s.storeCommitment(s.newCommitment("cmt_scope_floor", types.CommitmentScopeSubscription, s.sub.ID, "150"))
+
+	s.insertMeterUsageWithProps(ctx, meterA.ID, s.customer.ExternalID, "api", time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 40, nil)
+	s.insertMeterUsageWithProps(ctx, meterB.ID, s.customer.ExternalID, "api", time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 60, nil)
+
+	unfiltered := s.detailedAnalytics(nil, nil, nil, "")
+	byLine := lo.KeyBy(unfiltered.Items, func(item dto.UsageAnalyticItem) string { return item.SubLineItemID })
+	s.Require().Len(byLine, 2)
+	s.True(unfiltered.TotalCost.Equal(dec("150")), "unfiltered total %s", unfiltered.TotalCost)
+
+	tests := []struct {
+		name       string
+		meterIDs   []string
+		featureIDs []string
+	}{
+		{name: "unfiltered"},
+		{name: "meter filter", meterIDs: []string{meterA.ID}},
+		{name: "feature filter", featureIDs: []string{featureA.ID}},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			items := s.detailedAnalytics(tt.meterIDs, tt.featureIDs, nil, "").Items
+			item, ok := lo.Find(items, func(item dto.UsageAnalyticItem) bool { return item.SubLineItemID == lineA.ID })
+			s.Require().True(ok, "no item for line A")
+			if len(tt.meterIDs)+len(tt.featureIDs) > 0 {
+				s.Len(items, 1, "the filtered-out line gets no rows")
+			}
+
+			s.True(item.TotalCost.Equal(dec("60")), "A costs %s", item.TotalCost)
+			s.Require().NotNil(item.CommitmentInfo)
+			s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(dec("40")), "utilized %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+			s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(dec("20")), "true-up %s", item.CommitmentInfo.ComputedTrueUpAmount)
+			s.True(item.CommitmentInfo.Amount.Equal(byLine[lineA.ID].CommitmentInfo.Amount), "committed share %s", item.CommitmentInfo.Amount)
+		})
+	}
+}
+
+// A filter pays one whole-line read per left-out line of the commitments covering a queried line, and none for a
+// commitment that covers only left-out lines.
+func (s *MeterUsageServiceSuite) TestCommitment_FilterReadsOnlyTheSharedScope() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	meterA := s.createMeterWithAggregation(ctx, "meter_reads_a", "api_call", types.AggregationSum)
+	meterB := s.createMeterWithAggregation(ctx, "meter_reads_b", "api_call", types.AggregationSum)
+	priceA := s.createPriceForMeter(ctx, "price_reads_a", meterA.ID, dec("1"))
+	priceB := s.createPriceForMeter(ctx, "price_reads_b", meterB.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_reads_a", meterA.ID, priceA.ID)
+	s.createLineItemForMeter(ctx, "li_reads_b", meterB.ID, priceB.ID)
+	s.insertMeterUsageWithProps(ctx, meterA.ID, s.customer.ExternalID, "api", time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 40, nil)
+	s.insertMeterUsageWithProps(ctx, meterB.ID, s.customer.ExternalID, "api", time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 60, nil)
+
+	repo := &countingMeterUsageRepo{MeterUsageRepository: s.meterUsageRepo}
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.MeterUsageRepo = repo
+	svc := NewMeterUsageService(params)
+	readsForA := func() int {
+		repo.reads = 0
+		_, err := svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+			TenantID:           types.GetTenantID(ctx),
+			EnvironmentID:      types.GetEnvironmentID(ctx),
+			ExternalCustomerID: s.customer.ExternalID,
+			MeterIDs:           []string{meterA.ID},
+			StartTime:          s.periodStart,
+			EndTime:            s.periodEnd,
+		})
+		s.Require().NoError(err)
+		return repo.reads
+	}
+
+	uncommitted := readsForA()
+	s.storeCommitment(s.newCommitment("cmt_reads_b", types.CommitmentScopePrice, priceB.ID, "100"))
+	s.Equal(uncommitted, readsForA(), "a commitment on B alone does not read B")
+
+	s.storeCommitment(s.newCommitment("cmt_reads_both", types.CommitmentScopeSubscription, s.sub.ID, "150"))
+	s.Equal(uncommitted+1, readsForA(), "B is read once to price the commitments covering A")
+}
+
+// group_by reads a monthly-bucketed line whole on the request's billing anchor, as its combos are read: anchored on
+// the 15th, the 5 Jan and 20 Jan peaks fall in two months and the line bills both.
+func (s *MeterUsageServiceSuite) TestGroupBy_WholeLineReadUsesTheRequestAnchor() {
+	ctx := s.GetContext()
+	monthly := &meter.Meter{
+		ID:          "meter_monthly_peak",
+		Name:        "Monthly peak",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationMax, BucketSize: types.WindowSizeMonth},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, monthly))
+	p := s.createPriceForMeter(ctx, "price_monthly_peak", monthly.ID, dec("1"))
+	s.createLineItemForMeter(ctx, "li_monthly_peak", monthly.ID, p.ID)
+	s.insertMeterUsageWithProps(ctx, monthly.ID, s.customer.ExternalID, "api", time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100, nil)
+	s.insertMeterUsageWithProps(ctx, monthly.ID, s.customer.ExternalID, "batch", time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), 100, nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{monthly.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"source"},
+		BillingAnchor:      lo.ToPtr(time.Date(2025, 12, 15, 0, 0, 0, 0, time.UTC)),
+	})
+	s.Require().NoError(err)
+	s.Require().Len(resp.Items, 2)
+	for _, item := range resp.Items {
+		s.True(item.TotalCost.Equal(dec("100")), "%s: want 100, got %s", item.Source, item.TotalCost)
+	}
+}
+
+// Two stacked daily GPU reservations, 4 at $1 then 4 at $1.50, on a daily MAX meter fed by two sources. The line
+// peaks at 10, 6 and 5 on three days: 12 and 7 GPU-days utilized, 2 over at the $2 line price, and 112 and 117
+// unused, $314 in all. The trainer reported 21 GPU-days and inference 7, so they split it 3:1.
+func (s *MeterUsageServiceSuite) TestGroupBy_StackedWindowCommitmentsSplitTheInvoiceByUsage() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	gpus := &meter.Meter{
+		ID:          "meter_stacked_gpus",
+		Name:        "GPUs",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationMax, BucketSize: types.WindowSizeDay},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, gpus))
+	p := s.createPriceForMeter(ctx, "price_stacked_gpus", gpus.ID, dec("2"))
+	s.createLineItemForMeter(ctx, "li_stacked_gpus", gpus.ID, p.ID)
+
+	for i, rate := range []string{"1", "1.5"} {
+		committed := s.createPriceForMeter(ctx, "price_stacked_committed_"+rate, gpus.ID, dec(rate))
+		c := s.newCommitment("cmt_stacked_"+rate, types.CommitmentScopePrice, p.ID, "4")
+		c.Type, c.Measurement, c.Priority = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow, i+1
+		c.CommittedPriceID = lo.ToPtr(committed.ID)
+		s.storeCommitment(c)
+	}
+
+	usage := []struct {
+		source string
+		day    int
+		gpus   float64
+	}{
+		{"trainer", 5, 10},
+		{"trainer", 6, 6},
+		{"inference", 6, 3},
+		{"trainer", 7, 5},
+		{"inference", 7, 4},
+	}
+	for _, u := range usage {
+		at := time.Date(2026, 1, u.day, 10, 0, 0, 0, time.UTC)
+		s.insertMeterUsageWithProps(ctx, gpus.ID, s.customer.ExternalID, u.source, at, u.gpus, nil)
+	}
+
+	resp := s.detailedAnalytics([]string{gpus.ID}, nil, []string{"source"}, "")
+	bySource := lo.KeyBy(resp.Items, func(item dto.UsageAnalyticItem) string { return item.Source })
+	s.Require().Len(bySource, 2)
+	s.True(bySource["trainer"].TotalUsage.Equal(dec("21")), "trainer GPU-days %s", bySource["trainer"].TotalUsage)
+	s.True(bySource["inference"].TotalUsage.Equal(dec("7")), "inference GPU-days %s", bySource["inference"].TotalUsage)
+	s.True(bySource["trainer"].TotalCost.Equal(dec("235.5")), "trainer costs %s", bySource["trainer"].TotalCost)
+	s.True(bySource["inference"].TotalCost.Equal(dec("78.5")), "inference costs %s", bySource["inference"].TotalCost)
+
+	trainer := bySource["trainer"].CommitmentInfo
+	s.Require().NotNil(trainer)
+	s.True(trainer.ComputedCommitmentUtilizedAmount.Equal(dec("16.875")), "trainer utilized %s", trainer.ComputedCommitmentUtilizedAmount)
+	s.True(trainer.ComputedOverageAmount.Equal(dec("3")), "trainer overage %s", trainer.ComputedOverageAmount)
+	s.True(trainer.ComputedTrueUpAmount.Equal(dec("215.625")), "trainer true-up %s", trainer.ComputedTrueUpAmount)
+	s.requireCombosSplitTheInvoice(resp.Items)
+}
+
+// A daily window of 10 units at $1 with a $3 overage price on a daily SUM meter: 24 units utilized, 8 over and 286
+// unused bill $334. With daily points each source's points share its cost, and its utilized, overage and true-up
+// shares sum to the invoice's.
+func (s *MeterUsageServiceSuite) TestGroupBy_DailyPointsAmortizeEveryCommitmentField() {
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	daily := &meter.Meter{
+		ID:          "meter_daily_units",
+		Name:        "Units",
+		EventName:   "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeDay},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, daily))
+	p := s.createPriceForMeter(ctx, "price_daily_units", daily.ID, dec("2"))
+	s.createLineItemForMeter(ctx, "li_daily_units", daily.ID, p.ID)
+	committed := s.createPriceForMeter(ctx, "price_daily_committed", daily.ID, dec("1"))
+	overagePrice := s.createPriceForMeter(ctx, "price_daily_overage", daily.ID, dec("3"))
+	c := s.newCommitment("cmt_daily_units", types.CommitmentScopePrice, p.ID, "10")
+	c.Type, c.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+	c.CommittedPriceID, c.OveragePriceID = lo.ToPtr(committed.ID), lo.ToPtr(overagePrice.ID)
+	s.storeCommitment(c)
+
+	// 5 Jan: 14 (4 over); 6 Jan: 4; 7 Jan: 14 (4 over). The api sent 12 units and batch 20.
+	usage := []struct {
+		source string
+		day    int
+		units  float64
+	}{
+		{"api", 5, 8},
+		{"batch", 5, 6},
+		{"api", 6, 4},
+		{"batch", 7, 14},
+	}
+	for _, u := range usage {
+		at := time.Date(2026, 1, u.day, 10, 0, 0, 0, time.UTC)
+		s.insertMeterUsageWithProps(ctx, daily.ID, s.customer.ExternalID, u.source, at, u.units, nil)
+	}
+
+	resp := s.detailedAnalytics([]string{daily.ID}, nil, []string{"source"}, types.WindowSizeDay)
+	bySource := lo.KeyBy(resp.Items, func(item dto.UsageAnalyticItem) string { return item.Source })
+	s.Require().Len(bySource, 2)
+	s.True(bySource["api"].TotalCost.Equal(dec("125.25")), "api costs %s", bySource["api"].TotalCost)
+	s.True(bySource["batch"].TotalCost.Equal(dec("208.75")), "batch costs %s", bySource["batch"].TotalCost)
+
+	for source, item := range bySource {
+		s.Require().NotEmpty(item.Points, source)
+		pointsCost, pointsUtilized, pointsOverage, pointsTrueUp := decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
+		for _, point := range item.Points {
+			pointsCost = pointsCost.Add(point.Cost)
+			pointsUtilized = pointsUtilized.Add(point.ComputedCommitmentUtilizedAmount)
+			pointsOverage = pointsOverage.Add(point.ComputedOverageAmount)
+			pointsTrueUp = pointsTrueUp.Add(point.ComputedTrueUpAmount)
+		}
+		s.True(pointsCost.Equal(item.TotalCost), "%s points sum to %s, item costs %s", source, pointsCost, item.TotalCost)
+		s.True(pointsUtilized.Equal(item.CommitmentInfo.ComputedCommitmentUtilizedAmount), "%s points utilized %s", source, pointsUtilized)
+		s.True(pointsOverage.Equal(item.CommitmentInfo.ComputedOverageAmount), "%s points overage %s", source, pointsOverage)
+		s.True(pointsTrueUp.Equal(item.CommitmentInfo.ComputedTrueUpAmount), "%s points true-up %s", source, pointsTrueUp)
+
+		info := item.CommitmentInfo
+		s.Require().NotNil(info, source)
+		for field, amount := range map[string]decimal.Decimal{
+			"utilized": info.ComputedCommitmentUtilizedAmount,
+			"overage":  info.ComputedOverageAmount,
+			"true-up":  info.ComputedTrueUpAmount,
+		} {
+			s.True(amount.IsPositive(), "%s %s %s", source, field, amount)
+		}
+	}
+
+	s.requireCombosSplitTheInvoice(resp.Items)
 }
 
 // TestGroupByPropertyField_CountMeter reproduces the production bug where

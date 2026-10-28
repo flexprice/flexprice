@@ -557,6 +557,7 @@ func (s *analyticsService) RunReport(ctx context.Context, key string, req *dto.R
 		return nil, err
 	}
 	rv.Compare = req.Compare
+	rv.Offset = req.Offset
 	res, err := s.executeBilling(ctx, rv)
 	if err != nil {
 		return nil, err

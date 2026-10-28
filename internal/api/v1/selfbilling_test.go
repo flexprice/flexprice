@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,23 +25,41 @@ type stubSelfBilling struct {
 
 func (s *stubSelfBilling) Status(_ context.Context, tenantID string) (*dto.SelfBillingStatusResponse, error) {
 	s.gotTenant = tenantID
-	return &dto.SelfBillingStatusResponse{Enabled: true, Status: types.TenantInternalStatusTrialing}, nil
+	return &dto.SelfBillingStatusResponse{
+		Enabled: true,
+		Status:  types.TenantInternalStatusTrialing,
+	}, nil
 }
 
 func (s *stubSelfBilling) PollCheckout(_ context.Context, tenantID, id string) (*dto.SelfBillingCheckoutResponse, error) {
 	s.gotTenant = tenantID
 	s.gotCheckout = id
-	return &dto.SelfBillingCheckoutResponse{CheckoutID: id, Status: types.CheckoutStatusPending}, nil
+	return &dto.SelfBillingCheckoutResponse{
+		CheckoutID: id,
+		Status:     types.CheckoutStatusPending,
+	}, nil
 }
 
 func (s *stubSelfBilling) Summary(_ context.Context, tenantID string) (*dto.SelfBillingSummaryResponse, error) {
 	s.gotTenant = tenantID
-	return &dto.SelfBillingSummaryResponse{Status: types.TenantInternalStatusActive}, nil
+	return &dto.SelfBillingSummaryResponse{
+		Status: types.TenantInternalStatusActive,
+		Plan: &dto.SelfBillingPlanResponse{
+			ID:   "plan_1",
+			Name: "Self Serve",
+			Charges: []*dto.SelfBillingChargeResponse{{
+				PriceID: "price_override",
+				Amount:  decimal.RequireFromString("79.123456789"),
+			}},
+		},
+	}, nil
 }
 
 func (s *stubSelfBilling) PortalSession(_ context.Context, tenantID string) (*dto.SelfBillingPortalResponse, error) {
 	s.gotTenant = tenantID
-	return &dto.SelfBillingPortalResponse{URL: "https://portal.test"}, nil
+	return &dto.SelfBillingPortalResponse{
+		URL: "https://portal.test",
+	}, nil
 }
 
 func TestSelfBillingHandler_UsesContextTenant(t *testing.T) {
@@ -78,6 +98,15 @@ func TestSelfBillingHandler_UsesContextTenant(t *testing.T) {
 			require.Equal(t, http.StatusOK, w.Code)
 			assert.Equal(t, "t1", stub.gotTenant)
 			assert.Equal(t, tt.wantCheckout, stub.gotCheckout)
+			if tt.name == "summary_ignores_query_tenant" || tt.name == "tenant_billing_ignores_query_tenant" {
+				var summary dto.SelfBillingSummaryResponse
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
+				require.NotNil(t, summary.Plan)
+				assert.Equal(t, "plan_1", summary.Plan.ID)
+				require.Len(t, summary.Plan.Charges, 1)
+				assert.Equal(t, "79.123456789", summary.Plan.Charges[0].Amount.String())
+				assert.Contains(t, w.Body.String(), `"amount":"79.123456789"`)
+			}
 		})
 	}
 }

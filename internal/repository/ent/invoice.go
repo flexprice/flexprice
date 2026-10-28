@@ -281,6 +281,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetQuantity(item.Quantity).
 					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+					SetNillableCommitmentID(item.CommitmentID).
 					SetNillableParentLineItemID(item.ParentLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
@@ -377,6 +378,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCurrency(item.Currency).
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+				SetNillableCommitmentID(item.CommitmentID).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
@@ -1245,6 +1247,12 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 	if f.PeriodEndLTE != nil {
 		query = query.Where(invoice.PeriodEndLTE(*f.PeriodEndLTE))
+	}
+	if f.PeriodStartLT != nil {
+		query = query.Where(invoice.PeriodStartLT(*f.PeriodStartLT))
+	}
+	if f.PeriodEndGT != nil {
+		query = query.Where(invoice.PeriodEndGT(*f.PeriodEndGT))
 	}
 	if f.FinalizedAtGTE != nil {
 		query = query.Where(invoice.FinalizedAtGTE(*f.FinalizedAtGTE))

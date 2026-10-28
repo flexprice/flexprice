@@ -34,11 +34,11 @@ import (
 	kafkaPubsub "github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/pyroscope"
-	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -169,6 +169,7 @@ func main() {
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
 			repository.NewEntitlementGrantRepository,
+			repository.NewMeterUsageCheckpointRepository,
 			repository.NewCommitmentRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
@@ -213,6 +214,8 @@ func main() {
 			repository.NewRevenueFactRepository,
 			repository.NewSelfBillingClickHouseRepository,
 			repository.NewSelfBillingPostgresRepository,
+			repository.NewEventDeletionRequestRepository,
+			repository.NewEventDeletionLogRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -273,12 +276,14 @@ func main() {
 			adminsvc.NewDLQService,
 			service.NewMeterService,
 			service.NewEventService,
+			service.NewEventDeletionWindowService,
 			service.NewEventConsumptionService,
 			service.NewRawEventsReprocessingService,
 			service.NewRawEventConsumptionService,
 			service.NewCostSheetUsageTrackingService,
 			service.NewMeterUsageTrackingService,
 			service.NewMeterUsageService,
+			service.NewEventDeletionService,
 			service.NewCheckoutSessionService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
@@ -314,6 +319,7 @@ func main() {
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
 			service.NewCouponService,
+			service.NewCommitmentService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
 			service.NewSettingsService,
@@ -407,6 +413,7 @@ func provideHandlers(
 	taxService service.TaxService,
 	fxRateService service.FXRateService,
 	couponService service.CouponService,
+	commitmentService service.CommitmentService,
 	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
 	settingsService service.SettingsService,
@@ -429,6 +436,7 @@ func provideHandlers(
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
+	eventDeletionService service.EventDeletionService,
 	checkoutSessionService service.CheckoutSessionService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
@@ -437,7 +445,7 @@ func provideHandlers(
 	selfBillingService selfbilling.Service,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, eventDeletionService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -479,6 +487,7 @@ func provideHandlers(
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
+		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),

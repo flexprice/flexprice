@@ -102,22 +102,20 @@ func (r *Reporter) reportInstallInit(ctx context.Context) {
 	r.send(ctx, EventInstallInit, newInstallPayload(r))
 }
 
-// ReportEvent fires a lightweight ping for a real system event consumed off
-// the webhook topic. Dispatches off the caller's goroutine so a stalled
-// collector never delays webhook delivery; capped by inflight so a
-// persistent stall can't pile up unbounded goroutines. Best-effort: a
-// dropped or failed send is fine, this is telemetry, not delivery.
+// ReportEvent pings the collector for event names isTrackedEventName allows,
+// with a redacted payload (redact.go), dispatched off the caller's goroutine.
 func (r *Reporter) ReportEvent(ctx context.Context, event *types.WebhookEvent) {
 	if reason := r.disabledReason(); reason != "" {
 		return
 	}
+	if !isTrackedEventName(string(event.EventName)) {
+		return
+	}
 
-	p := newSystemEventPayload(r, &systemEventInput{
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		EventName:     string(event.EventName),
-		Payload:       json.RawMessage(event.Payload),
-	})
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	eventName := string(event.EventName)
+	rawPayload := append(json.RawMessage(nil), event.Payload...)
 
 	select {
 	case r.inflight <- struct{}{}:
@@ -127,6 +125,12 @@ func (r *Reporter) ReportEvent(ctx context.Context, event *types.WebhookEvent) {
 	}
 	go func() {
 		defer func() { <-r.inflight }()
+		p := newSystemEventPayload(r, &systemEventInput{
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			EventName:     eventName,
+			Payload:       redactEventPayload(rawPayload),
+		})
 		sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		r.send(sendCtx, EventSystemEvent, p)

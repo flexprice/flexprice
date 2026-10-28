@@ -1,5 +1,7 @@
 package webhook
 
+import "github.com/flexprice/flexprice/internal/postgres"
+
 // QuickBooksWebhookPayload represents the top-level webhook payload from QuickBooks
 // Reference: https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks
 type QuickBooksWebhookPayload struct {
@@ -65,4 +67,5 @@ func (e *EntityChange) IsUpdateOperation() bool {
 type ServiceDependencies struct {
 	PaymentService interface{} // interfaces.PaymentService
 	InvoiceService interface{} // interfaces.InvoiceService
+	DB             postgres.IClient
 }

@@ -1365,7 +1365,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 		selectedTier := price.Tiers[selectedTierIndex]
 		result.SelectedTierIndex = selectedTierIndex
-		result.TierUnitAmount = selectedTier.UnitAmount
+		result.TierUnitAmount = selectedTier.GetPerUnitCost()
 
 		// Calculate tier cost with full precision and handling of flat amount
 		result.FinalCost = selectedTier.CalculateTierAmount(quantity, price.Currency)
@@ -1409,7 +1409,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			// Record the last tier used (will be the highest tier the quantity applies to)
 			if tierQuantity.GreaterThan(decimal.Zero) {
 				result.SelectedTierIndex = i
-				result.TierUnitAmount = tier.UnitAmount
+				result.TierUnitAmount = tier.GetPerUnitCost()
 			}
 
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
@@ -1640,8 +1640,9 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 			}
 
 			convertedTier := price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: convertedUnitAmount,
+				UpTo:              tier.UpTo,
+				UnitAmount:        convertedUnitAmount,
+				TransformQuantity: tier.TransformQuantity,
 			}
 
 			// Convert flat amount if provided

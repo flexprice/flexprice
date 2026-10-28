@@ -69,6 +69,12 @@ func (e *Entitlement) IsUnlimitedGrant() bool {
 	return e != nil && e.HasGrantConfig() && e.GrantQuota == nil
 }
 
+// IsLiveAt reports whether start_date <= at < end_date; a missing date is unbounded.
+func (e *Entitlement) IsLiveAt(at time.Time) bool {
+	return (e.StartDate == nil || !e.StartDate.After(at)) &&
+		(e.EndDate == nil || e.EndDate.After(at))
+}
+
 func (e *Entitlement) IsSubscriptionOverride() bool {
 	return e != nil &&
 		e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION &&

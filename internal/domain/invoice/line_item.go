@@ -53,6 +53,9 @@ type InvoiceLineItem struct {
 	// sub_line_item_id links this invoice line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// commitment_id links this line item to the commitment it bills.
+	CommitmentID *string `json:"commitment_id,omitempty"`
+
 	// parent_line_item_id links this line item to the line item it replaced, if it was created by editing
 	// an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
@@ -103,6 +106,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		InvoiceLevelDiscount:        lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
 		SubscriptionLineItemID:      e.SubscriptionLineItemID,
+		CommitmentID:                e.CommitmentID,
 		ParentLineItemID:            e.ParentLineItemID,
 		CustomCurrency:              e.CustomCurrency,
 		FxConversion:                e.FxConversion,
@@ -146,9 +150,9 @@ func (i *InvoiceLineItem) ProjectCustomCurrency(cc *types.CustomCurrency, fiatCu
 
 // Validate validates the invoice line item.
 // Amount may be negative: a credit line (e.g. unused time on a plan being replaced) sits on the
-// same invoice as the charges it offsets. Non-negativity is enforced on the invoice aggregates.
+// same invoice as the charges it offsets. Usage quantities may also be signed.
 func (i *InvoiceLineItem) Validate() error {
-	if i.Quantity.IsNegative() {
+	if i.Quantity.IsNegative() && lo.FromPtr(i.PriceType) != string(types.PRICE_TYPE_USAGE) {
 		return ierr.NewError("invoice line item validation failed").WithHint("quantity must be non negative").Mark(ierr.ErrValidation)
 	}
 

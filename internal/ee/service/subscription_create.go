@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -192,6 +193,18 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 	}
 	for _, grant := range grants {
 		if err := s.CreditGrantRepo.Delete(ctx, grant.ID); err != nil {
+			return err
+		}
+	}
+
+	commitmentFilter := commitment.NewNoLimitFilter()
+	commitmentFilter.SubscriptionIDs = []string{subscriptionID}
+	commitments, err := s.CommitmentRepo.List(ctx, commitmentFilter)
+	if err != nil {
+		return err
+	}
+	for _, c := range commitments {
+		if err := s.CommitmentRepo.Delete(ctx, c.ID); err != nil {
 			return err
 		}
 	}

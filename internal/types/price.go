@@ -106,6 +106,9 @@ type PriceTier struct {
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
 	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty"`
+
+	// transform_quantity bills unit_amount per package of divide_by units; round defaults to up
+	TransformQuantity *TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
 type TransformQuantity struct {

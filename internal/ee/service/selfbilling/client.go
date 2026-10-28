@@ -95,6 +95,7 @@ type portalSession struct {
 
 type remoteSummary struct {
 	subscription *remoteSubscription
+	plan         *dto.SelfBillingPlanResponse
 	invoices     []remoteInvoice
 	usage        *dto.CustomerUsageSummaryResponse
 }

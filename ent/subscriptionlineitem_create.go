@@ -368,6 +368,34 @@ func (_c *SubscriptionLineItemCreate) SetNillableAddonAssociationID(v *string) *
 	return _c
 }
 
+// SetPredecessorLineItemID sets the "predecessor_line_item_id" field.
+func (_c *SubscriptionLineItemCreate) SetPredecessorLineItemID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetPredecessorLineItemID(v)
+	return _c
+}
+
+// SetNillablePredecessorLineItemID sets the "predecessor_line_item_id" field if the given value is not nil.
+func (_c *SubscriptionLineItemCreate) SetNillablePredecessorLineItemID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetPredecessorLineItemID(*v)
+	}
+	return _c
+}
+
+// SetSuccessorLineItemID sets the "successor_line_item_id" field.
+func (_c *SubscriptionLineItemCreate) SetSuccessorLineItemID(v string) *SubscriptionLineItemCreate {
+	_c.mutation.SetSuccessorLineItemID(v)
+	return _c
+}
+
+// SetNillableSuccessorLineItemID sets the "successor_line_item_id" field if the given value is not nil.
+func (_c *SubscriptionLineItemCreate) SetNillableSuccessorLineItemID(v *string) *SubscriptionLineItemCreate {
+	if v != nil {
+		_c.SetSuccessorLineItemID(*v)
+	}
+	return _c
+}
+
 // SetMetadata sets the "metadata" field.
 func (_c *SubscriptionLineItemCreate) SetMetadata(v map[string]string) *SubscriptionLineItemCreate {
 	_c.mutation.SetMetadata(v)
@@ -811,6 +839,14 @@ func (_c *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sqlg
 	if value, ok := _c.mutation.AddonAssociationID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString, value)
 		_node.AddonAssociationID = &value
+	}
+	if value, ok := _c.mutation.PredecessorLineItemID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldPredecessorLineItemID, field.TypeString, value)
+		_node.PredecessorLineItemID = &value
+	}
+	if value, ok := _c.mutation.SuccessorLineItemID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldSuccessorLineItemID, field.TypeString, value)
+		_node.SuccessorLineItemID = &value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)

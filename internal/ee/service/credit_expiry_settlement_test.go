@@ -906,15 +906,83 @@ func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_OnlyCycleDraftIsCurrentPeriod(
 }
 
 func (s *CreditExpiryInvoiceRaceSuite) TestUsageNetOfDraftCredits() {
-	usage := map[string]currentPeriodUsage{
-		"a": {amount: decimal.NewFromInt(35)},
-		"b": {amount: decimal.NewFromInt(10)},
-		"c": {amount: decimal.NewFromInt(5)},
+	cases := []struct {
+		name           string
+		usage, applied map[string]int64
+		want           int64
+	}{
+		{name: "existing partial and fully settled subscriptions", usage: map[string]int64{"a": 35, "b": 10, "c": 5}, applied: map[string]int64{"a": 20, "b": 30}, want: 20},
+		{name: "no applied credits", usage: map[string]int64{"a": 35, "b": 10, "c": 5}, want: 50},
+		{name: "70 minus 40 retains the net liability", usage: map[string]int64{"a": 30}, want: 30},
+		{name: "net-negative usage cannot credit the wallet", usage: map[string]int64{"a": -20}, want: 0},
+		{name: "negative subscription cannot offset another subscription", usage: map[string]int64{"a": -30, "b": 50}, want: 50},
+		{name: "negative subscription with applied credits", usage: map[string]int64{"a": -30, "b": 50}, applied: map[string]int64{"a": 70, "b": 20}, want: 30},
+		{name: "usage below already settled amount cannot refund credits", usage: map[string]int64{"a": 30}, applied: map[string]int64{"a": 70}, want: 0},
+		{name: "correction still above settled amount", usage: map[string]int64{"a": 30}, applied: map[string]int64{"a": 20}, want: 10},
 	}
-	applied := map[string]decimal.Decimal{"a": decimal.NewFromInt(20), "b": decimal.NewFromInt(30)}
-	// a: 35−20=15, b: capped at its usage → 0, c: no credits → 5
-	s.True(decimal.NewFromInt(20).Equal(usageNetOfDraftCredits(usage, applied)))
-	s.True(decimal.NewFromInt(50).Equal(usageNetOfDraftCredits(usage, nil)))
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			usage := lo.MapValues(tc.usage, func(amount int64, _ string) currentPeriodUsage {
+				return currentPeriodUsage{amount: decimal.NewFromInt(amount)}
+			})
+			applied := lo.MapValues(tc.applied, func(amount int64, _ string) decimal.Decimal {
+				return decimal.NewFromInt(amount)
+			})
+			s.True(decimal.NewFromInt(tc.want).Equal(usageNetOfDraftCredits(usage, applied)))
+		})
+	}
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageOnlyReducesPendingCharges() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	start, end := now.Add(-24*time.Hour), now.Add(24*time.Hour)
+	sub := s.usageSubscription("subs_wallet_signed", start, start, end)
+	s.seedGrant("wtxn_wallet_signed", decimal.NewFromInt(100), start, end.Add(24*time.Hour))
+	for i, step := range []struct{ delta, pending, available int64 }{
+		{70, 70, 30}, {-40, 30, 70}, {-50, 0, 100},
+	} {
+		s.usage(sub, start.Add(time.Duration(i+1)*time.Hour), step.delta)
+		resp, err := s.walletService.GetWalletBalanceV2(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.False(resp.IsCachedFallback)
+		s.True(decimal.NewFromInt(step.pending).Equal(lo.FromPtr(resp.CurrentPeriodUsage)))
+		s.True(decimal.NewFromInt(step.available).Equal(lo.FromPtr(resp.RealTimeBalance)))
+		s.True(decimal.NewFromInt(step.available).Equal(lo.FromPtr(resp.RealTimeCreditBalance)))
+		stored, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit or refund the wallet")
+		s.True(stored.CreditBalance.Equal(decimal.NewFromInt(100)))
+	}
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageDoesNotRestoreExpiredCredits() {
+	ctx := s.GetContext()
+	tx, start, end := s.midPeriodGrant(100)
+	sub := s.usageSubscription("subs_wallet_expired_signed", start, start, end)
+	s.usage(sub, lo.FromPtr(tx.ExpiryDate).Add(-time.Hour), 70)
+	settled, err := s.walletService.ExpireCredits(ctx, tx.ID)
+	s.Require().NoError(err)
+	s.True(settled.Applied.Equal(decimal.NewFromInt(70)))
+	s.True(settled.Expired)
+	s.True(s.creditsAvailable(tx.ID).IsZero())
+	for i, delta := range []int64{-40, -50} {
+		s.usage(sub, lo.FromPtr(tx.ExpiryDate).Add(time.Duration(i+1)*time.Minute), delta)
+		resp, err := s.walletService.GetWalletBalanceV2(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.False(resp.IsCachedFallback)
+		s.True(lo.FromPtr(resp.RealTimeBalance).IsZero(), "negative usage cannot restore expired credits")
+		s.True(lo.FromPtr(resp.RealTimeCreditBalance).IsZero())
+		s.True(lo.FromPtr(resp.CurrentPeriodUsage).IsZero())
+		stored, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.True(stored.Balance.IsZero())
+		s.True(stored.CreditBalance.IsZero())
+		s.True(s.creditsAvailable(tx.ID).IsZero())
+	}
+	s.Len(s.walletTransactions(types.TransactionReasonCreditAdjustment), 1)
+	s.Len(s.walletTransactions(types.TransactionReasonCreditExpired), 1)
+	s.Empty(s.walletTransactions(types.TransactionReasonInvoiceVoidRefund))
 }
 
 // ---------------------------------------------------------------------------
@@ -1088,4 +1156,38 @@ func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_ReleasedOnceProcesse
 func (s *CreditExpiryInvoiceRaceSuite) TestFinalizationHold_SafetyCap() {
 	inv, _ := s.finalizationCase(settlementFinalizationHold + 10*time.Minute)
 	s.True(s.finalizationDue(inv.ID))
+}
+
+func (s *CreditExpiryInvoiceRaceSuite) TestExpirySettlement_PaysPositiveLinesBeforeFinalization() {
+	ctx := s.GetContext()
+	boundary := time.Now().UTC().Add(-3 * time.Hour)
+	sub, start := s.rolledSubscription("subs_signed_expiry", boundary)
+	tx := s.seedGrant("wtxn_signed_expiry", decimal.NewFromInt(50), start, boundary)
+	inv := s.draftWithAppliedCredits("inv_signed_expiry", decimal.Zero, 50, -45)
+	inv.SubscriptionID = lo.ToPtr(sub.ID)
+	inv.BillingReason = string(types.InvoiceBillingReasonSubscriptionCycle)
+	inv.PeriodStart, inv.PeriodEnd = lo.ToPtr(start), lo.ToPtr(boundary)
+	inv.LastComputedAt = lo.ToPtr(boundary.Add(15 * time.Minute))
+	s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+
+	result, err := s.walletService.ExpireCredits(ctx, tx.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(result.Applied), "applied %s", result.Applied)
+	s.False(result.Expired)
+	expired := s.walletTransactions(types.TransactionReasonCreditExpired)
+	s.Empty(expired)
+	adjustments := s.walletTransactions(types.TransactionReasonCreditAdjustment)
+	s.Require().Len(adjustments, 1)
+	s.True(decimal.NewFromInt(50).Equal(adjustments[0].CreditAmount))
+	s.True(s.creditsAvailable(tx.ID).IsZero())
+
+	settled, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(settled.TotalPrepaidCreditsApplied))
+	final, err := s.creditAdjustment.ApplyCreditsToInvoice(ctx, settled)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(50).Equal(final.TotalPrepaidCreditsApplied))
+	s.True(decimal.NewFromInt(50).Equal(lineCredits(settled)))
+	s.True(settled.Total.IsZero())
+	s.Len(s.walletTransactions(types.TransactionReasonCreditAdjustment), 1, "finalization must not debit again")
 }

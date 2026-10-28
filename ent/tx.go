@@ -60,6 +60,8 @@ type Tx struct {
 	EntityIntegrationMapping *EntityIntegrationMappingClient
 	// Environment is the client for interacting with the Environment builders.
 	Environment *EnvironmentClient
+	// EventDeletionRequest is the client for interacting with the EventDeletionRequest builders.
+	EventDeletionRequest *EventDeletionRequestClient
 	// FXRate is the client for interacting with the FXRate builders.
 	FXRate *FXRateClient
 	// Feature is the client for interacting with the Feature builders.
@@ -78,6 +80,8 @@ type Tx struct {
 	InvoiceSequence *InvoiceSequenceClient
 	// Meter is the client for interacting with the Meter builders.
 	Meter *MeterClient
+	// MeterUsageCheckpoint is the client for interacting with the MeterUsageCheckpoint builders.
+	MeterUsageCheckpoint *MeterUsageCheckpointClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
@@ -286,6 +290,7 @@ func (tx *Tx) init() {
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
+	tx.EventDeletionRequest = NewEventDeletionRequestClient(tx.config)
 	tx.FXRate = NewFXRateClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
@@ -295,6 +300,7 @@ func (tx *Tx) init() {
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
+	tx.MeterUsageCheckpoint = NewMeterUsageCheckpointClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.PaymentMethod = NewPaymentMethodClient(tx.config)
