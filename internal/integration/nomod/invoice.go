@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with Nomod
@@ -352,6 +353,11 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"synced_at":          clock.Now().Format(time.RFC3339),
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -361,6 +367,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		Metadata:         metadata,
 		EnvironmentID:    environmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -384,10 +391,16 @@ func (s *InvoiceSyncService) GetExistingNomodMapping(
 	ctx context.Context,
 	flexInvoiceID string,
 ) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      flexInvoiceID,
 		ProviderTypes: []string{string(types.SecretProviderNomod)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -426,11 +439,17 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, nomodInv
 	s.logger.Debug(ctx, "looking up FlexPrice invoice ID from Nomod invoice ID",
 		"nomod_invoice_id", nomodInvoiceID)
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderEntityIDs: []string{nomodInvoiceID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
 		ProviderTypes:     []string{string(types.SecretProviderNomod)},
 		QueryFilter:       types.NewDefaultQueryFilter(),
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

@@ -192,6 +192,10 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		return nil, err
 	}
 
+	if err := s.setGatewayConnection(ctx, p); err != nil {
+		return nil, err
+	}
+
 	if err := s.PaymentRepo.Create(ctx, p); err != nil {
 		// Concurrent request already inserted with this key — return theirs.
 		// Gated on the idempotency-key conflict specifically: any other
@@ -527,7 +531,13 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {
+		if lo.FromPtr(p.PaymentGateway) != *req.PaymentGateway {
+			p.ConnectionID = nil
+		}
 		p.PaymentGateway = req.PaymentGateway
+		if err := s.setGatewayConnection(ctx, p); err != nil {
+			return nil, err
+		}
 	}
 	if req.GatewayPaymentID != nil {
 		p.GatewayPaymentID = req.GatewayPaymentID
@@ -1048,6 +1058,22 @@ func (s *paymentService) fetchMoyasarPaymentStatus(ctx context.Context, gatewayP
 	return integrations.MoyasarPaymentStatus(resp.Status).ToFlexpricePaymentStatus()
 }
 
+// setGatewayConnection records the connection of the payment's gateway; a gateway without one leaves it nil.
+func (s *paymentService) setGatewayConnection(ctx context.Context, p *payment.Payment) error {
+	if p.ConnectionID != nil || lo.FromPtr(p.PaymentGateway) == "" {
+		return nil
+	}
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProvider(*p.PaymentGateway))
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	p.ConnectionID = lo.ToPtr(conn.ID)
+	return nil
+}
+
 // CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 // session directly via repo, without gateway calls or lifecycle processing.
 // TODO: migrate to full payment lifecycle method when payment lifecycle service is released
@@ -1079,6 +1105,10 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	})
 
 	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.setGatewayConnection(ctx, p); err != nil {
 		return nil, err
 	}
 

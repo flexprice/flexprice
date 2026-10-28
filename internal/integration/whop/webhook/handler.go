@@ -106,11 +106,17 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *WhopWebhookEven
 func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "handling Whop invoice.paid", "whop_invoice_id", data.ID)
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Look up Flexprice invoice via entity_integration_mapping
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderWhop)},
 		ProviderEntityIDs: []string{data.ID},
 		EntityType:        types.IntegrationEntityTypeInvoice,
+		ConnectionID:      conn.ID,
 	}
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -187,6 +193,11 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 		return nil
 	}
 
+	conn, err := h.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Idempotency: skip if mapping already exists
 	existingFilter := &types.EntityIntegrationMappingFilter{
 		QueryFilter: &types.QueryFilter{
@@ -196,6 +207,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 		EntityIDs:     []string{customerID},
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderWhop)},
+		ConnectionID:  conn.ID,
 	}
 	existing, err := h.entityIntegrationMappingRepo.List(ctx, existingFilter)
 	if err != nil {

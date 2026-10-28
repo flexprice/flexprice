@@ -73,10 +73,16 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 
 	// Check if customer is synced via integration mapping table
 	if s.entityIntegrationMappingRepo != nil {
+		conn, err := s.client.GetConnection(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		filter := &types.EntityIntegrationMappingFilter{
 			EntityID:      customerID,
 			EntityType:    types.IntegrationEntityTypeCustomer,
 			ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+			ConnectionID:  conn.ID,
 		}
 
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -213,6 +219,11 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		"customer_id", flexpriceCustomer.ID,
 		"razorpay_customer_id", razorpayCustomerID)
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Store mapping in entity_integration_mapping
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
@@ -227,6 +238,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ConnectionID:  lo.ToPtr(conn.ID),
 	}
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
@@ -248,10 +260,16 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 
 // GetRazorpayCustomerID retrieves the Razorpay customer ID for a FlexPrice customer
 func (s *CustomerService) GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityID:      customerID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderRazorpay)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

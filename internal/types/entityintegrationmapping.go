@@ -110,6 +110,9 @@ type EntityIntegrationMappingFilter struct {
 	// Provider-specific filters (only plural variants kept)
 	ProviderTypes     []string `json:"provider_types,omitempty" form:"provider_types" validate:"omitempty"`
 	ProviderEntityIDs []string `json:"provider_entity_ids,omitempty" form:"provider_entity_ids" validate:"omitempty"`
+
+	// ConnectionID matches rows of that connection plus rows written before connections were recorded
+	ConnectionID string `json:"connection_id,omitempty" form:"connection_id" validate:"omitempty"`
 }
 
 // NewEntityIntegrationMappingFilter creates a new EntityIntegrationMappingFilter with default values

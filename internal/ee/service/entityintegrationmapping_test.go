@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -48,6 +49,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestCreateEntityIntegrationMappin
 		EntityID:         "cust_123",
 		EntityType:       types.IntegrationEntityTypeCustomer,
 		ProviderType:     "stripe",
+		ConnectionID:     lo.ToPtr("conn_stripe"),
 		ProviderEntityID: "cus_stripe_456",
 		Metadata: map[string]interface{}{
 			"stripe_customer_email": "test@example.com",
@@ -80,6 +82,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestGetEntityIntegrationMapping()
 		EntityID:         "cust_123",
 		EntityType:       types.IntegrationEntityTypeCustomer,
 		ProviderType:     "stripe",
+		ConnectionID:     lo.ToPtr("conn_stripe"),
 		ProviderEntityID: "cus_stripe_456",
 	}
 
@@ -109,6 +112,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestGetByEntityAndProvider() {
 		EntityID:         "cust_123",
 		EntityType:       types.IntegrationEntityTypeCustomer,
 		ProviderType:     "stripe",
+		ConnectionID:     lo.ToPtr("conn_stripe"),
 		ProviderEntityID: "cus_stripe_456",
 	}
 
@@ -144,6 +148,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestGetByProviderEntity() {
 		EntityID:         "cust_123",
 		EntityType:       types.IntegrationEntityTypeCustomer,
 		ProviderType:     "stripe",
+		ConnectionID:     lo.ToPtr("conn_stripe"),
 		ProviderEntityID: "cus_stripe_456",
 	}
 
