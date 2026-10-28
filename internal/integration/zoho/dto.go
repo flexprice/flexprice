@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -178,8 +179,22 @@ type InvoiceCreateRequest struct {
 	// PlaceOfSupply is the GST state code the supply is made to. It drives Zoho's
 	// IGST vs CGST/SGST split. Zoho falls back to the contact's place_of_contact
 	// when omitted, but sending it pins the value at invoice time.
-	PlaceOfSupply string        `json:"place_of_supply,omitempty"`
-	CustomFields  []CustomField `json:"custom_fields,omitempty"`
+	PlaceOfSupply  string          `json:"place_of_supply,omitempty"`
+	CustomFields   []CustomField   `json:"custom_fields,omitempty"`
+	PaymentOptions *PaymentOptions `json:"payment_options,omitempty"`
+}
+
+// PaymentOptions lists the online payment gateways a Zoho invoice offers. A gateway shows on the
+// invoice only when it is also set up under the Zoho org's Online Payments.
+type PaymentOptions struct {
+	PaymentGateways []PaymentGateway `json:"payment_gateways"`
+}
+
+type PaymentGateway struct {
+	Configured  bool                     `json:"configured"`
+	GatewayName types.ZohoPaymentGateway `json:"gateway_name"`
+	// PayPal payment method (standard or adaptive), set only on the PayPal gateway.
+	AdditionalField1 string `json:"additional_field1,omitempty"`
 }
 
 type InvoiceResponse struct {

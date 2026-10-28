@@ -231,6 +231,8 @@ func (s *InvoiceService) buildInvoiceRequest(ctx context.Context, flexInvoice *i
 	reqPayload.CustomFields = append(reqPayload.CustomFields,
 		metadataCustomFields(settings, flexInvoice.Metadata, flexCustomer.Metadata)...)
 
+	reqPayload.PaymentOptions = s.paymentOptions(ctx, flexInvoice.ID, settings)
+
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
 		return nil, err
@@ -243,6 +245,31 @@ func (s *InvoiceService) buildInvoiceRequest(ctx context.Context, flexInvoice *i
 	reqPayload.CurrencyCode = curCode
 	reqPayload.ExchangeRate = exchRate
 	return reqPayload, nil
+}
+
+// paymentOptions lists the payment gateways the tenant selected for Zoho invoices. Nil when
+// attaching is off or no gateway is selected.
+func (s *InvoiceService) paymentOptions(ctx context.Context, invoiceID string, settings *types.InvoiceSyncSettings) *PaymentOptions {
+	if !settings.IsZohoPaymentGatewaysEnabled() {
+		return nil
+	}
+
+	gateways := settings.ZohoPaymentGateways()
+	if len(gateways) == 0 {
+		s.logger.Info(ctx, "no payment gateway selected, syncing Zoho invoice without payment options",
+			"invoice_id", invoiceID)
+		return nil
+	}
+
+	paymentGateways := make([]PaymentGateway, 0, len(gateways))
+	for _, gateway := range gateways {
+		paymentGateway := PaymentGateway{Configured: true, GatewayName: gateway}
+		if gateway == types.ZohoPaymentGatewayPayPal {
+			paymentGateway.AdditionalField1 = string(settings.PaymentGateways.PayPalPaymentMethod)
+		}
+		paymentGateways = append(paymentGateways, paymentGateway)
+	}
+	return &PaymentOptions{PaymentGateways: paymentGateways}
 }
 
 // resyncInvoice updates the Zoho contact, then the Zoho invoice when it is still editable.

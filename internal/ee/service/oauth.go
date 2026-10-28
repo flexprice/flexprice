@@ -460,6 +460,29 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 					Outbound: outbound,
 				}
 			}
+
+			// Parse invoice sync settings
+			if invoiceSyncSettingsMap, ok := scMap["invoice_sync_settings"].(map[string]interface{}); ok {
+				syncConfig.InvoiceSyncSettings = &types.InvoiceSyncSettings{}
+
+				// Parse Zoho payment gateways
+				if paymentGatewaysMap, ok := invoiceSyncSettingsMap["payment_gateways"].(map[string]interface{}); ok {
+					enabled, _ := paymentGatewaysMap["enabled"].(bool)
+					payPalPaymentMethod, _ := paymentGatewaysMap["paypal_payment_method"].(string)
+					gatewaysList, _ := paymentGatewaysMap["gateways"].([]interface{})
+					gateways := make([]types.ZohoPaymentGateway, 0, len(gatewaysList))
+					for _, gateway := range gatewaysList {
+						if gatewayName, ok := gateway.(string); ok {
+							gateways = append(gateways, types.ZohoPaymentGateway(gatewayName))
+						}
+					}
+					syncConfig.InvoiceSyncSettings.PaymentGateways = &types.ZohoPaymentGatewaySettings{
+						Enabled:             enabled,
+						Gateways:            gateways,
+						PayPalPaymentMethod: types.ZohoPayPalPaymentMethod(payPalPaymentMethod),
+					}
+				}
+			}
 		}
 	}
 

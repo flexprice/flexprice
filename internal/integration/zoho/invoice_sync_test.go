@@ -2,6 +2,7 @@ package zoho
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
@@ -430,6 +431,48 @@ func TestSyncInvoiceToZoho_SkipsZeroAmountLines(t *testing.T) {
 	require.Len(t, req.LineItems, 1)
 	assert.Equal(t, "Blinkit - Workspace 1", req.LineItems[0].Name)
 	assert.True(t, decimal.NewFromInt(600).Equal(req.LineItems[0].Discount))
+}
+
+// Connections without payment gateway settings send the Zoho invoice exactly as before.
+func TestSyncInvoiceToZoho_OmitsPaymentOptionsWithoutGatewaySettings(t *testing.T) {
+	line := []testLineItem{{name: "Charge", priceID: "price_1", amount: "100"}}
+
+	tests := []struct {
+		name       string
+		syncConfig *types.SyncConfig
+	}{
+		{"no sync config", nil},
+		{"no invoice sync settings", &types.SyncConfig{}},
+		{"invoice sync settings without payment gateways", &types.SyncConfig{
+			InvoiceSyncSettings: &types.InvoiceSyncSettings{NormalizeFixedTo: types.BILLING_PERIOD_MONTHLY},
+		}},
+		{"payment gateways disabled", &types.SyncConfig{
+			InvoiceSyncSettings: &types.InvoiceSyncSettings{
+				ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+					PaymentGateways: &types.ZohoPaymentGatewaySettings{
+						Gateways: []types.ZohoPaymentGateway{types.ZohoPaymentGatewayStripe},
+					},
+				},
+			},
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, client := newSyncTestService(buildTestInvoice("INR", "0", "", "", line), tt.syncConfig)
+
+			_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+			require.NoError(t, err)
+
+			req := client.createInvoiceReq
+			require.NotNil(t, req)
+			assert.Nil(t, req.PaymentOptions)
+
+			body, err := json.Marshal(req)
+			require.NoError(t, err)
+			assert.NotContains(t, string(body), "payment_options")
+		})
+	}
 }
 
 func TestTotalLineItemDiscount(t *testing.T) {
