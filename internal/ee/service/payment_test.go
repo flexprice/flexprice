@@ -64,6 +64,7 @@ func (s *PaymentServiceSuite) setupService() {
 		AuthRepo:            s.GetStores().AuthRepo,
 		WalletRepo:          s.GetStores().WalletRepo,
 		PaymentRepo:         s.GetStores().PaymentRepo,
+		ConnectionRepo:      s.GetStores().ConnectionRepo,
 		EventPublisher:      s.GetPublisher(),
 		WebhookPublisher:    s.GetWebhookPublisher(),
 	})

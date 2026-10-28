@@ -12,6 +12,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // QuickBooksInvoiceService defines the interface for QuickBooks invoice operations
@@ -232,12 +233,18 @@ func (s *InvoiceService) getQuickBooksItemID(ctx context.Context, priceID string
 			Mark(ierr.ErrValidation)
 	}
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", "", err
+	}
+
 	// Query entity mapping table to find QuickBooks item for this Flexprice price
 	// EntityID: {price_id}, EntityType: "price", ProviderType: "quickbooks"
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityID = priceID
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.ProviderTypes = []string{string(types.SecretProviderQuickBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -273,10 +280,16 @@ func (s *InvoiceService) getQuickBooksItemID(ctx context.Context, priceID string
 // This prevents duplicate invoice creation if sync is triggered multiple times.
 // Returns the existing mapping if found, or ErrNotFound if invoice hasn't been synced yet.
 func (s *InvoiceService) getExistingQuickBooksMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.EntityID = invoiceID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
 	filter.ProviderTypes = []string{string(types.SecretProviderQuickBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
@@ -300,6 +313,11 @@ func (s *InvoiceService) createInvoiceMapping(ctx context.Context, invoiceID, qu
 	baseModel := types.GetDefaultBaseModel(ctx)
 	baseModel.TenantID = tenantID
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypeInvoice,
@@ -312,9 +330,10 @@ func (s *InvoiceService) createInvoiceMapping(ctx context.Context, invoiceID, qu
 			"synced_at":            clock.Now().Format(time.RFC3339),
 			"flexprice_invoice_id": invoiceID,
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 
-	err := s.EntityIntegrationMappingRepo.Create(ctx, mapping)
+	err = s.EntityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to create invoice mapping").

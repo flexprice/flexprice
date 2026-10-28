@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -26,6 +27,15 @@ func TestMarketplaceService(t *testing.T) {
 func (s *MarketplaceServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.setupService()
+	ctx := s.GetContext()
+	for _, provider := range []types.SecretProvider{types.SecretProviderAWSMarketplace, types.SecretProviderGCPMarketplace, types.SecretProviderAzureMarketplace} {
+		require.NoError(s.T(), s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+			ID:            "conn_" + string(provider),
+			ProviderType:  provider,
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}))
+	}
 }
 
 func (s *MarketplaceServiceSuite) setupService() {
@@ -36,6 +46,7 @@ func (s *MarketplaceServiceSuite) setupService() {
 		DB:                           s.GetDB(),
 		SubRepo:                      stores.SubscriptionRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
+		ConnectionRepo:               stores.ConnectionRepo,
 	})
 }
 

@@ -136,6 +136,7 @@ func (a *SnapshotActivities) processConnection(
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  conn.ID,
 	})
 	if err != nil {
 		a.logger.Error(ctx, "marketplace usage snapshot: failed to list customer mappings",
@@ -154,6 +155,7 @@ func (a *SnapshotActivities) processConnection(
 		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{providerType},
+		ConnectionID:  conn.ID,
 	})
 	if err != nil {
 		a.logger.Error(ctx, "marketplace usage snapshot: failed to list subscription mappings",
