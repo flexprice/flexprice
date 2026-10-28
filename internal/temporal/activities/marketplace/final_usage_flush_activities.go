@@ -17,7 +17,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -51,12 +53,13 @@ type FlushActivities struct {
 	customerRepo                 customer.Repository
 	usageRecordRepo              usagerecord.Repository
 	mktplaceReporter             *MarketplaceReporter
+	entityScope                  interfaces.BillingEntityScope
 	logger                       *logger.Logger
 }
 
 // NewFlushActivities builds the activity set. The reporter is constructed once at registration and
 // shared with the reporting cron.
-func NewFlushActivities(params service.ServiceParams, mktplaceReporter *MarketplaceReporter, log *logger.Logger) *FlushActivities {
+func NewFlushActivities(params service.ServiceParams, mktplaceReporter *MarketplaceReporter, entityScope interfaces.BillingEntityScope, log *logger.Logger) *FlushActivities {
 	return &FlushActivities{
 		subscriptionService:          service.NewSubscriptionService(params),
 		billingService:               service.NewBillingService(params),
@@ -66,6 +69,7 @@ func NewFlushActivities(params service.ServiceParams, mktplaceReporter *Marketpl
 		customerRepo:                 params.CustomerRepo,
 		usageRecordRepo:              params.UsageRecordRepo,
 		mktplaceReporter:             mktplaceReporter,
+		entityScope:                  entityScope,
 		logger:                       log,
 	}
 }
@@ -100,6 +104,11 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 ) (*temporalModels.MarketplaceSubscriptionFinalUsageFlushWorkflowResult, error) {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, "", "", input.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	log := activity.GetLogger(ctx)
 	tenantID := input.TenantID

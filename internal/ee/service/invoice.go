@@ -2037,6 +2037,11 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
 	// Stripe finalizes with auto-advance, so syncing a paid invoice would make Stripe collect it again.
 	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
 		inv.PaymentStatus == types.PaymentStatusOverpaid {
@@ -2166,6 +2171,11 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
 	if inv.AmountRemaining.IsZero() {
 		s.Logger.Debug(ctx, "invoice amount remaining is zero, skipping Razorpay sync",
 			"invoice_id", inv.ID)
@@ -2251,6 +2261,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
 	// Check if Chargebee connection exists
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderChargebee)
 	if err != nil || conn == nil {
@@ -2305,6 +2320,11 @@ func (s *invoiceService) SyncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 // SyncInvoiceToQuickBooksIfEnabled syncs the invoice to QuickBooks if QuickBooks connection is enabled.
 func (s *invoiceService) SyncInvoiceToQuickBooksIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
 	if err != nil {
 		return err
 	}
@@ -2371,6 +2391,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 		return err
 	}
 
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
 	if err != nil || conn == nil {
 		if err != nil && !ierr.IsNotFound(err) {
@@ -2412,6 +2437,11 @@ func (s *invoiceService) SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, in
 // saved payment method (token), the invoice is also charged automatically; otherwise
 // the invoice is synced as a Moyasar invoice link so the customer can pay manually.
 func (s *invoiceService) SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderMoyasar)
 	if err != nil {
 		if ierr.IsNotFound(err) {
@@ -3666,6 +3696,11 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePD
 // this invoice, or "" when none applies. The first connection with outbound
 // invoice sync enabled wins.
 func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID string) (string, error) {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		return "", err
+	}
+
 	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
 	if err != nil || len(providers) == 0 {
 		return "", err
