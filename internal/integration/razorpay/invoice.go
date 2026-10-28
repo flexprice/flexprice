@@ -349,7 +349,7 @@ func (s *InvoiceSyncService) executeAutoCharge(
 	}
 
 	// Persist audit mappings (non-fatal — charge is already submitted).
-	s.createAutoChargeMappings(ctx, inv.ID, pymnt.ID, result)
+	s.createAutoChargeMappings(ctx, inv.ID, pymnt, result)
 
 	s.logger.Info(ctx, "auto-charge submitted successfully",
 		"invoice_id", inv.ID,
@@ -367,25 +367,22 @@ func (s *InvoiceSyncService) executeAutoCharge(
 //     from the invoice→razorpay_invoice mapping created on the send-invoice path)
 //   - payment → Razorpay payment (pay_xxx, omitted when AlreadySubmitted and no ID)
 //
+// Both mappings take the connection recorded on the payment.
 // Both writes are best-effort: failures are logged but do not abort the charge.
 // The primary reconciliation path (notes.flexprice_payment_id on the webhook) is
 // independent of these mappings.
 func (s *InvoiceSyncService) createAutoChargeMappings(
 	ctx context.Context,
 	invoiceID string,
-	paymentID string,
+	pymnt *payment.Payment,
 	result *AutoChargeResult,
 ) {
 	if s.entityIntegrationMappingRepo == nil {
 		return
 	}
 
+	paymentID := pymnt.ID
 	environmentID := types.GetEnvironmentID(ctx)
-	conn, err := s.client.GetConnection(ctx)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get razorpay connection for auto-charge mappings", "error", err, "invoice_id", invoiceID)
-		return
-	}
 
 	// 1. Invoice → Razorpay order
 	if result.RazorpayOrderID != "" {
@@ -400,7 +397,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			},
 			EnvironmentID: environmentID,
 			BaseModel:     types.GetDefaultBaseModel(ctx),
-			ConnectionID:  lo.ToPtr(conn.ID),
+			ConnectionID:  pymnt.ConnectionID,
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, orderMapping); err != nil {
 			s.logger.Info(ctx, "failed to create invoice→order mapping (non-fatal)",
@@ -420,7 +417,7 @@ func (s *InvoiceSyncService) createAutoChargeMappings(
 			ProviderEntityID: result.RazorpayPaymentID,
 			EnvironmentID:    environmentID,
 			BaseModel:        types.GetDefaultBaseModel(ctx),
-			ConnectionID:     lo.ToPtr(conn.ID),
+			ConnectionID:     pymnt.ConnectionID,
 		}
 		if err := s.entityIntegrationMappingRepo.Create(ctx, paymentMapping); err != nil {
 			s.logger.Info(ctx, "failed to create payment→razorpay_payment mapping (non-fatal)",

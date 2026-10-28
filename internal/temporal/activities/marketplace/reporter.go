@@ -118,8 +118,7 @@ type marketplaceConnection struct {
 // hasAgreementFor reports whether the subscription holds an agreement on this connection's
 // marketplace, which is what makes a usage record for it reportable here.
 //
-// The mappings are loaded for this connection, so an agreement registered through another
-// connection of the same marketplace is not reported here.
+// An agreement reports through the connection it was registered under.
 func (marketplaceConn *marketplaceConnection) hasAgreementFor(subscriptionID string) bool {
 	switch marketplaceConn.conn.ProviderType {
 	case types.SecretProviderAWSMarketplace:

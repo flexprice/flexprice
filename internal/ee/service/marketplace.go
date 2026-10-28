@@ -120,7 +120,6 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		EntityType:        types.IntegrationEntityTypeSubscription,
 		ProviderTypes:     []string{providerType},
 		ProviderEntityIDs: []string{subProviderEntityID},
-		ConnectionID:      conn.ID,
 	})
 	if err != nil {
 		s.Logger.Error(ctx, "marketplace agreement registration failed",
@@ -144,7 +143,6 @@ func (s *marketplaceService) RegisterAgreement(ctx context.Context, req dto.Regi
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		EntityID:      req.SubscriptionID,
 		ProviderTypes: []string{providerType},
-		ConnectionID:  conn.ID,
 	})
 	if err != nil {
 		s.Logger.Error(ctx, "marketplace agreement registration failed",
@@ -252,6 +250,9 @@ func (s *marketplaceService) createMappingIfAbsent(
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, err
+	}
+	if err := entityintegrationmapping.ValidateConnection(mapping); err != nil {
 		return nil, err
 	}
 	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {

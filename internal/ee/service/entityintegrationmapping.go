@@ -205,13 +205,16 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 	return nil
 }
 
-// setProviderConnection fills a missing connection with the provider's connection in ctx.
+// setProviderConnection fills a missing connection with the provider's connection in ctx; none in scope leaves it nil.
 func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Context, mapping *entityintegrationmapping.EntityIntegrationMapping) error {
 	provider := types.SecretProvider(mapping.ProviderType)
 	if mapping.ConnectionID != nil || provider.Validate() != nil {
 		return nil
 	}
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, provider)
+	if ierr.IsNotFound(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -359,6 +362,9 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, err
+	}
+	if err := entityintegrationmapping.ValidateConnection(mapping); err != nil {
 		return nil, err
 	}
 	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
