@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/connectionassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
@@ -13,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type connectionRepository struct {
@@ -136,12 +138,53 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 			Mark(ierr.ErrDatabase)
 	}
 
-	SetSpanSuccess(span)
 	domainConn := domainConnection.FromEnt(c)
+	if err := r.fillBillingEntityIDs(ctx, []*domainConnection.Connection{domainConn}); err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
 
 	// Cache the result
 	r.SetCache(ctx, domainConn)
 
+	return domainConn, nil
+}
+
+func (r *connectionRepository) GetUnscoped(ctx context.Context, id string) (*domainConnection.Connection, error) {
+	span := StartRepositorySpan(ctx, "connection", "get_unscoped", map[string]interface{}{
+		"connection_id": id,
+	})
+	defer FinishSpan(span)
+
+	c, err := r.client.Reader(ctx).Connection.Query().
+		Where(
+			connection.ID(id),
+			connection.TenantID(types.GetTenantID(ctx)),
+			connection.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Connection with ID %s was not found", id).
+				WithReportableDetails(map[string]any{
+					"connection_id": id,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get connection").
+			Mark(ierr.ErrDatabase)
+	}
+
+	domainConn := domainConnection.FromEnt(c)
+	if err := r.fillBillingEntityIDs(ctx, []*domainConnection.Connection{domainConn}); err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
 	return domainConn, nil
 }
 
@@ -157,23 +200,45 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 	r.log.Debug(ctx, "getting connection by provider",
 		"provider_type", provider)
 
+	notFound := ierr.NewError("connection not found").
+		WithHintf("Connection with provider %s was not found in this environment", provider).
+		Mark(ierr.ErrNotFound)
+
+	if pinnedID := types.GetConnectionID(ctx); pinnedID != "" {
+		c, err := r.GetUnscoped(ctx, pinnedID)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+		if c.ProviderType != provider {
+			SetSpanError(span, notFound)
+			return nil, notFound
+		}
+		SetSpanSuccess(span)
+		return c, nil
+	}
+
 	connections, err := r.ListAllPublished(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, err
 	}
 
-	for _, c := range connections {
-		if c.ProviderType == provider {
-			SetSpanSuccess(span)
-			return c, nil
-		}
+	isProvider := func(c *domainConnection.Connection) bool { return c.ProviderType == provider }
+	if c, ok := lo.Find(domainConnection.InScope(ctx, connections), isProvider); ok {
+		SetSpanSuccess(span)
+		return c, nil
 	}
 
-	SetSpanError(span, ierr.ErrNotFound)
-	return nil, ierr.NewError("connection not found").
-		WithHintf("Connection with provider %s was not found in this environment", provider).
-		Mark(ierr.ErrNotFound)
+	if lo.ContainsBy(connections, isProvider) {
+		r.log.Info(ctx, "no connection for billing entity",
+			"tenant_id", types.GetTenantID(ctx),
+			"billing_entity_id", types.GetBillingEntityID(ctx),
+			"provider_type", provider)
+	}
+
+	SetSpanError(span, notFound)
+	return nil, notFound
 }
 
 // ListPublishedByProvider returns every published connection for a provider across all tenants and
@@ -231,6 +296,14 @@ func (r *connectionRepository) ListAllPublished(ctx context.Context) ([]*domainC
 	return connections, nil
 }
 
+func (r *connectionRepository) ListPublishedInScope(ctx context.Context) ([]*domainConnection.Connection, error) {
+	connections, err := r.ListAllPublished(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return domainConnection.InScope(ctx, connections), nil
+}
+
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
 	client := r.client.Reader(ctx)
 
@@ -256,7 +329,41 @@ func (r *connectionRepository) List(ctx context.Context, filter *types.Connectio
 		result = append(result, domainConnection.FromEnt(c))
 	}
 
+	if err := r.fillBillingEntityIDs(ctx, result); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+// fillBillingEntityIDs sets each connection's owner from its published owner association.
+func (r *connectionRepository) fillBillingEntityIDs(ctx context.Context, conns []*domainConnection.Connection) error {
+	if len(conns) == 0 {
+		return nil
+	}
+
+	owners, err := r.client.Reader(ctx).ConnectionAssociation.Query().
+		Where(
+			connectionassociation.TenantID(types.GetTenantID(ctx)),
+			connectionassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+			connectionassociation.EntityType(string(types.ConnectionAssociationEntityTypeBillingEntity)),
+			connectionassociation.Status(string(types.StatusPublished)),
+			connectionassociation.ConnectionIDIn(lo.Map(conns, func(c *domainConnection.Connection, _ int) string { return c.ID })...),
+		).
+		All(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to read connection owners").
+			Mark(ierr.ErrDatabase)
+	}
+
+	ownerByConnection := make(map[string]string, len(owners))
+	for _, o := range owners {
+		ownerByConnection[o.ConnectionID] = o.EntityID
+	}
+	for _, c := range conns {
+		c.BillingEntityID = lo.EmptyableToPtr(ownerByConnection[c.ID])
+	}
+	return nil
 }
 
 // convertConnectionMetadataToMap converts structured encrypted secret data to map format for database storage
@@ -684,7 +791,7 @@ func (o ConnectionQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.ConnectionFilter, query ConnectionQuery) (ConnectionQuery, error) {
+func (o ConnectionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.ConnectionFilter, query ConnectionQuery) (ConnectionQuery, error) {
 	var err error
 	if f == nil {
 		return query, nil
@@ -696,6 +803,10 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 
 	if len(f.ConnectionIDs) > 0 {
 		query = query.Where(connection.IDIn(f.ConnectionIDs...))
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(predicate.Connection(columnInSelector(connection.FieldID, connectionIDsOfEntity(ctx, f.BillingEntityID))))
 	}
 
 	if f.Filters != nil {

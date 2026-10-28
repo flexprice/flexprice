@@ -73,6 +73,14 @@ func (r *fakeConnectionRepo) ListAllPublished(ctx context.Context) ([]*connectio
 	return r.List(ctx, nil)
 }
 
+func (r *fakeConnectionRepo) ListPublishedInScope(ctx context.Context) ([]*connection.Connection, error) {
+	return r.List(ctx, nil)
+}
+
+func (r *fakeConnectionRepo) GetUnscoped(ctx context.Context, id string) (*connection.Connection, error) {
+	return r.Get(ctx, id)
+}
+
 func (r *fakeConnectionRepo) Count(_ context.Context, _ *types.ConnectionFilter) (int, error) {
 	return len(r.byProvider), nil
 }
