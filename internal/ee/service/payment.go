@@ -92,6 +92,23 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
+	// Offline and credit payments need no gateway, so they skip the billing entity's connection check.
+	if p.PaymentMethodType != types.PaymentMethodTypeOffline && p.PaymentMethodType != types.PaymentMethodTypeCredits {
+		customerID := p.DestinationID
+		if invoice != nil {
+			customerID = invoice.CustomerID
+		}
+		ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+		if err != nil {
+			return nil, err
+		}
+		if req.PaymentGateway != nil {
+			if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(*req.PaymentGateway)); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Check if payment link already exists for this invoice
 	// If invoice was synced to gateway and has a payment URL, return it immediately
 	// No payment record is created here - the webhook will create it when payment is made
@@ -1081,6 +1098,13 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	if req == nil || req.Invoice == nil {
 		return nil, ierr.NewError("request and invoice are required").
 			Mark(ierr.ErrValidation)
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, req.Invoice.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+	if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(req.Gateway)); err != nil {
+		return nil, err
 	}
 
 	gatewayStr := string(req.Gateway)

@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -143,4 +144,63 @@ func (s *BillingEntityServiceSuite) TestEffectiveEntity() {
 		s.Require().NoError(err)
 		s.Nil(got)
 	})
+}
+
+func (s *BillingEntityServiceSuite) TestScopeToCustomer() {
+	env := types.GetEnvironmentID(s.GetContext())
+
+	s.Run("off", func() {
+		s.ClearStores()
+		s.setMode(types.BillingEntityModeOff)
+
+		// The customer does not exist, so any read would fail.
+		ctx, err := s.service.ScopeToCustomer(s.GetContext(), "c_missing")
+		s.Require().NoError(err)
+		s.Empty(types.GetBillingEntityID(ctx))
+	})
+
+	tests := []struct {
+		name     string
+		mode     types.BillingEntityMode
+		customer *string
+		want     string
+	}{
+		{name: "enabling_unassigned", mode: types.BillingEntityModeEnabling, want: "be_default"},
+		{name: "enabled_assigned", mode: types.BillingEntityModeEnabled, customer: lo.ToPtr("be_eu"), want: "be_eu"},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.ClearStores()
+			s.setMode(tc.mode)
+			s.addEntity("be_default", env, "INV", true)
+			s.addEntity("be_eu", env, "EU", false)
+			s.addCustomer("c1", tc.customer)
+
+			ctx, err := s.service.ScopeToCustomer(s.GetContext(), "c1")
+			s.Require().NoError(err)
+			s.Equal(tc.want, types.GetBillingEntityID(ctx))
+		})
+	}
+}
+
+func (s *BillingEntityServiceSuite) TestScopeToSubscription() {
+	env := types.GetEnvironmentID(s.GetContext())
+	s.ClearStores()
+	s.setMode(types.BillingEntityModeEnabled)
+	s.addEntity("be_default", env, "INV", true)
+	s.addEntity("be_eu", env, "EU", false)
+	s.addCustomer("c_eu", lo.ToPtr("be_eu"))
+
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, &subscription.Subscription{
+		ID:            "sub_eu",
+		CustomerID:    "c_eu",
+		EnvironmentID: env,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}))
+
+	scoped, err := s.service.ScopeToSubscription(ctx, "sub_eu")
+	s.Require().NoError(err)
+	s.Equal("be_eu", types.GetBillingEntityID(scoped))
 }
