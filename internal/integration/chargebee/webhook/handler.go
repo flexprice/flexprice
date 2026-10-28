@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -204,6 +205,9 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *ChargebeeWebho
 	if session.CheckoutStatus != types.CheckoutStatusPending {
 		return nil
 	}
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
+		return nil
+	}
 
 	reason := fmt.Errorf("chargebee payment failed for transaction %s", content.Transaction.ID)
 	if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, session.ID, reason); err != nil {
@@ -235,6 +239,9 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 	if session == nil {
 		return false, nil
+	}
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
+		return true, nil
 	}
 
 	switch session.CheckoutStatus {
@@ -322,6 +329,9 @@ func (h *Handler) settleLinkedPayment(
 	if _, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID); err != nil {
 		return false, nil
 	}
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
+		return true, nil
+	}
 
 	// Settlement books the payment's own amount and does not check it against
 	// transaction.Amount: the hosted page charges exactly what the link was created
@@ -343,6 +353,10 @@ func (h *Handler) settleLinkedPayment(
 		"flexprice_payment_id", flexpricePaymentID,
 		"chargebee_transaction_id", chargebeeTransactionID)
 	return true, nil
+}
+
+func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) bool {
+	return webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
 }
 
 // findCheckoutSessionForPayment returns the session that owns this payment, in any

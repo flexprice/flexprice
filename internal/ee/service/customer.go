@@ -52,7 +52,12 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	billingEntityService := NewBillingEntityService(s.ServiceParams)
 	if err := billingEntityService.WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
-		billingEntityID, err := billingEntityService.ResolveBillingEntityID(txCtx, mode, req.BillingEntityID)
+		requested := req.BillingEntityID
+		// Inbound provider events carry their connection's entity in ctx.
+		if requested == nil && mode == types.BillingEntityModeEnabled && types.GetBillingEntityID(txCtx) != "" {
+			requested = lo.ToPtr(types.GetBillingEntityID(txCtx))
+		}
+		billingEntityID, err := billingEntityService.ResolveForCreate(txCtx, mode, requested)
 		if err != nil {
 			return err
 		}

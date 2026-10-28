@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	whop "github.com/flexprice/flexprice/internal/integration/whop"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -165,7 +166,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 //  2. GET /v1/plans/:plan_id → internal_notes holds the Flexprice customer_id
 //  3. Idempotency check — skip if mapping already exists
 //  4. Create entity mapping: customer_id → member_id
-func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucceededEventData, _ *ServiceDependencies) error {
+func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucceededEventData, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "handling Whop payment.succeeded",
 		"payment_id", data.ID,
 		"plan_id", data.Plan.ID)
@@ -190,6 +191,9 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 	if customerID == "" {
 		h.logger.Info(ctx, "Whop plan has no internal_notes (customer_id), skipping mapping",
 			"plan_id", data.Plan.ID)
+		return nil
+	}
+	if !webhookscope.Customer(ctx, services.BillingEntityScope, h.logger, customerID) {
 		return nil
 	}
 

@@ -160,7 +160,7 @@ func (h *Handler) processDealContacts(
 			"deal_id", dealID)
 
 		// Create customer in FlexPrice
-		if err := h.customerSvc.CreateCustomerFromHubSpot(ctx, contact, dealID, services.CustomerService); err != nil {
+		if err := h.customerSvc.CreateCustomerFromHubSpot(ctx, contact, dealID, services.CustomerService, services.BillingEntityScope); err != nil {
 			h.logger.Error(ctx, "failed to create customer from HubSpot contact",
 				"error", err,
 				"contact_id", contactID,

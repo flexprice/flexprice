@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -24,6 +25,7 @@ type HubSpotCustomerService interface {
 		hubspotContact *ContactResponse,
 		dealID string,
 		customerService interfaces.CustomerService,
+		scope interfaces.BillingEntityScope,
 	) error
 }
 
@@ -56,6 +58,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 	hubspotContact *ContactResponse,
 	dealID string,
 	customerService interfaces.CustomerService,
+	scope interfaces.BillingEntityScope,
 ) error {
 	if hubspotContact == nil {
 		return ierr.NewError("nil hubspot contact").Mark(ierr.ErrValidation)
@@ -96,6 +99,9 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 		existingCustomers, err := customerService.GetCustomers(ctx, filter)
 		if err == nil && existingCustomers != nil && len(existingCustomers.Items) > 0 {
 			existingCustomer := existingCustomers.Items[0]
+			if !webhookscope.Customer(ctx, scope, s.logger, existingCustomer.ID) {
+				return nil
+			}
 			s.logger.Info(ctx, "customer with same email already exists, creating mapping",
 				"customer_id", existingCustomer.ID,
 				"hubspot_contact_id", hubspotContact.ID)

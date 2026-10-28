@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -159,6 +160,10 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, payment *moyasar.Moyasa
 	return nil
 }
 
+func (h *Handler) paymentInScope(ctx context.Context, paymentID string, services *ServiceDependencies) bool {
+	return webhookscope.Payment(ctx, services.BillingEntityScope, services.PaymentService, services.InvoiceService, h.logger, paymentID)
+}
+
 // handlePaymentLifecycle handles payments that Flexprice initiated (CUSTOMER tokenization or INVOICE autopay).
 // The flexprice_payment_id in metadata is the cross-system anchor.
 func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePaymentID string, services *ServiceDependencies) error {
@@ -166,6 +171,10 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		"flexprice_payment_id", flexpricePaymentID,
 		"moyasar_payment_id", payment.ID,
 	)
+
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
+		return nil
+	}
 
 	flexpricePayment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
@@ -412,6 +421,9 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 	flexpricePaymentID := payment.Metadata["flexprice_payment_id"]
 	if flexpricePaymentID == "" {
 		h.logger.Info(ctx, "payment_failed has no flexprice_payment_id, skipping", "moyasar_payment_id", payment.ID)
+		return nil
+	}
+	if !h.paymentInScope(ctx, flexpricePaymentID, services) {
 		return nil
 	}
 

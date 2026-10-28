@@ -889,26 +889,36 @@ func NewRouter(
 	webhooks := v1Public.Group("/webhooks")
 	webhooks.Use(middleware.WebhookBodyLimitMiddleware(middleware.MaxWebhookBodyBytes), middleware.WebhookActorMiddleware, middleware.WebhookLoggingMiddleware(logger, webhookRequestRepo))
 	{
-		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
+		// Stripe webhook endpoints: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
-		// HubSpot webhook endpoint: POST /v1/webhooks/hubspot/{tenant_id}/{environment_id}
+		webhooks.POST("/stripe/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleStripeWebhook)
+		// HubSpot webhook endpoints: POST /v1/webhooks/hubspot/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/hubspot/:tenant_id/:environment_id", handlers.Webhook.HandleHubSpotWebhook)
-		// Razorpay webhook endpoint: POST /v1/webhooks/razorpay/{tenant_id}/{environment_id}
+		webhooks.POST("/hubspot/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleHubSpotWebhook)
+		// Razorpay webhook endpoints: POST /v1/webhooks/razorpay/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/razorpay/:tenant_id/:environment_id", handlers.Webhook.HandleRazorpayWebhook)
-		// Chargebee webhook endpoint: POST /v1/webhooks/chargebee/{tenant_id}/{environment_id}
+		webhooks.POST("/razorpay/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleRazorpayWebhook)
+		// Chargebee webhook endpoints: POST /v1/webhooks/chargebee/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/chargebee/:tenant_id/:environment_id", handlers.Webhook.HandleChargebeeWebhook)
-		// QuickBooks webhook endpoint: POST /v1/webhooks/quickbooks/{tenant_id}/{environment_id}
+		webhooks.POST("/chargebee/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleChargebeeWebhook)
+		// QuickBooks webhook endpoints: POST /v1/webhooks/quickbooks/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/quickbooks/:tenant_id/:environment_id", handlers.Webhook.HandleQuickBooksWebhook)
-		// Nomod webhook endpoint: POST /v1/webhooks/nomod/{tenant_id}/{environment_id}
+		webhooks.POST("/quickbooks/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleQuickBooksWebhook)
+		// Nomod webhook endpoints: POST /v1/webhooks/nomod/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/nomod/:tenant_id/:environment_id", handlers.Webhook.HandleNomodWebhook)
-		// Moyasar webhook endpoint: POST /v1/webhooks/moyasar/{tenant_id}/{environment_id}
+		webhooks.POST("/nomod/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleNomodWebhook)
+		// Moyasar webhook endpoints: POST /v1/webhooks/moyasar/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/moyasar/:tenant_id/:environment_id", handlers.Webhook.HandleMoyasarWebhook)
-		// Paddle webhook endpoint: POST /v1/webhooks/paddle/{tenant_id}/{environment_id}
+		webhooks.POST("/moyasar/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleMoyasarWebhook)
+		// Paddle webhook endpoints: POST /v1/webhooks/paddle/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/paddle/:tenant_id/:environment_id", handlers.Webhook.HandlePaddleWebhook)
-		// Zoho Books webhook endpoint: POST /v1/webhooks/zoho_books/{tenant_id}/{environment_id}
+		webhooks.POST("/paddle/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandlePaddleWebhook)
+		// Zoho Books webhook endpoints: POST /v1/webhooks/zoho_books/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/zoho_books/:tenant_id/:environment_id", handlers.Webhook.HandleZohoBooksWebhook)
-		// Whop webhook endpoint: POST /v1/webhooks/whop/{tenant_id}/{environment_id}
+		webhooks.POST("/zoho_books/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleZohoBooksWebhook)
+		// Whop webhook endpoints: POST /v1/webhooks/whop/{tenant_id}/{environment_id}[/{connection_id}]
 		webhooks.POST("/whop/:tenant_id/:environment_id", handlers.Webhook.HandleWhopWebhook)
+		webhooks.POST("/whop/:tenant_id/:environment_id/:connection_id", handlers.Webhook.HandleWhopWebhook)
 	}
 
 	// Settings routes.

@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -339,7 +340,7 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 }
 
 // CreateCustomerFromStripe creates a customer in our system from Stripe webhook data
-func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCustomer *stripe.Customer, environmentID string, customerService interfaces.CustomerService) error {
+func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCustomer *stripe.Customer, environmentID string, customerService interfaces.CustomerService, scope interfaces.BillingEntityScope) error {
 	externalID := stripeCustomer.ID
 
 	// Step 1: Check by flexprice_customer_id, if exists just return
@@ -358,6 +359,10 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		externalID = lookupKey
 		existing, err := customerService.GetCustomerByLookupKey(ctx, lookupKey)
 		if err == nil && existing != nil {
+			if !webhookscope.Customer(ctx, scope, s.logger, existing.Customer.ID) {
+				return nil
+			}
+
 			conn, err := s.client.GetConnection(ctx)
 			if err != nil {
 				return err
