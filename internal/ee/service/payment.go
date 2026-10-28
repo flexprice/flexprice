@@ -940,25 +940,29 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	gatewayTrackingID := lo.FromPtr(p.GatewayTrackingID)
 	gateway := types.PaymentGatewayType(*p.PaymentGateway)
 
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, false)
+	if err != nil {
+		return p, err
+	}
+
 	var newStatus types.PaymentStatus
-	var err error
 	var backfillGatewayPaymentID string
 
 	if gatewayPaymentID != "" {
 		switch gateway {
 		case types.PaymentGatewayTypeStripe:
-			newStatus, err = s.fetchStripePaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchStripePaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, err = s.fetchRazorpayPaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchRazorpayPaymentStatus(gatewayCtx, gatewayPaymentID)
 		case types.PaymentGatewayTypeMoyasar:
-			newStatus, err = s.fetchMoyasarPaymentStatus(ctx, gatewayPaymentID)
+			newStatus, err = s.fetchMoyasarPaymentStatus(gatewayCtx, gatewayPaymentID)
 		default:
 			return p, nil
 		}
 	} else if gatewayTrackingID != "" {
 		switch gateway {
 		case types.PaymentGatewayTypeRazorpay:
-			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(ctx, gatewayTrackingID)
+			newStatus, backfillGatewayPaymentID, err = s.fetchRazorpayPaymentLinkStatus(gatewayCtx, gatewayTrackingID)
 		default:
 			return p, nil
 		}

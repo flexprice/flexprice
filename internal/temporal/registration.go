@@ -348,7 +348,7 @@ func RegisterWorkflowsAndActivities(
 		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry:         cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
 		paddleInvoicePullSync:        cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
-		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, params.Logger),
+		moyasarAuthPaymentSettlement: cronActivities.NewMoyasarAuthPaymentSettlementActivities(params.IntegrationFactory, params.PaymentRepo, entityScope, params.Logger),
 		checkoutSessionExpiry:        cronActivities.NewCheckoutSessionExpiryActivities(service.NewCheckoutSessionService(params), params.Logger),
 		marketplaceSnapshot:          marketplaceSnapshotActivities,
 		marketplaceReport:            marketplaceReportActivities,

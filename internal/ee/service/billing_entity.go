@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -29,6 +30,8 @@ type BillingEntityService interface {
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
 	// ScopeToDefault puts the environment's default entity in ctx; off tenants get ctx unchanged.
 	ScopeToDefault(ctx context.Context) (context.Context, error)
+	// ScopeToPayment pins the connection that took the payment, else its customer's entity; publishedOnly rejects a removed connection.
+	ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error)
 	// ScopeToConnection pins the connection, in any status, and its owner entity in ctx; another provider's connection is not found.
 	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
 	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
@@ -339,6 +342,37 @@ func (s *billingEntityService) ScopeToConnection(ctx context.Context, connection
 			WithHintf("Connection %s is not a %s connection", connectionID, provider).
 			WithReportableDetails(map[string]any{"connection_id": connectionID}).
 			Mark(ierr.ErrNotFound)
+	}
+	ctx = types.SetConnectionID(ctx, conn.ID)
+	if owner := lo.FromPtr(conn.BillingEntityID); owner != "" {
+		ctx = types.SetBillingEntityID(ctx, owner)
+	}
+	return ctx, nil
+}
+
+func (s *billingEntityService) ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error) {
+	connectionID := lo.FromPtr(p.ConnectionID)
+	if connectionID == "" {
+		customerID, err := s.PaymentRepo.GetLinkedCustomerID(ctx, p.ID)
+		if err != nil || customerID == "" {
+			return ctx, err
+		}
+		return s.ScopeToCustomer(ctx, customerID)
+	}
+
+	get := s.ConnectionRepo.GetUnscoped
+	if publishedOnly {
+		get = s.ConnectionRepo.Get
+	}
+	conn, err := get(ctx, connectionID)
+	if err != nil {
+		if publishedOnly && ierr.IsNotFound(err) {
+			return ctx, ierr.NewError("payment connection was removed").
+				WithHintf("The connection %s that took this payment was removed", connectionID).
+				WithReportableDetails(map[string]any{"payment_id": p.ID, "connection_id": connectionID}).
+				Mark(ierr.ErrValidation)
+		}
+		return ctx, err
 	}
 	ctx = types.SetConnectionID(ctx, conn.ID)
 	if owner := lo.FromPtr(conn.BillingEntityID); owner != "" {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -20,6 +21,8 @@ type BillingEntityScope interface {
 	ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error)
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
 	ScopeToDefault(ctx context.Context) (context.Context, error)
+	// ScopeToPayment pins the connection that took the payment, else its customer's entity; publishedOnly rejects a removed connection.
+	ScopeToPayment(ctx context.Context, p *payment.Payment, publishedOnly bool) (context.Context, error)
 	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
 	InScope(ctx context.Context, customerID string) (bool, error)
 	// RequireProviderConnected returns a validation error when the entity in ctx has no connection for the provider.
