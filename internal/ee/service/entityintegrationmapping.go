@@ -224,7 +224,7 @@ func (s *entityIntegrationMappingService) setProviderConnection(ctx context.Cont
 }
 
 // linkConnections scopes ctx to the linked customer, invoice or subscription and returns its connections
-// for the provider. Other entity types keep the environment's connections.
+// for the provider. Other entity types link only when the environment has at most one such connection.
 func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, req dto.LinkIntegrationMappingRequest) (context.Context, []*connection.Connection, error) {
 	provider := types.SecretProvider(req.ProviderType)
 	scope := NewBillingEntityService(s.ServiceParams)
@@ -242,7 +242,20 @@ func (s *entityIntegrationMappingService) linkConnections(ctx context.Context, r
 			QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
 			ProviderType: provider,
 		})
-		return ctx, connections, err
+		if err != nil {
+			return ctx, nil, err
+		}
+		if len(connections) > 1 {
+			return ctx, nil, ierr.NewErrorf("more than one %s connection exists; this mapping can't be linked to a single account", provider).
+				WithHintf("More than one %s connection exists; this mapping can't be linked to a single account", provider).
+				WithReportableDetails(map[string]any{
+					"provider_type": provider,
+					"entity_type":   req.EntityType,
+					"entity_id":     req.EntityID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		return ctx, connections, nil
 	}
 	if err != nil {
 		return ctx, nil, err
