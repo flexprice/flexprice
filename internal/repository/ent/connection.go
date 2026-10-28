@@ -180,12 +180,41 @@ func (r *connectionRepository) GetUnscoped(ctx context.Context, id string) (*dom
 	}
 
 	domainConn := domainConnection.FromEnt(c)
-	if err := r.fillBillingEntityIDs(ctx, []*domainConnection.Connection{domainConn}); err != nil {
+	ownerID, err := r.latestOwnerID(ctx, id)
+	if err != nil {
 		SetSpanError(span, err)
 		return nil, err
 	}
+	domainConn.BillingEntityID = lo.EmptyableToPtr(ownerID)
 	SetSpanSuccess(span)
 	return domainConn, nil
+}
+
+// latestOwnerID returns the connection's owner in any status: the published one, else the latest archived one.
+func (r *connectionRepository) latestOwnerID(ctx context.Context, connectionID string) (string, error) {
+	owners, err := r.client.Reader(ctx).ConnectionAssociation.Query().
+		Where(
+			connectionassociation.TenantID(types.GetTenantID(ctx)),
+			connectionassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+			connectionassociation.EntityType(string(types.ConnectionAssociationEntityTypeBillingEntity)),
+			connectionassociation.ConnectionID(connectionID),
+		).
+		Order(ent.Desc(connectionassociation.FieldUpdatedAt)).
+		All(ctx)
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to read connection owner").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(owners) == 0 {
+		return "", nil
+	}
+	if published, ok := lo.Find(owners, func(o *ent.ConnectionAssociation) bool {
+		return o.Status == string(types.StatusPublished)
+	}); ok {
+		return published.EntityID, nil
+	}
+	return owners[0].EntityID, nil
 }
 
 // GetByProvider is used for providers that does not support multiple connections per environment.
@@ -210,12 +239,10 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 			SetSpanError(span, err)
 			return nil, err
 		}
-		if c.ProviderType != provider {
-			SetSpanError(span, notFound)
-			return nil, notFound
+		if c.ProviderType == provider {
+			SetSpanSuccess(span)
+			return c, nil
 		}
-		SetSpanSuccess(span)
-		return c, nil
 	}
 
 	connections, err := r.ListAllPublished(ctx)

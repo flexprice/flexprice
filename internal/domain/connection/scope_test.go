@@ -47,6 +47,12 @@ func TestInScope(t *testing.T) {
 			want:  []string{"conn_s3", "conn_stripe_a", "conn_hubspot_a"},
 		},
 		{
+			name:  "entity_in_ctx_no_owners",
+			ctx:   withEntity("be_a"),
+			conns: unowned,
+			want:  []string{"conn_s3"},
+		},
+		{
 			name:  "no_entity_owned_exist",
 			ctx:   context.Background(),
 			conns: owned,
