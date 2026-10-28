@@ -191,6 +191,11 @@ func ErrorMessage(v string) predicate.Payment {
 	return predicate.Payment(sql.FieldEQ(FieldErrorMessage, v))
 }
 
+// ConnectionID applies equality check predicate on the "connection_id" field. It's identical to ConnectionIDEQ.
+func ConnectionID(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldEQ(FieldConnectionID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Payment {
 	return predicate.Payment(sql.FieldEQ(FieldTenantID, v))
@@ -1709,6 +1714,81 @@ func ErrorMessageEqualFold(v string) predicate.Payment {
 // ErrorMessageContainsFold applies the ContainsFold predicate on the "error_message" field.
 func ErrorMessageContainsFold(v string) predicate.Payment {
 	return predicate.Payment(sql.FieldContainsFold(FieldErrorMessage, v))
+}
+
+// ConnectionIDEQ applies the EQ predicate on the "connection_id" field.
+func ConnectionIDEQ(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDNEQ applies the NEQ predicate on the "connection_id" field.
+func ConnectionIDNEQ(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldNEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDIn applies the In predicate on the "connection_id" field.
+func ConnectionIDIn(vs ...string) predicate.Payment {
+	return predicate.Payment(sql.FieldIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDNotIn applies the NotIn predicate on the "connection_id" field.
+func ConnectionIDNotIn(vs ...string) predicate.Payment {
+	return predicate.Payment(sql.FieldNotIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDGT applies the GT predicate on the "connection_id" field.
+func ConnectionIDGT(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldGT(FieldConnectionID, v))
+}
+
+// ConnectionIDGTE applies the GTE predicate on the "connection_id" field.
+func ConnectionIDGTE(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldGTE(FieldConnectionID, v))
+}
+
+// ConnectionIDLT applies the LT predicate on the "connection_id" field.
+func ConnectionIDLT(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldLT(FieldConnectionID, v))
+}
+
+// ConnectionIDLTE applies the LTE predicate on the "connection_id" field.
+func ConnectionIDLTE(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldLTE(FieldConnectionID, v))
+}
+
+// ConnectionIDContains applies the Contains predicate on the "connection_id" field.
+func ConnectionIDContains(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldContains(FieldConnectionID, v))
+}
+
+// ConnectionIDHasPrefix applies the HasPrefix predicate on the "connection_id" field.
+func ConnectionIDHasPrefix(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldHasPrefix(FieldConnectionID, v))
+}
+
+// ConnectionIDHasSuffix applies the HasSuffix predicate on the "connection_id" field.
+func ConnectionIDHasSuffix(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldHasSuffix(FieldConnectionID, v))
+}
+
+// ConnectionIDIsNil applies the IsNil predicate on the "connection_id" field.
+func ConnectionIDIsNil() predicate.Payment {
+	return predicate.Payment(sql.FieldIsNull(FieldConnectionID))
+}
+
+// ConnectionIDNotNil applies the NotNil predicate on the "connection_id" field.
+func ConnectionIDNotNil() predicate.Payment {
+	return predicate.Payment(sql.FieldNotNull(FieldConnectionID))
+}
+
+// ConnectionIDEqualFold applies the EqualFold predicate on the "connection_id" field.
+func ConnectionIDEqualFold(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldEqualFold(FieldConnectionID, v))
+}
+
+// ConnectionIDContainsFold applies the ContainsFold predicate on the "connection_id" field.
+func ConnectionIDContainsFold(v string) predicate.Payment {
+	return predicate.Payment(sql.FieldContainsFold(FieldConnectionID, v))
 }
 
 // HasAttempts applies the HasEdge predicate on the "attempts" edge.

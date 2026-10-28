@@ -587,6 +587,58 @@ var (
 			},
 		},
 	}
+	// ConnectionAssociationsColumns holds the columns for the "connection_associations" table.
+	ConnectionAssociationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "connection_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// ConnectionAssociationsTable holds the schema information for the "connection_associations" table.
+	ConnectionAssociationsTable = &schema.Table{
+		Name:       "connection_associations",
+		Columns:    ConnectionAssociationsColumns,
+		PrimaryKey: []*schema.Column{ConnectionAssociationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_connection_assoc_owner_connection",
+				Unique:  true,
+				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'billing_entity'::text)",
+				},
+			},
+			{
+				Name:    "idx_connection_assoc_owner_provider",
+				Unique:  true,
+				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[9], ConnectionAssociationsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'billing_entity'::text)",
+				},
+			},
+			{
+				Name:    "idx_connection_assoc_customer",
+				Unique:  true,
+				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'customer'::text)",
+				},
+			},
+			{
+				Name:    "idx_connection_assoc_lookup",
+				Unique:  false,
+				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[8], ConnectionAssociationsColumns[9]},
+			},
+		},
+	}
 	// ContractsColumns holds the columns for the "contracts" table.
 	ContractsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1329,6 +1381,7 @@ var (
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 	}
 	// EntityIntegrationMappingsTable holds the schema information for the "entity_integration_mappings" table.
@@ -1338,9 +1391,9 @@ var (
 		PrimaryKey: []*schema.Column{EntityIntegrationMappingsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "idx_entity_integration_mapping_unique",
+				Name:    "idx_entity_integration_mapping_connection_unique",
 				Unique:  true,
-				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[10]},
+				Columns: []*schema.Column{EntityIntegrationMappingsColumns[1], EntityIntegrationMappingsColumns[7], EntityIntegrationMappingsColumns[9], EntityIntegrationMappingsColumns[8], EntityIntegrationMappingsColumns[10], EntityIntegrationMappingsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((status)::text = 'published'::text)",
 				},
@@ -2076,6 +2129,7 @@ var (
 		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "recorded_at", Type: field.TypeTime, Nullable: true},
 		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "connection_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PaymentsTable holds the schema information for the "payments" table.
 	PaymentsTable = &schema.Table{
@@ -3631,6 +3685,7 @@ var (
 		CheckoutSessionsTable,
 		CommitmentsTable,
 		ConnectionsTable,
+		ConnectionAssociationsTable,
 		ContractsTable,
 		ContractAssociationsTable,
 		CostsheetsTable,

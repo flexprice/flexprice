@@ -98,6 +98,7 @@ const (
 	UUID_PREFIX_SECRET                     = "secret"
 	UUID_PREFIX_TAX_RATE                   = "taxrate"
 	UUID_PREFIX_TAX_ASSOCIATION            = "ta"
+	UUID_PREFIX_CONNECTION_ASSOCIATION     = "ca"
 	UUID_PREFIX_TAX_APPLIED                = "taxapp"
 	UUID_PREFIX_CREDIT_GRANT               = "cg"
 	UUID_PREFIX_CHECKOUT_SESSION           = "cs"

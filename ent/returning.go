@@ -23,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/connectionassociation"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -1026,6 +1027,68 @@ func scanReturningConnection(rows *sql.Rows) ([]*Connection, error) {
 	var out []*Connection
 	for rows.Next() {
 		node := &Connection{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*ConnectionAssociation.
+func (_u *ConnectionAssociationUpdate) SaveReturning(ctx context.Context) ([]*ConnectionAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ConnectionAssociationUpdate) sqlSaveReturning(ctx context.Context) ([]*ConnectionAssociation, error) {
+	var out []*ConnectionAssociation
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", connectionassociation.Table, connectionassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningConnectionAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*ConnectionAssociation.
+func (_d *ConnectionAssociationDelete) ExecReturning(ctx context.Context) ([]*ConnectionAssociation, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ConnectionAssociationDelete) sqlExecReturning(ctx context.Context) ([]*ConnectionAssociation, error) {
+	var out []*ConnectionAssociation
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", connectionassociation.Table, connectionassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningConnectionAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningConnectionAssociation(rows *sql.Rows) ([]*ConnectionAssociation, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*ConnectionAssociation
+	for rows.Next() {
+		node := &ConnectionAssociation{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

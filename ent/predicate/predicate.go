@@ -48,6 +48,9 @@ type Commitment func(*sql.Selector)
 // Connection is the predicate function for connection builders.
 type Connection func(*sql.Selector)
 
+// ConnectionAssociation is the predicate function for connectionassociation builders.
+type ConnectionAssociation func(*sql.Selector)
+
 // Contract is the predicate function for contract builders.
 type Contract func(*sql.Selector)
 
