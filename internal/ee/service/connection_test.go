@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,6 +56,8 @@ func newConnectionServiceWithRealFactoryForTest(t *testing.T, cfg *config.Config
 		Config:             cfg,
 		ConnectionRepo:     connRepo,
 		IntegrationFactory: factory,
+		DB:                 testutil.NewMockPostgresClient(log),
+		TenantRepo:         testutil.NewInMemoryTenantStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -81,6 +84,8 @@ func newConnectionServiceForTest(t *testing.T) (ConnectionService, *testutil.InM
 		Logger:         log,
 		Config:         cfg,
 		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -146,6 +151,8 @@ func newConnectionServiceForTestWithConfig(t *testing.T, cfg *config.Configurati
 		Logger:         log,
 		Config:         cfg,
 		ConnectionRepo: connRepo,
+		DB:             testutil.NewMockPostgresClient(log),
+		TenantRepo:     testutil.NewInMemoryTenantStore(),
 	}
 
 	return NewConnectionService(params, encSvc), connRepo
@@ -661,4 +668,31 @@ func TestUpdateConnection_StripeSecrets_RejectedForOtherProviders(t *testing.T) 
 		},
 	})
 	require.True(t, ierr.IsValidation(err), "expected validation error, got: %v", err)
+}
+
+func TestDuplicateConnection(t *testing.T) {
+	entityA := lo.ToPtr("be_a")
+	entityB := lo.ToPtr("be_b")
+	conn := func(provider types.SecretProvider, owner *string, status types.Status) *connection.Connection {
+		return &connection.Connection{ProviderType: provider, BillingEntityID: owner, BaseModel: types.BaseModel{Status: status}}
+	}
+
+	tests := []struct {
+		name     string
+		existing []*connection.Connection
+		provider types.SecretProvider
+		owner    *string
+		want     bool
+	}{
+		{"off_same_provider", []*connection.Connection{conn(types.SecretProviderStripe, nil, types.StatusPublished)}, types.SecretProviderStripe, nil, true},
+		{"same_entity", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusPublished)}, types.SecretProviderStripe, entityA, true},
+		{"other_entity", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusPublished)}, types.SecretProviderStripe, entityB, false},
+		{"storage", []*connection.Connection{conn(types.SecretProviderS3, nil, types.StatusPublished)}, types.SecretProviderS3, nil, false},
+		{"archived_ignored", []*connection.Connection{conn(types.SecretProviderStripe, entityA, types.StatusArchived)}, types.SecretProviderStripe, entityA, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, duplicateConnection(tc.existing, tc.provider, tc.owner))
+		})
+	}
 }

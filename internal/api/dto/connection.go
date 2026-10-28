@@ -20,6 +20,8 @@ type CreateConnectionRequest struct {
 	// customers land after paying or cancelling on Moyasar's hosted invoice page.
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
+	// BillingEntityID owns the connection; only accepted when billing entities are enabled. Storage providers have no owner.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
@@ -31,6 +33,7 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 		EncryptedSecretData map[string]interface{} `json:"encrypted_secret_data,omitempty"`
 		Metadata            map[string]interface{} `json:"metadata,omitempty"`
 		SyncConfig          *types.SyncConfig      `json:"sync_config,omitempty"`
+		BillingEntityID     *string                `json:"billing_entity_id,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -42,6 +45,7 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 	req.ProviderType = temp.ProviderType
 	req.Metadata = temp.Metadata
 	req.SyncConfig = temp.SyncConfig
+	req.BillingEntityID = temp.BillingEntityID
 
 	// Convert flat encrypted secret data to structured format based on provider_type
 	if temp.EncryptedSecretData != nil {
@@ -382,6 +386,8 @@ type UpdateConnectionRequest struct {
 	// FlatEncryptedSecretData is set when the client sends a flat encrypted_secret_data object (create-style keys at top level).
 	// It is merged using the connection's provider_type in the service layer. Not serialized.
 	FlatEncryptedSecretData map[string]interface{} `json:"-"`
+	// BillingEntityID moves the connection to this billing entity; only accepted when billing entities are enabled.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
@@ -398,6 +404,7 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 		Metadata            map[string]interface{} `json:"metadata,omitempty"`
 		SyncConfig          *types.SyncConfig      `json:"sync_config,omitempty"`
 		EncryptedSecretData json.RawMessage        `json:"encrypted_secret_data,omitempty"`
+		BillingEntityID     *string                `json:"billing_entity_id,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -407,6 +414,7 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	req.Name = temp.Name
 	req.Metadata = temp.Metadata
 	req.SyncConfig = temp.SyncConfig
+	req.BillingEntityID = temp.BillingEntityID
 	req.EncryptedSecretData = nil
 	req.FlatEncryptedSecretData = nil
 
@@ -443,10 +451,12 @@ type ConnectionResponse struct {
 	Status        types.Status           `json:"status"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 	SyncConfig    *types.SyncConfig      `json:"sync_config,omitempty"`
-	CreatedAt     string                 `json:"created_at"`
-	UpdatedAt     string                 `json:"updated_at"`
-	CreatedBy     string                 `json:"created_by"`
-	UpdatedBy     string                 `json:"updated_by"`
+	// BillingEntityID is the owning billing entity; null when billing entities are off and for storage providers.
+	BillingEntityID *string `json:"billing_entity_id"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+	CreatedBy       string  `json:"created_by"`
+	UpdatedBy       string  `json:"updated_by"`
 }
 
 // ListConnectionsResponse represents the response for listing connections
@@ -475,18 +485,19 @@ func ToConnectionResponse(conn *connection.Connection) *ConnectionResponse {
 	}
 
 	return &ConnectionResponse{
-		ID:            conn.ID,
-		Name:          conn.Name,
-		ProviderType:  conn.ProviderType,
-		EnvironmentID: conn.EnvironmentID,
-		TenantID:      conn.TenantID,
-		Status:        conn.Status,
-		Metadata:      conn.Metadata,
-		SyncConfig:    conn.GetSyncConfig(),
-		CreatedAt:     conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:     conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		CreatedBy:     conn.CreatedBy,
-		UpdatedBy:     conn.UpdatedBy,
+		ID:              conn.ID,
+		Name:            conn.Name,
+		ProviderType:    conn.ProviderType,
+		EnvironmentID:   conn.EnvironmentID,
+		TenantID:        conn.TenantID,
+		Status:          conn.Status,
+		Metadata:        conn.Metadata,
+		SyncConfig:      conn.GetSyncConfig(),
+		BillingEntityID: conn.BillingEntityID,
+		CreatedAt:       conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:       conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:       conn.CreatedBy,
+		UpdatedBy:       conn.UpdatedBy,
 	}
 }
 
