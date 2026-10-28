@@ -1076,7 +1076,7 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 		return
 	}
 
-	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := p.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		p.Logger.Error(ctx, "failed to list published connections, skipping mark-paid dispatch",
 			"error", err, "invoice_id", invoiceID)

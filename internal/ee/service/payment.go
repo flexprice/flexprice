@@ -102,8 +102,16 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		if err != nil {
 			return nil, err
 		}
-		if req.PaymentGateway != nil {
-			if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(*req.PaymentGateway)); err != nil {
+		var provider types.SecretProvider
+		switch {
+		case req.PaymentGateway != nil:
+			provider = types.SecretProvider(*req.PaymentGateway)
+		case p.PaymentMethodType == types.PaymentMethodTypeCard:
+			// Card payments without a gateway are charged through Stripe.
+			provider = types.SecretProviderStripe
+		}
+		if provider != "" {
+			if err := requireProviderConnected(ctx, s.ServiceParams, provider); err != nil {
 				return nil, err
 			}
 		}
