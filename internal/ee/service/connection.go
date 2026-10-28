@@ -758,8 +758,8 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if err != nil {
 			return err
 		}
-		if duplicateConnection(existing, conn.ProviderType, owner) {
-			return errConnectionExists(conn.ProviderType, owner)
+		if dup := duplicateConnection(existing, conn.ProviderType, owner); dup != nil {
+			return errConnectionExists(txCtx, dup, owner, connectionExistsHint)
 		}
 		if err := s.ConnectionRepo.Create(txCtx, conn); err != nil {
 			return err
@@ -1219,26 +1219,39 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 	return nil
 }
 
-// duplicateConnection reports whether a published connection of the provider already belongs to the owner (nil when entities are off); storage is exempt.
-func duplicateConnection(existing []*connection.Connection, provider types.SecretProvider, owner *string) bool {
+// duplicateConnection returns the published connection of the provider that already belongs to the owner (nil when entities are off); storage is exempt.
+func duplicateConnection(existing []*connection.Connection, provider types.SecretProvider, owner *string) *connection.Connection {
 	if connection.IsStorageProvider(provider) {
-		return false
+		return nil
 	}
-	return lo.ContainsBy(existing, func(c *connection.Connection) bool {
+	dup, _ := lo.Find(existing, func(c *connection.Connection) bool {
 		return c.Status == types.StatusPublished &&
 			c.ProviderType == provider &&
 			lo.FromPtr(c.BillingEntityID) == lo.FromPtr(owner)
 	})
+	return dup
 }
 
-func errConnectionExists(provider types.SecretProvider, owner *string) error {
-	hint := fmt.Sprintf("A published connection for provider '%s' already exists in this environment", provider)
+const (
+	connectionExistsHint      = "A published connection for provider '%s' already exists"
+	oauthConnectionExistsHint = "A published connection for provider %s already exists"
+)
+
+func errConnectionExists(ctx context.Context, existing *connection.Connection, owner *string, hintFormat string) error {
+	hint := fmt.Sprintf(hintFormat, existing.ProviderType) + " in this environment"
+	details := map[string]any{
+		"provider_type":          existing.ProviderType,
+		"tenant_id":              types.GetTenantID(ctx),
+		"environment_id":         types.GetEnvironmentID(ctx),
+		"existing_connection_id": existing.ID,
+	}
 	if owner != nil {
-		hint = fmt.Sprintf("A published connection for provider '%s' already exists for this billing entity", provider)
+		hint = fmt.Sprintf(hintFormat, existing.ProviderType) + " for this billing entity"
+		details["billing_entity_id"] = *owner
 	}
 	return ierr.NewError("connection already exists").
 		WithHint(hint).
-		WithReportableDetails(map[string]any{"provider_type": provider, "billing_entity_id": lo.FromPtr(owner)}).
+		WithReportableDetails(details).
 		Mark(ierr.ErrAlreadyExists)
 }
 
@@ -1331,8 +1344,8 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 			if err != nil {
 				return err
 			}
-			if duplicateConnection(existing, conn.ProviderType, target) {
-				return errConnectionExists(conn.ProviderType, target)
+			if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
+				return errConnectionExists(txCtx, dup, target, connectionExistsHint)
 			}
 			ownerType := types.ConnectionAssociationEntityTypeBillingEntity
 			if err := archiveAssociations(txCtx, s.ServiceParams, conn.ID, &ownerType); err != nil {

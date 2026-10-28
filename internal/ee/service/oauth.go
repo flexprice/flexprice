@@ -203,8 +203,8 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 				WithHint("Failed to check for existing connections").
 				Mark(ierr.ErrDatabase)
 		}
-		if duplicateConnection(existing, providerType, owner) {
-			return errConnectionExists(providerType, owner)
+		if dup := duplicateConnection(existing, providerType, owner); dup != nil {
+			return errConnectionExists(txCtx, dup, owner, oauthConnectionExistsHint)
 		}
 
 		session.BillingEntityID = owner

@@ -241,7 +241,9 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 			SetSpanError(span, err)
 			return nil, err
 		}
-		if c.ProviderType == provider {
+		// The pin holds only while ctx stays on the pinned connection's entity.
+		entityID, owner := types.GetBillingEntityID(ctx), lo.FromPtr(c.BillingEntityID)
+		if c.ProviderType == provider && (entityID == "" || owner == "" || owner == entityID) {
 			SetSpanSuccess(span)
 			return c, nil
 		}
@@ -706,7 +708,8 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	// Invalidate cache to ensure fresh data on next read
 	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
 	// Update cache with new data
-	r.SetCache(ctx, c)
+	cached := *c
+	afterCommit(ctx, func() { r.SetCache(ctx, &cached) })
 	r.deleteAllPublishedCache(ctx)
 
 	return nil

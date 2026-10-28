@@ -805,6 +805,7 @@ func (s *PaymentServiceSuite) TestProcessPaymentCountsOutcome() {
 		PaymentRepo:      s.GetStores().PaymentRepo,
 		InvoiceRepo:      s.GetStores().InvoiceRepo,
 		CustomerRepo:     s.GetStores().CustomerRepo,
+		TenantRepo:       s.GetStores().TenantRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})
