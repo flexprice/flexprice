@@ -32,8 +32,10 @@ type Environment struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Type holds the value of the "type" field.
-	Type         string `json:"type,omitempty"`
-	selectValues sql.SelectValues
+	Type string `json:"type,omitempty"`
+	// BillingEntityMode holds the value of the "billing_entity_mode" field.
+	BillingEntityMode string `json:"billing_entity_mode,omitempty"`
+	selectValues      sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -41,7 +43,7 @@ func (*Environment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case environment.FieldID, environment.FieldTenantID, environment.FieldStatus, environment.FieldCreatedBy, environment.FieldUpdatedBy, environment.FieldName, environment.FieldType:
+		case environment.FieldID, environment.FieldTenantID, environment.FieldStatus, environment.FieldCreatedBy, environment.FieldUpdatedBy, environment.FieldName, environment.FieldType, environment.FieldBillingEntityMode:
 			values[i] = new(sql.NullString)
 		case environment.FieldCreatedAt, environment.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -114,6 +116,12 @@ func (_m *Environment) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Type = value.String
 			}
+		case environment.FieldBillingEntityMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_entity_mode", values[i])
+			} else if value.Valid {
+				_m.BillingEntityMode = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -173,6 +181,9 @@ func (_m *Environment) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	builder.WriteString("billing_entity_mode=")
+	builder.WriteString(_m.BillingEntityMode)
 	builder.WriteByte(')')
 	return builder.String()
 }

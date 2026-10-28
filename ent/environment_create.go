@@ -108,6 +108,20 @@ func (_c *EnvironmentCreate) SetType(v string) *EnvironmentCreate {
 	return _c
 }
 
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_c *EnvironmentCreate) SetBillingEntityMode(v string) *EnvironmentCreate {
+	_c.mutation.SetBillingEntityMode(v)
+	return _c
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_c *EnvironmentCreate) SetNillableBillingEntityMode(v *string) *EnvironmentCreate {
+	if v != nil {
+		_c.SetBillingEntityMode(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *EnvironmentCreate) SetID(v string) *EnvironmentCreate {
 	_c.mutation.SetID(v)
@@ -161,6 +175,10 @@ func (_c *EnvironmentCreate) defaults() {
 		v := environment.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.BillingEntityMode(); !ok {
+		v := environment.DefaultBillingEntityMode
+		_c.mutation.SetBillingEntityMode(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -197,6 +215,9 @@ func (_c *EnvironmentCreate) check() error {
 		if err := environment.TypeValidator(v); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Environment.type": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.BillingEntityMode(); !ok {
+		return &ValidationError{Name: "billing_entity_mode", err: errors.New(`ent: missing required field "Environment.billing_entity_mode"`)}
 	}
 	return nil
 }
@@ -264,6 +285,10 @@ func (_c *EnvironmentCreate) createSpec() (*Environment, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
 		_node.Type = value
+	}
+	if value, ok := _c.mutation.BillingEntityMode(); ok {
+		_spec.SetField(environment.FieldBillingEntityMode, field.TypeString, value)
+		_node.BillingEntityMode = value
 	}
 	return _node, _spec
 }

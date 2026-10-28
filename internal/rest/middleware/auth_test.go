@@ -90,6 +90,14 @@ func (f *fakeEnvironmentRepo) CountByType(ctx context.Context, envType types.Env
 	return 0, nil
 }
 
+func (f *fakeEnvironmentRepo) GetBillingEntityMode(ctx context.Context, id string) (types.BillingEntityMode, error) {
+	return types.BillingEntityModeOff, nil
+}
+
+func (f *fakeEnvironmentRepo) SetBillingEntityMode(ctx context.Context, id string, mode types.BillingEntityMode) error {
+	return nil
+}
+
 func testEnvironment(id, tenantID string, envType types.EnvironmentType) *domainEnvironment.Environment {
 	return &domainEnvironment.Environment{
 		ID:        id,

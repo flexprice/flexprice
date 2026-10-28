@@ -16,27 +16,29 @@ which customer.
 setup, or issue invoices that name the wrong seller, carry the wrong tax defaults and share one number
 series across entities.
 
-**Outcome.** A tenant can enable billing entities and create several legal entities inside one
-environment, all sharing the same catalog. Each customer belongs to exactly one entity, and that
+**Outcome.** A tenant can enable billing entities in an environment and create several legal entities
+inside it, all sharing the environment's catalog. Each environment is enabled on its own, so a tenant can
+try entities in a sandbox before production. Each customer belongs to exactly one entity, and that
 customer's invoices show that entity as the seller, use that entity's number prefix and series, and
 start from that entity's default tax rates. Finalized invoices keep the seller they were issued with.
-Tenants that never enable the feature keep today's behaviour. Payment gateways and other integrations
+Environments that never enable the feature keep today's behaviour. Payment gateways and other integrations
 keep their one connection per environment and serve only the default entity; giving each entity its own
 integrations is the next phase.
 
 ## 2. Use cases
 <!-- erd:locked -->
 
-**UC1 — Tenant admin enables billing entities.**
-1. Admin enables billing entities for the tenant.
-2. The tenant shows as enabling while every environment gets a default entity and existing customers
-   are assigned to it.
-3. The tenant shows as enabled; the default entity carries the tenant's seller details, invoice prefix
-   and default tax rates, and nothing an end customer sees has changed.
+**UC1 — Tenant admin enables billing entities in an environment.**
+1. Admin enables billing entities in the environment.
+2. The environment shows as enabling while it gets a default entity and its existing customers are
+   assigned to it.
+3. The environment shows as enabled; the default entity carries the tenant's seller details, the
+   environment's invoice prefix and default tax rates, and nothing an end customer sees has changed.
+   The tenant's other environments are unchanged.
 
 Variation: the admin enables again while enabling is running → the same enablement continues; enabling
-an already enabled tenant changes nothing. Any environment of the tenant uses an external tax engine →
-enabling is rejected.
+an already enabled environment changes nothing. The environment uses an external tax engine → enabling
+is rejected.
 
 **UC2 — Tenant admin manages an entity.**
 1. Admin creates an entity with a name, legal name, seller details, tax IDs and a distinct invoice prefix.
@@ -52,7 +54,7 @@ in any environment → rejected.
 2. The customer belongs to the named entity, or to the default entity, and never changes entity.
 3. The customer starts with the entity's default tax rates.
 
-Variation: the tenant is off → naming an entity is rejected and the customer is created as today. The
+Variation: the environment is off → naming an entity is rejected and the customer is created as today. The
 entity belongs to another environment → rejected.
 
 **UC4 — Billing run issues an invoice for a customer.**
@@ -69,10 +71,10 @@ online payment, and is not synced to any integration; it is recorded as paid man
    optionally filtered by one entity.
 2. Every returned record, and every outbound webhook for it, shows the entity it belongs to.
 
-Variation: the tenant is off → the filter is rejected and records show no entity.
+Variation: the environment is off → the filter is rejected and records show no entity.
 
-**UC6 — Tenant that never enables keeps working as today.**
-1. The tenant creates customers, issues invoices and collects payments exactly as today.
+**UC6 — Environment that never enables keeps working as today.**
+1. The tenant creates customers, issues invoices and collects payments in it exactly as today.
 
 Variation: the admin changes the environment invoice prefix mid-period → from the follow-up numbering
 release on, the new prefix starts its own series instead of continuing the old prefix's counter.
@@ -81,8 +83,8 @@ release on, the new prefix starts its own series instead of continuing the old p
 <!-- erd:locked -->
 
 **In**
-- Per-tenant, irreversible switch to enable billing entities, with an enabling state (UC1).
-- One default entity per environment, created at enablement (UC1).
+- Per-environment, irreversible switch to enable billing entities, with an enabling state (UC1).
+- One default entity per enabled environment, created at enablement (UC1).
 - Entity create, read and edit; seller details, tax IDs and invoice prefix per entity (UC2).
 - Entity-level default tax rates (UC2, UC3).
 - Customer assigned to one entity at creation, immutable (UC3).
@@ -101,7 +103,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 - Moving customers between entities, including splitting existing customers of a launch tenant.
 - Changing which entity is the default.
 - Disabling entities.
-- Cloning an environment of a tenant with billing entities.
+- Cloning from or into an environment with billing entities.
 - One customer billed by several entities.
 - Entity-level user permissions.
 - All-entities reporting view.
@@ -113,21 +115,21 @@ release on, the new prefix starts its own series instead of continuing the old p
 
 | ID | Requirement | UC | Acceptance criteria |
 |---|---|---|---|
-| FR-1 | Enabling moves the tenant from `off` to `enabling` and, when done, to `enabled`; it never goes back. | UC1 | Enable on an off tenant → status `enabling`, then `enabled`; no call returns the tenant to `off`. |
-| FR-2 | Enabling creates one default entity per environment, taking its name, legal name, invoice prefix and default tax rates from the tenant immediately, and its seller details from the tenant's billing details when it completes. All of them can be edited afterwards. | UC1 | After enable, each environment has exactly one default entity whose name, legal name, prefix, tax rates and seller details equal the tenant's values at enable time. |
-| FR-3 | Enabling assigns every existing customer to its environment's default entity. | UC1 | After `enabled`, no customer of the tenant has an empty entity. |
+| FR-1 | Enabling moves an environment from `off` to `enabling` and, when done, to `enabled`; it never goes back. Other environments of the tenant keep their own mode. | UC1 | Enable in an off environment → status `enabling`, then `enabled`; no call returns it to `off`; the tenant's other environments stay `off`. |
+| FR-2 | Enabling creates the environment's default entity, taking its name and legal name from the tenant, its invoice prefix and default tax rates from the environment immediately, and its seller details from the tenant's billing details when it completes. All of them can be edited afterwards. | UC1 | After enable, the environment has exactly one default entity whose name, legal name, prefix, tax rates and seller details equal those values at enable time. |
+| FR-3 | Enabling assigns every existing customer of the environment to its default entity. | UC1 | After `enabled`, no customer of the environment has an empty entity. |
 | FR-4 | Enabling is idempotent. | UC1 | Calling enable during `enabling` or after `enabled` starts no second run and changes no data. |
-| FR-5 | An environment created in an `enabling` or `enabled` tenant gets its default entity; cloning an environment is rejected in such a tenant. | UC1 | Create an environment after enable → it has a default entity; customers created in it belong to it. Clone on an enabling or enabled tenant → 400. |
-| FR-6 | Entities can be created, read, listed and edited in an `enabled` tenant only. | UC2 | Entity endpoints on an off or enabling tenant → 400 `billing_entities_not_enabled`. |
+| FR-5 | A new environment starts `off`; cloning is rejected when the source or an existing target environment is `enabling` or `enabled`. | UC1 | Create an environment in a tenant with an enabled environment → it is `off` with no entities. Clone from or into an enabling or enabled environment → 400. |
+| FR-6 | Entities can be created, read, listed and edited in an `enabled` environment only. | UC2 | Entity endpoints in an off or enabling environment → 400 `billing_entities_not_enabled`. |
 | FR-7 | Every entity has a non-empty invoice prefix that differs from every other entity's current prefix in the environment. | UC2 | Create or edit with another entity's current prefix → 409; with a free prefix → accepted. |
-| FR-8 | Billing entities and external tax engines exclude each other: enabling is rejected while any environment of the tenant uses an external tax engine, and turning one on is rejected from `enabling` on. Turning it off is always allowed. | UC1, UC2 | Environment on Stripe Tax → enable → 400; enabled tenant → set `tax_config` to an external provider → 400; set it disabled → saved. |
+| FR-8 | Billing entities and external tax engines exclude each other in an environment: enabling is rejected while the environment uses an external tax engine, and turning one on is rejected from `enabling` on. Turning it off is always allowed. | UC1, UC2 | Environment on Stripe Tax → enable → 400; enabled environment → set `tax_config` to an external provider → 400; set it disabled → saved. |
 | FR-9 | Entities cannot be disabled or deleted in this phase. | UC2 | No disable or delete endpoint exists for entities. |
 | FR-10 | Entity edits apply to drafts and future finalizations only. | UC2 | Edit seller details → finalized invoice PDF unchanged; draft PDF shows new details. |
-| FR-11 | From `enabling` on, the environment invoice prefix and tenant-level tax associations cannot be changed. | UC2 | Change `invoice_config` prefix, or create, update or delete a tenant-level tax association, on an enabling or enabled tenant → 400 naming the entity setting; other `invoice_config` fields still save. |
-| FR-12 | Customer create accepts an optional `billing_entity_id`; absent means the default entity. | UC3 | Enabled tenant: create with an entity → customer shows it; without → shows the default's ID. |
+| FR-11 | From `enabling` on, the environment invoice prefix and tenant-level tax associations cannot be changed. | UC2 | Change `invoice_config` prefix, or create, update or delete a tenant-level tax association, in an enabling or enabled environment → 400 naming the entity setting; other `invoice_config` fields still save. |
+| FR-12 | Customer create accepts an optional `billing_entity_id`; absent means the default entity. | UC3 | Enabled environment: create with an entity → customer shows it; without → shows the default's ID. |
 | FR-13 | A customer's entity never changes. | UC3 | Update a customer with another `billing_entity_id` → rejected. |
-| FR-14 | A new customer gets its entity's auto-apply tax rates; an off tenant's customer gets the tenant-level rates as today. | UC3 | Create a customer of an entity linked to rate R → customer has R. |
-| FR-15 | `billing_entity_id` in a request body or filter is rejected unless the tenant is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling tenant → 400 `billing_entities_not_enabled`; other environment's entity → 400. |
+| FR-14 | A new customer gets its entity's auto-apply tax rates; a customer in an off environment gets the tenant-level rates as today. | UC3 | Create a customer of an entity linked to rate R → customer has R. |
+| FR-15 | `billing_entity_id` in a request body or filter is rejected unless the environment is `enabled`, and must name an entity of the request's environment. | UC3, UC5 | Off or enabling environment → 400 `billing_entities_not_enabled`; other environment's entity → 400. |
 | FR-16 | An invoice's number comes from the counter of its prefix and period: the customer's entity's prefix, or the environment prefix for a customer without one. | UC4, UC6 | Two entities with prefixes INV and EU finalize in one period → `INV-…` continues the existing series, `EU-…-00001` starts its own; no two invoices share a number. |
 | FR-17 | Finalizing the invoice of a customer with an entity stores a seller snapshot once: entity ID, legal name, seller details, tax IDs. | UC4 | Finalize → snapshot present; retry finalize → snapshot unchanged. |
 | FR-18 | The PDF and hosted invoice page show the snapshot for finalized invoices, the customer's entity for drafts, and the tenant for customers without an entity and for invoices issued before enablement. | UC4 | Edit entity after finalize, force PDF rebuild → old seller shown; invoice issued before enable → tenant shown. |
@@ -135,7 +137,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-20 | Invoices of a non-default entity's customers are never auto-charged, never get checkout, payment links or saved payment methods, and their customers, invoices and subscriptions are never synced to integrations. | UC4 | Non-default customer with `charge_automatically` → invoice stays pending, no gateway call; checkout or payment method request → 400; no sync workflow started. |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
 | FR-22 | Lists and searches of customers, invoices, subscriptions, wallets, credit notes, payments and refunds accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
-| FR-23 | Customers, invoices, subscriptions, wallets, credit notes, payments and refunds carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off tenant → null. |
+| FR-23 | Customers, invoices, subscriptions, wallets, credit notes, payments and refunds carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
 | FR-24 | Get, update and delete by ID are not scoped by entity. | UC5 | Get a record of any entity by ID → returned with its entity. |
 
 ## 5. Non-functional requirements
@@ -143,13 +145,13 @@ release on, the new prefix starts its own series instead of continuing the old p
 
 | ID | Category | Requirement (measurable) | How we verify |
 |---|---|---|---|
-| NFR-1 | Compatibility | A tenant that never enables sees identical responses, invoice numbers, PDFs and integration behaviour, except the added null `billing_entity_id` field and the `prefix` recorded on each invoice counter. | Full integration suite on an off tenant before and after the change; diff of invoice numbers. |
+| NFR-1 | Compatibility | An environment that never enables sees identical responses, invoice numbers, PDFs and integration behaviour, except the added null `billing_entity_id` field and the `prefix` recorded on each invoice counter. | Full integration suite on an off environment before and after the change; diff of invoice numbers. |
 | NFR-2 | Compatibility | API changes are additive: no field removed or renamed, every new request field optional. | OpenAPI diff shows additions only; SDK builds unchanged. |
 | NFR-3 | Correctness | No two invoices in an environment share a number, under concurrent finalization and concurrent prefix edits. | Unique index on invoice number holds; concurrent finalize e2e. |
-| NFR-4 | Correctness | Once a tenant is `enabled`, no customer has an empty entity. | e2e: enable with customers created concurrently during enabling; count of empty-entity customers = 0. |
+| NFR-4 | Correctness | Once an environment is `enabled`, none of its customers has an empty entity. | e2e: enable with customers created concurrently during enabling; count of empty-entity customers = 0. |
 | NFR-5 | Correctness | Enabling changes no existing invoice number, amount, status, balance or issued PDF. | e2e: snapshot invoices before and after enable. |
 | NFR-6 | Performance | Customer create adds at most one shared lock and two indexed reads; list responses add one batch entity lookup per page (two for payments), never one per row. | Query count in e2e traces. |
-| NFR-7 | Availability | Enabling never blocks billing: finalization, payments and customer creates keep working throughout; creates wait at most for the enable step-1 transaction. | e2e: run billing while enabling a tenant with 100k customers. |
+| NFR-7 | Availability | Enabling never blocks billing: finalization, payments and customer creates keep working throughout; creates wait at most for the enable step-1 transaction. | e2e: run billing while enabling an environment with 100k customers. |
 | NFR-8 | Scalability | The enable backfill updates customers in batches of at most 1,000 rows per transaction and can resume after a crash. | Kill the worker mid-backfill; rerun completes with no duplicates or gaps. |
 
 ## 6. Constraints
@@ -161,8 +163,8 @@ release on, the new prefix starts its own series instead of continuing the old p
 | Customer `external_id` is unique per environment. | Existing schema | A buyer billed by two entities is two customers with different external IDs. |
 | Invoice numbers are unique per environment. | Existing unique index | Distinct prefixes per counter keep entities from colliding (FR-16, NFR-3). |
 | There is no database-wide statement or transaction timeout. | Database configuration | "Wait for in-flight creates" cannot be proven; enablement uses a lock instead (FR-3, NFR-4). |
-| Tenant mode is cached for up to 2 minutes in memory and up to 30 minutes in Redis when a read races invalidation. | Existing tenant cache | Every decision that affects stored data reads the data or the database, never the cached mode. |
-| Customers are cached. | Existing customer cache | Enablement clears the tenant's customer cache after the backfill. |
+| Environments are cached in memory. | Existing environment cache | Every decision that affects stored data reads the data or the database, never the cached mode. |
+| Customers are cached. | Existing customer cache | Enablement clears the cache of each customer it assigns. |
 | Every write to a recorded entity goes into the activity log. | Activity log | The enable backfill is a system update that is not recorded per customer. |
 | Tenant name and billing details are also the tenant's buyer details in Flexprice's own billing. | Self-billing | They stay editable after enable; only their seller role ends. |
 | External tax engines use the shared gateway account's registrations and address. | Stripe Tax | Billing entities run on native tax only in this phase (FR-8). |
@@ -215,8 +217,8 @@ flowchart LR
 ```
 
 Main flow (UC1 → UC4):
-1. Admin enables; the enable job creates a default entity per environment and switches the tenant to `enabling`.
-2. The job assigns existing customers to their default entity and switches the tenant to `enabled`.
+1. Admin enables an environment; the enable job creates its default entity and switches it to `enabling`.
+2. The job assigns the environment's existing customers to the default entity and switches it to `enabled`.
 3. Admin creates a second entity with its own prefix, seller details, tax IDs and tax rates.
 4. Client creates a customer under the second entity; the customer gets that entity's tax rates.
 5. The billing run finalizes the customer's invoice: the number comes from the entity prefix's counter and the seller is frozen into the snapshot.
@@ -235,7 +237,7 @@ erDiagram
   BILLING_ENTITY ||--o{ TAX_ASSOCIATION : "default rates"
   CUSTOMER ||--o{ INVOICE : receives
   ENVIRONMENT ||--o{ INVOICE_SEQUENCE : numbers
-  TENANT {
+  ENVIRONMENT {
     string billing_entity_mode "new: off, enabling, enabled"
   }
   BILLING_ENTITY {
@@ -274,15 +276,15 @@ Changed tables:
 
 | Table | Column / change | Type | Null | Why |
 |---|---|---|---|---|
-| `tenants` | `billing_entity_mode` | varchar(20) | no, default `off` | FR-1 |
-| `customers` | `billing_entity_id` | varchar(50) | yes | NULL only while the tenant is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
+| `environments` | `billing_entity_mode` | varchar(20) | no, default `off` | FR-1 |
+| `customers` | `billing_entity_id` | varchar(50) | yes | NULL only while the environment is off or before the backfill reaches the row; immutable once set. Index (tenant, environment, `billing_entity_id`) built concurrently |
 | `invoices` | `seller_snapshot` | jsonb | yes | Written at finalization for customers with an entity (FR-17) |
 | `invoice_sequences` | `prefix` | varchar(20) | see migration | Counter key becomes (tenant, environment, prefix, period) |
 | `tax_associations` | new `entity_type` value `billing_entity` | | | Entity default rates; no schema change |
 
 Migration notes:
 - All additions are nullable or defaulted; `customers.billing_entity_id` and its index need no backfill at
-  deploy. Off tenants are never backfilled.
+  deploy. Off environments are never backfilled.
 - Migrations run before the new code rolls out and must stay additive, because old pods keep running
   against the migrated schema. `invoice_sequences` therefore changes in two releases:
   1. **This change:** add `prefix` nullable, fill existing rows with their environment's effective
@@ -292,17 +294,17 @@ Migration notes:
      update again, naming no unique index, so it keeps working when the old index is dropped.
   2. **Follow-up release:** fill remaining empty prefixes, drop the old unique index and add the prefix
      to the counter key. Pods still on this change keep working during that rollout. Until it is
-     deployed, prefixes other than the environment prefix cannot get their own row, so no tenant is
+     deployed, prefixes other than the environment prefix cannot get their own row, so no environment is
      enabled before it.
 
 ### 9.2 API contracts
 
-**Enable** — `POST /v1/tenants/billing-entities/enable` · tenant admin
+**Enable** — `POST /v1/billing-entities/enable` · tenant super admin · environment from the request
 
-Request: none. Response `202 {"mode": "enabling"}`; on an enabled tenant `200 {"mode": "enabled"}`.
-Errors: `403` not a tenant admin; `400` an environment uses an external tax engine (FR-8).
+Request: none. Response `202 {"mode": "enabling"}`; on an enabled environment `200 {"mode": "enabled"}`.
+Errors: `403` not a super admin; `400` the environment uses an external tax engine (FR-8).
 
-**Status** — `GET /v1/tenants/billing-entities/status` → `{"mode": "off" | "enabling" | "enabled"}`
+**Status** — `GET /v1/billing-entities/status` → `{"mode": "off" | "enabling" | "enabled"}` for the request's environment
 
 **Entities** — environment-scoped, require `enabled` (else `400 billing_entities_not_enabled`)
 
@@ -355,19 +357,19 @@ and `entity_id` set to the entity.
 | `billing_entities_not_enabled` | 400 | Entity field, filter or endpoint while off or enabling; the mode is re-read from the database first |
 | Entity not found in this environment | 400 | Body or filter names another environment's entity |
 | Prefix in use | 409 | FR-7 |
-| External tax engine | 400 | Enable with an external engine, or external engine on an enabling or enabled tenant (FR-8) |
+| External tax engine | 400 | Enable with an external engine, or external engine in an enabling or enabled environment (FR-8) |
 | Setting owned by entity | 400 | FR-11 |
 | Cross-entity invoice | 400 | FR-21 |
 | No integration for entity | 400 | FR-20 |
 
 ### 9.3 Flows
 
-**Tenant mode**
+**Environment mode**
 
 ```mermaid
 stateDiagram-v2
   [*] --> off
-  off --> enabling: admin enables (default entities created)
+  off --> enabling: admin enables (default entity created)
   enabling --> enabled: backfill done, seller details copied
   note right of off: No entities. Entity fields rejected. Today's behaviour.
   note right of enabling: Entities exist. New customers get an entity. Entity fields still rejected.
@@ -384,21 +386,21 @@ sequenceDiagram
   participant DB as Database
   participant Cache
   Admin->>API: Enable
-  API->>Job: Start (one run per tenant)
+  API->>Job: Start (one run per tenant and environment)
   API-->>Admin: 202 enabling
   Note over Job,DB: Step 1 (one transaction)
-  Job->>DB: Take the tenant's exclusive enable lock
-  Job->>DB: Per environment: create default entity named after the tenant, with the environment prefix
-  Job->>DB: Copy tenant-level tax links to each default entity
+  Job->>DB: Take the environment's exclusive enable lock
+  Job->>DB: Create the default entity named after the tenant, with the environment prefix
+  Job->>DB: Copy the environment's tenant-level tax links to it
   Job->>DB: Mode = enabling
   Note over Job,DB: Step 2 (batches of 1,000, resumable)
   loop until no customer without an entity
-    Job->>DB: Assign batch to its environment's default entity (not activity-logged)
+    Job->>DB: Assign a batch of the environment's customers to the default entity (not activity-logged)
   end
   Note over Job,DB: Step 3 (one transaction)
-  Job->>DB: Copy tenant billing details into each default entity's seller details
+  Job->>DB: Copy tenant billing details into the default entity's seller details
   Job->>DB: Assign any remaining customers, mode = enabled
-  Job->>Cache: Clear tenant and customer caches
+  Job->>Cache: Clear environment and customer caches
 ```
 
 **Customer create** (UC3; FR-12, FR-14, NFR-4)
@@ -409,8 +411,8 @@ sequenceDiagram
   participant API
   participant DB as Database
   Client->>API: Create customer (optional entity)
-  API->>DB: Begin, take the tenant's shared enable lock
-  API->>DB: Read tenant mode (database, not cache)
+  API->>DB: Begin, take the environment's shared enable lock
+  API->>DB: Read environment mode (database, not cache)
   alt off
     API->>DB: Store customer with no entity, copy tenant-level tax rates
   else enabling
@@ -467,24 +469,24 @@ flowchart LR
 
 | Job or event | Change |
 |---|---|
-| Enable job | New Temporal workflow, one run per tenant (§9.3) |
+| Enable job | New Temporal workflow, one run per tenant and environment (§9.3) |
 | Integration event dispatcher | Skips customers, invoices and subscriptions of non-default entities |
 | Invoice payment attempt (auto-charge) | Skips invoices of non-default entities; invoice stays pending |
 | Outbound webhooks for customers, invoices, subscriptions, wallets, credit notes, payments, refunds | Payload gains `billing_entity_id` |
 | Inbound gateway webhooks | Unchanged; they only concern default-entity records |
 | Exports, scheduled tasks, usage processing | Unchanged |
-| Environment create and clone | Create gets a default entity in enabling and enabled tenants; clone is rejected in them |
+| Environment create and clone | A new environment starts off; clone from or into an enabling or enabled environment is rejected |
 
 ## 10. Cross-cutting concerns
 <!-- erd:locked -->
 
 | Concern | How the design handles it | NFR |
 |---|---|---|
-| Backward compatibility | Off tenants follow today's paths; new request fields optional, response field additive | NFR-1, NFR-2 |
+| Backward compatibility | Off environments follow today's paths; new request fields optional, response field additive | NFR-1, NFR-2 |
 | Concurrency: enable vs creates | Exclusive lock in enable step 1, shared lock in creates; mode read from the database | NFR-4, NFR-7 |
 | Concurrency: numbering | Counter increment in the finalize transaction; unique invoice number index; prefix edits never repeat a number because a prefix always shares one counter | NFR-3 |
 | Stale caches | Decisions use stored data, not the cached mode; caches cleared at the end of enable | NFR-4 |
-| Idempotency | One enable run per tenant; backfill only touches customers without an entity; snapshot written only if empty | NFR-5, NFR-8 |
+| Idempotency | One enable run per tenant and environment; backfill only touches customers without an entity; snapshot written only if empty | NFR-5, NFR-8 |
 | Failure: enable job crashes | Temporal retries the step; steps 1 and 3 are single transactions, step 2 resumes | NFR-8 |
 | Failure: customer missed by backfill | Step 3 assigns any remaining customer in the same transaction that sets `enabled` | NFR-4 |
 | Performance | Concurrent index build; batch entity lookup per page; backfill batches of 1,000 | NFR-6, NFR-8 |
@@ -497,7 +499,7 @@ flowchart LR
 
 | Risk | Likelihood / Impact | Mitigation |
 |---|---|---|
-| A tenant is enabled before the follow-up numbering release is deployed | Low / High: non-default entities cannot number | Enable only after that release; release checklist item |
+| An environment is enabled before the follow-up numbering release is deployed | Low / High: non-default entities cannot number | Enable only after that release; release checklist item |
 | A guard point for non-default entities is missed and money or data reaches the shared accounts | Medium / High | Guard at the few entry points listed in §9.4; e2e covers each |
 | Large tenants make the backfill slow | Low / Low: billing keeps working during `enabling` | Batches of 1,000; progress logged |
 | Tenants expect the series to continue after a mid-period prefix change | Low / Low | Documented in release notes (UC6) |
@@ -505,3 +507,4 @@ flowchart LR
 | Question | Answer |
 |---|---|
 | Should the hosted invoice page hide its payment option for non-default entities, or show "pay offline" text? | Hide it: the hosted invoice response sends `pay.enabled: false`, so the page shows no pay option, and the hosted Pay endpoint rejects the request (2026-10-28). |
+| Is billing entity mode set per tenant or per environment? | Per environment, like every other billing setting: a tenant can enable a sandbox first, and enable and status act on the request's environment (2026-10-28). |

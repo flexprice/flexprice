@@ -13,6 +13,7 @@ func (s *BillingEntityServiceSuite) invoiceSvc() *invoiceService {
 		Config:            s.GetConfig(),
 		DB:                s.GetDB(),
 		TenantRepo:        s.GetStores().TenantRepo,
+		EnvironmentRepo:   s.GetStores().EnvironmentRepo,
 		CustomerRepo:      s.GetStores().CustomerRepo,
 		InvoiceRepo:       s.GetStores().InvoiceRepo,
 		BillingEntityRepo: s.GetStores().BillingEntityRepo,

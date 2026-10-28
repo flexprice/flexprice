@@ -1,6 +1,6 @@
 package types
 
-// BillingEntityMode is a tenant's billing entities state; it only moves forward.
+// BillingEntityMode is an environment's billing entities state; it only moves forward.
 type BillingEntityMode string
 
 const (
@@ -9,7 +9,7 @@ const (
 	BillingEntityModeEnabled  BillingEntityMode = "enabled"
 )
 
-// Normalize reads an empty mode, as found in stale cached tenants, as off.
+// Normalize reads an empty mode, as found in stale cached environments, as off.
 func (m BillingEntityMode) Normalize() BillingEntityMode {
 	if m == "" {
 		return BillingEntityModeOff
