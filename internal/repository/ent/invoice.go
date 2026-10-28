@@ -1043,33 +1043,34 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// Use raw SQL for atomic increment since ent doesn't support RETURNING with OnConflict.
-	// One counter per period, keyed without the prefix until the old unique index is dropped.
-	query := `
-		INSERT INTO invoice_sequences (tenant_id,environment_id,year_month, prefix, last_value, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT (tenant_id, environment_id, year_month) DO UPDATE
-		SET last_value = invoice_sequences.last_value + 1,
-			prefix = EXCLUDED.prefix,
+	// One counter per period, keyed without the prefix. The statements name no unique index,
+	// so they keep working while the sequence indexes change.
+	incrementQuery := `
+		UPDATE invoice_sequences
+		SET last_value = last_value + 1,
+			prefix = $4,
 			updated_at = CURRENT_TIMESTAMP
+		WHERE tenant_id = $1 AND environment_id = $2 AND year_month = $3
+		RETURNING last_value`
+	insertQuery := `
+		INSERT INTO invoice_sequences (tenant_id, environment_id, year_month, prefix, last_value, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT DO NOTHING
 		RETURNING last_value`
 
-	var lastValue int64
-	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, prefix, invoiceConfig.InvoiceNumberStartSequence)
+	lastValue, found, err := r.queryInvoiceSequence(ctx, incrementQuery, tenantID, environmentID, yearMonth, prefix)
+	if err == nil && !found {
+		lastValue, found, err = r.queryInvoiceSequence(ctx, insertQuery, tenantID, environmentID, yearMonth, prefix, invoiceConfig.InvoiceNumberStartSequence)
+	}
+	if err == nil && !found {
+		// Another finalization created the row first; it is committed and visible now.
+		lastValue, found, err = r.queryInvoiceSequence(ctx, incrementQuery, tenantID, environmentID, yearMonth, prefix)
+	}
 	if err != nil {
-		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+		return "", err
 	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return "", ierr.WithError(err).WithHint("failed to fetch sequence value").Mark(ierr.ErrDatabase)
-		}
+	if !found {
 		return "", ierr.NewError("no sequence value returned").Mark(ierr.ErrInternal)
-	}
-
-	if err := rows.Scan(&lastValue); err != nil {
-		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
 
 	r.logger.Info(ctx, "generated invoice number",
@@ -1083,6 +1084,28 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 	paddedSequence := fmt.Sprintf(sequenceFormat, lastValue)
 
 	return fmt.Sprintf("%s%s%s%s%s", prefix, invoiceConfig.InvoiceNumberSeparator, yearMonth, invoiceConfig.InvoiceNumberSeparator, paddedSequence), nil
+}
+
+// queryInvoiceSequence runs a statement returning last_value; found is false when it returned no row.
+func (r *invoiceRepository) queryInvoiceSequence(ctx context.Context, query string, args ...any) (int64, bool, error) {
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		return 0, false, ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, false, ierr.WithError(err).WithHint("failed to fetch sequence value").Mark(ierr.ErrDatabase)
+		}
+		return 0, false, nil
+	}
+
+	var lastValue int64
+	if err := rows.Scan(&lastValue); err != nil {
+		return 0, false, ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
+	}
+	return lastValue, true, nil
 }
 
 func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error) {

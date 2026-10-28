@@ -287,11 +287,13 @@ Migration notes:
   against the migrated schema. `invoice_sequences` therefore changes in two releases:
   1. **This change:** add `prefix` nullable, fill existing rows with their environment's effective
      prefix (stored setting, else the default), build the new unique index beside the old one. New code
-     keeps upserting on the old key and records the current prefix on the row, so numbering behaves
-     exactly as today; old pods keep using the old key on the same rows.
-  2. **Follow-up release:** fill remaining empty prefixes, make `prefix` required, drop the old unique
-     index and switch the upsert to the new key. Until it is deployed, prefixes other than the
-     environment prefix cannot get their own row, so no tenant is enabled before it.
+     keeps one counter per period and records the current prefix on the row, so numbering behaves
+     exactly as today. It increments with an update, then an insert that ignores conflicts, then the
+     update again, naming no unique index, so it keeps working when the old index is dropped.
+  2. **Follow-up release:** fill remaining empty prefixes, drop the old unique index and add the prefix
+     to the counter key. Pods still on this change keep working during that rollout. Until it is
+     deployed, prefixes other than the environment prefix cannot get their own row, so no tenant is
+     enabled before it.
 
 ### 9.2 API contracts
 
