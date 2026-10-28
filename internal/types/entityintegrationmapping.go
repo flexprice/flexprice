@@ -111,7 +111,7 @@ type EntityIntegrationMappingFilter struct {
 	ProviderTypes     []string `json:"provider_types,omitempty" form:"provider_types" validate:"omitempty"`
 	ProviderEntityIDs []string `json:"provider_entity_ids,omitempty" form:"provider_entity_ids" validate:"omitempty"`
 
-	// ConnectionID matches rows of that connection plus rows written before connections were recorded
+	// ConnectionID matches rows of that connection or rows with no connection
 	ConnectionID string `json:"connection_id,omitempty" form:"connection_id" validate:"omitempty"`
 }
 

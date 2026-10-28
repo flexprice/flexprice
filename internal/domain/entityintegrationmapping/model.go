@@ -112,12 +112,6 @@ func Validate(m *EntityIntegrationMapping) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if types.SecretProvider(m.ProviderType).Validate() == nil && lo.FromPtr(m.ConnectionID) == "" {
-		return ierr.NewError("connection_id is required").
-			WithHint("Connection ID cannot be empty for a connection-backed provider").
-			Mark(ierr.ErrValidation)
-	}
-
 	if m.ProviderEntityID == "" {
 		return ierr.NewError("provider_entity_id is required").
 			WithHint("Provider entity ID cannot be empty").
@@ -145,6 +139,16 @@ func Validate(m *EntityIntegrationMapping) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return nil
+}
+
+// ValidateConnection requires a connection for a connection-backed provider.
+func ValidateConnection(m *EntityIntegrationMapping) error {
+	if types.SecretProvider(m.ProviderType).Validate() == nil && lo.FromPtr(m.ConnectionID) == "" {
+		return ierr.NewError("connection_id is required").
+			WithHint("Connection ID cannot be empty for a connection-backed provider").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
