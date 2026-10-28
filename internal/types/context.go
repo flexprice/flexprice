@@ -270,6 +270,13 @@ func RegisterPostCommit(ctx context.Context, fn func()) bool {
 	return true
 }
 
+// AfterCommit runs fn once the surrounding transaction commits, or now when there is none.
+func AfterCommit(ctx context.Context, fn func()) {
+	if !RegisterPostCommit(ctx, fn) {
+		fn()
+	}
+}
+
 // RunPostCommitHooks closes registration and runs what was queued.
 func RunPostCommitHooks(ctx context.Context) {
 	for _, fn := range closePostCommitHooks(ctx) {
