@@ -8,6 +8,9 @@ import (
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
+// UserEmailLowerConstraint is created by hand in migrations/versioned/postgres.
+const UserEmailLowerConstraint = "idx_user_email_lower_unique"
+
 // User holds the schema definition for the User entity.
 type User struct {
 	ent.Schema
