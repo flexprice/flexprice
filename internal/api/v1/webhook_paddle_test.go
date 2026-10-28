@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -80,6 +81,7 @@ func setupPaddleWebhookHandler(t *testing.T, connRepo connection.Repository) *We
 		nil,
 		nil,
 		nil,
+		service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore()}),
 	)
 }
 

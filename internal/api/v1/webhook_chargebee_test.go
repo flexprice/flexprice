@@ -10,6 +10,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -125,6 +126,7 @@ func setupChargebeeWebhookHandler(t *testing.T, webhookUsername, webhookPassword
 		nil, // refundService
 		nil, // db
 		nil, // webhookService
+		service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore()}),
 	)
 }
 

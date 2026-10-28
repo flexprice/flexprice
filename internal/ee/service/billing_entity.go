@@ -29,6 +29,10 @@ type BillingEntityService interface {
 	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
 	// ScopeToDefault puts the environment's default entity in ctx; off tenants get ctx unchanged.
 	ScopeToDefault(ctx context.Context) (context.Context, error)
+	// ScopeToConnection pins the connection, in any status, and its owner entity in ctx; another provider's connection is not found.
+	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
+	// InScope reports whether the customer belongs to the entity in ctx; true when off or ctx has no entity.
+	InScope(ctx context.Context, customerID string) (bool, error)
 	RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
 	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
@@ -323,6 +327,43 @@ func (s *billingEntityService) ScopeToDefault(ctx context.Context) (context.Cont
 		return ctx, err
 	}
 	return types.SetBillingEntityID(ctx, def.ID), nil
+}
+
+func (s *billingEntityService) ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error) {
+	conn, err := s.ConnectionRepo.GetUnscoped(ctx, connectionID)
+	if err != nil {
+		return ctx, err
+	}
+	if conn.ProviderType != provider {
+		return ctx, ierr.NewError("connection not found").
+			WithHintf("Connection %s is not a %s connection", connectionID, provider).
+			WithReportableDetails(map[string]any{"connection_id": connectionID}).
+			Mark(ierr.ErrNotFound)
+	}
+	ctx = types.SetConnectionID(ctx, conn.ID)
+	if owner := lo.FromPtr(conn.BillingEntityID); owner != "" {
+		ctx = types.SetBillingEntityID(ctx, owner)
+	}
+	return ctx, nil
+}
+
+func (s *billingEntityService) InScope(ctx context.Context, customerID string) (bool, error) {
+	want := types.GetBillingEntityID(ctx)
+	if want == "" {
+		return true, nil
+	}
+	if off, err := s.entitiesOff(ctx); err != nil || off {
+		return off, err
+	}
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return false, err
+	}
+	entity, err := s.EffectiveEntity(ctx, cust)
+	if err != nil {
+		return false, err
+	}
+	return entity != nil && entity.ID == want, nil
 }
 
 func (s *billingEntityService) RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error {

@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/webhookscope"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -916,7 +917,7 @@ func buildCreateAddressRequest(c *customer.Customer) *paddlesdk.CreateAddressReq
 }
 
 // ProcessCustomerCreatedWebhook creates a FlexPrice customer from Paddle webhook data (customer.created).
-func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, paddleCustomer *paddlenotification.CustomerNotification, customerService interfaces.CustomerService) error {
+func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, paddleCustomer *paddlenotification.CustomerNotification, customerService interfaces.CustomerService, scope interfaces.BillingEntityScope) error {
 	paddleCustomerID := paddleCustomer.ID
 
 	conn, err := s.client.GetConnection(ctx)
@@ -951,6 +952,9 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 		existingCustomers, err := customerService.GetCustomers(ctx, emailFilter)
 		if err == nil && existingCustomers != nil && len(existingCustomers.Items) > 0 {
 			existingCustomer := existingCustomers.Items[0]
+			if !webhookscope.Customer(ctx, scope, s.logger, existingCustomer.ID) {
+				return nil
+			}
 
 			_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
 				EntityID:         existingCustomer.ID,

@@ -204,3 +204,44 @@ func (s *BillingEntityServiceSuite) TestScopeToSubscription() {
 	s.Require().NoError(err)
 	s.Equal("be_eu", types.GetBillingEntityID(scoped))
 }
+
+func (s *BillingEntityServiceSuite) TestInScope_Customer() {
+	env := types.GetEnvironmentID(s.GetContext())
+
+	s.Run("off", func() {
+		s.ClearStores()
+		s.setMode(types.BillingEntityModeOff)
+
+		ok, err := s.service.InScope(types.SetBillingEntityID(s.GetContext(), "be_eu"), "c_missing")
+		s.Require().NoError(err)
+		s.True(ok)
+	})
+
+	tests := []struct {
+		name   string
+		entity string
+		want   bool
+	}{
+		{name: "no_entity_in_ctx", entity: "", want: true},
+		{name: "same", entity: "be_eu", want: true},
+		{name: "other", entity: "be_default", want: false},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.ClearStores()
+			s.setMode(types.BillingEntityModeEnabled)
+			s.addEntity("be_default", env, "INV", true)
+			s.addEntity("be_eu", env, "EU", false)
+			s.addCustomer("c1", lo.ToPtr("be_eu"))
+
+			ctx := s.GetContext()
+			if tc.entity != "" {
+				ctx = types.SetBillingEntityID(ctx, tc.entity)
+			}
+			ok, err := s.service.InScope(ctx, "c1")
+			s.Require().NoError(err)
+			s.Equal(tc.want, ok)
+		})
+	}
+}
