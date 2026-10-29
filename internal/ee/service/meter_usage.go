@@ -630,6 +630,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 			// (clean aggregate for applyLineItemCommitment), non-commitment items query
 			// with the full group_by (per-group breakdown in the response).
 			splitsLines := hasExtraGroupBy(req.GroupBy)
+			splitCommitments := req.ForceApplyCommitment || len(req.PropertyFilters) > 0 || len(req.Sources) > 0
 
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if splitsLines {
@@ -639,7 +640,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 					// them too. Trade-off: commitment fires per fanned row and
 					// multi-counts the true-up across sources — accepted at the
 					// flag's call site.
-					if !req.ForceApplyCommitment && len(req.PropertyFilters) == 0 && len(req.Sources) == 0 && liw.Item != nil && liw.Item.HasAnyCommitment() {
+					if !splitCommitments && liw.Item != nil && liw.Item.HasAnyCommitment() {
 						commitmentLIs = append(commitmentLIs, liw)
 					} else {
 						nonCommitmentLIs = append(nonCommitmentLIs, liw)
@@ -2538,7 +2539,7 @@ func amortizeLineTotals(data *AnalyticsData) {
 		}
 
 		usage := lo.Map(combos, func(a *events.DetailedUsageAnalytic, _ int) decimal.Decimal { return a.TotalUsage })
-		costs := amortize(total, usage)
+		costs := amortizeUsage(total, usage, combos[0].AggregationType)
 		if lineBreakdown := data.LineCommitments[lineID]; lineBreakdown != nil {
 			utilized := amortize(lineBreakdown.ComputedCommitmentUtilizedAmount, usage)
 			overage := amortize(lineBreakdown.ComputedOverageAmount, usage)
@@ -2559,10 +2560,18 @@ func amortizeLineTotals(data *AnalyticsData) {
 		}
 
 		for i, combo := range combos {
+			// Keep existing correction points when a zero-net group's charge is unchanged.
+			if combo.TotalUsage.IsZero() && combo.TotalCost.Equal(costs[i]) && combo.CommitmentInfo == nil {
+				continue
+			}
 			combo.TotalCost = costs[i]
 			for _, points := range [][]events.UsageAnalyticPoint{combo.Points, combo.BucketPoints} {
 				pointUsage := lo.Map(points, func(p events.UsageAnalyticPoint, _ int) decimal.Decimal { return p.Usage })
-				for j, cost := range amortize(combo.TotalCost, pointUsage) {
+				pointCosts := amortizeUsage(combo.TotalCost, pointUsage, combo.AggregationType)
+				if combo.CommitmentInfo != nil {
+					pointCosts = amortize(combo.TotalCost, pointUsage)
+				}
+				for j, cost := range pointCosts {
 					points[j].Cost = cost
 				}
 
@@ -2590,6 +2599,33 @@ func amortize(total decimal.Decimal, weights []decimal.Decimal) []decimal.Decima
 	}
 
 	return spreadCost(weights, total)
+}
+
+// amortizeUsage preserves signed SUM corrections and assigns the rounding residual to the last nonzero weight.
+func amortizeUsage(total decimal.Decimal, weights []decimal.Decimal, aggregation types.AggregationType) []decimal.Decimal {
+	if aggregation != types.AggregationSum || !lo.SomeBy(weights, decimal.Decimal.IsNegative) {
+		return amortize(total, weights)
+	}
+
+	sum, last := decimal.Zero, -1
+	for i, weight := range weights {
+		sum = sum.Add(weight)
+		if !weight.IsZero() {
+			last = i
+		}
+	}
+	if sum.IsZero() {
+		return amortize(total, weights)
+	}
+
+	shares := make([]decimal.Decimal, len(weights))
+	remaining := total
+	for i, weight := range weights {
+		shares[i] = total.Mul(weight).Div(sum)
+		remaining = remaining.Sub(shares[i])
+	}
+	shares[last] = shares[last].Add(remaining)
+	return shares
 }
 
 // wholeLineTotals prices each line once before splitting its cost across groups.
@@ -2635,7 +2671,7 @@ func (s *meterUsageService) wholeLineTotals(
 		}
 
 		charge, m := lineCharges[0], usage.MeterMap[item.MeterID]
-		selectedUsage := charge.QuantityDecimal()
+		selectedQuantity := charge.QuantityDecimal()
 		if filtered {
 			unfiltered := *params
 			unfiltered.PropertyFilters, unfiltered.Sources = nil, nil
@@ -2643,6 +2679,12 @@ func (s *meterUsageService) wholeLineTotals(
 			if err != nil {
 				return nil, nil, err
 			}
+		}
+
+		fullQuantity := charge.QuantityDecimal()
+		// A net-zero line has no blended rate; retain its existing per-group and per-bucket costs.
+		if fullQuantity.IsZero() {
+			continue
 		}
 
 		var total decimal.Decimal
@@ -2654,11 +2696,7 @@ func (s *meterUsageService) wholeLineTotals(
 		}
 
 		if filtered {
-			if !charge.QuantityDecimal().IsPositive() {
-				total = decimal.Zero
-			} else {
-				total = total.Mul(selectedUsage).Div(charge.QuantityDecimal())
-			}
+			total = total.Mul(selectedQuantity).Div(fullQuantity)
 		}
 		totals[item.ID] = total
 	}
@@ -3161,9 +3199,15 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	item.TotalCost = cost
 	item.Currency = p.Currency
 
+	// Linear charges retain corrections even when positive and negative usage cancel out.
+	if m.Aggregation.Type == types.AggregationSum && p.BillingModel == types.BILLING_MODEL_FLAT_FEE && item.TotalUsage.IsZero() && cost.IsZero() {
+		s.stampPointCosts(ctx, priceService, item, p)
+		return
+	}
+
 	// Display windows share the aggregate charge; pricing each point separately would restart tiers and packages.
 	weights := lo.Map(item.Points, func(point events.UsageAnalyticPoint, _ int) decimal.Decimal { return point.Usage })
-	for i, share := range amortize(item.TotalCost, weights) {
+	for i, share := range amortizeUsage(item.TotalCost, weights, m.Aggregation.Type) {
 		item.Points[i].Cost = share
 	}
 }

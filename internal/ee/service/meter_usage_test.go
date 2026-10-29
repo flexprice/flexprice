@@ -5778,6 +5778,8 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 		{name: "fractional", quantities: []float64{40.25, 60.25}, slabCost: "200.5", volumeCost: "100.5"},
 		{name: "flat", quantities: []float64{60, 90}, slabCost: "268", volumeCost: "161", flatAmounts: []string{"7", "11", "13"}},
 		{name: "rounding", quantities: []float64{1, 50, 100}, slabCost: "251", volumeCost: "151"},
+		{name: "mixed_sign", quantities: []float64{200, -50}, slabCost: "250", volumeCost: "150"},
+		{name: "negative_net", quantities: []float64{50, -70}, slabCost: "-40", volumeCost: "-40"},
 		{name: "zero", quantities: []float64{0, 0}, slabCost: "0", volumeCost: "0"},
 	}
 	for _, mode := range []types.BillingTier{types.BILLING_TIER_SLAB, types.BILLING_TIER_VOLUME} {
@@ -6016,6 +6018,124 @@ func (s *MeterUsageServiceSuite) TestFilteredGroups_ShareWholeLineCost() {
 					}
 				}
 			})
+		}
+	}
+}
+
+func (s *MeterUsageServiceSuite) TestAnalytics_SignedUsageAllocations() {
+	for _, tt := range []struct {
+		name       string
+		quantities []float64
+		sources    []string
+	}{
+		{name: "positive net", quantities: []float64{100, -30}},
+		{name: "negative net", quantities: []float64{50, -70}},
+		{name: "all negative", quantities: []float64{-10, -20}},
+		{name: "zero net", quantities: []float64{100, -100}},
+		{name: "zero group", quantities: []float64{100, -100, 50}, sources: []string{"alpha", "alpha", "beta"}},
+		{name: "zero usage", quantities: []float64{0, 0}},
+		{name: "fractional", quantities: []float64{1.25, -2.5}},
+	} {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			sourcesByEvent := tt.sources
+			if sourcesByEvent == nil {
+				sourcesByEvent = []string{"alpha", "beta"}
+			}
+			id := "signed_" + tt.name
+			m := s.createMeterWithAggregation(ctx, "meter_"+id, "api_call", types.AggregationSum)
+			p := s.createPriceForMeter(ctx, "price_"+id, m.ID, dec("1"))
+			s.createLineItemForMeter(ctx, "li_"+id, m.ID, p.ID)
+			for i, quantity := range tt.quantities {
+				s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, sourcesByEvent[i],
+					time.Date(2026, 1, 5+i, 12, 0, 0, 0, time.UTC), quantity, nil)
+			}
+			for _, sources := range [][]string{nil, {"alpha"}, {"beta"}, {"alpha", "beta"}} {
+				for _, groupBy := range [][]string{nil, {"source"}} {
+					resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+						TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+						ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
+						StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
+						Sources: sources, GroupBy: groupBy,
+					})
+					s.Require().NoError(err)
+					want := decimal.Zero
+					for i, quantity := range tt.quantities {
+						if len(sources) == 0 || slices.Contains(sources, sourcesByEvent[i]) {
+							want = want.Add(decimal.NewFromFloat(quantity))
+						}
+					}
+					s.True(resp.TotalCost.Equal(want), "%v %v: cost %s, want %s", sources, groupBy, resp.TotalCost, want)
+					total := decimal.Zero
+					for _, item := range resp.Items {
+						s.True(item.TotalCost.Equal(item.TotalUsage), "group %s: cost %s, usage %s", item.Source, item.TotalCost, item.TotalUsage)
+						s.Require().NotEmpty(item.Points)
+						points := decimal.Zero
+						for _, point := range item.Points {
+							s.True(point.Cost.Equal(point.Usage), "point cost %s, usage %s", point.Cost, point.Usage)
+							points = points.Add(point.Cost)
+						}
+						s.True(points.Equal(item.TotalCost))
+						total = total.Add(item.TotalCost)
+					}
+					s.True(total.Equal(resp.TotalCost))
+				}
+			}
+		})
+	}
+}
+
+func (s *MeterUsageServiceSuite) TestAnalytics_SignedAllocationRounding() {
+	weights := []decimal.Decimal{dec("200"), dec("-50"), decimal.Zero}
+	shares := amortizeUsage(dec("250"), weights, types.AggregationSum)
+	s.True(shares[0].Sub(dec("333.3333333333333333")).Abs().LessThan(dec("0.000000001")))
+	s.True(shares[1].Sub(dec("-83.3333333333333333")).Abs().LessThan(dec("0.000000001")))
+	s.True(shares[2].IsZero())
+	s.True(shares[0].Add(shares[1]).Add(shares[2]).Equal(dec("250")))
+
+	shares = amortizeUsage(dec("250"), weights, types.AggregationMax)
+	s.True(shares[0].Equal(dec("250")))
+	s.True(shares[1].IsZero())
+	s.True(shares[2].IsZero())
+}
+
+func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesCharges() {
+	ctx := s.GetContext()
+	m := &meter.Meter{
+		ID: "meter_zero_buckets", EventName: "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeDay},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	p := &price.Price{
+		ID: "price_zero_buckets", Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
+		Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
+		Type:  types.PRICE_TYPE_USAGE, MeterID: m.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	s.createLineItemForMeter(ctx, "li_zero_buckets", m.ID, p.ID)
+	for i, quantity := range []float64{150, -150} {
+		s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, "alpha",
+			time.Date(2026, 1, 5+i, 12, 0, 0, 0, time.UTC), quantity, nil)
+	}
+
+	// Independently priced buckets cost $250 and -$300, despite net-zero usage.
+	for _, sources := range [][]string{nil, {"alpha"}} {
+		for _, groupBy := range [][]string{nil, {"source"}} {
+			resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+				TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+				ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
+				StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
+				Sources: sources, GroupBy: groupBy,
+			})
+			s.Require().NoError(err)
+			s.Require().Len(resp.Items, 1)
+			s.True(resp.Items[0].TotalUsage.IsZero())
+			s.True(resp.TotalCost.Equal(dec("-50")), "%v %v: got %s", sources, groupBy, resp.TotalCost)
+			s.Require().Len(resp.Items[0].Points, 2)
+			s.True(resp.Items[0].Points[0].Cost.Add(resp.Items[0].Points[1].Cost).Equal(resp.TotalCost))
 		}
 	}
 }
