@@ -8,17 +8,21 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/flexprice/flexprice/ent"
 	itemdb "github.com/flexprice/flexprice/ent/billingscheduleitem"
 	ruledb "github.com/flexprice/flexprice/ent/billingterm"
+	customerdb "github.com/flexprice/flexprice/ent/customer"
 	invoicedb "github.com/flexprice/flexprice/ent/invoice"
 	linedb "github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
+	subscriptiondb "github.com/flexprice/flexprice/ent/subscription"
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -237,6 +241,9 @@ func (r *billingScheduleItemRepository) Create(ctx context.Context, item *domain
 			return ierr.NewError("billing rule source not found for owner").Mark(ierr.ErrNotFound)
 		}
 	}
+	if err := r.validateRecipient(ctx, item); err != nil {
+		return err
+	}
 	copy := domain.NewScheduleItemBuilder(item).Build()
 	create := r.client.Writer(ctx).BillingScheduleItem.Create().
 		SetID(copy.ID).SetTenantID(tenantID).SetEnvironmentID(environmentID).
@@ -256,6 +263,37 @@ func (r *billingScheduleItemRepository) Create(ctx context.Context, item *domain
 	}
 	if _, err := create.Save(ctx); err != nil {
 		return billingPersistenceError(err, "create billing schedule item")
+	}
+	return nil
+}
+
+func (r *billingScheduleItemRepository) validateRecipient(ctx context.Context, item *domain.ScheduleItem) error {
+	if err := billingIdentifier("schedule customer id", item.CustomerID); err != nil {
+		return err
+	}
+	exists, err := r.client.Writer(ctx).Customer.Query().Where(
+		customerdb.ID(item.CustomerID), customerdb.TenantID(item.TenantID), customerdb.EnvironmentID(item.EnvironmentID),
+	).Exist(ctx)
+	if err != nil {
+		return billingPersistenceError(err, "resolve schedule customer")
+	}
+	if !exists {
+		return ierr.NewError("schedule customer not found").Mark(ierr.ErrNotFound)
+	}
+	if item.SubscriptionID == nil {
+		return nil
+	}
+	if err := billingIdentifier("schedule subscription id", *item.SubscriptionID); err != nil {
+		return err
+	}
+	exists, err = r.client.Writer(ctx).Subscription.Query().Where(
+		subscriptiondb.ID(*item.SubscriptionID), subscriptiondb.TenantID(item.TenantID), subscriptiondb.EnvironmentID(item.EnvironmentID),
+	).Exist(ctx)
+	if err != nil {
+		return billingPersistenceError(err, "resolve schedule subscription")
+	}
+	if !exists {
+		return ierr.NewError("schedule subscription not found").Mark(ierr.ErrNotFound)
 	}
 	return nil
 }
@@ -428,12 +466,38 @@ func (r *billingScheduleItemRepository) Claim(ctx context.Context, id, invoiceID
 		linedb.InvoiceID(invoiceID), linedb.BillingScheduleItemID(id), linedb.Status(string(types.StatusPublished)),
 		linedb.HasInvoiceWith(invoicedb.TenantID(tenantID), invoicedb.EnvironmentID(environmentID), invoicedb.ID(invoiceID), invoicedb.Status(string(types.StatusPublished)), invoicedb.InvoiceStatusIn(types.InvoiceStatusDraft, types.InvoiceStatusFinalized)),
 	}
-	exists, err := r.client.Writer(ctx).InvoiceLineItem.Query().Where(source...).Exist(ctx)
+	item, err := r.Get(types.WithForceWriter(ctx), id)
+	if err != nil {
+		return false, err
+	}
+	line, err := r.client.Writer(ctx).InvoiceLineItem.Query().Where(source...).WithInvoice(func(q *ent.InvoiceQuery) {
+		q.Where(invoicedb.TenantID(tenantID), invoicedb.EnvironmentID(environmentID))
+	}).Only(ctx)
 	if err != nil {
 		return false, billingPersistenceError(err, "resolve schedule invoice source")
 	}
-	if !exists {
-		return false, ierr.NewError("matching invoice line source not found").Mark(ierr.ErrNotFound)
+	binding := domain.NewScheduleItemBuilder(item).WithInvoiceID(&invoiceID).WithInvoiceLineItemID(&invoiceLineItemID).Build()
+	if err := billingValidateBinding(binding, line); err != nil {
+		return false, err
+	}
+	if line.FxConversion != nil || line.Edges.Invoice.FxConversion != nil {
+		return false, billingBindingIntegrity("new scheduled claims cannot use currency conversion")
+	}
+	source = append(source,
+		linedb.CustomerID(item.CustomerID), linedb.AmountEQ(item.Amount), linedb.QuantityEQ(decimal.NewFromInt(1)),
+		linedb.CurrencyEqualFold(item.Currency), linedb.PeriodStartEQ(item.ServicePeriodStart), linedb.PeriodEndEQ(item.ServicePeriodEnd),
+		billingJSONAbsent(linedb.FieldFxConversion, linedb.FieldCustomCurrency),
+		linedb.HasInvoiceWith(invoicedb.CustomerID(item.CustomerID), invoicedb.CurrencyEqualFold(item.Currency), billingJSONAbsent(invoicedb.FieldFxConversion, invoicedb.FieldCustomCurrency)),
+	)
+	if item.SubscriptionID == nil {
+		source = append(source, linedb.SubscriptionIDIsNil())
+	} else {
+		source = append(source, linedb.SubscriptionID(*item.SubscriptionID))
+	}
+	if item.OwnerType == types.BillingTermOwnerCommitment {
+		source = append(source, linedb.CommitmentID(item.OwnerID))
+	} else {
+		source = append(source, linedb.CommitmentIDIsNil())
 	}
 	count, err := r.client.Writer(ctx).BillingScheduleItem.Update().Where(
 		itemdb.TenantID(tenantID), itemdb.EnvironmentID(environmentID), itemdb.ID(id),
@@ -447,6 +511,15 @@ func (r *billingScheduleItemRepository) Claim(ctx context.Context, id, invoiceID
 		return false, billingPersistenceError(err, "claim billing schedule item")
 	}
 	return count == 1, nil
+}
+
+// Ent writes optional JSON pointers as either SQL NULL or JSON null.
+func billingJSONAbsent(columns ...string) func(*sql.Selector) {
+	return func(selector *sql.Selector) {
+		for _, column := range columns {
+			selector.Where(sql.Or(sql.IsNull(selector.C(column)), sqljson.ValueIsNull(selector.C(column))))
+		}
+	}
 }
 
 func (r *billingScheduleItemRepository) Cancel(ctx context.Context, id string, reason types.BillingScheduleCancellationReason) (bool, error) {

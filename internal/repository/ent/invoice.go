@@ -174,6 +174,9 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 	}
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
+		if err := validateInvoiceBillingSources(ctx, r.client.Writer(ctx), inv.LineItems); err != nil {
+			return err
+		}
 		// 1. Create invoice
 		invBuilder := r.client.Writer(ctx).Invoice.Create().
 			SetID(inv.ID).
@@ -369,6 +372,9 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 			return ierr.WithError(err).WithHintf("invoice %s not found", invoiceID).Mark(ierr.ErrNotFound)
 		}
 
+		if err := validateInvoiceBillingSources(ctx, r.client.Writer(ctx), items); err != nil {
+			return err
+		}
 		builders := make([]*ent.InvoiceLineItemCreate, len(items))
 		for i, item := range items {
 			builders[i] = r.client.Writer(ctx).InvoiceLineItem.Create().

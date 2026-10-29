@@ -25,6 +25,8 @@ func TestRecord_CommitAndRollback(t *testing.T) {
 			require.Len(t, sink.entries(), 1)
 			entry := sink.entries()[0]
 			require.Equal(t, CommitmentBillingTermsReplaced, entry.Action)
+			require.Equal(t, "comm_1", entry.EntityID)
+			require.Equal(t, types.GetTenantID(ctx), entry.TenantID)
 			require.Equal(t, "env_1", entry.EnvironmentID)
 			require.Equal(t, "user_1", entry.Actor.ID)
 			var snapshot map[string]any

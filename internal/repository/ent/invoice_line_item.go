@@ -52,6 +52,10 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		item.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	if err := validateInvoiceBillingSources(ctx, r.client.Writer(ctx), []*domaininvoice.InvoiceLineItem{item}); err != nil {
+		return err
+	}
+
 	builder := r.client.Writer(ctx).InvoiceLineItem.Create().
 		SetID(item.ID).
 		SetTenantID(types.GetTenantID(ctx)).
@@ -139,6 +143,9 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 
 	err := r.client.WithTx(ctx, func(ctx context.Context) error {
 		client := r.client.Writer(ctx)
+		if err := validateInvoiceBillingSources(ctx, client, items); err != nil {
+			return err
+		}
 
 		bulk := make([]*ent.InvoiceLineItemCreate, len(items))
 		for i, item := range items {

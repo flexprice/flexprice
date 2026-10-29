@@ -37,6 +37,8 @@ func TestInvoiceLockAdmissionPostgres(t *testing.T) {
 			require.True(t, ierr.IsVersionConflict(f.invs.Update(admitted, late)))
 			require.True(t, ierr.IsVersionConflict(f.invs.UpdateDraftInvoicePeriod(admitted, late.ID, time.Now().UTC(), "SUBSCRIPTION_CYCLE", "late_key")))
 			require.True(t, ierr.IsVersionConflict(f.invs.Delete(admitted, late.ID)))
+			require.True(t, ierr.IsVersionConflict(f.invs.AddLineItems(admitted, late.ID, nil)))
+			require.True(t, ierr.IsVersionConflict(f.invs.RemoveLineItems(admitted, late.ID, []string{"late_item"})))
 			require.NoError(t, f.invs.Update(admitted, existing))
 			require.NoError(t, f.invs.CreateWithLineItems(admitted, created))
 			_, err = f.invs.GetForUpdate(admitted, created.ID)

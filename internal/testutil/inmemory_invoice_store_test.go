@@ -78,3 +78,25 @@ func TestInMemoryInvoiceStore_List_SubscriptionCustomerIDsFilter(t *testing.T) {
 	require.Len(t, got, 1)
 	require.Equal(t, "inv_subcust_match", got[0].ID)
 }
+
+func TestInMemoryInvoiceStore_DetachesBillingScheduleSource(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	store := NewInMemoryInvoiceStore()
+	inv := &invoice.Invoice{ID: "inv_source_copy", EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{ID: "line_scheduled", BillingScheduleItemID: lo.ToPtr("bsitem_original")},
+			{ID: "line_ordinary"},
+		},
+	}
+	require.NoError(t, store.Create(ctx, inv))
+	*inv.LineItems[0].BillingScheduleItemID = "changed_input"
+	read, err := store.Get(ctx, inv.ID)
+	require.NoError(t, err)
+	require.Len(t, read.LineItems, 2)
+	require.Equal(t, "bsitem_original", *read.LineItems[0].BillingScheduleItemID)
+	require.Nil(t, read.LineItems[1].BillingScheduleItemID)
+	*read.LineItems[0].BillingScheduleItemID = "changed_read"
+	fresh, err := store.Get(ctx, inv.ID)
+	require.NoError(t, err)
+	require.Equal(t, "bsitem_original", *fresh.LineItems[0].BillingScheduleItemID, "reads cannot mutate the stored source reference")
+}

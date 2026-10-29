@@ -2,10 +2,13 @@ package ent
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	itemdb "github.com/flexprice/flexprice/ent/billingscheduleitem"
 	ruledb "github.com/flexprice/flexprice/ent/billingterm"
+	customerdb "github.com/flexprice/flexprice/ent/customer"
 	invoicedb "github.com/flexprice/flexprice/ent/invoice"
 	linedb "github.com/flexprice/flexprice/ent/invoicelineitem"
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
@@ -79,6 +83,25 @@ func billingTestContext(tenant, environment string) context.Context {
 	return types.SetEnvironmentID(ctx, environment)
 }
 
+func billingTestCustomerID(ctx context.Context) string {
+	tenant, environment := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	digest := sha256.Sum256([]byte(strconv.Itoa(len(tenant)) + ":" + tenant + environment))
+	return "cust_" + hex.EncodeToString(digest[:20])
+}
+
+func (f *billingPostgresFixture) seedCustomer(t *testing.T, ctx context.Context) {
+	t.Helper()
+	id := billingTestCustomerID(ctx)
+	exists, err := f.client.Writer(ctx).Customer.Query().Where(customerdb.ID(id), customerdb.TenantID(types.GetTenantID(ctx)), customerdb.EnvironmentID(types.GetEnvironmentID(ctx))).Exist(ctx)
+	require.NoError(t, err)
+	if exists {
+		return
+	}
+	_, err = f.client.Writer(ctx).Customer.Create().SetID(id).SetTenantID(types.GetTenantID(ctx)).SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetExternalID(id).SetName("Billing terms fixture").SetStatus(string(types.StatusPublished)).Save(ctx)
+	require.NoError(t, err)
+}
+
 func newBillingTestRule(ctx context.Context, owner domain.OwnerRef) *domain.Rule {
 	amount := decimal.NewFromInt(100)
 	due := time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC)
@@ -93,7 +116,7 @@ func newBillingTestRule(ctx context.Context, owner domain.OwnerRef) *domain.Rule
 func newBillingTestItem(ctx context.Context, rule *domain.Rule) *domain.ScheduleItem {
 	return domain.NewScheduleItemBuilder(&domain.ScheduleItem{
 		ID: types.GenerateUUIDWithPrefix("bsitem"), OwnerType: rule.OwnerType, OwnerID: rule.OwnerID,
-		BillingTermID: &rule.ID, CustomerID: "customer_a", Currency: "usd", Amount: *rule.Value,
+		BillingTermID: &rule.ID, CustomerID: billingTestCustomerID(ctx), Currency: "usd", Amount: *rule.Value,
 		Kind: types.BillingScheduleCharge, BillTrigger: types.BillingScheduleOnDate, BillOn: rule.BillOn,
 		ServicePeriodStart: *rule.BillOn, ServicePeriodEnd: rule.BillOn.AddDate(1, 0, 0),
 		Description: rule.Description, Delivery: types.BillingTermSeparateInvoice,
@@ -104,6 +127,7 @@ func newBillingTestItem(ctx context.Context, rule *domain.Rule) *domain.Schedule
 
 func (f *billingPostgresFixture) createSource(t *testing.T, ctx context.Context) (*domain.Rule, *domain.ScheduleItem) {
 	t.Helper()
+	f.seedCustomer(t, ctx)
 	owner := domain.OwnerRef{Type: "future_fee", ID: types.GenerateUUIDWithPrefix("owner")}
 	rule := newBillingTestRule(ctx, owner)
 	require.NoError(t, f.rules.Create(ctx, rule))
@@ -113,15 +137,22 @@ func (f *billingPostgresFixture) createSource(t *testing.T, ctx context.Context)
 }
 
 func newBillingTestLine(ctx context.Context, inv *domaininvoice.Invoice, item *domain.ScheduleItem) *domaininvoice.InvoiceLineItem {
+	var commitmentID *string
+	if item.OwnerType == types.BillingTermOwnerCommitment {
+		commitmentID = &item.OwnerID
+	}
 	return domaininvoice.NewInvoiceLineItemBuilder(&domaininvoice.InvoiceLineItem{
 		ID: types.GenerateUUIDWithPrefix("invli"), InvoiceID: inv.ID, CustomerID: inv.CustomerID,
+		SubscriptionID: item.SubscriptionID, CommitmentID: commitmentID,
 		Amount: item.Amount, Quantity: decimal.NewFromInt(1), Currency: item.Currency,
+		PeriodStart: &item.ServicePeriodStart, PeriodEnd: &item.ServicePeriodEnd,
 		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
 	}).WithBillingScheduleItemID(&item.ID).Build()
 }
 
 func newBillingTestInvoice(ctx context.Context) *domaininvoice.Invoice {
 	inv := newTestInvoice(ctx)
+	inv.CustomerID = billingTestCustomerID(ctx)
 	return domaininvoice.NewInvoiceBuilder(inv).WithIdempotencyKey(&inv.ID).Build()
 }
 

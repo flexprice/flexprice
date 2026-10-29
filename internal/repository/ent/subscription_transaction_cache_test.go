@@ -35,4 +35,12 @@ func TestSubscriptionTransactionReadsBypassCache(t *testing.T) {
 	fresh, err := repo.Get(types.WithForceWriter(ctx), sub.ID)
 	require.NoError(t, err)
 	require.Equal(t, types.SubscriptionStatusActive, fresh.SubscriptionStatus)
+	t.Run("writer-pinned reads bypass a populated cache", func(t *testing.T) {
+		repo.SetCache(ctx, sub)
+		pinned := types.WithWriterPinning(ctx)
+		require.NotNil(t, repo.GetCache(pinned, sub.ID), "installing a pin alone does not bypass the cache")
+		types.PinWriter(pinned)
+		require.Nil(t, repo.GetCache(pinned, sub.ID))
+		require.NotNil(t, repo.GetCache(ctx, sub.ID), "another request can still use the cached subscription")
+	})
 }
