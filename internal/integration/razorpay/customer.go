@@ -171,6 +171,11 @@ func (s *CustomerService) CreateCustomerInRazorpay(ctx context.Context, customer
 
 // SyncCustomerToRazorpay creates a customer in Razorpay and stores the mapping
 func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Prepare customer data for Razorpay
 	customerData := map[string]interface{}{
 		"name": flexpriceCustomer.Name,
@@ -218,11 +223,6 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 	s.logger.Info(ctx, "created customer in Razorpay",
 		"customer_id", flexpriceCustomer.ID,
 		"razorpay_customer_id", razorpayCustomerID)
-
-	conn, err := s.client.GetConnection(ctx)
-	if err != nil {
-		return "", err
-	}
 
 	// Store mapping in entity_integration_mapping
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{

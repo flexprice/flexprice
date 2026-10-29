@@ -106,8 +106,8 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		switch {
 		case req.PaymentGateway != nil:
 			provider = types.SecretProvider(*req.PaymentGateway)
-		case p.PaymentMethodType == types.PaymentMethodTypeCard:
-			// Card payments without a gateway are charged through Stripe.
+		case p.PaymentMethodType == types.PaymentMethodTypeCard && req.ProcessPayment:
+			// Card payments without a gateway are charged through Stripe; recorded ones (Zoho, QuickBooks) need none.
 			provider = types.SecretProviderStripe
 		}
 		if provider != "" {
@@ -560,7 +560,11 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 			p.ConnectionID = nil
 		}
 		p.PaymentGateway = req.PaymentGateway
-		if err := s.setGatewayConnection(ctx, p); err != nil {
+		gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p, false)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.setGatewayConnection(gatewayCtx, p); err != nil {
 			return nil, err
 		}
 	}

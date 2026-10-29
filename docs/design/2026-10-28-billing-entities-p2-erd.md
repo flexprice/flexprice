@@ -405,16 +405,12 @@ sequenceDiagram
 | Job or event | Change |
 |---|---|
 | Enable job | Step 1 assigns every existing non-storage connection to its environment's default entity (FR-3) |
-| Customer, invoice, subscription, payment sync workflows | Payloads unchanged; activities re-read the record and set its entity before the lookup |
-| Integration event dispatcher | Sets the record's entity; skip condition becomes "no connection for this provider" |
-| Sync parity R1: record-anchored | Every sync of a customer, invoice, subscription or payment (dispatcher, workflow activities, inline updates, `POST /integrations/sync`, payment links, checkout, auto-charge) uses the connection of the record's entity. Payloads unchanged; activities re-read the record and set its entity before the lookup. Catalog items created inside a record sync (Stripe products and prices, Zoho and Chargebee items, Paddle products) follow R1: mappings are keyed by that connection |
+| Sync parity R1: record-anchored | Every sync of a customer, invoice, subscription or payment (dispatcher, workflow activities, inline updates, `POST /integrations/sync`, payment links, checkout, auto-charge) uses the connection of the record's entity. Payloads unchanged; activities re-read the record and set its entity before the lookup. The integration event dispatcher skips a record whose entity has no connection for the provider. Catalog items created inside a record sync (Stripe products and prices, Zoho and Chargebee items, Paddle products) follow R1: mappings are keyed by that connection |
 | Sync parity R2: payment-anchored | Refunds, payment-status polls and the Moyasar settlement cron use the payment's connection, else its customer's entity (FR-18) |
 | Sync parity R3: environment-level push | Runs once per connection of the provider and writes mappings per connection: QuickBooks price push, Chargebee plan and price push, and the marketplace usage report and snapshot crons (already per connection; each is pinned to its connection) |
 | Sync parity R4: inbound | Per-connection route; the event is applied as the sending connection's entity, including customers created from events (FR-14) |
 | "Already synced" checks | Count mappings for the entity's connection |
 | Auto-charge and mark-paid dispatch | Candidates limited to the customer's allowed connections |
-| Gateway refunds | Use the payment's connection (FR-18) |
-| Inbound provider events | Per-connection route; customers created from them get the connection's entity (FR-14) |
 | Outbound webhooks | Payment payloads gain `connection_id` |
 
 ### 9.5 Frontend (portal repo)

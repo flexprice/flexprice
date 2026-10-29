@@ -243,7 +243,7 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 		}
 		// The pin holds only while ctx stays on the pinned connection's entity.
 		entityID, owner := types.GetBillingEntityID(ctx), lo.FromPtr(c.BillingEntityID)
-		if c.ProviderType == provider && (entityID == "" || owner == "" || owner == entityID) {
+		if c.ProviderType == provider && (entityID == "" || owner == entityID) {
 			SetSpanSuccess(span)
 			return c, nil
 		}

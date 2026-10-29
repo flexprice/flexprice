@@ -155,6 +155,11 @@ func (s *DealSyncService) syncLineItem(
 		return s.client.UpdateDealLineItem(ctx, mapping.ProviderEntityID, props)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	resp, err := s.client.CreateDealLineItem(ctx, &DealLineItemCreateRequest{
 		Properties: *props,
 		Associations: []LineItemAssociation{
@@ -169,11 +174,6 @@ func (s *DealSyncService) syncLineItem(
 			},
 		},
 	})
-	if err != nil {
-		return err
-	}
-
-	conn, err := s.client.GetConnection(ctx)
 	if err != nil {
 		return err
 	}

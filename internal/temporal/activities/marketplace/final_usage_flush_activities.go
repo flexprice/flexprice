@@ -89,6 +89,15 @@ func (a *FlushActivities) subscriptionMarketplaceMappings(ctx context.Context, s
 	})
 }
 
+// mappingConnection returns the published connection the mapping was made with, or the provider's
+// connection for a mapping without one.
+func (a *FlushActivities) mappingConnection(ctx context.Context, m *entityintegrationmapping.EntityIntegrationMapping) (*connection.Connection, error) {
+	if connectionID := lo.FromPtr(m.ConnectionID); connectionID != "" {
+		return a.connectionRepo.Get(ctx, connectionID)
+	}
+	return a.connectionRepo.GetByProvider(ctx, types.SecretProvider(m.ProviderType))
+}
+
 // MarketplaceSubscriptionFinalUsageFlushActivity reports the subscription's outstanding usage in two
 // phases — first the backlog of unsynced records, then the final window up to the cancellation — and
 // archives its marketplace mappings. The phases are kept separate, and logged separately, so a run's
@@ -134,15 +143,16 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 	marketplaceConns := make([]*marketplaceConnection, 0, len(subMappings))
 	connectionResolutionFailed := false
 	for _, m := range subMappings {
-		conn, err := a.connectionRepo.GetByProvider(ctx, types.SecretProvider(m.ProviderType))
+		conn, err := a.mappingConnection(ctx, m)
 		if err != nil {
 			a.logger.Error(ctx, "marketplace subscription flush: failed to resolve marketplace connection",
 				"tenant_id", tenantID, "environment_id", environmentID, "subscription_id", input.SubscriptionID,
-				"provider_type", m.ProviderType, "error", err, "stage", "get_connection")
+				"provider_type", m.ProviderType, "connection_id", lo.FromPtr(m.ConnectionID),
+				"error", err, "stage", "get_connection")
 			connectionResolutionFailed = true
 			continue
 		}
-		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(ctx, conn)
+		prepared, err := a.mktplaceReporter.prepareMarketplaceConnection(types.SetConnectionID(ctx, conn.ID), conn)
 		if err != nil {
 			// already logged inside prepareMarketplaceConnection at the stage that failed
 			connectionResolutionFailed = true
