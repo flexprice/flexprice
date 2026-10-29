@@ -23165,7 +23165,8 @@
           },
           "usage_limit": {
             "type": "integer",
-            "description": "Deprecated: use grant_quota; a metered usage_limit is converted to a grant on create."
+            "description": "Deprecated: use grant_quota; a metered usage_limit is converted to a grant on create.",
+            "deprecated": true
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -24083,7 +24084,8 @@
             "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
-            }
+            },
+            "deprecated": true
           },
           "credit_grants": {
             "type": "array",
@@ -24143,7 +24145,8 @@
                 "type": "string"
               }
             },
-            "description": "Deprecated: use SubscriptionCoupons instead."
+            "description": "Deprecated: use SubscriptionCoupons instead.",
+            "deprecated": true
           },
           "line_item_grouping": {
             "$ref": "#/components/schemas/types.LineItemGrouping"
@@ -26519,7 +26522,8 @@
             "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
-            }
+            },
+            "deprecated": true
           },
           "credit_grants": {
             "type": "array",
@@ -26548,7 +26552,8 @@
                 "type": "string"
               }
             },
-            "description": "Deprecated: use SubscriptionCoupons instead."
+            "description": "Deprecated: use SubscriptionCoupons instead.",
+            "deprecated": true
           },
           "line_items": {
             "type": "array",
@@ -27842,7 +27847,8 @@
           },
           "usage_limit": {
             "type": "integer",
-            "description": "UsageLimit is the new usage limit (only these 3 fields can be overridden)\nFor metered features, nil means unlimited usage"
+            "description": "Deprecated: use grant_quota; on a grant-backed entitlement a usage_limit is converted to grant_quota.",
+            "deprecated": true
           }
         }
       },
@@ -30745,7 +30751,8 @@
             "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
-            }
+            },
+            "deprecated": true
           },
           "end_date": {
             "type": "string",
@@ -30759,7 +30766,8 @@
                 "type": "string"
               }
             },
-            "description": "Deprecated: use SubscriptionCoupons instead."
+            "description": "Deprecated: use SubscriptionCoupons instead.",
+            "deprecated": true
           },
           "line_items": {
             "type": "array",
@@ -32399,7 +32407,8 @@
           },
           "usage_limit": {
             "type": "integer",
-            "description": "Deprecated: use grant_quota."
+            "description": "Deprecated: use grant_quota.",
+            "deprecated": true
           },
           "usage_reset_period": {
             "$ref": "#/components/schemas/types.EntitlementUsageResetPeriod"
@@ -36677,6 +36686,9 @@
           "normalize_fixed_to": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "payment_gateways": {
+            "$ref": "#/components/schemas/types.ZohoPaymentGatewaySettings"
+          },
           "payment_mode": {
             "type": "string",
             "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode."
@@ -40606,6 +40618,58 @@
           "TenantInternalStatusSuspended"
         ],
         "x-speakeasy-name-override": "TenantInternalStatus"
+      },
+      "types.ZohoPayPalPaymentMethod": {
+        "type": "string",
+        "enum": [
+          "standard",
+          "adaptive"
+        ],
+        "x-enum-varnames": [
+          "ZohoPayPalPaymentMethodStandard",
+          "ZohoPayPalPaymentMethodAdaptive"
+        ],
+        "x-speakeasy-name-override": "ZohoPayPalPaymentMethod"
+      },
+      "types.ZohoPaymentGateway": {
+        "type": "string",
+        "enum": [
+          "paypal",
+          "stripe",
+          "authorize_net",
+          "payflow_pro",
+          "2checkout",
+          "braintree",
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "ZohoPaymentGatewayPayPal",
+          "ZohoPaymentGatewayStripe",
+          "ZohoPaymentGatewayAuthorizeNet",
+          "ZohoPaymentGatewayPayflowPro",
+          "ZohoPaymentGateway2Checkout",
+          "ZohoPaymentGatewayBraintree",
+          "ZohoPaymentGatewayRazorpay"
+        ],
+        "x-speakeasy-name-override": "ZohoPaymentGateway"
+      },
+      "types.ZohoPaymentGatewaySettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ZohoPaymentGateway"
+            }
+          },
+          "paypal_payment_method": {
+            "$ref": "#/components/schemas/types.ZohoPayPalPaymentMethod"
+          }
+        },
+        "x-speakeasy-name-override": "ZohoPaymentGatewaySettings"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
