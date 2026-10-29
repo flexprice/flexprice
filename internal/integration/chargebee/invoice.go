@@ -3,6 +3,7 @@ package chargebee
 import (
 	"context"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/chargebee/chargebee-go/v3/enum"
@@ -91,6 +92,7 @@ func (s *InvoiceService) CreateInvoice(ctx context.Context, req *InvoiceCreateRe
 	// Prepare request params
 	createParams := &chargebeeInvoice.CreateForChargeItemsAndChargesRequestParams{
 		CustomerId:     req.CustomerID,
+		CurrencyCode:   strings.ToUpper(req.Currency),
 		AutoCollection: enum.AutoCollection(req.AutoCollection),
 	}
 
@@ -98,6 +100,20 @@ func (s *InvoiceService) CreateInvoice(ctx context.Context, req *InvoiceCreateRe
 	if len(req.LineItems) > 0 {
 		itemPrices := make([]*chargebeeInvoice.CreateForChargeItemsAndChargesItemPriceParams, 0, len(req.LineItems))
 		for _, item := range req.LineItems {
+			if item.ChargeAmount != nil {
+				if item.ItemPriceID != "" || *item.ChargeAmount <= 0 || req.Currency == "" {
+					return nil, ierr.Validation("scheduled Chargebee charges require a positive exact amount and invoice currency")
+				}
+				charge := &chargebeeInvoice.CreateForChargeItemsAndChargesChargeParams{Amount: item.ChargeAmount, Description: item.Description}
+				if item.DateFrom != nil {
+					charge.DateFrom = lo.ToPtr(item.DateFrom.Unix())
+				}
+				if item.DateTo != nil {
+					charge.DateTo = lo.ToPtr(item.DateTo.Unix())
+				}
+				createParams.Charges = append(createParams.Charges, charge)
+				continue
+			}
 			if item.Quantity > math.MaxInt32 || item.Quantity < math.MinInt32 {
 				return nil, ierr.NewError("line item quantity exceeds Chargebee's supported range").
 					WithHint("Quantity must fit in a 32-bit integer for Chargebee").
@@ -305,6 +321,7 @@ func (s *InvoiceService) SyncInvoiceToChargebee(
 
 	// Step 7: Create invoice in Chargebee
 	invoiceReq := &InvoiceCreateRequest{
+		Currency:       flexInvoice.Currency,
 		CustomerID:     chargebeeCustomerID,
 		AutoCollection: autoCollection,
 		LineItems:      lineItems,
@@ -361,6 +378,16 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 			s.Logger.Debug(ctx, "skipping zero-amount line item",
 				"invoice_id", flexInvoice.ID,
 				"line_item_id", item.ID)
+			continue
+		}
+
+		if item.BillingScheduleItemID != nil && item.PriceID == nil {
+			amount := item.Amount.Shift(int32(types.GetCurrencyPrecision(flexInvoice.Currency)))
+			if !amount.IsPositive() || !amount.Equal(amount.Truncate(0)) || amount.GreaterThan(decimal.NewFromInt(math.MaxInt64)) {
+				return nil, ierr.Validation("scheduled charge exceeds Chargebee amount precision")
+			}
+			lineItems = append(lineItems, InvoiceLineItem{ChargeAmount: lo.ToPtr(amount.IntPart()), Quantity: 1,
+				Description: item.GetDescription(), DateFrom: item.PeriodStart, DateTo: item.PeriodEnd})
 			continue
 		}
 

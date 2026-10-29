@@ -143,8 +143,22 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 
+	inv, err := s.serviceParams.InvoiceRepo.Get(types.WithForceWriter(ctx), input.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+	if inv == nil {
+		return nil, ierr.NewError("invoice repository returned no invoice").Mark(ierr.ErrDatabase)
+	}
+	if inv.Status != types.StatusPublished || inv.InvoiceStatus == types.InvoiceStatusVoided || inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true, Skipped: true}, nil
+	}
+	if inv.InvoiceStatus == types.InvoiceStatusFinalized {
+		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true}, nil
+	}
+
 	// Check if finalization delay has elapsed
-	due, err := invoiceService.IsFinalizationDue(ctx, input.InvoiceID)
+	due, err := invoiceService.IsInvoiceFinalizationDue(ctx, inv)
 	if err != nil {
 		s.logger.Error(ctx, "failed to check finalization delay",
 			"invoice_id", input.InvoiceID,
@@ -227,6 +241,18 @@ func (s *InvoiceActivities) AttemptInvoicePaymentActivity(
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
+
+	inv, err := s.serviceParams.InvoiceRepo.Get(types.WithForceWriter(ctx), input.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+	if inv == nil {
+		return nil, ierr.NewError("invoice repository returned no invoice").Mark(ierr.ErrDatabase)
+	}
+	if inv.Status != types.StatusPublished || inv.InvoiceStatus == types.InvoiceStatusVoided || inv.InvoiceStatus == types.InvoiceStatusSkipped ||
+		inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid {
+		return &invoiceModels.PaymentActivityOutput{Success: true}, nil
+	}
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 

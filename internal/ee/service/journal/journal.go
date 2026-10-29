@@ -155,6 +155,11 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 	if inv.FinalizedAt == nil {
 		return nil
 	}
+	for _, line := range inv.LineItems {
+		if err := validateBillingScheduleRecognition(line); err != nil {
+			return err
+		}
+	}
 
 	revenuePostings, err := s.invoiceRevenuePostings(ctx, inv)
 	if err != nil {
@@ -308,6 +313,9 @@ func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *credi
 
 	postings := make([]posting, 0, len(cn.LineItems))
 	for _, li := range cn.LineItems {
+		if err := validateBillingScheduleRecognition(invoiceLines[li.InvoiceLineItemID]); err != nil {
+			return nil, err
+		}
 		pobID, err := s.pobService.POBIDForInvoiceLine(ctx, invoiceLines[li.InvoiceLineItemID])
 		if err != nil {
 			return nil, err
@@ -315,6 +323,16 @@ func (s *journalService) creditNoteContraPostings(ctx context.Context, cn *credi
 		postings = append(postings, posting{account: types.LedgerAccountContraRevenue, amount: amounts[li.ID].Neg(), pobID: pobID})
 	}
 	return postings, nil
+}
+
+func validateBillingScheduleRecognition(line *invoice.InvoiceLineItem) error {
+	if line == nil || line.BillingScheduleItemID == nil {
+		return nil
+	}
+	return ierr.NewError("scheduled commitment principal has no supported performance obligation allocation").
+		WithHint("Leave this journal source pending until commitment-to-performance-obligation allocation is supported; payment schedules do not define revenue recognition.").
+		WithReportableDetails(map[string]any{"invoice_line_item_id": line.ID, "billing_schedule_item_id": *line.BillingScheduleItemID}).
+		Mark(ierr.ErrInvalidOperation)
 }
 
 // e.g. 80 by card: Dr cash 80 / Cr AR 80; by wallet credits: Dr customer_credit 80 / Cr AR 80.

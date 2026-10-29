@@ -56,32 +56,35 @@ func ProcessInvoiceWorkflow(
 	// ================================================================================
 	// STEP 0: Compute invoice (line items, coupons/taxes, or mark SKIPPED if zero)
 	// ================================================================================
-	logger.Info("Step 0: Computing invoice",
-		"invoice_id", input.InvoiceID)
-
-	var computeOutput invoiceModels.ComputeInvoiceActivityOutput
-	computeInput := invoiceModels.ComputeInvoiceActivityInput{
-		InvoiceID:     input.InvoiceID,
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        input.UserID,
-	}
-
-	err := workflow.ExecuteActivity(ctx, ActivityComputeInvoice, computeInput).Get(ctx, &computeOutput)
-	if err != nil {
-		logger.Error("Failed to compute invoice",
-			"error", err,
+	version := workflow.GetVersion(ctx, "materialized-invoice-processing", workflow.DefaultVersion, 1)
+	if version == workflow.DefaultVersion || !input.SkipCompute {
+		logger.Info("Step 0: Computing invoice",
 			"invoice_id", input.InvoiceID)
-		return nil, err
-	}
 
-	if computeOutput.Skipped {
-		logger.Info("Invoice is zero-dollar, marked SKIPPED; skipping finalize/sync/payment",
-			"invoice_id", input.InvoiceID)
-		return &invoiceModels.ProcessInvoiceWorkflowResult{
-			Success:     true,
-			CompletedAt: workflow.Now(ctx),
-		}, nil
+		var computeOutput invoiceModels.ComputeInvoiceActivityOutput
+		computeInput := invoiceModels.ComputeInvoiceActivityInput{
+			InvoiceID:     input.InvoiceID,
+			TenantID:      input.TenantID,
+			EnvironmentID: input.EnvironmentID,
+			UserID:        input.UserID,
+		}
+
+		err := workflow.ExecuteActivity(ctx, ActivityComputeInvoice, computeInput).Get(ctx, &computeOutput)
+		if err != nil {
+			logger.Error("Failed to compute invoice",
+				"error", err,
+				"invoice_id", input.InvoiceID)
+			return nil, err
+		}
+
+		if computeOutput.Skipped {
+			logger.Info("Invoice is zero-dollar, marked SKIPPED; skipping finalize/sync/payment",
+				"invoice_id", input.InvoiceID)
+			return &invoiceModels.ProcessInvoiceWorkflowResult{
+				Success:     true,
+				CompletedAt: workflow.Now(ctx),
+			}, nil
+		}
 	}
 
 	// ================================================================================
@@ -97,7 +100,7 @@ func ProcessInvoiceWorkflow(
 		EnvironmentID: input.EnvironmentID,
 	}
 
-	err = workflow.ExecuteActivity(ctx, ActivityFinalizeInvoice, finalizeInput).Get(ctx, &finalizeOutput)
+	err := workflow.ExecuteActivity(ctx, ActivityFinalizeInvoice, finalizeInput).Get(ctx, &finalizeOutput)
 	if err != nil {
 		logger.Error("Failed to finalize invoice",
 			"error", err,

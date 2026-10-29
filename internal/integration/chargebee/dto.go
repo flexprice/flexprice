@@ -166,6 +166,7 @@ type BillingAddress struct {
 // Note: Chargebee calculates due dates automatically based on customer payment terms
 // and site settings. The due_date cannot be set during invoice creation.
 type InvoiceCreateRequest struct {
+	Currency       string            `json:"currency,omitempty"`
 	CustomerID     string            `json:"customer_id"`
 	AutoCollection string            `json:"auto_collection"` // "on" if customer has payment method, "off" otherwise
 	LineItems      []InvoiceLineItem `json:"line_items"`
@@ -174,12 +175,13 @@ type InvoiceCreateRequest struct {
 
 // InvoiceLineItem represents a line item in invoice request
 type InvoiceLineItem struct {
-	ItemPriceID string     `json:"item_price_id"`
-	Quantity    int        `json:"quantity"`
-	UnitAmount  int64      `json:"unit_amount,omitempty"` // Amount in cents
-	Description string     `json:"description,omitempty"`
-	DateFrom    *time.Time `json:"date_from,omitempty"`
-	DateTo      *time.Time `json:"date_to,omitempty"`
+	ChargeAmount *int64     `json:"charge_amount,omitempty"`
+	ItemPriceID  string     `json:"item_price_id"`
+	Quantity     int        `json:"quantity"`
+	UnitAmount   int64      `json:"unit_amount,omitempty"` // Amount in cents
+	Description  string     `json:"description,omitempty"`
+	DateFrom     *time.Time `json:"date_from,omitempty"`
+	DateTo       *time.Time `json:"date_to,omitempty"`
 }
 
 // InvoiceResponse represents an invoice response from Chargebee

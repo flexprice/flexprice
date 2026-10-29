@@ -246,13 +246,17 @@ func (s *ItemSyncService) createItemMapping(
 // This allows companies to configure their own income account ID while maintaining a sensible default.
 // The default "79" is the standard Service Income account in QuickBooks Sandbox.
 func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
+	return quickBooksIncomeAccount(ctx, s.Client, s.Logger)
+}
+
+func quickBooksIncomeAccount(ctx context.Context, client QuickBooksClient, log *logger.Logger) string {
 	const defaultIncomeAccountID = "79"
 
 	// Try to get connection to check for custom income account ID
-	conn, err := s.Client.GetConnection(ctx)
+	conn, err := client.GetConnection(ctx)
 	if err != nil {
 		// If connection not found or error, use default
-		s.Logger.Debug(ctx, "could not get QuickBooks connection, using default income account ID",
+		log.Debug(ctx, "could not get QuickBooks connection, using default income account ID",
 			"default_account_id", defaultIncomeAccountID,
 			"error", err)
 		return defaultIncomeAccountID
@@ -261,7 +265,7 @@ func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
 	// Check if connection has custom income account ID in metadata
 	if conn.EncryptedSecretData.QuickBooks != nil {
 		if incomeAccountID := conn.EncryptedSecretData.QuickBooks.IncomeAccountID; incomeAccountID != "" {
-			s.Logger.Debug(ctx, "using custom income account ID from connection",
+			log.Debug(ctx, "using custom income account ID from connection",
 				"income_account_id", incomeAccountID,
 				"connection_id", conn.ID)
 			return incomeAccountID
@@ -269,7 +273,7 @@ func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
 	}
 
 	// No custom account ID configured, use default
-	s.Logger.Debug(ctx, "no custom income account ID configured, using default Service Revenue account",
+	log.Debug(ctx, "no custom income account ID configured, using default Service Revenue account",
 		"default_account_id", defaultIncomeAccountID,
 		"connection_id", conn.ID,
 		"hint", "Set 'income_account_id' in connection metadata to use a different account")

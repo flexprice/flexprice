@@ -861,3 +861,15 @@ func (s *InvoiceConversionSuite) TestExistingCustomersUnaffected() {
 		})
 	}
 }
+
+func TestConvertInvoiceAmountsPreservesScheduledPrincipal(t *testing.T) {
+	line := convLine("scheduled", "usd", "100")
+	line.BillingScheduleItemID = lo.ToPtr("bsi_source")
+	inv := &invoice.Invoice{ID: "inv_scheduled", Currency: "usd", Subtotal: dec("100"), LineItems: []*invoice.InvoiceLineItem{line}}
+	err := convertInvoiceAmounts(inv, &FXRateResolution{To: "eur", Rate: dec("0.9")}, time.Now())
+	require.ErrorContains(t, err, "obligation currency")
+	require.Equal(t, "usd", inv.Currency)
+	require.Equal(t, "100", line.Amount.String())
+	require.Nil(t, inv.FxConversion)
+	require.Nil(t, line.FxConversion)
+}

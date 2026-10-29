@@ -1714,6 +1714,9 @@ func (r *GetUnpaidInvoicesToBePaidRequest) Validate() error {
 }
 
 type GetUnpaidInvoicesToBePaidResponse struct {
+	// ExcludedDraftInvoices supports source reconciliation without exposing another public invoice list.
+	ExcludedDraftInvoices []*InvoiceResponse `json:"-"`
+
 	// invoices is the list of unpaid invoices to be paid
 	Invoices []*InvoiceResponse `json:"invoices"`
 

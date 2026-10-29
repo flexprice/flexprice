@@ -87,6 +87,7 @@ const (
 	TemporalPriceSyncV2Workflow                            TemporalWorkflowType = "PriceSyncV2Workflow"
 	TemporalAddonPriceSyncWorkflow                         TemporalWorkflowType = "AddonPriceSyncWorkflow"
 	TemporalProcessInvoiceWorkflow                         TemporalWorkflowType = "ProcessInvoiceWorkflow"
+	TemporalProcessBillingScheduleItemsDueWorkflow         TemporalWorkflowType = "ProcessBillingScheduleItemsDueWorkflow"
 	TemporalProcessSubscriptionBillingWorkflow             TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
 	TemporalQuickBooksCustomerSyncWorkflow                 TemporalWorkflowType = "QuickBooksCustomerSyncWorkflow"
 	TemporalQuickBooksInvoiceSyncWorkflow                  TemporalWorkflowType = "QuickBooksInvoiceSyncWorkflow"
@@ -119,6 +120,7 @@ const (
 // temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
 // task queue, tracking exclusions, and Validate in sync when adding a cron workflow).
 var temporalCronWorkflowTypes = []TemporalWorkflowType{
+	TemporalProcessBillingScheduleItemsDueWorkflow,
 	TemporalCreditGrantProcessingWorkflow,
 	TemporalSubscriptionAutoCancellationWorkflow,
 	TemporalSubscriptionOverdueInvoicesWorkflow,
