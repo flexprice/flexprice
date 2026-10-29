@@ -26334,7 +26334,8 @@
           },
           "group_by_property": {
             "type": "string",
-            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.\n\nDeprecated: prefer GroupBy []string{\"properties.<X>\"} for parity with\nother analytics endpoints. ToUsageParams translates this field into\nGroupBy when GroupBy is otherwise empty."
+            "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.\n\nDeprecated: prefer GroupBy []string{\"properties.<X>\"} for parity with\nother analytics endpoints. ToUsageParams translates this field into\nGroupBy when GroupBy is otherwise empty.",
+            "deprecated": true
           },
           "multiplier": {
             "type": "string"
@@ -31426,7 +31427,8 @@
           "configuration": {
             "type": "object",
             "additionalProperties": true,
-            "description": "configuration is the raw type-specific configuration. Deprecated: use configuration_details."
+            "description": "configuration is the raw type-specific configuration. Deprecated: use configuration_details.",
+            "deprecated": true
           },
           "configuration_details": {
             "$ref": "#/components/schemas/ConfigurationDetails"
@@ -31455,7 +31457,8 @@
           "execution_result": {
             "type": "object",
             "additionalProperties": true,
-            "description": "execution_result is the raw type-specific execution result. Deprecated: use execution_details."
+            "description": "execution_result is the raw type-specific execution result. Deprecated: use execution_details.",
+            "deprecated": true
           },
           "id": {
             "type": "string",
@@ -38068,7 +38071,8 @@
           },
           "with_line_items": {
             "type": "boolean",
-            "description": "WithLineItems includes line items in the response.\n\nDeprecated: use expand=\"subscription_line_items\" instead. Retained for\nbackwards compatibility and for internal callers that need to force-disable\nline item loading (set to false). The service layer ORs this with the\nexpand check before invoking the repository."
+            "description": "WithLineItems includes line items in the response.\n\nDeprecated: use expand=\"subscription_line_items\" instead. Retained for\nbackwards compatibility and for internal callers that need to force-disable\nline item loading (set to false). The service layer ORs this with the\nexpand check before invoking the repository.",
+            "deprecated": true
           }
         },
         "x-speakeasy-name-override": "SubscriptionFilter"
