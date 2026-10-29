@@ -1097,9 +1097,6 @@ func neverGrantShapeError(e *entitlement.Entitlement, m *meter.Meter) error {
 	if defaultedMode(e.AggregationMode) != types.EntitlementAggregationModeAdditive {
 		return ierr.NewError("parallel grants are not supported for NEVER meters").Mark(ierr.ErrValidation)
 	}
-	if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
-		return ierr.NewError("addon grants are not supported for NEVER meters").Mark(ierr.ErrValidation)
-	}
 	return nil
 }
 
