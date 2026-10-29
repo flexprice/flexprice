@@ -1,0 +1,71 @@
+package service
+
+import (
+	"context"
+
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/types"
+)
+
+// invoiceBillingEntity is the effective billing entity of the invoice's customer, or nil.
+func (s *invoiceService) invoiceBillingEntity(ctx context.Context, inv *invoice.Invoice) (*billingentity.BillingEntity, error) {
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+	return NewBillingEntityService(s.ServiceParams).EffectiveEntity(ctx, cust)
+}
+
+// sellerFor is the seller frozen at finalization, else the customer's entity now; nil means the tenant sells.
+// An issued invoice without a snapshot predates billing entities, so the tenant stays its seller.
+func (s *invoiceService) sellerFor(ctx context.Context, inv *invoice.Invoice) (*types.SellerSnapshot, error) {
+	if inv.SellerSnapshot != nil {
+		return inv.SellerSnapshot, nil
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return nil, nil
+	}
+	entity, err := s.invoiceBillingEntity(ctx, inv)
+	if err != nil {
+		return nil, err
+	}
+	return entity.SellerSnapshot(), nil
+}
+
+// numberPrefixFor is the customer's entity prefix, or the environment prefix for a customer without one.
+func (s *invoiceService) numberPrefixFor(ctx context.Context, inv *invoice.Invoice, cfg *types.InvoiceConfig) (string, error) {
+	entity, err := s.invoiceBillingEntity(ctx, inv)
+	if err != nil {
+		return "", err
+	}
+	if entity == nil {
+		return cfg.InvoiceNumberPrefix, nil
+	}
+	return entity.InvoiceNumberPrefix, nil
+}
+
+// applySellerSnapshot freezes the customer's entity as seller once; later calls keep the first snapshot.
+func (s *invoiceService) applySellerSnapshot(ctx context.Context, inv *invoice.Invoice) error {
+	if inv.SellerSnapshot != nil {
+		return nil
+	}
+	entity, err := s.invoiceBillingEntity(ctx, inv)
+	if err != nil {
+		return err
+	}
+	inv.SellerSnapshot = entity.SellerSnapshot()
+	return nil
+}
+
+// sellerAsTenant presents an entity seller in the tenant shape the biller block and hosted page render.
+func sellerAsTenant(t *tenant.Tenant, seller *types.SellerSnapshot) *tenant.Tenant {
+	biller := &tenant.Tenant{}
+	if t != nil {
+		*biller = *t
+	}
+	biller.Name = seller.LegalName
+	biller.BillingDetails = billingentity.TenantBillingDetailsFromSeller(seller.SellerDetails)
+	return biller
+}

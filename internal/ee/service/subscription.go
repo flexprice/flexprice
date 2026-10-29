@@ -990,6 +990,12 @@ func triggerHubSpotDealSync(ctx context.Context, sp ServiceParams, subscriptionI
 			"subscription_id", subscriptionID)
 		return
 	}
+	if skip, err := skipIntegrationsForCustomer(ctx, sp, cust.ID, "hubspot_deal_sync"); err != nil || skip {
+		if err != nil {
+			sp.Logger.Error(ctx, "failed to check billing entity for HubSpot deal sync", "error", err, "subscription_id", subscriptionID)
+		}
+		return
+	}
 
 	input := &models.HubSpotDealSyncWorkflowInput{
 		SubscriptionID: subscriptionID,
@@ -1082,6 +1088,12 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
 		return // Not an error - customer might not be from HubSpot
+	}
+	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, customerID, "hubspot_quote_sync"); err != nil || skip {
+		if err != nil {
+			s.Logger.Error(ctx, "failed to check billing entity for HubSpot quote sync", "error", err, "subscription_id", subscriptionID)
+		}
+		return
 	}
 
 	// Prepare workflow input with all necessary IDs
@@ -1791,6 +1803,10 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 	response.CreditGrants = creditGrantsResponse.Items
 
+	if err := fillSubscriptionBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -1821,6 +1837,9 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 
 	response := &dto.SubscriptionResponseV2{
 		Subscription: sub,
+	}
+	if err := fillSubscriptionV2BillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
 	}
 
 	// Compare sub.SyncedPriceSequence against the plan's current max
@@ -2461,6 +2480,10 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset())
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to list subscriptions from repository", "error", err, "filter", filter)
@@ -2694,6 +2717,10 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"total_items", len(response.Items),
 		"total_count", count,
 		"pagination", response.Pagination)
+
+	if err := fillSubscriptionBillingEntityIDs(ctx, s.ServiceParams, response.Items...); err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }
@@ -8126,6 +8153,8 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		// Inherited.
 		if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 			sub.SubscriptionType = types.SubscriptionTypeInherited
+		} else if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, parentSub.CustomerID); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -8139,6 +8168,9 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 				WithHint("The invoicing customer must be active").
 				WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
 				Mark(ierr.ErrValidation)
+		}
+		if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, invoicingCustomer.ID); err != nil {
+			return nil, nil, err
 		}
 		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
 	}

@@ -9,6 +9,8 @@ type Environment struct {
 	ID   string                `db:"id" json:"id"`
 	Name string                `db:"name" json:"name"`
 	Type types.EnvironmentType `db:"type" json:"type"`
+	// BillingEntityMode is for display only; decisions read it from the database.
+	BillingEntityMode types.BillingEntityMode `db:"billing_entity_mode" json:"billing_entity_mode"`
 
 	types.BaseModel
 }
@@ -20,9 +22,10 @@ func FromEnt(e *ent.Environment) *Environment {
 	}
 
 	return &Environment{
-		ID:   e.ID,
-		Name: e.Name,
-		Type: types.EnvironmentType(e.Type),
+		ID:                e.ID,
+		Name:              e.Name,
+		Type:              types.EnvironmentType(e.Type),
+		BillingEntityMode: types.BillingEntityMode(e.BillingEntityMode),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

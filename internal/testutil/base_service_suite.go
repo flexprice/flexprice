@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -124,6 +125,7 @@ type Stores struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	BillingEntityRepo            billingentity.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -296,6 +298,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		SelfBillingClickHouseRepo:    selfBillingStore,
 		SelfBillingPostgresRepo:      selfBillingStore,
 		CommitmentRepo:               NewInMemoryCommitmentStore(),
+		BillingEntityRepo:            NewInMemoryBillingEntityStore(),
 	}
 
 	// Cache stores
@@ -366,6 +369,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.RevenueFactRepo.(*InMemoryRevenueFactStore).Clear()
 	s.stores.SelfBillingClickHouseRepo.(*InMemorySelfBillingStore).Clear()
 	s.stores.CommitmentRepo.(*InMemoryCommitmentStore).Clear()
+	s.stores.BillingEntityRepo.(*InMemoryBillingEntityStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

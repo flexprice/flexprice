@@ -737,6 +737,15 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		"amount", amount,
 	)
 
+	if skip, err := skipIntegrationsForCustomer(ctx, *s.ServiceParams, inv.CustomerID, "invoice_card_charge"); err != nil || skip {
+		if err != nil {
+			s.Logger.Error(ctx, "failed to resolve billing entity for card charge",
+				"error", err,
+				"invoice_id", inv.ID)
+		}
+		return decimal.Zero
+	}
+
 	// Check if tenant has Stripe connection
 	if !s.hasStripeConnection(ctx) {
 		s.Logger.Info(context.Background(), "no Stripe connection available for payment method charge",

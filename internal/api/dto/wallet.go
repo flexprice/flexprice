@@ -258,6 +258,8 @@ func (r *CreateWalletRequest) Validate() error {
 // WalletResponse represents a wallet in API responses
 type WalletResponse struct {
 	*wallet.Wallet
+	// billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities
+	BillingEntityID           *string                `json:"billing_entity_id"`
 	CreditsAvailableBreakdown *types.CreditBreakdown `json:"credits_available_breakdown,omitempty"`
 	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
 	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
@@ -538,6 +540,8 @@ type TopUpWalletResponse struct {
 // WalletBalanceResponse represents the response for getting wallet balance
 type WalletBalanceResponse struct {
 	*wallet.Wallet
+	// billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities
+	BillingEntityID           *string                `json:"billing_entity_id,omitempty"`
 	RealTimeBalance           *decimal.Decimal       `json:"real_time_balance,omitempty" swaggertype:"string"`
 	RealTimeCreditBalance     *decimal.Decimal       `json:"real_time_credit_balance,omitempty" swaggertype:"string"`
 	BalanceUpdatedAt          *time.Time             `json:"balance_updated_at,omitempty"`

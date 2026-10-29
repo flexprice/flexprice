@@ -35,6 +35,7 @@ func copyCustomer(c *customer.Customer) *customer.Customer {
 		Name:              c.Name,
 		Email:             c.Email,
 		BillingCurrency:   clonePtr(c.BillingCurrency),
+		BillingEntityID:   clonePtr(c.BillingEntityID),
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,
@@ -251,4 +252,24 @@ func (s *InMemoryCustomerStore) ListByFilter(ctx context.Context, filter *types.
 // CountByFilter counts customers based on filter
 func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.Count(ctx, filter)
+}
+
+// AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.
+func (s *InMemoryCustomerStore) AssignDefaultBillingEntities(ctx context.Context, tenantID, environmentID string, limit int) (int, error) {
+	return 0, ierr.NewError("not supported by the in-memory customer store").Mark(ierr.ErrNotImplemented)
+}
+
+func (s *InMemoryCustomerStore) BillingEntityIDsByCustomerIDs(ctx context.Context, ids []string) (map[string]*string, error) {
+	result := make(map[string]*string, len(ids))
+	for _, id := range ids {
+		c, err := s.Get(ctx, id)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+		result[id] = c.BillingEntityID
+	}
+	return result, nil
 }

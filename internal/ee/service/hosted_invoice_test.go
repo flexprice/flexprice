@@ -40,6 +40,7 @@ func (s *HostedInvoiceResolveSuite) SetupTest() {
 		Config:                 s.GetConfig(),
 		DB:                     s.GetDB(),
 		TenantRepo:             stores.TenantRepo,
+		EnvironmentRepo:        stores.EnvironmentRepo,
 		InvoiceRepo:            stores.InvoiceRepo,
 		HostedInvoiceTokenRepo: stores.HostedInvoiceTokenRepo,
 	})

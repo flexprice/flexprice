@@ -39,6 +39,8 @@ func (s *PortalPaymentMethodSuite) SetupTest() {
 		DB:                 s.GetDB(),
 		ConnectionRepo:     s.GetStores().ConnectionRepo,
 		CustomerRepo:       s.GetStores().CustomerRepo,
+		TenantRepo:         s.GetStores().TenantRepo,
+		EnvironmentRepo:    s.GetStores().EnvironmentRepo,
 		IntegrationFactory: s.GetIntegrationFactory(),
 	}
 	s.paymentSvc = NewPaymentService(params)

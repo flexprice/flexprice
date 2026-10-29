@@ -42,9 +42,19 @@ func (r *LockRequest) GetTimeout() time.Duration {
 // Auto released on tx commit/rollback.
 // Must be called inside a transaction.
 func (c *Client) LockWithWait(ctx context.Context, req LockRequest) error {
+	return c.lockWithWait(ctx, req, "pg_advisory_xact_lock")
+}
+
+// LockSharedWithWait acquires a shared advisory lock: shared holders never block each other,
+// only an exclusive LockWithWait on the same key does. Must be called inside a transaction.
+func (c *Client) LockSharedWithWait(ctx context.Context, req LockRequest) error {
+	return c.lockWithWait(ctx, req, "pg_advisory_xact_lock_shared")
+}
+
+func (c *Client) lockWithWait(ctx context.Context, req LockRequest, lockFunc string) error {
 	tx := c.TxFromContext(ctx)
 	if tx == nil {
-		return fmt.Errorf("LockWithWait must be called inside transaction")
+		return fmt.Errorf("advisory lock must be called inside transaction")
 	}
 
 	timeout := req.GetTimeout()
@@ -57,9 +67,7 @@ func (c *Client) LockWithWait(ctx context.Context, req LockRequest) error {
 	}
 
 	// Acquire the lock (will respect lock_timeout we just set)
-	_, err = tx.ExecContext(ctx, `
-		SELECT pg_advisory_xact_lock(hashtext($1))
-	`, req.Key)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("SELECT %s(hashtext($1))", lockFunc), req.Key)
 	if err != nil {
 		// Check if it's a lock timeout error using PostgreSQL error code
 		if isLockTimeoutError(err) {

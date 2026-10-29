@@ -1473,6 +1473,379 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/billing-entities": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List the billing entities of this environment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "List billing entities",
+                "operationId": "listBillingEntities",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "billing_entity_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "name": "is_default",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "deleted",
+                            "archived"
+                        ],
+                        "type": "string",
+                        "x-enum-varnames": [
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
+                        ],
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListBillingEntitiesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a legal entity that bills customers in this environment. Requires billing entities to be enabled.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Create a billing entity",
+                "operationId": "createBillingEntity",
+                "parameters": [
+                    {
+                        "description": "Billing entity to create",
+                        "name": "billing_entity",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreateBillingEntityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Invoice prefix already in use",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing-entities/enable": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Start enabling billing entities in the environment. The environment gets a default entity and its existing customers are assigned to it. Irreversible.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Enable billing entities",
+                "operationId": "enableBillingEntities",
+                "responses": {
+                    "200": {
+                        "description": "Already enabled",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "202": {
+                        "description": "Enabling started",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "The environment uses an external tax engine",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Not a super admin",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing-entities/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Whether billing entities are off, enabling or enabled in the environment.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Get billing entities status",
+                "operationId": "getBillingEntitiesStatus",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityModeResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/billing-entities/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Load a single billing entity by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Get a billing entity",
+                "operationId": "getBillingEntity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Edit a billing entity. Drafts and future invoices use the new details; finalized invoices keep theirs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Billing Entities"
+                ],
+                "summary": "Update a billing entity",
+                "operationId": "updateBillingEntity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Billing entity ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "billing_entity",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateBillingEntityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingEntityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or billing entities not enabled",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Invoice prefix already in use",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/checkout/sessions": {
             "post": {
                 "security": [
@@ -6984,6 +7357,12 @@ const docTemplate = `{
                 "summary": "List payments",
                 "operationId": "listPayments",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filters by the invoice customer's billing entity",
+                        "name": "billing_entity_id",
+                        "in": "query"
+                    },
                     {
                         "type": "string",
                         "name": "currency",
@@ -17204,6 +17583,70 @@ const docTemplate = `{
                 }
             }
         },
+        "BillingEntityModeResponse": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "$ref": "#/definitions/types.BillingEntityMode"
+                }
+            }
+        },
+        "BillingEntityResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_number_prefix": {
+                    "type": "string"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "legal_name": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "seller_details": {
+                    "$ref": "#/definitions/types.SellerDetails"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tax_identifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TaxIdentifier"
+                    }
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "BillingPeriodConfig": {
             "type": "object",
             "properties": {
@@ -18641,6 +19084,44 @@ const docTemplate = `{
                 }
             }
         },
+        "CreateBillingEntityRequest": {
+            "type": "object",
+            "required": [
+                "invoice_number_prefix",
+                "legal_name",
+                "name"
+            ],
+            "properties": {
+                "invoice_number_prefix": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
+                },
+                "legal_name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "seller_details": {
+                    "$ref": "#/definitions/types.SellerDetails"
+                },
+                "tax_identifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TaxIdentifier"
+                    }
+                }
+            }
+        },
         "CreateBulkEntitlementRequest": {
             "type": "object",
             "required": [
@@ -19131,6 +19612,10 @@ const docTemplate = `{
                     "description": "billing_currency is the fiat currency invoices are issued in; empty means the charge currency is used as-is",
                     "type": "string",
                     "maxLength": 10
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity that bills this customer; defaults to the environment's\ndefault entity. Accepted only once billing entities are enabled, and never changes afterwards.",
+                    "type": "string"
                 },
                 "contact": {
                     "description": "contact is an optional contact number for the customer (e.g. phone)",
@@ -20817,6 +21302,10 @@ const docTemplate = `{
         "CreditNoteResponse": {
             "type": "object",
             "properties": {
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -21108,6 +21597,10 @@ const docTemplate = `{
                 },
                 "billing_currency": {
                     "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
+                "billing_entity_id": {
+                    "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.",
                     "type": "string"
                 },
                 "contact": {
@@ -23214,6 +23707,10 @@ const docTemplate = `{
                     "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
                     "type": "string"
                 },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
+                },
                 "billing_period": {
                     "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")",
                     "type": "string"
@@ -23389,6 +23886,14 @@ const docTemplate = `{
                 "refunded_amount": {
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
                     "type": "string"
+                },
+                "seller_snapshot": {
+                    "description": "SellerSnapshot is the billing entity seller frozen at finalization; nil for customers without an entity.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SellerSnapshot"
+                        }
+                    ]
                 },
                 "source_type": {
                     "$ref": "#/definitions/types.InvoiceSourceType"
@@ -23670,6 +24175,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/AlertLogResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListBillingEntitiesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BillingEntityResponse"
                     }
                 },
                 "pagination": {
@@ -24157,6 +24676,10 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/PaymentAttemptResponse"
                     }
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -24812,6 +25335,10 @@ const docTemplate = `{
                 },
                 "attempt": {
                     "type": "integer"
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
                 },
                 "cancelled_at": {
                     "type": "string"
@@ -27085,6 +27612,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
+                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
@@ -27341,6 +27872,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.BillingCycle"
                         }
                     ]
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
+                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -28404,6 +28939,41 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateBillingEntityRequest": {
+            "type": "object",
+            "properties": {
+                "invoice_number_prefix": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
+                },
+                "legal_name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "seller_details": {
+                    "$ref": "#/definitions/types.SellerDetails"
+                },
+                "tax_identifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TaxIdentifier"
+                    }
+                }
+            }
+        },
         "UpdateCommitmentRequest": {
             "type": "object",
             "properties": {
@@ -28521,6 +29091,10 @@ const docTemplate = `{
                     "description": "billing_currency updates the invoicing currency; send \"\" to clear it back to the charge currency",
                     "type": "string",
                     "maxLength": 10
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id cannot be changed; sending it is rejected",
+                    "type": "string"
                 },
                 "contact": {
                     "description": "contact is the updated contact number for the customer (e.g. phone)",
@@ -29685,6 +30259,10 @@ const docTemplate = `{
                 "balance_updated_at": {
                     "type": "string"
                 },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the wallet's customer; set on customer wallet lists in environments with billing entities",
+                    "type": "string"
+                },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
                 },
@@ -29778,6 +30356,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AutoTopup"
                 },
                 "balance": {
+                    "type": "string"
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities",
                     "type": "string"
                 },
                 "config": {
@@ -30030,7 +30612,8 @@ const docTemplate = `{
                 "database_error",
                 "service_unavailable",
                 "too_many_requests",
-                "not_implemented"
+                "not_implemented",
+                "billing_entities_not_enabled"
             ],
             "x-enum-varnames": [
                 "ErrCodeHTTPClient",
@@ -30045,7 +30628,8 @@ const docTemplate = `{
                 "ErrCodeDatabase",
                 "ErrCodeServiceUnavailable",
                 "ErrCodeTooManyRequests",
-                "ErrCodeNotImplemented"
+                "ErrCodeNotImplemented",
+                "ErrCodeBillingEntitiesNotEnabled"
             ]
         },
         "Addon": {
@@ -30194,6 +30778,10 @@ const docTemplate = `{
                 },
                 "billing_currency": {
                     "description": "BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.",
+                    "type": "string"
+                },
+                "billing_entity_id": {
+                    "description": "BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.",
                     "type": "string"
                 },
                 "contact": {
@@ -31553,6 +32141,10 @@ const docTemplate = `{
         "types.CustomerFilter": {
             "type": "object",
             "properties": {
+                "billing_entity_id": {
+                    "description": "billing_entity_id filters by the customer's billing entity",
+                    "type": "string"
+                },
                 "customer_ids": {
                     "type": "array",
                     "items": {
@@ -32539,6 +33131,10 @@ const docTemplate = `{
                 "amount_remaining_gt": {
                     "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
                     "type": "number"
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id filters by the customer's billing entity",
+                    "type": "string"
                 },
                 "billing_reason": {
                     "description": "BillingReason filters invoices by why they were generated",
@@ -33945,6 +34541,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.BillingCadence"
                     }
                 },
+                "billing_entity_id": {
+                    "description": "billing_entity_id filters by the customer's billing entity",
+                    "type": "string"
+                },
                 "billing_period": {
                     "description": "BillingPeriod filters by billing period",
                     "type": "array",
@@ -34397,14 +34997,16 @@ const docTemplate = `{
                 "subscription",
                 "invoice",
                 "tenant",
-                "credit_note"
+                "credit_note",
+                "billing_entity"
             ],
             "x-enum-varnames": [
                 "TaxRateEntityTypeCustomer",
                 "TaxRateEntityTypeSubscription",
                 "TaxRateEntityTypeInvoice",
                 "TaxRateEntityTypeTenant",
-                "TaxRateEntityTypeCreditNote"
+                "TaxRateEntityTypeCreditNote",
+                "TaxRateEntityTypeBillingEntity"
             ]
         },
         "types.TaxRateScope": {
@@ -34831,6 +35433,10 @@ const docTemplate = `{
             "properties": {
                 "alert_enabled": {
                     "type": "boolean"
+                },
+                "billing_entity_id": {
+                    "description": "billing_entity_id filters by the customer's billing entity",
+                    "type": "string"
                 },
                 "expand": {
                     "type": "string"
@@ -36036,6 +36642,19 @@ const docTemplate = `{
                 }
             }
         },
+        "types.BillingEntityMode": {
+            "type": "string",
+            "enum": [
+                "off",
+                "enabling",
+                "enabled"
+            ],
+            "x-enum-varnames": [
+                "BillingEntityModeOff",
+                "BillingEntityModeEnabling",
+                "BillingEntityModeEnabled"
+            ]
+        },
         "types.CommitmentCollectionMethod": {
             "type": "string",
             "enum": [
@@ -36172,6 +36791,80 @@ const docTemplate = `{
                 "ReportValueTypeCount",
                 "ReportValueTypeDays"
             ]
+        },
+        "types.SellerAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.SellerDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/types.SellerAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.SellerSnapshot": {
+            "type": "object",
+            "properties": {
+                "billing_entity_id": {
+                    "type": "string"
+                },
+                "legal_name": {
+                    "type": "string"
+                },
+                "seller_details": {
+                    "$ref": "#/definitions/types.SellerDetails"
+                },
+                "tax_identifiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TaxIdentifier"
+                    }
+                }
+            }
+        },
+        "types.TaxIdentifier": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
         },
         "types.TenantInternalStatus": {
             "type": "string",
@@ -36372,6 +37065,9 @@ const docTemplate = `{
         "webhookDto.CreditNote": {
             "type": "object",
             "properties": {
+                "billing_entity_id": {
+                    "type": "string"
+                },
                 "credit_note_number": {
                     "type": "string"
                 },
@@ -36446,6 +37142,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "address_state": {
+                    "type": "string"
+                },
+                "billing_entity_id": {
                     "type": "string"
                 },
                 "email": {
@@ -36587,6 +37286,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount_remaining": {
+                    "type": "string"
+                },
+                "billing_entity_id": {
                     "type": "string"
                 },
                 "billing_period": {
@@ -36849,6 +37551,9 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "billing_entity_id": {
+                    "type": "string"
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -37024,6 +37729,9 @@ const docTemplate = `{
                 "attempt": {
                     "type": "integer"
                 },
+                "billing_entity_id": {
+                    "type": "string"
+                },
                 "credit_note_id": {
                     "type": "string"
                 },
@@ -37160,6 +37868,9 @@ const docTemplate = `{
             "properties": {
                 "billing_cadence": {
                     "$ref": "#/definitions/types.BillingCadence"
+                },
+                "billing_entity_id": {
+                    "type": "string"
                 },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
@@ -37470,6 +38181,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "balance": {
+                    "type": "string"
+                },
+                "billing_entity_id": {
                     "type": "string"
                 },
                 "conversion_rate": {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/refund"
 	domainRefund "github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -684,9 +685,13 @@ func (o RefundQueryOptions) GetFieldName(field string) string {
 	return ""
 }
 
-func (o RefundQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.RefundFilter, query RefundQuery) RefundQuery {
+func (o RefundQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.RefundFilter, query RefundQuery) RefundQuery {
 	if f == nil {
 		return query
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(predicate.Refund(columnInSelector(refund.FieldInvoiceID, invoiceIDsOfEntity(ctx, f.BillingEntityID))))
 	}
 
 	if f.PaymentIDs != nil {

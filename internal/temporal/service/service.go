@@ -479,8 +479,9 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 // exclusiveWorkflowIDKeys lists workflow types that allow one open run per entity. Their ID is fixed
 // (no UUID suffix), so Temporal rejects a start while a run is open.
 var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
-	types.TemporalPriceSyncV2Workflow:    "price_sync_plan",
-	types.TemporalAddonPriceSyncWorkflow: "price_sync_addon",
+	types.TemporalPriceSyncV2Workflow:         "price_sync_plan",
+	types.TemporalBillingEntityEnableWorkflow: "billing_entity_enable",
+	types.TemporalAddonPriceSyncWorkflow:      "price_sync_addon",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
@@ -627,6 +628,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.EnvironmentCloneWorkflowInput); ok {
 			return input.SourceEnvironmentID + "-" + input.TargetEnvironmentID
 		}
+	case types.TemporalBillingEntityEnableWorkflow:
+		if input, ok := params.(models.BillingEntityEnableWorkflowInput); ok {
+			return input.TenantID + "-" + input.EnvironmentID
+		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
 		if input, ok := params.(*models.PrepareProcessedEventsWorkflowInput); ok {
@@ -756,6 +761,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalEnvironmentCloneWorkflow:
 		return s.buildEnvironmentCloneInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalBillingEntityEnableWorkflow:
+		return s.buildBillingEntityEnableInput(ctx, tenantID, environmentID, userID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -1767,6 +1774,22 @@ func (s *temporalService) buildEnvironmentCloneInput(_ context.Context, tenantID
 			Mark(errors.ErrValidation)
 	}
 	input.TenantID = tenantID
+	input.UserID = userID
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
+}
+
+func (s *temporalService) buildBillingEntityEnableInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	input, ok := params.(models.BillingEntityEnableWorkflowInput)
+	if !ok {
+		return nil, errors.NewError("invalid input for billing entity enable workflow").
+			WithHint("Provide a BillingEntityEnableWorkflowInput struct").
+			Mark(errors.ErrValidation)
+	}
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
 	input.UserID = userID
 	if err := input.Validate(); err != nil {
 		return nil, err

@@ -50,6 +50,9 @@ type Invoice struct {
 	// fx_conversion is the frozen fiat→fiat conversion applied at finalize; nil when the invoice was never converted.
 	FxConversion *types.FxConversion `json:"fx_conversion,omitempty"`
 
+	// SellerSnapshot is the billing entity seller frozen at finalization; nil for customers without an entity.
+	SellerSnapshot *types.SellerSnapshot `json:"seller_snapshot,omitempty"`
+
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
 	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
@@ -192,6 +195,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AmountPaid:             e.AmountPaid,
 		CustomCurrency:         e.CustomCurrency,
 		FxConversion:           e.FxConversion,
+		SellerSnapshot:         e.SellerSnapshot,
 		Subtotal:               e.Subtotal,
 		Total:                  e.Total,
 		TotalDiscount:          lo.FromPtrOr(e.TotalDiscount, decimal.Zero),

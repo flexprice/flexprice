@@ -992,6 +992,10 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
+	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -1229,6 +1233,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -1304,6 +1312,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		for _, inv := range items {
 			inv.WithTaxes(taxesByInvoice[inv.ID])
 		}
+	}
+
+	if err := fillInvoiceBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListInvoicesResponse{
@@ -1514,11 +1526,19 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			if err != nil {
 				return ierr.WithError(err).WithHint("Failed to get invoice configuration").Mark(ierr.ErrValidation)
 			}
-			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig)
+			prefix, err := s.numberPrefixFor(txCtx, lockedInv, &invoiceConfig)
+			if err != nil {
+				return err
+			}
+			invoiceNumber, err := s.InvoiceRepo.GetNextInvoiceNumber(txCtx, &invoiceConfig, prefix)
 			if err != nil {
 				return err
 			}
 			lockedInv.InvoiceNumber = &invoiceNumber
+		}
+
+		if err := s.applySellerSnapshot(txCtx, lockedInv); err != nil {
+			return err
 		}
 
 		// Trial-start invoices are always $0 but must NOT be auto-succeeded here.
@@ -3372,25 +3392,33 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 		return nil
 	}
 
-	// If Stripe outbound invoice sync is enabled for this tenant/environment,
-	// skip automatic payment and let Stripe/record-payment flows be the source of truth.
-	conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
-	if connErr == nil && conn != nil && conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Info(ctx, "stripe invoice sync enabled, skipping automatic payment processing",
-			"invoice_id", inv.ID,
-			"subscription_id", lo.FromPtr(inv.SubscriptionID),
-			"flow_type", flowType)
-		return nil
+	// Non-default billing entities have no gateway: only the card charge is skipped, wallets still pay.
+	served, err := NewBillingEntityService(s.ServiceParams).CustomerServesIntegrations(ctx, inv.CustomerID)
+	if err != nil {
+		return err
 	}
 
-	// Fallback guard: if mapping already exists in Stripe, also skip automatic payment.
-	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
-	if err == nil && stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-		s.Logger.Info(ctx, "invoice is synced to Stripe, skipping automatic payment processing",
-			"invoice_id", inv.ID,
-			"subscription_id", lo.FromPtr(inv.SubscriptionID),
-			"flow_type", flowType)
-		return nil
+	if served {
+		// If Stripe outbound invoice sync is enabled for this tenant/environment,
+		// skip automatic payment and let Stripe/record-payment flows be the source of truth.
+		conn, connErr := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
+		if connErr == nil && conn != nil && conn.IsInvoiceOutboundEnabled() {
+			s.Logger.Info(ctx, "stripe invoice sync enabled, skipping automatic payment processing",
+				"invoice_id", inv.ID,
+				"subscription_id", lo.FromPtr(inv.SubscriptionID),
+				"flow_type", flowType)
+			return nil
+		}
+
+		// Fallback guard: if mapping already exists in Stripe, also skip automatic payment.
+		stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err == nil && stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
+			s.Logger.Info(ctx, "invoice is synced to Stripe, skipping automatic payment processing",
+				"invoice_id", inv.ID,
+				"subscription_id", lo.FromPtr(inv.SubscriptionID),
+				"flow_type", flowType)
+			return nil
+		}
 	}
 
 	// Use parameters if provided, otherwise get from subscription
@@ -3679,6 +3707,16 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			"customer_id", inv.CustomerID)
 	}
 
+	seller, err := s.sellerFor(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	biller := tenant
+	if seller != nil {
+		biller = sellerAsTenant(tenant, seller)
+		billerTaxIDs = seller.TaxIdentifiers
+	}
+
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
 		ID:                         inv.ID,
@@ -3694,7 +3732,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		BillingReason:              inv.BillingReason,
 		Notes:                      "",  // resolved from invoice metadata
 		VAT:                        0.0, // resolved from invoice metadata
-		Biller:                     s.getBillerInfo(tenant, billerTaxIDs),
+		Biller:                     s.getBillerInfo(biller, billerTaxIDs),
 		PeriodStart:                pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
 		PeriodEnd:                  pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:                  s.getRecipientInfo(customer, customerTaxIDs),
@@ -5713,6 +5751,9 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	}
 	if inv.SubscriptionID == nil {
 		return nil // No subscription to sync for non-subscription invoices
+	}
+	if skip, err := skipIntegrationsForCustomer(ctx, s.ServiceParams, inv.CustomerID, "invoice_vendor_sync"); err != nil || skip {
+		return err
 	}
 
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})

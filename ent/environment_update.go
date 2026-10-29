@@ -96,6 +96,20 @@ func (_u *EnvironmentUpdate) SetNillableType(v *string) *EnvironmentUpdate {
 	return _u
 }
 
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_u *EnvironmentUpdate) SetBillingEntityMode(v string) *EnvironmentUpdate {
+	_u.mutation.SetBillingEntityMode(v)
+	return _u
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_u *EnvironmentUpdate) SetNillableBillingEntityMode(v *string) *EnvironmentUpdate {
+	if v != nil {
+		_u.SetBillingEntityMode(*v)
+	}
+	return _u
+}
+
 // Mutation returns the EnvironmentMutation object of the builder.
 func (_u *EnvironmentUpdate) Mutation() *EnvironmentMutation {
 	return _u.mutation
@@ -185,6 +199,9 @@ func (_u *EnvironmentUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.BillingEntityMode(); ok {
+		_spec.SetField(environment.FieldBillingEntityMode, field.TypeString, value)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{environment.Label}
@@ -269,6 +286,20 @@ func (_u *EnvironmentUpdateOne) SetType(v string) *EnvironmentUpdateOne {
 func (_u *EnvironmentUpdateOne) SetNillableType(v *string) *EnvironmentUpdateOne {
 	if v != nil {
 		_u.SetType(*v)
+	}
+	return _u
+}
+
+// SetBillingEntityMode sets the "billing_entity_mode" field.
+func (_u *EnvironmentUpdateOne) SetBillingEntityMode(v string) *EnvironmentUpdateOne {
+	_u.mutation.SetBillingEntityMode(v)
+	return _u
+}
+
+// SetNillableBillingEntityMode sets the "billing_entity_mode" field if the given value is not nil.
+func (_u *EnvironmentUpdateOne) SetNillableBillingEntityMode(v *string) *EnvironmentUpdateOne {
+	if v != nil {
+		_u.SetBillingEntityMode(*v)
 	}
 	return _u
 }
@@ -391,6 +422,9 @@ func (_u *EnvironmentUpdateOne) sqlSave(ctx context.Context) (_node *Environment
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(environment.FieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BillingEntityMode(); ok {
+		_spec.SetField(environment.FieldBillingEntityMode, field.TypeString, value)
 	}
 	_node = &Environment{config: _u.config}
 	_spec.Assign = _node.assignValues

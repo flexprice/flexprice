@@ -822,6 +822,12 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 					"error", err,
 					"invoice_id", invoice.ID)
 			}
+			// Best effort like the dates: a paid invoice must still finalize; it then renders the entity's current seller.
+			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).applySellerSnapshot(ctx, invoice); err != nil {
+				p.Logger.Error(ctx, "failed to snapshot invoice seller at finalization",
+					"error", err,
+					"invoice_id", invoice.ID)
+			}
 		}
 	} else if invoice.AmountRemaining.LessThan(invoice.AmountDue) {
 		invoice.PaymentStatus = types.PaymentStatusPending // Partial payment still keeps it pending
@@ -925,6 +931,15 @@ func (p *paymentProcessor) dispatchZohoMarkPaid(ctx context.Context, invoiceID s
 // fail downstream with "connection not configured" for the ones that aren't.
 func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID string) {
 	if p.ConnectionRepo == nil {
+		return
+	}
+	served, err := NewBillingEntityService(p.ServiceParams).InvoiceServesIntegrations(ctx, invoiceID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to check billing entity for mark-paid", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	if !served {
+		p.Logger.Info(ctx, "skipping integration for non-default billing entity", "invoice_id", invoiceID, "step", "mark_paid")
 		return
 	}
 

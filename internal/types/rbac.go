@@ -103,4 +103,5 @@ const (
 	EntityWorkflow        Entity = "workflow"
 	EntityAnalytics       Entity = "analytics"
 	EntityFXRate          Entity = "fxrate"
+	EntityBillingEntity   Entity = "billing_entity"
 )

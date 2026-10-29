@@ -109,6 +109,12 @@ func (Customer) Fields() []ent.Field {
 			NotEmpty(),
 		field.JSON("contact_persons", []*ContactPerson{}).
 			Optional(),
+		field.String("billing_entity_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -146,5 +152,7 @@ func (Customer) Indexes() []ent.Index {
 		index.Fields("metadata").
 			Annotations(entsql.IndexAnnotation{Type: "GIN"}).
 			StorageKey(Idx_customer_metadata_gin),
+		index.Fields("tenant_id", "environment_id", "billing_entity_id").
+			StorageKey("idx_customers_tenant_env_billing_entity"),
 	}
 }

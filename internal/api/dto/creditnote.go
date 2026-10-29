@@ -181,6 +181,8 @@ func (r *FinalizeCreditNoteRequest) Validate() error {
 // CreditNoteResponse represents the response payload containing credit note information
 type CreditNoteResponse struct {
 	*creditnote.CreditNote
+	// billing_entity_id is the billing entity of the record's customer; null when the environment has no billing entities
+	BillingEntityID *string `json:"billing_entity_id"`
 
 	// invoice contains the associated invoice information if requested
 	Invoice *InvoiceResponse `json:"invoice,omitempty"`

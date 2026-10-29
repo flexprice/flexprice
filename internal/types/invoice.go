@@ -429,7 +429,7 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1"`
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1,max=20"`
 	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
 	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
@@ -500,6 +500,9 @@ type InvoiceFilter struct {
 	// customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
 	// This is the ID returned by FlexPrice when creating or retrieving customers
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 
 	// external_customer_id filters invoices for a customer using your system's customer identifier
 	// This is the ID you provided when creating the customer in FlexPrice

@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingentity"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
@@ -519,6 +520,68 @@ func scanReturningAuth(rows *sql.Rows) ([]*Auth, error) {
 	var out []*Auth
 	for rows.Next() {
 		node := &Auth{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*BillingEntity.
+func (_u *BillingEntityUpdate) SaveReturning(ctx context.Context) ([]*BillingEntity, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *BillingEntityUpdate) sqlSaveReturning(ctx context.Context) ([]*BillingEntity, error) {
+	var out []*BillingEntity
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", billingentity.Table, billingentity.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingEntity(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*BillingEntity.
+func (_d *BillingEntityDelete) ExecReturning(ctx context.Context) ([]*BillingEntity, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *BillingEntityDelete) sqlExecReturning(ctx context.Context) ([]*BillingEntity, error) {
+	var out []*BillingEntity
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", billingentity.Table, billingentity.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingEntity(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningBillingEntity(rows *sql.Rows) ([]*BillingEntity, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*BillingEntity
+	for rows.Next() {
+		node := &BillingEntity{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

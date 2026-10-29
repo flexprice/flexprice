@@ -13,6 +13,7 @@ type InternalCustomerEvent struct {
 type Customer struct {
 	ID                string            `json:"id"`
 	ExternalID        string            `json:"external_id"`
+	BillingEntityID   *string           `json:"billing_entity_id"`
 	EnvironmentID     string            `json:"environment_id"`
 	Name              string            `json:"name"`
 	Email             string            `json:"email,omitempty"`
@@ -33,6 +34,7 @@ func NewCustomer(resp *dto.CustomerResponse) *Customer {
 	return &Customer{
 		ID:                resp.ID,
 		ExternalID:        resp.ExternalID,
+		BillingEntityID:   resp.BillingEntityID,
 		EnvironmentID:     resp.EnvironmentID,
 		Name:              resp.Name,
 		Email:             resp.Email,

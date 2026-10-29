@@ -233,6 +233,7 @@ type PaymentFilter struct {
 	Currency          *string  `form:"currency"`
 	GatewayPaymentID  *string  `form:"gateway_payment_id"`
 	GatewayTrackingID *string  `form:"gateway_tracking_id"` // For filtering by gateway tracking ID
+	BillingEntityID   *string  `form:"billing_entity_id"`   // Filters by the invoice customer's billing entity
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit

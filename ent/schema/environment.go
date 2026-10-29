@@ -37,6 +37,11 @@ func (Environment) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty(),
+		field.String("billing_entity_mode").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default("off"),
 	}
 }
 

@@ -90,6 +90,17 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		}
 	}
 
+	// Offline and credit payments need no gateway, so non-default billing entities may record them.
+	if p.PaymentMethodType != types.PaymentMethodTypeOffline && p.PaymentMethodType != types.PaymentMethodTypeCredits {
+		customerID := p.DestinationID
+		if invoice != nil {
+			customerID = invoice.CustomerID
+		}
+		if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, customerID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Check if payment link already exists for this invoice
 	// If invoice was synced to gateway and has a payment URL, return it immediately
 	// No payment record is created here - the webhook will create it when payment is made
@@ -430,6 +441,10 @@ func (s *paymentService) GetPayment(ctx context.Context, id string) (*dto.Paymen
 			response.InvoiceNumber = invoice.InvoiceNumber
 		}
 	}
+	if err := fillPaymentBillingEntityIDs(ctx, s.ServiceParams, response); err != nil {
+		return nil, err
+	}
+
 	return response, nil
 }
 
@@ -655,6 +670,10 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		}
 	}
 
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, lo.FromPtr(filter.BillingEntityID)); err != nil {
+		return nil, err
+	}
+
 	payments, err := s.PaymentRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err // Repository already using ierr
@@ -700,6 +719,10 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 			}
 		}
 		items[i] = response
+	}
+
+	if err := fillPaymentBillingEntityIDs(ctx, s.ServiceParams, items...); err != nil {
+		return nil, err
 	}
 
 	return &dto.ListPaymentsResponse{
@@ -997,6 +1020,9 @@ func (s *paymentService) CreatePaymentForCheckout(ctx context.Context, req *dto.
 	if req == nil || req.Invoice == nil {
 		return nil, ierr.NewError("request and invoice are required").
 			Mark(ierr.ErrValidation)
+	}
+	if err := requireIntegrationsForCustomer(ctx, s.ServiceParams, req.Invoice.CustomerID); err != nil {
+		return nil, err
 	}
 
 	gatewayStr := string(req.Gateway)

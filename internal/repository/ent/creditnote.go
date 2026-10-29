@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCreditNote "github.com/flexprice/flexprice/internal/domain/creditnote"
@@ -626,9 +627,13 @@ func (o CreditNoteQueryOptions) GetFieldName(field string) string {
 	return ""
 }
 
-func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CreditNoteFilter, query CreditNoteQuery) CreditNoteQuery {
+func (o CreditNoteQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.CreditNoteFilter, query CreditNoteQuery) CreditNoteQuery {
 	if f == nil {
 		return query
+	}
+
+	if f.BillingEntityID != "" {
+		query = query.Where(predicate.CreditNote(columnInSelector(creditnote.FieldCustomerID, customerIDsOfEntity(ctx, f.BillingEntityID))))
 	}
 
 	// Apply entity-specific filters

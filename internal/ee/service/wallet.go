@@ -103,6 +103,8 @@ type WalletService interface {
 
 	// GetWallets retrieves wallets based on filter
 	GetWallets(ctx context.Context, filter *types.WalletFilter) (*types.ListResponse[*wallet.Wallet], error)
+	// FillBillingEntityIDs sets each wallet response's billing entity from its customer.
+	FillBillingEntityIDs(ctx context.Context, items []*dto.WalletResponse) error
 
 	// UpdateWalletAlertState updates the alert state of a wallet
 	UpdateWalletAlertState(ctx context.Context, walletID string, state types.AlertState) error
@@ -387,6 +389,9 @@ func (s *walletService) GetWalletsByCustomerID(ctx context.Context, customerID s
 	for i, w := range wallets {
 		response[i] = dto.FromWallet(w)
 	}
+	if err := fillWalletBillingEntityIDs(ctx, s.ServiceParams, response...); err != nil {
+		return nil, err
+	}
 
 	return response, nil
 }
@@ -403,7 +408,11 @@ func (s *walletService) GetWalletByID(ctx context.Context, id string) (*dto.Wall
 		return nil, err // Repository already using ierr
 	}
 
-	return dto.FromWallet(w), nil
+	resp := dto.FromWallet(w)
+	if err := fillWalletBillingEntityIDs(ctx, s.ServiceParams, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (s *walletService) GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
@@ -2890,6 +2899,9 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 			}
 		}
 	}
+	if err := fillWalletBalanceBillingEntityIDs(ctx, s.ServiceParams, response...); err != nil {
+		return nil, err
+	}
 	return response, nil
 }
 
@@ -2903,6 +2915,10 @@ func (s *walletService) GetWallets(ctx context.Context, filter *types.WalletFilt
 	}
 
 	// Get wallets using filter
+	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
+		return nil, err
+	}
+
 	wallets, err := s.WalletRepo.GetWalletsByFilter(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -4614,4 +4630,8 @@ func withRecordedAt(metadata types.Metadata, at *time.Time) types.Metadata {
 	stamped["requested_effective_date"] = at.UTC().Format(time.RFC3339Nano)
 	stamped["requested_at"] = time.Now().UTC().Format(time.RFC3339Nano)
 	return stamped
+}
+
+func (s *walletService) FillBillingEntityIDs(ctx context.Context, items []*dto.WalletResponse) error {
+	return fillWalletBillingEntityIDs(ctx, s.ServiceParams, items...)
 }
