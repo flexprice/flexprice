@@ -64,6 +64,9 @@ func (s *invoiceService) RecalculateInvoiceWithSchedule(ctx context.Context, id 
 	if err != nil {
 		return nil, err
 	}
+	if err := validateCorrectionCharges(plan.original, prepared.LineItems); err != nil {
+		return s.recoverInvoiceCorrection(ctx, id, req, err)
+	}
 	if prepared.CustomerID != plan.original.CustomerID || !strings.EqualFold(prepared.Currency, plan.currency) {
 		return nil, correctionConflict("replacement recipient or currency changed", plan.original.ID, "")
 	}
@@ -113,20 +116,25 @@ func (s *invoiceService) RecalculateInvoiceWithSchedule(ctx context.Context, id 
 		})
 	})
 	if err != nil {
-		if ierr.IsVersionConflict(err) {
-			latest, reloadErr := s.loadInvoiceCorrection(ctx, id, req)
-			if reloadErr != nil {
-				return nil, reloadErr
-			}
-			if latest.replacement != nil {
-				return dto.NewInvoiceResponse(latest.replacement), nil
-			}
-		}
-		return nil, err
+		return s.recoverInvoiceCorrection(ctx, id, req, err)
 	}
 	s.afterInvoiceComputation(ctx, replacement, false, false)
 	s.Logger.Info(ctx, "scheduled invoice correction created", "original_invoice_id", id, "invoice_id", replacement.ID)
 	return dto.NewInvoiceResponse(replacement), nil
+}
+
+func (s *invoiceService) recoverInvoiceCorrection(ctx context.Context, id string, req dto.RecalculateInvoiceRequest, cause error) (*dto.InvoiceResponse, error) {
+	if !ierr.IsVersionConflict(cause) {
+		return nil, cause
+	}
+	latest, err := s.loadInvoiceCorrection(ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+	if latest.replacement != nil {
+		return dto.NewInvoiceResponse(latest.replacement), nil
+	}
+	return nil, cause
 }
 
 func (s *invoiceService) loadInvoiceCorrection(ctx context.Context, id string, req dto.RecalculateInvoiceRequest) (*invoiceCorrection, error) {
@@ -160,7 +168,7 @@ func (s *invoiceService) loadInvoiceCorrection(ctx context.Context, id string, r
 	if original.CustomCurrency != nil || !finiteScheduleDate(original.PeriodStart) || !finiteScheduleDate(original.PeriodEnd) {
 		return nil, ierr.Validation("scheduled correction requires supported currency and invoice period context")
 	}
-	history, err := s.BillingScheduleItems.List(ctx, &domain.ScheduleItemFilter{InvoiceIDs: []string{id}, IncludeArchived: true, Limit: core.MaxItems})
+	history, err := s.invoiceCorrectionSources(ctx, original)
 	if err != nil {
 		return nil, err
 	}
@@ -174,15 +182,6 @@ func (s *invoiceService) loadInvoiceCorrection(ctx context.Context, id string, r
 		}
 		allowed[domain.OwnerRef{Type: item.OwnerType, ID: item.OwnerID}] = item
 	}
-	states, err := s.BillingTermsStore.BindingStates(ctx, history)
-	if err != nil {
-		return nil, err
-	}
-	if len(states) != len(history) || lo.SomeBy(states, func(state domain.BindingState) bool {
-		return state.InvoiceID != id || state.InvoiceStatus != types.InvoiceStatusVoided
-	}) {
-		return nil, ierr.NewError("original invoice bindings are not voided").Mark(ierr.ErrInvalidOperation)
-	}
 	if original.RecalculatedInvoiceID != nil {
 		replacement, err := s.InvoiceRepo.Get(ctx, *original.RecalculatedInvoiceID)
 		if err != nil {
@@ -191,7 +190,7 @@ func (s *invoiceService) loadInvoiceCorrection(ctx context.Context, id string, r
 		if replacement == nil || replacement.ID != *original.RecalculatedInvoiceID || replacement.TenantID != original.TenantID || replacement.EnvironmentID != original.EnvironmentID || replacement.CustomerID != original.CustomerID || replacement.InvoiceStatus == types.InvoiceStatusVoided || replacement.Status != types.StatusPublished {
 			return nil, correctionConflict("the existing replacement is no longer live", id, *original.RecalculatedInvoiceID)
 		}
-		sources, err := s.BillingScheduleItems.List(ctx, &domain.ScheduleItemFilter{InvoiceIDs: []string{replacement.ID}, IncludeArchived: true, Limit: core.MaxItems})
+		sources, err := s.invoiceCorrectionSources(ctx, replacement)
 		if err != nil {
 			return nil, err
 		}
@@ -202,15 +201,6 @@ func (s *invoiceService) loadInvoiceCorrection(ctx context.Context, id string, r
 			if !billingDueItemScope(ctx, source) || allowed[domain.OwnerRef{Type: source.OwnerType, ID: source.OwnerID}] == nil || lo.FromPtr(source.InvoiceID) != replacement.ID || !slices.Contains(req.BillingScheduleItemIDs, source.ID) {
 				return nil, correctionConflict("replacement source selection changed", id, replacement.ID)
 			}
-		}
-		bindings, err := s.BillingTermsStore.BindingStates(ctx, sources)
-		if err != nil {
-			return nil, err
-		}
-		if len(bindings) != len(sources) || lo.SomeBy(bindings, func(binding domain.BindingState) bool {
-			return binding.InvoiceID != replacement.ID || binding.InvoiceStatus != replacement.InvoiceStatus || binding.InvoiceArchived
-		}) {
-			return nil, correctionConflict("replacement source bindings changed", id, replacement.ID)
 		}
 		ids := []string{}
 		for _, line := range replacement.LineItems {
@@ -289,7 +279,7 @@ func (s *invoiceService) prepareInvoiceCorrection(ctx context.Context, plan *inv
 		case types.InvoiceBillingReasonProration:
 			reference = types.ReferencePointCancel
 		}
-		request, err := NewBillingService(s.ServiceParams).PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		request, err := NewBillingService(s.ServiceParams).PrepareSubscriptionInvoiceRequest(withCorrectionCharges(ctx), &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription: sub, PeriodStart: *original.PeriodStart, PeriodEnd: *original.PeriodEnd, ReferencePoint: reference, ExcludeInvoiceID: original.ID,
 		})
 		if err != nil {

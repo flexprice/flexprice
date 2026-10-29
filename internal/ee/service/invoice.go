@@ -654,6 +654,13 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	if err := validateBillingScheduleRecompute(ctx, inv); err != nil {
 		return nil, false, err
 	}
+	original, err := s.correctionSourceInvoice(ctx, inv)
+	if err != nil {
+		return nil, false, err
+	}
+	if original != nil {
+		ctx = withCorrectionCharges(ctx)
+	}
 
 	// A paused period bills nothing: its invoice is marked SKIPPED as is and never computed.
 	if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionPaused {
@@ -819,7 +826,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			return err
 		}
 
-		return s.withBillingScheduleCollection(txCtx, inv, func(collectionCtx context.Context) error {
+		return s.withBillingScheduleCollection(txCtx, inv, applyReq, func(collectionCtx context.Context) error {
 			var computeErr error
 			skipped, computeErr = s.applyInvoiceComputation(collectionCtx, inv, applyReq)
 			return computeErr

@@ -24,7 +24,7 @@ type invoiceCollection struct {
 	subscriptions []string
 }
 
-func (s *invoiceService) withBillingScheduleCollection(ctx context.Context, inv *invoice.Invoice, compute func(context.Context) error) error {
+func (s *invoiceService) withBillingScheduleCollection(ctx context.Context, inv *invoice.Invoice, prepared *dto.InvoiceComputeRequest, compute func(context.Context) error) error {
 	if isBillingScheduleRead(ctx) {
 		return compute(ctx)
 	}
@@ -33,13 +33,16 @@ func (s *invoiceService) withBillingScheduleCollection(ctx context.Context, inv 
 		return compute(ctx)
 	}
 	if hasBillingScheduleLines(inv) {
-		original, err := s.InvoiceRepo.GetByRecalculatedInvoiceID(ctx, inv.ID)
-		if err != nil && !ierr.IsNotFound(err) {
+		original, err := s.correctionSourceInvoice(ctx, inv)
+		if err != nil {
 			return err
 		}
 		if original != nil {
-			if original.InvoiceStatus != types.InvoiceStatusVoided || original.CustomerID != inv.CustomerID || !strings.EqualFold(original.Currency, inv.Currency) {
-				return billingScheduleCorrectionRequired(inv)
+			if prepared == nil {
+				return correctionConflict("replacement charges must be prepared before computation", original.ID, inv.ID)
+			}
+			if err := validateCorrectionCharges(original, prepared.LineItems); err != nil {
+				return err
 			}
 			return compute(ctx)
 		}

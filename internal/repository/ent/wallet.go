@@ -465,13 +465,13 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	})
 	defer FinishSpan(span)
 
-	count, err := r.client.Writer(ctx).Wallet.Update().
+	updated, err := r.client.Writer(ctx).Wallet.Update().
 		Where(wallet.ID(walletID), wallet.TenantID(types.GetTenantID(ctx)), wallet.EnvironmentID(types.GetEnvironmentID(ctx))).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetUpdatedAt(time.Now().UTC()).
-		Save(ctx)
+		SaveReturning(ctx)
 
 	if err != nil {
 		return ierr.WithError(err).
@@ -483,7 +483,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	if count == 0 {
+	if len(updated) == 0 {
 		return ierr.NewError("wallet not found").WithHint("No wallet matches this tenant and environment").Mark(ierr.ErrNotFound)
 	}
 	r.DeleteCache(ctx, walletID)

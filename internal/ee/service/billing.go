@@ -2493,7 +2493,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 
 	// Revenue facts record zero-revenue periods, so they always keep zero value lines.
-	if !invoiceConfig.IncludeZeroValueLineItems && params.ReferencePoint != types.ReferencePointRevenueFacts {
+	if !invoiceConfig.IncludeZeroValueLineItems && params.ReferencePoint != types.ReferencePointRevenueFacts && !retainCorrectionZeroUsage(ctx) {
 		filtered := *result
 		filtered.UsageCharges = lo.Filter(result.UsageCharges, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
 			return !(item.Quantity.IsZero() && item.Amount.IsZero())

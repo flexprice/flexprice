@@ -99,6 +99,7 @@ func newInvoiceVoidPostgresFixture(t *testing.T, db postgres.IClient) *invoiceVo
 	customer.ID = types.GenerateUUIDWithPrefix("customer")
 	customer.ExternalID = customer.ID
 	require.NoError(t, params.CustomerRepo.Create(ctx, &customer))
+	seedBillingScheduleCustomer(t, ctx, db, customer.ID)
 	params.DB = db
 	params.InvoiceRepo = repository.NewInvoiceRepository(db, params.Logger)
 	params.InvoiceLineItemRepo = repository.NewInvoiceLineItemRepository(db, params.Logger)
