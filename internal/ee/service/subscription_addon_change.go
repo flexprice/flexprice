@@ -369,6 +369,24 @@ func changeAtDate(changeAt types.ScheduleType, now, periodEnd time.Time) time.Ti
 	return now
 }
 
+// attachQuantity is the quantity an attach will carry. Override quantities are written onto the
+// line items only at Persist, after grants are resolved, so they are read from the request.
+func attachQuantity(attach *addonAttachParams) decimal.Decimal {
+	quantity := lineItemsQuantity(attach.getLineItems())
+	for _, override := range attach.getRequest().OverrideLineItems {
+		if override.Quantity == nil {
+			continue
+		}
+		isFixed := lo.SomeBy(attach.getLineItems(), func(li *subscription.SubscriptionLineItem) bool {
+			return li.PriceID == override.PriceID && li.PriceType == types.PRICE_TYPE_FIXED
+		})
+		if isFixed && override.Quantity.GreaterThan(quantity) {
+			quantity = *override.Quantity
+		}
+	}
+	return quantity
+}
+
 func (s *addonChangeService) grantChangeRequest(config *addonChangeConfig) GrantChangeRequest {
 	sub := config.getSubscription()
 	grantReq := GrantChangeRequest{Sub: sub}
@@ -379,6 +397,7 @@ func (s *addonChangeService) grantChangeRequest(config *addonChangeConfig) Grant
 			EffectiveDate: detach.getEffectiveDate(),
 			Origin:        grantProrationSourceAddonDetach,
 			AddonID:       detach.getAssociation().AddonID,
+			Quantity:      lineItemsQuantity(detach.getLineItems()),
 		})
 	}
 
@@ -392,6 +411,7 @@ func (s *addonChangeService) grantChangeRequest(config *addonChangeConfig) Grant
 			ProrationSettings: req.ProrationSettings.WithDefault(req.ProrationBehavior),
 			Origin:            grantProrationSourceAddonAttach,
 			AddonID:           req.AddonID,
+			Quantity:          attachQuantity(attach),
 		})
 	}
 

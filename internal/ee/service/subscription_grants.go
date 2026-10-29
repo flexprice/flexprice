@@ -12,6 +12,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // SubscriptionGrantService owns credit grants and entitlement grants for any subscription
@@ -45,6 +46,8 @@ type GrantSource struct {
 	// AddonID is the source's identity: credit grant templates and entitlement configs are
 	// both read from it, and removal targets the grants it materialized.
 	AddonID string
+	// Quantity scales the addon's entitlement quotas; zero or one counts the addon once.
+	Quantity decimal.Decimal
 }
 
 // requestedDate is what the caller asked for, falling back to the resolved date.
@@ -374,21 +377,33 @@ func (s *subscriptionGrantService) sourceGrantECs(
 		return nil, nil
 	}
 
-	if ecs, read := byAddon[src.AddonID]; read {
-		return ecs, nil
+	ecs, read := byAddon[src.AddonID]
+	if !read {
+		ents, err := NewEntitlementService(s.ServiceParams).GetAddonEntitlements(ctx, src.AddonID)
+		if err != nil {
+			return nil, err
+		}
+		ecs = lo.Filter(dto.ToEntitlements(ents), func(ec *entitlement.Entitlement, _ int) bool {
+			return ec != nil && ec.HasGrantConfig()
+		})
+		byAddon[src.AddonID] = ecs
 	}
 
-	ents, err := NewEntitlementService(s.ServiceParams).GetAddonEntitlements(ctx, src.AddonID)
-	if err != nil {
-		return nil, err
+	// The memo holds the addon's own configs; each source scales its copies by its quantity.
+	return lo.Map(ecs, func(ec *entitlement.Entitlement, _ int) *entitlement.Entitlement {
+		return scaleEntitlementQuota(ec, src.Quantity)
+	}), nil
+}
+
+// lineItemsQuantity is the largest quantity among an addon association's fixed-price line items.
+func lineItemsQuantity(lineItems []*subscription.SubscriptionLineItem) decimal.Decimal {
+	quantity := decimal.Zero
+	for _, li := range lineItems {
+		if li != nil && li.PriceType == types.PRICE_TYPE_FIXED && li.Quantity.GreaterThan(quantity) {
+			quantity = li.Quantity
+		}
 	}
-
-	ecs := lo.Filter(dto.ToEntitlements(ents), func(ec *entitlement.Entitlement, _ int) bool {
-		return ec != nil && ec.HasGrantConfig()
-	})
-	byAddon[src.AddonID] = ecs
-
-	return ecs, nil
+	return quantity
 }
 
 // resolveSurvivingGrantECs is the subscription's grant configs less the ones leaving in this
@@ -406,26 +421,32 @@ func (s *subscriptionGrantService) resolveSurvivingGrantECs(
 		return byFeature, nil
 	}
 
-	// An addon attached twice lists its config twice, so a removal takes out one entry per
-	// leaving attachment, not every entry with that config ID.
-	leaving := make(map[string]int, len(removedECs))
-	for _, ec := range removedECs {
-		leaving[ec.ID]++
-	}
+	// An addon attached twice lists its config twice, each copy scaled by its own quantity, so
+	// a removal takes out one entry per leaving attachment: the copy with the same quota first,
+	// so removing the quantity-1 attachment does not take the quantity-3 one.
+	leaving := lo.GroupBy(removedECs, func(ec *entitlement.Entitlement) string { return ec.ID })
 
 	surviving := make(map[string][]*entitlement.Entitlement, len(byFeature))
 	for featureID, ecs := range byFeature {
-		kept := make([]*entitlement.Entitlement, 0, len(ecs))
-		for _, ec := range ecs {
-			if ec == nil {
-				continue
+		ecs = lo.Compact(ecs)
+		dropped := make([]bool, len(ecs))
+		for _, exactQuota := range []bool{true, false} {
+			for i, ec := range ecs {
+				pending := leaving[ec.ID]
+				if dropped[i] || len(pending) == 0 {
+					continue
+				}
+				_, j, ok := lo.FindIndexOf(pending, func(p *entitlement.Entitlement) bool {
+					return !exactQuota || lo.FromPtr(p.GrantQuota).Equal(lo.FromPtr(ec.GrantQuota))
+				})
+				if !ok {
+					continue
+				}
+				leaving[ec.ID] = append(pending[:j:j], pending[j+1:]...)
+				dropped[i] = true
 			}
-			if leaving[ec.ID] > 0 {
-				leaving[ec.ID]--
-				continue
-			}
-			kept = append(kept, ec)
 		}
+		kept := lo.Reject(ecs, func(_ *entitlement.Entitlement, i int) bool { return dropped[i] })
 		if len(kept) > 0 {
 			surviving[featureID] = kept
 		}

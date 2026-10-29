@@ -479,6 +479,88 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_OneOfTwoAtta
 	s.True(live.Quota.Equal(decimal.NewFromInt(110)), "expected 110, got %s", live.Quota)
 }
 
+// seedFixedGrantAddon registers an addon with a fixed price, whose line item carries the
+// quantity, and one subscription_period grant EC.
+func (s *SubscriptionServiceSuite) seedFixedGrantAddon(addonID, ecID, featureID string, quota int64) {
+	ctx := s.GetContext()
+	s.NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{ID: addonID, LookupKey: addonID, Name: addonID,
+		BaseModel: types.GetDefaultBaseModel(ctx)}))
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, &price.Price{
+		ID: "price_" + addonID, Amount: decimal.NewFromInt(10), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_ADDON, EntityID: addonID, Type: types.PRICE_TYPE_FIXED,
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence: types.InvoiceCadenceAdvance, BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+	s.seedGrantEC(ecID, featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, addonID, quota, "")
+}
+
+// attachAddonQuantity attaches an addon unprorated with its fixed price at quantity.
+func (s *SubscriptionServiceSuite) attachAddonQuantity(addonID string, quantity int64) error {
+	at := s.testData.now
+	_, err := s.service.AddAddonToSubscription(s.GetContext(), &dto.AddAddonRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
+			AddonID: addonID, Cadence: types.AddonCadenceRecurring, StartDate: &at,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			OverrideLineItems: []dto.OverrideLineItemRequest{{PriceID: "price_" + addonID, Quantity: lo.ToPtr(decimal.NewFromInt(quantity))}},
+		},
+	})
+	return err
+}
+
+// featureQuota sums the quotas the subscription's configs give a feature, as a renewal or a
+// cold start would pool them.
+func (s *SubscriptionServiceSuite) featureQuota(featureID string) decimal.Decimal {
+	byFeature, err := s.grantService().GetSubscriptionGrantECsByFeature(s.GetContext(), s.testData.subscription)
+	s.Require().NoError(err)
+	total := decimal.Zero
+	for _, ec := range byFeature[featureID] {
+		total = total.Add(lo.FromPtr(ec.GrantQuota))
+	}
+	return total
+}
+
+// An addon's quantity multiplies its quota, on attach and when the cap is rebuilt.
+// e.g. plan 10 + addon 100 at quantity 3 = 310.
+func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_MultipliesQuota() {
+	featureID := s.seedNeverGrantFeature("feat_never_qty")
+	s.seedGrantEC("ent_aaa_never_qty_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_qty_plan", featureID, 10)
+	s.seedFixedGrantAddon("addon_never_qty", "ent_zzz_never_qty", featureID, 100)
+
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty", 3))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(310)), "attach: expected 310, got %s", live.Quota)
+	s.True(s.featureQuota(featureID).Equal(decimal.NewFromInt(310)), "rebuilt cap: expected 310, got %s", s.featureQuota(featureID))
+}
+
+// Two attachments of one addon at different quantities: removing the quantity-3 one leaves
+// the quantity-1 one. e.g. plan 10 + 3 x 100 + 1 x 100 = 410; remove the 3 = 110.
+func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_RemovingOneAttachmentKeepsTheOther() {
+	featureID := s.seedNeverGrantFeature("feat_never_qty_rm")
+	s.seedGrantEC("ent_aaa_never_qty_rm_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_qty_rm_plan", featureID, 10)
+	s.seedFixedGrantAddon("addon_never_qty_rm", "ent_zzz_never_qty_rm", featureID, 100)
+
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", 3))
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", 1))
+	s.Require().True(s.liveRow(featureID).Quota.Equal(decimal.NewFromInt(410)), "got %s", s.liveRow(featureID).Quota)
+
+	s.Require().NoError(s.runGrantPass(nil, []GrantSource{{
+		ChangeType:    types.ScheduleTypeImmediate,
+		EffectiveDate: s.testData.now,
+		Origin:        grantProrationSourceAddonDetach,
+		AddonID:       "addon_never_qty_rm",
+		Quantity:      decimal.NewFromInt(3),
+	}}))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(110)), "expected 110, got %s", live.Quota)
+}
+
 // Swapping an addon for another size on a never-reset feature reopens the cap as the plan's
 // quota plus the new addon's, prorated or full; the old addon's quota drops out.
 // e.g. plan 100 + addon 500 = 600; to 1000 unprorated = 1100, to 200 = 300.

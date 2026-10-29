@@ -6710,6 +6710,71 @@ func withAssociationWindow(ent *dto.EntitlementResponse, assoc *dto.AddonAssocia
 	return &updatedEntResp
 }
 
+// addonQuantitiesAt is each addon association's quantity as of at: the largest quantity on
+// its live fixed-price line items. Associations without one are absent and count once.
+// The subscription's loaded line items are used unless they miss an association, as they do
+// when loaded before an attach or a quantity change.
+func (s *subscriptionService) addonQuantitiesAt(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	at time.Time,
+	associationIDs []string,
+) (map[string]decimal.Decimal, error) {
+	quantities := addonQuantities(sub.LineItems, at)
+	if s.SubscriptionLineItemRepo == nil || lo.EveryBy(associationIDs, func(id string) bool { _, ok := quantities[id]; return ok }) {
+		return quantities, nil
+	}
+	lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	return addonQuantities(lineItems, at), nil
+}
+
+// addonQuantities maps association ID to the largest quantity among its fixed-price line
+// items live at at.
+func addonQuantities(lineItems []*subscription.SubscriptionLineItem, at time.Time) map[string]decimal.Decimal {
+	quantities := make(map[string]decimal.Decimal)
+	for _, li := range lineItems {
+		if li == nil || li.AddonAssociationID == nil || li.PriceType != types.PRICE_TYPE_FIXED || li.Status != types.StatusPublished {
+			continue
+		}
+		if li.StartDate.After(at) || (!li.EndDate.IsZero() && !li.EndDate.After(at)) {
+			continue
+		}
+		if q, seen := quantities[*li.AddonAssociationID]; !seen || li.Quantity.GreaterThan(q) {
+			quantities[*li.AddonAssociationID] = li.Quantity
+		}
+	}
+	return quantities
+}
+
+// withAddonQuantity scales a metered addon entitlement's limit by its association's quantity.
+// A quantity of one, or none recorded, leaves it as is.
+func withAddonQuantity(ent *dto.EntitlementResponse, quantity decimal.Decimal) *dto.EntitlementResponse {
+	if ent == nil || ent.Entitlement == nil || !quantity.GreaterThan(decimal.NewFromInt(1)) {
+		return ent
+	}
+	scaled := *ent
+	scaled.Entitlement = scaleEntitlementQuota(ent.Entitlement, quantity)
+	return &scaled
+}
+
+// scaleEntitlementQuota is a copy of e with its quota and usage limit multiplied by quantity.
+func scaleEntitlementQuota(e *entitlement.Entitlement, quantity decimal.Decimal) *entitlement.Entitlement {
+	if e == nil || !quantity.GreaterThan(decimal.NewFromInt(1)) {
+		return e
+	}
+	scaled := *e
+	if e.GrantQuota != nil {
+		scaled.GrantQuota = lo.ToPtr(e.GrantQuota.Mul(quantity))
+	}
+	if e.UsageLimit != nil {
+		scaled.UsageLimit = lo.ToPtr(decimal.NewFromInt(*e.UsageLimit).Mul(quantity).IntPart())
+	}
+	return &scaled
+}
+
 // carryParentSourceToOverrides copies each override's parent plan or addon onto the
 // override, so a suppressed parent does not take the source's name with it.
 func carryParentSourceToOverrides(planEnts, addonEnts, subEnts []*dto.EntitlementResponse) {
@@ -6828,13 +6893,23 @@ func (s *subscriptionService) resolveSubscriptionEntitlements(ctx context.Contex
 			}
 		}
 
-		// Expand: add entitlements once per addon association (supports multi-addon)
+		quantities, err := s.addonQuantitiesAt(ctx, sub, at, lo.FilterMap(activeAddons.Items,
+			func(assoc *dto.AddonAssociationResponse, _ int) (string, bool) {
+				return lo.FromPtr(assoc).ID, assoc != nil
+			}))
+		if err != nil {
+			return nil, err
+		}
+
+		// Expand: add entitlements once per addon association (supports multi-addon), each
+		// scaled by the association's quantity: 2 x addon A at quantity 3 = 6 x A's limits.
 		for _, assoc := range activeAddons.Items {
 			if assoc == nil || assoc.AddonID == "" {
 				continue
 			}
 			for _, ent := range addonEntitlementsByID[assoc.AddonID] {
-				addonEntitlements = append(addonEntitlements, withAssociationWindow(ent, assoc))
+				addonEntitlements = append(addonEntitlements,
+					withAddonQuantity(withAssociationWindow(ent, assoc), quantities[assoc.ID]))
 			}
 		}
 	}
