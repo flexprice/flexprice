@@ -63,16 +63,18 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			if err != nil {
 				return types.ConnectionMetadata{}, err
 			}
-			encryptedWebhookSecret, err := s.encryptionService.Encrypt(encryptedSecretData.Stripe.WebhookSecret)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-
 			encryptedMetadata.Stripe = &types.StripeConnectionMetadata{
 				PublishableKey: encryptedPublishableKey,
 				SecretKey:      encryptedSecretKey,
-				WebhookSecret:  encryptedWebhookSecret,
 				AccountID:      encryptedSecretData.Stripe.AccountID, // Account ID is not sensitive
+			}
+			// Webhooks are rejected until the secret is saved via UpdateConnection
+			if encryptedSecretData.Stripe.WebhookSecret != "" {
+				encryptedWebhookSecret, err := s.encryptionService.Encrypt(encryptedSecretData.Stripe.WebhookSecret)
+				if err != nil {
+					return types.ConnectionMetadata{}, err
+				}
+				encryptedMetadata.Stripe.WebhookSecret = encryptedWebhookSecret
 			}
 		}
 

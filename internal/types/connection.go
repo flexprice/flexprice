@@ -472,11 +472,6 @@ func (s *StripeConnectionMetadata) Validate() error {
 			WithHint("Stripe secret key is required").
 			Mark(ierr.ErrValidation)
 	}
-	if s.WebhookSecret == "" {
-		return ierr.NewError("webhook_secret is required").
-			WithHint("Stripe webhook secret is required").
-			Mark(ierr.ErrValidation)
-	}
 	return nil
 }
 
