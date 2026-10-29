@@ -61,7 +61,7 @@ jobs:
             exit 1
           fi
           BASE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
-          LAST=$(npm view @flexprice/sdk versions --json | jq -er --arg p "$BASE-dev." '[.[] | select(startswith($p)) | ltrimstr($p) | tonumber?] | max // 0')
+          LAST=$(npm view @flexprice/sdk time --json | jq -er --arg p "$BASE-dev." '[keys[] | select(startswith($p)) | ltrimstr($p) | tonumber?] | max // 0')
           VERSION="$BASE-dev.$((LAST + 1))"
           echo "Dev version $VERSION (npm latest $LATEST)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -117,6 +117,7 @@ jobs:
       # Skip when npm dev was built from this commit or a newer one, so a re-run never publishes older code.
       - name: Check npm dev tag
         id: devtag
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
