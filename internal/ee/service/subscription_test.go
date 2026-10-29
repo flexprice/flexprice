@@ -2111,7 +2111,7 @@ func (s *SubscriptionServiceSuite) inlineCommitmentRequest() dto.CreateSubscript
 			CommittedPrice: &dto.CommitmentPriceInput{Amount: lo.ToPtr(decimal.RequireFromString("0.048"))},
 			Measurement:    types.CommitmentMeasurementBillingPeriod,
 			StartDate:      start,
-			EndDate:        start.AddDate(1, 0, 0),
+			EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
 		}},
 	}
 }

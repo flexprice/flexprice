@@ -389,7 +389,7 @@ func TestCreateSubscriptionRequestValidate_InlineCommitments(t *testing.T) {
 			Value:          decimal.NewFromInt(100),
 			Measurement:    types.CommitmentMeasurementBillingPeriod,
 			StartDate:      start,
-			EndDate:        start.AddDate(1, 0, 0),
+			EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
 		}
 	}
 	subscriptionScope := CommitmentScopeInput{EntityType: types.CommitmentScopeSubscription}

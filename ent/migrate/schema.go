@@ -384,7 +384,7 @@ var (
 		{Name: "total_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "instalment_invoicing", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
 		{Name: "start_date", Type: field.TypeTime},
-		{Name: "end_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "on_early_termination", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "commitment_status", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "terminated_at", Type: field.TypeTime, Nullable: true},

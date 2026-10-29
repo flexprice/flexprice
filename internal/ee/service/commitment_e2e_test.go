@@ -141,7 +141,7 @@ func floorRequest(name string, priceID string, value string, start, end time.Tim
 		Measurement: types.CommitmentMeasurementBillingPeriod,
 		Binding:     lo.ToPtr(true),
 		StartDate:   start,
-		EndDate:     end,
+		EndDate:     lo.ToPtr(end),
 	}
 }
 
@@ -274,6 +274,73 @@ func (s *CommitmentE2ESuite) TestDailyWindowQuantityCommitment() {
 		wantLine{types.CommitmentLineUtilized, "Reserved GPUs", "168", "252"},
 		wantLine{types.CommitmentLineTrueUp, "Reserved GPUs (unused)", "80", "120"},
 		wantLine{types.CommitmentLineOverage, "GPUs", "22", "44"},
+	)
+}
+
+// Ten reserved GPUs a day at $1.50, with no end date: every month bills its full floor, used GPU-days plus a
+// true-up for the rest. Terminated on 11 Mar, March's floor shrinks to the ten days it ran, and a larger
+// reservation can take over from the termination.
+func (s *CommitmentE2ESuite) TestOpenEndedDailyWindowCommitment_BillsEveryMonthUntilTerminated() {
+	gpus := s.planWith("open_gpus", types.BILLING_PERIOD_MONTHLY, s.gpus, "2")
+	sub := s.subscribe(gpus, s.jan)
+	req := floorRequest("Reserved GPUs", gpus.ID, "10", s.jan, time.Time{})
+	req.EndDate = nil
+	req.Type, req.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+	req.CommittedPrice = &dto.CommitmentPriceInput{Amount: lo.ToPtr(dec("1.5"))}
+	created := s.commit(sub.ID, req)
+	s.Nil(created.EndDate)
+	s.Nil(created.CommitmentValue, "an open-ended commitment has no finite value")
+
+	// January runs 8 GPUs a day, February 6, the first ten days of March 7 and the rest of March 5.
+	feb, mar, apr := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0), s.jan.AddDate(0, 3, 0)
+	for day := s.jan; day.Before(apr); day = day.AddDate(0, 0, 1) {
+		qty := "8"
+		switch {
+		case !day.Before(mar.AddDate(0, 0, 10)):
+			qty = "5"
+		case !day.Before(mar):
+			qty = "7"
+		case !day.Before(feb):
+			qty = "6"
+		}
+
+		s.record(s.gpus, day.Add(12*time.Hour), qty)
+	}
+
+	// January: 248 of 310 GPU-days used, 62 unused, the full $465 floor.
+	s.requireInvoice(s.invoiceFor(sub.ID, s.jan, feb), "465",
+		wantLine{types.CommitmentLineUtilized, "Reserved GPUs", "248", "372"},
+		wantLine{types.CommitmentLineTrueUp, "Reserved GPUs (unused)", "62", "93"},
+	)
+
+	// February: 168 of 280 GPU-days used, 112 unused, the full $420 floor.
+	s.requireInvoice(s.invoiceFor(sub.ID, feb, mar), "420",
+		wantLine{types.CommitmentLineUtilized, "Reserved GPUs", "168", "252"},
+		wantLine{types.CommitmentLineTrueUp, "Reserved GPUs (unused)", "112", "168"},
+	)
+
+	terminatedAt := mar.AddDate(0, 0, 10)
+	terminated, err := s.commitments.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt: lo.ToPtr(terminatedAt),
+	})
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, terminated.CommitmentStatus)
+	s.Nil(terminated.TerminationInvoiceID)
+
+	// Twelve GPUs a day from the termination on; the terminated reservation no longer allocates from 11 Mar.
+	expanded := floorRequest("Expanded GPUs", gpus.ID, "12", terminatedAt, time.Time{})
+	expanded.EndDate = nil
+	expanded.Type, expanded.Measurement = types.COMMITMENT_TYPE_QUANTITY, types.CommitmentMeasurementWindow
+	expanded.CommittedPrice = &dto.CommitmentPriceInput{Amount: lo.ToPtr(dec("1.5"))}
+	s.commit(sub.ID, expanded)
+
+	// March: the ten days to the termination are a $150 floor, 70 of 100 GPU-days used; the 21 days after it a
+	// $378 floor on the new reservation, 105 of 252 used.
+	s.requireInvoice(s.invoiceFor(sub.ID, mar, apr), "528",
+		wantLine{types.CommitmentLineUtilized, "Reserved GPUs", "70", "105"},
+		wantLine{types.CommitmentLineTrueUp, "Reserved GPUs (unused)", "30", "45"},
+		wantLine{types.CommitmentLineUtilized, "Expanded GPUs", "105", "157.5"},
+		wantLine{types.CommitmentLineTrueUp, "Expanded GPUs (unused)", "147", "220.5"},
 	)
 }
 
@@ -598,6 +665,25 @@ func (s *CommitmentE2ESuite) TestAnalytics_UnusedFloorStillShows() {
 		s.True(resp.Items[0].TotalCost.Equal(dec("150")), "group_by %v: total %s", groupBy, resp.Items[0].TotalCost)
 		s.True(resp.Items[0].CommitmentInfo.ComputedTrueUpAmount.Equal(dec("150")))
 	}
+}
+
+// An open-ended floor shows in the month's analytics like a dated one, carrying the floor the invoice bills.
+func (s *CommitmentE2ESuite) TestAnalytics_OpenEndedFloorShowsItsPeriodFloor() {
+	tokens := s.planWith("analytics_open_ended", types.BILLING_PERIOD_MONTHLY, s.tokens, "0", tokenSlabs...)
+	sub := s.subscribe(tokens, s.jan)
+	req := floorRequest("Platform floor", tokens.ID, "150", s.jan, time.Time{})
+	req.EndDate = nil
+	s.commit(sub.ID, req)
+	s.recordSourcedTokens()
+
+	invoice := s.invoiceFor(sub.ID, s.jan, s.jan.AddDate(0, 1, 0))
+	s.requireInvoice(invoice, "150",
+		wantLine{types.CommitmentLineUtilized, "Platform floor", "300", "100"},
+		wantLine{types.CommitmentLineTrueUp, "Platform floor (unused)", "1", "50"},
+	)
+
+	s.requireSourceCosts(s.usageAnalytics([]string{"source"}, nil, ""), invoice,
+		map[string]string{"api": "30", "batch": "45", "console": "75"})
 }
 
 // A meter-scoped floor over a line versioned on 16 Jan shares its true-up between the two versions by what each

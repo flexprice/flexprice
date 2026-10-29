@@ -11300,7 +11300,7 @@ func (m *CommitmentMutation) EndDate() (r time.Time, exists bool) {
 // OldEndDate returns the old "end_date" field's value of the Commitment entity.
 // If the Commitment object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CommitmentMutation) OldEndDate(ctx context.Context) (v time.Time, err error) {
+func (m *CommitmentMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
 	}
@@ -11314,9 +11314,22 @@ func (m *CommitmentMutation) OldEndDate(ctx context.Context) (v time.Time, err e
 	return oldValue.EndDate, nil
 }
 
+// ClearEndDate clears the value of the "end_date" field.
+func (m *CommitmentMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[commitment.FieldEndDate] = struct{}{}
+}
+
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *CommitmentMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[commitment.FieldEndDate]
+	return ok
+}
+
 // ResetEndDate resets all changes to the "end_date" field.
 func (m *CommitmentMutation) ResetEndDate() {
 	m.end_date = nil
+	delete(m.clearedFields, commitment.FieldEndDate)
 }
 
 // SetOnEarlyTermination sets the "on_early_termination" field.
@@ -12163,6 +12176,9 @@ func (m *CommitmentMutation) ClearedFields() []string {
 	if m.FieldCleared(commitment.FieldInstalmentInvoicing) {
 		fields = append(fields, commitment.FieldInstalmentInvoicing)
 	}
+	if m.FieldCleared(commitment.FieldEndDate) {
+		fields = append(fields, commitment.FieldEndDate)
+	}
 	if m.FieldCleared(commitment.FieldOnEarlyTermination) {
 		fields = append(fields, commitment.FieldOnEarlyTermination)
 	}
@@ -12218,6 +12234,9 @@ func (m *CommitmentMutation) ClearField(name string) error {
 		return nil
 	case commitment.FieldInstalmentInvoicing:
 		m.ClearInstalmentInvoicing()
+		return nil
+	case commitment.FieldEndDate:
+		m.ClearEndDate()
 		return nil
 	case commitment.FieldOnEarlyTermination:
 		m.ClearOnEarlyTermination()

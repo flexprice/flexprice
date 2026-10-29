@@ -979,9 +979,9 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 		Measurement: types.CommitmentMeasurementBillingPeriod,
 		Timezone:    "UTC",
 		StartDate:   apr,
-		EndDate:     may,
+		EndDate:     lo.ToPtr(may),
 	}
-	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "")
+	periods, err := commitmentPeriods(c, monthlySub(apr), amountOf, "", apr, may)
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
 

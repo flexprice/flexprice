@@ -2003,6 +2003,16 @@ func EndDateLTE(v time.Time) predicate.Commitment {
 	return predicate.Commitment(sql.FieldLTE(FieldEndDate, v))
 }
 
+// EndDateIsNil applies the IsNil predicate on the "end_date" field.
+func EndDateIsNil() predicate.Commitment {
+	return predicate.Commitment(sql.FieldIsNull(FieldEndDate))
+}
+
+// EndDateNotNil applies the NotNil predicate on the "end_date" field.
+func EndDateNotNil() predicate.Commitment {
+	return predicate.Commitment(sql.FieldNotNull(FieldEndDate))
+}
+
 // OnEarlyTerminationEQ applies the EQ predicate on the "on_early_termination" field.
 func OnEarlyTerminationEQ(v types.CommitmentEarlyTermination) predicate.Commitment {
 	vc := string(v)

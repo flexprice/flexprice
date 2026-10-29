@@ -99,8 +99,9 @@ type CreateCommitmentRequest struct {
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	StartDate          time.Time                         `json:"start_date" validate:"required"`
-	EndDate            time.Time                         `json:"end_date" validate:"required"`
-	Metadata           types.Metadata                    `json:"metadata,omitempty"`
+	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
+	EndDate  *time.Time     `json:"end_date,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
 // ApplyDefaults fills label, timezone and the binding-dependent settings.
@@ -152,7 +153,7 @@ func (r *CreateCommitmentRequest) Validate() error {
 		return ierr.Validation("scope.entity_id is required")
 	case !r.Value.IsPositive():
 		return ierr.Validation("value must be greater than zero")
-	case !r.StartDate.Before(r.EndDate):
+	case r.EndDate != nil && !r.StartDate.Before(*r.EndDate):
 		return ierr.Validation("start_date must be before end_date")
 	case r.Priority < 0:
 		return ierr.Validation("priority must be zero or greater")

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -198,7 +199,12 @@ func (s *entitlementGrantService) hasActiveCommitment(ctx context.Context, sub *
 		return false, nil
 	}
 	active, err := svc.ActiveForPeriod(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
-	return len(active) > 0, err
+	if err != nil {
+		return false, err
+	}
+
+	// A terminated open-ended commitment matches the active window forever; only a live term blocks the grant.
+	return lo.SomeBy(active, func(c *commitment.Commitment) bool { return !c.EndedBy(sub.CurrentPeriodStart) }), nil
 }
 
 // CreateSubscriptionEntitlementGrant creates a dollar entitlement grant shared by every usage line on one subscription. It

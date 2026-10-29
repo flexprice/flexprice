@@ -398,7 +398,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCheckout_SessionFai
 		Value:          decimal.NewFromInt(100),
 		Measurement:    types.CommitmentMeasurementBillingPeriod,
 		StartDate:      start,
-		EndDate:        start.AddDate(1, 0, 0),
+		EndDate:        lo.ToPtr(start.AddDate(1, 0, 0)),
 	}}
 	_, err := s.service.CreateSubscription(ctx, req)
 	s.Require().Error(err)

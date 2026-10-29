@@ -74,6 +74,7 @@ func (s *EntitlementGrantSuite) buildServiceParams() ServiceParams {
 		AlertLogsRepo:            stores.AlertLogsRepo,
 		WalletRepo:               stores.WalletRepo,
 		SettingsRepo:             stores.SettingsRepo,
+		CommitmentRepo:           stores.CommitmentRepo,
 		AddonRepo:                stores.AddonRepo,
 		AddonAssociationRepo:     stores.AddonAssociationRepo,
 		MeterUsageRepo:           stores.MeterUsageRepo,

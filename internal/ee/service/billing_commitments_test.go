@@ -53,7 +53,7 @@ func (s *BillingServiceSuite) newTestCommitment(
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
 		StartDate:          start,
-		EndDate:            end,
+		EndDate:            lo.ToPtr(end),
 		CommitmentStatus:   types.CommitmentStatusActive,
 		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
 		EnvironmentID:      types.GetEnvironmentID(ctx),
@@ -704,7 +704,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() 
 	s.True(total.Equal(dec("34")), "total %s", total)
 }
 
-// One pool spans every span a commitment is in force, so usage before a later commitment starts draws it down.
+// One pool spans every span a commitment applies to, so usage before a later commitment starts draws it down.
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSplit() {
 	ctx := s.GetContext()
 	s.setupTestData()
@@ -1758,7 +1758,7 @@ func (s *EntitlementQuantityTestSuite) recalcFixture(
 
 	for _, c := range commitments {
 		c.SubscriptionID, c.CustomerID, c.ScopeEntityID = sub.ID, sub.CustomerID, li.PriceID
-		c.StartDate, c.EndDate = aug, aug.AddDate(0, 3, 0)
+		c.StartDate, c.EndDate = aug, lo.ToPtr(aug.AddDate(0, 3, 0))
 		_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
 		s.Require().NoError(err)
 	}
@@ -1887,8 +1887,8 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
 	s.Equal(types.CommitmentMeasurementBillingPeriod, b.Measurement)
 	s.True(b.Binding)
 	s.Equal("usd", b.Currency)
-	s.True(b.AppliesFrom.Equal(periodStart), "in force from %s", b.AppliesFrom)
-	s.True(b.AppliesTo.Equal(sub.CurrentPeriodEnd), "in force to %s", b.AppliesTo)
+	s.True(b.AppliesFrom.Equal(periodStart), "applies from %s", b.AppliesFrom)
+	s.True(b.AppliesTo.Equal(sub.CurrentPeriodEnd), "applies to %s", b.AppliesTo)
 	s.True(b.Committed.Amount.Equal(dec("100")), "period amount %s", b.Committed.Amount)
 	// The now-based fixture prorates capacity by a fraction of a second, so compare it rounded.
 	s.True(types.RoundToCurrencyPrecision(b.Committed.Quantity, "usd").Equal(dec("100")), "capacity %s", b.Committed.Quantity)
@@ -1907,6 +1907,39 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
 	s.True(partial.Commitments[0].Unused.Amount.Equal(b.Unused.Amount))
 	s.True(partial.Commitments[0].BilledAmount.Equal(b.BilledAmount))
 	s.True(partial.Commitments[0].AppliesTo.Equal(sub.CurrentPeriodEnd), "applies to %s", partial.Commitments[0].AppliesTo)
+}
+
+// An open-ended commitment applies to the end of the queried period, at that period's full floor, whether the
+// window covers the whole period or stops inside it.
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_OpenEndedAppliesToThePeriodEnd() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	periodStart := sub.CurrentPeriodStart
+	c := s.newTestCommitment(
+		types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT),
+		sub,
+		types.COMMITMENT_TYPE_AMOUNT,
+		"100",
+		s.testData.prices.apiCalls.ID,
+		periodStart,
+		time.Time{},
+	)
+	c.EndDate = nil
+	s.storeCommitment(c)
+
+	for _, usage := range []*dto.GetUsageBySubscriptionResponse{
+		s.rawUsage(sub),
+		s.rawUsageWindow(sub, periodStart, time.Now().UTC()),
+	} {
+		s.Require().Len(usage.Commitments, 1)
+		b := usage.Commitments[0]
+		s.Equal(c.ID, b.CommitmentID)
+		s.True(b.AppliesFrom.Equal(periodStart), "applies from %s", b.AppliesFrom)
+		s.True(b.AppliesTo.Equal(sub.CurrentPeriodEnd), "applies to %s", b.AppliesTo)
+		s.True(b.Committed.Amount.Equal(dec("100")), "period amount %s", b.Committed.Amount)
+		s.True(b.BilledAmount.Equal(dec("100")), "billed %s", b.BilledAmount)
+	}
 }
 
 // The public usage API reads meter_usage; its response carries the breakdown, while internal callers

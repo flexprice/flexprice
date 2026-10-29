@@ -66,7 +66,7 @@ func (s *commitmentService) Preview(
 		return nil, err
 	}
 
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
+	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}, nil
 }
 
 func (s *commitmentService) requireEnabled(ctx context.Context) error {
@@ -225,28 +225,29 @@ func (s *commitmentService) findReplay(ctx context.Context, req dto.CreateCommit
 	return existing, nil
 }
 
-// prepare validates the request and builds the commitment and its value without persisting anything.
+// prepare validates the request and builds the commitment and its value (nil when open-ended) without persisting
+// anything.
 func (s *commitmentService) prepare(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*commitment.Commitment, *commitmentContext, decimal.Decimal, error) {
+) (*commitment.Commitment, *commitmentContext, *decimal.Decimal, error) {
 	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, nil, err
 	}
 
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, nil, err
 	}
 
 	req.ApplyDefaults(cc.Sub.Timezone)
 	if err := req.Validate(); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, nil, err
 	}
 
 	if err := s.validateAgainstSubscription(ctx, req, cc, opts); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, nil, err
 	}
 
 	c := req.ToCommitment(ctx, cc.Sub)
@@ -263,7 +264,7 @@ func (s *commitmentService) prepare(
 
 		priceReq := rate.in.ToCreatePriceRequest(c, cc.Sub, scopeMeter(c, cc), rate.kind)
 		if err := priceReq.Validate(); err != nil {
-			return nil, nil, decimal.Zero, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -273,12 +274,12 @@ func (s *commitmentService) prepare(
 		amountOf = priceAmountFn(ctx, s.ServiceParams, req.CommittedPrice.ToPrice(c.Currency))
 	}
 
-	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc))
+	value, err := termValue(c, cc.Sub, amountOf, bucketFor(c, cc))
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, nil, err
 	}
 
-	return c, cc, commitmentValue(periods), nil
+	return c, cc, value, nil
 }
 
 // scopeMeter returns the meter of the first scoped line at the commitment start, which backs its rate prices.
@@ -532,7 +533,7 @@ func (s *commitmentService) TerminateForSubscription(
 				continue
 			}
 
-			if !effectiveAt.Before(c.EndDate) {
+			if c.EndedBy(effectiveAt) {
 				continue
 			}
 
@@ -622,8 +623,8 @@ func (s *commitmentService) terminate(
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	if !effectiveAt.Before(c.EndDate) {
-		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EndDate.Format(time.RFC3339))
+	if c.EndedBy(effectiveAt) {
+		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EffectiveEnd().Format(time.RFC3339))
 	}
 
 	var invoiceID *string
@@ -675,12 +676,36 @@ func (s *commitmentService) billCancellationFee(
 		)
 	}
 
+	// Nor can it fall at or past the subscription end, which bounds the term the fee covers.
+	if sub.EndDate != nil && !effectiveAt.Before(*sub.EndDate) {
+		return nil, ierr.Validationf(
+			"effective_at with a cancellation_fee must be before the subscription end %s",
+			sub.EndDate.Format(time.RFC3339),
+		)
+	}
+
 	metadata := types.Metadata{
 		types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineCancellationFee),
 		types.MetadataKeyCommitmentID:       c.ID,
 	}
 	if c.InvoiceDescription != nil {
 		metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
+	}
+
+	// The fee covers the rest of the term, or of the billing period holding effective_at for one that never ends;
+	// either stops at the subscription end.
+	periodEnd := c.EffectiveEnd()
+	if c.OpenEnded() {
+		holding, err := periodAt(sub, effectiveAt)
+		if err != nil {
+			return nil, err
+		}
+
+		periodEnd = &holding.End
+	}
+
+	if sub.EndDate != nil {
+		periodEnd = lo.ToPtr(minTime(*periodEnd, *sub.EndDate))
 	}
 
 	billingPeriod := string(sub.BillingPeriod)
@@ -694,7 +719,7 @@ func (s *commitmentService) billCancellationFee(
 		Total:          amount,
 		Subtotal:       amount,
 		PeriodStart:    lo.ToPtr(effectiveAt),
-		PeriodEnd:      lo.ToPtr(c.EndDate),
+		PeriodEnd:      periodEnd,
 		BillingPeriod:  &billingPeriod,
 		IdempotencyKey: lo.ToPtr("commitment_termination_" + c.ID),
 		LineItems: []dto.CreateInvoiceLineItemRequest{
@@ -703,7 +728,7 @@ func (s *commitmentService) billCancellationFee(
 				Quantity:     decimal.NewFromInt(1),
 				Amount:       amount,
 				PeriodStart:  lo.ToPtr(effectiveAt),
-				PeriodEnd:    lo.ToPtr(c.EndDate),
+				PeriodEnd:    periodEnd,
 				CommitmentID: lo.ToPtr(c.ID),
 				EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
 				EntityID:     lo.ToPtr(c.ID),
@@ -790,13 +815,12 @@ func (s *commitmentService) response(
 		return nil, err
 	}
 
-	periods, err := commitmentPeriods(c, sub, amountOf, bucket)
+	value, err := termValue(c, sub, amountOf, bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	value := commitmentValue(periods)
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
+	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}, nil
 }
 
 func (s *commitmentService) CheckPriceAttach(
@@ -878,8 +902,8 @@ func (s *commitmentService) checkPriceAttach(
 	return s.checkAttachPairs(ctx, sub, inScope)
 }
 
-// commitmentsInScope returns commitments in force after `at` and starting before `until` (nil when open-ended)
-// whose scope includes the new usage price. A commitment stays in force through the billing period holding its effective end.
+// commitmentsInScope returns commitments covering the new usage price that hold their scope after `at`, through the
+// billing period holding their effective end, and start before `until` (nil when open-ended).
 func (s *commitmentService) commitmentsInScope(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -897,12 +921,12 @@ func (s *commitmentService) commitmentsInScope(
 
 	var inScope []*commitment.Commitment
 	for _, c := range listed {
-		spanEnd, err := inForceEnd(sub, c)
+		blockedUntil, err := blocksUntil(sub, c)
 		if err != nil {
 			return nil, err
 		}
 
-		if !at.Before(spanEnd) || !c.StartDate.Before(spanEnd) || (until != nil && !c.StartDate.Before(*until)) {
+		if endReached(blockedUntil, at) || endReached(blockedUntil, c.StartDate) || endReached(until, c.StartDate) {
 			continue
 		}
 
@@ -982,21 +1006,21 @@ func (s *commitmentService) checkAttachPairs(
 ) (string, error) {
 	for i, a := range inScope {
 		for _, b := range inScope[i+1:] {
-			aEnd, err := inForceEnd(sub, a)
+			aBlockedUntil, err := blocksUntil(sub, a)
 			if err != nil {
 				return "", err
 			}
 
-			bEnd, err := inForceEnd(sub, b)
+			bBlockedUntil, err := blocksUntil(sub, b)
 			if err != nil {
 				return "", err
 			}
 
-			if !a.StartDate.Before(bEnd) || !b.StartDate.Before(aEnd) {
+			if endReached(bBlockedUntil, a.StartDate) || endReached(aBlockedUntil, b.StartDate) {
 				continue
 			}
 
-			allocatingTogether := a.StartDate.Before(b.EffectiveEnd()) && b.StartDate.Before(a.EffectiveEnd())
+			allocatingTogether := !b.EndedBy(a.StartDate) && !a.EndedBy(b.StartDate)
 			if allocatingTogether && a.Priority == b.Priority {
 				return a.ID, ierr.Validationf(
 					"commitments %s and %s overlap on the new price with the same priority %d",
