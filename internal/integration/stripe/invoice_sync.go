@@ -262,7 +262,7 @@ func buildInvoiceItemParams(
 	stripeInvoiceID string,
 	productIDByPriceID map[string]string,
 ) *stripe.InvoiceItemCreateParams {
-	amountCents := lineItem.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+	amountMinorUnits := types.ToSmallestUnit(lineItem.Amount, lineItem.Currency)
 	currency := strings.ToLower(lineItem.Currency)
 
 	params := &stripe.InvoiceItemCreateParams{
@@ -276,12 +276,19 @@ func buildInvoiceItemParams(
 		},
 	}
 
+	if lineItem.BillingScheduleItemID != nil {
+		params.Metadata["flexprice_billing_schedule_item_id"] = *lineItem.BillingScheduleItemID
+	}
+	if lineItem.CommitmentID != nil {
+		params.Metadata["flexprice_commitment_id"] = *lineItem.CommitmentID
+	}
+
 	if lineItem.PriceID != nil {
 		if productID, ok := productIDByPriceID[*lineItem.PriceID]; ok {
 			params.PriceData = &stripe.InvoiceItemCreatePriceDataParams{
 				Product:    stripe.String(productID),
 				Currency:   stripe.String(currency),
-				UnitAmount: stripe.Int64(amountCents),
+				UnitAmount: stripe.Int64(amountMinorUnits),
 			}
 			params.Metadata["flexprice_stripe_product_id"] = productID
 			return params
@@ -289,7 +296,7 @@ func buildInvoiceItemParams(
 	}
 
 	params.Currency = stripe.String(currency)
-	params.Amount = stripe.Int64(amountCents)
+	params.Amount = stripe.Int64(amountMinorUnits)
 	return params
 }
 

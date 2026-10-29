@@ -68,3 +68,20 @@ func TestBuildInvoiceItemParams_AmountFallbackWhenFeatureOff(t *testing.T) {
 	require.Nil(t, params.PriceData)
 	require.Equal(t, int64(250), *params.Amount)
 }
+
+func TestBuildInvoiceItemParams_ScheduledPrincipalCurrencyAndProvenance(t *testing.T) {
+	for _, test := range []struct {
+		currency, amount string
+		minor            int64
+	}{{"usd", "123.45", 12345}, {"jpy", "123", 123}, {"kwd", "1.234", 1234}} {
+		t.Run(test.currency, func(t *testing.T) {
+			line := &invoice.InvoiceLineItem{ID: "line", Amount: decimal.RequireFromString(test.amount), Currency: test.currency, Quantity: decimal.NewFromInt(1),
+				BillingScheduleItemID: lo.ToPtr("schedule"), CommitmentID: lo.ToPtr("commitment")}
+			params := buildInvoiceItemParams(line, "customer", "invoice", nil)
+			require.Nil(t, params.PriceData)
+			require.Equal(t, test.minor, *params.Amount)
+			require.Equal(t, "schedule", params.Metadata["flexprice_billing_schedule_item_id"])
+			require.Equal(t, "commitment", params.Metadata["flexprice_commitment_id"])
+		})
+	}
+}

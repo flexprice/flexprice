@@ -9,7 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
 	"github.com/flexprice/flexprice/internal/integration/gcpmarketplace"
+	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	alertActivities "github.com/flexprice/flexprice/internal/temporal/activities/alerts"
+	billingTermsActivities "github.com/flexprice/flexprice/internal/temporal/activities/billingterms"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
@@ -23,7 +25,6 @@ import (
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
 	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
-	addonActivities "github.com/flexprice/flexprice/internal/temporal/activities/addon"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	prepareProcessedEventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/prepareprocessedevents"
 	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
@@ -37,6 +38,7 @@ import (
 	zohoActivities "github.com/flexprice/flexprice/internal/temporal/activities/zoho"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
+	billingTermsWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/billingterms"
 	cronWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/cron"
 	dlqWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/dlq"
 	eventsWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/events"
@@ -56,6 +58,7 @@ type WorkerConfig struct {
 
 // cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
 type cronActivityBundle struct {
+	billingSchedule              billingTermsActivities.Activities
 	creditGrant                  *cronActivities.CreditGrantActivities
 	subscription                 *cronActivities.SubscriptionCronActivities
 	walletCreditExpiry           *cronActivities.WalletCreditExpiryActivities
@@ -76,6 +79,7 @@ func RegisterWorkflowsAndActivities(
 	temporalService temporalService.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	billingScheduleService service.BillingScheduleService,
 ) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
@@ -316,6 +320,7 @@ func RegisterWorkflowsAndActivities(
 	marketplaceFlushActivities := marketplaceActivities.NewFlushActivities(params, mktplaceReporter, params.Logger)
 
 	cronBundle := &cronActivityBundle{
+		billingSchedule:              billingTermsActivities.NewActivities(billingScheduleService),
 		creditGrant:                  cronActivities.NewCreditGrantActivities(creditGrantService, params.Logger),
 		subscription:                 cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
 		walletCreditExpiry:           cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
@@ -559,6 +564,7 @@ func buildWorkerConfig(
 
 	case types.TemporalTaskQueueCron:
 		workflowsList = append(workflowsList,
+			billingTermsWorkflows.ProcessBillingScheduleItemsDueWorkflow,
 			cronWorkflows.CreditGrantProcessingWorkflow,
 			cronWorkflows.SubscriptionAutoCancellationWorkflow,
 			cronWorkflows.SubscriptionOverdueInvoicesWorkflow,
@@ -580,6 +586,8 @@ func buildWorkerConfig(
 			cronWorkflows.SelfBillingHourlyWorkflow,
 		)
 		activitiesList = append(activitiesList,
+			cron.billingSchedule.PrepareBillingScheduleBatchActivity,
+			cron.billingSchedule.CreateOrRecoverBillingScheduleInvoiceActivity,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
 			cron.subscription.ProcessAutoCancellationActivity,
 			cron.subscription.ProcessOverdueSubscriptionInvoicesActivity,

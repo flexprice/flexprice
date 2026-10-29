@@ -31,6 +31,9 @@ func convertInvoiceAmounts(inv *invoice.Invoice, resolution *FXRateResolution, c
 	if types.IsMatchingCurrency(chargeCurrency, billingCurrency) {
 		return nil
 	}
+	if hasBillingScheduleLines(inv) {
+		return ierr.Validation("scheduled payments must be invoiced in their obligation currency")
+	}
 
 	rate := resolution.Rate
 

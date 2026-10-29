@@ -40,10 +40,28 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Start isolated Temporal server
+        run: |
+          curl --fail --location --retry 3 -o /tmp/temporal.tar.gz \
+            https://github.com/temporalio/cli/releases/download/v1.8.2/temporal_cli_1.8.2_linux_amd64.tar.gz
+          echo 'd8421bda989e6514b4bdb4d63a9012a8a05a806892e881a5aad8510496349a94  /tmp/temporal.tar.gz' | sha256sum --check
+          tar -xzf /tmp/temporal.tar.gz -C /tmp temporal
+          /tmp/temporal server start-dev --disable-config-env --disable-config-file \
+            --ip 127.0.0.1 --port 17333 --headless --namespace billing-terms-test \
+            --log-level error > /tmp/billing-temporal.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if /tmp/temporal operator cluster health --address 127.0.0.1:17333; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/billing-temporal.log
+          exit 1
+
       - name: Run Tests
         env:
           FLEXPRICE_BILLING_TERMS_TEST_DSN: postgres://billing_terms:billing_terms_local@localhost:5432/billing_terms_test?sslmode=disable
           FLEXPRICE_TEST_POSTGRES_DSN: postgres://billing_terms:billing_terms_local@localhost:5432/billing_terms_test?sslmode=disable
+          FLEXPRICE_BILLING_TERMS_TEST_TEMPORAL_ADDRESS: 127.0.0.1:17333
+          FLEXPRICE_BILLING_TERMS_TEST_TEMPORAL_NAMESPACE: billing-terms-test
         run: |
           make test-coverage
 

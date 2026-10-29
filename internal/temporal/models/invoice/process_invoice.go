@@ -14,6 +14,8 @@ type ProcessInvoiceWorkflowInput struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
 	UserID        string `json:"user_id"`
+	// SkipCompute preserves an atomically materialized draft and its finalization clock.
+	SkipCompute bool `json:"skip_compute,omitempty"`
 }
 
 // Validate validates the process invoice workflow input

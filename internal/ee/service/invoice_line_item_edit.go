@@ -63,6 +63,9 @@ func (s *invoiceService) UpdateLineItem(ctx context.Context, invoiceID, lineItem
 				WithHintf("line item %s does not exist on invoice %s (or is not the current version)", lineItemID, invoiceID).
 				Mark(ierr.ErrNotFound)
 		}
+		if existingItem.BillingScheduleItemID != nil {
+			return billingScheduleCorrectionRequired(inv)
+		}
 
 		builder := invoice.NewInvoiceLineItemBuilder(existingItem).
 			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)).
@@ -246,6 +249,11 @@ func (s *invoiceService) RemoveBulkLineItem(ctx context.Context, invoiceID strin
 			removedIDs[resolved] = true
 			resolvedIDs = append(resolvedIDs, resolved)
 		}
+		for _, line := range lockedInv.LineItems {
+			if removedIDs[line.ID] && line.BillingScheduleItemID != nil {
+				return billingScheduleCorrectionRequired(lockedInv)
+			}
+		}
 
 		if err := s.InvoiceRepo.RemoveLineItems(txCtx, invoiceID, resolvedIDs); err != nil {
 			return err
@@ -355,6 +363,9 @@ func rejectVoidedInvoiceEdit(inv *invoice.Invoice) error {
 // voidAndRecreateDraftForEdit voids a finalized invoice and creates a DRAFT copy of it
 // (data + line items, discount re-derived), linking the original to the copy. Run inside a transaction.
 func (s *invoiceService) voidAndRecreateDraftForEdit(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
+	if hasBillingScheduleLines(inv) {
+		return nil, billingScheduleCorrectionRequired(inv)
+	}
 	voided, err := s.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
 	if err != nil {
 		return nil, err

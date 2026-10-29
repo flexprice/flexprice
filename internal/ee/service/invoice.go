@@ -641,9 +641,14 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return nil, false, err
 	}
 
+	ctx = revalidateTrialEndCollection(ctx, inv)
+
 	// Early return for finalized/voided — no lock needed, these are immutable.
 	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusSkipped {
 		return inv, false, nil
+	}
+	if err := validateBillingScheduleRecompute(ctx, inv); err != nil {
+		return nil, false, err
 	}
 
 	// A paused period bills nothing: its invoice is marked SKIPPED as is and never computed.
@@ -658,6 +663,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 				return lockErr
 			}
 			inv = locked
+			if err := validateBillingScheduleRecompute(txCtx, inv); err != nil {
+				return err
+			}
 			if inv.InvoiceStatus != types.InvoiceStatusDraft {
 				return nil
 			}
@@ -677,19 +685,23 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	}
 
 	// check if the sub is of type inherited and if so, skip computation
-	if inv.SubscriptionID != nil {
+	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
 		if err != nil {
 			return nil, false, err
 		}
 		if sub.SubscriptionType == types.SubscriptionTypeInherited ||
 			sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+			if hasBillingScheduleLines(inv) {
+				return nil, false, billingScheduleCorrectionRequired(inv)
+			}
 			return inv, true, nil
 		}
 	}
 
 	// 2. Compute the request OUTSIDE the lock (expensive for subscription invoices).
 	var applyReq *dto.InvoiceComputeRequest
+	preparedCustomerID, preparedCurrency := inv.CustomerID, inv.Currency
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		// Subscription: compute line items from billing service
@@ -746,6 +758,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			subInvReq.ZeroOutAmounts()
 		}
 		computeReq := subInvReq.ToComputeRequest()
+		preparedCustomerID, preparedCurrency = subInvReq.CustomerID, subInvReq.Currency
 		applyReq = &computeReq
 		applyReq.OpeningInvoiceAdjustmentAmount = params.OpeningInvoiceAdjustmentAmount
 	} else if req != nil {
@@ -754,6 +767,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	}
 
 	// 3. Take the lock — only for DB writes (line items, credits, coupons, taxes, status update).
+	preparedInvoice := inv
 	var computed bool
 	var skipped, wasSkipped bool
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -762,6 +776,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if lockErr != nil {
 			return lockErr
 		}
+		txCtx = revalidateTrialEndCollection(txCtx, inv)
 
 		gatedSession, sessionOwned, lockErr := s.isInvoiceGatedOnCheckout(txCtx, inv, req.SourceID())
 		if lockErr != nil {
@@ -776,6 +791,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 				WithHint("manual line-item edits are not supported for computed invoices").
 				Mark(ierr.ErrValidation)
 		}
+		if err := validateBillingScheduleRecompute(txCtx, inv); err != nil {
+			return err
+		}
+		if hasBillingScheduleLines(inv) && inv.InvoiceType != types.InvoiceTypeSubscription && req != nil {
+			return billingScheduleCorrectionRequired(inv)
+		}
 
 		// Re-check status under lock: allow SKIPPED invoices to be re-computed
 		// (usage may have accumulated since the invoice was first marked SKIPPED).
@@ -787,124 +808,31 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			return nil
 		}
 		computed = true
-
-		// The math below runs in the denomination; credits applied at expiry must survive recompute.
-		inv.RestoreFromDenomination()
-		creditsAppliedToDraft := inv.TotalPrepaidCreditsApplied
-
-		// Populate invoice from the computed request (uniform for all invoice types)
-		if applyReq != nil {
-			reconciledItems, err := s.reconcileLineItems(txCtx, inv, applyReq.LineItems)
-			if err != nil {
-				return err
-			}
-
-			inv.Subtotal = applyReq.Subtotal
-			inv.Total = applyReq.Total
-			inv.AmountDue = applyReq.AmountDue
-			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
-			inv.Description = applyReq.Description
-			inv.DueDate = applyReq.DueDate
-			inv.LineItems = reconciledItems
+		if !sameInvoiceComputationContext(preparedInvoice, inv) {
+			return ierr.NewError("invoice changed while charges were being prepared; retry computation").Mark(ierr.ErrVersionConflict)
+		}
+		if err := validateBillingScheduleDestination(inv, preparedCustomerID, preparedCurrency); err != nil {
+			return err
 		}
 
-		isTrialStart := types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart
-		if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() && !lo.SomeBy(inv.LineItems, func(item *invoice.InvoiceLineItem) bool {
-			return item != nil && !item.Amount.IsZero()
-		}) && !isTrialStart && !creditsAppliedToDraft.IsPositive() {
-			now := time.Now().UTC()
-			inv.LastComputedAt = &now
-			inv.InvoiceStatus = types.InvoiceStatusSkipped
-			if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-				return err
-			}
-			skipped = true
-			return nil
-		}
-
-		// Apply coupons/discounts. For one-off and credit invoices, also apply
-		// credits and taxes here so a computed draft carries a total. Finalization
-		// recalculates the tax again. For subscription invoices, credits and taxes
-		// are deferred to the finalization step so wallet debits only happen when
-		// the invoice is actually sealed.
-		applyTaxes := false
-		if applyReq != nil {
-			if inv.InvoiceType == types.InvoiceTypeOneOff || inv.InvoiceType == types.InvoiceTypeCredit {
-				// One-off / credit: apply coupons + credits now, taxes after the conversion
-				if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, *applyReq); err != nil {
-					return err
-				}
-				applyTaxes = true
-			} else {
-				// Subscription: coupons only — credits and taxes deferred to finalization
-				if err := s.applyCouponsToInvoice(txCtx, inv, *applyReq); err != nil {
-					return err
-				}
-				inv.TotalPrepaidCreditsApplied = creditsAppliedToDraft
-				if creditsAppliedToDraft.IsPositive() {
-					inv.Total = decimal.Max(inv.Subtotal.Sub(inv.TotalDiscount).Sub(creditsAppliedToDraft), decimal.Zero)
-					inv.AmountDue = inv.Total
-				}
-			}
-		}
-
-		// The pipeline above ran in the subscription's currency. Snapshot it as the
-		// denomination, then write the fiat columns back from it.
-		inv.CaptureCustomCurrencyDenomination()
-		inv.ProjectCustomCurrency()
-
-		// Tax runs after the conversion: it writes tax_applied rows that go to external
-		// integrations, so they have to be fiat.
-		if applyTaxes {
-			if err := s.applyTaxesToInvoice(txCtx, inv, *applyReq); err != nil {
-				return err
-			}
-		}
-
-		inv.AmountRemaining = decimal.Max(inv.AmountDue.Sub(inv.AmountPaid), decimal.Zero)
-		// Negative usage can lower a paid draft below what was already collected.
-		if inv.AmountPaid.GreaterThan(inv.AmountDue) {
-			inv.PaymentStatus = types.PaymentStatusOverpaid
-		}
-		for _, item := range inv.LineItems {
-			if err := s.InvoiceLineItemRepo.Update(txCtx, item); err != nil {
-				return err
-			}
-		}
-
-		now := time.Now().UTC()
-		inv.LastComputedAt = &now
-
-		return s.InvoiceRepo.Update(txCtx, inv)
+		return s.withBillingScheduleCollection(txCtx, inv, func(collectionCtx context.Context) error {
+			var computeErr error
+			skipped, computeErr = s.applyInvoiceComputation(collectionCtx, inv, applyReq)
+			return computeErr
+		})
 	})
 	if err != nil {
 		return nil, skipped, err
 	}
 
-	// Period-end computation also runs for zero-value invoices and after rollover has advanced the subscription.
+	ctx = withoutTrialEndCollection(ctx)
+
 	if computed {
-		if err := s.saveCompletedCycleUsageCheckpoints(ctx, inv); err != nil {
-			s.Logger.Error(ctx, "saving usage checkpoints failed; reads use the preceding checkpoint",
-				"subscription_id", *inv.SubscriptionID, "invoice_id", inv.ID, "error", err)
-		}
-	}
-
-	// Notify draft-stage listeners (currently just Tabs sync) that the invoice changed. Skip when
-	// nothing actually happened (concurrent finalize/void raced us) or when the invoice landed on
-	// SKIPPED — zero-amount invoices are never synced downstream, so there's nothing to notify.
-	if computed && !skipped {
-		s.publishSystemEvent(ctx, types.WebhookEventInvoiceUpdate, invoiceID)
-	}
-	if computed && skipped != wasSkipped {
-		recordInvoiceTransition(ctx, inv)
-	}
-
-	// A skipped renewal owes nothing, so release the new period's held grants now.
-	if skipped && types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionCycle {
-		if err := s.HandleIncompleteSubscriptionPayment(ctx, inv); err != nil {
-			s.Logger.Error(ctx, "failed to release grants for skipped renewal invoice",
-				"error", err,
-				"invoice_id", inv.ID)
+		computedInvoice := invoice.NewInvoiceBuilder(inv).Build()
+		notifyCtx := types.WithoutDBTransaction(ctx)
+		notify := func() { s.afterInvoiceComputation(notifyCtx, computedInvoice, skipped, wasSkipped) }
+		if !types.RegisterPostCommit(ctx, notify) {
+			notify()
 		}
 	}
 
@@ -2731,7 +2659,9 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		}
 		computeOverride.ProrationBehavior = req.ProrationBehavior
 	}
-	_, skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
+	computeCtx := bindTrialEndCollection(ctx, &draft.Invoice)
+	ctx = withoutTrialEndCollection(ctx)
+	_, skipped, err := s.ComputeInvoice(computeCtx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2861,6 +2791,10 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 
 	s.Logger.Info(ctx, "prepared invoice request for preview", "invoice_request", invReq)
 
+	if err := s.projectSubscriptionBillingSchedule(ctx, sub, invReq); err != nil {
+		return nil, err
+	}
+
 	if req.HideZeroChargesLineItems {
 		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
 			return !item.Amount.IsZero() || item.Metadata[metadataKeySubscriptionEntitlementGrantAllowance] != ""
@@ -2935,6 +2869,10 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 
 	s.Logger.Info(ctx, "prepared invoice request for internal preview",
 		"invoice_request", invReq)
+
+	if err := s.projectSubscriptionBillingSchedule(ctx, sub, invReq); err != nil {
+		return nil, err
+	}
 
 	if req.HideZeroChargesLineItems {
 		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
@@ -3079,11 +3017,13 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 }
 
 func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error) {
+	ctx = withoutNewBillingClaims(ctx)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
 	unpaidInvoices := make([]*dto.InvoiceResponse, 0)
+	excludedDrafts := make([]*dto.InvoiceResponse, 0)
 	currentPeriodCredits := make(map[string]decimal.Decimal)
 	unpaidAmount := decimal.Zero
 	unpaidUsageCharges := decimal.Zero
@@ -3129,6 +3069,9 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		// The caller counts this period's usage live, so skip its draft (also between period end and
 		// rollover) and report the credits applied to it for netting.
 		if isCurrentPeriodDraft(inv, req.CurrentPeriodStarts) {
+			if matchesCurrency {
+				excludedDrafts = append(excludedDrafts, inv)
+			}
 			if matchesCurrency && inv.TotalPrepaidCreditsApplied.IsPositive() {
 				applied := inv.TotalPrepaidCreditsApplied
 				if inCustomCurrency {
@@ -3142,6 +3085,9 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		// Skip draft invoices whose billing period hasn't ended yet —
 		// their charges are not yet due and should not reduce wallet balance.
 		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.PeriodEnd != nil && inv.PeriodEnd.After(time.Now().UTC()) {
+			if matchesCurrency {
+				excludedDrafts = append(excludedDrafts, inv)
+			}
 			continue
 		}
 
@@ -3196,6 +3142,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 	return &dto.GetUnpaidInvoicesToBePaidResponse{
 		Invoices:                    unpaidInvoices,
+		ExcludedDraftInvoices:       excludedDrafts,
 		TotalUnpaidAmount:           unpaidAmount,
 		TotalUnpaidUsageCharges:     unpaidUsageCharges,
 		TotalUnpaidFixedCharges:     unpaidFixedCharges,
@@ -4181,11 +4128,11 @@ func publishInvoiceWebhook(ctx context.Context, params ServiceParams, eventName 
 	)
 }
 
-// reconcileLineItems updates existing line items in-place when sub_line_item_id matches,
+// reconcileOrdinaryLineItems updates existing line items in-place when sub_line_item_id matches,
 // inserts new ones, and archives unmatched old ones.
 // Falls back to delete+create when existing items have no sub_line_item_id (pre-migration data).
 // Credits/discounts are NOT applied here — call applyCreditsAndCouponsToInvoice after this returns.
-func (s *invoiceService) reconcileLineItems(
+func (s *invoiceService) reconcileOrdinaryLineItems(
 	ctx context.Context,
 	inv *invoice.Invoice,
 	newLineItemReqs []dto.CreateInvoiceLineItemRequest,
@@ -4398,37 +4345,56 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		return nil, err
 	}
 
-	// Start transaction to update invoice atomically
+	// Prepare outside the write lock, then re-read the invoice before applying results.
+	preparedInvoice := inv
+	billingService := NewBillingService(s.ServiceParams)
+
+	// Use period_end reference point to include both arrear and advance charges
+	referencePoint := types.ReferencePointPeriodEnd
+
+	newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *inv.PeriodStart,
+		PeriodEnd:      *inv.PeriodEnd,
+		ReferencePoint: referencePoint,
+		// Exclude this draft from already-invoiced matching.
+		ExcludeInvoiceID: inv.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// STEP 2: Call PrepareSubscriptionInvoiceRequest for fresh calculation.
-		// Line items are reconciled after this call (update-in-place or delete+create).
-		billingService := NewBillingService(s.ServiceParams)
-
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
-
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, &dto.PrepareSubscriptionInvoiceRequestParams{
-			Subscription:   sub,
-			PeriodStart:    *inv.PeriodStart,
-			PeriodEnd:      *inv.PeriodEnd,
-			ReferencePoint: referencePoint,
-			// Exclude THIS invoice from FilterLineItemsToBeInvoiced's already-invoiced check
-			// otherwise the draft's own line items (which sit in [periodStart, periodEnd)) get filtered out of
-			// the fresh compute and the recalc returns $0. Was silently masked pre-fan-out because tests exercised draft rows with
-			// nil PeriodStart/PeriodEnd, which the filter couldn't match on; once reconcile started requiring PeriodStart/PeriodEnd to
-			// key its update-in-place map, the missing exclusion surfaced.
-			ExcludeInvoiceID: inv.ID,
-		})
+		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, id)
 		if err != nil {
 			return err
 		}
-
+		if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.FxConversion != nil || !sameInvoiceComputationContext(preparedInvoice, inv) {
+			return ierr.NewError("invoice changed during recalculation").
+				WithHint("Refresh the invoice before recalculating").Mark(ierr.ErrInvalidOperation)
+		}
+		gatedSession, _, err := s.isInvoiceGatedOnCheckout(txCtx, inv, "")
+		if err != nil {
+			return err
+		}
+		if gatedSession != nil {
+			return errInvoiceCheckoutGated(id, "recalculate")
+		}
+		if err := validateBillingScheduleDestination(inv, newInvoiceReq.CustomerID, newInvoiceReq.Currency); err != nil {
+			return err
+		}
+		computeReq := newInvoiceReq.ToComputeRequest()
+		preserved, err := preserveBillingScheduleRequest(txCtx, inv, &computeReq)
+		if err != nil {
+			return err
+		}
+		computeReq = *preserved
 		// STEP 3: Update invoice totals, metadata, and customer ID
 		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
 		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
 		prevAmountDue := inv.AmountDue
-		inv.Total = decimal.Max(newInvoiceReq.Total, decimal.Zero)
-		inv.Subtotal = decimal.Max(newInvoiceReq.Subtotal, decimal.Zero)
+		inv.Total = decimal.Max(computeReq.Total, decimal.Zero)
+		inv.Subtotal = decimal.Max(computeReq.Subtotal, decimal.Zero)
 		inv.CustomerID = newInvoiceReq.CustomerID
 		inv.AmountDue = inv.Total
 		inv.AmountRemaining = decimal.Max(inv.AmountDue.Sub(inv.AmountPaid), decimal.Zero)
@@ -4449,7 +4415,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		}
 
 		// STEP 4+5: Reconcile line items (update-in-place or delete+create fallback)
-		reconciledItems, err := s.reconcileLineItems(txCtx, inv, newInvoiceReq.LineItems)
+		reconciledItems, err := s.reconcileLineItems(txCtx, inv, computeReq.LineItems)
 		if err != nil {
 			return err
 		}
@@ -4461,7 +4427,6 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		}
 
 		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		computeReq := newInvoiceReq.ToComputeRequest()
 		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, computeReq); err != nil {
 			return err
 		}
@@ -4478,7 +4443,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID,
 			"old_amount_due", prevAmountDue,
-			"new_amount_due", newInvoiceReq.AmountDue,
+			"new_amount_due", inv.AmountDue,
 			"new_line_items", len(reconciledItems),
 			"recalculation_type", "complete_fresh_calculation")
 
@@ -4526,6 +4491,9 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 	if err != nil {
 		return nil, err
 	}
+	if hasBillingScheduleLines(inv) {
+		return nil, billingScheduleCorrectionRequired(inv)
+	}
 
 	if inv.InvoiceType != types.InvoiceTypeSubscription {
 		return nil, ierr.NewError("invoice type is not supported").
@@ -4559,11 +4527,21 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string) (*dt
 	}
 
 	// All non-mutating prerequisites passed — safe to void now.
-	if inv.InvoiceStatus != types.InvoiceStatusVoided {
-		inv, err = s.VoidInvoice(ctx, id, dto.InvoiceVoidRequest{})
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, id)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		if hasBillingScheduleLines(inv) {
+			return billingScheduleCorrectionRequired(inv)
+		}
+		if inv.InvoiceStatus != types.InvoiceStatusVoided {
+			inv, err = s.VoidInvoice(txCtx, id, dto.InvoiceVoidRequest{})
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Use the same method as subscription billing (processSubscriptionPeriod): CreateSubscriptionInvoice

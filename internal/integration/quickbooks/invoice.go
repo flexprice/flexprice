@@ -158,10 +158,24 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 // 4. Includes Amount, UnitPrice, Description, and ItemRef as per requirements
 func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
 	lineItems := make([]InvoiceLineItem, 0)
+	var scheduledItem *ItemResponse
 
 	for _, item := range flexInvoice.LineItems {
 		// Skip zero-amount items - QuickBooks doesn't need them
 		if item.Amount.IsZero() {
+			continue
+		}
+
+		if item.BillingScheduleItemID != nil && item.PriceID == nil {
+			if scheduledItem == nil {
+				var err error
+				scheduledItem, err = s.scheduledPaymentItem(ctx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			lineItems = append(lineItems, InvoiceLineItem{Amount: item.Amount, DetailType: "SalesItemLineDetail",
+				Description: item.GetDescription(), SalesItemLineDetail: &SalesItemLineDetail{ItemRef: AccountRef{Value: scheduledItem.ID, Name: scheduledItem.Name}}})
 			continue
 		}
 
