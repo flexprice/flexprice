@@ -20191,8 +20191,11 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when building analytics views (e.g. usage by feature or customer
-        over time). Supports filtering, grouping, and time-series breakdown.
+      description: |-
+        Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.
+        Groups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.
+        Source/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.
+        For non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.
       operationId: getUsageAnalytics
       parameters:
       - description: Request body
