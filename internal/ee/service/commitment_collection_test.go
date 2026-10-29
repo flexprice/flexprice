@@ -229,3 +229,35 @@ func (s *MeterUsageServiceSuite) TestGroupBy_BillingTermsKeepsValueAndSuppresses
 		})
 	}
 }
+
+func TestGroupedScheduledCommitmentsRetainCoveredValue(t *testing.T) {
+	line := invoiceLine("shared", "80", "80", "80")
+	stack := &commitmentStack{Type: types.COMMITMENT_TYPE_AMOUNT, Measurement: types.CommitmentMeasurementBillingPeriod,
+		Windows: engineWindows(1), Lines: []*usageLine{line}}
+	for _, id := range []string{"first", "second"} {
+		sc := committed(id, true, "40", []int{0}, stack.Lines, "40")
+		sc.C.Type = types.COMMITMENT_TYPE_AMOUNT
+		sc.C.InvoiceLabel = "Reserved usage"
+		sc.C.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+		stack.Commitments = append(stack.Commitments, sc)
+	}
+	rows := renderStack(t, stack, withCommittedPrices(func(_ *price.Price, q decimal.Decimal) decimal.Decimal { return q }))
+	require.Len(t, rows, 2)
+	grouped := mergeLineItemsByBillingPeriod(rows)
+	require.Len(t, grouped, 1)
+	require.True(t, grouped[0].Amount.IsZero())
+	require.Equal(t, "80", grouped[0].Quantity.String())
+	require.NotNil(t, grouped[0].CommitmentInfo.ValueWithin)
+	require.Equal(t, "80", grouped[0].CommitmentInfo.ValueWithin.String())
+	for _, row := range rows {
+		require.Equal(t, "40", row.CommitmentInfo.ValueWithin.String(), "grouping leaves source rows unchanged")
+	}
+	for _, values := range [][2]*decimal.Decimal{{nil, nil}, {nil, lo.ToPtr(dec("40"))}, {lo.ToPtr(dec("40")), nil}} {
+		got := mergeCommitmentInfo(&types.CommitmentInfo{ValueWithin: values[0]}, &types.CommitmentInfo{ValueWithin: values[1]})
+		if values[0] == nil && values[1] == nil {
+			require.Nil(t, got.ValueWithin, "legacy rows keep the field omitted")
+		} else {
+			require.Equal(t, "40", got.ValueWithin.String())
+		}
+	}
+}

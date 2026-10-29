@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
@@ -142,6 +143,7 @@ func (s *meterUsageService) commitmentAnalytics(ctx context.Context, query *comm
 	page := &commitmentAnalyticsPage{entries: []*commitmentAnalyticsEntry{}}
 	contexts := map[string]*commitmentContext{}
 	usageBySubscription := map[string]map[string]*dto.CommitmentUsageBreakdown{}
+	remainingPeriods := commitmentAnalyticsPeriodLimit
 	ownerService := newCommitmentService(s.ServiceParams)
 	cursor := query.afterID
 	for scanned := 0; scanned < commitmentAnalyticsScanLimit; {
@@ -193,7 +195,7 @@ func (s *meterUsageService) commitmentAnalytics(ctx context.Context, query *comm
 			} else {
 				breakdown, ok := usageBySubscription[owner.SubscriptionID]
 				if !ok {
-					breakdown, err = s.analyticsCommitmentUsage(ctx, owner, &params)
+					breakdown, err = s.analyticsCommitmentUsage(ctx, owner, &params, &remainingPeriods)
 					if err != nil {
 						return nil, err
 					}
@@ -270,39 +272,105 @@ func analyticsCommitmentMatches(owner *commitment.Commitment, loaded *commitment
 	})
 }
 
-func (s *meterUsageService) analyticsCommitmentUsage(ctx context.Context, owner *commitment.Commitment, params *events.MeterUsageDetailedAnalyticsParams) (map[string]*dto.CommitmentUsageBreakdown, error) {
-	usage, err := s.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
-		SubscriptionID: owner.SubscriptionID, StartTime: params.StartTime, EndTime: params.EndTime,
+func (s *meterUsageService) analyticsCommitmentUsage(ctx context.Context, owner *commitment.Commitment, params *events.MeterUsageDetailedAnalyticsParams, remainingPeriods *int) (map[string]*dto.CommitmentUsageBreakdown, error) {
+	sub, err := s.SubRepo.Get(ctx, owner.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	if sub == nil || sub.ID != owner.SubscriptionID || sub.CustomerID != owner.CustomerID || sub.TenantID != owner.TenantID || sub.EnvironmentID != owner.EnvironmentID {
+		return nil, ierr.NewError("commitment usage returned invalid subscription scope").Mark(ierr.ErrDatabase)
+	}
+	owners, err := newCommitmentService(s.ServiceParams).ActiveForPeriod(ctx, sub.ID, params.StartTime, params.EndTime)
+	if err != nil {
+		return nil, err
+	}
+	periods, err := analyticsCommitmentPeriods(sub, owners, params.StartTime, params.EndTime, *remainingPeriods)
+	if err != nil {
+		return nil, err
+	}
+	*remainingPeriods -= len(periods)
+	combined := make(map[string]*dto.CommitmentUsageBreakdown)
+	for _, period := range periods {
+		window := *params
+		window.StartTime, window.EndTime = period.Start, period.End
+		window.MeterIDs, window.FeatureIDs, window.GroupBy = nil, nil, nil
+		breakdown, err := s.analyticsCommitmentPeriodUsage(ctx, sub, &window)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range breakdown {
+			if existing := combined[row.CommitmentID]; existing != nil {
+				addCommitmentUsage(existing, row)
+			} else {
+				combined[row.CommitmentID] = row
+			}
+		}
+	}
+	return combined, nil
+}
+
+const commitmentAnalyticsPeriodLimit = 500
+
+func analyticsCommitmentPeriods(sub *subscription.Subscription, owners []*commitment.Commitment, start, end time.Time, limit int) ([]types.Period, error) {
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, sub.BillingPeriod, sub.BillingPeriodCount, sub.Timezone)
+	if err != nil {
+		return nil, err
+	}
+	start = maxTime(start, sub.StartDate)
+	if sub.CancelledAt != nil {
+		end = minTime(end, *sub.CancelledAt)
+	}
+	byStart := make(map[time.Time]types.Period)
+	for _, owner := range owners {
+		until := minTime(end, owner.EffectiveEnd())
+		for at := maxTime(start, owner.StartDate); at.Before(until); {
+			period := types.FullBillingPeriod(at, grid)
+			period.Start = maxTime(start, period.Start)
+			period.End = minTime(end, period.End)
+			if _, exists := byStart[period.Start]; !exists {
+				if len(byStart) == limit {
+					return nil, ierr.Validation("commitment analytics supports at most 500 subscription billing periods per request; narrow the time range, customer selection or commitment page")
+				}
+				byStart[period.Start] = period
+			}
+			at = period.End
+		}
+	}
+	periods := lo.Values(byStart)
+	slices.SortFunc(periods, func(a, b types.Period) int { return a.Start.Compare(b.Start) })
+	return periods, nil
+}
+
+func (s *meterUsageService) analyticsCommitmentPeriodUsage(ctx context.Context, sub *subscription.Subscription, params *events.MeterUsageDetailedAnalyticsParams) ([]*dto.CommitmentUsageBreakdown, error) {
+	usage, err := s.GetSubscriptionMeterUsageWithSub(ctx, sub, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: sub.ID, StartTime: params.StartTime, EndTime: params.EndTime,
 		UseFinal: params.UseFinal, IncludeChildren: params.IncludeChildren,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if usage == nil || usage.Subscription == nil || usage.Subscription.ID != owner.SubscriptionID || usage.Subscription.CustomerID != owner.CustomerID || usage.Subscription.TenantID != owner.TenantID || usage.Subscription.EnvironmentID != owner.EnvironmentID {
-		return nil, ierr.NewError("commitment usage returned invalid subscription scope").Mark(ierr.ErrDatabase)
-	}
-	unfiltered := *params
-	unfiltered.MeterIDs, unfiltered.FeatureIDs, unfiltered.GroupBy = nil, nil, nil
-	end := params.EndTime
-	if usage.Subscription.CancelledAt != nil {
-		end = minTime(end, *usage.Subscription.CancelledAt)
-	}
-	if !params.StartTime.Before(end) {
-		return map[string]*dto.CommitmentUsageBreakdown{}, nil
-	}
-	charges, err := s.wholeLineCharges(ctx, usage, &unfiltered, &usage.Subscription.BillingAnchor, end)
+	charges, err := s.wholeLineCharges(ctx, usage, params, &sub.BillingAnchor, params.EndTime)
 	if err != nil {
 		return nil, err
 	}
-	projectedEnd := projectedCommitmentEnd(usage.Subscription, params.StartTime, end)
-	loader, err := newBillingService(s.ServiceParams).newCommitmentLoader(ctx, usage.Subscription, params.StartTime, projectedEnd, projectedEnd, charges, usage.MeterMap, types.UsageSourceAnalytics)
+	projectedEnd := projectedCommitmentEnd(sub, params.StartTime, params.EndTime)
+	loader, err := newBillingService(s.ServiceParams).newCommitmentLoader(ctx, sub, params.StartTime, projectedEnd, projectedEnd, charges, usage.MeterMap, types.UsageSourceAnalytics)
 	if err != nil {
 		return nil, err
 	}
-	loader.usageEnd = end
-	breakdown, err := loader.UsageBreakdown(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return lo.KeyBy(breakdown, func(row *dto.CommitmentUsageBreakdown) string { return row.CommitmentID }), nil
+	loader.usageEnd = params.EndTime
+	return loader.UsageBreakdown(ctx)
+}
+
+func addCommitmentUsage(target, addition *dto.CommitmentUsageBreakdown) {
+	target.AppliesFrom = minTime(target.AppliesFrom, addition.AppliesFrom)
+	target.AppliesTo = maxTime(target.AppliesTo, addition.AppliesTo)
+	target.Committed.Quantity = target.Committed.Quantity.Add(addition.Committed.Quantity)
+	target.Committed.Amount = target.Committed.Amount.Add(addition.Committed.Amount)
+	target.Used.Quantity = target.Used.Quantity.Add(addition.Used.Quantity)
+	target.Used.Amount = target.Used.Amount.Add(addition.Used.Amount)
+	target.Unused.Quantity = target.Unused.Quantity.Add(addition.Unused.Quantity)
+	target.Unused.Amount = target.Unused.Amount.Add(addition.Unused.Amount)
+	target.TrueUpAmount = target.TrueUpAmount.Add(addition.TrueUpAmount)
+	target.BilledAmount = target.BilledAmount.Add(addition.BilledAmount)
 }

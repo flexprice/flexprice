@@ -7,6 +7,7 @@ import (
 	"time"
 
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	core "github.com/flexprice/flexprice/internal/ee/service/billingterms"
@@ -258,4 +259,101 @@ func TestCommitmentAnalyticsGroupedCollectionRecipient(t *testing.T) {
 	snapshot.EnvironmentID = "another_environment"
 	_, err = svc.analyticsCommitmentCollection(f.ctx, f.commitment)
 	require.True(t, ierr.IsDatabase(err), "%v", err)
+}
+
+func TestCommitmentAnalyticsAcrossBillingPeriods(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		quantity   bool
+		scheduled  bool
+		partialEnd bool
+	}{
+		{name: "amount capacity resets each month"},
+		{name: "quantity capacity resets each month", quantity: true},
+		{name: "scheduled collection preserves economic usage", scheduled: true},
+		{name: "open final period retains full capacity", partialEnd: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, svc := newCommitmentAnalyticsFixture(t)
+			ctx := s.GetContext()
+			end := s.periodEnd.AddDate(0, 1, 0)
+			s.sub.CurrentPeriodStart, s.sub.CurrentPeriodEnd = s.periodEnd, end
+			require.NoError(t, s.GetStores().SubscriptionRepo.Update(ctx, s.sub))
+			line := s.createLineItem(ctx, "line_multi_period", s.periodStart, end)
+			owner := s.newCommitment("comm_multi_period", types.CommitmentScopeSubscription, s.sub.ID, "100")
+			firstUsage, secondUsage := float64(12000), float64(2000)
+			wantCommitted, wantUsed, wantUnused := "200", "120", "80"
+			if tc.quantity {
+				owner.Type = types.COMMITMENT_TYPE_QUANTITY
+				owner.ScopeEntityType, owner.ScopeEntityID = types.CommitmentScopePrice, line.PriceID
+				owner.CommittedPriceID = lo.ToPtr(line.PriceID)
+				firstUsage, secondUsage = 120, 20
+				wantCommitted, wantUsed, wantUnused = "2", "1.2", "0.8"
+			}
+			if tc.scheduled {
+				owner.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+				svc.BillingTerms = &analyticsTermsService{state: &analyticsTermsState{
+					owner: &domain.OwnerSnapshot{Owner: domain.OwnerRef{Type: types.BillingTermOwnerCommitment, ID: owner.ID},
+						TenantID: owner.TenantID, EnvironmentID: owner.EnvironmentID, CustomerID: owner.CustomerID, SubscriptionID: &owner.SubscriptionID},
+					summary: &domain.CollectionSummary{Currency: "usd", TargetAmount: dec("600"), InvoicedAmount: dec("100")},
+				}}
+			}
+			s.storeCommitment(owner)
+			s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, s.periodStart.AddDate(0, 0, 5), firstUsage)
+			s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, s.periodEnd, secondUsage)
+			params := commitmentAnalyticsParams(s)
+			params.EndTime = end
+			if tc.partialEnd {
+				params.EndTime = s.periodEnd.AddDate(0, 0, 14)
+				s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID, params.EndTime, 99999)
+			}
+			page, err := svc.commitmentAnalytics(ctx, newCommitmentAnalyticsQuery(params, []string{s.customer.ID}, 50, ""))
+			require.NoError(t, err)
+			require.Len(t, page.Entries(), 1)
+			usage := page.Entries()[0].Usage()
+			require.NotNil(t, usage)
+			require.Equal(t, wantCommitted, usage.Committed.Amount.String())
+			require.Equal(t, wantUsed, usage.Used.Amount.String())
+			require.Equal(t, wantUnused, usage.Unused.Amount.String())
+			require.Equal(t, "200", usage.Committed.Quantity.String())
+			require.Equal(t, "120", usage.Used.Quantity.String())
+			require.Equal(t, "80", usage.Unused.Quantity.String())
+			require.True(t, usage.AppliesFrom.Equal(s.periodStart))
+			require.True(t, usage.AppliesTo.Equal(end))
+			if tc.scheduled {
+				require.False(t, usage.TrueUpEnabled)
+				require.True(t, usage.TrueUpAmount.IsZero())
+				require.True(t, usage.BilledAmount.IsZero())
+				require.Equal(t, "100", page.Entries()[0].Collection().InvoicedAmount.String())
+			} else {
+				require.Equal(t, wantUnused, usage.TrueUpAmount.String())
+				require.Equal(t, wantCommitted, usage.BilledAmount.String())
+			}
+		})
+	}
+}
+
+func TestCommitmentAnalyticsPeriodBudget(t *testing.T) {
+	s, _ := newCommitmentAnalyticsFixture(t)
+	owner := s.newCommitment("comm_budget", types.CommitmentScopeSubscription, s.sub.ID, "100")
+	s.sub.BillingPeriod = types.BILLING_PERIOD_DAILY
+	owner.EndDate = s.periodStart.AddDate(0, 0, 501)
+	owners := []*commitment.Commitment{owner, owner}
+	periods, err := analyticsCommitmentPeriods(s.sub, owners, s.periodStart, owner.EndDate.AddDate(0, 0, -1), commitmentAnalyticsPeriodLimit)
+	require.NoError(t, err)
+	require.Len(t, periods, 500, "multiple owners share each subscription period")
+	_, err = analyticsCommitmentPeriods(s.sub, owners, s.periodStart, owner.EndDate, commitmentAnalyticsPeriodLimit)
+	require.True(t, ierr.IsValidation(err))
+	_, err = analyticsCommitmentPeriods(s.sub, owners, s.periodStart, s.periodStart.AddDate(0, 0, 2), 1)
+	require.True(t, ierr.IsValidation(err), "a later subscription shares the remaining request budget")
+	owner.StartDate, owner.EndDate = s.periodStart.AddDate(0, 0, 10), s.periodStart.AddDate(0, 0, 11)
+	periods, err = analyticsCommitmentPeriods(s.sub, owners, s.periodStart, s.periodStart.AddDate(0, 0, 501), 1)
+	require.NoError(t, err)
+	require.Len(t, periods, 1, "periods without applicable commitments need no usage reads")
+	require.True(t, periods[0].Start.Equal(owner.StartDate))
+	cancelled := owner.StartDate
+	s.sub.CancelledAt = &cancelled
+	periods, err = analyticsCommitmentPeriods(s.sub, owners, s.periodStart, owner.EndDate, 1)
+	require.NoError(t, err)
+	require.Empty(t, periods)
 }
