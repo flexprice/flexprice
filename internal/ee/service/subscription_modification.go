@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -193,9 +194,31 @@ func (s *subscriptionModificationService) executeInheritance(
 	changedSubs := make([]dto.ChangedSubscription, 0)
 	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		changedSubs = nil // reset for safety in case of retry
+		subSvc := NewSubscriptionService(sp).(*subscriptionService)
+		fresh, err := subSvc.lockCreationParent(txCtx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		if fresh.SubscriptionStatus != types.SubscriptionStatusActive || fresh.HasPositiveAutoInvoiceThreshold() {
+			return ierr.Validation("subscription cannot accept inherited subscriptions")
+		}
+		sub = fresh
+		childCustomerIDs, err = s.resolveExternalCustomersForInheritance(txCtx, sub.CustomerID, params.ExternalCustomerIDsToInheritSubscription)
+		if err != nil {
+			return err
+		}
+		existing, err := s.getInheritedSubscriptions(txCtx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		for _, child := range existing {
+			if slices.Contains(childCustomerIDs, child.CustomerID) {
+				return ierr.Validation("duplicate inherited subscription")
+			}
+		}
 		// If standalone, promote to parent
 		if sub.SubscriptionType == types.SubscriptionTypeStandalone {
-			sub.SubscriptionType = types.SubscriptionTypeParent
+			sub = subscription.NewSubscriptionBuilder(sub).WithSubscriptionType(types.SubscriptionTypeParent).Build()
 			if err := sp.SubRepo.Update(txCtx, sub); err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to update subscription type to parent").
@@ -835,6 +858,18 @@ func (s *subscriptionModificationService) getInheritedSubscriptions(ctx context.
 
 // createInheritedSubscription creates a child inherited subscription from a parent.
 func (s *subscriptionModificationService) createInheritedSubscription(ctx context.Context, parent *subscription.Subscription, childCustomerID string) (*subscription.Subscription, error) {
+	if parent == nil {
+		return nil, ierr.Validation("inherited subscription requires a parent")
+	}
+	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
+	fresh, err := subSvc.lockCreationParent(ctx, parent.ID)
+	if err != nil {
+		return nil, err
+	}
+	if fresh.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.Validation("parent subscription is not active")
+	}
+	parent = fresh
 	inheritedSub := &subscription.Subscription{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:             childCustomerID,
@@ -901,8 +936,15 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 		EntityType:    types.SystemEntityTypeSubscription,
 		EntityID:      subscriptionID,
 	}
-	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.serviceParams.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+	publish := func() {
+		publishCtx, cancel := context.WithTimeout(context.WithoutCancel(types.WithoutDBTransaction(ctx)), 10*time.Second)
+		defer cancel()
+		if err := s.serviceParams.WebhookPublisher.PublishWebhook(publishCtx, webhookEvent); err != nil {
+			s.serviceParams.Logger.Error(publishCtx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+		}
+	}
+	if !types.RegisterPostCommit(ctx, publish) {
+		publish()
 	}
 }
 
@@ -1062,9 +1104,26 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 	changedSubs := make([]dto.ChangedSubscription, 0, len(childSubs))
 	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		changedSubs = nil
-		for _, childSub := range childSubs {
-			childSub.CancelAt = lo.ToPtr(effectiveDate)
-			childSub.CancelAtPeriodEnd = true
+		subSvc := NewSubscriptionService(sp).(*subscriptionService)
+		ids := make([]string, 0, len(childSubs))
+		for _, child := range childSubs {
+			ids = append(ids, child.ID)
+		}
+		participants, err := subSvc.lockGroupedMembership(txCtx, "", ids)
+		if err != nil {
+			return err
+		}
+		parentSub = participants[subscriptionID]
+		if parentSub == nil || parentSub.SubscriptionType != types.SubscriptionTypeParent || (parentSub.SubscriptionStatus != types.SubscriptionStatusActive && parentSub.SubscriptionStatus != types.SubscriptionStatusTrialing) {
+			return ierr.Validation("parent subscription cannot remove inherited subscriptions")
+		}
+		effectiveDate = parentSub.CurrentPeriodEnd
+		for _, original := range childSubs {
+			childSub := participants[original.ID]
+			if childSub.SubscriptionType != types.SubscriptionTypeInherited || lo.FromPtr(childSub.ParentSubscriptionID) != subscriptionID || childSub.CustomerID != original.CustomerID || childSub.CancelAt != nil {
+				return lifecycleMembershipChanged()
+			}
+			childSub = subscription.NewSubscriptionBuilder(childSub).WithCancelAt(&effectiveDate).WithCancelAtPeriodEnd(true).Build()
 			if err := sp.SubRepo.Update(txCtx, childSub); err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to schedule inherited subscription for removal").

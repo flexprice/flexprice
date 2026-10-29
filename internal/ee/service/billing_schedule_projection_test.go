@@ -6,6 +6,10 @@ import (
 	"time"
 
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	core "github.com/flexprice/flexprice/internal/ee/service/billingterms"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -62,4 +66,54 @@ func TestBillingScheduleProjection_EligibilityAndArchivedSources(t *testing.T) {
 			require.Len(t, projection.assigned, lo.Ternary(tc.assigned, 1, 0))
 		})
 	}
+}
+
+func TestWalletBillingSchedule_CurrentDraftCreditsCountOnce(t *testing.T) {
+	s, svc, sub, source, asOf := newPaymentLifecycleFixture(t)
+	ctx := s.GetContext()
+	owner := &commitment.Commitment{ID: "commitment_wallet", SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Currency: sub.Currency, Binding: true,
+		CollectionMethod: lo.ToPtr(types.CommitmentCollectionBillingTerms), EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+	_, err := svc.CommitmentRepo.Create(ctx, owner)
+	require.NoError(t, err)
+	item := &domain.ScheduleItem{ID: "schedule_wallet", OwnerID: owner.ID, OwnerType: types.BillingTermOwnerCommitment, CustomerID: sub.CustomerID, Currency: sub.Currency,
+		Amount: decimal.NewFromInt(100), ScheduleStatus: types.BillingScheduleInvoiced, InvoiceID: &source.ID, InvoiceLineItemID: lo.ToPtr("source_line"), EnvironmentID: sub.EnvironmentID, BaseModel: types.GetDefaultBaseModel(ctx)}
+	source.InvoiceStatus = types.InvoiceStatusDraft
+	source.PaymentStatus = types.PaymentStatusPending
+	source.AmountDue, source.AmountRemaining, source.AmountPaid = decimal.NewFromInt(150), decimal.NewFromInt(80), decimal.NewFromInt(70)
+	source.TotalPrepaidCreditsApplied = decimal.NewFromInt(70)
+	source.LastComputedAt = &asOf
+	source.LineItems = []*invoice.InvoiceLineItem{{ID: *item.InvoiceLineItemID, InvoiceID: source.ID, CustomerID: sub.CustomerID, Currency: sub.Currency, BillingScheduleItemID: &item.ID,
+		Amount: item.Amount, Quantity: decimal.NewFromInt(1), PeriodStart: &sub.CurrentPeriodStart, PeriodEnd: &sub.CurrentPeriodEnd, EnvironmentID: sub.EnvironmentID, BaseModel: types.GetDefaultBaseModel(ctx)}}
+	require.NoError(t, svc.InvoiceRepo.Update(ctx, source))
+	svc.BillingTerms = &billingProjectionEngine{state: &billingAPIState{owner: &domain.OwnerSnapshot{Owner: commitmentBillingOwner(owner.ID), CustomerID: sub.CustomerID, Currency: sub.Currency, TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID}, items: []*domain.ScheduleItem{item}}}
+	service := &walletService{ServiceParams: svc.ServiceParams}
+	w := &wallet.Wallet{CustomerID: sub.CustomerID, Currency: sub.Currency, Config: types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}}}
+	usage := map[string]currentPeriodUsage{sub.ID: {periodStart: sub.CurrentPeriodStart, amount: decimal.NewFromInt(50)}}
+	pending, _, err := service.pendingCharges(ctx, w, usage)
+	require.NoError(t, err)
+	require.Equal(t, "80", pending.String())
+	require.Equal(t, "50", usage[sub.ID].amount.String(), "projection must not mutate live usage")
+	source.LineItems[0].LineItemDiscount = decimal.NewFromInt(10)
+	source.LineItems[0].InvoiceLevelDiscount = decimal.NewFromInt(5)
+	require.NoError(t, svc.InvoiceRepo.Update(ctx, source))
+	pending, _, err = service.pendingCharges(ctx, w, usage)
+	require.NoError(t, err)
+	require.Equal(t, "65", pending.String())
+}
+
+func TestBillingScheduleProjection_InvoiceRecipientAndGroupedChildren(t *testing.T) {
+	s, svc, sub, _, _ := newPaymentLifecycleFixture(t)
+	ctx := s.GetContext()
+	parent := subscription.NewSubscriptionBuilder(sub).WithSubscriptionType(types.SubscriptionTypeParent).Build()
+	parent.InvoicingCustomerID = lo.ToPtr("invoice_recipient")
+	require.NoError(t, svc.SubRepo.Update(ctx, parent))
+	child := subscription.NewSubscriptionBuilder(parent).WithSubscriptionType(types.SubscriptionTypeGroupedInvoicing).WithParentSubscriptionID(&parent.ID).Build()
+	child.ID, child.CustomerID, child.InvoicingCustomerID = "grouped_child", "usage_customer", nil
+	require.NoError(t, svc.SubRepo.Create(ctx, child))
+	ids, err := billingProjectionSubscriptions(ctx, svc.ServiceParams, "invoice_recipient")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{parent.ID, child.ID}, ids)
+	ids, err = billingProjectionSubscriptions(ctx, svc.ServiceParams, sub.CustomerID)
+	require.NoError(t, err)
+	require.Empty(t, ids)
 }

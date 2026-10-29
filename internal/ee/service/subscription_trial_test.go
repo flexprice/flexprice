@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -202,12 +203,17 @@ func TestSubscriptionTrialInvoicePaid(t *testing.T) {
 	suite.Run(t, new(SubscriptionTrialInvoicePaidSuite))
 }
 
+func (s *SubscriptionTrialInvoicePaidSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *SubscriptionTrialInvoicePaidSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.svc = NewSubscriptionService(ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &subscriptionUpdateStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -308,6 +314,7 @@ func (s *SubscriptionTrialInvoicePaidSuite) TestTrialEndPaidInvoice_ActivatesAnd
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 
+	persistTrialActivationInvoice(s.T(), ctx, s.svc.(*subscriptionService).ServiceParams, sub, inv)
 	s.Require().NoError(s.svc.HandleSubscriptionActivatingInvoicePaid(ctx, inv))
 
 	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
@@ -379,6 +386,7 @@ func (s *SubscriptionTrialInvoicePaidSuite) TestTrialEndPaidInvoice_IdempotentWh
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 
+	persistTrialActivationInvoice(s.T(), ctx, s.svc.(*subscriptionService).ServiceParams, sub, inv)
 	s.Require().NoError(s.svc.HandleSubscriptionActivatingInvoicePaid(ctx, inv))
 	first, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 	s.Require().NoError(err)
@@ -404,11 +412,15 @@ func TestSubscriptionTrialProration(t *testing.T) {
 	suite.Run(t, new(SubscriptionTrialProrationSuite))
 }
 
+func (s *SubscriptionTrialProrationSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *SubscriptionTrialProrationSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	st := s.GetStores()
 	s.params = ServiceParams{
-		Logger: s.GetLogger(), Config: s.GetConfig(), DB: s.GetDB(),
+		Logger: s.GetLogger(), Config: s.GetConfig(), DB: &lifecycleTestDB{IClient: s.GetDB()}, BillingTermsStore: &subscriptionUpdateStore{},
 		TaxAssociationRepo: st.TaxAssociationRepo, TaxRateRepo: st.TaxRateRepo, TaxAppliedRepo: st.TaxAppliedRepo,
 		HostedInvoiceTokenRepo: st.HostedInvoiceTokenRepo,
 		SubRepo:                st.SubscriptionRepo, SubscriptionLineItemRepo: st.SubscriptionLineItemRepo,
@@ -495,11 +507,13 @@ func (s *SubscriptionTrialProrationSuite) TestFirstPaidPeriodAfterTrial() {
 			s.True(sub.TrialEnd.Equal(tc.trialEnd), "trial end %s, want %s", sub.TrialEnd, tc.trialEnd)
 
 			now := tc.trialEnd
+			var inv *dto.InvoiceResponse
 			if tc.endEarlyAt != nil {
 				now = *tc.endEarlyAt
-				sub.TrialEnd = lo.ToPtr(now)
+				inv, err = s.subSvc.(*subscriptionService).ProcessSingleSubscriptionTrialEnd(ctx, sub, now)
+			} else {
+				inv, err = s.subSvc.(*subscriptionService).processSubscriptionTrialEnd(ctx, sub, NewInvoiceService(s.params), now)
 			}
-			inv, err := s.subSvc.(*subscriptionService).processSubscriptionTrialEnd(ctx, sub, NewInvoiceService(s.params), now)
 			s.Require().NoError(err)
 
 			after, err := st.SubscriptionRepo.Get(ctx, resp.ID)

@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
@@ -33,21 +35,21 @@ func trialEndCollectionFixture(t *testing.T) (*commitmentTermsFixture, *invoice.
 
 func TestTrialEndCollection_RequiresBoundInvoice(t *testing.T) {
 	f, inv, transitionCtx := trialEndCollectionFixture(t)
-	for _, ctx := range []context.Context{f.ctx, transitionCtx, revalidateTrialEndCollection(transitionCtx, inv)} {
+	for _, ctx := range []context.Context{f.ctx, transitionCtx, revalidatePendingCollection(transitionCtx, inv)} {
 		owner, err := f.adapter.Snapshot(ctx, f.owner)
 		require.NoError(t, err)
 		require.False(t, owner.CanCollect)
 		require.Equal(t, "subscription_pending", owner.DeferredReason)
 	}
-	boundCtx := bindTrialEndCollection(transitionCtx, inv)
+	boundCtx := bindPendingCollection(transitionCtx, inv)
 	for i := 0; i < 2; i++ {
 		owner, err := f.adapter.Snapshot(boundCtx, f.owner)
 		require.NoError(t, err)
 		require.True(t, owner.CanCollect)
 		require.Empty(t, owner.DeferredReason)
 	}
-	for _, cleared := range []context.Context{withoutTrialEndCollection(transitionCtx), withoutTrialEndCollection(boundCtx)} {
-		owner, err := f.adapter.Snapshot(bindTrialEndCollection(cleared, inv), f.owner)
+	for _, cleared := range []context.Context{withoutPendingCollection(transitionCtx), withoutPendingCollection(boundCtx)} {
+		owner, err := f.adapter.Snapshot(bindPendingCollection(cleared, inv), f.owner)
 		require.NoError(t, err)
 		require.False(t, owner.CanCollect, "later invoice processing cannot restore the authorization")
 	}
@@ -89,13 +91,13 @@ func TestTrialEndCollection_InvoiceBoundary(t *testing.T) {
 			t.Run(tt.name+"/"+phase, func(t *testing.T) {
 				f, inv, ctx := trialEndCollectionFixture(t)
 				if phase == "locked invoice" {
-					ctx = bindTrialEndCollection(ctx, inv)
+					ctx = bindPendingCollection(ctx, inv)
 				}
 				tt.change(inv)
 				if phase == "draft binding" {
-					ctx = bindTrialEndCollection(ctx, inv)
+					ctx = bindPendingCollection(ctx, inv)
 				} else {
-					ctx = revalidateTrialEndCollection(ctx, inv)
+					ctx = revalidatePendingCollection(ctx, inv)
 				}
 				owner, err := f.adapter.Snapshot(ctx, f.owner)
 				require.NoError(t, err)
@@ -132,7 +134,7 @@ func TestTrialEndCollection_FreshOwnerState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f, inv, ctx := trialEndCollectionFixture(t)
-			ctx = bindTrialEndCollection(ctx, inv)
+			ctx = bindPendingCollection(ctx, inv)
 			tt.change(f)
 			owner, err := f.adapter.Snapshot(ctx, f.owner)
 			if tt.wantError {
@@ -148,9 +150,9 @@ func TestTrialEndCollection_FreshOwnerState(t *testing.T) {
 
 func TestTrialEndCollection_RejectsRebindingAndScopeChanges(t *testing.T) {
 	f, inv, ctx := trialEndCollectionFixture(t)
-	boundCtx := bindTrialEndCollection(ctx, inv)
+	boundCtx := bindPendingCollection(ctx, inv)
 	inv.ID = "another_invoice"
-	owner, err := f.adapter.Snapshot(bindTrialEndCollection(boundCtx, inv), f.owner)
+	owner, err := f.adapter.Snapshot(bindPendingCollection(boundCtx, inv), f.owner)
 	require.NoError(t, err)
 	require.False(t, owner.CanCollect)
 
@@ -158,18 +160,53 @@ func TestTrialEndCollection_RejectsRebindingAndScopeChanges(t *testing.T) {
 		types.SetTenantID(boundCtx, "other"),
 		types.SetEnvironmentID(boundCtx, "other"),
 	} {
-		require.False(t, trialEndCollectionAllowed(changed, f.sub, types.BillingTermSubscriptionInvoice))
+		require.False(t, pendingCollectionAllowed(changed, f.sub, types.BillingTermSubscriptionInvoice))
 	}
 }
 
 func TestTrialEndCollection_FutureTrialAndDetachedDates(t *testing.T) {
 	f, inv, _ := trialEndCollectionFixture(t)
 	ctx := withTrialEndCollection(f.ctx, f.sub, f.sub.TrialEnd.Add(-time.Microsecond))
-	require.False(t, trialEndCollectionAllowed(bindTrialEndCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
+	require.False(t, pendingCollectionAllowed(bindPendingCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
 	ctx = withTrialEndCollection(f.ctx, f.sub, *f.sub.TrialEnd)
 	originalStart := f.sub.CurrentPeriodStart
 	*f.sub.TrialEnd = f.sub.TrialEnd.Add(time.Hour)
-	require.False(t, trialEndCollectionAllowed(bindTrialEndCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
+	require.False(t, pendingCollectionAllowed(bindPendingCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
 	*f.sub.TrialEnd = originalStart
-	require.True(t, trialEndCollectionAllowed(bindTrialEndCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
+	require.True(t, pendingCollectionAllowed(bindPendingCollection(ctx, inv), f.sub, types.BillingTermSubscriptionInvoice))
+}
+
+type trialEndInvoiceProbe struct {
+	InvoiceService
+	create func(context.Context, *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, *subscription.Subscription, error)
+}
+
+func (p *trialEndInvoiceProbe) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, _ *dto.PaymentParameters, _ types.InvoiceFlowType, _ bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+	return p.create(ctx, req)
+}
+
+func (s *SubscriptionTrialProrationSuite) TestTrialEndCollectionAuthorization() {
+	f, inv, _ := trialEndCollectionFixture(s.T())
+	ctx := types.SetEnvironmentID(s.GetContext(), "env_trial")
+	f.sub.TenantID, f.sub.EnvironmentID = types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	f.sub.SubscriptionStatus = types.SubscriptionStatusTrialing
+	s.Require().NoError(s.params.SubRepo.Create(ctx, f.sub))
+	called := false
+	probe := &trialEndInvoiceProbe{create: func(invoiceCtx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+		called = true
+		fresh, err := s.params.SubRepo.Get(invoiceCtx, f.sub.ID)
+		s.Require().NoError(err)
+		s.Equal(types.SubscriptionStatusIncomplete, fresh.SubscriptionStatus)
+		s.False(pendingCollectionAllowed(invoiceCtx, fresh, types.BillingTermSubscriptionInvoice))
+		inv.TenantID, inv.EnvironmentID = fresh.TenantID, fresh.EnvironmentID
+		inv.PeriodStart, inv.PeriodEnd = &req.PeriodStart, &req.PeriodEnd
+		boundCtx := bindPendingCollection(invoiceCtx, inv)
+		s.True(pendingCollectionAllowed(boundCtx, fresh, types.BillingTermSubscriptionInvoice))
+		s.False(pendingCollectionAllowed(boundCtx, fresh, types.BillingTermSeparateInvoice))
+		return dto.NewInvoiceResponse(inv), fresh, nil
+	}}
+	_, err := s.subSvc.(*subscriptionService).processSubscriptionTrialEnd(ctx, f.sub, probe, *f.sub.TrialEnd)
+	s.Require().NoError(err)
+	s.True(called)
+	s.False(pendingCollectionAllowed(ctx, f.sub, types.BillingTermSubscriptionInvoice))
 }

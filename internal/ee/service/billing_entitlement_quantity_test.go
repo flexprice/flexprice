@@ -81,7 +81,8 @@ func (s *EntitlementQuantityTestSuite) setupServices() {
 		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
 		SubRepo:                      stores.SubscriptionRepo,
 		CommitmentRepo:               stores.CommitmentRepo,
 		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,
@@ -217,6 +218,7 @@ func (s *EntitlementQuantityTestSuite) setupTestData() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 

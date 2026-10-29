@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	core "github.com/flexprice/flexprice/internal/ee/service/billingterms"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -61,12 +63,16 @@ func (s *commitmentService) Preview(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	c, _, value, err := s.prepare(ctx, &req, commitmentCreateOptions{})
+	c, _, value, collection, err := s.prepare(ctx, &req, commitmentCreateOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}, nil
+	response := &dto.CommitmentResponse{Commitment: c, CommitmentValue: &value}
+	if collection != nil {
+		collection.attach(response)
+	}
+	return response, nil
 }
 
 func (s *commitmentService) requireEnabled(ctx context.Context) error {
@@ -112,14 +118,39 @@ func (s *commitmentService) create(
 	}
 
 	if existing != nil {
-		return s.response(ctx, existing, nil)
+		return s.createdResponse(ctx, existing, nil, nil)
 	}
 
+	if req.BillingTerms != nil {
+		if s.DB.TxFromContext(ctx) == nil {
+			if _, _, _, _, err := s.prepare(ctx, &req, opts); err != nil {
+				return nil, err
+			}
+		}
+		ctx, err = prepareBillingSchedule(ctx, s.BillingScheduleProvisioner)
+		if err != nil {
+			return nil, err
+		}
+		if s.BillingTerms == nil || s.BillingTermsStore == nil {
+			return nil, ierr.NewError("billing terms are unavailable").Mark(ierr.ErrServiceUnavailable)
+		}
+	}
 	var out *commitment.Commitment
+	var state core.State
 	var cc *commitmentContext
 	inserted := false
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "commitments:" + req.SubscriptionID}); err != nil {
+		if req.BillingTerms != nil {
+			var err error
+			txCtx, err = s.lockCollectionOwner(txCtx, req.SubscriptionID)
+			if err != nil {
+				return err
+			}
+		}
+		if err := s.lockCommitmentKey(txCtx, "commitments:"+req.SubscriptionID); err != nil {
+			if ierr.IsVersionConflict(err) || ierr.IsServiceUnavailable(err) || ierr.IsInvalidOperation(err) {
+				return err
+			}
 			return ierr.WithError(err).
 				WithHint("Failed to lock subscription commitments").
 				Mark(ierr.ErrInternal)
@@ -147,7 +178,7 @@ func (s *commitmentService) create(
 		}
 
 		var c *commitment.Commitment
-		if c, cc, _, err = s.prepare(txCtx, &req, opts); err != nil {
+		if c, cc, _, _, err = s.prepare(txCtx, &req, opts); err != nil {
 			return err
 		}
 
@@ -164,6 +195,13 @@ func (s *commitmentService) create(
 			return err
 		}
 
+		if req.BillingTerms != nil {
+			state, err = s.BillingTerms.Initialize(txCtx, core.InitializeRequest{Owner: commitmentBillingOwner(out.ID), Rows: req.BillingTerms.RuleInputs()})
+			if err != nil {
+				return err
+			}
+		}
+
 		inserted = true
 		return nil
 	})
@@ -176,7 +214,7 @@ func (s *commitmentService) create(
 		}
 
 		if replayed != nil {
-			return s.response(ctx, replayed, nil)
+			return s.createdResponse(ctx, replayed, nil, nil)
 		}
 	}
 
@@ -185,7 +223,7 @@ func (s *commitmentService) create(
 	}
 
 	if !inserted {
-		return s.response(ctx, out, nil)
+		return s.createdResponse(ctx, out, nil, nil)
 	}
 
 	s.Logger.Info(ctx, "commitment.created",
@@ -194,7 +232,7 @@ func (s *commitmentService) create(
 		"subscription_id", out.SubscriptionID,
 	)
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentCreated, out)
-	return s.response(ctx, out, cc)
+	return s.createdResponse(ctx, out, cc, state)
 }
 
 // findReplay returns the commitment already created under req's idempotency key, or nil when the key is unused.
@@ -230,23 +268,23 @@ func (s *commitmentService) prepare(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*commitment.Commitment, *commitmentContext, decimal.Decimal, error) {
+) (*commitment.Commitment, *commitmentContext, decimal.Decimal, *preparedBillingCollection, error) {
 	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, decimal.Zero, nil, err
 	}
 
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, decimal.Zero, nil, err
 	}
 
 	req.ApplyDefaults(cc.Sub.Timezone)
 	if err := req.Validate(); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, decimal.Zero, nil, err
 	}
 
 	if err := s.validateAgainstSubscription(ctx, req, cc, opts); err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, decimal.Zero, nil, err
 	}
 
 	c := req.ToCommitment(ctx, cc.Sub)
@@ -263,7 +301,7 @@ func (s *commitmentService) prepare(
 
 		priceReq := rate.in.ToCreatePriceRequest(c, cc.Sub, scopeMeter(c, cc), rate.kind)
 		if err := priceReq.Validate(); err != nil {
-			return nil, nil, decimal.Zero, err
+			return nil, nil, decimal.Zero, nil, err
 		}
 	}
 
@@ -275,10 +313,23 @@ func (s *commitmentService) prepare(
 
 	periods, err := commitmentPeriods(c, cc.Sub, amountOf, bucketFor(c, cc))
 	if err != nil {
-		return nil, nil, decimal.Zero, err
+		return nil, nil, decimal.Zero, nil, err
 	}
 
-	return c, cc, commitmentValue(periods), nil
+	value := commitmentValue(periods)
+	var collection *preparedBillingCollection
+	if req.BillingTerms != nil {
+		if s.BillingTerms == nil || s.BillingTermsStore == nil {
+			return nil, nil, decimal.Zero, nil, ierr.NewError("billing terms are unavailable").Mark(ierr.ErrServiceUnavailable)
+		}
+		delivery := lo.FromPtrOr(req.InvoiceDelivery, types.BillingTermSubscriptionInvoice)
+		c = commitment.NewCommitmentBuilder(c).WithTotalAmount(types.RoundToCurrencyPrecision(value, c.Currency)).WithInvoiceDelivery(delivery).Build()
+		collection, err = s.prepareCollection(ctx, c, *req.BillingTerms)
+		if err != nil {
+			return nil, nil, decimal.Zero, nil, err
+		}
+	}
+	return c, cc, value, collection, nil
 }
 
 // scopeMeter returns the meter of the first scoped line at the commitment start, which backs its rate prices.
@@ -397,8 +448,23 @@ func (s *commitmentService) Update(
 		return nil, ierr.Validation("name and invoice_label must be 1-255 characters")
 	}
 
+	for key := range req.Metadata {
+		if strings.HasPrefix(key, "flexprice.billing_terms.") {
+			return nil, ierr.Validation("billing terms settlement metadata is reserved")
+		}
+	}
 	var updated *commitment.Commitment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		discovered, err := s.CommitmentRepo.Get(types.WithForceWriter(txCtx), id)
+		if err != nil {
+			return err
+		}
+		if commitmentUsesTerms(discovered) {
+			txCtx, err = s.lockCollectionOwner(txCtx, discovered.SubscriptionID)
+			if err != nil {
+				return err
+			}
+		}
 		if err := s.lockCommitment(txCtx, id); err != nil {
 			return err
 		}
@@ -422,7 +488,13 @@ func (s *commitmentService) Update(
 		}
 
 		if req.Metadata != nil {
-			b.WithMetadata(req.Metadata)
+			metadata := lo.Assign(types.Metadata{}, req.Metadata)
+			for key, value := range c.Metadata {
+				if strings.HasPrefix(key, "flexprice.billing_terms.") {
+					metadata[key] = value
+				}
+			}
+			b.WithMetadata(metadata)
 		}
 
 		updated, err = s.CommitmentRepo.Update(txCtx, b.Build())
@@ -454,23 +526,39 @@ func (s *commitmentService) Terminate(
 	effectiveAt := lo.FromPtrOr(req.EffectiveAt, time.Now().UTC())
 	var out *commitment.Commitment
 	var invoiceID *string
+	changed := true
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
+		discovered, err := s.CommitmentRepo.Get(types.WithForceWriter(txCtx), id)
+		if err != nil {
+			return err
+		}
+		if commitmentUsesTerms(discovered) {
+			txCtx, err = s.admitTerminationInvoice(txCtx, discovered, req.CancellationFee)
+			if err != nil {
+				return err
+			}
+		}
 		out, invoiceID, err = s.terminate(txCtx, id, effectiveAt, req.CancellationFee)
+		if err == nil && commitmentUsesTerms(discovered) {
+			changed = discovered.Metadata[commitmentSettlementKey] != out.Metadata[commitmentSettlementKey]
+		}
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	s.Logger.Info(ctx, "commitment.terminated",
-		"operation", "commitment.terminated",
-		"commitment_id", out.ID,
-		"subscription_id", out.SubscriptionID,
-		"effective_at", effectiveAt,
-		"termination_invoice_id", lo.FromPtr(invoiceID),
-	)
-	s.publishSystemEvent(ctx, types.WebhookEventCommitmentTerminated, out)
+	if changed {
+		s.Logger.Info(ctx, "commitment.terminated",
+			"operation", "commitment.terminated",
+			"commitment_id", out.ID,
+			"subscription_id", out.SubscriptionID,
+			"effective_at", effectiveAt,
+			"termination_invoice_id", lo.FromPtr(invoiceID),
+		)
+		s.publishSystemEvent(ctx, types.WebhookEventCommitmentTerminated, out)
+	}
 
 	resp, err := s.response(ctx, out, nil)
 	if err != nil {
@@ -489,68 +577,7 @@ func (s *commitmentService) TerminateForSubscription(
 	effectiveAt time.Time,
 ) error {
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: "commitments:" + subscriptionID}); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to lock subscription commitments").
-				Mark(ierr.ErrInternal)
-		}
-
-		f := commitment.NewNoLimitFilter()
-		f.SubscriptionIDs = []string{subscriptionID}
-		f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
-		listed, err := s.CommitmentRepo.List(txCtx, f)
-		if err != nil {
-			return err
-		}
-
-		for _, c := range listed {
-			if c.CommitmentStatus == types.CommitmentStatusTerminated {
-				if c.TerminatedAt == nil || !c.TerminatedAt.After(effectiveAt) {
-					continue
-				}
-
-				if err := s.lockCommitment(txCtx, c.ID); err != nil {
-					return err
-				}
-
-				latest, err := s.CommitmentRepo.Get(txCtx, c.ID)
-				if err != nil {
-					return err
-				}
-
-				if _, err := s.CommitmentRepo.Update(txCtx, commitment.NewCommitmentBuilder(latest).WithTerminatedAt(effectiveAt).Build()); err != nil {
-					return err
-				}
-
-				s.Logger.Info(ctx, "commitment.termination_rescheduled",
-					"operation", "commitment.termination_rescheduled",
-					"commitment_id", c.ID,
-					"subscription_id", subscriptionID,
-					"previous_terminated_at", *c.TerminatedAt,
-					"effective_at", effectiveAt,
-				)
-				continue
-			}
-
-			if !effectiveAt.Before(c.EndDate) {
-				continue
-			}
-
-			out, _, err := s.terminate(txCtx, c.ID, effectiveAt, nil)
-			if err != nil {
-				return err
-			}
-
-			s.publishSystemEvent(txCtx, types.WebhookEventCommitmentTerminated, out)
-			s.Logger.Info(ctx, "commitment.terminated",
-				"operation", "commitment.terminated",
-				"commitment_id", c.ID,
-				"subscription_id", subscriptionID,
-				"effective_at", effectiveAt,
-			)
-		}
-
-		return nil
+		return s.terminateSubscriptionCommitments(txCtx, subscriptionID, effectiveAt, false)
 	})
 }
 
@@ -590,12 +617,23 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 
 // lockCommitment serialises writes to one commitment and must run inside a transaction.
 func (s *commitmentService) lockCommitment(ctx context.Context, id string) error {
-	if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: "commitment:" + id}); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to lock commitment").
-			Mark(ierr.ErrInternal)
+	if err := s.lockCommitmentKey(ctx, "commitment:"+id); err != nil {
+		return err
 	}
-
+	guard, _ := ctx.Value(commitmentGuardKey{}).(*commitmentGuard)
+	if guard == nil && !types.HasInvoiceLockAdmission(ctx) {
+		return nil
+	}
+	c, err := s.CommitmentRepo.Get(types.WithForceWriter(ctx), id)
+	if err != nil {
+		return err
+	}
+	if commitmentUsesTerms(c) {
+		if s.BillingTermsStore == nil {
+			return ierr.NewError("billing terms locking is unavailable").Mark(ierr.ErrServiceUnavailable)
+		}
+		return s.BillingTermsStore.LockOwner(ctx, commitmentBillingOwner(id))
+	}
 	return nil
 }
 
@@ -607,13 +645,26 @@ func (s *commitmentService) terminate(
 	effectiveAt time.Time,
 	fee *decimal.Decimal,
 ) (*commitment.Commitment, *string, error) {
+	discovered, err := s.CommitmentRepo.Get(types.WithForceWriter(ctx), id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if commitmentUsesTerms(discovered) {
+		ctx, err = s.lockCollectionOwner(ctx, discovered.SubscriptionID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	if err := s.lockCommitment(ctx, id); err != nil {
 		return nil, nil, err
 	}
-
 	c, err := s.CommitmentRepo.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if commitmentUsesTerms(c) {
+		return s.settleCommitment(ctx, id, effectiveAt, fee, false)
 	}
 
 	if c.CommitmentStatus != types.CommitmentStatusActive {

@@ -25,6 +25,7 @@ func TestSubscriptionGroupedInvoicingTestSuite(t *testing.T) {
 
 func (s *SubscriptionGroupedInvoicingTestSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_grouped")
 	s.setupServices()
 }
 
@@ -36,7 +37,8 @@ func (s *SubscriptionGroupedInvoicingTestSuite) setupServices() {
 	serviceParams := ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
 		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                  s.GetStores().TaxRateRepo,
 		AuthRepo:                     s.GetStores().AuthRepo,
@@ -114,6 +116,7 @@ func (s *SubscriptionGroupedInvoicingTestSuite) makeParentSub(customerID string,
 		CurrentPeriodStart: start,
 		CurrentPeriodEnd:   start.AddDate(0, 1, 0),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 	}
 	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Create(ctx, sub))
 	return sub
@@ -136,6 +139,7 @@ func (s *SubscriptionGroupedInvoicingTestSuite) makeChildSub(customerID string, 
 		CurrentPeriodStart: start,
 		CurrentPeriodEnd:   start.AddDate(0, 1, 0),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 	}
 	for _, fn := range overrides {
 		fn(sub)
@@ -426,7 +430,8 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestExecuteGroupedInvoicingMembe
 	modSvc := NewSubscriptionModificationService(ServiceParams{
 		Logger:                   s.GetLogger(),
 		Config:                   s.GetConfig(),
-		DB:                       s.GetDB(),
+		DB:                       &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:        &lifecycleTestStore{},
 		SubRepo:                  s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
 		CustomerRepo:             s.GetStores().CustomerRepo,

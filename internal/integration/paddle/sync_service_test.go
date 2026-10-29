@@ -1010,6 +1010,12 @@ func (m *mockSubscriptionService) GetUsageBySubscription(ctx context.Context, re
 func (m *mockSubscriptionService) UpdateBillingPeriods(ctx context.Context) (*apidto.SubscriptionUpdatePeriodResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) AdvanceBillingPeriod(ctx context.Context, id string, period apidto.Period) ([]*subscription.Subscription, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CompleteScheduledCancellation(ctx context.Context, id string, periodEnd time.Time) (bool, error) {
+	return false, nil
+}
 func (m *mockSubscriptionService) ProcessTrialEndDue(ctx context.Context) (*apidto.SubscriptionUpdatePeriodResponse, error) {
 	return nil, nil
 }

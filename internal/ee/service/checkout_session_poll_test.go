@@ -121,6 +121,7 @@ func TestCheckoutPollSuite(t *testing.T) {
 func (s *CheckoutPollSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ClearStores()
+	s.WithEnvironment("env_test")
 
 	s.provider = &fakeCheckoutProvider{}
 
@@ -149,7 +150,9 @@ func (s *CheckoutPollSuite) buildParams() ServiceParams {
 	return ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
 		SubRepo:                      s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:        s.GetStores().SubscriptionPhaseRepo,

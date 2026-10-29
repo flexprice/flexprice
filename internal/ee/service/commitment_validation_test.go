@@ -185,7 +185,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 			r.Binding = lo.ToPtr(false)
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
 		}, false},
-		{"C17 billing_terms not yet supported", func(r *dto.CreateCommitmentRequest) {
+		{"C17 billing_terms requires rules", func(r *dto.CreateCommitmentRequest) {
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
 		}, false},
 		{"C21 label too long", func(r *dto.CreateCommitmentRequest) { r.InvoiceLabel = string(make([]byte, 256)) }, false},

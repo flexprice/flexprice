@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -72,81 +75,118 @@ func (s *subscriptionService) childSubscriptions(ctx context.Context, parentID s
 
 func (s *subscriptionService) activateDraftSubscription(ctx context.Context, sub *subscription.Subscription) error {
 	if sub == nil {
-		return ierr.NewError("subscription is required to activate a draft create").
-			Mark(ierr.ErrValidation)
+		return ierr.Validation("subscription is required to activate a draft create")
 	}
-
-	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		children, err := s.childSubscriptions(ctx, sub.ID, types.SubscriptionStatusDraft)
+	if err := s.validatePaymentLifecycle(ctx, paymentLifecycleRequest{subscriptionID: sub.ID, asOf: time.Now().UTC()}); err != nil {
+		return err
+	}
+	nested := s.DB.TxFromContext(ctx) != nil || s.BillingTermsStore.InTransaction(ctx)
+	return s.DB.WithTx(types.WithForceWriter(ctx), func(tx context.Context) error {
+		discovered, err := s.lifecycleSubscription(tx, sub.ID)
 		if err != nil {
 			return err
 		}
-
-		for _, child := range children {
-			if err := s.activateDraftSubscription(ctx, child); err != nil {
-				return err
-			}
-		}
-	}
-
-	if sub.SubscriptionStatus == types.SubscriptionStatusDraft {
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		if err := s.SubRepo.Update(activity.WithAction(ctx, sub.ID, activity.SubscriptionActivated), sub); err != nil {
+		current, participants, err := s.lockPaymentSubscriptions(tx, discovered, nested)
+		if err != nil {
 			return err
 		}
-	}
+		if current.SubscriptionStatus == types.SubscriptionStatusActive {
+			return nil
+		}
+		if !checkoutDraftEligible(current, time.Now().UTC()) {
+			return ierr.NewError("checkout subscription is no longer an eligible draft").Mark(ierr.ErrVersionConflict)
+		}
+		var activated []*subscription.Subscription
+		for _, participant := range participants {
+			if participant.ID != current.ID && lo.FromPtr(participant.ParentSubscriptionID) != current.ID {
+				continue
+			}
+			if !checkoutDraftEligible(participant, time.Now().UTC()) {
+				continue
+			}
+			updated := subscription.NewSubscriptionBuilder(participant).WithStatus(types.SubscriptionStatusActive).Build()
+			if err := s.SubRepo.Update(activity.WithAction(tx, updated.ID, activity.SubscriptionActivated), updated); err != nil {
+				return err
+			}
+			activated = append(activated, updated)
+		}
+		notify := func() {
+			detached := types.WithoutDBTransaction(context.WithoutCancel(tx))
+			detached, cancel := context.WithTimeout(detached, 10*time.Second)
+			defer cancel()
+			for _, owner := range activated {
+				if owner.ID == sub.ID {
+					*sub = *owner
+				}
+				if err := s.processPendingCreditGrantsForSubscription(detached, owner); err != nil {
+					s.Logger.Error(detached, "checkout activation grants deferred to recovery", "error", err, "subscription_id", owner.ID)
+				}
+				s.publishSystemEvent(detached, types.WebhookEventSubscriptionActivated, owner.ID)
+				NotifySubscriptionChanged(detached, s.ServiceParams, owner.ID)
+			}
+		}
+		if !types.RegisterPostCommit(tx, notify) {
+			return ierr.NewError("checkout activation requires an active postcommit queue").Mark(ierr.ErrInvalidOperation)
+		}
+		return nil
+	})
+}
 
-	if err := s.processPendingCreditGrantsForSubscription(ctx, sub); err != nil {
-		s.Logger.Error(ctx, "failed to process pending credit grants for checkout-activated subscription",
-			"error", err,
-			"subscription_id", sub.ID,
-		)
-	}
-
-	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
-	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
-	return nil
+func checkoutDraftEligible(sub *subscription.Subscription, asOf time.Time) bool {
+	return sub.SubscriptionStatus == types.SubscriptionStatusDraft && sub.PauseStatus != types.PauseStatusActive && sub.ActivePauseID == nil && sub.CancelledAt == nil &&
+		(sub.EndDate == nil || sub.EndDate.After(asOf)) && (sub.CancelAt == nil || sub.CancelAt.After(asOf)) && (!sub.CancelAtPeriodEnd || sub.CurrentPeriodEnd.After(asOf))
 }
 
 func (s *subscriptionService) archiveDraftCheckoutSubscription(ctx context.Context, subscriptionID string) error {
 	if subscriptionID == "" {
 		return nil
 	}
-
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
+	if err := s.validateSubscriptionLifecycle(ctx, subscriptionID); err != nil {
 		return err
 	}
-
-	if sub.SubscriptionStatus != types.SubscriptionStatusDraft {
-		return ierr.NewError("checkout subscription is no longer draft").
-			WithHint("subscription was already activated").
-			Mark(ierr.ErrAlreadyExists)
-	}
-
-	children, err := s.childSubscriptions(ctx, subscriptionID)
-	if err != nil {
-		return err
-	}
-
-	for _, child := range children {
-		if err := s.archiveDraftSubscriptionDependencies(ctx, child.ID); err != nil {
+	nested := s.DB.TxFromContext(ctx) != nil || s.BillingTermsStore.InTransaction(ctx)
+	return s.DB.WithTx(types.WithForceWriter(ctx), func(tx context.Context) error {
+		discovered, err := s.lifecycleSubscription(tx, subscriptionID)
+		if err != nil {
 			return err
 		}
-		if err := s.SubRepo.Delete(ctx, child.ID); err != nil {
+		current, participants, err := s.lockPaymentSubscriptions(tx, discovered, nested)
+		if err != nil {
 			return err
 		}
-	}
-
-	if err := s.archiveDraftSubscriptionDependencies(ctx, subscriptionID); err != nil {
-		return err
-	}
-	return s.SubRepo.Delete(ctx, subscriptionID)
+		if current.SubscriptionStatus != types.SubscriptionStatusDraft {
+			return ierr.NewError("checkout subscription is no longer draft").WithHint("subscription was already activated").Mark(ierr.ErrAlreadyExists)
+		}
+		var drafts []*subscription.Subscription
+		for _, participant := range participants {
+			if participant.ID != current.ID && lo.FromPtr(participant.ParentSubscriptionID) != current.ID {
+				continue
+			}
+			// A grouped seat can begin its trial before the parent's checkout completes.
+			if participant.SubscriptionStatus != types.SubscriptionStatusDraft && participant.SubscriptionStatus != types.SubscriptionStatusTrialing {
+				return ierr.NewError("checkout child has left its initial draft or trial").Mark(ierr.ErrVersionConflict)
+			}
+			drafts = append(drafts, participant)
+		}
+		for _, draft := range drafts {
+			if err := s.archiveDraftSubscriptionDependencies(tx, draft.ID); err != nil {
+				return err
+			}
+		}
+		for _, draft := range drafts {
+			if err := s.SubRepo.Delete(tx, draft.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.Context, subscriptionID string) error {
+	if err := s.archiveDraftCommitments(ctx, subscriptionID); err != nil {
+		return err
+	}
 	notifySubscriptionArchived(ctx, s.ServiceParams, subscriptionID)
-
 	addonFilter := types.NewNoLimitAddonAssociationFilter()
 	addonFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	addonFilter.EntityIDs = []string{subscriptionID}
@@ -200,18 +240,6 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		}
 	}
 
-	commitmentFilter := commitment.NewNoLimitFilter()
-	commitmentFilter.SubscriptionIDs = []string{subscriptionID}
-	commitments, err := s.CommitmentRepo.List(ctx, commitmentFilter)
-	if err != nil {
-		return err
-	}
-	for _, c := range commitments {
-		if err := s.CommitmentRepo.Delete(ctx, c.ID); err != nil {
-			return err
-		}
-	}
-
 	taxFilter := &types.TaxAssociationFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		EntityType:  types.TaxRateEntityTypeSubscription,
@@ -223,6 +251,56 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 	}
 	for _, association := range taxAssociations {
 		if err := s.TaxAssociationRepo.Delete(ctx, association); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *subscriptionService) archiveDraftCommitments(ctx context.Context, subscriptionID string) error {
+	commitments := newCommitmentService(s.ServiceParams)
+	ctx, err := commitments.lockCollectionOwner(ctx, subscriptionID)
+	if err != nil {
+		return err
+	}
+	if err := commitments.lockCommitmentKey(ctx, "commitments:"+subscriptionID); err != nil {
+		return err
+	}
+	rows, err := s.CommitmentRepo.List(ctx, &commitment.Filter{
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(501), Status: lo.ToPtr(types.StatusPublished)}, SubscriptionIDs: []string{subscriptionID},
+	})
+	if err != nil {
+		return err
+	}
+	if len(rows) > 500 {
+		return ierr.Validation("checkout cleanup supports at most 500 commitments")
+	}
+	for _, owner := range rows {
+		if owner == nil || !commitmentTermsScope(ctx, owner.TenantID, owner.EnvironmentID, owner.Status) || owner.SubscriptionID != subscriptionID {
+			return ierr.NewError("checkout cleanup returned invalid commitment scope").Mark(ierr.ErrDatabase)
+		}
+	}
+	slices.SortFunc(rows, func(a, b *commitment.Commitment) int { return strings.Compare(a.ID, b.ID) })
+	for _, owner := range rows {
+		if err := commitments.lockCommitment(ctx, owner.ID); err != nil {
+			return err
+		}
+		if commitmentUsesTerms(owner) {
+			if s.BillingTerms == nil {
+				return ierr.NewError("checkout commitment cleanup is unavailable").Mark(ierr.ErrServiceUnavailable)
+			}
+			state, err := s.BillingTerms.Get(ctx, commitmentBillingOwner(owner.ID))
+			if err != nil {
+				return err
+			}
+			if state.Summary().AssignedAmount.IsPositive() {
+				return ierr.NewError("checkout commitment already has assigned invoice principal").Mark(ierr.ErrVersionConflict)
+			}
+			if _, _, err := commitments.settleCommitment(ctx, owner.ID, owner.StartDate, nil, true); err != nil {
+				return err
+			}
+		}
+		if err := s.CommitmentRepo.Delete(ctx, owner.ID); err != nil {
 			return err
 		}
 	}

@@ -55,19 +55,24 @@ func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
 	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
 
 	var parentSub *subscription.Subscription
-	if params.Action == dto.GroupedInvoicingActionAdd {
-		var err error
-		parentSub, err = s.serviceParams.SubRepo.Get(ctx, params.ParentSubscriptionID)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	changed := make([]dto.ChangedSubscription, 0, len(params.ChildSubscriptionIDs))
 	parentPromoted := false
-	parentWasStandalone := parentSub != nil && parentSub.SubscriptionType == types.SubscriptionTypeStandalone
+	parentWasStandalone := false
 
 	err := s.serviceParams.DB.WithTx(ctx, func(txCtx context.Context) error {
+		parentID := ""
+		if params.Action == dto.GroupedInvoicingActionAdd {
+			parentID = params.ParentSubscriptionID
+		}
+		participants, err := subSvc.lockGroupedMembership(txCtx, parentID, params.ChildSubscriptionIDs)
+		if err != nil {
+			return err
+		}
+		if parentID != "" {
+			parentSub = participants[parentID]
+			parentWasStandalone = parentSub.SubscriptionType == types.SubscriptionTypeStandalone
+		}
 		for _, childID := range params.ChildSubscriptionIDs {
 			var opErr error
 			if params.Action == dto.GroupedInvoicingActionAdd {

@@ -2,8 +2,10 @@ package dto
 
 import (
 	"context"
+	"strings"
 	"time"
 
+	domainBillingTerms "github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -98,6 +100,8 @@ type CreateCommitmentRequest struct {
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
+	BillingTerms       *BillingTermsInput                `json:"billing_terms,omitempty"`
+	InvoiceDelivery    *types.BillingTermDelivery        `json:"invoice_delivery,omitempty"`
 	StartDate          time.Time                         `json:"start_date" validate:"required"`
 	EndDate            time.Time                         `json:"end_date" validate:"required"`
 	Metadata           types.Metadata                    `json:"metadata,omitempty"`
@@ -130,6 +134,11 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 
 // Validate checks the rules that need only the request. Call ApplyDefaults first.
 func (r *CreateCommitmentRequest) Validate() error {
+	for key := range r.Metadata {
+		if strings.HasPrefix(key, "flexprice.billing_terms.") {
+			return ierr.Validation("billing terms settlement metadata is reserved")
+		}
+	}
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
@@ -182,12 +191,31 @@ func (r *CreateCommitmentRequest) Validate() error {
 	}
 
 	if r.CollectionMethod != nil {
+		if *r.CollectionMethod == "" {
+			return ierr.Validation("collection_method must not be empty")
+		}
 		if err := r.CollectionMethod.Validate(); err != nil {
 			return err
 		}
 
 		if *r.CollectionMethod == types.CommitmentCollectionBillingTerms {
-			return ierr.Validation("collection_method billing_terms is not yet supported")
+			if r.BillingTerms == nil {
+				return ierr.Validation("billing_terms is required for billing_terms collection")
+			}
+			if err := r.BillingTerms.Validate(); err != nil {
+				return err
+			}
+			if r.InvoiceDelivery != nil {
+				if err := r.InvoiceDelivery.Validate(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if r.CollectionMethod == nil || *r.CollectionMethod != types.CommitmentCollectionBillingTerms {
+		if r.BillingTerms != nil || r.InvoiceDelivery != nil {
+			return ierr.Validation("billing_terms and invoice_delivery require binding billing_terms collection")
 		}
 	}
 
@@ -320,8 +348,12 @@ func (r *TerminateCommitmentRequest) Validate() error {
 
 type CommitmentResponse struct {
 	*commitment.Commitment `json:",inline"`
-	CommitmentValue        *decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
-	TerminationInvoiceID   *string          `json:"termination_invoice_id,omitempty"`
+	CommitmentValue        *decimal.Decimal                      `json:"commitment_value,omitempty" swaggertype:"string"`
+	TerminationInvoiceID   *string                               `json:"termination_invoice_id,omitempty"`
+	BillingTerms           *BillingTermsResponse                 `json:"billing_terms,omitempty"`
+	BillingScheduleItems   *ListBillingScheduleItemsResponse     `json:"billing_schedule_items,omitempty"`
+	Collection             *domainBillingTerms.CollectionSummary `json:"collection,omitempty"`
+	StateToken             string                                `json:"state_token,omitempty"`
 }
 
 type ListCommitmentsResponse = types.ListResponse[*CommitmentResponse] // @name ListCommitmentsResponse

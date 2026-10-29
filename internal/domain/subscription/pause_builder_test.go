@@ -64,3 +64,26 @@ func TestSubscriptionBuilderMembershipAndCancellation(t *testing.T) {
 	require.Nil(t, absent.WithSubscriptionType(types.SubscriptionTypeParent).WithCancelledAt(&cancelled).Build())
 	require.NotNil(t, NewSubscriptionBuilder(nil).WithSubscriptionType(types.SubscriptionTypeParent).Build())
 }
+
+func TestSubscriptionBuilderTrialActivationFields(t *testing.T) {
+	now := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
+	end := now.Add(time.Hour)
+	item := &SubscriptionLineItem{ID: "line", Metadata: types.Metadata{"key": "original"}}
+	items := []*SubscriptionLineItem{item, nil}
+	updated := NewSubscriptionBuilder(nil).WithStartDate(now).WithTrialStart(&now).WithTrialEnd(&end).WithBillingAnchor(now).WithLineItems(items).Build()
+	now = now.Add(time.Hour)
+	end = end.Add(time.Hour)
+	items[0] = nil
+	item.Metadata["key"] = "changed"
+	require.Equal(t, "original", updated.LineItems[0].Metadata["key"])
+	require.Nil(t, updated.LineItems[1])
+	require.Equal(t, updated.StartDate, *updated.TrialStart)
+	require.Equal(t, updated.StartDate, updated.BillingAnchor)
+	require.Equal(t, updated.StartDate.Add(time.Hour), *updated.TrialEnd)
+	cleared := NewSubscriptionBuilder(updated).WithTrialStart(nil).WithTrialEnd(nil).WithLineItems(nil).Build()
+	require.Nil(t, cleared.TrialStart)
+	require.Nil(t, cleared.TrialEnd)
+	require.Nil(t, cleared.LineItems)
+	var absent *subscriptionBuilder
+	require.Nil(t, absent.WithStartDate(now).WithTrialStart(&now).WithTrialEnd(&end).WithBillingAnchor(now).WithLineItems(items).Build())
+}

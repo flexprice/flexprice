@@ -177,44 +177,15 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	// Get the subscription
-	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
-	if err != nil {
-		s.logger.Error(ctx, "UpdateCurrentPeriodActivity failed",
-			"error", err,
-			"subscription_id", input.SubscriptionID,
-			"tenant_id", input.TenantID,
-			"environment_id", input.EnvironmentID,
-		)
-		return nil, err
-	}
-
-	// Update to the new current period
-	sub.CurrentPeriodStart = input.PeriodStart
-	sub.CurrentPeriodEnd = input.PeriodEnd
-
-	// Update the subscription
-	if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
-		s.logger.Error(ctx, "failed to update subscription period",
-			"subscription_id", sub.ID,
-			"new_period_start", input.PeriodStart,
-			"new_period_end", input.PeriodEnd,
-			"error", err)
-		return nil, err
-	}
-
-	s.logger.Info(ctx, "updated subscription period",
-		"subscription_id", sub.ID,
-		"new_period_start", input.PeriodStart,
-		"new_period_end", input.PeriodEnd)
-
-	children, err := s.advanceGroupedInvoicingChildrenPeriod(ctx, sub, input.PeriodStart, input.PeriodEnd)
+	updated, err := s.subscriptionService.AdvanceBillingPeriod(ctx, input.SubscriptionID, dto.Period{Start: input.PeriodStart, End: input.PeriodEnd})
 	if err != nil {
 		return nil, err
 	}
-	s.refreshEntitlementGrantsAfterRollover(ctx, append([]*subscription.Subscription{sub}, children...)...)
+	s.refreshEntitlementGrantsAfterRollover(ctx, updated...)
 
-	service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+	for _, sub := range updated {
+		service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+	}
 
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
@@ -255,48 +226,6 @@ func (s *BillingActivities) hasNeverResetGrant(ctx context.Context, sub *subscri
 		return ec != nil && ec.Entitlement != nil && ec.HasGrantConfig() &&
 			ec.Feature != nil && ec.Feature.Meter != nil && ec.Feature.Meter.ResetUsage == types.ResetUsageNever
 	})
-}
-
-func (s *BillingActivities) advanceGroupedInvoicingChildrenPeriod(
-	ctx context.Context,
-	parent *subscription.Subscription,
-	periodStart time.Time,
-	periodEnd time.Time,
-) ([]*subscription.Subscription, error) {
-	if parent.SubscriptionType != types.SubscriptionTypeParent {
-		return nil, nil
-	}
-
-	filter := types.NewNoLimitSubscriptionFilter()
-	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	filter.ParentSubscriptionIDs = []string{parent.ID}
-	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-	}
-
-	children, err := s.serviceParams.SubRepo.List(ctx, filter)
-	if err != nil {
-		s.logger.Error(ctx, "failed to list grouped_invoicing children for period cascade",
-			"error", err,
-			"parent_subscription_id", parent.ID)
-		return nil, err
-	}
-
-	for _, child := range children {
-		child.CurrentPeriodStart = periodStart
-		child.CurrentPeriodEnd = periodEnd
-		if err := s.serviceParams.SubRepo.Update(ctx, child); err != nil {
-			s.logger.Error(ctx, "failed to update grouped_invoicing child period",
-				"error", err,
-				"child_subscription_id", child.ID,
-				"parent_subscription_id", parent.ID)
-			return nil, err
-		}
-	}
-
-	return children, nil
 }
 
 // Lets late-arriving events and pipeline lag settle.
@@ -369,118 +298,13 @@ func (s *BillingActivities) CheckCancellationActivity(
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
+	cancelled, err := s.subscriptionService.CompleteScheduledCancellation(ctx, input.SubscriptionID, input.Period.End)
 	if err != nil {
-		s.logger.Error(ctx, "CheckCancellationActivity failed",
-			"error", err,
-			"subscription_id", input.SubscriptionID,
-			"tenant_id", input.TenantID,
-			"environment_id", input.EnvironmentID,
-		)
+		s.logger.Error(ctx, "failed to complete subscription cancellation", "error", err, "subscription_id", input.SubscriptionID)
 		return nil, err
 	}
-
-	shouldCancel := false
-	var cancelledAt *time.Time
-
-	// Check for cancellation at period end
-	if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(input.Period.End) {
-		shouldCancel = true
-		cancelledAt = sub.CancelAt
-		s.logger.Info(ctx, "subscription should be cancelled at period end",
-			"subscription_id", sub.ID,
-			"period_end", input.Period.End,
-			"cancel_at", *sub.CancelAt)
-	}
-
-	// Check if period end matches the subscription end date
-	if sub.EndDate != nil && input.Period.End.Equal(*sub.EndDate) {
-		shouldCancel = true
-		cancelledAt = sub.EndDate
-		s.logger.Info(ctx, "subscription reached end date",
-			"subscription_id", sub.ID,
-			"period_end", input.Period.End,
-			"end_date", *sub.EndDate)
-	}
-
-	// Perform cancellation if required
-	if shouldCancel {
-		// A subscription that reaches its end date while paused ends its pause with it.
-		var endedPauseID *string
-		if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
-			endedPauseID = sub.ActivePauseID
-			sub.PauseStatus = types.PauseStatusNone
-			sub.ActivePauseID = nil
-		}
-		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-		sub.CancelledAt = cancelledAt
-		subscriptionService := service.NewSubscriptionService(s.serviceParams)
-
-		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
-			// Update subscription
-			if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
-				return err
-			}
-
-			if endedPauseID != nil {
-				pause, err := s.serviceParams.SubRepo.GetPause(ctx, *endedPauseID)
-				if err != nil {
-					return err
-				}
-				pause.PauseStatus = types.PauseStatusCompleted
-				if err := s.serviceParams.SubRepo.UpdatePause(ctx, pause); err != nil {
-					return err
-				}
-			}
-
-			// Terminate line items, addon associations, and credit grants now that the
-			// previously scheduled cancellation has actually fired. Gated on
-			// CancelAtPeriodEnd+CancelAt (set only by CancelSubscription's end_of_period/
-			// scheduled_date path), matching processSubscriptionPeriod's equivalent hook in
-			// internal/ee/service/subscription.go — never fires for a bare EndDate set through
-			// some other path that never had termination deferred in the first place.
-			if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
-				if err := subscriptionService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
-					SubscriptionID:     sub.ID,
-					EffectiveDate:      *sub.CancelAt,
-					CancellationReason: sub.Metadata["cancellation_reason"],
-				}); err != nil {
-					return err
-				}
-			}
-
-			// Update the cancellation schedule status to executed
-			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
-				s.logger.Error(ctx, "failed to mark cancellation schedule as executed",
-					"subscription_id", sub.ID,
-					"error", err)
-				// Don't fail the transaction, just log the error
-			}
-
-			// Match CancelSubscription / cron processSubscriptionPeriod: cancel inherited child subs with the parent
-			if err := subscriptionService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err != nil {
-			s.logger.Error(ctx, "failed to cancel subscription",
-				"subscription_id", sub.ID,
-				"error", err)
-			return nil, err
-		}
-
-		subscriptionService.PublishCancellationEvents(ctx, sub)
-		service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
-
-		s.logger.Info(ctx, "subscription cancelled successfully",
-			"subscription_id", sub.ID,
-			"cancelled_at", *cancelledAt)
-	}
-
 	return &subscriptionModels.CheckSubscriptionCancellationActivityOutput{
-		IsCancelled: shouldCancel,
+		IsCancelled: cancelled,
 		Success:     true,
 	}, nil
 }

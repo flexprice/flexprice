@@ -151,27 +151,36 @@ func (s *subscriptionService) addToGroupedInvoicing(
 	parentSub *subscription.Subscription,
 	childSubID string,
 ) error {
-	child, err := s.SubRepo.Get(ctx, childSubID)
-	if err != nil {
+	if parentSub == nil {
+		return ierr.Validation("grouped invoicing requires a parent")
+	}
+	if err := s.validateSubscriptionMembership(ctx, childSubID); err != nil {
 		return err
 	}
-
-	if err := s.validateAddToGroupedInvoicing(ctx, parentSub, child); err != nil {
-		return err
-	}
-
-	// Promote standalone parent to parent type on first child attachment
-	if parentSub.SubscriptionType == types.SubscriptionTypeStandalone {
-		parentSub.SubscriptionType = types.SubscriptionTypeParent
-		if err := s.SubRepo.Update(ctx, parentSub); err != nil {
+	var updatedParent *subscription.Subscription
+	err := s.DB.WithTx(ctx, func(tx context.Context) error {
+		participants, err := s.lockGroupedMembership(tx, parentSub.ID, []string{childSubID})
+		if err != nil {
 			return err
 		}
+		parent, child := participants[parentSub.ID], participants[childSubID]
+		if err := s.validateAddToGroupedInvoicing(tx, parent, child); err != nil {
+			return err
+		}
+		updatedParent = parent
+		if parent.SubscriptionType == types.SubscriptionTypeStandalone {
+			updatedParent = subscription.NewSubscriptionBuilder(parent).WithSubscriptionType(types.SubscriptionTypeParent).Build()
+			if err := s.SubRepo.Update(tx, updatedParent); err != nil {
+				return err
+			}
+		}
+		updatedChild := subscription.NewSubscriptionBuilder(child).WithSubscriptionType(types.SubscriptionTypeGroupedInvoicing).WithParentSubscriptionID(&parent.ID).Build()
+		return s.SubRepo.Update(tx, updatedChild)
+	})
+	if err == nil && updatedParent != nil {
+		*parentSub = *updatedParent
 	}
-
-	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
-	child.ParentSubscriptionID = lo.ToPtr(parentSub.ID)
-
-	return s.SubRepo.Update(ctx, child)
+	return err
 }
 
 // removeFromGroupedInvoicing fetches the child, verifies it is currently grouped_invoicing,
@@ -184,25 +193,21 @@ func (s *subscriptionService) removeFromGroupedInvoicing(
 	ctx context.Context,
 	childSubID string,
 ) error {
-	child, err := s.SubRepo.Get(ctx, childSubID)
-	if err != nil {
+	if err := s.validateSubscriptionMembership(ctx, childSubID); err != nil {
 		return err
 	}
-
-	if child.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
-		return ierr.NewError("subscription is not of type grouped_invoicing").
-			WithHint("Only grouped_invoicing subscriptions can be removed from grouped invoicing").
-			WithReportableDetails(map[string]any{
-				"subscription_id":   child.ID,
-				"subscription_type": child.SubscriptionType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	child.SubscriptionType = types.SubscriptionTypeStandalone
-	child.ParentSubscriptionID = nil
-
-	return s.SubRepo.Update(ctx, child)
+	return s.DB.WithTx(ctx, func(tx context.Context) error {
+		participants, err := s.lockGroupedMembership(tx, "", []string{childSubID})
+		if err != nil {
+			return err
+		}
+		child := participants[childSubID]
+		if child.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
+			return ierr.Validation("subscription is not of type grouped_invoicing")
+		}
+		updated := subscription.NewSubscriptionBuilder(child).WithSubscriptionType(types.SubscriptionTypeStandalone).WithParentSubscriptionID(nil).Build()
+		return s.SubRepo.Update(tx, updated)
+	})
 }
 
 // validateAddToGroupedInvoicingDryRun fetches the child and runs all constraints without

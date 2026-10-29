@@ -243,7 +243,10 @@ func commitmentCollectionDeferred(ctx context.Context, sub, destination *subscri
 			return "subscription_destination_unavailable"
 		}
 		if participant.SubscriptionStatus == types.SubscriptionStatusDraft || participant.SubscriptionStatus == types.SubscriptionStatusIncomplete {
-			if participant.SubscriptionStatus == types.SubscriptionStatusIncomplete && trialEndCollectionAllowed(ctx, destination, delivery) {
+			if participant.SubscriptionStatus == types.SubscriptionStatusIncomplete && destination.SubscriptionStatus == types.SubscriptionStatusIncomplete && pendingCollectionAllowed(ctx, destination, delivery) {
+				continue
+			}
+			if participant.SubscriptionStatus == types.SubscriptionStatusDraft && participant.ID == destination.ID && pendingCollectionAllowed(ctx, destination, delivery) {
 				continue
 			}
 			return "subscription_pending"

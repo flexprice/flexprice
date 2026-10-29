@@ -54,6 +54,7 @@ type Handlers struct {
 	FXRate                   *v1.FXRateHandler
 	Coupon                   *v1.CouponHandler
 	Commitment               *v1.CommitmentHandler
+	BillingTerms             v1.BillingTermsHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	Product                  *v1.ProductHandler
@@ -729,6 +730,13 @@ func NewRouter(
 			commitments.GET("/:id", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.GetCommitment)
 			commitments.PUT("/:id", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.UpdateCommitment)
 			commitments.POST("/:id/terminate", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TerminateCommitment)
+			commitments.GET("/:id/billing-terms", read(types.EntityCommitment, types.ActionRead), handlers.BillingTerms.Get)
+			commitments.POST("/:id/billing-terms/preview", read(types.EntityCommitment, types.ActionRead), handlers.BillingTerms.Preview)
+			commitments.PUT("/:id/billing-terms", write(types.EntityCommitment, types.ActionWrite), handlers.BillingTerms.Replace)
+			commitments.GET("/:id/billing-terms/history", read(types.EntityCommitment, types.ActionRead), handlers.BillingTerms.History)
+			commitments.GET("/:id/billing-schedule-items", read(types.EntityCommitment, types.ActionRead), handlers.BillingTerms.ListItems)
+			commitments.GET("/:id/billing-schedule-items/:item_id", read(types.EntityCommitment, types.ActionRead), handlers.BillingTerms.GetItem)
+			commitments.POST("/:id/billing-schedule-items/:item_id/trigger", write(types.EntityCommitment, types.ActionWrite), handlers.BillingTerms.Trigger)
 		}
 
 		// Coupon routes

@@ -64,6 +64,7 @@ func (s *SubscriptionServiceSuite) seedTrialingFixedFeeSubscription(amount decim
 		Currency: "usd", BillingCycle: types.BillingCycleAnniversary, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1, BillingCadence: types.BILLING_CADENCE_RECURRING,
 		SubscriptionStatus: types.SubscriptionStatusTrialing,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
 		PaymentBehavior:    string(types.PaymentBehaviorDefaultActive), CollectionMethod: string(types.CollectionMethodChargeAutomatically),
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
@@ -322,15 +323,21 @@ func (s *SubscriptionServiceSuite) TestTrialEndCheckout_ReplayAfterTimestampPers
 			sub := s.seedTrialingFixedFeeSubscription(decimal.NewFromInt(200))
 			subSvc := s.service.(*subscriptionService)
 			start := time.Date(2026, 10, 15, 18, 27, 24, tt.nanos, time.UTC).Truncate(time.Microsecond)
+			sub.TrialStart = lo.ToPtr(start.AddDate(0, 0, -14))
+			s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 			// Model the timestamp returned by PostgreSQL after the first conversion commits.
 			persistedStart := start.Round(time.Microsecond).Add(tt.offset)
 			_, err := subSvc.convertTrialToFirstPaidPeriod(ctx, sub, persistedStart)
 			s.Require().NoError(err)
 			if tt.active {
+				persistTrialActivationInvoice(s.T(), ctx, subSvc.ServiceParams, sub, &invoice.Invoice{ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE)})
 				s.Require().NoError(subSvc.completeTrialConversionToActive(ctx, sub))
 			}
 			before, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 			s.Require().NoError(err)
+			if tt.active {
+				s.Equal(types.SubscriptionStatusActive, before.SubscriptionStatus)
+			}
 
 			modSvc := NewSubscriptionModificationService(subSvc.ServiceParams).(*subscriptionModificationService)
 			err = modSvc.applyTrialEndConversion(ctx, sub.ID, start)
@@ -462,6 +469,10 @@ func (s *SubscriptionServiceSuite) TestTrialConversionActivatesOnlyFromIncomplet
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			sub := s.seedTrialingFixedFeeSubscription(decimal.NewFromInt(200))
+			trialEnd := time.Now().UTC().Add(-time.Hour)
+			_, err := s.service.(*subscriptionService).convertTrialToFirstPaidPeriod(ctx, sub, trialEnd)
+			s.Require().NoError(err)
+			persistTrialActivationInvoice(s.T(), ctx, s.service.(*subscriptionService).ServiceParams, sub, &invoice.Invoice{ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE)})
 			sub.SubscriptionStatus = tt.status
 			s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
@@ -488,6 +499,10 @@ func (s *SubscriptionServiceSuite) TestTrialConversionUsesFreshStoredRow() {
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			sub := s.seedTrialingFixedFeeSubscription(decimal.NewFromInt(200))
+			trialEnd := time.Now().UTC().Add(-time.Hour)
+			_, err := s.service.(*subscriptionService).convertTrialToFirstPaidPeriod(ctx, sub, trialEnd)
+			s.Require().NoError(err)
+			persistTrialActivationInvoice(s.T(), ctx, s.service.(*subscriptionService).ServiceParams, sub, &invoice.Invoice{ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE)})
 			sub.SubscriptionStatus = tt.stored
 			s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 

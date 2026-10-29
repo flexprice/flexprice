@@ -106,7 +106,6 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	sub *subscription.Subscription,
 ) (*dto.SubscriptionModifyResponse, error) {
 	now := time.Now().UTC()
-	sub.TrialEnd = lo.ToPtr(now)
 	invRes, err := s.subscriptionService.ProcessSingleSubscriptionTrialEnd(ctx, sub, now)
 	if err != nil {
 		return nil, err
@@ -205,14 +204,20 @@ func (s *subscriptionModificationService) settleTrialEndPayFirst(
 
 // applyTrialEndConversion ends the trial at the checkout's recorded start. Safe to replay.
 func (s *subscriptionModificationService) applyTrialEndConversion(ctx context.Context, subscriptionID string, start time.Time) error {
+	start = start.UTC().Truncate(time.Microsecond)
 	sp := s.serviceParams
 
-	return sp.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Locked re-read: a concurrent delivery may have converted the row already.
-		sub, err := sp.SubRepo.GetForUpdate(txCtx, subscriptionID)
+	if err := s.subscriptionService.validateSubscriptionLifecycle(ctx, subscriptionID); err != nil {
+		return err
+	}
+	nested := sp.DB.TxFromContext(ctx) != nil || sp.BillingTermsStore.InTransaction(ctx)
+	return sp.DB.WithTx(types.WithForceWriter(ctx), func(txCtx context.Context) error {
+		lifecycle, err := s.subscriptionService.lockSubscriptionLifecycle(txCtx, subscriptionID, nested)
 		if err != nil {
 			return err
 		}
+		txCtx = lifecycle.ctx
+		sub := subscription.NewSubscriptionBuilder(lifecycle.current).Build()
 
 		if sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
 			if sub.TrialEnd != nil && sub.TrialEnd.Equal(start) {
@@ -224,6 +229,9 @@ func (s *subscriptionModificationService) applyTrialEndConversion(ctx context.Co
 				Mark(ierr.ErrInvalidOperation)
 		}
 
+		if sub.PauseStatus == types.PauseStatusActive || sub.CancelledAt != nil || (sub.CancelAt != nil && !sub.CancelAt.After(start)) || (sub.EndDate != nil && !sub.EndDate.After(start)) {
+			return ierr.NewError("trial lifecycle changed; refresh the subscription").Mark(ierr.ErrVersionConflict)
+		}
 		_, err = s.subscriptionService.convertTrialToFirstPaidPeriod(txCtx, sub, start)
 		return err
 	})
@@ -237,11 +245,30 @@ func (s *subscriptionModificationService) executeTrialEndModifyDate(
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	sub.TrialEnd = lo.ToPtr(newTrialEnd)
-	// During trialing, CurrentPeriodEnd is aligned with TrialEnd.
-	sub.CurrentPeriodEnd = newTrialEnd
-
-	err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+	if sub == nil || !commitmentTermsDate(newTrialEnd) {
+		return nil, ierr.Validation("trial modification requires a subscription and finite date")
+	}
+	if err := s.subscriptionService.validateSubscriptionLifecycle(ctx, sub.ID); err != nil {
+		return nil, err
+	}
+	nested := sp.DB.TxFromContext(ctx) != nil || sp.BillingTermsStore.InTransaction(ctx)
+	err := sp.DB.WithTx(types.WithForceWriter(ctx), func(txCtx context.Context) error {
+		lifecycle, err := s.subscriptionService.lockSubscriptionLifecycle(txCtx, sub.ID, nested)
+		if err != nil {
+			return err
+		}
+		txCtx = lifecycle.ctx
+		current := lifecycle.current
+		if err := s.validateTrialEndRequest(current, current.ID, &dto.SubModifyTrialEndRequest{Action: dto.TrialEndActionScheduledDate, NewTrialEnd: &newTrialEnd}); err != nil {
+			return err
+		}
+		if current.PauseStatus == types.PauseStatusActive || current.ActivePauseID != nil || current.CancelledAt != nil {
+			return ierr.NewError("trial lifecycle changed; refresh the subscription").Mark(ierr.ErrVersionConflict)
+		}
+		if err := ensureNoPendingCheckoutSession(txCtx, sp, current.ID); err != nil {
+			return err
+		}
+		sub = subscription.NewSubscriptionBuilder(current).WithTrialEnd(&newTrialEnd).WithCurrentPeriodEnd(newTrialEnd).Build()
 		if err := sp.SubRepo.Update(txCtx, sub); err != nil {
 			return err
 		}
@@ -341,8 +368,7 @@ func (s *subscriptionModificationService) cascadeTrialEndModifyToInherited(ctx c
 		return err
 	}
 	for _, child := range children {
-		child.TrialEnd = lo.ToPtr(newTrialEnd)
-		child.CurrentPeriodEnd = newTrialEnd
+		child = subscription.NewSubscriptionBuilder(child).WithTrialEnd(&newTrialEnd).WithCurrentPeriodEnd(newTrialEnd).Build()
 		if err := s.serviceParams.SubRepo.Update(ctx, child); err != nil {
 			return err
 		}

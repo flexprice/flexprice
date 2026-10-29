@@ -224,6 +224,12 @@ type SubscriptionService interface {
 	// Calculate Billing Periods for the subscription
 	CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]dto.Period, error)
 
+	// AdvanceBillingPeriod advances fresh subscription and grouped-child periods under lifecycle guards.
+	AdvanceBillingPeriod(ctx context.Context, subscriptionID string, period dto.Period) ([]*subscription.Subscription, error)
+
+	// CompleteScheduledCancellation applies a due cancellation using fresh guarded subscription state.
+	CompleteScheduledCancellation(ctx context.Context, subscriptionID string, periodEnd time.Time) (bool, error)
+
 	// Create Draft Invoice for the subscription
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error)
 

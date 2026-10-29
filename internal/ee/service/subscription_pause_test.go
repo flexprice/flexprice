@@ -58,7 +58,8 @@ func (s *SubscriptionPauseSuite) SetupTest() {
 	s.params = ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &subscriptionUpdateStore{},
 		RedisCache:                   s.GetRedisCache(),
 		WalletRepo:                   stores.WalletRepo,
 		SubRepo:                      stores.SubscriptionRepo,

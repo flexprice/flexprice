@@ -7,8 +7,8 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // SubscriptionScheduleService handles subscription schedule operations
@@ -460,73 +460,57 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	ctx context.Context,
 	schedule *subscription.SubscriptionSchedule,
 ) error {
-	// Parse the cancellation configuration to get original state
-	config, err := schedule.GetCancellationConfig()
-	if err != nil {
-		return fmt.Errorf("failed to parse cancellation configuration: %w", err)
+	if schedule == nil || schedule.TenantID != types.GetTenantID(ctx) || schedule.EnvironmentID != types.GetEnvironmentID(ctx) {
+		return ierr.Validation("cancellation restoration requires its original tenant and environment")
 	}
-
-	// Enrich context with tenant and environment from the schedule
-	ctx = types.SetTenantID(ctx, schedule.TenantID)
-	ctx = types.SetEnvironmentID(ctx, schedule.EnvironmentID)
-
-	// Get the subscription
-	sub, err := s.SubRepo.Get(ctx, schedule.SubscriptionID)
-	if err != nil {
-		return fmt.Errorf("failed to get subscription: %w", err)
+	subSvc := NewSubscriptionService(s.ServiceParams).(*subscriptionService)
+	if err := subSvc.validateSubscriptionLifecycle(ctx, schedule.SubscriptionID); err != nil {
+		return err
 	}
-
-	s.Logger.Info(ctx, "restoring subscription state after cancellation schedule cancellation",
-		"schedule_id", schedule.ID,
-		"subscription_id", sub.ID,
-		"current_cancel_at_period_end", sub.CancelAtPeriodEnd,
-	)
-
-	// Restore the original state
-	sub.CancelAtPeriodEnd = config.OriginalCancelAtPeriodEnd
-	sub.CancelAt = config.OriginalCancelAt
-	sub.EndDate = config.OriginalEndDate
-	// A subscription can't already have a pending cancellation when a new one is scheduled
-	// (cancelAllPendingSchedules/CancelSubscription's own validation prevent that), so nil is
-	// always the correct prior value here. Without this, CancelledAt (set unconditionally by
-	// updateSubscriptionForCancellation at scheduling time) stays permanently non-nil after a
-	// revert, which later spuriously blocks executePlanChange's cancellation guard.
-	sub.CancelledAt = nil
-	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
-	// Nil-safe: old schedule records without this field are handled gracefully.
-	if config.OriginalCurrentPeriodEnd != nil {
-		originalEnd := lo.FromPtr(config.OriginalCurrentPeriodEnd)
-		if !originalEnd.Equal(sub.CurrentPeriodEnd) {
-			// The open draft was moved to the scheduled date; move it back with the period.
-			if _, err := NewInvoiceService(s.ServiceParams).MoveCycleDraft(ctx, sub, originalEnd,
-				types.InvoiceBillingReasonSubscriptionCycle); err != nil {
-				return fmt.Errorf("failed to restore the open draft's period end: %w", err)
-			}
+	nested := s.DB.TxFromContext(ctx) != nil || s.BillingTermsStore.InTransaction(ctx)
+	return s.DB.WithTx(types.WithForceWriter(ctx), func(tx context.Context) error {
+		lifecycle, err := subSvc.lockSubscriptionLifecycle(tx, schedule.SubscriptionID, nested)
+		if err != nil {
+			return err
 		}
-		sub.CurrentPeriodEnd = originalEnd
-	}
-
-	// Update the subscription
-	if err := s.SubRepo.Update(ctx, sub); err != nil {
-		return fmt.Errorf("failed to restore subscription state: %w", err)
-	}
-
-	s.Logger.Info(ctx, "subscription state restored successfully",
-		"schedule_id", schedule.ID,
-		"subscription_id", sub.ID,
-		"restored_cancel_at_period_end", sub.CancelAtPeriodEnd,
-	)
-
-	// Cascade the reverted state to any inherited (child) subscriptions. CancelSubscription
-	// unconditionally cascades cancellation fields to children at scheduling time
-	// (CascadeCancelToInheritedSubscriptions), so a revert must undo that too — otherwise
-	// children stay stuck with stale CancelAtPeriodEnd/CancelAt/CancelledAt/EndDate and get
-	// wrongly cancelled on their own later. Reuses the same cascade function, called with the
-	// now-reverted parent struct; it's a no-op for non-parent subscriptions.
-	subService := NewSubscriptionService(s.ServiceParams).(*subscriptionService)
-	if err := subService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
-		return fmt.Errorf("failed to cascade reverted state to inherited subscriptions: %w", err)
-	}
-
-	return nil
+		tx = lifecycle.ctx
+		current := lifecycle.current
+		latest, err := s.SubScheduleRepo.Get(tx, schedule.ID)
+		if err != nil {
+			return err
+		}
+		if latest == nil || latest.TenantID != types.GetTenantID(tx) || latest.EnvironmentID != types.GetEnvironmentID(tx) || latest.SubscriptionID != current.ID || latest.ScheduleType != types.SubscriptionScheduleChangeTypeCancellation || latest.Status != types.ScheduleStatusPending || !latest.CanBeCancelled() {
+			return ierr.NewError("cancellation schedule changed; refresh and retry").Mark(ierr.ErrVersionConflict)
+		}
+		if current.SubscriptionStatus == types.SubscriptionStatusCancelled || current.CancelAt == nil || !current.CancelAt.Equal(latest.ScheduledAt) {
+			return ierr.NewError("subscription cancellation changed; refresh and retry").Mark(ierr.ErrVersionConflict)
+		}
+		config, err := latest.GetCancellationConfig()
+		if err != nil {
+			return err
+		}
+		builder := subscription.NewSubscriptionBuilder(current).WithCancelAtPeriodEnd(config.OriginalCancelAtPeriodEnd).
+			WithCancelAt(config.OriginalCancelAt).WithEndDate(config.OriginalEndDate).WithCancelledAt(nil)
+		if config.OriginalCurrentPeriodEnd != nil {
+			originalEnd := *config.OriginalCurrentPeriodEnd
+			if !commitmentTermsDate(originalEnd) || !originalEnd.After(current.CurrentPeriodStart) {
+				return ierr.NewError("subscription period changed; refresh and retry").Mark(ierr.ErrVersionConflict)
+			}
+			if !originalEnd.Equal(current.CurrentPeriodEnd) {
+				if _, err := NewInvoiceService(s.ServiceParams).MoveCycleDraft(tx, current, originalEnd, types.InvoiceBillingReasonSubscriptionCycle); err != nil {
+					return err
+				}
+			}
+			builder.WithCurrentPeriodEnd(originalEnd)
+		}
+		restored := builder.Build()
+		if err := s.SubRepo.Update(tx, restored); err != nil {
+			return err
+		}
+		if err := subSvc.cascadeCancellation(tx, restored, lifecycle.children); err != nil {
+			return err
+		}
+		s.Logger.Info(tx, "restored subscription cancellation state", "subscription_id", current.ID, "schedule_id", latest.ID)
+		return nil
+	})
 }
