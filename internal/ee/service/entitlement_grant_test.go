@@ -2107,6 +2107,21 @@ func (s *EntitlementGrantSuite) TestSubscriptionOverride_GrantQuotaWinsOverUsage
 	rows := s.subScopedRows(sub)
 	s.Require().Len(rows, 1)
 	s.Equal("250", lo.FromPtr(rows[0].GrantQuota).String())
+	s.Nil(rows[0].UsageLimit, "no conflicting legacy limit is stored next to the quota")
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionOverride_UsageLimitNeverBecomesAnAmountQuota() {
+	sub, ec := s.grantOverrideFixture("amount")
+	subSvc := NewSubscriptionService(s.buildServiceParams()).(*subscriptionService)
+
+	s.NoError(subSvc.ProcessSubscriptionEntitlementOverrides(s.GetContext(), sub, []dto.OverrideEntitlementRequest{
+		{EntitlementID: ec.ID, UsageLimit: lo.ToPtr(int64(50))},
+	}))
+
+	rows := s.subScopedRows(sub)
+	s.Require().Len(rows, 1)
+	s.Equal(lo.FromPtr(ec.GrantQuota).String(), lo.FromPtr(rows[0].GrantQuota).String(), "a count is not a currency amount")
+	s.Nil(rows[0].UsageLimit)
 }
 
 func (s *EntitlementGrantSuite) TestSubscriptionOverride_OverridesGrantQuota() {
