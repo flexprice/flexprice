@@ -256,12 +256,13 @@ type GetSubscriptionMeterUsageRequest struct {
 	ForceApplyCommitment bool
 }
 
-// dateRangeGroup is the key used to batch standard-meter queries that share
-// the same effective time range and aggregation type.
+// dateRangeGroup batches usage queries with the same period and aggregation settings.
 type dateRangeGroup struct {
-	Start   time.Time
-	End     time.Time
-	AggType types.AggregationType
+	Start      time.Time
+	End        time.Time
+	AggType    types.AggregationType
+	BucketSize types.WindowSize
+	GroupBy    string
 }
 
 // lineItemWithMeter pairs a line item with its meter ID for grouping.
@@ -2661,6 +2662,20 @@ func (s *meterUsageService) wholeLineTotals(
 		return totals, commitments, nil
 	}
 
+	var fullCharges map[string][]*dto.SubscriptionUsageByMetersResponse
+	if filtered {
+		fullCharges = make(map[string][]*dto.SubscriptionUsageByMetersResponse, len(charges))
+		for lineID, selected := range charges {
+			charge := *selected[0]
+			fullCharges[lineID] = []*dto.SubscriptionUsageByMetersResponse{&charge}
+		}
+		unfiltered := *params
+		unfiltered.PropertyFilters, unfiltered.Sources = nil, nil
+		if err := s.queryWholeLineCharges(ctx, usage, fullCharges, &unfiltered, billingAnchor, end); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// A legacy commitment that still fires on the combos keeps pricing them; one the group_by skips leaves them plain.
 	legacyFires := !filtered && (!hasUserBucketedGroupBy(params.GroupBy) || params.ForceApplyCommitment)
 	priceService := NewPriceService(s.ServiceParams)
@@ -2673,12 +2688,7 @@ func (s *meterUsageService) wholeLineTotals(
 		charge, m := lineCharges[0], usage.MeterMap[item.MeterID]
 		selectedQuantity := charge.QuantityDecimal()
 		if filtered {
-			unfiltered := *params
-			unfiltered.PropertyFilters, unfiltered.Sources = nil, nil
-			charge, err = s.wholeLineCharge(ctx, usage, item, nil, &unfiltered, billingAnchor, end)
-			if err != nil {
-				return nil, nil, err
-			}
+			charge = fullCharges[item.ID][0]
 		}
 
 		fullQuantity := charge.QuantityDecimal()
@@ -2720,89 +2730,103 @@ func (s *meterUsageService) wholeLineCharges(
 	)
 
 	charges := make(map[string][]*dto.SubscriptionUsageByMetersResponse, len(combosByLine))
+	pending := make(map[string][]*dto.SubscriptionUsageByMetersResponse)
 	for lineID, combos := range combosByLine {
-		charge, err := s.wholeLineCharge(ctx, usage, combos[0].LineItem, combos, params, billingAnchor, end)
-		if err != nil {
-			return nil, err
+		p, m := combos[0].Price, combos[0].Meter
+		charge := &dto.SubscriptionUsageByMetersResponse{
+			SubscriptionLineItemID: lineID, MeterID: m.ID, Price: p, Currency: p.Currency,
 		}
-
 		charges[lineID] = []*dto.SubscriptionUsageByMetersResponse{charge}
+
+		switch {
+		case price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m):
+			if combos[0].BucketedResult != nil {
+				charge.BucketedUsageResult = combos[0].BucketedResult
+				charge.SetQuantityDecimal(charge.BucketedUsageResult.Value)
+			} else if lo.SomeBy(combos, func(lu *LineItemMeterUsage) bool { return lu.EventCount > 0 || !lu.Usage.IsZero() }) {
+				pending[lineID] = charges[lineID]
+			} else {
+				charge.BucketedUsageResult = &events.AggregationResult{}
+			}
+		case len(combos) > 1 && !m.Aggregation.Type.Additive():
+			pending[lineID] = charges[lineID]
+		default:
+			quantity := decimal.Zero
+			for _, lu := range combos {
+				quantity = quantity.Add(lu.Usage)
+			}
+			charge.SetQuantityDecimal(quantity)
+		}
 	}
 
+	if err := s.queryWholeLineCharges(ctx, usage, pending, params, billingAnchor, end); err != nil {
+		return nil, err
+	}
 	return charges, nil
 }
 
-// wholeLineCharge returns the line's whole usage in the window as one charge: the sum of its combos when the aggregation
-// adds across them, else a read of the line; bucketed lines carry their per-bucket usage. A line without combos is read.
-func (s *meterUsageService) wholeLineCharge(
+// queryWholeLineCharges batches reads with matching periods and billing aggregation settings.
+// Separate analytics reads are eventually consistent while events are being ingested.
+func (s *meterUsageService) queryWholeLineCharges(
 	ctx context.Context,
 	usage *SubscriptionMeterUsage,
-	item *subscription.SubscriptionLineItem,
-	combos []*LineItemMeterUsage,
+	charges map[string][]*dto.SubscriptionUsageByMetersResponse,
 	params *events.MeterUsageDetailedAnalyticsParams,
 	billingAnchor *time.Time,
 	end time.Time,
-) (*dto.SubscriptionUsageByMetersResponse, error) {
-	p, m := usage.PriceMap[item.PriceID], usage.MeterMap[item.MeterID]
-	from, to := item.GetPeriodStart(params.StartTime), item.GetPeriodEnd(end)
-	charge := &dto.SubscriptionUsageByMetersResponse{
-		SubscriptionLineItemID: item.ID,
-		MeterID:                item.MeterID,
-		Price:                  p,
-		Currency:               p.Currency,
+) error {
+	groups := make(map[dateRangeGroup][]*dto.SubscriptionUsageByMetersResponse)
+	for _, item := range usage.Subscription.LineItems {
+		if len(charges[item.ID]) == 0 {
+			continue
+		}
+		charge := charges[item.ID][0]
+		m := usage.MeterMap[item.MeterID]
+		group := dateRangeGroup{
+			Start: item.GetPeriodStart(params.StartTime), End: item.GetPeriodEnd(end), AggType: m.Aggregation.Type,
+		}
+		if price.IsBucketedMax(charge.Price, m) || price.IsBucketedSum(charge.Price, m) {
+			group.BucketSize = price.ResolveBucketSize(charge.Price, m)
+			group.GroupBy = price.BucketedGroupBy(charge.Price, m)
+		}
+		groups[group] = append(groups[group], charge)
 	}
 
-	if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
-		// Fanned-out combos carry no line-level buckets, so the line is read whole; a line with no events reads nothing.
-		hasEvents := lo.SomeBy(combos, func(lu *LineItemMeterUsage) bool { return lu.EventCount > 0 || !lu.Usage.IsZero() })
-		var result *events.AggregationResult
-		switch {
-		case len(combos) > 0 && combos[0].BucketedResult != nil:
-			result = combos[0].BucketedResult
-		case len(combos) > 0 && !hasEvents:
-			result = &events.AggregationResult{}
-		default:
-			var err error
-			result, err = s.queryBucketedMeterUsage(
-				ctx, m, p, usage.ExternalCustomerIDs, from, to, billingAnchor, params.UseFinal, params.PropertyFilters, params.Sources, false,
-			)
-			if err != nil {
-				return nil, err
+	for group, batch := range groups {
+		meterIDs := lo.Uniq(lo.Map(batch, func(charge *dto.SubscriptionUsageByMetersResponse, _ int) string { return charge.MeterID }))
+		query := &events.MeterUsageQueryParams{
+			TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: usage.ExternalCustomerIDs, MeterIDs: meterIDs,
+			StartTime: group.Start, EndTime: group.End, AggregationType: group.AggType,
+			WindowSize: group.BucketSize, BillingAnchor: billingAnchor, UseFinal: params.UseFinal,
+			PropertyFilters: params.PropertyFilters, Sources: params.Sources,
+		}
+		if group.GroupBy != "" {
+			query.GroupBy = []string{"properties." + group.GroupBy}
+		}
+		results, err := s.repo.GetUsageMultiMeter(ctx, query)
+		if err != nil {
+			return err
+		}
+		byMeter := lo.KeyBy(results, func(result *events.MeterUsageAggregationResult) string { return result.MeterID })
+		for _, charge := range batch {
+			result := byMeter[charge.MeterID]
+			if result == nil {
+				result = &events.MeterUsageAggregationResult{}
+			}
+			charge.SetQuantityDecimal(result.TotalValue)
+			if group.BucketSize == "" {
+				continue
+			}
+			charge.BucketedUsageResult = &events.AggregationResult{
+				Type: group.AggType, MeterID: charge.MeterID, Value: result.TotalValue, EventCount: result.EventCount,
+				Results: lo.Map(result.Points, func(point events.MeterUsageResult, _ int) events.UsageResult {
+					return events.UsageResult{WindowSize: point.WindowStart, Value: point.Value, EventCount: point.EventCount}
+				}),
 			}
 		}
-
-		charge.BucketedUsageResult = result
-		charge.SetQuantityDecimal(result.Value)
-		return charge, nil
 	}
-
-	quantity := decimal.Zero
-	for _, lu := range combos {
-		quantity = quantity.Add(lu.Usage)
-	}
-
-	if len(combos) == 0 || (len(combos) > 1 && !m.Aggregation.Type.Additive()) {
-		result, err := s.repo.GetUsage(ctx, &events.MeterUsageQueryParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: usage.ExternalCustomerIDs,
-			MeterID:             item.MeterID,
-			StartTime:           from,
-			EndTime:             to,
-			AggregationType:     m.Aggregation.Type,
-			UseFinal:            params.UseFinal,
-			PropertyFilters:     params.PropertyFilters,
-			Sources:             params.Sources,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		quantity = result.TotalValue
-	}
-
-	charge.SetQuantityDecimal(quantity)
-	return charge, nil
+	return nil
 }
 
 // commitmentLineBreakdowns prices the v2 commitments covering the window as its invoice would and returns each covered
@@ -2840,18 +2864,21 @@ func (s *meterUsageService) commitmentLineBreakdowns(
 
 	// A meter filter leaves out scope lines the commitments share; they are read whole into the loader's charges so the
 	// commitments price their whole scope, and get no rows.
+	missing := make(map[string][]*dto.SubscriptionUsageByMetersResponse)
 	for _, item := range scopeLines {
 		if isQueried(item) || usage.PriceMap[item.PriceID] == nil || usage.MeterMap[item.MeterID] == nil {
 			continue
 		}
 
-		charge, err := s.wholeLineCharge(ctx, usage, item, nil, params, billingAnchor, end)
-		if err != nil {
-			return nil, err
-		}
-
-		charges[item.ID] = []*dto.SubscriptionUsageByMetersResponse{charge}
+		p := usage.PriceMap[item.PriceID]
+		missing[item.ID] = []*dto.SubscriptionUsageByMetersResponse{{
+			SubscriptionLineItemID: item.ID, MeterID: item.MeterID, Price: p, Currency: p.Currency,
+		}}
 	}
+	if err := s.queryWholeLineCharges(ctx, usage, missing, params, billingAnchor, end); err != nil {
+		return nil, err
+	}
+	maps.Copy(charges, missing)
 
 	lines, _, err := loader.InvoiceLines(ctx)
 	if err != nil {

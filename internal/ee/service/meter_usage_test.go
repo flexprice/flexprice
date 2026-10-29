@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -6137,5 +6138,76 @@ func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesChar
 			s.Require().Len(resp.Items[0].Points, 2)
 			s.True(resp.Items[0].Points[0].Cost.Add(resp.Items[0].Points[1].Cost).Equal(resp.TotalCost))
 		}
+	}
+}
+
+func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatchedReads() {
+	for _, tt := range []struct {
+		name        string
+		aggregation types.AggregationType
+		bucket      types.WindowSize
+		groupBy     string
+		selected    string
+		wantCost    string
+		wantReads   int
+	}{
+		{name: "sum", aggregation: types.AggregationSum, selected: "150", wantCost: "183.3333333333333333", wantReads: 1},
+		{name: "max", aggregation: types.AggregationMax, selected: "90", wantCost: "140", wantReads: 1},
+		{name: "bucketed_sum", aggregation: types.AggregationSum, bucket: types.WindowSizeDay, selected: "150", wantCost: "183.3333333333333333", wantReads: 2},
+		{name: "bucketed_max", aggregation: types.AggregationMax, bucket: types.WindowSizeDay, selected: "90", wantCost: "140", wantReads: 2},
+		{name: "grouped_bucketed_max", aggregation: types.AggregationMax, bucket: types.WindowSizeDay, groupBy: "instance", selected: "150", wantCost: "250", wantReads: 2},
+	} {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			usage := &SubscriptionMeterUsage{
+				Subscription:        &subscription.Subscription{},
+				ExternalCustomerIDs: []string{s.customer.ExternalID},
+				MeterMap:            make(map[string]*meter.Meter), PriceMap: make(map[string]*price.Price),
+			}
+			for i := 0; i < 1000; i++ {
+				id := tt.name + "_" + strconv.Itoa(i)
+				m := &meter.Meter{
+					ID:          "meter_" + id,
+					Aggregation: meter.Aggregation{Type: tt.aggregation, BucketSize: tt.bucket, GroupBy: tt.groupBy},
+				}
+				p := &price.Price{
+					ID: "price_" + id, MeterID: m.ID, Currency: "usd",
+					BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
+					Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
+				}
+				li := &subscription.SubscriptionLineItem{
+					ID: "li_" + id, MeterID: m.ID, PriceID: p.ID,
+					StartDate: s.periodStart, EndDate: s.periodEnd,
+				}
+				usage.Subscription.LineItems = append(usage.Subscription.LineItems, li)
+				usage.MeterMap[m.ID], usage.PriceMap[p.ID] = m, p
+				usage.LineItemUsages = append(usage.LineItemUsages, &LineItemMeterUsage{
+					LineItem: li, Meter: m, Price: p, Usage: dec(tt.selected), EventCount: 2,
+				})
+				for j, quantity := range []float64{60, 90, 120, 180} {
+					source := "selected"
+					if j >= 2 {
+						source = "excluded"
+					}
+					s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, source,
+						s.periodStart.Add(time.Hour), quantity, map[string]interface{}{"instance": strconv.Itoa(j % 2)})
+				}
+			}
+
+			repo := &countingMeterUsageRepo{MeterUsageRepository: s.meterUsageRepo}
+			params := fullServiceParams(&s.BaseServiceTestSuite)
+			params.MeterUsageRepo = repo
+			svc := NewMeterUsageService(params).(*meterUsageService)
+			totals, commitments, err := svc.wholeLineTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
+				StartTime: s.periodStart, EndTime: s.periodEnd, Sources: []string{"selected"}, GroupBy: []string{"source"},
+			}, &s.periodStart, s.periodEnd)
+			s.Require().NoError(err)
+			s.Empty(commitments)
+			s.Require().Len(totals, 1000)
+			s.Equal(tt.wantReads, repo.reads, "allocation reads must be per batch, not per line")
+			for _, total := range totals {
+				s.True(total.Equal(dec(tt.wantCost)), "cost %s, want %s", total, tt.wantCost)
+			}
+		})
 	}
 }

@@ -390,7 +390,26 @@ func (s *InMemoryMeterUsageStore) GetUsage(_ context.Context, params *events.Met
 	return result, nil
 }
 
-func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+	if params.WindowSize != "" && len(params.GroupBy) > 0 {
+		var results []*events.MeterUsageAggregationResult
+		for _, meterID := range params.MeterIDs {
+			query := *params
+			query.MeterID, query.MeterIDs = meterID, nil
+			bucketed, err := s.GetUsageForBucketedMeters(ctx, &query)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, &events.MeterUsageAggregationResult{
+				MeterID: meterID, AggregationType: params.AggregationType,
+				TotalValue: bucketed.Value, EventCount: bucketed.EventCount,
+				Points: lo.Map(bucketed.Results, func(point events.UsageResult, _ int) events.MeterUsageResult {
+					return events.MeterUsageResult{WindowStart: point.WindowSize, Value: point.Value, EventCount: point.EventCount}
+				}),
+			})
+		}
+		return results, nil
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

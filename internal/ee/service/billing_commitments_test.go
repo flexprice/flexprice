@@ -210,6 +210,11 @@ type countingMeterUsageRepo struct {
 	reads int
 }
 
+func (r *countingMeterUsageRepo) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+	r.reads++
+	return r.MeterUsageRepository.GetUsageMultiMeter(ctx, params)
+}
+
 func (r *countingMeterUsageRepo) GetUsage(
 	ctx context.Context,
 	params *events.MeterUsageQueryParams,

@@ -332,6 +332,9 @@ func (r *MeterUsageRepository) executeMultiMeterWindowedQuery(ctx context.Contex
 		res.EventCount += point.EventCount
 		res.Points = append(res.Points, point)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Error iterating meter_usage multi-meter window rows").Mark(ierr.ErrDatabase)
+	}
 
 	results := make([]*events.MeterUsageAggregationResult, 0, len(meterResults))
 	for _, res := range meterResults {
@@ -361,6 +364,9 @@ func (r *MeterUsageRepository) executeMultiMeterScalarQuery(ctx context.Context,
 			TotalValue:      value,
 			EventCount:      eventCount,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Error iterating meter_usage multi-meter rows").Mark(ierr.ErrDatabase)
 	}
 
 	return results, nil
