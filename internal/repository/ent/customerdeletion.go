@@ -201,6 +201,33 @@ func (r *CustomerDeletionRepository) GetByExternalID(ctx context.Context, extern
 	return domaincd.FromEnt(request), nil
 }
 
+// IsExternalIDRetired reports permanent, never-reusable retirement
+func (r *CustomerDeletionRepository) IsExternalIDRetired(ctx context.Context, externalID string) (bool, error) {
+	if externalID == "" {
+		return false, nil
+	}
+
+	retired, err := r.client.Reader(ctx).CustomerDeletionRequest.
+		Query().
+		Where(
+			customerdeletionrequest.ExternalID(externalID),
+			customerdeletionrequest.TenantID(types.GetTenantID(ctx)),
+			customerdeletionrequest.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Exist(ctx)
+
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Failed to check the external ID retirement registry").
+			WithReportableDetails(map[string]any{
+				"external_id": externalID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return retired, nil
+}
+
 // ListCategories retrieves the category rows of a request
 func (r *CustomerDeletionRepository) ListCategories(ctx context.Context, requestID string) ([]*domaincd.CustomerDeletionCategory, error) {
 	client := r.client.Reader(ctx)

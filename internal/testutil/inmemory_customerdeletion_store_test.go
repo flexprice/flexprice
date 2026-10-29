@@ -45,6 +45,53 @@ func newSuppressedRequest(ctx context.Context, id, customerID, externalID string
 	return request, categories
 }
 
+func TestInMemoryCustomerDeletionStore_IsExternalIDRetired(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "acme-1")
+	require.NoError(t, store.Create(ctx, request, categories))
+
+	retired, err := store.IsExternalIDRetired(ctx, "acme-1")
+	require.NoError(t, err)
+	assert.True(t, retired)
+
+	retired, err = store.IsExternalIDRetired(ctx, "acme-2")
+	require.NoError(t, err)
+	assert.False(t, retired)
+
+	retired, err = store.IsExternalIDRetired(ctx, "")
+	require.NoError(t, err)
+	assert.False(t, retired)
+
+	retired, err = store.IsExternalIDRetired(deletionCtx("tenant_b", "env_sandbox"), "acme-1")
+	require.NoError(t, err)
+	assert.False(t, retired, "retirement must not leak across tenants")
+
+	retired, err = store.IsExternalIDRetired(deletionCtx("tenant_a", "env_prod"), "acme-1")
+	require.NoError(t, err)
+	assert.False(t, retired, "retirement must not leak across environments")
+}
+
+func TestInMemoryCustomerDeletionStore_LookupSurvivesRetirement(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_a")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "acme-1")
+	require.NoError(t, store.Create(ctx, request, categories))
+
+	got, err := store.GetByExternalID(ctx, "acme-1")
+	require.NoError(t, err)
+	assert.Equal(t, "cdr_1", got.ID)
+	assert.Equal(t, customerdeletion.StateSuppressed, got.State)
+
+	cats, err := store.ListCategories(ctx, got.ID)
+	require.NoError(t, err)
+	require.Len(t, cats, 1)
+	assert.Equal(t, customerdeletion.CategoryCustomerPG, cats[0].Category)
+	assert.Equal(t, customerdeletion.DispositionPending, cats[0].Disposition)
+}
+
 func TestInMemoryCustomerDeletionStore_CreateAndRead(t *testing.T) {
 	ctx := deletionCtx("tenant_a", "env_a")
 	store := NewInMemoryCustomerDeletionStore()

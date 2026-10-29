@@ -35,6 +35,10 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	cust := req.ToCustomer(ctx)
 
+	if err := s.rejectRetiredExternalID(ctx, cust.ExternalID); err != nil {
+		return nil, err
+	}
+
 	// Validate address fields
 	if err := customer.ValidateAddress(cust); err != nil {
 		return nil, ierr.WithError(err).
@@ -111,6 +115,29 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	}
 
 	return &dto.CustomerResponse{Customer: cust}, nil
+}
+
+// Customer unique index is partial; only the registry refuses
+func (s *customerService) rejectRetiredExternalID(ctx context.Context, externalID string) error {
+	if s.CustomerDeletionRepo == nil || externalID == "" {
+		return nil
+	}
+
+	retired, err := s.CustomerDeletionRepo.IsExternalIDRetired(ctx, externalID)
+	if err != nil {
+		return err
+	}
+	if !retired {
+		return nil
+	}
+
+	return ierr.NewError("external ID is permanently retired").
+		WithHintf("External ID %s was subject to a customer deletion request and can never identify a customer again. Choose a different external ID.", externalID).
+		WithReportableDetails(map[string]any{
+			"external_id": externalID,
+			"reason":      "retired",
+		}).
+		Mark(ierr.ErrAlreadyExists)
 }
 
 func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.CustomerResponse, error) {
@@ -225,6 +252,9 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 
 	// Update basic fields
 	if req.ExternalID != nil && *req.ExternalID != cust.ExternalID {
+		if err := s.rejectRetiredExternalID(ctx, *req.ExternalID); err != nil {
+			return nil, err
+		}
 		cust.ExternalID = *req.ExternalID
 		oldExternalIDs, ok := cust.Metadata["old_external_ids"]
 		if !ok {

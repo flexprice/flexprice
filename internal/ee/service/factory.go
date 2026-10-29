@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/customerdeletion"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -158,6 +159,7 @@ type ServiceParams struct {
 	JournalService               journalsvc.JournalService
 	EventDeletionRequestRepo     events.DeletionRequestRepository
 	EventDeletionLogRepo         events.DeletedEventsLogRepository
+	CustomerDeletionRepo         customerdeletion.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -282,6 +284,7 @@ func NewServiceParams(
 	journalService journalsvc.JournalService,
 	eventDeletionRequestRepo events.DeletionRequestRepository,
 	eventDeletionLogRepo events.DeletedEventsLogRepository,
+	customerDeletionRepo customerdeletion.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -370,5 +373,6 @@ func NewServiceParams(
 		JournalService:               journalService,
 		EventDeletionRequestRepo:     eventDeletionRequestRepo,
 		EventDeletionLogRepo:         eventDeletionLogRepo,
+		CustomerDeletionRepo:         customerDeletionRepo,
 	}
 }

@@ -144,6 +144,21 @@ func (s *InMemoryCustomerDeletionStore) GetByExternalID(ctx context.Context, ext
 	}, "external_id", externalID)
 }
 
+func (s *InMemoryCustomerDeletionStore) IsExternalIDRetired(ctx context.Context, externalID string) (bool, error) {
+	if externalID == "" {
+		return false, nil
+	}
+
+	items, err := s.requests.List(ctx, nil, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest, _ interface{}) bool {
+		return deletionScoped(ctx, r.TenantID, r.EnvironmentID) && r.ExternalID == externalID
+	}, nil)
+	if err != nil {
+		return false, err
+	}
+
+	return len(items) > 0, nil
+}
+
 func (s *InMemoryCustomerDeletionStore) getBy(ctx context.Context, match func(context.Context, *customerdeletion.CustomerDeletionRequest) bool, key, value string) (*customerdeletion.CustomerDeletionRequest, error) {
 	items, err := s.requests.List(ctx, nil, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest, _ interface{}) bool {
 		return deletionScoped(ctx, r.TenantID, r.EnvironmentID) && match(ctx, r)
