@@ -43,6 +43,8 @@ const (
 	FieldPlanDisplayName = "plan_display_name"
 	// FieldPriceID holds the string denoting the price_id field in the database.
 	FieldPriceID = "price_id"
+	// FieldBillingScheduleItemID holds the string denoting the billing_schedule_item_id field in the database.
+	FieldBillingScheduleItemID = "billing_schedule_item_id"
 	// FieldPriceType holds the string denoting the price_type field in the database.
 	FieldPriceType = "price_type"
 	// FieldMeterID holds the string denoting the meter_id field in the database.
@@ -89,12 +91,21 @@ const (
 	FieldCustomCurrency = "custom_currency"
 	// FieldFxConversion holds the string denoting the fx_conversion field in the database.
 	FieldFxConversion = "fx_conversion"
+	// EdgeBillingScheduleItem holds the string denoting the billing_schedule_item edge name in mutations.
+	EdgeBillingScheduleItem = "billing_schedule_item"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
 	EdgeCouponApplications = "coupon_applications"
 	// Table holds the table name of the invoicelineitem in the database.
 	Table = "invoice_line_items"
+	// BillingScheduleItemTable is the table that holds the billing_schedule_item relation/edge.
+	BillingScheduleItemTable = "invoice_line_items"
+	// BillingScheduleItemInverseTable is the table name for the BillingScheduleItem entity.
+	// It exists in this package in order to avoid circular dependency with the "billingscheduleitem" package.
+	BillingScheduleItemInverseTable = "billing_schedule_items"
+	// BillingScheduleItemColumn is the table column denoting the billing_schedule_item relation/edge.
+	BillingScheduleItemColumn = "billing_schedule_item_id"
 	// InvoiceTable is the table that holds the invoice relation/edge.
 	InvoiceTable = "invoice_line_items"
 	// InvoiceInverseTable is the table name for the Invoice entity.
@@ -128,6 +139,7 @@ var Columns = []string{
 	FieldEntityType,
 	FieldPlanDisplayName,
 	FieldPriceID,
+	FieldBillingScheduleItemID,
 	FieldPriceType,
 	FieldMeterID,
 	FieldMeterDisplayName,
@@ -272,6 +284,11 @@ func ByPriceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceID, opts...).ToFunc()
 }
 
+// ByBillingScheduleItemID orders the results by the billing_schedule_item_id field.
+func ByBillingScheduleItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingScheduleItemID, opts...).ToFunc()
+}
+
 // ByPriceType orders the results by the price_type field.
 func ByPriceType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceType, opts...).ToFunc()
@@ -367,6 +384,13 @@ func ByParentLineItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentLineItemID, opts...).ToFunc()
 }
 
+// ByBillingScheduleItemField orders the results by billing_schedule_item field.
+func ByBillingScheduleItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBillingScheduleItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByInvoiceField orders the results by invoice field.
 func ByInvoiceField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -386,6 +410,13 @@ func ByCouponApplications(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOptio
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newCouponApplicationsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newBillingScheduleItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BillingScheduleItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, true, BillingScheduleItemTable, BillingScheduleItemColumn),
+	)
 }
 func newInvoiceStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

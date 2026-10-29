@@ -264,6 +264,85 @@ var (
 			},
 		},
 	}
+	// BillingScheduleItemsColumns holds the columns for the "billing_schedule_items" table.
+	BillingScheduleItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "owner_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "owner_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "kind", Type: field.TypeString, Default: "charge", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "bill_trigger", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "bill_on", Type: field.TypeTime, Nullable: true},
+		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "description", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "service_period_start", Type: field.TypeTime},
+		{Name: "service_period_end", Type: field.TypeTime},
+		{Name: "delivery", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "schedule_status", Type: field.TypeString, Default: "scheduled", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "invoice_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "cancellation_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "billing_term_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// BillingScheduleItemsTable holds the schema information for the "billing_schedule_items" table.
+	BillingScheduleItemsTable = &schema.Table{
+		Name:       "billing_schedule_items",
+		Columns:    BillingScheduleItemsColumns,
+		PrimaryKey: []*schema.Column{BillingScheduleItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "billing_schedule_items_billing_terms_schedule_items",
+				Columns:    []*schema.Column{BillingScheduleItemsColumns[26]},
+				RefColumns: []*schema.Column{BillingTermsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_owner_type_owner_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[8], BillingScheduleItemsColumns[9], BillingScheduleItemsColumns[2]},
+			},
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_status_schedule_status_delivery_bill_on_id",
+				Unique:  false,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[2], BillingScheduleItemsColumns[21], BillingScheduleItemsColumns[20], BillingScheduleItemsColumns[15], BillingScheduleItemsColumns[0]},
+			},
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_billing_term_id",
+				Unique:  false,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[26]},
+			},
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_invoice_id",
+				Unique:  false,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[22]},
+			},
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_owner_type_owner_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[8], BillingScheduleItemsColumns[9], BillingScheduleItemsColumns[3], BillingScheduleItemsColumns[0]},
+			},
+			{
+				Name:    "billingscheduleitem_tenant_id_environment_id_invoice_line_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{BillingScheduleItemsColumns[1], BillingScheduleItemsColumns[7], BillingScheduleItemsColumns[23]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(invoice_line_item_id IS NOT NULL)",
+				},
+			},
+		},
+	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
 	BillingSequencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -283,6 +362,50 @@ var (
 				Name:    "billingsequence_tenant_id_subscription_id",
 				Unique:  true,
 				Columns: []*schema.Column{BillingSequencesColumns[1], BillingSequencesColumns[2]},
+			},
+		},
+	}
+	// BillingTermsColumns holds the columns for the "billing_terms" table.
+	BillingTermsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "owner_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "owner_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "kind", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "value_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "value", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "bill_on", Type: field.TypeTime, Nullable: true},
+		{Name: "on_trigger", Type: field.TypeBool, Default: false},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "interval", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "interval_count", Type: field.TypeInt, Nullable: true},
+		{Name: "bill_at", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "split", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// BillingTermsTable holds the schema information for the "billing_terms" table.
+	BillingTermsTable = &schema.Table{
+		Name:       "billing_terms",
+		Columns:    BillingTermsColumns,
+		PrimaryKey: []*schema.Column{BillingTermsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "billingterm_tenant_id_environment_id_owner_type_owner_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{BillingTermsColumns[1], BillingTermsColumns[7], BillingTermsColumns[8], BillingTermsColumns[9], BillingTermsColumns[2]},
+			},
+			{
+				Name:    "billingterm_tenant_id_environment_id_owner_type_owner_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{BillingTermsColumns[1], BillingTermsColumns[7], BillingTermsColumns[8], BillingTermsColumns[9], BillingTermsColumns[3], BillingTermsColumns[0]},
 			},
 		},
 	}
@@ -1555,6 +1678,11 @@ var (
 		PrimaryKey: []*schema.Column{InvoicesColumns[0]},
 		Indexes: []*schema.Index{
 			{
+				Name:    "invoice_tenant_id_environment_id_recalculated_invoice_id",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[44]},
+			},
+			{
 				Name:    "idx_tenant_customer_status",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[8], InvoicesColumns[12], InvoicesColumns[13], InvoicesColumns[2]},
@@ -1650,6 +1778,7 @@ var (
 		{Name: "parent_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "custom_currency", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "fx_conversion", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "billing_schedule_item_id", Type: field.TypeString, Unique: true, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// InvoiceLineItemsTable holds the schema information for the "invoice_line_items" table.
@@ -1659,8 +1788,14 @@ var (
 		PrimaryKey: []*schema.Column{InvoiceLineItemsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "invoice_line_items_invoices_line_items",
+				Symbol:     "invoice_line_items_billing_schedule_items_source_line",
 				Columns:    []*schema.Column{InvoiceLineItemsColumns[37]},
+				RefColumns: []*schema.Column{BillingScheduleItemsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "invoice_line_items_invoices_line_items",
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[38]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1669,7 +1804,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[37], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[38], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_customer_id_status",
@@ -3465,7 +3600,9 @@ var (
 		AlertSettingsTable,
 		AnalyticsViewsTable,
 		AuthsTable,
+		BillingScheduleItemsTable,
 		BillingSequencesTable,
+		BillingTermsTable,
 		CheckoutSessionsTable,
 		CommitmentsTable,
 		ConnectionsTable,
@@ -3532,6 +3669,24 @@ var (
 )
 
 func init() {
+	BillingScheduleItemsTable.ForeignKeys[0].RefTable = BillingTermsTable
+	BillingScheduleItemsTable.Annotation = &entsql.Annotation{}
+	BillingScheduleItemsTable.Annotation.Checks = map[string]string{
+		"billing_schedule_items_amount":         "amount > 0",
+		"billing_schedule_items_cancellation":   "(schedule_status = 'canceled' AND cancellation_reason IS NOT NULL AND cancellation_reason IN ('terms_amended', 'invoice_voided', 'termination')) OR (schedule_status != 'canceled' AND cancellation_reason IS NULL)",
+		"billing_schedule_items_delivery":       "delivery IN ('subscription_invoice', 'separate_invoice') AND (delivery != 'subscription_invoice' OR subscription_id IS NOT NULL)",
+		"billing_schedule_items_kind":           "kind IN ('charge', 'settlement') AND (kind = 'settlement' OR billing_term_id IS NOT NULL)",
+		"billing_schedule_items_service_period": "service_period_start < service_period_end",
+		"billing_schedule_items_state":          "schedule_status IN ('scheduled', 'invoiced', 'canceled') AND ((invoice_id IS NULL AND invoice_line_item_id IS NULL) OR (invoice_id IS NOT NULL AND invoice_line_item_id IS NOT NULL)) AND (schedule_status != 'scheduled' OR invoice_id IS NULL) AND (schedule_status != 'invoiced' OR invoice_id IS NOT NULL)",
+		"billing_schedule_items_trigger":        "bill_trigger IN ('on_date', 'manual') AND (bill_trigger = 'manual' OR bill_on IS NOT NULL)",
+	}
+	BillingTermsTable.Annotation = &entsql.Annotation{}
+	BillingTermsTable.Annotation.Checks = map[string]string{
+		"billing_terms_kind":       "kind IN ('once', 'recurring')",
+		"billing_terms_shape":      "(kind = 'once' AND ((on_trigger AND bill_on IS NULL) OR (NOT on_trigger AND bill_on IS NOT NULL)) AND start_date IS NULL AND end_date IS NULL AND \"interval\" IS NULL AND interval_count IS NULL AND bill_at IS NULL AND split IS NULL) OR (kind = 'recurring' AND NOT on_trigger AND bill_on IS NULL AND start_date IS NOT NULL AND end_date IS NOT NULL AND start_date < end_date AND \"interval\" IS NOT NULL AND \"interval\" IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'HALF_YEARLY', 'ANNUAL') AND interval_count IS NOT NULL AND interval_count > 0 AND bill_at IS NOT NULL AND bill_at IN ('advance', 'arrear') AND ((value_type = 'fixed' AND split IS NULL) OR (value_type = 'remainder' AND split IS NOT NULL AND split IN ('even', 'proportional'))))",
+		"billing_terms_value":      "(value_type = 'fixed' AND value IS NOT NULL AND value > 0) OR (value_type = 'remainder' AND value IS NULL)",
+		"billing_terms_value_type": "value_type IN ('fixed', 'remainder')",
+	}
 	CostsheetsTable.ForeignKeys[0].RefTable = PricesTable
 	CouponApplicationsTable.ForeignKeys[0].RefTable = CouponsTable
 	CouponApplicationsTable.ForeignKeys[1].RefTable = InvoicesTable
@@ -3545,7 +3700,8 @@ func init() {
 	CreditGrantsTable.ForeignKeys[2].RefTable = SubscriptionsTable
 	CreditNoteLineItemsTable.ForeignKeys[0].RefTable = CreditNotesTable
 	EntitlementsTable.ForeignKeys[0].RefTable = AddonsTable
-	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
+	InvoiceLineItemsTable.ForeignKeys[0].RefTable = BillingScheduleItemsTable
+	InvoiceLineItemsTable.ForeignKeys[1].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	PricesTable.ForeignKeys[0].RefTable = PriceUnitsTable
 	SubscriptionsTable.ForeignKeys[0].RefTable = CustomersTable

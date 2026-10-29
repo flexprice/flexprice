@@ -53,6 +53,9 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 	if inv.EnvironmentID == "" {
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+	if err := types.ValidateInvoiceCreation(ctx, inv.TenantID, inv.EnvironmentID); err != nil {
+		return err
+	}
 
 	builder := client.Invoice.Create().
 		SetID(inv.ID).
@@ -145,7 +148,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 	}
 
 	*inv = *domainInvoice.FromEnt(invoice)
-	return nil
+	return types.AdmitCreatedInvoice(ctx, inv.ID)
 }
 
 // CreateWithLineItems creates an invoice with its line items in a single transaction
@@ -166,8 +169,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 	if inv.EnvironmentID == "" {
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+	if err := types.ValidateInvoiceCreation(ctx, inv.TenantID, inv.EnvironmentID); err != nil {
+		return err
+	}
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
+		if err := validateInvoiceBillingSources(ctx, r.client.Writer(ctx), inv.LineItems); err != nil {
+			return err
+		}
 		// 1. Create invoice
 		invBuilder := r.client.Writer(ctx).Invoice.Create().
 			SetID(inv.ID).
@@ -256,6 +265,10 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 		}
 
+		if err := types.AdmitCreatedInvoice(ctx, invoice.ID); err != nil {
+			return err
+		}
+
 		// 2. Create line items in bulk if present
 		if len(inv.LineItems) > 0 {
 			builders := make([]*ent.InvoiceLineItemCreate, len(inv.LineItems))
@@ -282,6 +295,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 					SetNillableCommitmentID(item.CommitmentID).
+					SetNillableBillingScheduleItemID(item.BillingScheduleItemID).
 					SetNillableParentLineItemID(item.ParentLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
@@ -328,6 +342,10 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 
 // AddLineItems adds line items to an existing invoice
 func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, items []*domainInvoice.InvoiceLineItem) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, invoiceID); err != nil {
+		return err
+	}
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "add_line_items", map[string]interface{}{
 		"invoice_id":  invoiceID,
@@ -354,6 +372,9 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 			return ierr.WithError(err).WithHintf("invoice %s not found", invoiceID).Mark(ierr.ErrNotFound)
 		}
 
+		if err := validateInvoiceBillingSources(ctx, r.client.Writer(ctx), items); err != nil {
+			return err
+		}
 		builders := make([]*ent.InvoiceLineItemCreate, len(items))
 		for i, item := range items {
 			builders[i] = r.client.Writer(ctx).InvoiceLineItem.Create().
@@ -379,6 +400,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillableCommitmentID(item.CommitmentID).
+				SetNillableBillingScheduleItemID(item.BillingScheduleItemID).
 				SetNillableParentLineItemID(item.ParentLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
@@ -416,6 +438,10 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 
 // RemoveLineItems removes line items from an invoice
 func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, invoiceID); err != nil {
+		return err
+	}
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "remove_line_items", map[string]interface{}{
 		"invoice_id":  invoiceID,
@@ -504,6 +530,21 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 // GetForUpdate retrieves an invoice with a row-level lock (SELECT FOR UPDATE).
 // Must be called within a transaction so the lock is held until commit/rollback.
 func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domainInvoice.Invoice, error) {
+	return r.getForUpdate(ctx, id, false)
+}
+
+func (r *invoiceRepository) GetForUpdateNowait(ctx context.Context, id string) (*domainInvoice.Invoice, error) {
+	return r.getForUpdate(ctx, id, true)
+}
+
+func (r *invoiceRepository) getForUpdate(ctx context.Context, id string, nowait bool) (*domainInvoice.Invoice, error) {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return nil, err
+	}
+
+	if nowait && r.client.TxFromContext(ctx) == nil {
+		return nil, ierr.NewError("invoice row lock requires a transaction").Mark(ierr.ErrInvalidOperation)
+	}
 	span := StartRepositorySpan(ctx, "invoice", "get_for_update", map[string]interface{}{
 		"invoice_id": id,
 	})
@@ -515,16 +556,23 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 
 	// Acquire row-level lock so concurrent workers cannot update the same invoice
 	lockQuery := `SELECT id FROM invoices WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 FOR UPDATE`
-	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID)
-	if err != nil {
-		return nil, ierr.WithError(err).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+	if nowait {
+		lockQuery += " NOWAIT"
 	}
-	// Must check and close rows BEFORE running another query on the same connection
-	hasRow := rows.Next()
-	rowErr := rows.Err()
-	rows.Close() // #nosec G104 -- best-effort close, error non-fatal
-	if rowErr != nil {
-		return nil, ierr.WithError(rowErr).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID)
+	hasRow := false
+	if err == nil {
+		hasRow = rows.Next()
+		err = rows.Err()
+		rows.Close() // #nosec G104 -- best-effort close, error non-fatal
+	}
+	if err != nil {
+		var postgresError *pq.Error
+		if nowait && errors.As(err, &postgresError) && postgresError.Code == "55P03" {
+			return nil, ierr.WithError(err).WithHint("Invoice is being modified; retry the request").
+				WithReportableDetails(map[string]any{"invoice_id": id}).Mark(ierr.ErrVersionConflict)
+		}
+		return nil, ierr.WithError(err).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
 	}
 	if !hasRow {
 		return nil, ierr.NewError("invoice not found").
@@ -566,6 +614,10 @@ func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domai
 }
 
 func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoice) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, inv.ID); err != nil {
+		return err
+	}
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "update", map[string]interface{}{
 		"invoice_id": inv.ID,
@@ -675,6 +727,10 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 }
 
 func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return err
+	}
+
 	span := StartRepositorySpan(ctx, "invoice", "update_draft_invoice_period", map[string]interface{}{
 		"invoice_id": id,
 	})
@@ -710,6 +766,10 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 }
 
 func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return err
+	}
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "delete", map[string]interface{}{
 		"invoice_id": id,
@@ -922,6 +982,22 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 	}
 
 	return domainInvoice.FromEnt(inv), nil
+}
+
+func (r *invoiceRepository) GetByRecalculatedInvoiceID(ctx context.Context, replacementID string) (*domainInvoice.Invoice, error) {
+	if replacementID == "" || types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
+		return nil, ierr.Validation("replacement lookup requires invoice, tenant and environment")
+	}
+	original, err := r.client.Writer(ctx).Invoice.Query().Where(
+		invoice.RecalculatedInvoiceIDEQ(replacementID), invoice.TenantIDEQ(types.GetTenantID(ctx)), invoice.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
+	).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, ierr.WithError(err).WithHint("original invoice not found").Mark(ierr.ErrNotFound)
+	}
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to resolve original invoice").Mark(ierr.ErrDatabase)
+	}
+	return domainInvoice.FromEnt(original), nil
 }
 
 func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {

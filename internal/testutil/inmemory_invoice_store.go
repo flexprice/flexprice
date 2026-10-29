@@ -94,6 +94,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
 			CommitmentID:                item.CommitmentID,
+			BillingScheduleItemID:       clonePtr(item.BillingScheduleItemID),
 			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
@@ -159,8 +160,14 @@ func (s *InMemoryInvoiceStore) Create(ctx context.Context, inv *invoice.Invoice)
 	if inv.EnvironmentID == "" {
 		inv.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+	if err := types.ValidateInvoiceCreation(ctx, inv.TenantID, inv.EnvironmentID); err != nil {
+		return err
+	}
 
-	return s.InMemoryStore.Create(ctx, inv.ID, copyInvoice(inv))
+	if err := s.InMemoryStore.Create(ctx, inv.ID, copyInvoice(inv)); err != nil {
+		return err
+	}
+	return types.AdmitCreatedInvoice(ctx, inv.ID)
 }
 
 func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *invoice.Invoice) error {
@@ -182,6 +189,10 @@ func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *inv
 }
 
 func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID string, items []*invoice.InvoiceLineItem) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, invoiceID); err != nil {
+		return err
+	}
+
 	inv, err := s.Get(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -199,6 +210,10 @@ func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID strin
 }
 
 func (s *InMemoryInvoiceStore) RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, invoiceID); err != nil {
+		return err
+	}
+
 	inv, err := s.Get(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -231,6 +246,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
+// GetForUpdateNowait uses the same in-memory read; PostgreSQL tests exercise contention.
+func (s *InMemoryInvoiceStore) GetForUpdateNowait(ctx context.Context, id string) (*invoice.Invoice, error) {
+	return s.GetForUpdate(ctx, id)
+}
+
 // GetForUpdate returns the invoice; the in-memory store has no row locking, so
 // it cannot provide real mutual exclusion (that is SELECT ... FOR UPDATE in
 // Postgres). It records the access so tests can assert that a code path takes
@@ -239,6 +259,10 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 // Mirrors the real ent repository's GetForUpdate, which fetches published line
 // items via ListByInvoiceID and populates the result's LineItems field.
 func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return nil, err
+	}
+
 	if hook := s.BeforeGetForUpdate; hook != nil {
 		hook(id)
 	}
@@ -287,6 +311,9 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
 	}
 
+	if err := types.CheckInvoiceLockAdmission(ctx, inv.ID); err != nil {
+		return err
+	}
 	updated := copyInvoice(inv)
 	// The ent repository never clears custom_currency, so a caller that did not load it
 	// leaves the stored value in place. Match that here or the double hides the bug.
@@ -305,6 +332,10 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 }
 
 func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return err
+	}
+
 	inv, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
@@ -323,6 +354,10 @@ func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id 
 // deletes both and leaves the rows readable. This double used to hard-delete, so any assertion that
 // an orphaned draft had been cleaned up passed whether or not the code did anything.
 func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
+	if err := types.CheckInvoiceLockAdmission(ctx, id); err != nil {
+		return err
+	}
+
 	inv, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
@@ -357,6 +392,25 @@ func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, invoiceFilterFn)
+}
+
+func (s *InMemoryInvoiceStore) GetByRecalculatedInvoiceID(ctx context.Context, replacementID string) (*invoice.Invoice, error) {
+	if replacementID == "" || types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" {
+		return nil, ierr.Validation("replacement lookup requires invoice, tenant and environment")
+	}
+	rows, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, inv *invoice.Invoice, _ interface{}) bool {
+		return inv != nil && inv.TenantID == types.GetTenantID(ctx) && inv.EnvironmentID == types.GetEnvironmentID(ctx) && inv.RecalculatedInvoiceID != nil && *inv.RecalculatedInvoiceID == replacementID
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, ierr.NewError("original invoice not found").Mark(ierr.ErrNotFound)
+	}
+	if len(rows) != 1 {
+		return nil, ierr.NewError("replacement has multiple original invoices").Mark(ierr.ErrDatabase)
+	}
+	return copyInvoice(rows[0]), nil
 }
 
 func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key string) (*invoice.Invoice, error) {

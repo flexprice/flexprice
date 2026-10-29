@@ -272,6 +272,7 @@ func (Invoice) Edges() []ent.Edge {
 // Indexes of the Invoice.
 func (Invoice) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("tenant_id", "environment_id", "recalculated_invoice_id"),
 		index.Fields("tenant_id", "environment_id", "customer_id", "invoice_status", "payment_status", "status").
 			StorageKey("idx_tenant_customer_status").
 			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),

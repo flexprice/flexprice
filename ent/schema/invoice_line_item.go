@@ -78,6 +78,11 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Immutable(),
+		field.String("billing_schedule_item_id").
+			SchemaType(map[string]string{"postgres": "varchar(50)"}).
+			Optional().
+			Nillable().
+			Immutable(),
 		field.String("price_type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -234,6 +239,11 @@ func (InvoiceLineItem) Fields() []ent.Field {
 // Edges of the InvoiceLineItem.
 func (InvoiceLineItem) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.From("billing_schedule_item", BillingScheduleItem.Type).
+			Ref("source_line").
+			Field("billing_schedule_item_id").
+			Unique().
+			Immutable(),
 		edge.From("invoice", Invoice.Type).
 			Ref("line_items").
 			Field("invoice_id").

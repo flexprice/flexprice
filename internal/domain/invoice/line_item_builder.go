@@ -27,6 +27,20 @@ func NewInvoiceLineItemBuilder(lineItem *InvoiceLineItem) *invoiceLineItemBuilde
 	return &invoiceLineItemBuilder{item: &copied}
 }
 
+// WithBillingScheduleItemID sets the immutable scheduled source on a new line.
+func (b *invoiceLineItemBuilder) WithBillingScheduleItemID(id *string) *invoiceLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	if id == nil {
+		b.item.BillingScheduleItemID = nil
+	} else {
+		value := *id
+		b.item.BillingScheduleItemID = &value
+	}
+	return b
+}
+
 func (b *invoiceLineItemBuilder) WithID(id string) *invoiceLineItemBuilder {
 	if b == nil || b.item == nil {
 		return b
@@ -133,6 +147,17 @@ func (b *invoiceLineItemBuilder) WithBaseModel(baseModel types.BaseModel) *invoi
 		return b
 	}
 	b.item.BaseModel = baseModel
+	return b
+}
+
+// WithoutAdjustments clears amounts reapplied by the invoice computation pipeline.
+func (b *invoiceLineItemBuilder) WithoutAdjustments() *invoiceLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	b.item.PrepaidCreditsApplied = decimal.Zero
+	b.item.LineItemDiscount = decimal.Zero
+	b.item.InvoiceLevelDiscount = decimal.Zero
 	return b
 }
 

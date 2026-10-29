@@ -404,6 +404,9 @@ func (s PauseStatus) Validate() error {
 
 // SubscriptionFilter represents filters for subscription queries
 type SubscriptionFilter struct {
+	// AfterID is an internal keyset boundary for scheduled traversal.
+	AfterID string `json:"-" form:"-"`
+
 	*QueryFilter
 	*TimeRangeFilter
 

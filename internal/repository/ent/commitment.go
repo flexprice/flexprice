@@ -326,6 +326,9 @@ func (r *commitmentRepository) Count(ctx context.Context, filter *domain.Filter)
 
 func applyCommitmentFilter(q *ent.CommitmentQuery, f *domain.Filter) (*ent.CommitmentQuery, error) {
 	preds := []predicate.Commitment{}
+	if f.AfterID != "" {
+		preds = append(preds, entcommitment.IDGT(f.AfterID))
+	}
 	if len(f.IDs) > 0 {
 		preds = append(preds, entcommitment.IDIn(f.IDs...))
 	}

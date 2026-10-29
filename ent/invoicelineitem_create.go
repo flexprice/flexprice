@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/billingscheduleitem"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -192,6 +193,20 @@ func (_c *InvoiceLineItemCreate) SetPriceID(v string) *InvoiceLineItemCreate {
 func (_c *InvoiceLineItemCreate) SetNillablePriceID(v *string) *InvoiceLineItemCreate {
 	if v != nil {
 		_c.SetPriceID(*v)
+	}
+	return _c
+}
+
+// SetBillingScheduleItemID sets the "billing_schedule_item_id" field.
+func (_c *InvoiceLineItemCreate) SetBillingScheduleItemID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetBillingScheduleItemID(v)
+	return _c
+}
+
+// SetNillableBillingScheduleItemID sets the "billing_schedule_item_id" field if the given value is not nil.
+func (_c *InvoiceLineItemCreate) SetNillableBillingScheduleItemID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetBillingScheduleItemID(*v)
 	}
 	return _c
 }
@@ -482,6 +497,11 @@ func (_c *InvoiceLineItemCreate) SetFxConversion(v *types.FxConversion) *Invoice
 func (_c *InvoiceLineItemCreate) SetID(v string) *InvoiceLineItemCreate {
 	_c.mutation.SetID(v)
 	return _c
+}
+
+// SetBillingScheduleItem sets the "billing_schedule_item" edge to the BillingScheduleItem entity.
+func (_c *InvoiceLineItemCreate) SetBillingScheduleItem(v *BillingScheduleItem) *InvoiceLineItemCreate {
+	return _c.SetBillingScheduleItemID(v.ID)
 }
 
 // SetInvoice sets the "invoice" edge to the Invoice entity.
@@ -812,6 +832,23 @@ func (_c *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Creat
 	if value, ok := _c.mutation.FxConversion(); ok {
 		_spec.SetField(invoicelineitem.FieldFxConversion, field.TypeJSON, value)
 		_node.FxConversion = value
+	}
+	if nodes := _c.mutation.BillingScheduleItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: true,
+			Table:   invoicelineitem.BillingScheduleItemTable,
+			Columns: []string{invoicelineitem.BillingScheduleItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(billingscheduleitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.BillingScheduleItemID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

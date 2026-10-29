@@ -150,6 +150,9 @@ type Filter struct {
 	ScopeType       *types.CommitmentScopeType `json:"scope_entity_type,omitempty" form:"scope_entity_type"`
 	ScopeIDs        []string                   `json:"scope_entity_ids,omitempty" form:"scope_entity_ids"`
 
+	// AfterID is an internal cursor for ascending-ID traversal.
+	AfterID string `json:"-" form:"-"`
+
 	// ActiveFrom/ActiveTo select commitments whose term overlaps [ActiveFrom, ActiveTo).
 	ActiveFrom *time.Time `json:"active_from,omitempty" form:"active_from"`
 	ActiveTo   *time.Time `json:"active_to,omitempty" form:"active_to"`

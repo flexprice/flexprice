@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -188,6 +189,21 @@ func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.
 
 func NewCommitmentRepository(p RepositoryParams) commitment.Repository {
 	return entRepo.NewCommitmentRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingTermRepository constructs scoped collection-rule persistence.
+func NewBillingTermRepository(p RepositoryParams) billingterms.RuleRepository {
+	return entRepo.NewBillingTermRepository(p.EntClient)
+}
+
+// NewBillingScheduleItemRepository constructs scoped charge/claim persistence.
+func NewBillingScheduleItemRepository(p RepositoryParams) billingterms.ScheduleItemRepository {
+	return entRepo.NewBillingScheduleItemRepository(p.EntClient)
+}
+
+// NewBillingTermsExecutionStore provides billing transactions and scoped financial source reads.
+func NewBillingTermsExecutionStore(p RepositoryParams) billingterms.ExecutionStore {
+	return entRepo.NewBillingTermsExecutionStore(p.EntClient)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

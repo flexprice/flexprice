@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -180,6 +182,17 @@ func (r *subscriptionRepository) GetTimezone(ctx context.Context, id string) (st
 
 // GetForUpdate row-locks the subscription and bypasses cache (cache can't hold a lock).
 func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*domainSub.Subscription, error) {
+	return r.getForUpdate(ctx, id, false)
+}
+
+func (r *subscriptionRepository) GetForUpdateNowait(ctx context.Context, id string) (*domainSub.Subscription, error) {
+	return r.getForUpdate(ctx, id, true)
+}
+
+func (r *subscriptionRepository) getForUpdate(ctx context.Context, id string, nowait bool) (*domainSub.Subscription, error) {
+	if nowait && r.client.TxFromContext(ctx) == nil {
+		return nil, ierr.NewError("subscription row lock requires a transaction").Mark(ierr.ErrInvalidOperation)
+	}
 	span := StartRepositorySpan(ctx, "subscription", "get_for_update", map[string]interface{}{
 		"subscription_id": id,
 	})
@@ -190,18 +203,27 @@ func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*
 	environmentID := types.GetEnvironmentID(ctx)
 
 	lockQuery := `SELECT id FROM subscriptions WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 AND status = $4 FOR UPDATE`
+	if nowait {
+		lockQuery += " NOWAIT"
+	}
 	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID, string(types.StatusPublished))
+	hasRow := false
+	if err == nil {
+		// Close before reading the locked row on the same connection.
+		hasRow = rows.Next()
+		err = rows.Err()
+		rows.Close() // #nosec G104 -- best-effort, error non-fatal
+	}
 	if err != nil {
 		SetSpanError(span, err)
+		var postgresError *pq.Error
+		if nowait && errors.As(err, &postgresError) && postgresError.Code == "55P03" {
+			return nil, ierr.WithError(err).
+				WithHint("Subscription is being modified; retry the request").
+				WithReportableDetails(map[string]any{"subscription_id": id}).
+				Mark(ierr.ErrVersionConflict)
+		}
 		return nil, ierr.WithError(err).WithHint("subscription lock failed").Mark(ierr.ErrDatabase)
-	}
-	// Check and close before running another query on the same connection.
-	hasRow := rows.Next()
-	rowErr := rows.Err()
-	rows.Close() // #nosec G104 -- best-effort, error non-fatal
-	if rowErr != nil {
-		SetSpanError(span, rowErr)
-		return nil, ierr.WithError(rowErr).WithHint("subscription lock failed").Mark(ierr.ErrDatabase)
 	}
 	if !hasRow {
 		return nil, ierr.NewError("subscription not found").
@@ -720,6 +742,10 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		return query, nil
 	}
 
+	if f.AfterID != "" {
+		query = query.Where(subscription.IDGT(f.AfterID))
+	}
+
 	// Apply subscription IDs filter
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscription.IDIn(f.SubscriptionIDs...))
@@ -1061,6 +1087,7 @@ func (r *subscriptionRepository) GetPause(ctx context.Context, id string) (*doma
 		Where(
 			subscriptionpause.ID(id),
 			subscriptionpause.TenantID(types.GetTenantID(ctx)),
+			subscriptionpause.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscriptionpause.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
@@ -1182,7 +1209,11 @@ func (r *subscriptionRepository) GetWithPauses(ctx context.Context, id string) (
 			subscription.Status(string(types.StatusPublished)),
 		).
 		WithPauses(func(q *ent.SubscriptionPauseQuery) {
-			q.Where(subscriptionpause.Status(string(types.StatusPublished)))
+			q.Where(
+				subscriptionpause.TenantID(types.GetTenantID(ctx)),
+				subscriptionpause.EnvironmentID(types.GetEnvironmentID(ctx)),
+				subscriptionpause.Status(string(types.StatusPublished)),
+			)
 			q.Order(ent.Desc(subscriptionpause.FieldCreatedAt))
 		}).
 		Only(ctx)
@@ -1224,6 +1255,9 @@ func (r *subscriptionRepository) SetCache(ctx context.Context, sub *domainSub.Su
 }
 
 func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domainSub.Subscription {
+	if r.client.TxFromContext(ctx) != nil || types.ShouldForceWriter(ctx) || types.IsWriterPinned(ctx) {
+		return nil
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "subscription", "get", map[string]interface{}{
 		"subscription_id": id,
 	})

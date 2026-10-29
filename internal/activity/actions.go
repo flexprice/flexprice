@@ -20,6 +20,12 @@ const (
 	SubscriptionResumed     Action = "subscription.resumed"
 )
 
+// Commitment
+const (
+	CommitmentBillingTermsReplaced Action = "commitment.billing_terms_replaced"
+	CommitmentBillingItemTriggered Action = "commitment.billing_item_triggered"
+)
+
 // Invoice
 const (
 	InvoiceDeleted   Action = "invoice.deleted"

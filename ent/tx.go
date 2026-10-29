@@ -28,8 +28,12 @@ type Tx struct {
 	AnalyticsView *AnalyticsViewClient
 	// Auth is the client for interacting with the Auth builders.
 	Auth *AuthClient
+	// BillingScheduleItem is the client for interacting with the BillingScheduleItem builders.
+	BillingScheduleItem *BillingScheduleItemClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// BillingTerm is the client for interacting with the BillingTerm builders.
+	BillingTerm *BillingTermClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
 	// Commitment is the client for interacting with the Commitment builders.
@@ -290,7 +294,9 @@ func (tx *Tx) init() {
 	tx.AlertSettings = NewAlertSettingsClient(tx.config)
 	tx.AnalyticsView = NewAnalyticsViewClient(tx.config)
 	tx.Auth = NewAuthClient(tx.config)
+	tx.BillingScheduleItem = NewBillingScheduleItemClient(tx.config)
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
+	tx.BillingTerm = NewBillingTermClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
 	tx.Commitment = NewCommitmentClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
