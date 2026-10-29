@@ -275,8 +275,6 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 		case neverReset && closed != nil && !cfg.removesFeature(featureID):
 			// Nothing leaves, so the cap carries as it stands, prorated segments included.
 			existingQuota = closed.Quota
-		case neverReset:
-			existingQuota = existingQuota.Add(cfg.unproratedRemovedQuota(featureID))
 		}
 		// E.g. incoming 150, old remaining 20, no surviving configs: normal gets 170; NEVER gets 150.
 		quota := grantToAdd.Quota.Add(existingQuota)
@@ -306,9 +304,7 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 		for _, ec := range cfg.survivingECsByFeature[featureID] {
 			quota = quota.Add(lo.FromPtr(ec.GrantQuota))
 		}
-		if neverReset {
-			quota = quota.Add(cfg.unproratedRemovedQuota(featureID))
-		} else {
+		if !neverReset {
 			quota, _ = closed.Remaining()
 		}
 		reqs = append(reqs, OpenFeatureBasedEntitlementGrantsRequest{
@@ -340,18 +336,6 @@ func (c *GrantChangeConfig) removesFeature(featureID string) bool {
 	return lo.SomeBy(c.entitlementsToRemove, func(ec *entitlement.Entitlement) bool {
 		return ec != nil && ec.FeatureID == featureID
 	})
-}
-
-// unproratedRemovedQuota is the quota of the feature's leaving configs that stays in a
-// never-reset cap until the period ends.
-func (c *GrantChangeConfig) unproratedRemovedQuota(featureID string) decimal.Decimal {
-	total := decimal.Zero
-	for _, ec := range c.entitlementsToRemove {
-		if ec != nil && ec.FeatureID == featureID && c.unproratedRemovals[ec.ID] {
-			total = total.Add(lo.FromPtr(ec.GrantQuota))
-		}
-	}
-	return total
 }
 
 func (c *GrantChangeConfig) origin() grantProrationSource {

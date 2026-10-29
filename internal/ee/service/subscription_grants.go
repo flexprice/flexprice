@@ -74,9 +74,6 @@ type GrantChangeConfig struct {
 	// pooled so two addons landing on one feature share a successor.
 	entitlementGrantsToAdd []*entitlementgrant.EntitlementGrant
 	entitlementsToRemove   []*entitlement.Entitlement
-	// unproratedRemovals are leaving configs whose removal is not prorated: on a never-reset
-	// meter their quota stays in the cap until the period ends, as the charge does.
-	unproratedRemovals map[string]bool
 
 	incomingECs           []*entitlement.Entitlement
 	survivingECsByFeature map[string][]*entitlement.Entitlement
@@ -120,10 +117,6 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 	cfg.creditGrantsToCancel = resolveCreditGrantCancellations(req.Sub, req.Removed)
 
 	if cfg.entitlementsToRemove, err = s.resolveGrantECs(ctx, req.Removed); err != nil {
-		return nil, err
-	}
-
-	if cfg.unproratedRemovals, err = s.resolveUnproratedRemovals(ctx, req.Removed); err != nil {
 		return nil, err
 	}
 
@@ -367,30 +360,6 @@ func (s *subscriptionGrantService) resolveGrantECs(
 	}
 
 	return resolved, nil
-}
-
-// resolveUnproratedRemovals is the set of leaving config IDs whose source is not prorated.
-func (s *subscriptionGrantService) resolveUnproratedRemovals(
-	ctx context.Context,
-	sources []GrantSource,
-) (map[string]bool, error) {
-	byAddon := make(map[string][]*entitlement.Entitlement, len(sources))
-	unprorated := make(map[string]bool)
-
-	for _, src := range sources {
-		if src.ProrationSettings.EntitlementGrantBehavior == types.ProrationBehaviorCreateProrations {
-			continue
-		}
-		ecs, err := s.sourceGrantECs(ctx, byAddon, src)
-		if err != nil {
-			return nil, err
-		}
-		for _, ec := range ecs {
-			unprorated[ec.ID] = true
-		}
-	}
-
-	return unprorated, nil
 }
 
 // sourceGrantECs reads one source's grant-carrying entitlement configs, memoised per addon.

@@ -421,16 +421,16 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_Seco
 	s.True(live.Quota.Equal(want), "expected %s, got %s", want, live.Quota)
 }
 
-// Removing an addon from a never-reset feature follows the removal's proration: prorated,
-// its quota leaves the cap at once; unprorated, it stays until the period ends.
-func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_FollowsRemovalProration() {
+// Removing an addon from a never-reset feature takes its quota off the cap at once, whatever
+// the proration: the cap is always the configs still on the feature.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_DropsAddonQuotaAtOnce() {
 	for _, tc := range []struct {
 		name     string
 		behavior types.ProrationBehavior
 		want     int64
 	}{
 		{"prorated", types.ProrationBehaviorCreateProrations, 10},
-		{"unprorated", types.ProrationBehaviorNone, 110},
+		{"unprorated", types.ProrationBehaviorNone, 10},
 	} {
 		s.Run(tc.name, func() {
 			featureID := s.seedNeverGrantFeature("feat_never_rm_" + tc.name)
@@ -449,6 +449,49 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_FollowsRemov
 			live := s.liveRow(featureID)
 			s.Require().NotNil(live)
 			s.True(live.Quota.Equal(decimal.NewFromInt(tc.want)), "expected %d, got %s", tc.want, live.Quota)
+			s.assertTiled(featureID)
+		})
+	}
+}
+
+// Swapping an addon for another size on a never-reset feature reopens the cap as the plan's
+// quota plus the new addon's, prorated or full; the old addon's quota drops out.
+// e.g. plan 100 + addon 500 = 600; to 1000 unprorated = 1100, to 200 = 300.
+func (s *SubscriptionServiceSuite) TestGrantBatch_Swap_NeverReset_CapIsPlanPlusNewAddon() {
+	for _, tc := range []struct {
+		name     string
+		newQuota int64
+		behavior types.ProrationBehavior
+		want     func() decimal.Decimal
+	}{
+		{"upgrade", 1000, types.ProrationBehaviorNone, func() decimal.Decimal { return decimal.NewFromInt(1100) }},
+		{"downgrade", 200, types.ProrationBehaviorNone, func() decimal.Decimal { return decimal.NewFromInt(300) }},
+		{"upgrade_prorated", 1000, types.ProrationBehaviorCreateProrations, func() decimal.Decimal { return decimal.NewFromInt(100).Add(s.expectedProrated(1000)) }},
+	} {
+		s.Run(tc.name, func() {
+			featureID := s.seedNeverGrantFeature("feat_never_swap_" + tc.name)
+			s.seedGrantEC("ent_aaa_never_swap_plan_"+tc.name, featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 100, "")
+			s.seedGrantAddon("addon_never_swap_old_"+tc.name, "ent_zzz_never_swap_old_"+tc.name, featureID, 500, "")
+			s.seedGrantAddon("addon_never_swap_new_"+tc.name, "ent_zzz_never_swap_new_"+tc.name, featureID, tc.newQuota, "")
+			s.seedCycleGrant("ent_aaa_never_swap_plan_"+tc.name, featureID, 600)
+
+			change := func(addonID string) GrantSource {
+				return GrantSource{
+					ChangeType:        types.ScheduleTypeImmediate,
+					EffectiveDate:     s.testData.now,
+					ProrationSettings: dto.NewProrationSettings(tc.behavior),
+					Origin:            grantProrationSourceAddonsModify,
+					AddonID:           addonID,
+				}
+			}
+			s.Require().NoError(s.runGrantPass(
+				[]GrantSource{change("addon_never_swap_new_" + tc.name)},
+				[]GrantSource{change("addon_never_swap_old_" + tc.name)},
+			))
+
+			live := s.liveRow(featureID)
+			s.Require().NotNil(live)
+			s.True(live.Quota.Equal(tc.want()), "expected %s, got %s", tc.want(), live.Quota)
 			s.assertTiled(featureID)
 		})
 	}
