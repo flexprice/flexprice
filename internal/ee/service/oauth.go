@@ -245,13 +245,12 @@ func (s *oauthService) encryptSessionBlob(session *types.OAuthSession, encrypted
 		"oauth_provider": string(session.Provider),
 		"credentials":    encryptedCredentials,
 	}
-	if session.BillingEntityID != nil {
-		oauthSessionData["billing_entity_id"] = *session.BillingEntityID
-	}
-
 	// Add non-sensitive metadata
 	for key, value := range session.Metadata {
 		oauthSessionData[key] = value
+	}
+	if session.BillingEntityID != nil {
+		oauthSessionData["billing_entity_id"] = *session.BillingEntityID
 	}
 
 	// Add sync config if provided

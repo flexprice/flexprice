@@ -168,6 +168,11 @@ func (s *CustomerService) CreateCustomerInNomod(ctx context.Context, customerID 
 
 // SyncCustomerToNomod creates a customer in Nomod and stores the mapping
 func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Prepare customer data for Nomod
 	req := CreateCustomerRequest{
 		FirstName: flexpriceCustomer.Name,
@@ -192,11 +197,6 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 	s.logger.Info(ctx, "created customer in Nomod",
 		"customer_id", flexpriceCustomer.ID,
 		"nomod_customer_id", nomodCustomerID)
-
-	conn, err := s.client.GetConnection(ctx)
-	if err != nil {
-		return "", err
-	}
 
 	// Store mapping in entity_integration_mapping
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
