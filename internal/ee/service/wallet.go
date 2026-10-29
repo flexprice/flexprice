@@ -3417,15 +3417,18 @@ func (s *walletService) pendingCharges(ctx context.Context, w *wallet.Wallet, us
 		return decimal.Zero, nil, err
 	}
 
+	scheduled := decimal.Zero
+	projectedUsage := usage
 	if walletAllowsScheduledPayments(w) {
-		scheduled, projectedUsage, err := s.pendingBillingSchedule(ctx, w, usage, resp)
+		scheduled, projectedUsage, err = s.pendingBillingSchedule(ctx, w, usage, resp)
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
-		pending := usageNetOfDraftCredits(projectedUsage, resp.CurrentPeriodCreditsApplied)
-		return pending.Add(resp.TotalUnpaidAmount).Add(scheduled), resp, nil
 	}
-	pending := usageNetOfDraftCredits(usage, resp.CurrentPeriodCreditsApplied)
+	pending := usageNetOfDraftCredits(projectedUsage, resp.CurrentPeriodCreditsApplied).Add(scheduled)
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+		return pending.Add(resp.TotalUnpaidAmount), resp, nil
+	}
 	return pending.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount), resp, nil
 }
 

@@ -35,11 +35,13 @@ func (s *walletService) pendingBillingSchedule(ctx context.Context, w *wallet.Wa
 		extra = extra.Add(item.Amount)
 	}
 	counted := make(map[string]bool)
+	listed := make(map[string]bool)
 	invoices := make(map[string]*invoice.Invoice)
 	for _, inv := range unpaid.Invoices {
 		invoices[inv.ID] = &inv.Invoice
+		listed[inv.ID] = true
 		for _, line := range inv.LineItems {
-			if line.BillingScheduleItemID != nil {
+			if line.BillingScheduleItemID != nil && len(w.Config.AllowedPriceTypes) > 0 {
 				counted[*line.BillingScheduleItemID] = true
 			}
 		}
@@ -75,7 +77,27 @@ func (s *walletService) pendingBillingSchedule(ctx context.Context, w *wallet.Wa
 		missingByInvoice[inv.ID] = missingByInvoice[inv.ID].Add(amount)
 	}
 	for id, amount := range missingByInvoice {
-		extra = extra.Add(decimal.Min(amount, invoices[id].AmountRemaining))
+		allowance := invoices[id].AmountRemaining
+		if len(w.Config.AllowedPriceTypes) == 0 && listed[id] {
+			allowance = legacyScheduleAllowance(invoices[id])
+		}
+		extra = extra.Add(decimal.Min(amount, allowance))
 	}
 	return extra, projectedUsage, nil
+}
+
+// Legacy projections already deduct invoice payments; only cap the additional principal.
+func legacyScheduleAllowance(inv *invoice.Invoice) decimal.Decimal {
+	usage, creditsOnUsage := decimal.Zero, decimal.Zero
+	for _, line := range inv.LineItems {
+		if lo.FromPtr(line.PriceType) == string(types.PRICE_TYPE_USAGE) {
+			usage = usage.Add(line.Amount).Sub(line.PrepaidCreditsApplied).Sub(line.LineItemDiscount)
+			creditsOnUsage = creditsOnUsage.Add(line.PrepaidCreditsApplied)
+		}
+	}
+	if unallocatedCredits := inv.TotalPrepaidCreditsApplied.Sub(creditsOnUsage); unallocatedCredits.IsPositive() {
+		usage = usage.Sub(unallocatedCredits)
+	}
+	legacyPending := decimal.Max(usage, decimal.Zero).Sub(inv.AmountPaid)
+	return decimal.Max(inv.AmountRemaining.Sub(legacyPending), decimal.Zero)
 }

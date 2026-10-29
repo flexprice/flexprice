@@ -21,8 +21,11 @@ func TestBillingScheduleProjection_PostgresReadsDoNotClaim(t *testing.T) {
 	service := &walletService{ServiceParams: f.service.ServiceParams}
 	w := &wallet.Wallet{CustomerID: f.invoice.CustomerID, Currency: "usd"}
 	usage := map[string]currentPeriodUsage{sub.ID: {periodStart: sub.CurrentPeriodStart, amount: decimal.Zero}}
-	for _, allowed := range []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage, types.WalletConfigPriceTypeFixed, types.WalletConfigPriceTypeAll} {
-		w.Config.AllowedPriceTypes = []types.WalletConfigPriceType{allowed}
+	for _, allowed := range []types.WalletConfigPriceType{"", types.WalletConfigPriceTypeUsage, types.WalletConfigPriceTypeFixed, types.WalletConfigPriceTypeAll} {
+		w.Config.AllowedPriceTypes = nil
+		if allowed != "" {
+			w.Config.AllowedPriceTypes = []types.WalletConfigPriceType{allowed}
+		}
 		pending, _, err := service.pendingCharges(f.ctx, w, usage)
 		require.NoError(t, err)
 		require.Equal(t, lo.Ternary(allowed == types.WalletConfigPriceTypeUsage, "0", "100"), pending.String())
