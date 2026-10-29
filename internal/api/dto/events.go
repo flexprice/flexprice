@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	domainBillingTerms "github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -372,7 +373,9 @@ type GetUsageAnalyticsRequest struct {
 	// and appends a BucketSummaries rollup to each item. Requires WindowSize to be set
 	// and the item to be linked to a subscription line item that has CommitmentTimeBuckets.
 	// Default: false (opt-in, backward compatible).
-	BreakdownBucket bool `json:"breakdown_bucket,omitempty" form:"breakdown_bucket"`
+	BreakdownBucket   bool   `json:"breakdown_bucket,omitempty" form:"breakdown_bucket"`
+	CommitmentsLimit  int    `json:"commitments_limit,omitempty"`
+	CommitmentsCursor string `json:"commitments_cursor,omitempty"`
 	// ForceApplyCommitment is an INTERNAL toggle set by the CSV export pipeline
 	// to keep commitment / true-up cost on fanned-out (group_by=source) rows.
 	// json:"-" so it can never be set from an HTTP body — user-facing callers
@@ -382,12 +385,32 @@ type GetUsageAnalyticsRequest struct {
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API
 type GetUsageAnalyticsResponse struct {
-	Subtotal        decimal.Decimal      `json:"subtotal" swaggertype:"string"`
-	TotalDiscount   decimal.Decimal      `json:"total_discount" swaggertype:"string"`
-	TotalCost       decimal.Decimal      `json:"total_cost" swaggertype:"string"` // TotalCost is the final cost after discount (Subtotal - TotalDiscount)
-	Currency        string               `json:"currency"`
-	Items           []UsageAnalyticItem  `json:"items"`
-	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
+	Subtotal              decimal.Decimal                `json:"subtotal" swaggertype:"string"`
+	TotalDiscount         decimal.Decimal                `json:"total_discount" swaggertype:"string"`
+	TotalCost             decimal.Decimal                `json:"total_cost" swaggertype:"string"` // TotalCost is the final cost after discount (Subtotal - TotalDiscount)
+	Currency              string                         `json:"currency"`
+	Items                 []UsageAnalyticItem            `json:"items"`
+	CustomAnalytics       []CustomAnalyticItem           `json:"custom_analytics,omitempty"`
+	Commitments           []*CommitmentAnalyticsResponse `json:"commitments,omitempty"`
+	CommitmentsPagination *BillingPagination             `json:"commitments_pagination,omitempty"`
+}
+
+// CommitmentAnalyticsResponse separates query-window usage from lifetime collection principal.
+type CommitmentAnalyticsResponse struct {
+	CommitmentID           string                    `json:"commitment_id"`
+	SubscriptionID         string                    `json:"subscription_id"`
+	UsageWindow            CommitmentUsageWindow     `json:"usage_window"`
+	Usage                  *CommitmentUsageBreakdown `json:"usage"`
+	UsageUnavailableReason string                    `json:"usage_unavailable_reason,omitempty"`
+	CollectionScope        string                    `json:"collection_scope" enums:"lifetime"`
+	// Collection is lifetime principal as of collection.as_of, independent of the usage time range; it is not cash received.
+	Collection *domainBillingTerms.CollectionSummary `json:"collection"`
+}
+
+// CommitmentUsageWindow is the selected analytics range, independent of lifetime collection.
+type CommitmentUsageWindow struct {
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response

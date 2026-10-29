@@ -186,6 +186,8 @@ type CommitmentInfo struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 	TrueUpEnabled bool             `json:"true_up_enabled"`
 	IsWindowed    bool             `json:"is_windowed"`
+	// ValueWithin is economic covered usage value, independent of its invoice charge.
+	ValueWithin *decimal.Decimal `json:"value_within,omitempty" swaggertype:"string"`
 	// total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount" swaggertype:"string"`
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount" swaggertype:"string"`

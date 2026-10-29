@@ -501,6 +501,7 @@ func mergeCommitmentInfo(target, addition *types.CommitmentInfo) *types.Commitme
 	}
 
 	merged := *target
+	merged.ValueWithin = types.AddDecimalPtr(target.ValueWithin, addition.ValueWithin)
 	merged.ComputedCommitmentUtilizedAmount = target.ComputedCommitmentUtilizedAmount.Add(addition.ComputedCommitmentUtilizedAmount)
 	merged.ComputedOverageAmount = target.ComputedOverageAmount.Add(addition.ComputedOverageAmount)
 	merged.ComputedTrueUpAmount = target.ComputedTrueUpAmount.Add(addition.ComputedTrueUpAmount)

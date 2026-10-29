@@ -20,17 +20,17 @@ import (
 // commitmentLoader turns the commitments overlapping one invoice calculation and the subscription's usage into
 // allocated commitment stacks. It is empty when commitments are off or nothing overlaps the period.
 type commitmentLoader struct {
-	billing           *billingService
-	sub               *subscription.Subscription
-	periodStart       time.Time
-	periodEnd         time.Time
-	asOf              time.Time
-	charges           map[string][]*dto.SubscriptionUsageByMetersResponse
-	meters            map[string]*meter.Meter
-	source            types.UsageSource
+	billing     *billingService
+	sub         *subscription.Subscription
+	periodStart time.Time
+	periodEnd   time.Time
+	asOf        time.Time
+	charges     map[string][]*dto.SubscriptionUsageByMetersResponse
+	meters      map[string]*meter.Meter
+	source      types.UsageSource
 	// usageEnd caps usage reads when periodEnd is projected past the queried window; zero means periodEnd.
-	usageEnd   time.Time
-	subContext *commitmentContext
+	usageEnd          time.Time
+	subContext        *commitmentContext
 	priceSvc          PriceService
 	commitments       []*stackedCommitment    // in D5 order
 	scopeByCommitment map[string]*loadedScope // keyed by commitment ID
@@ -124,6 +124,12 @@ func (s *billingService) newCommitmentLoader(
 		})
 		if len(callScopeLineItems) == 0 {
 			continue
+		}
+		method := commitmentCollectionMethod(c)
+		if c.Binding && method != types.CommitmentCollectionPerPeriod && method != types.CommitmentCollectionBillingTerms {
+			return nil, ierr.NewError("commitment has an unsupported collection method").
+				WithHint("Stored binding commitments require per_period or billing_terms collection").
+				WithReportableDetails(map[string]any{"commitment_id": c.ID, "collection_method": method}).Mark(ierr.ErrInvalidOperation)
 		}
 
 		amountOf := identityAmount
@@ -316,6 +322,7 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
 	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
+	renderer := lineRenderer{currency: l.sub.Currency, periodStart: l.periodStart, periodEnd: l.periodEnd, cost: cost}
 
 	byID := map[string]*dto.CommitmentUsageBreakdown{}
 	var out []*dto.CommitmentUsageBreakdown
@@ -325,14 +332,16 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 			b := byID[sc.C.ID]
 			if b == nil {
 				b = &dto.CommitmentUsageBreakdown{
-					CommitmentID: sc.C.ID,
-					InvoiceLabel: sc.C.InvoiceLabel,
-					Type:         sc.C.Type,
-					Measurement:  sc.C.Measurement,
-					Binding:      sc.C.Binding,
-					Currency:     l.sub.Currency,
-					AppliesFrom:  maxTime(l.periodStart, sc.C.StartDate),
-					AppliesTo:    minTime(l.periodEnd, sc.C.EffectiveEnd()),
+					CommitmentID:     sc.C.ID,
+					InvoiceLabel:     sc.C.InvoiceLabel,
+					Type:             sc.C.Type,
+					Measurement:      sc.C.Measurement,
+					Binding:          sc.C.Binding,
+					CollectionMethod: commitmentCollectionMethod(sc.C),
+					TrueUpEnabled:    commitmentTrueUpEnabled(sc.C),
+					Currency:         l.sub.Currency,
+					AppliesFrom:      maxTime(l.periodStart, sc.C.StartDate),
+					AppliesTo:        minTime(l.periodEnd, sc.C.EffectiveEnd()),
 				}
 				byID[sc.C.ID] = b
 				out = append(out, b)
@@ -342,6 +351,9 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 			b.Committed.Amount = b.Committed.Amount.Add(types.RoundToCurrencyPrecision(sc.Period.Amount, l.sub.Currency))
 			b.Used.Quantity = b.Used.Quantity.Add(used.Used)
 			b.Unused.Quantity = b.Unused.Quantity.Add(used.Unused)
+			for _, row := range renderer.commitmentUtilizedLines(stack, sc, used) {
+				b.Used.Amount = b.Used.Amount.Add(row.Amount)
+			}
 		}
 	}
 
@@ -353,9 +365,9 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 
 		switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
 		case types.CommitmentLineUtilized:
-			b.Used.Amount = b.Used.Amount.Add(line.Amount)
 			b.BilledAmount = b.BilledAmount.Add(line.Amount)
 		case types.CommitmentLineTrueUp:
+			b.TrueUpAmount = b.TrueUpAmount.Add(line.Amount)
 			b.BilledAmount = b.BilledAmount.Add(line.Amount)
 		}
 	}

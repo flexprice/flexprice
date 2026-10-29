@@ -14,7 +14,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -390,6 +389,7 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 
 // @Summary Get usage analytics
 // @ID getUsageAnalytics
+// @x-scope "read"
 // @Description Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.
 // @Tags Events
 // @Accept json
@@ -420,23 +420,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		return
 	}
 
-	params := &domainevents.MeterUsageDetailedAnalyticsParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerID:  req.ExternalCustomerID,
-		ExternalCustomerIDs: req.ExternalCustomerIDs,
-		FeatureIDs:          req.FeatureIDs,
-		StartTime:           req.StartTime,
-		EndTime:             req.EndTime,
-		GroupBy:             req.GroupBy,
-		PropertyFilters:     req.PropertyFilters,
-		Sources:             req.Sources,
-		WindowSize:          req.WindowSize,
-		Expand:              req.Expand,
-		IncludeChildren:     req.IncludeChildren,
-		BreakdownBucket:     req.BreakdownBucket,
-	}
-	response, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
+	response, err := h.meterUsageService.GetCostExplorer(ctx, &req)
 	if err != nil {
 		c.Error(err)
 		return
