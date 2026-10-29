@@ -673,12 +673,17 @@ func (s *refundService) refundToWalletAsFallbackToFailure(ctx context.Context, f
 }
 
 func recordRefundTransition(ctx context.Context, r *refund.Refund) {
-	metrics.RecordCounter(ctx, metrics.RefundTransitions, 1,
+	labels := []metrics.Label{
 		metrics.L(metrics.KeyProvider, lo.FromPtrOr(r.PaymentGateway, "none")),
 		metrics.L(metrics.KeyDestination, string(r.RefundDestination)),
 		metrics.L(metrics.KeyReason, string(r.RefundReason)),
 		metrics.L(metrics.KeyStatus, string(r.RefundStatus)),
-	)
+	}
+	recordCtx := types.WithoutDBTransaction(ctx)
+	record := func() { metrics.RecordCounter(recordCtx, metrics.RefundTransitions, 1, labels...) }
+	if !types.RegisterPostCommit(ctx, record) {
+		record()
+	}
 }
 
 func (s *refundService) GetRefund(ctx context.Context, id string) (*dto.RefundResponse, error) {
@@ -718,11 +723,17 @@ func (s *refundService) publishSystemEvent(ctx context.Context, eventName types.
 		EntityType:    types.SystemEntityTypeRefund,
 		EntityID:      refundID,
 	}
-	if err := s.WebhookPublisher.PublishWebhook(ctx, event); err != nil {
-		s.Logger.Error(ctx, "failed to publish refund webhook event",
-			"error", err,
-			"event_name", eventName,
-			"refund_id", refundID)
+	publishCtx := types.WithoutDBTransaction(ctx)
+	publish := func() {
+		if err := s.WebhookPublisher.PublishWebhook(publishCtx, event); err != nil {
+			s.Logger.Error(publishCtx, "failed to publish refund webhook event",
+				"error", err,
+				"event_name", eventName,
+				"refund_id", refundID)
+		}
+	}
+	if !types.RegisterPostCommit(ctx, publish) {
+		publish()
 	}
 }
 

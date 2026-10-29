@@ -286,7 +286,13 @@ func (s *InvoiceActivities) RecalculateInvoiceActivity(
 
 	invSvc := service.NewInvoiceService(s.serviceParams)
 
-	newInv, err := invSvc.RecalculateInvoice(ctx, input.InvoiceID)
+	var newInv *dto.InvoiceResponse
+	var err error
+	if len(input.BillingScheduleItemIDs) > 0 {
+		newInv, err = invSvc.RecalculateInvoiceWithSchedule(ctx, input.InvoiceID, dto.RecalculateInvoiceRequest{BillingScheduleItemIDs: input.BillingScheduleItemIDs})
+	} else {
+		newInv, err = invSvc.RecalculateInvoice(ctx, input.InvoiceID)
+	}
 	if err != nil {
 		s.logger.Error(ctx, "failed to recalculate invoice",
 			"invoice_id", input.InvoiceID,

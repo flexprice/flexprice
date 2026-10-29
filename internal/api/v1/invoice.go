@@ -331,20 +331,37 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // RecalculateInvoice godoc
 // @Summary Recalculate invoice (voided invoice)
 // @ID recalculateInvoice
-// @Description Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.
+// @Description Starts an async invoice replacement. For scheduled charges, explicitly select reviewed replacement billing_schedule_item_ids after voiding and replanning. Returns workflow_id and run_id; the original invoice links its replacement through recalculated_invoice_id.
 // @Tags Invoices
+// @Accept json
+// @x-scope "delete"
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
+// @Param request body dto.RecalculateInvoiceRequest false "Reviewed replacement charge selection"
 // @Success 202 {object} models.TemporalWorkflowResult
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request or invoice already recalculated"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Invoice not found"
+// @Failure 409 {object} ierr.ErrorResponse "Invoice or selected billing schedule items changed"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/recalculate [post]
 func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+	var req dto.RecalculateInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.Error(ierr.WithError(err).WithHint("Invalid invoice correction request").Mark(ierr.ErrValidation))
+		return
+	}
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+	if err := h.invoiceService.ValidateInvoiceCorrection(c.Request.Context(), id, req); err != nil {
+		c.Error(err)
 		return
 	}
 
@@ -359,10 +376,11 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	workflowInput := invoiceModels.RecalculateInvoiceWorkflowInput{
-		InvoiceID:     id,
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		UserID:        types.GetUserID(ctx),
+		BillingScheduleItemIDs: req.BillingScheduleItemIDs,
+		InvoiceID:              id,
+		TenantID:               types.GetTenantID(ctx),
+		EnvironmentID:          types.GetEnvironmentID(ctx),
+		UserID:                 types.GetUserID(ctx),
 	}
 
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalRecalculateInvoiceWorkflow, workflowInput)

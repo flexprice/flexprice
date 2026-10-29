@@ -44,10 +44,11 @@ func RecalculateInvoiceWorkflow(
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	activityInput := invoiceModels.RecalculateInvoiceActivityInput{
-		InvoiceID:     input.InvoiceID,
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        input.UserID,
+		BillingScheduleItemIDs: input.BillingScheduleItemIDs,
+		InvoiceID:              input.InvoiceID,
+		TenantID:               input.TenantID,
+		EnvironmentID:          input.EnvironmentID,
+		UserID:                 input.UserID,
 	}
 
 	var activityOutput invoiceModels.RecalculateInvoiceActivityOutput
@@ -57,6 +58,15 @@ func RecalculateInvoiceWorkflow(
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return nil, err
+	}
+	version := workflow.GetVersion(ctx, "billing-schedule-correction-handoff", workflow.DefaultVersion, 1)
+	if version != workflow.DefaultVersion && len(input.BillingScheduleItemIDs) > 0 {
+		if err := StartInvoiceProcessing(ctx, invoiceModels.ProcessInvoiceWorkflowInput{
+			InvoiceID: activityOutput.InvoiceID, TenantID: input.TenantID, EnvironmentID: input.EnvironmentID, UserID: input.UserID,
+			SkipCompute: true,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	logger.Info("Successfully recalculated invoice",
