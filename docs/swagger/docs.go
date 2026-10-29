@@ -2003,6 +2003,456 @@ const docTemplate = `{
                 }
             }
         },
+        "/commitments/{id}/billing-schedule-items": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists concrete charges with exact invoice sources; current items sort by bill date, archived history by creation time.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "List commitment billing schedule items",
+                "operationId": "listCommitmentBillingScheduleItems",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1–100; default 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque scoped page cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include historical sources",
+                        "name": "include_archived",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "scheduled, invoiced or canceled",
+                        "name": "schedule_status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListBillingScheduleItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}/billing-schedule-items/{item_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns an exact charge and its original rule, including archived sources.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Get commitment billing schedule item",
+                "operationId": "getCommitmentBillingScheduleItem",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Billing schedule item ID",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingScheduleItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}/billing-schedule-items/{item_id}/trigger": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Resolves a manual charge's date without creating an invoice synchronously.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Trigger a commitment billing milestone",
+                "operationId": "triggerCommitmentBillingScheduleItem",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Billing schedule item ID",
+                        "name": "item_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reviewed manual trigger",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/TriggerBillingScheduleItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/TriggerBillingScheduleItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/commitments/{id}/billing-terms": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns current collection rules, a bounded schedule page and lifetime collection summary.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Get commitment billing terms",
+                "operationId": "getCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsStateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Archives the previous rules and replaces unclaimed charges while retaining invoice provenance.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Replace commitment billing terms",
+                "operationId": "replaceCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reviewed replacement command",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReplaceBillingTermsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsStateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/commitments/{id}/billing-terms/history": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns current and archived schedule sources with their original rules.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Get commitment billing terms history",
+                "operationId": "getCommitmentBillingTermsHistory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, 1–100; default 50",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque scoped history cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "scheduled, invoiced or canceled",
+                        "name": "schedule_status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListBillingScheduleItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/commitments/{id}/billing-terms/preview": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Previews a complete replacement without changing rules, invoices or schedule items.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Preview commitment billing terms",
+                "operationId": "previewCommitmentBillingTerms",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Complete proposed collection arrangement",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/PreviewBillingTermsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BillingTermsPreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/commitments/{id}/terminate": {
             "post": {
                 "security": [
@@ -4951,7 +5401,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "read"
             }
         },
         "/events/bulk": {
@@ -6932,7 +7383,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.",
+                "description": "Starts an async invoice replacement. For scheduled charges, explicitly select reviewed replacement billing_schedule_item_ids after voiding and replanning. Returns workflow_id and run_id; the original invoice links its replacement through recalculated_invoice_id.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -6948,6 +7402,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Reviewed replacement charge selection",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/RecalculateInvoiceRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -6958,7 +7420,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request or invoice already recalculated",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6969,13 +7431,20 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Invoice or selected billing schedule items changed",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "delete"
             }
         },
         "/invoices/{id}/recalculate-v2": {
@@ -16938,6 +17407,44 @@ const docTemplate = `{
                 }
             }
         },
+        "billingterms.CollectionSummary": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string"
+                },
+                "assigned_amount": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "deferred_reason": {
+                    "type": "string"
+                },
+                "due_amount": {
+                    "type": "number"
+                },
+                "invoiced_amount": {
+                    "type": "number"
+                },
+                "next_bill_on": {
+                    "type": "string"
+                },
+                "requires_replan": {
+                    "type": "boolean"
+                },
+                "scheduled_amount": {
+                    "type": "number"
+                },
+                "target_amount": {
+                    "type": "number"
+                },
+                "unallocated_amount": {
+                    "type": "number"
+                }
+            }
+        },
         "commitment.Filter": {
             "type": "object",
             "properties": {
@@ -18295,6 +18802,20 @@ const docTemplate = `{
                 }
             }
         },
+        "BillingPagination": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
         "BillingPeriodConfig": {
             "type": "object",
             "properties": {
@@ -18323,6 +18844,314 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "start_time": {
+                    "type": "string"
+                }
+            }
+        },
+        "BillingScheduleItemResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "bill_on": {
+                    "type": "string"
+                },
+                "bill_trigger": {
+                    "$ref": "#/definitions/types.BillingScheduleTrigger"
+                },
+                "billing_term": {
+                    "$ref": "#/definitions/BillingTermResponse"
+                },
+                "billing_term_id": {
+                    "type": "string"
+                },
+                "cancellation_reason": {
+                    "$ref": "#/definitions/types.BillingScheduleCancellationReason"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "delivery": {
+                    "$ref": "#/definitions/types.BillingTermDelivery"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "type": "string"
+                },
+                "invoice_status": {
+                    "$ref": "#/definitions/types.InvoiceStatus"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.BillingScheduleItemKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
+                },
+                "schedule_status": {
+                    "$ref": "#/definitions/types.BillingScheduleStatus"
+                },
+                "service_period_end": {
+                    "type": "string"
+                },
+                "service_period_start": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "BillingTermInput": {
+            "type": "object",
+            "properties": {
+                "bill_at": {
+                    "$ref": "#/definitions/types.BillingTermTiming"
+                },
+                "bill_on": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "interval": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "interval_count": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.BillingTermKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "on_trigger": {
+                    "type": "boolean"
+                },
+                "percent": {
+                    "type": "string"
+                },
+                "split": {
+                    "$ref": "#/definitions/types.BillingTermSplit"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "value_type": {
+                    "$ref": "#/definitions/types.BillingTermValueType"
+                }
+            }
+        },
+        "BillingTermResponse": {
+            "type": "object",
+            "properties": {
+                "bill_at": {
+                    "$ref": "#/definitions/types.BillingTermTiming"
+                },
+                "bill_on": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "interval": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "interval_count": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.BillingTermKind"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "on_trigger": {
+                    "type": "boolean"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
+                },
+                "split": {
+                    "$ref": "#/definitions/types.BillingTermSplit"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "value_type": {
+                    "$ref": "#/definitions/types.BillingTermValueType"
+                }
+            }
+        },
+        "BillingTermsInput": {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BillingTermInput"
+                    }
+                }
+            }
+        },
+        "BillingTermsPreviewResponse": {
+            "type": "object",
+            "properties": {
+                "archive_item_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "archive_rule_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "blocking_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "can_apply": {
+                    "type": "boolean"
+                },
+                "collection": {
+                    "$ref": "#/definitions/billingterms.CollectionSummary"
+                },
+                "command": {
+                    "$ref": "#/definitions/ReplaceBillingTermsRequest"
+                },
+                "conditional_released_principal": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BillingScheduleItemResponse"
+                    }
+                },
+                "retained_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "state_token": {
+                    "type": "string"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "BillingTermsResponse": {
+            "type": "object",
+            "properties": {
+                "rows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BillingTermResponse"
+                    }
+                }
+            }
+        },
+        "BillingTermsStateResponse": {
+            "type": "object",
+            "properties": {
+                "billing_schedule_items": {
+                    "$ref": "#/definitions/ListBillingScheduleItemsResponse"
+                },
+                "billing_terms": {
+                    "$ref": "#/definitions/BillingTermsResponse"
+                },
+                "collection": {
+                    "$ref": "#/definitions/billingterms.CollectionSummary"
+                },
+                "state_token": {
                     "type": "string"
                 }
             }
@@ -18957,6 +19786,40 @@ const docTemplate = `{
                 }
             }
         },
+        "CommitmentAnalyticsResponse": {
+            "type": "object",
+            "properties": {
+                "collection": {
+                    "description": "Collection is lifetime principal as of collection.as_of, independent of the usage time range; it is not cash received.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/billingterms.CollectionSummary"
+                        }
+                    ]
+                },
+                "collection_scope": {
+                    "type": "string",
+                    "enum": [
+                        "lifetime"
+                    ]
+                },
+                "commitment_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "usage": {
+                    "$ref": "#/definitions/CommitmentUsageBreakdown"
+                },
+                "usage_unavailable_reason": {
+                    "type": "string"
+                },
+                "usage_window": {
+                    "$ref": "#/definitions/CommitmentUsageWindow"
+                }
+            }
+        },
         "CommitmentBucketRequest": {
             "type": "object",
             "properties": {
@@ -19018,8 +19881,17 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ActiveWindow"
                     }
                 },
+                "billing_schedule_items": {
+                    "$ref": "#/definitions/ListBillingScheduleItemsResponse"
+                },
+                "billing_terms": {
+                    "$ref": "#/definitions/BillingTermsResponse"
+                },
                 "binding": {
                     "type": "boolean"
+                },
+                "collection": {
+                    "$ref": "#/definitions/billingterms.CollectionSummary"
                 },
                 "collection_method": {
                     "$ref": "#/definitions/types.CommitmentCollectionMethod"
@@ -19093,6 +19965,9 @@ const docTemplate = `{
                 "start_date": {
                     "type": "string"
                 },
+                "state_token": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -19156,17 +20031,20 @@ const docTemplate = `{
                     "format": "date-time"
                 },
                 "billed_amount": {
-                    "description": "BilledAmount is what the stretch bills for this commitment: used plus, when binding, the true-up.",
+                    "description": "BilledAmount is the usage-billing contribution, excluding scheduled collection and overage.",
                     "type": "string"
                 },
                 "binding": {
                     "type": "boolean"
                 },
+                "collection_method": {
+                    "$ref": "#/definitions/types.CommitmentCollectionMethod"
+                },
                 "commitment_id": {
                     "type": "string"
                 },
                 "committed": {
-                    "description": "Committed is the full capacity for the stretch; its amount is the floor a binding commitment owes.",
+                    "description": "Committed is the capacity and economic value for the covered stretch.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/CommitmentUsageValue"
@@ -19182,11 +20060,17 @@ const docTemplate = `{
                 "measurement": {
                     "$ref": "#/definitions/types.CommitmentMeasurement"
                 },
+                "true_up_amount": {
+                    "type": "string"
+                },
+                "true_up_enabled": {
+                    "type": "boolean"
+                },
                 "type": {
                     "$ref": "#/definitions/types.CommitmentType"
                 },
                 "unused": {
-                    "description": "Unused is the remaining capacity; for a binding commitment its amount is the true-up still owed.",
+                    "description": "Unused is remaining capacity and value; only per-period collection can bill it as true-up.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/CommitmentUsageValue"
@@ -19194,7 +20078,7 @@ const docTemplate = `{
                     ]
                 },
                 "used": {
-                    "description": "Used is the capacity consumed so far and the value those units bill within the commitment.",
+                    "description": "Used is consumed capacity and its economic value, independent of collection timing.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/CommitmentUsageValue"
@@ -19210,6 +20094,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quantity": {
+                    "type": "string"
+                }
+            }
+        },
+        "CommitmentUsageWindow": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "start_time": {
                     "type": "string"
                 }
             }
@@ -19907,6 +20802,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.ActiveWindow"
                     }
                 },
+                "billing_terms": {
+                    "$ref": "#/definitions/BillingTermsInput"
+                },
                 "binding": {
                     "description": "default false",
                     "type": "boolean"
@@ -19923,6 +20821,9 @@ const docTemplate = `{
                 "idempotency_key": {
                     "type": "string",
                     "maxLength": 128
+                },
+                "invoice_delivery": {
+                    "$ref": "#/definitions/types.BillingTermDelivery"
                 },
                 "invoice_description": {
                     "type": "string",
@@ -23448,6 +24349,12 @@ const docTemplate = `{
                     "description": "BreakdownBucket when true augments each time-series point with BucketID/PriceID\nand appends a BucketSummaries rollup to each item. Requires WindowSize to be set\nand the item to be linked to a subscription line item that has CommitmentTimeBuckets.\nDefault: false (opt-in, backward compatible).",
                     "type": "boolean"
                 },
+                "commitments_cursor": {
+                    "type": "string"
+                },
+                "commitments_limit": {
+                    "type": "integer"
+                },
                 "end_time": {
                     "type": "string"
                 },
@@ -23506,6 +24413,15 @@ const docTemplate = `{
         "GetUsageAnalyticsResponse": {
             "type": "object",
             "properties": {
+                "commitments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommitmentAnalyticsResponse"
+                    }
+                },
+                "commitments_pagination": {
+                    "$ref": "#/definitions/BillingPagination"
+                },
                 "currency": {
                     "type": "string"
                 },
@@ -24172,6 +25088,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "amount": {
+                    "type": "string"
+                },
+                "billing_schedule_item_id": {
+                    "description": "BillingScheduleItemID retains the exact scheduled charge that created this line.",
                     "type": "string"
                 },
                 "commitment_id": {
@@ -24953,6 +25873,20 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListBillingScheduleItemsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BillingScheduleItemResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/BillingPagination"
                 }
             }
         },
@@ -25753,6 +26687,26 @@ const docTemplate = `{
                 }
             }
         },
+        "PreviewBillingTermsRequest": {
+            "type": "object",
+            "properties": {
+                "billing_terms": {
+                    "$ref": "#/definitions/BillingTermsInput"
+                },
+                "expected_state": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "replace_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "PriceFeatureResponse": {
             "type": "object",
             "properties": {
@@ -26173,6 +27127,17 @@ const docTemplate = `{
                 }
             }
         },
+        "RecalculateInvoiceRequest": {
+            "type": "object",
+            "properties": {
+                "billing_schedule_item_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "RefundResponse": {
             "type": "object",
             "properties": {
@@ -26364,6 +27329,20 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReplaceBillingTermsRequest": {
+            "type": "object",
+            "properties": {
+                "billing_terms": {
+                    "$ref": "#/definitions/BillingTermsInput"
+                },
+                "expected_state": {
+                    "type": "string"
                 },
                 "reason": {
                     "type": "string"
@@ -29860,6 +30839,31 @@ const docTemplate = `{
                 "TrialEndActionScheduledDate"
             ]
         },
+        "TriggerBillingScheduleItemRequest": {
+            "type": "object",
+            "properties": {
+                "bill_on": {
+                    "type": "string"
+                },
+                "expected_state": {
+                    "type": "string"
+                }
+            }
+        },
+        "TriggerBillingScheduleItemResponse": {
+            "type": "object",
+            "properties": {
+                "collection": {
+                    "$ref": "#/definitions/billingterms.CollectionSummary"
+                },
+                "item": {
+                    "$ref": "#/definitions/BillingScheduleItemResponse"
+                },
+                "state_token": {
+                    "type": "string"
+                }
+            }
+        },
         "TriggerForceRunRequest": {
             "type": "object",
             "required": [
@@ -32886,6 +33890,10 @@ const docTemplate = `{
                 },
                 "type": {
                     "$ref": "#/definitions/types.CommitmentType"
+                },
+                "value_within": {
+                    "description": "ValueWithin is economic covered usage value, independent of its invoice charge.",
+                    "type": "string"
                 }
             }
         },
@@ -34406,6 +35414,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
+                },
+                "payment_gateways": {
+                    "description": "Online payment gateways attached to the Zoho invoice as payment options, so the Zoho\ninvoice carries online payment links.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ZohoPaymentGatewaySettings"
                         }
                     ]
                 },
@@ -36987,6 +38003,10 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "billing_schedule_item_id": {
+                    "description": "BillingScheduleItemID retains the exact scheduled charge that created this line.",
+                    "type": "string"
+                },
                 "commitment_id": {
                     "description": "commitment_id links this line item to the commitment it bills.",
                     "type": "string"
@@ -37978,6 +38998,118 @@ const docTemplate = `{
                 "AmortizationPeriodEvenProrated"
             ]
         },
+        "types.BillingScheduleCancellationReason": {
+            "type": "string",
+            "enum": [
+                "terms_amended",
+                "invoice_voided",
+                "termination"
+            ],
+            "x-enum-varnames": [
+                "BillingScheduleTermsAmended",
+                "BillingScheduleInvoiceVoided",
+                "BillingScheduleTermination"
+            ]
+        },
+        "types.BillingScheduleItemKind": {
+            "type": "string",
+            "enum": [
+                "charge",
+                "settlement"
+            ],
+            "x-enum-varnames": [
+                "BillingScheduleCharge",
+                "BillingScheduleSettlement"
+            ]
+        },
+        "types.BillingScheduleStatus": {
+            "type": "string",
+            "enum": [
+                "scheduled",
+                "invoiced",
+                "canceled"
+            ],
+            "x-enum-varnames": [
+                "BillingScheduleScheduled",
+                "BillingScheduleInvoiced",
+                "BillingScheduleCanceled"
+            ]
+        },
+        "types.BillingScheduleTrigger": {
+            "type": "string",
+            "enum": [
+                "on_date",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "BillingScheduleOnDate",
+                "BillingScheduleManual"
+            ]
+        },
+        "types.BillingTermDelivery": {
+            "type": "string",
+            "enum": [
+                "subscription_invoice",
+                "separate_invoice"
+            ],
+            "x-enum-varnames": [
+                "BillingTermSubscriptionInvoice",
+                "BillingTermSeparateInvoice"
+            ]
+        },
+        "types.BillingTermKind": {
+            "type": "string",
+            "enum": [
+                "once",
+                "recurring"
+            ],
+            "x-enum-varnames": [
+                "BillingTermOnce",
+                "BillingTermRecurring"
+            ]
+        },
+        "types.BillingTermOwnerType": {
+            "type": "string",
+            "enum": [
+                "commitment"
+            ],
+            "x-enum-varnames": [
+                "BillingTermOwnerCommitment"
+            ]
+        },
+        "types.BillingTermSplit": {
+            "type": "string",
+            "enum": [
+                "even",
+                "proportional"
+            ],
+            "x-enum-varnames": [
+                "BillingTermEven",
+                "BillingTermProportional"
+            ]
+        },
+        "types.BillingTermTiming": {
+            "type": "string",
+            "enum": [
+                "advance",
+                "arrear"
+            ],
+            "x-enum-varnames": [
+                "BillingTermAdvance",
+                "BillingTermArrear"
+            ]
+        },
+        "types.BillingTermValueType": {
+            "type": "string",
+            "enum": [
+                "fixed",
+                "remainder"
+            ],
+            "x-enum-varnames": [
+                "BillingTermFixed",
+                "BillingTermRemainder"
+            ]
+        },
         "types.CommitmentCollectionMethod": {
             "type": "string",
             "enum": [
@@ -38276,6 +39408,60 @@ const docTemplate = `{
                 "TenantInternalStatusActive",
                 "TenantInternalStatusSuspended"
             ]
+        },
+        "types.ZohoPayPalPaymentMethod": {
+            "type": "string",
+            "enum": [
+                "standard",
+                "adaptive"
+            ],
+            "x-enum-varnames": [
+                "ZohoPayPalPaymentMethodStandard",
+                "ZohoPayPalPaymentMethodAdaptive"
+            ]
+        },
+        "types.ZohoPaymentGateway": {
+            "type": "string",
+            "enum": [
+                "paypal",
+                "stripe",
+                "authorize_net",
+                "payflow_pro",
+                "2checkout",
+                "braintree",
+                "razorpay"
+            ],
+            "x-enum-varnames": [
+                "ZohoPaymentGatewayPayPal",
+                "ZohoPaymentGatewayStripe",
+                "ZohoPaymentGatewayAuthorizeNet",
+                "ZohoPaymentGatewayPayflowPro",
+                "ZohoPaymentGateway2Checkout",
+                "ZohoPaymentGatewayBraintree",
+                "ZohoPaymentGatewayRazorpay"
+            ]
+        },
+        "types.ZohoPaymentGatewaySettings": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "gateways": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ZohoPaymentGateway"
+                    }
+                },
+                "paypal_payment_method": {
+                    "description": "Sent as additional_field1 on the PayPal gateway. Required when PayPal is selected.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ZohoPayPalPaymentMethod"
+                        }
+                    ]
+                }
+            }
         },
         "webhookDto.AlertWebhookPayload": {
             "type": "object",
