@@ -2156,26 +2156,28 @@ type CommitmentUsageValue struct {
 	Amount   decimal.Decimal `json:"amount" swaggertype:"string"`
 }
 
-// CommitmentUsageBreakdown is one commitment's usage against its capacity for the queried window,
-// projected to the window's end the way the period invoice bills it.
+// CommitmentUsageBreakdown reports capacity, economic utilization and usage-billing charges for the queried window.
 type CommitmentUsageBreakdown struct {
-	CommitmentID string                      `json:"commitment_id"`
-	InvoiceLabel string                      `json:"invoice_label"`
-	Type         types.CommitmentType        `json:"type"`
-	Measurement  types.CommitmentMeasurement `json:"measurement"`
-	Binding      bool                        `json:"binding"`
-	Currency     string                      `json:"currency"`
+	CommitmentID     string                           `json:"commitment_id"`
+	InvoiceLabel     string                           `json:"invoice_label"`
+	Type             types.CommitmentType             `json:"type"`
+	Measurement      types.CommitmentMeasurement      `json:"measurement"`
+	Binding          bool                             `json:"binding"`
+	CollectionMethod types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
+	TrueUpEnabled    bool                             `json:"true_up_enabled"`
+	TrueUpAmount     decimal.Decimal                  `json:"true_up_amount" swaggertype:"string"`
+	Currency         string                           `json:"currency"`
 	// AppliesFrom/To is the stretch of the queried window the commitment covers; usage outside it
 	// bills as overage and is not counted here.
 	AppliesFrom time.Time `json:"applies_from" format:"date-time"`
 	AppliesTo   time.Time `json:"applies_to" format:"date-time"`
-	// Committed is the full capacity for the stretch; its amount is the floor a binding commitment owes.
+	// Committed is the capacity and economic value for the covered stretch.
 	Committed CommitmentUsageValue `json:"committed"`
-	// Used is the capacity consumed so far and the value those units bill within the commitment.
+	// Used is consumed capacity and its economic value, independent of collection timing.
 	Used CommitmentUsageValue `json:"used"`
-	// Unused is the remaining capacity; for a binding commitment its amount is the true-up still owed.
+	// Unused is remaining capacity and value; only per-period collection can bill it as true-up.
 	Unused CommitmentUsageValue `json:"unused"`
-	// BilledAmount is what the stretch bills for this commitment: used plus, when binding, the true-up.
+	// BilledAmount is the usage-billing contribution, excluding scheduled collection and overage.
 	BilledAmount decimal.Decimal `json:"billed_amount" swaggertype:"string"`
 }
 

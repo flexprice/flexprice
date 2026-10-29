@@ -253,10 +253,66 @@ func commitmentInvoiceLines(
 	return out
 }
 
-// commitmentLines renders one commitment's utilized lines and its true-up; for a binding commitment the rows sum
-// to the rounded period amount, and a partial period's utilized value is capped there. A quantity commitment prices its
-// whole usage once on the committed price, so tiers walk the total, and splits that value across lines by quantity.
+// commitmentCollectionMethod resolves the legacy default without giving non-binding commitments a collection policy.
+func commitmentCollectionMethod(c *commitment.Commitment) types.CommitmentCollectionMethod {
+	if c == nil || !c.Binding {
+		return ""
+	}
+	if c.CollectionMethod == nil || *c.CollectionMethod == "" {
+		return types.CommitmentCollectionPerPeriod
+	}
+	return *c.CollectionMethod
+}
+
+func commitmentTrueUpEnabled(c *commitment.Commitment) bool {
+	return commitmentCollectionMethod(c) == types.CommitmentCollectionPerPeriod
+}
+
+// commitmentLines projects economic utilization into the configured collection method.
 func (r lineRenderer) commitmentLines(
+	stack *commitmentStack,
+	sc *stackedCommitment,
+	used commitmentAllocation,
+) []dto.CreateInvoiceLineItemRequest {
+	rows := r.commitmentUtilizedLines(stack, sc, used)
+	if commitmentCollectionMethod(sc.C) == types.CommitmentCollectionBillingTerms {
+		for i := range rows {
+			value := rows[i].Amount
+			rows[i].CommitmentInfo = &types.CommitmentInfo{
+				Type:        sc.C.Type,
+				IsWindowed:  sc.C.Measurement == types.CommitmentMeasurementWindow,
+				ValueWithin: &value,
+			}
+			rows[i].Amount = decimal.Zero
+		}
+		return rows
+	}
+	if !commitmentTrueUpEnabled(sc.C) {
+		return rows
+	}
+
+	utilizedValue := decimal.Zero
+	for _, row := range rows {
+		utilizedValue = utilizedValue.Add(row.Amount)
+	}
+	trueUp := types.RoundToCurrencyPrecision(sc.Period.Amount, r.currency).Sub(utilizedValue)
+	if !trueUp.IsPositive() {
+		return rows
+	}
+
+	// True-up quantity covers the whole span, matching its amount even in a mid-period preview.
+	trueUpQty := sc.Period.Capacity.Sub(used.Used)
+	if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
+		trueUpQty = decimal.NewFromInt(1)
+	}
+	row := r.row(sc.C, nil, types.CommitmentLineTrueUp, sc.C.InvoiceLabel+" (unused)", trueUpQty, trueUp)
+	row.PriceID = sc.C.CommittedPriceID
+	row.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
+	return append(rows, row)
+}
+
+// commitmentUtilizedLines values allocation before collection timing changes its invoice charge.
+func (r lineRenderer) commitmentUtilizedLines(
 	stack *commitmentStack,
 	sc *stackedCommitment,
 	used commitmentAllocation,
@@ -272,47 +328,22 @@ func (r lineRenderer) commitmentLines(
 		if !share.IsPositive() {
 			continue
 		}
-
 		qty, amount := share, usedValue.Mul(share).Div(used.Used)
 		if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
 			qty, amount = proportionalQuantity(line, share), share
 		}
-
 		rows = append(rows, r.row(sc.C, line, types.CommitmentLineUtilized, sc.C.InvoiceLabel, qty, amount))
 	}
 
 	utilizedValue := r.absorbDrift(rows, usedValue)
-	if !sc.C.Binding {
-		return rows
-	}
-
 	floor := types.RoundToCurrencyPrecision(sc.Period.Amount, r.currency)
-	if sc.Period.Clipped && utilizedValue.GreaterThan(floor) {
-		// A partial floor is the period's value accrued in this window; usage valued from tier zero cannot exceed it.
+	if sc.C.Binding && sc.Period.Clipped && utilizedValue.GreaterThan(floor) {
 		for i := range rows {
 			rows[i].Amount = types.RoundToCurrencyPrecision(rows[i].Amount.Mul(floor).Div(utilizedValue), r.currency)
 		}
-
 		r.absorbDrift(rows, floor)
-		return rows
 	}
-
-	trueUp := floor.Sub(utilizedValue)
-	if !trueUp.IsPositive() {
-		return rows
-	}
-
-	// The amount is the span floor's remainder, so the quantity is the span capacity's remainder —
-	// not the as-of unused, which stops at asOf and disagrees with the amount on mid-period previews.
-	trueUpQty := sc.Period.Capacity.Sub(used.Used)
-	if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
-		trueUpQty = decimal.NewFromInt(1)
-	}
-
-	row := r.row(sc.C, nil, types.CommitmentLineTrueUp, sc.C.InvoiceLabel+" (unused)", trueUpQty, trueUp)
-	row.PriceID = sc.C.CommittedPriceID
-	row.PriceType = lo.ToPtr(string(types.PRICE_TYPE_FIXED))
-	return append(rows, row)
+	return rows
 }
 
 // absorbDrift reconciles individually rounded rows with their rounded exact total, never driving

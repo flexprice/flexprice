@@ -49,6 +49,8 @@ type MeterUsageService interface {
 	// request shape used by callers that need to be signal-agnostic (e.g. the
 	// usage-analytics CSV exporter). It resolves tenant/environment from ctx.
 	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
+	// GetCostExplorer includes independently paginated commitments when commitments_v2 is enabled.
+	GetCostExplorer(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
 
 	// GetSubscriptionMeterUsage is the centralized meter-usage query function.
 	// Both analytics and billing paths call this per-subscription to get line-item-bounded usage.
@@ -2543,6 +2545,10 @@ func amortizeLineTotals(data *AnalyticsData) {
 			utilized := amortize(lineBreakdown.ComputedCommitmentUtilizedAmount, usage)
 			overage := amortize(lineBreakdown.ComputedOverageAmount, usage)
 			trueUp := amortize(lineBreakdown.ComputedTrueUpAmount, usage)
+			var coveredValue []decimal.Decimal
+			if lineBreakdown.ValueWithin != nil {
+				coveredValue = amortize(*lineBreakdown.ValueWithin, usage)
+			}
 			for i, combo := range combos {
 				costs[i] = utilized[i].Add(overage[i]).Add(trueUp[i])
 				combo.CommitmentInfo = &types.CommitmentInfo{
@@ -2554,6 +2560,9 @@ func amortizeLineTotals(data *AnalyticsData) {
 					ComputedCommitmentUtilizedAmount: utilized[i],
 					ComputedOverageAmount:            overage[i],
 					ComputedTrueUpAmount:             trueUp[i],
+				}
+				if coveredValue != nil {
+					combo.CommitmentInfo.ValueWithin = lo.ToPtr(coveredValue[i])
 				}
 			}
 		}
@@ -2808,7 +2817,10 @@ func (s *meterUsageService) commitmentLineBreakdowns(
 				breakdownByLine[item.ID] = lineBreakdown
 			}
 
-			lineBreakdown.TrueUpEnabled = lineBreakdown.TrueUpEnabled || sc.C.Binding
+			lineBreakdown.TrueUpEnabled = lineBreakdown.TrueUpEnabled || commitmentTrueUpEnabled(sc.C)
+			if commitmentCollectionMethod(sc.C) == types.CommitmentCollectionBillingTerms && lineBreakdown.ValueWithin == nil {
+				lineBreakdown.ValueWithin = lo.ToPtr(decimal.Zero)
+			}
 		}
 	}
 
@@ -2830,6 +2842,14 @@ func (s *meterUsageService) commitmentLineBreakdowns(
 		if kind == types.CommitmentLineOverage {
 			lineBreakdown.ComputedOverageAmount = lineBreakdown.ComputedOverageAmount.Add(line.Amount)
 			continue
+		}
+
+		if lineBreakdown.ValueWithin != nil {
+			value := line.Amount
+			if line.CommitmentInfo != nil && line.CommitmentInfo.ValueWithin != nil {
+				value = *line.CommitmentInfo.ValueWithin
+			}
+			lineBreakdown.ValueWithin = lo.ToPtr(lineBreakdown.ValueWithin.Add(value))
 		}
 
 		commitmentID := lo.FromPtr(line.CommitmentID)
