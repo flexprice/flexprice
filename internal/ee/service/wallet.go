@@ -304,8 +304,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 		return nil, err
 	}
 
-	// Convert to response DTO
-	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, w.ID)
+	walletAfterCommit(ctx, func(publishCtx context.Context) {
+		s.publishInternalWalletWebhookEvent(publishCtx, types.WebhookEventWalletCreated, w.ID)
+	})
 
 	return response, nil
 }
@@ -2621,29 +2622,34 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		return err
 	}
 
-	// Publish webhook event after transaction commits
-	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
+	walletAfterCommit(ctx, func(publishCtx context.Context) {
+		s.publishInternalTransactionWebhookEvent(publishCtx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-	// Log credit balance alert after wallet operation
-	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
-		// Don't fail the transaction if alert logging fails
-		s.Logger.Error(ctx, "failed to log credit balance alert after wallet operation",
-			"error", err,
-			"wallet_id", w.ID,
-		)
-	}
+		if err := s.logCreditBalanceAlert(publishCtx, w, newCreditBalance); err != nil {
+			s.Logger.Error(publishCtx, "failed to log credit balance alert after wallet operation",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+		}
 
-	// Only the wallet we just changed can have moved its alert state, so drive
-	// the per-wallet path directly instead of fanning out to every customer wallet.
-	if err := s.EvaluateAlertsForWallet(ctx, w, NewAlertLogsService(s.ServiceParams), ""); err != nil {
-		s.Logger.Error(ctx, "failed to evaluate wallet alerts after wallet operation",
-			"error", err,
-			"wallet_id", req.WalletID,
-			"customer_id", w.CustomerID,
-		)
-	}
+		if err := s.EvaluateAlertsForWallet(publishCtx, w, NewAlertLogsService(s.ServiceParams), ""); err != nil {
+			s.Logger.Error(publishCtx, "failed to evaluate wallet alerts after wallet operation",
+				"error", err,
+				"wallet_id", w.ID,
+				"customer_id", w.CustomerID,
+			)
+		}
+	})
 
 	return nil
+}
+
+func walletAfterCommit(ctx context.Context, work func(context.Context)) {
+	publishCtx := types.WithoutDBTransaction(ctx)
+	publish := func() { work(publishCtx) }
+	if !types.RegisterPostCommit(ctx, publish) {
+		publish()
+	}
 }
 
 // ExpireCredits expires credits for a given transaction

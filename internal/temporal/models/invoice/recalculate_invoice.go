@@ -4,16 +4,18 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ===================== Recalculate Invoice (voided) Workflow Models =====================
 
 // RecalculateInvoiceWorkflowInput represents the input for recalculating a voided subscription invoice (creates replacement invoice).
 type RecalculateInvoiceWorkflowInput struct {
-	InvoiceID     string `json:"invoice_id"`
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
-	UserID        string `json:"user_id"`
+	BillingScheduleItemIDs []string `json:"billing_schedule_item_ids,omitempty"`
+	InvoiceID              string   `json:"invoice_id"`
+	TenantID               string   `json:"tenant_id"`
+	EnvironmentID          string   `json:"environment_id"`
+	UserID                 string   `json:"user_id"`
 }
 
 // Validate validates the recalculate invoice workflow input
@@ -33,7 +35,7 @@ func (i *RecalculateInvoiceWorkflowInput) Validate() error {
 			WithHint("Environment ID is required").
 			Mark(ierr.ErrValidation)
 	}
-	return nil
+	return types.ValidateBillingScheduleItemIDs(i.BillingScheduleItemIDs)
 }
 
 // RecalculateInvoiceWorkflowResult represents the result of recalculating a voided invoice.
@@ -48,10 +50,11 @@ type RecalculateInvoiceWorkflowResult struct {
 
 // RecalculateInvoiceActivityInput represents the input for the recalculate invoice (voided) activity
 type RecalculateInvoiceActivityInput struct {
-	InvoiceID     string `json:"invoice_id"`
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
-	UserID        string `json:"user_id"`
+	BillingScheduleItemIDs []string `json:"billing_schedule_item_ids,omitempty"`
+	InvoiceID              string   `json:"invoice_id"`
+	TenantID               string   `json:"tenant_id"`
+	EnvironmentID          string   `json:"environment_id"`
+	UserID                 string   `json:"user_id"`
 }
 
 // Validate validates the recalculate invoice activity input
@@ -71,7 +74,7 @@ func (i *RecalculateInvoiceActivityInput) Validate() error {
 			WithHint("Environment ID is required").
 			Mark(ierr.ErrValidation)
 	}
-	return nil
+	return types.ValidateBillingScheduleItemIDs(i.BillingScheduleItemIDs)
 }
 
 // RecalculateInvoiceActivityOutput represents the output for the recalculate invoice activity

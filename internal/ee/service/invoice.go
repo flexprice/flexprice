@@ -78,6 +78,10 @@ type InvoiceService interface {
 	GetInvoicePDF(ctx context.Context, req dto.InvoicePDFRequest) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
+	// ValidateInvoiceCorrection checks scoped source selection before asynchronous replacement.
+	ValidateInvoiceCorrection(ctx context.Context, id string, req dto.RecalculateInvoiceRequest) error
+	// RecalculateInvoiceWithSchedule atomically replaces a voided invoice using reviewed sources.
+	RecalculateInvoiceWithSchedule(ctx context.Context, id string, req dto.RecalculateInvoiceRequest) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
@@ -650,6 +654,13 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	if err := validateBillingScheduleRecompute(ctx, inv); err != nil {
 		return nil, false, err
 	}
+	original, err := s.correctionSourceInvoice(ctx, inv)
+	if err != nil {
+		return nil, false, err
+	}
+	if original != nil {
+		ctx = withCorrectionCharges(ctx)
+	}
 
 	// A paused period bills nothing: its invoice is marked SKIPPED as is and never computed.
 	if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionPaused {
@@ -815,7 +826,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			return err
 		}
 
-		return s.withBillingScheduleCollection(txCtx, inv, func(collectionCtx context.Context) error {
+		return s.withBillingScheduleCollection(txCtx, inv, applyReq, func(collectionCtx context.Context) error {
 			var computeErr error
 			skipped, computeErr = s.applyInvoiceComputation(collectionCtx, inv, applyReq)
 			return computeErr
@@ -1724,6 +1735,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 
 	var inv *invoice.Invoice
+	var notifyAfterTransaction func()
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
 		tx = activity.WithAction(tx, id, activity.InvoiceVoided)
 		// Re-read under a row lock so a concurrent refund cannot make RefundedAmount
@@ -1742,59 +1754,87 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			return errInvoiceCheckoutGated(id, "void")
 		}
 
-		if err := validateInvoiceVoidable(inv); err != nil {
+		alreadyVoided := inv.InvoiceStatus == types.InvoiceStatusVoided
+		if !alreadyVoided {
+			if err := validateInvoiceVoidable(inv); err != nil {
+				return err
+			}
+		}
+
+		applyVoid := func(tx context.Context) error {
+			if alreadyVoided {
+				return validateInvoiceVoidable(inv)
+			}
+			return s.persistInvoiceVoid(tx, inv, req)
+		}
+		if err := s.withBillingScheduleVoid(tx, inv, applyVoid); err != nil {
 			return err
 		}
-
-		now := time.Now().UTC()
-		inv.InvoiceStatus = types.InvoiceStatusVoided
-		inv.VoidedAt = &now
-		if req.Metadata != nil {
-			if err := s.updateMetadata(inv, req); err != nil {
-				return err
+		if !alreadyVoided {
+			notifyCtx := types.WithoutDBTransaction(tx)
+			voidedInvoice := invoice.NewInvoiceBuilder(inv).Build()
+			notifyAfterTransaction = func() { s.afterInvoiceVoid(notifyCtx, voidedInvoice) }
+			if types.RegisterPostCommit(tx, notifyAfterTransaction) {
+				notifyAfterTransaction = nil
 			}
 		}
-
-		// Refund only the remaining customer value that has not already been returned.
-		// RefundedAmount tracks prior refunds (e.g. refund credit notes), so voiding must
-		// not credit more than the total value provided for the invoice.
-		fundedAmount := inv.AmountPaid.Add(inv.TotalPrepaidCreditsApplied)
-		refundAmount := fundedAmount.Sub(inv.RefundedAmount)
-		if refundAmount.IsNegative() {
-			refundAmount = decimal.Zero
-		}
-		if refundAmount.IsPositive() {
-			refundService := NewRefundService(s.ServiceParams)
-
-			refunds, err := refundService.PrepareRefundsForVoidedInvoice(tx, inv, refundAmount)
-			if err != nil {
-				return err
-			}
-
-			// A void never refunds to a gateway, so these rows settle to the wallet with no
-			// external I/O and can be dispatched inside this transaction.
-			for _, row := range refunds {
-				if err := refundService.Dispatch(tx, row.ID); err != nil {
-					return err
-				}
-			}
-
-			inv.RefundedAmount = inv.RefundedAmount.Add(refundAmount)
-		}
-
-		// Once voided, any invoice whose funded value has been fully returned is
-		// terminally REFUNDED — including the case where prior refunds already
-		// covered it and this void issued no additional credit.
-		if fundedAmount.IsPositive() && inv.RefundedAmount.GreaterThanOrEqual(fundedAmount) {
-			tx = activity.WithAction(tx, id, activity.InvoiceRefunded)
-			inv.PaymentStatus = types.PaymentStatusRefunded
-		}
-
-		return s.InvoiceRepo.Update(tx, inv)
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	if notifyAfterTransaction != nil {
+		notifyAfterTransaction()
+	}
+	return inv, nil
+}
+
+// persistInvoiceVoid requires the caller transaction and locked invoice row.
+func (s *invoiceService) persistInvoiceVoid(tx context.Context, inv *invoice.Invoice, req dto.InvoiceVoidRequest) error {
+	now := time.Now().UTC()
+	inv.InvoiceStatus = types.InvoiceStatusVoided
+	inv.VoidedAt = &now
+	if req.Metadata != nil {
+		if err := s.updateMetadata(inv, req); err != nil {
+			return err
+		}
+	}
+
+	// Return only funded customer value that has not already been refunded.
+	fundedAmount := inv.AmountPaid.Add(inv.TotalPrepaidCreditsApplied)
+	refundAmount := fundedAmount.Sub(inv.RefundedAmount)
+	if refundAmount.IsNegative() {
+		refundAmount = decimal.Zero
+	}
+	if refundAmount.IsPositive() {
+		refundService := NewRefundService(s.ServiceParams)
+
+		refunds, err := refundService.PrepareRefundsForVoidedInvoice(tx, inv, refundAmount)
+		if err != nil {
+			return err
+		}
+
+		// A void never refunds to a gateway, so these rows settle to the wallet with no
+		// external I/O and can be dispatched inside this transaction.
+		for _, row := range refunds {
+			if err := refundService.Dispatch(tx, row.ID); err != nil {
+				return err
+			}
+		}
+
+		inv.RefundedAmount = inv.RefundedAmount.Add(refundAmount)
+	}
+
+	// Earlier refunds may already cover all funded value, leaving nothing new to return.
+	if fundedAmount.IsPositive() && inv.RefundedAmount.GreaterThanOrEqual(fundedAmount) {
+		tx = activity.WithAction(tx, inv.ID, activity.InvoiceRefunded)
+		inv.PaymentStatus = types.PaymentStatusRefunded
+	}
+
+	return s.InvoiceRepo.Update(tx, inv)
+}
+
+func (s *invoiceService) afterInvoiceVoid(ctx context.Context, inv *invoice.Invoice) {
 	recordInvoiceTransition(ctx, inv)
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
@@ -1823,9 +1863,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		}
 	}
 
-	// A void says the supply never happened, so the whole filing is undone rather than any
-	// part of it. Outside the void transaction, and a failure is logged rather than failing the
-	// void: the invoice is already void by now, so an unreversed tax is an operator's to chase.
+	// Reverse the full tax filing after commit; provider failures leave the invoice voided.
 	taxService := NewTaxService(s.ServiceParams)
 	if err := taxService.ReverseTaxOnProvider(ctx, dto.TaxReversalRequest{
 		EntityType: types.TaxRateEntityTypeInvoice,
@@ -1842,8 +1880,6 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	}
 
 	notifyInvoiceVoided(ctx, s.ServiceParams, inv.ID)
-
-	return inv, nil
 }
 
 func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {

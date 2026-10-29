@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -453,6 +454,9 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 
 // UpdateWalletBalance updates the wallet's balance and credit balance
 func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error {
+	if ctx == nil || strings.TrimSpace(types.GetTenantID(ctx)) == "" || strings.TrimSpace(types.GetEnvironmentID(ctx)) == "" {
+		return ierr.Validation("tenant and environment context are required to update a wallet balance")
+	}
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "update_wallet_balance", map[string]interface{}{
 		"wallet_id":          walletID,
@@ -461,8 +465,8 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	})
 	defer FinishSpan(span)
 
-	_, err := r.client.Writer(ctx).Wallet.Update().
-		Where(wallet.ID(walletID)).
+	updated, err := r.client.Writer(ctx).Wallet.Update().
+		Where(wallet.ID(walletID), wallet.TenantID(types.GetTenantID(ctx)), wallet.EnvironmentID(types.GetEnvironmentID(ctx))).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -478,6 +482,9 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 				"credit_balance": newCreditBalance,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+	if len(updated) == 0 {
+		return ierr.NewError("wallet not found").WithHint("No wallet matches this tenant and environment").Mark(ierr.ErrNotFound)
 	}
 	r.DeleteCache(ctx, walletID)
 	return nil
@@ -1084,6 +1091,9 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 }
 
 func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wallet) {
+	if wallet == nil || r.bypassCache(ctx) {
+		return
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "set", map[string]interface{}{
 		"wallet_id": wallet.ID,
 	})
@@ -1094,6 +1104,9 @@ func (r *walletRepository) SetCache(ctx context.Context, wallet *walletdomain.Wa
 }
 
 func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomain.Wallet {
+	if r.bypassCache(ctx) {
+		return nil
+	}
 	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": id,
 	})
@@ -1112,13 +1125,30 @@ func (r *walletRepository) GetCache(ctx context.Context, id string) *walletdomai
 }
 
 func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
-	span, ctx := cache.StartRedisCacheSpan(ctx, "wallet", "delete", map[string]interface{}{
-		"wallet_id": walletID,
+	if ctx == nil || r.redisCache == nil {
+		return
+	}
+	cacheCtx := types.WithoutDBTransaction(ctx)
+	inTransaction := r.client != nil && r.client.TxFromContext(ctx) != nil
+	afterCommit(ctx, func() {
+		deleteCtx := cacheCtx
+		if inTransaction {
+			var cancel context.CancelFunc
+			// The commit may succeed immediately before the caller cancels its request.
+			deleteCtx, cancel = context.WithTimeout(context.WithoutCancel(deleteCtx), 3*time.Second)
+			defer cancel()
+		}
+		span, deleteCtx := cache.StartRedisCacheSpan(deleteCtx, "wallet", "delete", map[string]interface{}{
+			"wallet_id": walletID,
+		})
+		defer cache.FinishSpan(span)
+		cacheKey := cache.GenerateKey(deleteCtx, cache.PrefixWallet, walletID)
+		r.redisCache.Delete(deleteCtx, cacheKey)
 	})
-	defer cache.FinishSpan(span)
+}
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixWallet, walletID)
-	r.redisCache.Delete(ctx, cacheKey)
+func (r *walletRepository) bypassCache(ctx context.Context) bool {
+	return ctx == nil || r.redisCache == nil || types.ShouldForceWriter(ctx) || (r.client != nil && r.client.TxFromContext(ctx) != nil)
 }
 
 func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*walletdomain.Wallet, error) {
