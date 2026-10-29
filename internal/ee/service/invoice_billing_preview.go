@@ -23,6 +23,10 @@ func (s *invoiceService) projectSubscriptionBillingSchedule(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	cutoff, err := invoiceCollectionCutoff(destination)
+	if err != nil {
+		return err
+	}
 	discovered, err := s.discoverInvoiceCollection(ctx, destination)
 	if err != nil {
 		return err
@@ -33,7 +37,7 @@ func (s *invoiceService) projectSubscriptionBillingSchedule(ctx context.Context,
 	}
 	total := decimal.Zero
 	for _, item := range projection.due {
-		if item.Delivery != types.BillingTermSubscriptionInvoice || item.BillOn.After(*request.PeriodEnd) {
+		if item.Delivery != types.BillingTermSubscriptionInvoice || item.BillOn.After(cutoff) {
 			continue
 		}
 		request.LineItems = append(request.LineItems, schedulePreviewRequest(item))

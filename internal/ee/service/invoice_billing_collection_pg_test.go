@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	entcustomer "github.com/flexprice/flexprice/ent/customer"
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	core "github.com/flexprice/flexprice/internal/ee/service/billingterms"
 	"github.com/flexprice/flexprice/internal/postgres"
 	repository "github.com/flexprice/flexprice/internal/repository/ent"
@@ -27,6 +29,18 @@ type invoiceCollectionFixture struct {
 	itemID  string
 }
 
+func seedBillingScheduleCustomer(t *testing.T, ctx context.Context, db postgres.IClient, id string) {
+	t.Helper()
+	exists, err := db.Writer(ctx).Customer.Query().Where(entcustomer.ID(id), entcustomer.TenantID(types.GetTenantID(ctx)), entcustomer.EnvironmentID(types.GetEnvironmentID(ctx))).Exist(ctx)
+	require.NoError(t, err)
+	if exists {
+		return
+	}
+	_, err = db.Writer(ctx).Customer.Create().SetID(id).SetTenantID(types.GetTenantID(ctx)).SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetExternalID(id).SetName("Billing terms fixture").SetStatus(string(types.StatusPublished)).Save(ctx)
+	require.NoError(t, err)
+}
+
 func newInvoiceCollectionFixture(t *testing.T, db postgres.IClient) *invoiceCollectionFixture {
 	t.Helper()
 	suite := &InvoiceServiceSuite{}
@@ -34,6 +48,7 @@ func newInvoiceCollectionFixture(t *testing.T, db postgres.IClient) *invoiceColl
 	suite.SetupSuite()
 	suite.SetupTest()
 	t.Cleanup(suite.TearDownTest)
+	suite.testData.now = suite.testData.now.Truncate(time.Microsecond)
 	ctx := suite.GetContext()
 	inv := suite.computedCycleDraft(types.GenerateUUIDWithPrefix("sub"), "usd", decimal.NewFromInt(40))
 	params := suite.service.(*invoiceService).ServiceParams
@@ -43,8 +58,11 @@ func newInvoiceCollectionFixture(t *testing.T, db postgres.IClient) *invoiceColl
 	sub.Timezone = "UTC"
 	sub.SubscriptionType = types.SubscriptionTypeStandalone
 	sub.BillingCadence = types.BILLING_CADENCE_RECURRING
+	sub.BillingCycle = types.BillingCycleAnniversary
 	require.NoError(t, params.SubRepo.Update(ctx, sub))
 	params.DB = db
+	seedBillingScheduleCustomer(t, ctx, db, sub.CustomerID)
+	require.NoError(t, repository.NewSubscriptionRepository(db, params.Logger, testutil.NewInMemoryRedis()).Create(ctx, subscription.NewSubscriptionBuilder(sub).Build()))
 	params.InvoiceRepo = repository.NewInvoiceRepository(db, params.Logger)
 	params.InvoiceLineItemRepo = repository.NewInvoiceLineItemRepository(db, params.Logger)
 	require.NoError(t, params.InvoiceRepo.CreateWithLineItems(ctx, inv))
