@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainBillingTerms "github.com/flexprice/flexprice/internal/domain/billingterms"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -146,12 +147,28 @@ func (s *CheckoutPollSuite) SetupTest() {
 	s.svc = NewCheckoutSessionService(s.buildParams()).(*checkoutSessionService)
 }
 
+type checkoutPollExecutionStore struct {
+	domainBillingTerms.ExecutionStore
+}
+
+func (*checkoutPollExecutionStore) InTransaction(ctx context.Context) bool {
+	return ctx.Value(types.CtxDBTransaction) != nil
+}
+
+func (*checkoutPollExecutionStore) LockEligibility(context.Context, []domainBillingTerms.EligibilityScope) error {
+	return nil
+}
+
+func (*checkoutPollExecutionStore) TryLockEligibility(context.Context, []domainBillingTerms.EligibilityScope) error {
+	return nil
+}
+
 func (s *CheckoutPollSuite) buildParams() ServiceParams {
 	return ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
 		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
-		BillingTermsStore:            &lifecycleTestStore{},
+		BillingTermsStore:            &checkoutPollExecutionStore{},
 		CommitmentRepo:               s.GetStores().CommitmentRepo,
 		SubRepo:                      s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
@@ -385,11 +402,6 @@ func (s *CheckoutPollSuite) TestConcurrentPolls_CompleteExactlyOnce() {
 
 	// No debounce, so both callers reach the gateway and race on the claim.
 	s.svc.Locker = nil
-
-	// Note: this test trips -race, in testutil.InMemorySubscriptionStore.GetWithLineItems,
-	// which writes LineItems onto the shared stored pointer. That is a flaw in the test
-	// double, not in the path under test — production safety comes from the conditional
-	// UPDATE in MarkCompleted. Run without -race, or fix the store separately.
 
 	const callers = 8
 	var wg sync.WaitGroup

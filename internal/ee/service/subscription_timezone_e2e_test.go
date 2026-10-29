@@ -48,6 +48,7 @@ func (s *SubscriptionTimezoneE2ETestSuite) SetupSuite() {
 
 func (s *SubscriptionTimezoneE2ETestSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_timezone")
 	s.setupService()
 	s.setupPlanAndPrice()
 	s.threshold = decimal.NewFromInt(10) // $10 threshold, $0.01/call → 1001 calls trip it
@@ -61,7 +62,9 @@ func (s *SubscriptionTimezoneE2ETestSuite) setupService() {
 	s.service = NewSubscriptionService(ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &lifecycleTestStore{},
+		CommitmentRepo:             s.GetStores().CommitmentRepo,
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -178,6 +181,7 @@ func (s *SubscriptionTimezoneE2ETestSuite) createSubWithThreshold(
 	ctx := s.GetContext()
 	sub := &subscription.Subscription{
 		ID:                   subID,
+		EnvironmentID:        types.GetEnvironmentID(ctx),
 		PlanID:               s.plan.ID,
 		CustomerID:           c.ID,
 		StartDate:            currentPeriodStart,

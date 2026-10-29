@@ -93,12 +93,68 @@ func TestWalletBillingSchedule_CurrentDraftCreditsCountOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "80", pending.String())
 	require.Equal(t, "50", usage[sub.ID].amount.String(), "projection must not mutate live usage")
+	w.Config.AllowedPriceTypes = nil
+	pending, _, err = service.pendingCharges(ctx, w, usage)
+	require.NoError(t, err)
+	require.Equal(t, "80", pending.String(), "legacy empty filters must include the draft source once")
 	source.LineItems[0].LineItemDiscount = decimal.NewFromInt(10)
 	source.LineItems[0].InvoiceLevelDiscount = decimal.NewFromInt(5)
 	require.NoError(t, svc.InvoiceRepo.Update(ctx, source))
 	pending, _, err = service.pendingCharges(ctx, w, usage)
 	require.NoError(t, err)
 	require.Equal(t, "65", pending.String())
+}
+
+func TestWalletBillingSchedule_EmptyFiltersPreserveOrdinaryCharges(t *testing.T) {
+	for _, tc := range []struct {
+		name                          string
+		usage, fixed, paid, remaining int64
+		want                          string
+	}{
+		{name: "mixed partial payment", usage: 50, fixed: 20, paid: 70, remaining: 100, want: "80"},
+		{name: "source only partial payment", paid: 30, remaining: 70, want: "70"},
+		{name: "credit reduced invoice", usage: 50, fixed: 20, paid: 70, remaining: 60, want: "60"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, svc, sub, source, _ := newPaymentLifecycleFixture(t)
+			ctx := s.GetContext()
+			owner := &commitment.Commitment{ID: "commitment_wallet", SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Currency: sub.Currency, Binding: true,
+				CollectionMethod: lo.ToPtr(types.CommitmentCollectionBillingTerms), EnvironmentID: sub.EnvironmentID, BaseModel: types.GetDefaultBaseModel(ctx)}
+			_, err := svc.CommitmentRepo.Create(ctx, owner)
+			require.NoError(t, err)
+			source.PaymentStatus = types.PaymentStatusPending
+			source.AmountDue = decimal.NewFromInt(tc.paid + tc.remaining)
+			source.AmountPaid, source.AmountRemaining = decimal.NewFromInt(tc.paid), decimal.NewFromInt(tc.remaining)
+			source.Subtotal, source.Total = decimal.NewFromInt(tc.usage+tc.fixed+100), source.AmountDue
+			source.LineItems = []*invoice.InvoiceLineItem{
+				{ID: "usage", Amount: decimal.NewFromInt(tc.usage), PriceType: lo.ToPtr(string(types.PRICE_TYPE_USAGE))},
+				{ID: "fixed", Amount: decimal.NewFromInt(tc.fixed), PriceType: lo.ToPtr(string(types.PRICE_TYPE_FIXED))},
+			}
+			var items []*domain.ScheduleItem
+			for _, id := range []string{"scheduled_one", "scheduled_two"} {
+				item := &domain.ScheduleItem{ID: id, OwnerID: owner.ID, OwnerType: types.BillingTermOwnerCommitment, CustomerID: sub.CustomerID, Currency: sub.Currency,
+					Amount: decimal.NewFromInt(50), ScheduleStatus: types.BillingScheduleInvoiced, InvoiceID: &source.ID, InvoiceLineItemID: lo.ToPtr(id + "_line"), EnvironmentID: sub.EnvironmentID, BaseModel: types.GetDefaultBaseModel(ctx)}
+				items = append(items, item)
+				source.LineItems = append(source.LineItems, &invoice.InvoiceLineItem{ID: *item.InvoiceLineItemID, InvoiceID: source.ID, CustomerID: sub.CustomerID, Currency: sub.Currency,
+					BillingScheduleItemID: &item.ID, Amount: item.Amount, Quantity: decimal.NewFromInt(1), PriceType: lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					PeriodStart: &sub.CurrentPeriodStart, PeriodEnd: &sub.CurrentPeriodEnd, EnvironmentID: sub.EnvironmentID, BaseModel: types.GetDefaultBaseModel(ctx)})
+			}
+			require.NoError(t, svc.InvoiceRepo.Update(ctx, source))
+			svc.BillingTerms = &billingProjectionEngine{state: &billingAPIState{owner: &domain.OwnerSnapshot{Owner: commitmentBillingOwner(owner.ID), CustomerID: sub.CustomerID,
+				Currency: sub.Currency, TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID}, items: items}}
+			service := &walletService{ServiceParams: svc.ServiceParams}
+			w := &wallet.Wallet{CustomerID: sub.CustomerID, Currency: sub.Currency}
+			for range 2 {
+				pending, _, err := service.pendingCharges(ctx, w, nil)
+				require.NoError(t, err)
+				require.Equal(t, tc.want, pending.String())
+			}
+			w.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
+			pending, _, err := service.pendingCharges(ctx, w, nil)
+			require.NoError(t, err)
+			require.Equal(t, decimal.NewFromInt(tc.remaining), pending)
+		})
+	}
 }
 
 func TestBillingScheduleProjection_InvoiceRecipientAndGroupedChildren(t *testing.T) {

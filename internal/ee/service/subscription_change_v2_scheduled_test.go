@@ -17,7 +17,7 @@ type failingSubRepo struct {
 	subscription.Repository
 }
 
-func (r *failingSubRepo) GetForUpdate(ctx context.Context, id string) (*subscription.Subscription, error) {
+func (r *failingSubRepo) GetForUpdateNowait(ctx context.Context, id string) (*subscription.Subscription, error) {
 	return nil, ierr.NewError("database unavailable").Mark(ierr.ErrDatabase)
 }
 

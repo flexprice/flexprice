@@ -390,8 +390,10 @@ func TestTrialActivationRequestCommitBoundary(t *testing.T) {
 			setTrialRecoveryPastPeriod(t, s, sub, source)
 			ctx, cancel := context.WithCancel(s.GetContext())
 			defer cancel()
+			var outerTx *ent.Tx
 			if mode != "immediate" {
-				ctx = context.WithValue(ctx, types.CtxDBTransaction, &ent.Tx{})
+				outerTx = &ent.Tx{}
+				ctx = context.WithValue(ctx, types.CtxDBTransaction, outerTx)
 				if mode != "missing hooks" {
 					ctx = types.WithPostCommitHooks(ctx)
 				}
@@ -402,7 +404,11 @@ func TestTrialActivationRequestCommitBoundary(t *testing.T) {
 			reads := 0
 			svc.SubRepo = &trialRecoverySubscriptions{Repository: svc.SubRepo, onList: func(read context.Context) {
 				reads++
-				require.Nil(t, svc.DB.TxFromContext(read))
+				activationTx := svc.DB.TxFromContext(read)
+				require.NotNil(t, activationTx, "activation discovery and locks belong to a fresh transaction")
+				if outerTx != nil {
+					require.NotSame(t, outerTx, activationTx, "activation must not reuse the invoice transaction")
+				}
 				require.NoError(t, read.Err())
 				require.Equal(t, sub.TenantID, types.GetTenantID(read))
 				require.Equal(t, sub.EnvironmentID, types.GetEnvironmentID(read))

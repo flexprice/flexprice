@@ -111,14 +111,24 @@ func TestTrialPaymentActivationRejectsInvalidPolicyOrLifecycle(t *testing.T) {
 
 func TestTrialPaymentOtherInvoiceReasonsUnchanged(t *testing.T) {
 	s, svc, sub, source, _ := newTrialRecoveryFixture(t)
+	setTrialRecoveryPastPeriod(t, s, sub, source)
+	sub.TrialStart, sub.TrialEnd = nil, nil
 	sub.CollectionMethod, sub.PaymentBehavior = string(types.CollectionMethodSendInvoice), string(types.PaymentBehaviorDefaultActive)
+	require.NoError(t, svc.SubRepo.Update(s.GetContext(), sub))
 	source.BillingReason = string(types.InvoiceBillingReasonSubscriptionCycle)
+	require.NoError(t, svc.InvoiceRepo.Update(s.GetContext(), source))
 	ctx := types.WithPostCommitHooks(context.WithValue(s.GetContext(), types.CtxDBTransaction, &ent.Tx{}))
 	processor := NewSubscriptionPaymentProcessor(&svc.ServiceParams)
 	require.NoError(t, processor.HandlePaymentBehavior(ctx, sub, dto.NewInvoiceResponse(source), types.PaymentBehaviorDefaultActive, types.InvoiceFlowRenewal))
 	stored, err := svc.SubRepo.Get(s.GetContext(), sub.ID)
 	require.NoError(t, err)
+	require.Equal(t, types.SubscriptionStatusIncomplete, stored.SubscriptionStatus, "ordinary renewal activation also waits for the invoice commit")
+	require.Empty(t, s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Events())
+	types.RunPostCommitHooks(ctx)
+	stored, err = svc.SubRepo.Get(s.GetContext(), sub.ID)
+	require.NoError(t, err)
 	require.Equal(t, types.SubscriptionStatusActive, stored.SubscriptionStatus)
+	require.Len(t, s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Events(), 1)
 }
 
 func TestTrialRecoveryRechecksCancellationAfterEligibility(t *testing.T) {

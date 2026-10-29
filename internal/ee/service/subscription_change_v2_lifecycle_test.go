@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -9,8 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func (s *SubscriptionChangeV2Suite) TestLifecycleGuardBusyLeavesPlanAndCalendarUnchanged() {
@@ -70,7 +71,8 @@ func TestPlanChangeEligibilityContentionPostgres(t *testing.T) {
 	params.SubRepo = repository.NewSubscriptionRepository(db, params.Logger, testutil.NewInMemoryRedis())
 	params.InvoiceRepo = repository.NewInvoiceRepository(db, params.Logger)
 	params.BillingTermsStore = repository.NewBillingTermsExecutionStore(db)
-	require.NoError(t, params.SubRepo.Create(ctx, suite.td.sub))
+	initial := subscription.NewSubscriptionBuilder(suite.td.sub).WithProrationBehavior(types.ProrationBehaviorNone).Build()
+	require.NoError(t, params.SubRepo.Create(ctx, initial))
 	svc := NewSubscriptionService(params).(*subscriptionService)
 	before, err := params.SubRepo.Get(ctx, suite.td.sub.ID)
 	require.NoError(t, err)
