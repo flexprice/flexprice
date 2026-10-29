@@ -1997,6 +1997,15 @@ func (s *SubscriptionServiceSuite) TestGetActiveAddonAssociations_OptInCancelled
 	start := s.testData.now
 	end := s.testData.now.Add(24 * time.Hour)
 	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, &addonassociation.AddonAssociation{
+		ID:          "assoc_active_opt_in",
+		EntityID:    sub.ID,
+		EntityType:  types.AddonAssociationEntityTypeSubscription,
+		AddonID:     addonID,
+		StartDate:   &start,
+		AddonStatus: types.AddonStatusActive,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, &addonassociation.AddonAssociation{
 		ID:          "assoc_cancelled_opt_in",
 		EntityID:    sub.ID,
 		EntityType:  types.AddonAssociationEntityTypeSubscription,
@@ -2007,9 +2016,9 @@ func (s *SubscriptionServiceSuite) TestGetActiveAddonAssociations_OptInCancelled
 		BaseModel:   types.GetDefaultBaseModel(ctx),
 	}))
 
-	hasAddon := func(resp *dto.ListAddonAssociationsResponse) bool {
+	hasAssoc := func(resp *dto.ListAddonAssociationsResponse, assocID string) bool {
 		for _, item := range resp.Items {
-			if item.AddonAssociation.AddonID == addonID {
+			if item.AddonAssociation.ID == assocID {
 				return true
 			}
 		}
@@ -2018,10 +2027,12 @@ func (s *SubscriptionServiceSuite) TestGetActiveAddonAssociations_OptInCancelled
 
 	defaultResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID)
 	s.NoError(err)
-	s.False(hasAddon(defaultResp), "default read must keep listing active associations only")
+	s.True(hasAssoc(defaultResp, "assoc_active_opt_in"), "default read must list active associations")
+	s.False(hasAssoc(defaultResp, "assoc_cancelled_opt_in"), "default read must keep listing active associations only")
 
 	optInResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID,
 		types.AddonStatusActive, types.AddonStatusCancelled)
 	s.NoError(err)
-	s.True(hasAddon(optInResp), "cancelled association must surface when the caller asks for it")
+	s.True(hasAssoc(optInResp, "assoc_active_opt_in"), "active association must stay listed alongside cancelled")
+	s.True(hasAssoc(optInResp, "assoc_cancelled_opt_in"), "cancelled association must surface when the caller asks for it")
 }

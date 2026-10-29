@@ -693,9 +693,7 @@ func (h *SubscriptionHandler) GetActiveAddonAssociations(c *gin.Context) {
 		return
 	}
 
-	// Opt-in: without addon_statuses the endpoint keeps listing active associations only.
-	// A caller that needs cancellations still running to their end_date asks for
-	// cancelled too and filters by end_date itself.
+	// Omitted statuses retain the active-only default.
 	var addonStatuses []types.AddonStatus
 	for _, raw := range c.QueryArray("addon_statuses") {
 		status := types.AddonStatus(raw)
