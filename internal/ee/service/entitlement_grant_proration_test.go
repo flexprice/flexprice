@@ -437,6 +437,18 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_Reat
 	s.assertTiled(featureID)
 }
 
+// Only a leaving grant config rebuilds a never-reset cap; a plan change also lists configs
+// without one, and those give no quota to take off.
+func (s *SubscriptionServiceSuite) TestGrantChangeConfig_RemovesFeature_OnlyGrantConfigs() {
+	legacy := &entitlement.Entitlement{FeatureID: "feat_rm_legacy", UsageLimit: lo.ToPtr(int64(100))}
+	grant := &entitlement.Entitlement{FeatureID: "feat_rm_grant", GrantQuota: lo.ToPtr(decimal.NewFromInt(100))}
+	cfg := &GrantChangeConfig{entitlementsToRemove: []*entitlement.Entitlement{legacy, grant, nil}}
+
+	s.False(cfg.removesFeature("feat_rm_legacy"))
+	s.True(cfg.removesFeature("feat_rm_grant"))
+	s.False(cfg.removesFeature("feat_rm_other"))
+}
+
 // Removing an addon from a never-reset feature takes its quota off the cap at once, whatever
 // the proration: the cap is always the configs still on the feature.
 func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_DropsAddonQuotaAtOnce() {

@@ -332,10 +332,10 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 	return err
 }
 
-// removesFeature reports whether a config on the feature leaves in this change.
+// removesFeature reports whether a grant config on the feature leaves in this change.
 func (c *GrantChangeConfig) removesFeature(featureID string) bool {
 	return lo.SomeBy(c.entitlementsToRemove, func(ec *entitlement.Entitlement) bool {
-		return ec != nil && ec.FeatureID == featureID
+		return ec != nil && ec.FeatureID == featureID && ec.HasGrantConfig()
 	})
 }
 
