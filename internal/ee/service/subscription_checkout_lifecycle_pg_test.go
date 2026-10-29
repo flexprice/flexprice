@@ -83,7 +83,7 @@ func TestCheckoutLifecycle_PostgresCommitmentCleanup(t *testing.T) {
 			params := f.service.ServiceParams
 			params.SubRepo = repository.NewSubscriptionRepository(db, params.Logger, testutil.NewInMemoryRedis())
 			params.CommitmentRepo = repository.NewCommitmentRepository(db, params.Logger)
-			require.NoError(t, params.SubRepo.Create(f.ctx, sub))
+			require.NoError(t, params.SubRepo.Update(f.ctx, sub))
 			_, err = params.CommitmentRepo.Create(f.ctx, owner)
 			require.NoError(t, err)
 			resolver, err := core.NewOwnerResolver(NewCommitmentTermsOwner(params.CommitmentRepo, params.SubRepo))

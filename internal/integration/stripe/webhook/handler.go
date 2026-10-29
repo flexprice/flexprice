@@ -883,8 +883,8 @@ func (h *Handler) handleSubscriptionUpdated(ctx context.Context, event *stripeap
 	subscriptionID := subscription.ID
 	err = h.subSvc.UpdateSubscription(ctx, subscriptionID, services)
 	if err != nil {
-		h.logger.Error(ctx, "failed to update subscription in FlexPrice, skipping event", "error", err, "subscription_id", subscription.ID, "event_id", event.ID)
-		return nil
+		h.logger.Error(ctx, "failed to update subscription in FlexPrice", "error", err, "subscription_id", subscription.ID, "event_id", event.ID)
+		return err
 	}
 
 	h.logger.Info(ctx, "successfully updated subscription in FlexPrice", "subscription_id", subscriptionID)

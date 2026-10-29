@@ -46,6 +46,9 @@ func TestSubscriptionBareEndSettlesManualBillingPostgres(t *testing.T) {
 			sub.CollectionMethod = string(types.CollectionMethodSendInvoice)
 			sub.PaymentBehavior = string(types.PaymentBehaviorDefaultActive)
 			require.NoError(t, params.SubRepo.Create(ctx, sub))
+			if scenario != "scheduled_cancellation" {
+				require.NoError(t, repository.NewSubscriptionRepository(db, params.Logger, testutil.NewInMemoryRedis()).Create(ctx, subscription.NewSubscriptionBuilder(sub).Build()))
+			}
 			owner := &commitment.Commitment{ID: types.GenerateUUIDWithPrefix("comm"), SubscriptionID: sub.ID, CustomerID: sub.CustomerID, Name: "Fixed term", InvoiceLabel: "Capacity", Currency: sub.Currency,
 				Type: types.COMMITMENT_TYPE_AMOUNT, Value: decimal.NewFromInt(100), Measurement: types.CommitmentMeasurementBillingPeriod,
 				ScopeEntityType: types.CommitmentScopeSubscription, ScopeEntityID: sub.ID, StartDate: start, EndDate: end, Timezone: "UTC", Binding: true,
