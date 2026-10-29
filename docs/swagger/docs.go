@@ -25274,7 +25274,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage_limit": {
-                    "description": "UsageLimit is the new usage limit (only these 3 fields can be overridden)\nFor metered features, nil means unlimited usage",
+                    "description": "Deprecated: use grant_quota; on a grant-backed entitlement a usage_limit is converted to grant_quota.",
                     "type": "integer"
                 }
             }
@@ -34409,6 +34409,14 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "payment_gateways": {
+                    "description": "Online payment gateways attached to the Zoho invoice as payment options, so the Zoho\ninvoice carries online payment links.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ZohoPaymentGatewaySettings"
+                        }
+                    ]
+                },
                 "payment_mode": {
                     "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode.",
                     "type": "string"
@@ -38276,6 +38284,60 @@ const docTemplate = `{
                 "TenantInternalStatusActive",
                 "TenantInternalStatusSuspended"
             ]
+        },
+        "types.ZohoPayPalPaymentMethod": {
+            "type": "string",
+            "enum": [
+                "standard",
+                "adaptive"
+            ],
+            "x-enum-varnames": [
+                "ZohoPayPalPaymentMethodStandard",
+                "ZohoPayPalPaymentMethodAdaptive"
+            ]
+        },
+        "types.ZohoPaymentGateway": {
+            "type": "string",
+            "enum": [
+                "paypal",
+                "stripe",
+                "authorize_net",
+                "payflow_pro",
+                "2checkout",
+                "braintree",
+                "razorpay"
+            ],
+            "x-enum-varnames": [
+                "ZohoPaymentGatewayPayPal",
+                "ZohoPaymentGatewayStripe",
+                "ZohoPaymentGatewayAuthorizeNet",
+                "ZohoPaymentGatewayPayflowPro",
+                "ZohoPaymentGateway2Checkout",
+                "ZohoPaymentGatewayBraintree",
+                "ZohoPaymentGatewayRazorpay"
+            ]
+        },
+        "types.ZohoPaymentGatewaySettings": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "gateways": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ZohoPaymentGateway"
+                    }
+                },
+                "paypal_payment_method": {
+                    "description": "Sent as additional_field1 on the PayPal gateway. Required when PayPal is selected.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ZohoPayPalPaymentMethod"
+                        }
+                    ]
+                }
+            }
         },
         "webhookDto.AlertWebhookPayload": {
             "type": "object",
