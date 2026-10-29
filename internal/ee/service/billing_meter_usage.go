@@ -196,6 +196,14 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	handledByCommitments := commitments.HandledLineIDs()
 
+	hasFeatureEntitlementGrant := len(grantsByMeterID) > 0 || lo.ContainsBy(lo.Values(entitlementsByMeterID), func(e *dto.AggregatedEntitlement) bool {
+		return e.IsEnabled && e.UsageLimit != nil
+	})
+	subGrants, err := s.loadSubscriptionEntitlementGrants(ctx, sub, hasFeatureEntitlementGrant, chargesByLineItemID, handledByCommitments, meterMap, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
 	// --- Per-line-item processing ---
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -425,7 +433,13 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// --- Post-loop: commitments, cumulative commitment or non-cumulative true-up ---
+	// --- Post-loop: subscription entitlement grants, commitments, cumulative commitment or non-cumulative true-up ---
+
+	reduction, err := s.applySubscriptionEntitlementGrants(ctx, sub, subGrants, usageCharges, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+	totalUsageCost = totalUsageCost.Sub(reduction)
 
 	var commitmentLines []dto.CreateInvoiceLineItemRequest
 	commitmentTotal := decimal.Zero

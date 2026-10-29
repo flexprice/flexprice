@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -22,6 +23,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -44,14 +47,19 @@ import (
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/journalentry"
+	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
+	"github.com/flexprice/flexprice/ent/performanceobligation"
+	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
@@ -133,67 +141,75 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			addon.Table:                    addon.ValidColumn,
-			addonassociation.Table:         addonassociation.ValidColumn,
-			alertlogs.Table:                alertlogs.ValidColumn,
-			alertsettings.Table:            alertsettings.ValidColumn,
-			analyticsview.Table:            analyticsview.ValidColumn,
-			auth.Table:                     auth.ValidColumn,
-			billingsequence.Table:          billingsequence.ValidColumn,
-			checkoutsession.Table:          checkoutsession.ValidColumn,
-			commitment.Table:               commitment.ValidColumn,
-			connection.Table:               connection.ValidColumn,
-			costsheet.Table:                costsheet.ValidColumn,
-			coupon.Table:                   coupon.ValidColumn,
-			couponapplication.Table:        couponapplication.ValidColumn,
-			couponassociation.Table:        couponassociation.ValidColumn,
-			creditgrant.Table:              creditgrant.ValidColumn,
-			creditgrantapplication.Table:   creditgrantapplication.ValidColumn,
-			creditnote.Table:               creditnote.ValidColumn,
-			creditnotelineitem.Table:       creditnotelineitem.ValidColumn,
-			customer.Table:                 customer.ValidColumn,
-			entitlement.Table:              entitlement.ValidColumn,
-			entitlementgrant.Table:         entitlementgrant.ValidColumn,
-			entityintegrationmapping.Table: entityintegrationmapping.ValidColumn,
-			environment.Table:              environment.ValidColumn,
-			eventdeletionrequest.Table:     eventdeletionrequest.ValidColumn,
-			fxrate.Table:                   fxrate.ValidColumn,
-			feature.Table:                  feature.ValidColumn,
-			group.Table:                    group.ValidColumn,
-			hostedinvoicetoken.Table:       hostedinvoicetoken.ValidColumn,
-			incomingwebhookevent.Table:     incomingwebhookevent.ValidColumn,
-			invoice.Table:                  invoice.ValidColumn,
-			invoicelineitem.Table:          invoicelineitem.ValidColumn,
-			invoicesequence.Table:          invoicesequence.ValidColumn,
-			meter.Table:                    meter.ValidColumn,
-			meterusagecheckpoint.Table:     meterusagecheckpoint.ValidColumn,
-			payment.Table:                  payment.ValidColumn,
-			paymentattempt.Table:           paymentattempt.ValidColumn,
-			paymentmethod.Table:            paymentmethod.ValidColumn,
-			plan.Table:                     plan.ValidColumn,
-			price.Table:                    price.ValidColumn,
-			priceunit.Table:                priceunit.ValidColumn,
-			refund.Table:                   refund.ValidColumn,
-			revenuefact.Table:              revenuefact.ValidColumn,
-			scheduledtask.Table:            scheduledtask.ValidColumn,
-			secret.Table:                   secret.ValidColumn,
-			settings.Table:                 settings.ValidColumn,
-			subscription.Table:             subscription.ValidColumn,
-			subscriptionlineitem.Table:     subscriptionlineitem.ValidColumn,
-			subscriptionpause.Table:        subscriptionpause.ValidColumn,
-			subscriptionphase.Table:        subscriptionphase.ValidColumn,
-			subscriptionschedule.Table:     subscriptionschedule.ValidColumn,
-			systemevent.Table:              systemevent.ValidColumn,
-			task.Table:                     task.ValidColumn,
-			taxapplied.Table:               taxapplied.ValidColumn,
-			taxassociation.Table:           taxassociation.ValidColumn,
-			taxrate.Table:                  taxrate.ValidColumn,
-			tenant.Table:                   tenant.ValidColumn,
-			usagerecord.Table:              usagerecord.ValidColumn,
-			user.Table:                     user.ValidColumn,
-			wallet.Table:                   wallet.ValidColumn,
-			wallettransaction.Table:        wallettransaction.ValidColumn,
-			workflowexecution.Table:        workflowexecution.ValidColumn,
+			accountingperiod.Table:                 accountingperiod.ValidColumn,
+			addon.Table:                            addon.ValidColumn,
+			addonassociation.Table:                 addonassociation.ValidColumn,
+			alertlogs.Table:                        alertlogs.ValidColumn,
+			alertsettings.Table:                    alertsettings.ValidColumn,
+			analyticsview.Table:                    analyticsview.ValidColumn,
+			auth.Table:                             auth.ValidColumn,
+			billingsequence.Table:                  billingsequence.ValidColumn,
+			checkoutsession.Table:                  checkoutsession.ValidColumn,
+			commitment.Table:                       commitment.ValidColumn,
+			connection.Table:                       connection.ValidColumn,
+			contract.Table:                         contract.ValidColumn,
+			contractassociation.Table:              contractassociation.ValidColumn,
+			costsheet.Table:                        costsheet.ValidColumn,
+			coupon.Table:                           coupon.ValidColumn,
+			couponapplication.Table:                couponapplication.ValidColumn,
+			couponassociation.Table:                couponassociation.ValidColumn,
+			creditgrant.Table:                      creditgrant.ValidColumn,
+			creditgrantapplication.Table:           creditgrantapplication.ValidColumn,
+			creditnote.Table:                       creditnote.ValidColumn,
+			creditnotelineitem.Table:               creditnotelineitem.ValidColumn,
+			customer.Table:                         customer.ValidColumn,
+			entitlement.Table:                      entitlement.ValidColumn,
+			entitlementgrant.Table:                 entitlementgrant.ValidColumn,
+			entityintegrationmapping.Table:         entityintegrationmapping.ValidColumn,
+			environment.Table:                      environment.ValidColumn,
+			eventdeletionrequest.Table:             eventdeletionrequest.ValidColumn,
+			fxrate.Table:                           fxrate.ValidColumn,
+			feature.Table:                          feature.ValidColumn,
+			group.Table:                            group.ValidColumn,
+			hostedinvoicetoken.Table:               hostedinvoicetoken.ValidColumn,
+			incomingwebhookevent.Table:             incomingwebhookevent.ValidColumn,
+			invoice.Table:                          invoice.ValidColumn,
+			invoicelineitem.Table:                  invoicelineitem.ValidColumn,
+			invoicesequence.Table:                  invoicesequence.ValidColumn,
+			journalentry.Table:                     journalentry.ValidColumn,
+			journalline.Table:                      journalline.ValidColumn,
+			meter.Table:                            meter.ValidColumn,
+			meterusagecheckpoint.Table:             meterusagecheckpoint.ValidColumn,
+			payment.Table:                          payment.ValidColumn,
+			paymentattempt.Table:                   paymentattempt.ValidColumn,
+			paymentmethod.Table:                    paymentmethod.ValidColumn,
+			performanceobligation.Table:            performanceobligation.ValidColumn,
+			performanceobligationassociation.Table: performanceobligationassociation.ValidColumn,
+			plan.Table:                             plan.ValidColumn,
+			price.Table:                            price.ValidColumn,
+			priceunit.Table:                        priceunit.ValidColumn,
+			product.Table:                          product.ValidColumn,
+			refund.Table:                           refund.ValidColumn,
+			revenuefact.Table:                      revenuefact.ValidColumn,
+			scheduledtask.Table:                    scheduledtask.ValidColumn,
+			secret.Table:                           secret.ValidColumn,
+			settings.Table:                         settings.ValidColumn,
+			subscription.Table:                     subscription.ValidColumn,
+			subscriptionlineitem.Table:             subscriptionlineitem.ValidColumn,
+			subscriptionpause.Table:                subscriptionpause.ValidColumn,
+			subscriptionphase.Table:                subscriptionphase.ValidColumn,
+			subscriptionschedule.Table:             subscriptionschedule.ValidColumn,
+			systemevent.Table:                      systemevent.ValidColumn,
+			task.Table:                             task.ValidColumn,
+			taxapplied.Table:                       taxapplied.ValidColumn,
+			taxassociation.Table:                   taxassociation.ValidColumn,
+			taxrate.Table:                          taxrate.ValidColumn,
+			tenant.Table:                           tenant.ValidColumn,
+			usagerecord.Table:                      usagerecord.ValidColumn,
+			user.Table:                             user.ValidColumn,
+			wallet.Table:                           wallet.ValidColumn,
+			wallettransaction.Table:                wallettransaction.ValidColumn,
+			workflowexecution.Table:                workflowexecution.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

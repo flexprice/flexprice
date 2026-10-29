@@ -21,8 +21,13 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
+	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
@@ -193,6 +198,11 @@ func main() {
 			repository.NewCouponAssociationRepository,
 			repository.NewCouponApplicationRepository,
 			repository.NewAddonRepository,
+			repository.NewProductRepository,
+			repository.NewContractRepository,
+			repository.NewPerformanceObligationRepository,
+			repository.NewAccountingPeriodRepository,
+			repository.NewJournalRepository,
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSubscriptionPhaseRepository,
@@ -274,6 +284,7 @@ func main() {
 			adminsvc.NewUserService,
 			adminsvc.NewSettingsService,
 			adminsvc.NewDLQService,
+			adminsvc.NewRevenueRecognitionService,
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventDeletionWindowService,
@@ -322,6 +333,12 @@ func main() {
 			service.NewCommitmentService,
 			service.NewCouponAssociationService,
 			service.NewAddonService,
+			service.NewProductService,
+			contractsvc.NewContractService,
+			pobsvc.NewPerformanceObligationService,
+			accountingperiodsvc.NewAccountingPeriodService,
+			journalsvc.NewJournalService,
+			revenuereportsvc.NewRevenueReportService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewSubscriptionModificationService,
@@ -416,6 +433,12 @@ func provideHandlers(
 	commitmentService service.CommitmentService,
 	couponAssociationService service.CouponAssociationService,
 	addonService service.AddonService,
+	productService service.ProductService,
+	contractService contractsvc.ContractService,
+	pobService pobsvc.PerformanceObligationService,
+	accountingPeriodService accountingperiodsvc.AccountingPeriodService,
+	journalService journalsvc.JournalService,
+	revenueReportService revenuereportsvc.RevenueReportService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionModificationService service.SubscriptionModificationService,
@@ -487,6 +510,12 @@ func provideHandlers(
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
+		Product:                  v1.NewProductHandler(productService, logger),
+		Contract:                 v1.NewContractHandler(contractService, logger),
+		PerformanceObligation:    v1.NewPerformanceObligationHandler(pobService, logger),
+		AccountingPeriod:         v1.NewAccountingPeriodHandler(accountingPeriodService, logger),
+		JournalEntry:             v1.NewJournalEntryHandler(journalService, logger),
+		RevenueReport:            v1.NewRevenueReportHandler(revenueReportService, logger),
 		Commitment:               v1.NewCommitmentHandler(commitmentService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, cfg, logger),
@@ -514,15 +543,17 @@ func provideAdminHandlers(
 	users adminsvc.UserService,
 	settings adminsvc.SettingsService,
 	dlq adminsvc.DLQService,
+	revenueRecognition adminsvc.RevenueRecognitionService,
 ) adminapi.Handlers {
 	return adminapi.Handlers{
-		Health:      adminv1.NewHealthHandler(),
-		Me:          adminv1.NewMeHandler(),
-		Environment: adminv1.NewEnvironmentHandler(environments),
-		Tenant:      adminv1.NewTenantHandler(tenants),
-		User:        adminv1.NewUserHandler(users),
-		Settings:    adminv1.NewSettingsHandler(settings),
-		DLQ:         adminv1.NewDLQHandler(dlq),
+		Health:             adminv1.NewHealthHandler(),
+		Me:                 adminv1.NewMeHandler(),
+		Environment:        adminv1.NewEnvironmentHandler(environments),
+		Tenant:             adminv1.NewTenantHandler(tenants),
+		User:               adminv1.NewUserHandler(users),
+		Settings:           adminv1.NewSettingsHandler(settings),
+		DLQ:                adminv1.NewDLQHandler(dlq),
+		RevenueRecognition: adminv1.NewRevenueRecognitionHandler(revenueRecognition),
 	}
 }
 

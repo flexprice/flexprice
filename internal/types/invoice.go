@@ -556,6 +556,8 @@ type InvoiceFilter struct {
 	FinalizedAtGTE *time.Time `json:"finalized_at_gte,omitempty" form:"finalized_at_gte" validate:"omitempty,time_rfc3339"`
 	// voided_at_gte filters invoices voided at or after the given instant
 	VoidedAtGTE *time.Time `json:"voided_at_gte,omitempty" form:"voided_at_gte" validate:"omitempty,time_rfc3339"`
+	// updated_at_gte filters invoices updated at or after the given instant
+	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte" validate:"omitempty,time_rfc3339"`
 
 	// SkipLineItems if true, will not include line items in the response
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`

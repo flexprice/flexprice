@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -23,6 +24,8 @@ import (
 // EntitlementService defines the interface for entitlement operations
 type EntitlementService interface {
 	CreateEntitlement(ctx context.Context, req dto.CreateEntitlementRequest) (*dto.EntitlementResponse, error)
+	// CreateSubscriptionEntitlementGrant creates a subscription entitlement grant on sub, which the caller has already loaded.
+	CreateSubscriptionEntitlementGrant(ctx context.Context, req dto.CreateEntitlementRequest, sub *subscription.Subscription) (*dto.EntitlementResponse, error)
 	CreateBulkEntitlement(ctx context.Context, req dto.CreateBulkEntitlementRequest) (*dto.CreateBulkEntitlementResponse, error)
 	GetEntitlement(ctx context.Context, id string) (*dto.EntitlementResponse, error)
 	ListEntitlements(ctx context.Context, filter *types.EntitlementFilter) (*dto.ListEntitlementsResponse, error)
@@ -116,6 +119,15 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 			Mark(ierr.ErrValidation)
 	}
 
+	if req.IsSubscriptionEntitlementGrant() {
+		sub, ok := entity.(*subscription.Subscription)
+		if !ok {
+			return nil, ierr.NewError("a subscription entitlement grant needs entity_id set to the subscription").
+				Mark(ierr.ErrValidation)
+		}
+		return s.CreateSubscriptionEntitlementGrant(ctx, req, sub)
+	}
+
 	// Validate feature exists
 	feature, err := s.FeatureRepo.Get(ctx, req.FeatureID)
 	if err != nil {
@@ -186,6 +198,9 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		if err := s.assertSingleContributor(txCtx, e); err != nil {
 			return err
 		}
+		if err := s.validateFeatureGrantAgainstSubscriptionScopedEntitlements(txCtx, e); err != nil {
+			return err
+		}
 
 		created, err := s.EntitlementRepo.Create(txCtx, e)
 		if err != nil {
@@ -248,7 +263,14 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 		subscriptionIDs := make(map[string]bool)
 		featureIDs := make(map[string]bool)
 
-		for _, entReq := range req.Items {
+		for i, entReq := range req.Items {
+			if entReq.IsSubscriptionEntitlementGrant() {
+				return ierr.NewError("subscription entitlement grants cannot be created in bulk").
+					WithHint("Create each subscription entitlement grant with POST /entitlements.").
+					WithReportableDetails(map[string]interface{}{"index": i}).
+					Mark(ierr.ErrValidation)
+			}
+
 			// Support both legacy plan_id and new entity_type/entity_id
 			var entityType types.EntitlementEntityType
 			var entityID string
@@ -386,6 +408,12 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 			entitlements[i] = ent
 		}
 
+		for _, e := range entitlements {
+			if err := s.validateFeatureGrantAgainstSubscriptionScopedEntitlements(txCtx, e); err != nil {
+				return err
+			}
+		}
+
 		// Create entitlements in bulk
 		createdEntitlements, err := s.EntitlementRepo.CreateBulk(txCtx, entitlements)
 		if err != nil {
@@ -463,6 +491,10 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	}
 
 	response := &dto.EntitlementResponse{Entitlement: result}
+
+	if result.IsSubscriptionScoped() {
+		return response, nil
+	}
 
 	// Add expanded fields
 	fetaureService := NewFeatureService(s.ServiceParams)
@@ -546,8 +578,8 @@ func (s *entitlementService) hydrateEntitlements(ctx context.Context, entitlemen
 	addonsByID := make(map[string]*addon.Addon)
 
 	if expand.Has(types.ExpandFeatures) {
-		featureIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
-			return e.FeatureID
+		featureIDs := lo.FilterMap(entitlements, func(e *entitlement.Entitlement, _ int) (string, bool) {
+			return e.FeatureID, e.FeatureID != ""
 		})
 
 		if len(featureIDs) > 0 {
@@ -684,6 +716,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if err != nil {
 		return nil, err
 	}
+	if existing.IsSubscriptionScoped() {
+		return s.updateSubscriptionEntitlementGrant(ctx, existing, req)
+	}
 
 	priorQuota := existing.GrantQuota
 	priorUnlimited := existing.IsUnlimitedGrant()
@@ -799,6 +834,9 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 		if err := s.assertSingleContributor(txCtx, existing); err != nil {
 			return err
 		}
+		if err := s.validateFeatureGrantAgainstSubscriptionScopedEntitlements(txCtx, existing); err != nil {
+			return err
+		}
 
 		updated, err := s.EntitlementRepo.Update(txCtx, existing)
 		if err != nil {
@@ -833,6 +871,9 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 
 		if err := s.EntitlementRepo.Delete(txCtx, id); err != nil {
 			return err
+		}
+		if existing.IsSubscriptionScoped() {
+			return s.settleDeletedSubscriptionEntitlementGrant(txCtx, existing)
 		}
 		return s.settleGrantWindowsForDeletedEC(txCtx, existing)
 	}); err != nil {
@@ -1087,5 +1128,52 @@ func (s *entitlementService) assertSingleContributor(ctx context.Context, e *ent
 			"feature_id":            e.FeatureID,
 			"other_entitlement_ids": otherEntitlements,
 		}).
+		Mark(ierr.ErrValidation)
+}
+
+// entitlementAlertsEnabled reports whether grant usage is evaluated in this environment: on in the
+// deployment config and in the environment's entitlement alert setting.
+func (s *entitlementService) entitlementAlertsEnabled(ctx context.Context) (bool, error) {
+	if !s.Config.UsageAlerts.Enabled || !s.Config.UsageAlerts.EntitlementAlertsEnabled {
+		return false, nil
+	}
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	cfg, err := GetSetting[types.AlertToggleConfig](settingsSvc, ctx, types.SettingKeyEntitlementAlertConfig)
+	if err != nil && !ierr.IsNotFound(err) {
+		return false, err
+	}
+	return cfg.IsAlertEnabled(), nil
+}
+
+// validateFeatureGrantAgainstSubscriptionScopedEntitlements refuses a feature entitlement grant that would reach a subscription
+// with a subscription-scoped entitlement, directly or through its plan or addon: one grant per charge.
+func (s *entitlementService) validateFeatureGrantAgainstSubscriptionScopedEntitlements(ctx context.Context, e *entitlement.Entitlement) error {
+	if !isFeatureEntitlementGrant(e) {
+		return nil
+	}
+	grants := &entitlementGrantService{ServiceParams: s.ServiceParams}
+	var subIDs []string
+	switch e.EntityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		granted, err := grants.hasSubscriptionScopedEntitlement(ctx, e.EntityID)
+		if err != nil {
+			return err
+		}
+		if granted {
+			subIDs = []string{e.EntityID}
+		}
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		subs, err := grants.subscriptionsWithSubscriptionScopedEntitlementOn(ctx, e.EntityType, e.EntityID)
+		if err != nil {
+			return err
+		}
+		subIDs = lo.Map(subs, func(sub *subscription.Subscription, _ int) string { return sub.ID })
+	}
+	if len(subIDs) == 0 {
+		return nil
+	}
+	return ierr.NewErrorf("subscription entitlement grant not supported: %s", errSubGrantWithFeatureGrant).
+		WithHint("A subscription with a subscription entitlement grant cannot also have feature entitlement grants.").
+		WithReportableDetails(map[string]any{"entitlement_id": e.ID, "subscription_ids": subIDs}).
 		Mark(ierr.ErrValidation)
 }

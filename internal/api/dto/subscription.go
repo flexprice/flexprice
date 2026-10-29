@@ -450,9 +450,11 @@ type SubscriptionCreationConfig struct {
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems overrides specific plan prices for this subscription.
-	OverrideLineItems    []OverrideLineItemRequest       `json:"override_line_items,omitempty" validate:"omitempty,dive"`
-	OverrideEntitlements []OverrideEntitlementRequest    `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
-	Addons               []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
+	OverrideLineItems    []OverrideLineItemRequest    `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+	OverrideEntitlements []OverrideEntitlementRequest `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
+	// SubscriptionEntitlementGrants are dollar entitlement grants shared by every usage line, created with the subscription.
+	SubscriptionEntitlementGrants []CreateSubscriptionEntitlementGrantRequest `json:"subscription_entitlement_grants,omitempty" validate:"omitempty,dive"`
+	Addons                        []AddAddonToSubscriptionRequest             `json:"addons,omitempty" validate:"omitempty,dive"`
 	// LineItems are extra (non-plan) line items added at creation.
 	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
 	Phases    []SubscriptionPhaseCreateRequest    `json:"phases,omitempty" validate:"omitempty,dive"`
@@ -1073,6 +1075,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	if len(r.SubscriptionEntitlementGrants) > 0 && len(r.Commitments) > 0 {
+		return ierr.NewError("subscription_entitlement_grants cannot be combined with commitments").
+			WithHint("A subscription with a commitment cannot carry a subscription entitlement grant.").
+			Mark(ierr.ErrValidation)
+	}
+
 	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
 		return ierr.NewError("opening invoice adjustment amount must be >= 0").
 			Mark(ierr.ErrValidation)
@@ -1682,6 +1690,34 @@ type OverrideLineItemRequest struct {
 
 	// PriceUnitTiers are the tiers for the price unit (for CUSTOM type, TIERED billing model)
 	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+}
+
+// CreateSubscriptionEntitlementGrantRequest is a subscription entitlement grant created together with its subscription.
+type CreateSubscriptionEntitlementGrantRequest struct {
+	GrantQuota              *decimal.Decimal                         `json:"grant_quota" swaggertype:"string" validate:"required"`
+	GrantDurationUnit       types.EntitlementGrantDurationUnit       `json:"grant_duration_unit" validate:"required"`
+	GrantDurationValue      *int                                     `json:"grant_duration_value,omitempty"`
+	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
+	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	// StartDate defaults to the subscription's start; EndDate leaves the grant open.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+}
+
+// ToCreateEntitlementRequest is the POST /entitlements request for this grant on the subscription.
+func (r CreateSubscriptionEntitlementGrantRequest) ToCreateEntitlementRequest(subscriptionID string) CreateEntitlementRequest {
+	return CreateEntitlementRequest{
+		StartDate:               r.StartDate,
+		EndDate:                 r.EndDate,
+		EntityType:              types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:                subscriptionID,
+		GrantMeasure:            types.EntitlementGrantMeasureAmount,
+		GrantQuota:              r.GrantQuota,
+		GrantDurationUnit:       r.GrantDurationUnit,
+		GrantDurationValue:      r.GrantDurationValue,
+		GrantAllocationBehavior: r.GrantAllocationBehavior,
+		AggregationMode:         r.AggregationMode,
+	}
 }
 
 // OverrideEntitlementRequest allows overriding entitlement values for a subscription

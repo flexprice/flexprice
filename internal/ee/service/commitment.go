@@ -135,6 +135,17 @@ func (s *commitmentService) create(
 			return nil
 		}
 
+		granted, err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).hasSubscriptionScopedEntitlement(txCtx, req.SubscriptionID)
+		if err != nil {
+			return err
+		}
+		if granted {
+			return ierr.NewError("subscription has a subscription entitlement grant").
+				WithHint("A subscription entitlement grant cannot be combined with a commitment; delete the grant first.").
+				WithReportableDetails(map[string]any{"subscription_id": req.SubscriptionID}).
+				Mark(ierr.ErrValidation)
+		}
+
 		var c *commitment.Commitment
 		if c, cc, _, err = s.prepare(txCtx, &req, opts); err != nil {
 			return err

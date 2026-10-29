@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // InMemoryEntitlementStore implements entitlement.Repository
@@ -85,6 +86,10 @@ func entitlementFilterFn(ctx context.Context, e *entitlement.Entitlement, filter
 		return false
 	}
 
+	if !lo.Contains(f.EffectiveGrantScopes(), e.EffectiveGrantScope()) {
+		return false
+	}
+
 	// Filter by time range
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && e.CreatedAt.Before(*f.StartTime) {
@@ -109,9 +114,10 @@ func entitlementSortFn(i, j *entitlement.Entitlement) bool {
 // checkUniquePerEntityFeature mirrors the partial unique index on
 // (tenant, env, entity_type, entity_id, feature_id) WHERE status='published'
 // AND aggregation_mode <> 'parallel': one published entitlement per
-// (entity, feature), except parallel-mode grant ECs which may stack.
+// (entity, feature), except parallel-mode grant ECs which may stack. A NULL feature_id
+// never matches in Postgres, so subscription entitlement grants (no feature) are never duplicates.
 func (s *InMemoryEntitlementStore) checkUniquePerEntityFeature(ctx context.Context, e *entitlement.Entitlement) error {
-	if e.AggregationMode == types.EntitlementAggregationModeParallel || e.Status != types.StatusPublished {
+	if e.AggregationMode == types.EntitlementAggregationModeParallel || e.Status != types.StatusPublished || e.FeatureID == "" {
 		return nil
 	}
 	existing, err := s.InMemoryStore.List(ctx, nil, func(cctx context.Context, other *entitlement.Entitlement, _ interface{}) bool {

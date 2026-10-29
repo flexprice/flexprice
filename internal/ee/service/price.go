@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -113,6 +114,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
+	if err := s.validateNewPriceSubscriptionEntitlementGrant(ctx, p); err != nil {
+		return nil, err
+	}
+
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -146,6 +151,10 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 
 	// Validate the price domain object
 	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateProduct(ctx, p.ProductID); err != nil {
 		return nil, err
 	}
 
@@ -396,6 +405,12 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		// Validate groups if provided
 		if err := s.validateGroup(txCtx, prices); err != nil {
 			return err
+		}
+
+		for _, p := range prices {
+			if err := s.validateNewPriceSubscriptionEntitlementGrant(txCtx, p); err != nil {
+				return err
+			}
 		}
 
 		// Create prices in bulk
@@ -848,6 +863,22 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	existingPrice, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	if req.ProductID != "" && req.ProductID != existingPrice.ProductID {
+		if existingPrice.ProductID != "" {
+			return nil, ierr.NewError("product_id cannot be changed").
+				WithHint("A price's product can be set once and never changed").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   id,
+					"product_id": existingPrice.ProductID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if err := s.validateProduct(ctx, req.ProductID); err != nil {
+			return nil, err
+		}
+		existingPrice.ProductID = req.ProductID
 	}
 
 	// Validate price unit type cannot be changed
@@ -1488,6 +1519,26 @@ func (s *priceService) validateBucketSizeAgainstMeter(ctx context.Context, req *
 	return s.validateBucketedPriceAgainstEntitlements(ctx, m, req.BucketSize, req.BillingModel)
 }
 
+// validateProduct checks that a price's product exists and is published.
+func (s *priceService) validateProduct(ctx context.Context, productID string) error {
+	if productID == "" {
+		return nil
+	}
+	p, err := s.ProductRepo.GetByID(ctx, productID)
+	if err != nil {
+		return err
+	}
+	if p.Status() != types.StatusPublished {
+		return ierr.NewError("product is not published").
+			WithHint("A price can only reference a published product").
+			WithReportableDetails(map[string]interface{}{
+				"product_id": productID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // validateGroup validates that a group exists and is of type "price"
 func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price) error {
 	// 1. Get all group IDs from prices
@@ -1845,4 +1896,45 @@ func (s *priceService) validateBucketedPriceAgainstEntitlements(ctx context.Cont
 	}
 
 	return nil
+}
+
+// validateNewPriceSubscriptionEntitlementGrant refuses a plan or addon usage price that would break a subscription
+// grant on a subscription using that plan or addon.
+func (s *priceService) validateNewPriceSubscriptionEntitlementGrant(ctx context.Context, p *price.Price) error {
+	if p.Type != types.PRICE_TYPE_USAGE || (p.EntityType != types.PRICE_ENTITY_TYPE_PLAN && p.EntityType != types.PRICE_ENTITY_TYPE_ADDON) {
+		return nil
+	}
+	owner := lo.Ternary(p.EntityType == types.PRICE_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_PLAN, types.ENTITLEMENT_ENTITY_TYPE_ADDON)
+	return (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateCatalogChange(ctx, owner, p.EntityID, changeForNewPrice(p))
+}
+
+// changeForNewPrice is how a new plan or addon price lands on a subscription: one line, or nothing when the
+// price's cadence or currency keeps it off that subscription.
+func changeForNewPrice(p *price.Price) func(sub *subscription.Subscription) subscriptionEntitlementGrantChange {
+	return func(sub *subscription.Subscription) subscriptionEntitlementGrantChange {
+		candidates := []*dto.PriceResponse{{Price: p}}
+		lands := filterValidPricesForSubscription(candidates, sub, nil)
+		if p.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
+			lands = filterAddonPricesForSubscription(candidates, sub)
+		}
+		if len(lands) == 0 {
+			return subscriptionEntitlementGrantChange{}
+		}
+		return subscriptionEntitlementGrantChange{
+			items:  []*subscription.SubscriptionLineItem{pendingLineForNewPrice(sub, p)},
+			prices: []*price.Price{p},
+		}
+	}
+}
+
+func pendingLineForNewPrice(sub *subscription.Subscription, p *price.Price) *subscription.SubscriptionLineItem {
+	return &subscription.SubscriptionLineItem{
+		ID:                 "pending_" + p.ID,
+		SubscriptionID:     sub.ID,
+		PriceID:            p.ID,
+		PriceType:          p.Type,
+		MeterID:            p.MeterID,
+		BillingPeriod:      p.BillingPeriod,
+		BillingPeriodCount: p.BillingPeriodCount,
+	}
 }

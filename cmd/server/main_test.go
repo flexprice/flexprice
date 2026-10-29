@@ -69,7 +69,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 }
 
 func TestProvideAdminHandlersBuildsEveryHandler(t *testing.T) {
-	handlers := reflect.ValueOf(provideAdminHandlers(nil, nil, nil, nil, nil))
+	handlers := reflect.ValueOf(provideAdminHandlers(nil, nil, nil, nil, nil, nil))
 	for i := range handlers.NumField() {
 		if handlers.Field(i).IsNil() {
 			t.Errorf("provideAdminHandlers leaves %s nil", handlers.Type().Field(i).Name)

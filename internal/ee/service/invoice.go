@@ -2863,7 +2863,7 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 
 	if req.HideZeroChargesLineItems {
 		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
-			return !item.Amount.IsZero()
+			return !item.Amount.IsZero() || item.Metadata[metadataKeySubscriptionEntitlementGrantAllowance] != ""
 		})
 	}
 
@@ -2938,7 +2938,7 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 
 	if req.HideZeroChargesLineItems {
 		invReq.LineItems = lo.Filter(invReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
-			return !item.Amount.IsZero()
+			return !item.Amount.IsZero() || item.Metadata[metadataKeySubscriptionEntitlementGrantAllowance] != ""
 		})
 	}
 
@@ -3415,6 +3415,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Delegate all payment behavior handling to the payment processor
 		err := paymentProcessor.HandlePaymentBehavior(ctx, sub, invoiceResponse, finalPaymentBehavior, flowType)
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to process payment for subscription invoice",
 				"error", err.Error(),

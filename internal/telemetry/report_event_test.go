@@ -18,7 +18,6 @@ import (
 func newTestReporter(t *testing.T, host string) *Reporter {
 	t.Helper()
 	cfg := &config.Configuration{}
-	cfg.Telemetry.Enabled = true
 	cfg.Telemetry.Host = host
 	log, err := logger.NewLogger(cfg)
 	if err != nil {

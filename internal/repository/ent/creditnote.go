@@ -645,6 +645,10 @@ func (o CreditNoteQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 		query = query.Where(creditnote.CreditNoteStatusIn(f.CreditNoteStatus...))
 	}
 
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(creditnote.UpdatedAtGTE(*f.UpdatedAtGTE))
+	}
+
 	// Apply time range filters
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {

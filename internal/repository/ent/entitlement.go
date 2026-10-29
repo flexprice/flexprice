@@ -68,8 +68,9 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetID(e.ID).
 		SetEntityType(e.EntityType).
 		SetEntityID(e.EntityID).
-		SetFeatureID(e.FeatureID).
-		SetFeatureType(e.FeatureType).
+		SetNillableFeatureID(lo.EmptyableToPtr(e.FeatureID)).
+		SetNillableFeatureType(lo.EmptyableToPtr(e.FeatureType)).
+		SetGrantScope(e.EffectiveGrantScope()).
 		SetIsEnabled(e.IsEnabled).
 		SetNillableUsageLimit(e.UsageLimit).
 		SetUsageResetPeriod(e.UsageResetPeriod).
@@ -384,8 +385,6 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		).
 		SetEntityType(e.EntityType).
 		SetEntityID(e.EntityID).
-		SetFeatureID(e.FeatureID).
-		SetFeatureType(e.FeatureType).
 		SetIsEnabled(e.IsEnabled).
 		SetIsSoftLimit(e.IsSoftLimit).
 		SetNillableUsageLimit(e.UsageLimit).
@@ -402,6 +401,11 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetGrantAllocationBehavior(e.GrantAllocationBehavior).
 		SetAggregationMode(defaultedAggregationMode(e.AggregationMode))
 	// SetNillable* with nil is a no-op, so clearing a grant config needs explicit Clear.
+	if e.FeatureID != "" {
+		updateQuery = updateQuery.SetFeatureID(e.FeatureID).SetFeatureType(e.FeatureType)
+	} else {
+		updateQuery = updateQuery.ClearFeatureID().ClearFeatureType()
+	}
 	if e.GrantDurationValue != nil {
 		updateQuery = updateQuery.SetGrantDurationValue(*e.GrantDurationValue)
 	} else {
@@ -512,8 +516,9 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetID(e.ID).
 			SetEntityType(e.EntityType).
 			SetEntityID(e.EntityID).
-			SetFeatureID(e.FeatureID).
-			SetFeatureType(e.FeatureType).
+			SetNillableFeatureID(lo.EmptyableToPtr(e.FeatureID)).
+			SetNillableFeatureType(lo.EmptyableToPtr(e.FeatureType)).
+			SetGrantScope(e.EffectiveGrantScope()).
 			SetIsEnabled(e.IsEnabled).
 			SetNillableUsageLimit(e.UsageLimit).
 			SetUsageResetPeriod(e.UsageResetPeriod).
@@ -801,6 +806,7 @@ func (o EntitlementQueryOptions) GetFieldResolver(field string) (string, error) 
 
 func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.EntitlementFilter, query EntitlementQuery) (EntitlementQuery, error) {
 	var err error
+	query = query.Where(entitlement.GrantScopeIn(f.EffectiveGrantScopes()...))
 	if f == nil {
 		return query, nil
 	}

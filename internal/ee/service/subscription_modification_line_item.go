@@ -611,6 +611,8 @@ func (s *subscriptionModificationService) applyLineItemChange(
 		return nil, err
 	}
 
+	// Runs after the outermost commit, so the checkout replay and the direct settle are both covered.
+	NotifySubscriptionChanged(ctx, s.serviceParams, request.GetSubscription().ID)
 	return changedLineItems, nil
 }
 

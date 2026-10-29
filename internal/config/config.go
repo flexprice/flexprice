@@ -851,12 +851,9 @@ type PyroscopeConfig struct {
 }
 
 type TelemetryConfig struct {
-	// Enabled defaults to false — telemetry is opt-in until validated.
-	// FLEXPRICE_TELEMETRY_DISABLED / DO_NOT_TRACK always win regardless.
-	Enabled      bool   `mapstructure:"enabled"`
+	// On by default. FLEXPRICE_TELEMETRY_DISABLED opts out.
 	Disabled     bool   `mapstructure:"disabled"`
 	Host         string `mapstructure:"host"`
-	DryRun       bool   `mapstructure:"dry_run"`
 	InstallLabel string `mapstructure:"install_label"`
 }
 

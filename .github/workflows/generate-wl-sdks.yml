@@ -199,6 +199,8 @@ jobs:
         run: bash scripts/generate-wl-configs.sh
 
       - name: Install Speakeasy CLI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         # Vendor's official installer over HTTPS; it verifies the CLI archive
         # checksum before install. Release-pipeline only.
         # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell

@@ -70,6 +70,8 @@ jobs:
         run: make swagger
 
       - name: Install Speakeasy CLI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         # nosemgrep: yaml.github-actions.security.gha-curl-pipe-shell.gha-curl-pipe-shell
         run: |
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh

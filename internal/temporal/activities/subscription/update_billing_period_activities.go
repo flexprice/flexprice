@@ -214,6 +214,8 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	}
 	s.refreshEntitlementGrantsAfterRollover(ctx, append([]*subscription.Subscription{sub}, children...)...)
 
+	service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil
@@ -470,6 +472,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 		}
 
 		subscriptionService.PublishCancellationEvents(ctx, sub)
+		service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
 
 		s.logger.Info(ctx, "subscription cancelled successfully",
 			"subscription_id", sub.ID,

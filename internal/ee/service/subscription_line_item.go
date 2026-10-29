@@ -82,6 +82,9 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 			return err
 		}
 
+		if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(txCtx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{lineItem}}); err != nil {
+			return err
+		}
 		if err := rejectLegacyCommitmentInScope(txCtx, s.ServiceParams, sub, lineItem); err != nil {
 			return err
 		}
@@ -146,6 +149,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 
 	priceResp, priceErr := NewPriceService(s.ServiceParams).GetPrice(ctx, lineItem.PriceID)
 	if priceErr != nil {
@@ -402,6 +406,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		if err != nil {
 			return nil, err
 		}
+		NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 		return resp, nil
 	}
@@ -431,6 +436,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, resp.SubscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, resp.SubscriptionID)
 	return resp, nil
 }
@@ -887,6 +893,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(ctx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{newLineItem}}); err != nil {
+				return err
+			}
+
 			// Create the line item directly using repository
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
@@ -913,6 +923,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			"end_date", endDate,
 		)
 
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
@@ -959,6 +970,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
+			if err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).validateWithSubscriptionScopedEntitlement(txCtx, sub, subscriptionEntitlementGrantChange{items: []*subscription.SubscriptionLineItem{existingLineItem}}); err != nil {
+				return err
+			}
 			return s.SubscriptionLineItemRepo.Update(txCtx, existingLineItem)
 		})
 		if err != nil {

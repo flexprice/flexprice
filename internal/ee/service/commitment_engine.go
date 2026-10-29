@@ -302,7 +302,9 @@ func (r lineRenderer) commitmentLines(
 		return rows
 	}
 
-	trueUpQty := used.Unused
+	// The amount is the span floor's remainder, so the quantity is the span capacity's remainder —
+	// not the as-of unused, which stops at asOf and disagrees with the amount on mid-period previews.
+	trueUpQty := sc.Period.Capacity.Sub(used.Used)
 	if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
 		trueUpQty = decimal.NewFromInt(1)
 	}

@@ -858,6 +858,50 @@ func (s *SubscriptionPauseSuite) TestResume_CreateProrationsIsSavedAndProratesTh
 	s.True(decimal.NewFromInt(3).Equal(usage), "only usage after the resume is billed, got %s", usage)
 }
 
+// cachedSubscriptionRepo serves Get from copies taken before a write, like the Redis cache does
+// until the transaction commits. GetForUpdate still reads the row.
+type cachedSubscriptionRepo struct {
+	subscription.Repository
+	cached map[string]*subscription.Subscription
+}
+
+func (r *cachedSubscriptionRepo) Get(ctx context.Context, id string) (*subscription.Subscription, error) {
+	if cached, ok := r.cached[id]; ok {
+		copied := *cached
+		return &copied, nil
+	}
+	return r.Repository.Get(ctx, id)
+}
+
+// A paused subscription read before the resume stays cached while the resume runs; the payment
+// step must not write that copy back over the resumed fields.
+func (s *SubscriptionPauseSuite) TestResume_StaleCachedSubscriptionDoesNotUndoTheResume() {
+	periodStart, periodEnd := openPeriod()
+	sub := s.billedSubscription("subs_resume_cached", periodStart, periodEnd)
+	paused := s.pause(sub.ID, types.ProrationBehaviorNone)
+
+	params := s.params
+	params.SubRepo = &cachedSubscriptionRepo{
+		Repository: s.params.SubRepo,
+		cached:     map[string]*subscription.Subscription{sub.ID: s.subscription(sub.ID)},
+	}
+	resp, err := NewSubscriptionService(params).ResumeSubscription(s.GetContext(), sub.ID, &dto.ResumeSubscriptionRequest{})
+	s.Require().NoError(err)
+	resumedAt := lo.FromPtr(resp.Pause.ResumedAt)
+
+	for name, got := range map[string]*subscription.Subscription{
+		"stored":   s.subscription(sub.ID),
+		"response": resp.Subscription.Subscription,
+	} {
+		s.Equal(types.SubscriptionStatusActive, got.SubscriptionStatus, name)
+		s.Equal(types.PauseStatusNone, got.PauseStatus, name)
+		s.Nil(got.ActivePauseID, name)
+		s.True(got.CurrentPeriodStart.Equal(resumedAt), "%s: period starts at the resume", name)
+		s.True(got.CurrentPeriodEnd.Equal(periodEnd), name)
+	}
+	s.Equal(types.PauseStatusCompleted, s.pauseRecord(paused.Pause.ID).PauseStatus)
+}
+
 // Without proration_behavior, resume keeps the subscription's own value.
 func (s *SubscriptionPauseSuite) TestResume_OmittedProrationKeepsTheSubscriptionValue() {
 	periodStart, periodEnd := openPeriod()

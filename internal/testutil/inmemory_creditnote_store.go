@@ -51,6 +51,8 @@ func copyCreditNote(cn *creditnote.CreditNote) *creditnote.CreditNote {
 		EnvironmentID:    cn.EnvironmentID,
 		TotalAmount:      cn.TotalAmount,
 		IdempotencyKey:   cn.IdempotencyKey,
+		FinalizedAt:      cn.FinalizedAt,
+		VoidedAt:         cn.VoidedAt,
 		BaseModel:        cn.BaseModel,
 	}
 

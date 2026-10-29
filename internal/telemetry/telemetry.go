@@ -59,8 +59,8 @@ func deploymentFingerprint(cfg *config.Configuration) string {
 func RegisterHooks(lc fx.Lifecycle, r *Reporter) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if reason := r.disabledReason(); reason != "" {
-				r.log.Info(ctx, "telemetry off", "reason", reason)
+			if r.cfg.Telemetry.Disabled {
+				r.log.Info(ctx, "telemetry off", "reason", "FLEXPRICE_TELEMETRY_DISABLED")
 				return nil
 			}
 			r.log.Info(ctx, "telemetry on, set FLEXPRICE_TELEMETRY_DISABLED=true to opt out")
@@ -79,23 +79,6 @@ func RegisterHooks(lc fx.Lifecycle, r *Reporter) {
 	})
 }
 
-func (r *Reporter) disabledReason() string {
-	switch {
-	case r.cfg.Telemetry.Disabled:
-		return "FLEXPRICE_TELEMETRY_DISABLED"
-	case isTruthy(os.Getenv("DO_NOT_TRACK")):
-		return "DO_NOT_TRACK"
-	case !r.cfg.Telemetry.Enabled:
-		return "telemetry is opt-in, set FLEXPRICE_TELEMETRY_ENABLED=true to enable"
-	}
-	return ""
-}
-
-func isTruthy(s string) bool {
-	s = strings.ToLower(strings.TrimSpace(s))
-	return s == "1" || s == "true"
-}
-
 func (r *Reporter) reportInstallInit(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -105,7 +88,7 @@ func (r *Reporter) reportInstallInit(ctx context.Context) {
 // ReportEvent pings the collector for event names isTrackedEventName allows,
 // with a redacted payload (redact.go), dispatched off the caller's goroutine.
 func (r *Reporter) ReportEvent(ctx context.Context, event *types.WebhookEvent) {
-	if reason := r.disabledReason(); reason != "" {
+	if r.cfg.Telemetry.Disabled {
 		return
 	}
 	if !isTrackedEventName(string(event.EventName)) {
@@ -138,11 +121,6 @@ func (r *Reporter) ReportEvent(ctx context.Context, event *types.WebhookEvent) {
 }
 
 func (r *Reporter) send(ctx context.Context, event EventType, payload any) {
-	if r.cfg.Telemetry.DryRun {
-		b, _ := json.Marshal(payload)
-		r.log.Info(ctx, "telemetry dry-run", "event", event, "payload", string(b))
-		return
-	}
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return

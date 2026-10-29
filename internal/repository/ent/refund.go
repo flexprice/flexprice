@@ -719,6 +719,9 @@ func (o RefundQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(refund.PaymentGateway(*f.Gateway))
 	}
 
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(refund.UpdatedAtGTE(*f.UpdatedAtGTE))
+	}
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {
 			query = query.Where(refund.CreatedAtGTE(*f.TimeRangeFilter.StartTime))

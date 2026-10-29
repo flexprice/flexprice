@@ -9,6 +9,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
 	"github.com/flexprice/flexprice/ent/alertlogs"
@@ -19,6 +20,8 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/ent/contract"
+	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -41,14 +44,19 @@ import (
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
+	"github.com/flexprice/flexprice/ent/journalentry"
+	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
+	"github.com/flexprice/flexprice/ent/performanceobligation"
+	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
@@ -160,6 +168,68 @@ func (t *returningTx) Exec(ctx context.Context, query string, args, v any) error
 		return err
 	}
 	return t.Tx.Exec(ctx, query, args, v)
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*AccountingPeriod.
+func (_u *AccountingPeriodUpdate) SaveReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *AccountingPeriodUpdate) sqlSaveReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	var out []*AccountingPeriod
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", accountingperiod.Table, accountingperiod.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningAccountingPeriod(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*AccountingPeriod.
+func (_d *AccountingPeriodDelete) ExecReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *AccountingPeriodDelete) sqlExecReturning(ctx context.Context) ([]*AccountingPeriod, error) {
+	var out []*AccountingPeriod
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", accountingperiod.Table, accountingperiod.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningAccountingPeriod(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningAccountingPeriod(rows *sql.Rows) ([]*AccountingPeriod, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*AccountingPeriod
+	for rows.Next() {
+		node := &AccountingPeriod{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
 }
 
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*Addon.
@@ -767,6 +837,130 @@ func scanReturningConnection(rows *sql.Rows) ([]*Connection, error) {
 	var out []*Connection
 	for rows.Next() {
 		node := &Connection{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*Contract.
+func (_u *ContractUpdate) SaveReturning(ctx context.Context) ([]*Contract, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ContractUpdate) sqlSaveReturning(ctx context.Context) ([]*Contract, error) {
+	var out []*Contract
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", contract.Table, contract.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContract(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*Contract.
+func (_d *ContractDelete) ExecReturning(ctx context.Context) ([]*Contract, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ContractDelete) sqlExecReturning(ctx context.Context) ([]*Contract, error) {
+	var out []*Contract
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", contract.Table, contract.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContract(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningContract(rows *sql.Rows) ([]*Contract, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*Contract
+	for rows.Next() {
+		node := &Contract{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*ContractAssociation.
+func (_u *ContractAssociationUpdate) SaveReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ContractAssociationUpdate) sqlSaveReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	var out []*ContractAssociation
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", contractassociation.Table, contractassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContractAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*ContractAssociation.
+func (_d *ContractAssociationDelete) ExecReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ContractAssociationDelete) sqlExecReturning(ctx context.Context) ([]*ContractAssociation, error) {
+	var out []*ContractAssociation
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", contractassociation.Table, contractassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningContractAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningContractAssociation(rows *sql.Rows) ([]*ContractAssociation, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*ContractAssociation
+	for rows.Next() {
+		node := &ContractAssociation{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err
@@ -2146,6 +2340,130 @@ func scanReturningInvoiceSequence(rows *sql.Rows) ([]*InvoiceSequence, error) {
 	return out, rows.Err()
 }
 
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*JournalEntry.
+func (_u *JournalEntryUpdate) SaveReturning(ctx context.Context) ([]*JournalEntry, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *JournalEntryUpdate) sqlSaveReturning(ctx context.Context) ([]*JournalEntry, error) {
+	var out []*JournalEntry
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", journalentry.Table, journalentry.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalEntry(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*JournalEntry.
+func (_d *JournalEntryDelete) ExecReturning(ctx context.Context) ([]*JournalEntry, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *JournalEntryDelete) sqlExecReturning(ctx context.Context) ([]*JournalEntry, error) {
+	var out []*JournalEntry
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", journalentry.Table, journalentry.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalEntry(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningJournalEntry(rows *sql.Rows) ([]*JournalEntry, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*JournalEntry
+	for rows.Next() {
+		node := &JournalEntry{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*JournalLine.
+func (_u *JournalLineUpdate) SaveReturning(ctx context.Context) ([]*JournalLine, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *JournalLineUpdate) sqlSaveReturning(ctx context.Context) ([]*JournalLine, error) {
+	var out []*JournalLine
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", journalline.Table, journalline.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalLine(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*JournalLine.
+func (_d *JournalLineDelete) ExecReturning(ctx context.Context) ([]*JournalLine, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *JournalLineDelete) sqlExecReturning(ctx context.Context) ([]*JournalLine, error) {
+	var out []*JournalLine
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", journalline.Table, journalline.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningJournalLine(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningJournalLine(rows *sql.Rows) ([]*JournalLine, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*JournalLine
+	for rows.Next() {
+		node := &JournalLine{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*Meter.
 func (_u *MeterUpdate) SaveReturning(ctx context.Context) ([]*Meter, error) {
 	_u.defaults()
@@ -2456,6 +2774,130 @@ func scanReturningPaymentMethod(rows *sql.Rows) ([]*PaymentMethod, error) {
 	return out, rows.Err()
 }
 
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*PerformanceObligation.
+func (_u *PerformanceObligationUpdate) SaveReturning(ctx context.Context) ([]*PerformanceObligation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *PerformanceObligationUpdate) sqlSaveReturning(ctx context.Context) ([]*PerformanceObligation, error) {
+	var out []*PerformanceObligation
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", performanceobligation.Table, performanceobligation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningPerformanceObligation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*PerformanceObligation.
+func (_d *PerformanceObligationDelete) ExecReturning(ctx context.Context) ([]*PerformanceObligation, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *PerformanceObligationDelete) sqlExecReturning(ctx context.Context) ([]*PerformanceObligation, error) {
+	var out []*PerformanceObligation
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", performanceobligation.Table, performanceobligation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningPerformanceObligation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningPerformanceObligation(rows *sql.Rows) ([]*PerformanceObligation, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*PerformanceObligation
+	for rows.Next() {
+		node := &PerformanceObligation{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*PerformanceObligationAssociation.
+func (_u *PerformanceObligationAssociationUpdate) SaveReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *PerformanceObligationAssociationUpdate) sqlSaveReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
+	var out []*PerformanceObligationAssociation
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", performanceobligationassociation.Table, performanceobligationassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningPerformanceObligationAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*PerformanceObligationAssociation.
+func (_d *PerformanceObligationAssociationDelete) ExecReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *PerformanceObligationAssociationDelete) sqlExecReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
+	var out []*PerformanceObligationAssociation
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", performanceobligationassociation.Table, performanceobligationassociation.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningPerformanceObligationAssociation(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningPerformanceObligationAssociation(rows *sql.Rows) ([]*PerformanceObligationAssociation, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*PerformanceObligationAssociation
+	for rows.Next() {
+		node := &PerformanceObligationAssociation{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*Plan.
 func (_u *PlanUpdate) SaveReturning(ctx context.Context) ([]*Plan, error) {
 	_u.defaults()
@@ -2627,6 +3069,68 @@ func scanReturningPriceUnit(rows *sql.Rows) ([]*PriceUnit, error) {
 	var out []*PriceUnit
 	for rows.Next() {
 		node := &PriceUnit{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*Product.
+func (_u *ProductUpdate) SaveReturning(ctx context.Context) ([]*Product, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *ProductUpdate) sqlSaveReturning(ctx context.Context) ([]*Product, error) {
+	var out []*Product
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", product.Table, product.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningProduct(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*Product.
+func (_d *ProductDelete) ExecReturning(ctx context.Context) ([]*Product, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *ProductDelete) sqlExecReturning(ctx context.Context) ([]*Product, error) {
+	var out []*Product
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", product.Table, product.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningProduct(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningProduct(rows *sql.Rows) ([]*Product, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*Product
+	for rows.Next() {
+		node := &Product{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

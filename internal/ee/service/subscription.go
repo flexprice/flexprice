@@ -393,6 +393,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	// Inline fx_rates: create the subscription-scope rates now that the subscription id exists.
 	if err := s.handleFxOverride(ctx, sub, inlineFXTarget, req.FxRates); err != nil {
@@ -420,6 +421,15 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 	if len(req.OverrideEntitlements) > 0 {
 		if err = s.ProcessSubscriptionEntitlementOverrides(ctx, sub, req.OverrideEntitlements); err != nil {
+			return nil, err
+		}
+	}
+	grantSvc := NewEntitlementService(s.ServiceParams)
+	for _, grantReq := range req.SubscriptionEntitlementGrants {
+		if grantReq.StartDate == nil {
+			grantReq.StartDate = lo.ToPtr(sub.StartDate)
+		}
+		if _, err = grantSvc.CreateSubscriptionEntitlementGrant(ctx, grantReq.ToCreateEntitlementRequest(sub.ID), sub); err != nil {
 			return nil, err
 		}
 	}
@@ -929,6 +939,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	if err != nil {
 		return nil, err
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	// Create response
 	response := &dto.SubscriptionResponse{Subscription: sub}
@@ -1534,6 +1545,7 @@ func buildOverridePriceRequest(originalPrice *dto.PriceResponse, override dto.Ov
 		ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 		DisplayName:          originalPrice.DisplayName,      // Preserve original price display name
 		PriceUnitType:        originalPrice.PriceUnitType,    // Always copy from original (cannot be changed)
+		ProductID:            originalPrice.ProductID,
 		SkipEntityValidation: true,
 	}
 	if override.BucketSize == dto.BucketSizeNone {
@@ -2346,6 +2358,7 @@ func (s *subscriptionService) CancelSubscription(
 			WithHint("Failed to process subscription cancellation").
 			Mark(ierr.ErrDatabase)
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscription.ID)
 
 	if !req.SuppressWebhook {
 		// Step 10: Publish events
@@ -3745,6 +3758,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
 			isSubscriptionCancelled = true
+			NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
@@ -4518,10 +4532,8 @@ func (s *subscriptionService) ResumeSubscription(
 	var sub *subscription.Subscription
 	var pause *subscription.SubscriptionPause
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if _, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID); err != nil {
-			return err
-		}
-		lockedSub, err := s.SubRepo.Get(txCtx, subscriptionID)
+		// GetForUpdate reads the locked row; Get may serve a stale copy from the cache.
+		lockedSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return err
 		}
@@ -4626,8 +4638,19 @@ func (s *subscriptionService) ResumeSubscription(
 			return err
 		}
 
-		sub, err = s.SubRepo.Get(txCtx, subscriptionID)
-		return err
+		// The payment step saves the subscription it read from the cache, which still holds the
+		// paused state. Keep the status it decided and write the resumed fields back.
+		paidSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		lockedSub.SubscriptionStatus = paidSub.SubscriptionStatus
+		if err := s.SubRepo.Update(txCtx, lockedSub); err != nil {
+			return err
+		}
+
+		sub = lockedSub
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -5115,6 +5138,10 @@ func (s *subscriptionService) createAddonAttachParams(
 		return nil, err
 	}
 
+	if err := s.validateAddonAttachSubscriptionEntitlementGrant(ctx, sub, req.AddonID, lineItems); err != nil {
+		return nil, err
+	}
+
 	return &addonAttachParams{
 		subscription:   sub,
 		request:        req,
@@ -5571,6 +5598,7 @@ func (s *subscriptionService) activateIncompleteSubscription(ctx context.Context
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	s.Logger.Info(ctx, "successfully activated incomplete subscription",
 		"subscription_id", subscriptionID,
@@ -5766,6 +5794,7 @@ func (s *subscriptionService) completeTrialConversionToActive(ctx context.Contex
 
 	if activated {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+		NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 	}
 	return nil
 }
@@ -7050,11 +7079,18 @@ func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Cont
 		}
 	}
 
+	subscriptionEntitlementGrants, err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).subscriptionEntitlementGrantsView(ctx, sub)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to load subscription entitlement grants, returning entitlements without them",
+			"error", err, "subscription_id", sub.ID)
+	}
+
 	// Build final response
 	response := &dto.SubscriptionEntitlementsResponse{
-		SubscriptionID: sub.ID,
-		PlanID:         sub.PlanID,
-		Features:       aggregatedFeatures,
+		SubscriptionID:                sub.ID,
+		PlanID:                        sub.PlanID,
+		Features:                      aggregatedFeatures,
+		SubscriptionEntitlementGrants: subscriptionEntitlementGrants,
 	}
 
 	return response
@@ -8710,4 +8746,26 @@ func (s *subscriptionService) processPendingPlanChangeV2(
 		"scheduled_at", schedule.ScheduledAt)
 
 	return s.ExecuteScheduledPlanChangeV2(ctx, schedule, config, sub)
+}
+
+// validateAddonAttachSubscriptionEntitlementGrant refuses an addon whose lines or feature entitlement grants would break the subscription entitlement grant.
+func (s *subscriptionService) validateAddonAttachSubscriptionEntitlementGrant(ctx context.Context, sub *subscription.Subscription, addonID string, items []*subscription.SubscriptionLineItem) error {
+	grants := &entitlementGrantService{ServiceParams: s.ServiceParams}
+	granted, err := grants.hasSubscriptionScopedEntitlement(ctx, sub.ID)
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return nil
+	}
+	addonEntitlements, err := NewEntitlementService(s.ServiceParams).GetAddonEntitlements(ctx, addonID)
+	if err != nil {
+		return err
+	}
+	return grants.validateChange(ctx, sub, subscriptionEntitlementGrantChange{
+		items: items,
+		entitlements: lo.Map(addonEntitlements.Items, func(r *dto.EntitlementResponse, _ int) *entitlement.Entitlement {
+			return r.Entitlement
+		}),
+	})
 }

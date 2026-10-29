@@ -68,6 +68,8 @@ const (
 	FieldGrantQuota = "grant_quota"
 	// FieldAggregationMode holds the string denoting the aggregation_mode field in the database.
 	FieldAggregationMode = "aggregation_mode"
+	// FieldGrantScope holds the string denoting the grant_scope field in the database.
+	FieldGrantScope = "grant_scope"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -102,6 +104,7 @@ var Columns = []string{
 	FieldGrantAllocationBehavior,
 	FieldGrantQuota,
 	FieldAggregationMode,
+	FieldGrantScope,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
@@ -154,6 +157,8 @@ var (
 	DefaultGrantAllocationBehavior types.EntitlementGrantAllocationBehavior
 	// DefaultAggregationMode holds the default value on creation for the "aggregation_mode" field.
 	DefaultAggregationMode types.EntitlementAggregationMode
+	// DefaultGrantScope holds the default value on creation for the "grant_scope" field.
+	DefaultGrantScope types.EntitlementGrantScopeEntityType
 	// IDValidator is a validator for the "id" field. It is called by the builders before save.
 	IDValidator func(string) error
 )
@@ -294,4 +299,9 @@ func ByGrantQuota(opts ...sql.OrderTermOption) OrderOption {
 // ByAggregationMode orders the results by the aggregation_mode field.
 func ByAggregationMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAggregationMode, opts...).ToFunc()
+}
+
+// ByGrantScope orders the results by the grant_scope field.
+func ByGrantScope(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrantScope, opts...).ToFunc()
 }

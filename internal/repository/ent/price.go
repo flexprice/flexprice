@@ -106,6 +106,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	if p.ParentPriceID != "" {
 		priceBuilder = priceBuilder.SetNillableParentPriceID(lo.EmptyableToPtr(p.ParentPriceID))
 	}
+	priceBuilder = priceBuilder.SetNillableProductID(lo.EmptyableToPtr(p.ProductID))
 
 	price, err := priceBuilder.Save(ctx)
 
@@ -321,6 +322,9 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 	} else {
 		update = update.SetNillableGroupID(lo.ToPtr(p.GroupID))
 	}
+	if p.ProductID != "" {
+		update = update.SetProductID(p.ProductID)
+	}
 
 	_, err := update.SaveReturning(ctx)
 
@@ -489,6 +493,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetCreatedBy(p.CreatedBy).
 			SetUpdatedBy(p.UpdatedBy).
 			SetNillableGroupID(lo.ToPtr(p.GroupID)).
+			SetNillableProductID(lo.EmptyableToPtr(p.ProductID)).
 			SetPriceUnitType(p.PriceUnitType).
 			SetNillablePriceUnitID(p.PriceUnitID).
 			SetNillablePriceUnit(p.PriceUnit).
@@ -629,6 +634,10 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	// entity id filter
 	if len(f.EntityIDs) > 0 {
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
+	}
+
+	if len(f.ProductIDs) > 0 {
+		query = query.Where(price.ProductIDIn(f.ProductIDs...))
 	}
 
 	// meter id filter

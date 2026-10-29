@@ -259,35 +259,10 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 		return nil
 	}
 
-	featureGrants := make([]*entitlementgrant.EntitlementGrant, 0, len(grants))
-	for _, g := range grants {
-		if g.IsFeatureScoped() {
-			featureGrants = append(featureGrants, g)
-			continue
-		}
-		s.Logger.Debug(ctx, "entitlement grant evaluation: skipping non-feature scope",
-			"grant_id", g.ID,
-			"scope_entity_type", g.ScopeEntityType,
-		)
-	}
-	if len(featureGrants) == 0 {
-		return nil
-	}
-
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
 
 	var errs []error
-	for _, g := range featureGrants {
-		f, ok := meta.featureByID[g.ScopeEntityID]
-		if !ok || f.MeterID == "" {
-			s.Logger.Debug(ctx, "entitlement grant evaluation: feature or meter missing", "grant_id", g.ID)
-			continue
-		}
-		m, ok := meta.meterByID[f.MeterID]
-		if !ok {
-			s.Logger.Debug(ctx, "entitlement grant evaluation: meter missing", "grant_id", g.ID, "meter_id", f.MeterID)
-			continue
-		}
+	for _, g := range grants {
 		sub, ok := meta.subsByID[g.SubscriptionID]
 		if !ok {
 			s.Logger.Debug(ctx, "entitlement grant evaluation: subscription missing", "grant_id", g.ID)
@@ -304,15 +279,37 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			continue
 		}
 
-		extIDs, err := meta.externalIDs(ctx, sub)
-		if err != nil {
-			s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
-				"grant_id", g.ID, "subscription_id", sub.ID, "error", err)
-			errs = append(errs, err)
+		var rawUsage decimal.Decimal
+		var err error
+		switch g.ScopeEntityType {
+		case types.EntitlementGrantScopeSubscription:
+			rawUsage, _, err = NewMeterUsageService(s.ServiceParams).GetSubscriptionWindowSpend(ctx, sub, g.ValidFrom, types.EarliestOf(at, g.ValidTo))
+		case types.EntitlementGrantScopeFeature:
+			f, ok := meta.featureByID[g.ScopeEntityID]
+			if !ok || f.MeterID == "" {
+				s.Logger.Debug(ctx, "entitlement grant evaluation: feature or meter missing", "grant_id", g.ID)
+				continue
+			}
+			m, ok := meta.meterByID[f.MeterID]
+			if !ok {
+				s.Logger.Debug(ctx, "entitlement grant evaluation: meter missing", "grant_id", g.ID, "meter_id", f.MeterID)
+				continue
+			}
+			extIDs, extErr := meta.externalIDs(ctx, sub)
+			if extErr != nil {
+				s.Logger.Error(ctx, "entitlement grant evaluation: external customer id lookup failed",
+					"grant_id", g.ID, "subscription_id", sub.ID, "error", extErr)
+				errs = append(errs, extErr)
+				continue
+			}
+			rawUsage, err = s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
+		default:
+			s.Logger.Debug(ctx, "entitlement grant evaluation: skipping unsupported scope",
+				"grant_id", g.ID,
+				"scope_entity_type", g.ScopeEntityType,
+			)
 			continue
 		}
-
-		rawUsage, err := s.refreshEntitlementGrantUsage(ctx, g, m, sub, extIDs, at)
 		if err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: usage refresh failed",
 				"grant_id", g.ID, "error", err)
@@ -329,28 +326,7 @@ func (s *alertService) evaluateEntitlementGrantsForCustomer(
 			errs = append(errs, err)
 		}
 
-		// Keep the evaluation-time crossing while exhausted; recovery starts a new crossing cycle.
-		cross := g.QuotaCrossedAt
-		if g.IsExhausted(usage) {
-			if cross == nil {
-				cross = &at
-			}
-		} else {
-			cross = nil
-		}
-
-		// Snapshot the refreshed state; last_computed_at >= valid_to marks a
-		// closed window as finalized so it never re-enters the refresh set.
-		builder := entitlementgrant.NewEntitlementGrantBuilder(g).
-			WithUsage(usage).
-			WithLastComputedAt(&at).
-			WithQuotaCrossedAt(cross)
-		if g.IsExhausted(usage) {
-			builder = builder.WithGrantStatus(types.EntitlementGrantStatusExhausted)
-		} else {
-			builder = builder.WithGrantStatus(types.EntitlementGrantStatusActive)
-		}
-		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, builder.Build()); err != nil {
+		if err := s.EntitlementGrantRepo.UpdateSnapshot(ctx, grantUsageSnapshot(g, usage, at)); err != nil {
 			s.Logger.Error(ctx, "entitlement grant evaluation: snapshot write failed",
 				"grant_id", g.ID, "error", err)
 			errs = append(errs, err)

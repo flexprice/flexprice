@@ -125,6 +125,14 @@ const (
 	UUID_PREFIX_FX_RATE                    = "fxr"
 	UUID_PREFIX_HOSTED_INVOICE_TOKEN       = "hit"
 	UUID_PREFIX_ACTIVITY                   = "act"
+	UUID_PREFIX_PRODUCT                    = "product"
+	UUID_PREFIX_CONTRACT                   = "contract"
+	UUID_PREFIX_CONTRACT_ASSOCIATION       = "contract_assoc"
+	UUID_PREFIX_PERFORMANCE_OBLIGATION     = "pob"
+	UUID_PREFIX_POB_ASSOCIATION            = "pob_assoc"
+	UUID_PREFIX_ACCOUNTING_PERIOD          = "acct_period"
+	UUID_PREFIX_JOURNAL_ENTRY              = "je"
+	UUID_PREFIX_JOURNAL_LINE               = "jl"
 	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
 
 	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.

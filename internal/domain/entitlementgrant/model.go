@@ -35,6 +35,11 @@ type EntitlementGrant struct {
 	types.BaseModel
 }
 
+// IsSubscriptionScoped reports whether the grant covers every usage line on its subscription.
+func (g *EntitlementGrant) IsSubscriptionScoped() bool {
+	return g != nil && g.ScopeEntityType == types.EntitlementGrantScopeSubscription
+}
+
 func (g *EntitlementGrant) IsFeatureScoped() bool {
 	if g == nil {
 		return false
@@ -78,6 +83,18 @@ func (g *EntitlementGrant) Overage() decimal.Decimal {
 		return decimal.Zero
 	}
 	return over
+}
+
+// Covered is how much of usage the grant covers: all of it when unlimited, otherwise up to the quota.
+func (g *EntitlementGrant) Covered(usage decimal.Decimal) decimal.Decimal {
+	usage = decimal.Max(usage, decimal.Zero)
+	if g == nil {
+		return decimal.Zero
+	}
+	if g.Unlimited {
+		return usage
+	}
+	return decimal.Min(usage, g.Quota)
 }
 
 func (g *EntitlementGrant) Remaining() (decimal.Decimal, bool) {

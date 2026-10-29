@@ -53,7 +53,7 @@ func TestAddExpiryDurationUnknownUnit(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// An unresolvable or empty timezone falls back to UTC rather than erroring, matching loadTimezone.
+// An unresolvable or empty timezone falls back to UTC rather than erroring, matching LoadTimezone.
 func TestAddExpiryDurationFallsBackToUTC(t *testing.T) {
 	start := time.Date(2026, 1, 31, 9, 0, 0, 0, time.UTC)
 	want := time.Date(2027, 1, 31, 9, 0, 0, 0, time.UTC)

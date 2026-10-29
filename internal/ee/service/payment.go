@@ -574,6 +574,9 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		return nil, err // Repository already using ierr
 	}
 	recordPaymentTransition(ctx, p, observedStatus)
+	if p.PaymentStatus != observedStatus {
+		postPaymentJournal(ctx, s.ServiceParams, p.ID)
+	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
 	if observedStatus != types.PaymentStatusFailed && p.PaymentStatus == types.PaymentStatusFailed {

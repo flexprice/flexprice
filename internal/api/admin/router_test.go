@@ -733,10 +733,10 @@ func TestRemoveUserErrors(t *testing.T) {
 			wantCalled: true,
 		},
 		{
-			name:       "last user of the tenant",
+			name:       "service account",
 			body:       body,
 			secret:     "test-secret",
-			serviceErr: ierr.NewError("cannot remove the last user in the tenant").Mark(ierr.ErrValidation),
+			serviceErr: ierr.NewError("only human users can be removed").Mark(ierr.ErrValidation),
 			wantStatus: http.StatusBadRequest,
 			wantCalled: true,
 		},

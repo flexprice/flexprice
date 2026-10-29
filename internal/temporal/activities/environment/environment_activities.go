@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"fmt"
+	"time"
 
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -11,9 +12,11 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	domainPlan "github.com/flexprice/flexprice/internal/domain/plan"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
+	domainProduct "github.com/flexprice/flexprice/internal/domain/product"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -272,6 +275,7 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 
 	// Build group ID map for price groups
 	groupIDMap := make(map[string]string)
+	productIDMap := make(map[string]string)
 
 	// Fetch all published plans from source
 	planFilter := types.NewNoLimitPlanFilter()
@@ -323,7 +327,7 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 		}
 
 		newPlanID, err := a.clonePlan(sourceCtx, targetCtx, srcPlan, input.TargetEnvironmentID,
-			featureIDMap, meterIDMap, groupIDMap)
+			featureIDMap, meterIDMap, groupIDMap, productIDMap)
 		if err != nil {
 			log.Info(ctx, "env_clone_plan_failed",
 				"plan_id", srcPlan.ID, "name", srcPlan.Name, "error", err)
@@ -359,7 +363,7 @@ func (a *EnvironmentActivities) clonePlan(
 	srcPlan *domainPlan.Plan,
 	targetEnvID string,
 	featureIDMap, meterIDMap map[string]string,
-	groupIDMap map[string]string,
+	groupIDMap, productIDMap map[string]string,
 ) (string, error) {
 	// Fetch source plan's prices, entitlements, credit grants
 	sourcePrices, err := a.params.PriceRepo.List(sourceCtx, types.NewNoLimitPriceFilter().
@@ -435,7 +439,17 @@ func (a *EnvironmentActivities) clonePlan(
 				}
 			}
 
-			newPrices = append(newPrices, p.CopyWith(txCtx, overrides))
+			cloned := p.CopyWith(txCtx, overrides)
+			if p.ProductID != "" {
+				newProductID, ok := productIDMap[p.ProductID]
+				if !ok {
+					// Product unreachable: clear rather than point at another environment.
+					newProductID, _ = a.resolveOrCreateProduct(sourceCtx, txCtx, p.ProductID)
+					productIDMap[p.ProductID] = newProductID
+				}
+				cloned.ProductID = newProductID
+			}
+			newPrices = append(newPrices, cloned)
 		}
 
 		// Build entitlements with remapping — fail fast if feature mapping is missing
@@ -546,6 +560,37 @@ func (a *EnvironmentActivities) buildCrossEnvIDMaps(
 	}
 
 	return featureIDMap, meterIDMap, nil
+}
+
+// resolveOrCreateProduct returns the target environment's product with the source
+// product's lookup key, cloning the source product when there is none.
+func (a *EnvironmentActivities) resolveOrCreateProduct(sourceCtx, targetCtx context.Context, sourceProductID string) (string, error) {
+	sourceProduct, err := a.params.ProductRepo.GetByID(sourceCtx, sourceProductID)
+	if err != nil {
+		return "", err
+	}
+
+	filter := productRepo.NewFilter()
+	filter.LookupKeys = []string{sourceProduct.LookupKey()}
+	existing, err := a.params.ProductRepo.List(targetCtx, filter)
+	if err != nil {
+		return "", err
+	}
+	if len(existing) > 0 {
+		return existing[0].ID(), nil
+	}
+
+	now := time.Now().UTC()
+	newProduct := domainProduct.NewBuilder(sourceProduct).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRODUCT)).
+		WithStatus(types.StatusPublished).
+		WithCreatedAt(now).
+		WithUpdatedAt(now).
+		Build()
+	if err := a.params.ProductRepo.Create(targetCtx, newProduct); err != nil {
+		return "", err
+	}
+	return newProduct.ID(), nil
 }
 
 // resolveOrCreateGroup finds or creates a matching group in the target environment by lookup_key.

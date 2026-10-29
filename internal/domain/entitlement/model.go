@@ -38,8 +38,23 @@ type Entitlement struct {
 	GrantAllocationBehavior types.EntitlementGrantAllocationBehavior `json:"grant_allocation_behavior,omitempty"`
 	GrantQuota              *decimal.Decimal                         `json:"grant_quota,omitempty" swaggertype:"string"`
 	AggregationMode         types.EntitlementAggregationMode         `json:"aggregation_mode,omitempty"`
+	GrantScope              types.EntitlementGrantScopeEntityType    `json:"grant_scope,omitempty"`
 
 	types.BaseModel
+}
+
+// IsSubscriptionScoped reports whether the entitlement is a subscription entitlement grant: a dollar
+// entitlement grant over every usage line on the subscription, with no feature.
+func (e *Entitlement) IsSubscriptionScoped() bool {
+	return e != nil && e.EffectiveGrantScope() == types.EntitlementGrantScopeSubscription
+}
+
+// EffectiveGrantScope is the entitlement's grant scope; an unset scope means a feature grant.
+func (e *Entitlement) EffectiveGrantScope() types.EntitlementGrantScopeEntityType {
+	if e == nil || e.GrantScope == "" {
+		return types.EntitlementGrantScopeFeature
+	}
+	return e.GrantScope
 }
 
 func (e *Entitlement) GetEntityType() types.EntitlementEntityType {
@@ -191,6 +206,14 @@ func (e *Entitlement) Validate() error {
 			WithHint("Invalid entity type").
 			Mark(ierr.ErrValidation)
 	}
+	if e.IsSubscriptionScoped() {
+		return e.validateSubscriptionScope()
+	}
+	if e.GrantScope != "" && e.GrantScope != types.EntitlementGrantScopeFeature {
+		return ierr.NewError("grant_scope must be feature or subscription").
+			WithReportableDetails(map[string]interface{}{"grant_scope": e.GrantScope}).
+			Mark(ierr.ErrValidation)
+	}
 	if e.FeatureID == "" {
 		return ierr.NewError("feature_id is required").
 			WithHint("Please provide a valid feature ID").
@@ -233,6 +256,34 @@ func (e *Entitlement) Validate() error {
 	return nil
 }
 
+// validateSubscriptionScope checks a subscription entitlement grant: owned by a subscription, no
+// feature, measured in money, with a quota.
+func (e *Entitlement) validateSubscriptionScope() error {
+	if e.EntityType != types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION {
+		return ierr.NewError("a subscription entitlement grant must belong to a subscription").
+			WithHint("Set entity_type to SUBSCRIPTION and entity_id to the subscription ID").
+			WithReportableDetails(map[string]interface{}{"entity_type": e.EntityType}).
+			Mark(ierr.ErrValidation)
+	}
+	if e.FeatureID != "" || e.FeatureType != "" {
+		return ierr.NewError("a subscription entitlement grant has no feature").
+			WithHint("Leave feature_id and feature_type empty; the grant covers every usage line on the subscription").
+			WithReportableDetails(map[string]interface{}{"feature_id": e.FeatureID}).
+			Mark(ierr.ErrValidation)
+	}
+	if !e.HasGrantConfig() || e.GrantMeasure != types.EntitlementGrantMeasureAmount {
+		return ierr.NewError("a subscription entitlement grant must be measured in amount").
+			WithReportableDetails(map[string]interface{}{"grant_measure": e.GrantMeasure}).
+			Mark(ierr.ErrValidation)
+	}
+	if e.GrantQuota == nil {
+		return ierr.NewError("a subscription entitlement grant requires grant_quota").
+			WithHint("Unlimited subscription entitlement grants are not supported").
+			Mark(ierr.ErrValidation)
+	}
+	return e.validateGrantConfig()
+}
+
 // validateGrantConfig enforces coherence on the grant fields: either none are
 // set (legacy entitlement) or the full measure/duration/quota set is present on
 // a metered feature. Meter-shape and pricing-shape checks live in the service layer.
@@ -250,7 +301,7 @@ func (e *Entitlement) validateGrantConfig() error {
 		return nil
 	}
 
-	if e.FeatureType != types.FeatureTypeMetered {
+	if !e.IsSubscriptionScoped() && e.FeatureType != types.FeatureTypeMetered {
 		return ierr.NewError("grant config requires a metered feature").
 			WithReportableDetails(map[string]interface{}{"feature_type": e.FeatureType}).
 			Mark(ierr.ErrValidation)
@@ -336,8 +387,8 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		ID:                      e.ID,
 		EntityType:              types.EntitlementEntityType(e.EntityType),
 		EntityID:                e.EntityID,
-		FeatureID:               e.FeatureID,
-		FeatureType:             types.FeatureType(e.FeatureType),
+		FeatureID:               lo.FromPtr(e.FeatureID),
+		FeatureType:             lo.FromPtr(e.FeatureType),
 		IsEnabled:               e.IsEnabled,
 		UsageLimit:              e.UsageLimit,
 		UsageResetPeriod:        types.EntitlementUsageResetPeriod(e.UsageResetPeriod),
@@ -355,6 +406,7 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		GrantAllocationBehavior: e.GrantAllocationBehavior,
 		GrantQuota:              e.GrantQuota,
 		AggregationMode:         e.AggregationMode,
+		GrantScope:              e.GrantScope,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

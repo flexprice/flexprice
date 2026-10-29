@@ -9,6 +9,18 @@ import (
 	"github.com/flexprice/flexprice/ent"
 )
 
+// The AccountingPeriodFunc type is an adapter to allow the use of ordinary
+// function as AccountingPeriod mutator.
+type AccountingPeriodFunc func(context.Context, *ent.AccountingPeriodMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AccountingPeriodFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AccountingPeriodMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountingPeriodMutation", m)
+}
+
 // The AddonFunc type is an adapter to allow the use of ordinary
 // function as Addon mutator.
 type AddonFunc func(context.Context, *ent.AddonMutation) (ent.Value, error)
@@ -127,6 +139,30 @@ func (f ConnectionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectionMutation", m)
+}
+
+// The ContractFunc type is an adapter to allow the use of ordinary
+// function as Contract mutator.
+type ContractFunc func(context.Context, *ent.ContractMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContractFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContractMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContractMutation", m)
+}
+
+// The ContractAssociationFunc type is an adapter to allow the use of ordinary
+// function as ContractAssociation mutator.
+type ContractAssociationFunc func(context.Context, *ent.ContractAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ContractAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ContractAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ContractAssociationMutation", m)
 }
 
 // The CostsheetFunc type is an adapter to allow the use of ordinary
@@ -393,6 +429,30 @@ func (f InvoiceSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InvoiceSequenceMutation", m)
 }
 
+// The JournalEntryFunc type is an adapter to allow the use of ordinary
+// function as JournalEntry mutator.
+type JournalEntryFunc func(context.Context, *ent.JournalEntryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f JournalEntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.JournalEntryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.JournalEntryMutation", m)
+}
+
+// The JournalLineFunc type is an adapter to allow the use of ordinary
+// function as JournalLine mutator.
+type JournalLineFunc func(context.Context, *ent.JournalLineMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f JournalLineFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.JournalLineMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.JournalLineMutation", m)
+}
+
 // The MeterFunc type is an adapter to allow the use of ordinary
 // function as Meter mutator.
 type MeterFunc func(context.Context, *ent.MeterMutation) (ent.Value, error)
@@ -453,6 +513,30 @@ func (f PaymentMethodFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentMethodMutation", m)
 }
 
+// The PerformanceObligationFunc type is an adapter to allow the use of ordinary
+// function as PerformanceObligation mutator.
+type PerformanceObligationFunc func(context.Context, *ent.PerformanceObligationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PerformanceObligationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PerformanceObligationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PerformanceObligationMutation", m)
+}
+
+// The PerformanceObligationAssociationFunc type is an adapter to allow the use of ordinary
+// function as PerformanceObligationAssociation mutator.
+type PerformanceObligationAssociationFunc func(context.Context, *ent.PerformanceObligationAssociationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PerformanceObligationAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PerformanceObligationAssociationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PerformanceObligationAssociationMutation", m)
+}
+
 // The PlanFunc type is an adapter to allow the use of ordinary
 // function as Plan mutator.
 type PlanFunc func(context.Context, *ent.PlanMutation) (ent.Value, error)
@@ -487,6 +571,18 @@ func (f PriceUnitFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, e
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PriceUnitMutation", m)
+}
+
+// The ProductFunc type is an adapter to allow the use of ordinary
+// function as Product mutator.
+type ProductFunc func(context.Context, *ent.ProductMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProductFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ProductMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProductMutation", m)
 }
 
 // The RefundFunc type is an adapter to allow the use of ordinary

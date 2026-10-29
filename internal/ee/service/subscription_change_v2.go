@@ -165,7 +165,47 @@ func (s *subscriptionService) resolvePlanChange(
 		return nil, err
 	}
 
+	if err := s.validatePlanChangeSubscriptionEntitlementGrant(ctx, r, toPlan); err != nil {
+		return nil, err
+	}
+
 	return r, nil
+}
+
+// validatePlanChangeSubscriptionEntitlementGrant refuses a plan change that would break the subscription entitlement grant: a
+// target plan line or feature entitlement grant it cannot cover, or a period reset that would cut its window.
+func (s *subscriptionService) validatePlanChangeSubscriptionEntitlementGrant(ctx context.Context, r *planChangeRequest, toPlan *dto.PlanResponse) error {
+	grants := &entitlementGrantService{ServiceParams: s.ServiceParams}
+	granted, err := grants.hasSubscriptionScopedEntitlement(ctx, r.currentSub.ID)
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return nil
+	}
+	if r.anchorAtEffect {
+		return ierr.NewError("the billing period cannot be reset on a subscription with a subscription entitlement grant").
+			WithHint("Use billing_period_behaviour='unchanged'. A reset would cut the grant's current window short.").
+			WithReportableDetails(map[string]any{"subscription_id": r.currentSub.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	var change subscriptionEntitlementGrantChange
+	for _, e := range r.closingLineItems {
+		ended := *e.LineItem
+		ended.EndDate = r.effectiveAt
+		change.items = append(change.items, &ended)
+	}
+	for _, e := range r.openingLineItems {
+		change.items = append(change.items, e.LineItem)
+		change.prices = append(change.prices, e.NewPrice)
+	}
+	for _, e := range toPlan.Entitlements {
+		if e != nil {
+			change.entitlements = append(change.entitlements, e.Entitlement)
+		}
+	}
+	return grants.validateChange(ctx, r.currentSub, change)
 }
 
 // resolveCreditGrantMigration works out which grants leave with the old plan and which
@@ -888,6 +928,7 @@ func (s *subscriptionService) executePlanChangeAt(
 	s.attemptPlanChangePayment(ctx, resp)
 
 	// After commit so webhook failure cannot roll back a completed change.
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPlanChanged, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 

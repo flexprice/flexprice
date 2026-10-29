@@ -8,12 +8,12 @@ import (
 	"github.com/samber/lo"
 )
 
-// loadTimezone resolves an IANA name (or known abbreviation) to a *time.Location.
+// LoadTimezone resolves an IANA name (or known abbreviation) to a *time.Location.
 //
 // Timezone values are validated once at the API boundary (customer DTO), so an
 // empty/unresolvable value here is unexpected. We fall back to UTC rather than
 // erroring — callers downstream of validation trust the value and never re-validate.
-func loadTimezone(tz string) *time.Location {
+func LoadTimezone(tz string) *time.Location {
 	if tz == "" || tz == DefaultTimezone {
 		return time.UTC
 	}
@@ -25,9 +25,9 @@ func loadTimezone(tz string) *time.Location {
 
 // FloorToStartOfDay returns the start of the calendar day (00:00:00.000)
 // containing t, evaluated in the given IANA timezone. Empty or unknown tz
-// falls back to UTC (matching loadTimezone). The returned instant is UTC.
+// falls back to UTC (matching LoadTimezone). The returned instant is UTC.
 func FloorToStartOfDay(t time.Time, tz string) time.Time {
-	loc := loadTimezone(tz)
+	loc := LoadTimezone(tz)
 	local := t.In(loc)
 	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).UTC()
 }
@@ -44,7 +44,7 @@ func FloorToStartOfDay(t time.Time, tz string) time.Time {
 // instance they passed in — reconstructing via time.Date always picks the first
 // occurrence (EDT), which would silently rewind the second (EST) occurrence.
 func FloorToStartOfHour(t time.Time, tz string) time.Time {
-	loc := loadTimezone(tz)
+	loc := LoadTimezone(tz)
 	local := t.In(loc)
 	return t.Add(
 		-time.Duration(local.Minute())*time.Minute -
@@ -57,7 +57,7 @@ func FloorToStartOfHour(t time.Time, tz string) time.Time {
 // evaluated in the given IANA timezone (empty → UTC). Monday-first is hardcoded;
 // per-tenant/customer week-start configuration is a documented follow-up.
 func FloorToStartOfWeek(t time.Time, tz string) time.Time {
-	loc := loadTimezone(tz)
+	loc := LoadTimezone(tz)
 	local := t.In(loc)
 	// Go's Weekday: Sunday=0, Monday=1, ..., Saturday=6.
 	// Days since ISO Monday: Mon=0, Tue=1, ..., Sun=6.
@@ -72,7 +72,7 @@ func FloorToStartOfWeek(t time.Time, tz string) time.Time {
 // local midnight, even if the intervening calendar day is 23 or 25 hours long.
 // Callers that add "24 * time.Hour" instead will drift by ±1h across DST.
 func AdvanceDays(t time.Time, n int, tz string) time.Time {
-	loc := loadTimezone(tz)
+	loc := LoadTimezone(tz)
 	return t.In(loc).AddDate(0, 0, n).UTC()
 }
 
@@ -98,7 +98,7 @@ type NextBillingDateParams struct {
 // (when p.Timezone is set), returned as a UTC instant. Stored dates are always UTC
 // instants — only the boundary computation happens in local time.
 func NextBillingDate(p *NextBillingDateParams) (time.Time, error) {
-	loc := loadTimezone(p.Timezone)
+	loc := LoadTimezone(p.Timezone)
 
 	// Re-locate the input times so that all time.Date() calls inside
 	// nextBillingDateCore compute the boundary in local time.
@@ -335,7 +335,7 @@ func NewBillingPeriodGrid(anchor time.Time, period BillingPeriod, unit int, tz s
 			Mark(ierr.ErrValidation)
 	}
 
-	return &billingPeriodGrid{anchor: anchor.In(loadTimezone(tz)), period: period, unit: unit}, nil
+	return &billingPeriodGrid{anchor: anchor.In(LoadTimezone(tz)), period: period, unit: unit}, nil
 }
 
 // billingDateAtIndex returns the k-th billing date; k = 0 is the anchor and k may be negative.
@@ -650,7 +650,7 @@ func GetNextUsageResetAt(p *GetNextUsageResetAtParams) (time.Time, error) {
 	// the billingAnchor's embedded location (legacy/UTC behaviour).
 	resetLoc := billingAnchor.Location()
 	if timezone != "" && timezone != DefaultTimezone {
-		resetLoc = loadTimezone(timezone)
+		resetLoc = LoadTimezone(timezone)
 	}
 
 	switch entitlementUsageResetPeriod {

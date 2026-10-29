@@ -314,5 +314,79 @@ func TestEntitlement_LiveWindow(t *testing.T) {
 			}
 		})
 	}
+}
 
+// subscriptionEntitlementGrant returns a valid subscription entitlement grant: $30 per subscription period.
+func subscriptionEntitlementGrant() *Entitlement {
+	q := decimal.NewFromInt(30)
+	return &Entitlement{
+		EntityType:        types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:          "subs_1",
+		GrantScope:        types.EntitlementGrantScopeSubscription,
+		GrantMeasure:      types.EntitlementGrantMeasureAmount,
+		GrantDurationUnit: types.EntitlementGrantDurationUnitSubscriptionPeriod,
+		GrantQuota:        &q,
+	}
+}
+
+func TestEntitlement_Validate_SubscriptionScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(e *Entitlement)
+		wantErr string
+	}{
+		{name: "valid", mutate: func(*Entitlement) {}},
+		{name: "parallel daily is valid", mutate: func(e *Entitlement) {
+			e.GrantDurationUnit = types.EntitlementGrantDurationUnitDay
+			e.GrantDurationValue = lo.ToPtr(1)
+			e.AggregationMode = types.EntitlementAggregationModeParallel
+		}},
+		{name: "owned by a plan", mutate: func(e *Entitlement) {
+			e.EntityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+		}, wantErr: "must belong to a subscription"},
+		{name: "has a feature", mutate: func(e *Entitlement) {
+			e.FeatureID, e.FeatureType = "feat_1", types.FeatureTypeMetered
+		}, wantErr: "has no feature"},
+		{name: "measured in quantity", mutate: func(e *Entitlement) {
+			e.GrantMeasure = types.EntitlementGrantMeasureQuantity
+		}, wantErr: "measured in amount"},
+		{name: "no grant config", mutate: func(e *Entitlement) {
+			e.GrantMeasure, e.GrantDurationUnit, e.GrantQuota = "", "", nil
+		}, wantErr: "measured in amount"},
+		{name: "unlimited", mutate: func(e *Entitlement) {
+			e.GrantQuota = nil
+		}, wantErr: "requires grant_quota"},
+		{name: "zero quota", mutate: func(e *Entitlement) {
+			e.GrantQuota = lo.ToPtr(decimal.Zero)
+		}, wantErr: "grant_quota must be positive"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := subscriptionEntitlementGrant()
+			tc.mutate(e)
+			err := e.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected valid, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v; want it to mention %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestEntitlement_Validate_FeatureScopeStillNeedsFeature(t *testing.T) {
+	e := baseEntitlement()
+	e.FeatureID = ""
+	if err := e.Validate(); err == nil || !strings.Contains(err.Error(), "feature_id is required") {
+		t.Fatalf("error = %v; want feature_id is required", err)
+	}
+	e = baseEntitlement()
+	e.GrantScope = "group"
+	if err := e.Validate(); err == nil || !strings.Contains(err.Error(), "grant_scope must be") {
+		t.Fatalf("error = %v; want grant_scope rejected", err)
+	}
 }
