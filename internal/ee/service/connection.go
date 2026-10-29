@@ -326,20 +326,23 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 		if encryptedSecretData.Paddle == nil {
 			s.Logger.Info(context.Background(), "Paddle metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Paddle metadata is required").
-				WithHint("Paddle connection requires encrypted_secret_data with api_key and webhook_secret").
+				WithHint("Paddle connection requires encrypted_secret_data with api_key").
 				Mark(ierr.ErrValidation)
 		}
 		encryptedAPIKey, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.APIKey)
 		if err != nil {
 			return types.ConnectionMetadata{}, err
 		}
-		encryptedWebhookSecret, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.WebhookSecret)
-		if err != nil {
-			return types.ConnectionMetadata{}, err
-		}
 		encryptedMetadata.Paddle = &types.PaddleConnectionMetadata{
-			APIKey:        encryptedAPIKey,
-			WebhookSecret: encryptedWebhookSecret,
+			APIKey: encryptedAPIKey,
+		}
+		// Webhooks are rejected until the secret is saved via UpdateConnection
+		if encryptedSecretData.Paddle.WebhookSecret != "" {
+			encryptedWebhookSecret, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.WebhookSecret)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+			encryptedMetadata.Paddle.WebhookSecret = encryptedWebhookSecret
 		}
 		if encryptedSecretData.Paddle.ClientSideToken != "" {
 			encryptedClientSideToken, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.ClientSideToken)
@@ -698,15 +701,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		}
 	}
 
-	// Whop: require the webhook signing secret at creation time. The Whop webhook
-	// route is unauthenticated and takes tenant and environment from the URL, so a
-	// connection without a secret leaves no way to tell a real delivery from a
-	// forged one — and those deliveries mark invoices paid. Legacy connections
-	// predating this check can add the secret via UpdateConnection.
+	// Whop: webhook_secret is saved later via UpdateConnection; the webhook route rejects deliveries until then.
 	if conn.ProviderType == types.SecretProviderWhop {
 		if conn.EncryptedSecretData.Whop == nil {
-			return nil, ierr.NewError("whop connection requires api_key, company_id and webhook_secret").
-				WithHint("encrypted_secret_data.whop with api_key, company_id and webhook_secret is required").
+			return nil, ierr.NewError("whop connection requires api_key and company_id").
+				WithHint("encrypted_secret_data.whop with api_key and company_id is required").
 				Mark(ierr.ErrValidation)
 		}
 		if err := conn.EncryptedSecretData.Whop.Validate(); err != nil {
@@ -1043,6 +1042,30 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 			return nil, encErr
 		}
 		conn.EncryptedSecretData.Whop.WebhookSecret = encWS
+	}
+
+	// Razorpay, Nomod, Moyasar, Paddle: merge webhook_secret only (plaintext from API → encrypted at rest)
+	if in, stored := req.EncryptedSecretData, conn.EncryptedSecretData; in != nil {
+		var incoming string
+		var target *string
+		switch {
+		case conn.ProviderType == types.SecretProviderRazorpay && in.Razorpay != nil && stored.Razorpay != nil:
+			incoming, target = in.Razorpay.WebhookSecret, &stored.Razorpay.WebhookSecret
+		case conn.ProviderType == types.SecretProviderNomod && in.Nomod != nil && stored.Nomod != nil:
+			incoming, target = in.Nomod.WebhookSecret, &stored.Nomod.WebhookSecret
+		case conn.ProviderType == types.SecretProviderMoyasar && in.Moyasar != nil && stored.Moyasar != nil:
+			incoming, target = in.Moyasar.WebhookSecret, &stored.Moyasar.WebhookSecret
+		case conn.ProviderType == types.SecretProviderPaddle && in.Paddle != nil && stored.Paddle != nil:
+			incoming, target = in.Paddle.WebhookSecret, &stored.Paddle.WebhookSecret
+		}
+		if incoming != "" {
+			encWS, encErr := s.encryptionService.Encrypt(incoming)
+			if encErr != nil {
+				s.Logger.Error(ctx, "failed to encrypt webhook secret", "error", encErr, "connection_id", id, "provider_type", conn.ProviderType)
+				return nil, encErr
+			}
+			*target = encWS
+		}
 	}
 
 	// Stripe: merge only the keys provided.
