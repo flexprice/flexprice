@@ -17,12 +17,14 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
+	domainbillingterms "github.com/flexprice/flexprice/internal/domain/billingterms"
 	"github.com/flexprice/flexprice/internal/dynamodb"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/ee/auth/saml"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	adminsvc "github.com/flexprice/flexprice/internal/ee/service/admin"
+	"github.com/flexprice/flexprice/internal/ee/service/billingterms"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
@@ -179,6 +181,9 @@ func main() {
 			repository.NewBillingTermRepository,
 			repository.NewBillingScheduleItemRepository,
 			repository.NewBillingTermsExecutionStore,
+			service.NewCommitmentTermsOwner,
+			newBillingTermsOwnerResolver,
+			billingterms.NewService,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,
@@ -922,4 +927,8 @@ func enrichServiceParams(base service.ServiceParams, revenueFacts interfaces.Rev
 	base.RevenueFacts = revenueFacts
 	base.SelfBilling = selfBilling
 	return base
+}
+
+func newBillingTermsOwnerResolver(adapter domainbillingterms.OwnerAdapter) (billingterms.OwnerResolver, error) {
+	return billingterms.NewOwnerResolver(adapter)
 }

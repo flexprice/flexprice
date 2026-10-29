@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	domainBillingTerms "github.com/flexprice/flexprice/internal/domain/billingterms"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -56,6 +57,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
+	"github.com/flexprice/flexprice/internal/ee/service/billingterms"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
@@ -79,14 +81,17 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger        *logger.Logger
-	Config        *config.Configuration
-	DB            postgres.IClient
-	PDFGenerator  pdf.Generator
-	TracingSvc    *tracing.Service
-	InMemoryCache cache.InMemoryCache
-	RedisCache    cache.RedisCache
-	Locker        cache.Locker
+	Logger               *logger.Logger
+	Config               *config.Configuration
+	DB                   postgres.IClient
+	PDFGenerator         pdf.Generator
+	TracingSvc           *tracing.Service
+	InMemoryCache        cache.InMemoryCache
+	RedisCache           cache.RedisCache
+	Locker               cache.Locker
+	BillingTerms         billingterms.Service
+	BillingTermsStore    domainBillingTerms.ExecutionStore
+	BillingScheduleItems domainBillingTerms.ScheduleItemRepository
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -275,6 +280,9 @@ func NewServiceParams(
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
+	billingTerms billingterms.Service,
+	billingTermsStore domainBillingTerms.ExecutionStore,
+	billingScheduleItems domainBillingTerms.ScheduleItemRepository,
 	productRepo productRepo.Repository,
 	contractService contractsvc.ContractService,
 	pobService pobsvc.PerformanceObligationService,
@@ -292,6 +300,9 @@ func NewServiceParams(
 		InMemoryCache:                inMemoryCache,
 		RedisCache:                   redisCache,
 		Locker:                       locker,
+		BillingTerms:                 billingTerms,
+		BillingTermsStore:            billingTermsStore,
+		BillingScheduleItems:         billingScheduleItems,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,
