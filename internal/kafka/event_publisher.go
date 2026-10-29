@@ -110,6 +110,9 @@ func (p *EventPublisher) buildMessage(event *events.Event, payload []byte, parti
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
+	if event.ForceReprocess {
+		msg.Metadata.Set("force_reprocess", "true")
+	}
 	return msg
 }
 
@@ -176,6 +179,15 @@ type eventGroup struct {
 	tenantID      string
 	environmentID string
 	events        []*events.Event
+}
+
+func batchForceReprocess(evts []*events.Event) bool {
+	for _, e := range evts {
+		if e != nil && e.ForceReprocess {
+			return true
+		}
+	}
+	return false
 }
 
 // groupForBatching buckets events by tenant and environment, then cuts each bucket into size-
@@ -246,6 +258,9 @@ func (p *EventPublisher) publishBatchMessage(ctx context.Context, payload []byte
 	msg.Metadata.Set("tenant_id", g.tenantID)
 	msg.Metadata.Set("environment_id", g.environmentID)
 	msg.Metadata.Set("batch_size", fmt.Sprintf("%d", count))
+	if batchForceReprocess(g.events) {
+		msg.Metadata.Set("force_reprocess", "true")
+	}
 
 	var firstErr error
 	if err := p.primary.Publish(determineBulkTopic(p.primaryCfg), msg); err != nil {

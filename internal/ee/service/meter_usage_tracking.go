@@ -247,6 +247,8 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		return nil
 	}
 
+	forceReprocess := msg.Metadata.Get("force_reprocess") == "true"
+
 	tenantID := batch.TenantID
 	environmentID := batch.EnvironmentID
 	if tenantID != "" {
@@ -288,6 +290,9 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			evt.EnvironmentID = environmentID
 		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
+		if forceReprocess {
+			evt.ForceReprocess = true
+		}
 
 		// Ahead of the dedup lock: a held event must take no lock. The whole batch
 		// is held, and the deferred release above returns the locks it already took.

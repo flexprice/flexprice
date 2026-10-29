@@ -94,6 +94,24 @@ func TestPublish_PrimaryOnly_Success(t *testing.T) {
 	}
 }
 
+func TestPublish_ForceReprocessSetsMetadata(t *testing.T) {
+	primary := &fakePublisher{}
+	ep := newPub(logger.NewNoopLogger(), primary, nil)
+
+	ev := sampleEvent()
+	ev.ForceReprocess = true
+	if err := ep.Publish(context.Background(), ev); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	msg := primary.only()
+	if msg == nil {
+		t.Fatal("expected one published message")
+	}
+	if got := msg.Metadata.Get("force_reprocess"); got != "true" {
+		t.Fatalf("force_reprocess metadata = %q, want true", got)
+	}
+}
+
 func TestPublish_BothClusters_ReceiveSamePayloadAndID(t *testing.T) {
 	primary := &fakePublisher{}
 	secondary := &fakePublisher{}
@@ -271,6 +289,23 @@ func newBulkPub(primary, secondary messagePublisher, kc *config.KafkaConfig) *Ev
 		ep.secondaryCfg = &sc
 	}
 	return ep
+}
+
+func TestPublishBatch_ForceReprocessSetsMetadata(t *testing.T) {
+	primary := &fakePublisher{}
+	ep := newBulkPub(primary, nil, bulkKafkaCfg(100, 0))
+
+	ev := evt("1", "tenant_1", "cust_a")
+	ev.ForceReprocess = true
+	if err := ep.PublishBatch(context.Background(), []*events.Event{ev}); err != nil {
+		t.Fatalf("PublishBatch: %v", err)
+	}
+	if len(primary.messages) != 1 {
+		t.Fatalf("published %d messages, want 1", len(primary.messages))
+	}
+	if got := primary.messages[0].Metadata.Get("force_reprocess"); got != "true" {
+		t.Fatalf("force_reprocess metadata = %q, want true", got)
+	}
 }
 
 func TestPublishBatch_OneMessagePerScope(t *testing.T) {

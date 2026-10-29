@@ -32,6 +32,7 @@ type IngestEventRequest struct {
 	TimestampStr       string                 `json:"-" csv:"timestamp"`                                // Used for CSV parsing
 	Source             string                 `json:"source" example:"api" csv:"source"`
 	Properties         map[string]interface{} `json:"properties" swaggertype:"object,string,number" example:"{\"request_size\":100,\"response_status\":200}" csv:"-"` // Handled separately for dynamic columns
+	ForceReprocess     bool                   `json:"force_reprocess,omitempty"`
 }
 
 func (r *IngestEventRequest) Validate() error {
@@ -77,7 +78,7 @@ func (r *BulkIngestRawEventRequest) Validate() error {
 }
 
 func (r *IngestEventRequest) ToEvent(ctx context.Context) *events.Event {
-	return events.NewEvent(
+	event := events.NewEvent(
 		r.EventName,
 		types.GetTenantID(ctx),
 		r.ExternalCustomerID,
@@ -88,6 +89,8 @@ func (r *IngestEventRequest) ToEvent(ctx context.Context) *events.Event {
 		r.Source,
 		types.GetEnvironmentID(ctx),
 	)
+	event.ForceReprocess = r.ForceReprocess
+	return event
 }
 
 type GetUsageRequest struct {
