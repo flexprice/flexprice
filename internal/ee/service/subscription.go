@@ -6712,17 +6712,15 @@ func withAssociationWindow(ent *dto.EntitlementResponse, assoc *dto.AddonAssocia
 
 // addonQuantitiesAt is each addon association's quantity as of at: the largest quantity on
 // its live fixed-price line items. Associations without one are absent and count once.
-// The subscription's loaded line items are used unless they miss an association, as they do
-// when loaded before an attach or a quantity change.
+// Line items are read fresh: the subscription's loaded ones can predate an attach or a
+// quantity change.
 func (s *subscriptionService) addonQuantitiesAt(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	at time.Time,
-	associationIDs []string,
 ) (map[string]decimal.Decimal, error) {
-	quantities := addonQuantities(sub.LineItems, at)
-	if s.SubscriptionLineItemRepo == nil || lo.EveryBy(associationIDs, func(id string) bool { _, ok := quantities[id]; return ok }) {
-		return quantities, nil
+	if s.SubscriptionLineItemRepo == nil {
+		return addonQuantities(sub.LineItems, at), nil
 	}
 	lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
 	if err != nil {
@@ -6750,9 +6748,9 @@ func addonQuantities(lineItems []*subscription.SubscriptionLineItem, at time.Tim
 }
 
 // withAddonQuantity scales a metered addon entitlement's limit by its association's quantity.
-// A quantity of one, or none recorded, leaves it as is.
+// A quantity of one, or none recorded (zero), leaves it as is.
 func withAddonQuantity(ent *dto.EntitlementResponse, quantity decimal.Decimal) *dto.EntitlementResponse {
-	if ent == nil || ent.Entitlement == nil || !quantity.GreaterThan(decimal.NewFromInt(1)) {
+	if ent == nil || ent.Entitlement == nil || !scalesQuota(quantity) {
 		return ent
 	}
 	scaled := *ent
@@ -6760,9 +6758,15 @@ func withAddonQuantity(ent *dto.EntitlementResponse, quantity decimal.Decimal) *
 	return &scaled
 }
 
+// scalesQuota reports whether quantity changes an allowance. Zero means none recorded, so
+// the entitlement counts once; fractions scale it down as billing does.
+func scalesQuota(quantity decimal.Decimal) bool {
+	return quantity.IsPositive() && !quantity.Equal(decimal.NewFromInt(1))
+}
+
 // scaleEntitlementQuota is a copy of e with its quota and usage limit multiplied by quantity.
 func scaleEntitlementQuota(e *entitlement.Entitlement, quantity decimal.Decimal) *entitlement.Entitlement {
-	if e == nil || !quantity.GreaterThan(decimal.NewFromInt(1)) {
+	if e == nil || !scalesQuota(quantity) {
 		return e
 	}
 	scaled := *e
@@ -6893,10 +6897,7 @@ func (s *subscriptionService) resolveSubscriptionEntitlements(ctx context.Contex
 			}
 		}
 
-		quantities, err := s.addonQuantitiesAt(ctx, sub, at, lo.FilterMap(activeAddons.Items,
-			func(assoc *dto.AddonAssociationResponse, _ int) (string, bool) {
-				return lo.FromPtr(assoc).ID, assoc != nil
-			}))
+		quantities, err := s.addonQuantitiesAt(ctx, sub, at)
 		if err != nil {
 			return nil, err
 		}

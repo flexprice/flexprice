@@ -371,17 +371,25 @@ func changeAtDate(changeAt types.ScheduleType, now, periodEnd time.Time) time.Ti
 
 // attachQuantity is the quantity an attach will carry. Override quantities are written onto the
 // line items only at Persist, after grants are resolved, so they are read from the request.
+// An override replaces its price's quantity; a zero override keeps the default, as Persist does.
 func attachQuantity(attach *addonAttachParams) decimal.Decimal {
-	quantity := lineItemsQuantity(attach.getLineItems())
+	overrides := make(map[string]decimal.Decimal)
 	for _, override := range attach.getRequest().OverrideLineItems {
-		if override.Quantity == nil {
+		if override.Quantity != nil && override.Quantity.IsPositive() {
+			overrides[override.PriceID] = *override.Quantity
+		}
+	}
+	quantity := decimal.Zero
+	for _, li := range attach.getLineItems() {
+		if li == nil || li.PriceType != types.PRICE_TYPE_FIXED {
 			continue
 		}
-		isFixed := lo.SomeBy(attach.getLineItems(), func(li *subscription.SubscriptionLineItem) bool {
-			return li.PriceID == override.PriceID && li.PriceType == types.PRICE_TYPE_FIXED
-		})
-		if isFixed && override.Quantity.GreaterThan(quantity) {
-			quantity = *override.Quantity
+		q, ok := overrides[li.PriceID]
+		if !ok {
+			q = li.Quantity
+		}
+		if q.GreaterThan(quantity) {
+			quantity = q
 		}
 	}
 	return quantity

@@ -480,8 +480,12 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_OneOfTwoAtta
 }
 
 // seedFixedGrantAddon registers an addon with a fixed price, whose line item carries the
-// quantity, and one subscription_period grant EC.
-func (s *SubscriptionServiceSuite) seedFixedGrantAddon(addonID, ecID, featureID string, quota int64) {
+// quantity, and one subscription_period grant EC. minQuantity zero leaves the price without one.
+func (s *SubscriptionServiceSuite) seedFixedGrantAddon(addonID, ecID, featureID string, quota, minQuantity int64) {
+	var minQty *decimal.Decimal
+	if minQuantity > 0 {
+		minQty = lo.ToPtr(decimal.NewFromInt(minQuantity))
+	}
 	ctx := s.GetContext()
 	s.NoError(s.GetStores().AddonRepo.Create(ctx, &addon.Addon{ID: addonID, LookupKey: addonID, Name: addonID,
 		BaseModel: types.GetDefaultBaseModel(ctx)}))
@@ -489,20 +493,20 @@ func (s *SubscriptionServiceSuite) seedFixedGrantAddon(addonID, ecID, featureID 
 		ID: "price_" + addonID, Amount: decimal.NewFromInt(10), Currency: "usd",
 		EntityType: types.PRICE_ENTITY_TYPE_ADDON, EntityID: addonID, Type: types.PRICE_TYPE_FIXED,
 		BillingPeriod: types.BILLING_PERIOD_MONTHLY, BillingPeriodCount: 1, BillingModel: types.BILLING_MODEL_FLAT_FEE,
-		InvoiceCadence: types.InvoiceCadenceAdvance, BaseModel: types.GetDefaultBaseModel(ctx),
+		InvoiceCadence: types.InvoiceCadenceAdvance, MinQuantity: minQty, BaseModel: types.GetDefaultBaseModel(ctx),
 	}))
 	s.seedGrantEC(ecID, featureID, types.ENTITLEMENT_ENTITY_TYPE_ADDON, addonID, quota, "")
 }
 
 // attachAddonQuantity attaches an addon unprorated with its fixed price at quantity.
-func (s *SubscriptionServiceSuite) attachAddonQuantity(addonID string, quantity int64) error {
+func (s *SubscriptionServiceSuite) attachAddonQuantity(addonID string, quantity decimal.Decimal) error {
 	at := s.testData.now
 	_, err := s.service.AddAddonToSubscription(s.GetContext(), &dto.AddAddonRequest{
 		SubscriptionID: s.testData.subscription.ID,
 		AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
 			AddonID: addonID, Cadence: types.AddonCadenceRecurring, StartDate: &at,
 			ProrationBehavior: types.ProrationBehaviorNone,
-			OverrideLineItems: []dto.OverrideLineItemRequest{{PriceID: "price_" + addonID, Quantity: lo.ToPtr(decimal.NewFromInt(quantity))}},
+			OverrideLineItems: []dto.OverrideLineItemRequest{{PriceID: "price_" + addonID, Quantity: lo.ToPtr(quantity)}},
 		},
 	})
 	return err
@@ -526,14 +530,70 @@ func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_MultipliesQuota(
 	featureID := s.seedNeverGrantFeature("feat_never_qty")
 	s.seedGrantEC("ent_aaa_never_qty_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
 	s.seedCycleGrant("ent_aaa_never_qty_plan", featureID, 10)
-	s.seedFixedGrantAddon("addon_never_qty", "ent_zzz_never_qty", featureID, 100)
+	s.seedFixedGrantAddon("addon_never_qty", "ent_zzz_never_qty", featureID, 100, 0)
 
-	s.Require().NoError(s.attachAddonQuantity("addon_never_qty", 3))
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty", decimal.NewFromInt(3)))
 
 	live := s.liveRow(featureID)
 	s.Require().NotNil(live)
 	s.True(live.Quota.Equal(decimal.NewFromInt(310)), "attach: expected 310, got %s", live.Quota)
 	s.True(s.featureQuota(featureID).Equal(decimal.NewFromInt(310)), "rebuilt cap: expected 310, got %s", s.featureQuota(featureID))
+}
+
+// A fractional quantity scales the quota down as billing does. e.g. plan 10 + addon 100 at 0.5 = 60.
+func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_FractionScalesDown() {
+	featureID := s.seedNeverGrantFeature("feat_never_qty_half")
+	s.seedGrantEC("ent_aaa_never_qty_half_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_qty_half_plan", featureID, 10)
+	s.seedFixedGrantAddon("addon_never_qty_half", "ent_zzz_never_qty_half", featureID, 100, 0)
+
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_half", decimal.RequireFromString("0.5")))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(60)), "attach: expected 60, got %s", live.Quota)
+	s.True(s.featureQuota(featureID).Equal(decimal.NewFromInt(60)), "rebuilt cap: expected 60, got %s", s.featureQuota(featureID))
+}
+
+// An override below the price's min_quantity replaces it. e.g. min 3, override 2: plan 10 + 2 x 100 = 210.
+func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_OverrideBelowMinQuantity() {
+	featureID := s.seedNeverGrantFeature("feat_never_qty_min")
+	s.seedGrantEC("ent_aaa_never_qty_min_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_qty_min_plan", featureID, 10)
+	s.seedFixedGrantAddon("addon_never_qty_min", "ent_zzz_never_qty_min", featureID, 100, 3)
+
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_min", decimal.NewFromInt(2)))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(210)), "attach: expected 210, got %s", live.Quota)
+	s.True(s.featureQuota(featureID).Equal(decimal.NewFromInt(210)), "rebuilt cap: expected 210, got %s", s.featureQuota(featureID))
+}
+
+// The cap reads quantities from the stored line items, not the subscription's loaded copies.
+func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_IgnoresStaleLoadedLineItems() {
+	featureID := s.seedNeverGrantFeature("feat_never_qty_stale")
+	s.seedGrantEC("ent_aaa_never_qty_stale_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
+	s.seedCycleGrant("ent_aaa_never_qty_stale_plan", featureID, 10)
+	s.seedFixedGrantAddon("addon_never_qty_stale", "ent_zzz_never_qty_stale", featureID, 100, 0)
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_stale", decimal.NewFromInt(3)))
+
+	stored, err := s.GetStores().SubscriptionLineItemRepo.ListBySubscription(s.GetContext(), s.testData.subscription)
+	s.Require().NoError(err)
+	sub := *s.testData.subscription
+	sub.LineItems = lo.Map(stored, func(li *subscription.SubscriptionLineItem, _ int) *subscription.SubscriptionLineItem {
+		stale := *li
+		stale.Quantity = decimal.NewFromInt(1)
+		return &stale
+	})
+
+	byFeature, err := s.grantService().GetSubscriptionGrantECsByFeature(s.GetContext(), &sub)
+	s.Require().NoError(err)
+	total := decimal.Zero
+	for _, ec := range byFeature[featureID] {
+		total = total.Add(lo.FromPtr(ec.GrantQuota))
+	}
+	s.True(total.Equal(decimal.NewFromInt(310)), "expected 310, got %s", total)
 }
 
 // Two attachments of one addon at different quantities: removing the quantity-3 one leaves
@@ -542,10 +602,10 @@ func (s *SubscriptionServiceSuite) TestAddonQuantity_NeverReset_RemovingOneAttac
 	featureID := s.seedNeverGrantFeature("feat_never_qty_rm")
 	s.seedGrantEC("ent_aaa_never_qty_rm_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
 	s.seedCycleGrant("ent_aaa_never_qty_rm_plan", featureID, 10)
-	s.seedFixedGrantAddon("addon_never_qty_rm", "ent_zzz_never_qty_rm", featureID, 100)
+	s.seedFixedGrantAddon("addon_never_qty_rm", "ent_zzz_never_qty_rm", featureID, 100, 0)
 
-	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", 3))
-	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", 1))
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", decimal.NewFromInt(3)))
+	s.Require().NoError(s.attachAddonQuantity("addon_never_qty_rm", decimal.NewFromInt(1)))
 	s.Require().True(s.liveRow(featureID).Quota.Equal(decimal.NewFromInt(410)), "got %s", s.liveRow(featureID).Quota)
 
 	s.Require().NoError(s.runGrantPass(nil, []GrantSource{{
