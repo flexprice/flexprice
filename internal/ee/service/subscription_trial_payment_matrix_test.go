@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -33,12 +34,17 @@ func TestSubscriptionTrialPaymentMatrix(t *testing.T) {
 	suite.Run(t, new(SubscriptionTrialPaymentMatrixSuite))
 }
 
+func (s *SubscriptionTrialPaymentMatrixSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *SubscriptionTrialPaymentMatrixSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	params := &ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
+		BillingTermsStore:          &subscriptionUpdateStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -172,6 +178,7 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 			paymentBehavior:  types.PaymentBehaviorErrorIfIncomplete,
 			amountDue:        decimal.NewFromInt(25),
 			startStatus:      types.SubscriptionStatusActive,
+			billingReason:    types.InvoiceBillingReasonSubscriptionCycle,
 			wantStatus:       types.SubscriptionStatusIncomplete,
 			notes:            "Failed renewal moves an active error_if_incomplete subscription to incomplete.",
 		},
@@ -212,6 +219,7 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 			// period advanced to [trialEnd, firstPeriodEnd] by processSubscriptionTrialEnd.
 			sub := &subscription.Subscription{
 				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+				SubscriptionType:   types.SubscriptionTypeStandalone,
 				CustomerID:         cust.ID,
 				PlanID:             pl.ID,
 				SubscriptionStatus: lo.Ternary(tt.startStatus != "", tt.startStatus, types.SubscriptionStatusIncomplete),
@@ -228,7 +236,12 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 				TrialEnd:           &trialEnd,
 				CollectionMethod:   string(tt.collectionMethod),
 				PaymentBehavior:    string(tt.paymentBehavior),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
 				BaseModel:          types.GetDefaultBaseModel(ctx),
+			}
+			if tt.billingReason == types.InvoiceBillingReasonSubscriptionCycle {
+				sub.TrialStart = nil
+				sub.TrialEnd = nil
 			}
 			s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
 
@@ -249,6 +262,10 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 				Total:           amtDue,
 				Subtotal:        amtDue,
 				BillingReason:   string(lo.Ternary(tt.billingReason != "", tt.billingReason, types.InvoiceBillingReasonSubscriptionTrialEnd)),
+				PeriodStart:     &sub.CurrentPeriodStart,
+				PeriodEnd:       &sub.CurrentPeriodEnd,
+				LastComputedAt:  &trialEnd,
+				EnvironmentID:   types.GetEnvironmentID(ctx),
 				BaseModel:       types.GetDefaultBaseModel(ctx),
 				LineItems:       []*invoice.InvoiceLineItem{},
 			}
@@ -348,6 +365,7 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestFullPayAfterBehavior_Activates
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
 		DB:                         s.GetDB(),
+		BillingTermsStore:          &subscriptionUpdateStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -386,6 +404,7 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestFullPayAfterBehavior_Activates
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	})
 
+	persistTrialActivationInvoice(s.T(), ctx, svc.(*subscriptionService).ServiceParams, sub, inv)
 	s.Require().NoError(svc.HandleSubscriptionActivatingInvoicePaid(ctx, inv))
 
 	updated, gerr := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)

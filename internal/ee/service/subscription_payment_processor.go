@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -79,13 +80,15 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		)
 
 		// If payment succeeded completely, mark subscription as active
-		if result.Success && sub.SubscriptionStatus != types.SubscriptionStatusCancelled {
+		if result.Success {
+			if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+				return s.requestTrialActivation(ctx, sub.ID)
+			}
 			s.Logger.Info(ctx, "manual flow payment successful - activating subscription",
 				"subscription_id", sub.ID,
 				"amount_paid", result.AmountPaid,
 			)
-			sub.SubscriptionStatus = types.SubscriptionStatusActive
-			return s.SubRepo.Update(ctx, sub)
+			return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 		}
 
 		// A failed renewal charge marks the subscription incomplete.
@@ -128,23 +131,24 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 ) error {
 	switch behavior {
 	case types.PaymentBehaviorDefaultActive:
+		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+			return s.requestTrialActivation(ctx, sub.ID)
+		}
 		// Default active behavior - always create active subscription without payment attempt
 		s.Logger.Info(ctx, "send_invoice with default_active - activating subscription immediately",
 			"subscription_id", sub.ID,
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
 		)
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		return s.SubRepo.Update(ctx, sub)
+		return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 
 	case types.PaymentBehaviorDefaultIncomplete:
 		// Nothing owed → active; renewals stay active until the overdue pass flips them at due date.
 		if !inv.AmountRemaining.IsPositive() {
-			if sub.SubscriptionStatus == types.SubscriptionStatusActive || sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
-				return nil
+			if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+				return s.requestTrialActivation(ctx, sub.ID)
 			}
-			sub.SubscriptionStatus = types.SubscriptionStatusActive
-			return s.SubRepo.Update(ctx, sub)
+			return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 		}
 		if flowType != types.InvoiceFlowSubscriptionCreation {
 			return nil
@@ -155,8 +159,7 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
 		)
-		sub.SubscriptionStatus = types.SubscriptionStatusIncomplete
-		return s.SubRepo.Update(ctx, sub)
+		return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 
 	default:
 		return ierr.NewError("unsupported payment behavior for send_invoice").
@@ -224,56 +227,11 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 	if flowType == types.InvoiceFlowCancel || !types.InvoiceBillingReason(inv.BillingReason).IsPaymentGatingAllowedInvoiceReason() {
 		return nil
 	}
-
-	// Get the latest subscription status to check if it was already activated
-	// by payment reconciliation (this can happen when payment succeeds and
-	// triggers subscription activation through payment service)
-	latestSub, err := s.SubRepo.Get(ctx, sub.ID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to get latest subscription status",
-			"error", err,
-			"subscription_id", sub.ID,
-		)
-		// Continue with original logic if we can't get latest status
-		latestSub = sub
+	if result.Success && inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+		return s.requestTrialActivation(ctx, sub.ID)
 	}
 
-	// Determine target status based on payment result
-	var targetStatus types.SubscriptionStatus
-	if result.Success {
-		targetStatus = types.SubscriptionStatusActive
-	} else {
-		targetStatus = types.SubscriptionStatusIncomplete
-	}
-
-	s.Logger.Info(ctx, "allow_incomplete payment result",
-		"subscription_id", sub.ID,
-		"success", result.Success,
-		"amount_paid", result.AmountPaid,
-		"current_status", latestSub.SubscriptionStatus,
-		"target_status", targetStatus,
-	)
-
-	// Only update if the subscription status needs to change
-	if latestSub.SubscriptionStatus != targetStatus && latestSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
-		latestSub.SubscriptionStatus = targetStatus
-		err := s.SubRepo.Update(ctx, latestSub)
-		if err != nil {
-			return err
-		}
-		// Update the original subscription object for consistency
-		sub.SubscriptionStatus = latestSub.SubscriptionStatus
-		return nil
-	}
-
-	s.Logger.Info(ctx, "subscription status already matches target, skipping update",
-		"subscription_id", sub.ID,
-		"status", latestSub.SubscriptionStatus,
-	)
-
-	// Update the original subscription object for consistency
-	sub.SubscriptionStatus = latestSub.SubscriptionStatus
-	return nil
+	return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 }
 
 // attemptPaymentErrorIfIncomplete attempts payment and returns error on failure
@@ -286,10 +244,10 @@ func (s *subscriptionPaymentProcessor) attemptPaymentErrorIfIncomplete(
 	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorErrorIfIncomplete, flowType)
 
 	if result.Success {
-		// Don't update subscription status here - let the payment processor handle it
-		// This prevents version conflicts when both this method and payment processor try to update
-		sub.SubscriptionStatus = types.SubscriptionStatusActive
-		return nil
+		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+			return s.requestTrialActivation(ctx, sub.ID)
+		}
+		return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
 	}
 
 	// Check the invoice flow type to determine error handling behavior
@@ -324,47 +282,21 @@ func (s *subscriptionPaymentProcessor) attemptPaymentDefaultActive(
 	inv *dto.InvoiceResponse,
 	flowType types.InvoiceFlowType,
 ) error {
-	result := s.processPayment(ctx, sub, inv, types.PaymentBehaviorDefaultActive, flowType)
-
-	// Get the latest subscription status to check if it was already activated
-	// by payment reconciliation (this can happen when payment succeeds and
-	// triggers subscription activation through payment service)
-	latestSub, err := s.SubRepo.Get(ctx, sub.ID)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to get latest subscription status",
-			"error", err,
-			"subscription_id", sub.ID,
-		)
-		// Continue with original logic if we can't get latest status
-		latestSub = sub
+	s.processPayment(ctx, sub, inv, types.PaymentBehaviorDefaultActive, flowType)
+	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialEnd) {
+		return s.requestTrialActivation(ctx, sub.ID)
 	}
 
-	// For default_active behavior, always set to active regardless of payment result
-	targetStatus := types.SubscriptionStatusActive
+	return s.requestPaymentLifecycle(ctx, sub.ID, inv.ID)
+}
 
-	s.Logger.Info(ctx, "default_active payment result",
-		"subscription_id", sub.ID,
-		"payment_success", result.Success,
-		"amount_paid", result.AmountPaid,
-		"current_status", latestSub.SubscriptionStatus,
-		"target_status", targetStatus,
-		"behavior", "always_active",
-	)
+func (s *subscriptionPaymentProcessor) requestPaymentLifecycle(ctx context.Context, subscriptionID, invoiceID string) error {
+	return (&subscriptionService{ServiceParams: *s.ServiceParams}).requestPaymentLifecycle(ctx, subscriptionID, invoiceID)
+}
 
-	// Only update if the subscription status needs to change
-	if latestSub.SubscriptionStatus != targetStatus {
-		latestSub.SubscriptionStatus = targetStatus
-		return s.SubRepo.Update(ctx, latestSub)
-	}
-
-	s.Logger.Info(ctx, "subscription status already matches target, skipping update",
-		"subscription_id", sub.ID,
-		"status", latestSub.SubscriptionStatus,
-	)
-
-	// Update the original subscription object for consistency
-	sub.SubscriptionStatus = latestSub.SubscriptionStatus
-	return nil
+func (s *subscriptionPaymentProcessor) requestTrialActivation(ctx context.Context, subscriptionID string) error {
+	service := &subscriptionService{ServiceParams: *s.ServiceParams}
+	return service.requestTrialActivation(ctx, subscriptionID, time.Now().UTC())
 }
 
 // processPayment processes payment with card-first logic

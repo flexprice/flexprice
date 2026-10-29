@@ -95,7 +95,8 @@ func (s *BillingActivitiesSuite) newServiceParams() service.ServiceParams {
 	return service.ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &billingPeriodTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &billingPeriodTestStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -147,6 +148,7 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_TerminatesResourc
 
 	sub := &subscription.Subscription{
 		ID:                 "sub_check_cancellation_activity",
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		CustomerID:         s.testData.customer.ID,
 		PlanID:             s.testData.plan.ID,
 		SubscriptionStatus: types.SubscriptionStatusActive,
@@ -213,6 +215,11 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_TerminatesResourc
 	s.NoError(err)
 	s.Require().NotEmpty(associationsBefore)
 	s.Equal(types.AddonStatusActive, associationsBefore[0].AddonStatus)
+
+	due := time.Now().UTC().Add(-time.Minute)
+	scheduledSub.CancelAt = &due
+	scheduledSub.EndDate = &due
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, scheduledSub))
 
 	// Drive the Temporal activity directly, as ProcessSubscriptionBillingWorkflow would,
 	// with a period whose End is at/after CancelAt so it decides to cancel.
@@ -432,6 +439,7 @@ func (s *BillingActivitiesSuite) pausedSubscription(ctx context.Context, id stri
 
 	sub := &subscription.Subscription{
 		ID:                 id,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		CustomerID:         s.testData.customer.ID,
 		PlanID:             s.testData.plan.ID,
 		SubscriptionStatus: types.SubscriptionStatusPaused,
@@ -673,7 +681,8 @@ func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_DoesNotRefreshC
 	sub := &subscription.Subscription{ID: "sub-cancelled-rollover", CustomerID: "no-customer",
 		SubscriptionStatus: types.SubscriptionStatusCancelled, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
-	activities := NewBillingActivities(nil, s.newServiceParams(), s.GetLogger())
+	params := s.newServiceParams()
+	activities := NewBillingActivities(service.NewSubscriptionService(params), params, s.GetLogger())
 	_, err := activities.UpdateCurrentPeriodActivity(context.Background(), subscriptionModels.UpdateSubscriptionPeriodActivityInput{
 		SubscriptionID: sub.ID, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
 		PeriodStart: time.Now().UTC(), PeriodEnd: time.Now().UTC().AddDate(0, 1, 0),

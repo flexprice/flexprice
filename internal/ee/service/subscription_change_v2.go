@@ -855,13 +855,22 @@ func (s *subscriptionService) executePlanChangeAt(
 	executingScheduleID string,
 ) (*dto.SubscriptionChangeV2Response, error) {
 	var resp *dto.SubscriptionChangeV2Response
-
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		txCtx = activity.WithAction(txCtx, subscriptionID, activity.SubscriptionPlanChanged)
-		sub, err := s.loadSubscriptionForChange(txCtx, subscriptionID, true)
+	if err := s.validateSubscriptionLifecycle(ctx, subscriptionID); err != nil {
+		return nil, err
+	}
+	nested := s.DB.TxFromContext(ctx) != nil || s.BillingTermsStore.InTransaction(ctx)
+	err := s.DB.WithTx(types.WithForceWriter(ctx), func(txCtx context.Context) error {
+		lifecycle, err := s.lockSubscriptionLifecycle(txCtx, subscriptionID, nested)
 		if err != nil {
 			return err
 		}
+		txCtx = activity.WithAction(lifecycle.ctx, subscriptionID, activity.SubscriptionPlanChanged)
+		sub := subscription.NewSubscriptionBuilder(lifecycle.current).Build()
+		items, err := s.SubscriptionLineItemRepo.ListBySubscription(txCtx, sub)
+		if err != nil {
+			return err
+		}
+		sub = subscription.NewSubscriptionBuilder(sub).WithLineItems(items).Build()
 
 		superseded, err := s.resolvePendingPlanChangeSchedule(txCtx, subscriptionID, req, executingScheduleID)
 		if err != nil {
@@ -1035,12 +1044,9 @@ func (s *subscriptionService) applyAnchorReset(
 		return swapped, nil
 	}
 
-	reset := *swapped
-	reset.BillingAnchor = r.updatedSub.BillingAnchor
-	reset.CurrentPeriodStart = r.updatedSub.CurrentPeriodStart
-	reset.CurrentPeriodEnd = r.updatedSub.CurrentPeriodEnd
-
-	if err := s.SubRepo.Update(ctx, &reset); err != nil {
+	reset := subscription.NewSubscriptionBuilder(swapped).WithBillingAnchor(r.updatedSub.BillingAnchor).
+		WithCurrentPeriodStart(r.updatedSub.CurrentPeriodStart).WithCurrentPeriodEnd(r.updatedSub.CurrentPeriodEnd).Build()
+	if err := s.SubRepo.Update(ctx, reset); err != nil {
 		return nil, err
 	}
 
@@ -1052,7 +1058,7 @@ func (s *subscriptionService) applyAnchorReset(
 		"previous_period_start", r.currentSub.CurrentPeriodStart,
 		"previous_period_end", r.currentSub.CurrentPeriodEnd)
 
-	return &reset, nil
+	return reset, nil
 }
 
 // projectSubscriptionAfterChange is the subscription the change would leave behind,

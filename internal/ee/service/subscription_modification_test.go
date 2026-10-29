@@ -38,6 +38,7 @@ func (s *SubscriptionModificationServiceSuite) SetupSuite() {
 
 func (s *SubscriptionModificationServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_modification")
 	s.service = NewSubscriptionModificationService(s.buildServiceParams())
 }
 
@@ -49,7 +50,8 @@ func (s *SubscriptionModificationServiceSuite) buildServiceParams() ServiceParam
 	return ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &lifecycleTestStore{},
 		SubRepo:                    s.GetStores().SubscriptionRepo,
 		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
@@ -127,6 +129,7 @@ func (s *SubscriptionModificationServiceSuite) createActiveSub(customerID string
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		CustomerID:         customerID,
 		PlanID:             p.ID,
 		Currency:           "USD",

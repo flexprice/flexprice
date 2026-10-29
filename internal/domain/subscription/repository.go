@@ -45,10 +45,9 @@ type Repository interface {
 	GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*Subscription, error)
 
 	// ListEnvironmentsWithGatedActiveSubscriptions returns, across all tenants, every environment
-	// holding an active subscription whose payment behavior gates it on invoice payment.
+	// holding an active payment-gated or incomplete subscription needing payment reconciliation.
 	ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error)
 
-	// MarkOverdueGatedSubscriptionsIncomplete moves active payment-gated subscriptions with an unpaid
-	// renewal invoice due within (asOf - graceDays, asOf] to incomplete and returns their IDs.
-	MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error)
+	// ListPaymentLifecycleCandidates returns a bounded ID-ordered page for guarded status reconciliation.
+	ListPaymentLifecycleCandidates(ctx context.Context, afterID string, limit int) ([]*Subscription, error)
 }

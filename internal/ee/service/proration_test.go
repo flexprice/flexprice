@@ -402,12 +402,15 @@ func pvrDate(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0
 
 func (s *ProrationScenarioSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_proration")
 	s.ClearStores()
 	st := s.GetStores()
 	s.params = ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
+		CommitmentRepo:               st.CommitmentRepo,
 		TaxAssociationRepo:           st.TaxAssociationRepo,
 		TaxRateRepo:                  st.TaxRateRepo,
 		SubRepo:                      st.SubscriptionRepo,

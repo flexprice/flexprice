@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -41,6 +42,7 @@ func (s *SubscriptionThresholdBillingTestSuite) SetupSuite() {
 
 func (s *SubscriptionThresholdBillingTestSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_threshold")
 	s.setupService()
 	s.setupTestData()
 }
@@ -54,7 +56,8 @@ func (s *SubscriptionThresholdBillingTestSuite) setupService() {
 		CheckoutSessionRepo:        s.GetStores().CheckoutSessionRepo,
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &lifecycleTestStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
@@ -173,6 +176,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	s.testData.subA = &subscription.Subscription{
+		EnvironmentID:        types.GetEnvironmentID(ctx),
 		ID:                   "sub_threshold_a",
 		PlanID:               s.testData.plan.ID,
 		CustomerID:           s.testData.customer.ID,
@@ -193,6 +197,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 
 	// Sub B: active, no threshold -> excluded from GetSubscriptionsWithAutoInvoiceThreshold
 	s.testData.subB = &subscription.Subscription{
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		ID:                 "sub_threshold_b",
 		PlanID:             s.testData.plan.ID,
 		CustomerID:         s.testData.customer.ID,
@@ -370,4 +375,48 @@ func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_SkipsSubscr
 	s.True(reloaded.CurrentPeriodStart.Equal(originalStart) ||
 		reloaded.CurrentPeriodStart.Sub(originalStart).Abs() < time.Second,
 		"CurrentPeriodStart should be unchanged when usage is below threshold")
+}
+
+func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_PauseWinsBeforeInvoice() {
+	ctx := s.GetContext()
+	s.insertEvents(1001, s.testData.now.Add(-time.Hour))
+	svc := s.service.(*subscriptionService)
+	repository := svc.SubRepo
+	originalStart := s.testData.subA.CurrentPeriodStart
+	svc.SubRepo = &subscriptionUpdateRepository{Repository: repository, t: s.T(), beforeLock: func(id string) {
+		current, err := repository.Get(ctx, id)
+		s.Require().NoError(err)
+		paused := subscription.NewSubscriptionBuilder(current).WithStatus(types.SubscriptionStatusPaused).Build()
+		s.Require().NoError(repository.Update(ctx, paused))
+	}}
+	result := &dto.AutoInvoiceThresholdBillingResultItem{SubscriptionID: s.testData.subA.ID}
+	s.Require().NoError(svc.processAutoInvoiceThresholdSubscription(ctx, s.testData.subA, s.testData.now, result))
+	s.False(result.Invoiced)
+	current, err := repository.Get(ctx, s.testData.subA.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusPaused, current.SubscriptionStatus)
+	s.Equal(originalStart, current.CurrentPeriodStart)
+	invoices, err := svc.InvoiceRepo.List(ctx, types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Empty(invoices)
+}
+
+func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_ChangedCalendarRequiresRetry() {
+	ctx := s.GetContext()
+	s.insertEvents(1001, s.testData.now.Add(-time.Hour))
+	svc := s.service.(*subscriptionService)
+	repository := svc.SubRepo
+	svc.SubRepo = &subscriptionUpdateRepository{Repository: repository, t: s.T(), beforeLock: func(id string) {
+		current, err := repository.Get(ctx, id)
+		s.Require().NoError(err)
+		updated := subscription.NewSubscriptionBuilder(current).WithCurrentPeriodEnd(current.CurrentPeriodEnd.AddDate(0, 0, 1)).Build()
+		s.Require().NoError(repository.Update(ctx, updated))
+	}}
+	result := &dto.AutoInvoiceThresholdBillingResultItem{SubscriptionID: s.testData.subA.ID}
+	err := svc.processAutoInvoiceThresholdSubscription(ctx, s.testData.subA, s.testData.now, result)
+	s.Require().ErrorContains(err, "changed during threshold")
+	s.False(result.Invoiced)
+	invoices, err := svc.InvoiceRepo.List(ctx, types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Empty(invoices)
 }

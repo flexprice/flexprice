@@ -1074,6 +1074,10 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionPriceOverrides() {
 	})
 }
 
+func (s *SubscriptionServiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *SubscriptionServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ClearStores() // Clear all stores before each test for isolation
@@ -1092,7 +1096,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 	s.service = NewSubscriptionService(ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &subscriptionUpdateStore{},
 		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
@@ -6573,6 +6578,10 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedWithEn
 		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 		s.NoError(err)
 		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+		s.Require().NotNil(updated.CancelledAt)
+		s.Require().NotNil(updated.EndDate)
+		s.Equal(cancelAt, *updated.CancelledAt)
+		s.Equal(cancelAt, *updated.EndDate)
 	})
 }
 
@@ -8233,8 +8242,9 @@ func (s *SubscriptionServiceSuite) TestProcessAutoCancellationWithInvoicingCusto
 
 	// Enable auto-cancellation settings - create setting directly via repository
 	setting := &settings.Setting{
-		ID:  s.GetUUID(),
-		Key: types.SettingKeySubscriptionConfig,
+		ID:            s.GetUUID(),
+		Key:           types.SettingKeySubscriptionConfig,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
 		Value: map[string]interface{}{
 			"auto_cancellation_enabled": true,
 			"grace_period_days":         gracePeriodDays,

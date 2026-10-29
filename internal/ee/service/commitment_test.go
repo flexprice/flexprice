@@ -207,6 +207,7 @@ func TestCommitmentServiceSuite(t *testing.T) { suite.Run(t, new(CommitmentServi
 
 func (s *CommitmentServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_commitments")
 	s.svc = NewCommitmentService(fullServiceParams(&s.BaseServiceTestSuite))
 	s.fx = seedCommitmentFixtures(s.T(), s.GetContext(), s.GetStores())
 }
@@ -921,7 +922,8 @@ func fullServiceParams(s *testutil.BaseServiceTestSuite) ServiceParams {
 	return ServiceParams{
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
 		EventRepo:                    st.EventRepo,
 		SubRepo:                      st.SubscriptionRepo,
 		SubscriptionLineItemRepo:     st.SubscriptionLineItemRepo,
@@ -1084,6 +1086,15 @@ func (d *recordingDB) LockWithWait(ctx context.Context, req postgres.LockRequest
 	return d.IClient.LockWithWait(ctx, req)
 }
 
+func (d *recordingDB) TryLock(ctx context.Context, req postgres.LockRequest) error {
+	*d.events = append(*d.events, "lock:"+req.Key)
+	locker, ok := d.IClient.(postgres.NonblockingLocker)
+	if !ok {
+		return ierr.NewError("nonblocking locks unavailable").Mark(ierr.ErrServiceUnavailable)
+	}
+	return locker.TryLock(ctx, req)
+}
+
 type recordingCommitmentRepo struct {
 	commitment.Repository
 	events *[]string
@@ -1160,8 +1171,8 @@ func (s *CommitmentServiceSuite) TestUpdate_ReadsUnderCommitmentLockInTx() {
 		dto.UpdateCommitmentRequest{Name: lo.ToPtr("Renamed")},
 	)
 	s.Require().NoError(err)
-	s.Require().GreaterOrEqual(len(events), 3, "events %v", events)
-	s.Equal([]string{"tx", "lock:commitment:" + created.ID, "get"}, events[:3])
+	s.Require().GreaterOrEqual(len(events), 4, "events %v", events)
+	s.Equal([]string{"tx", "get", "lock:commitment:" + created.ID, "get"}, events[:4])
 }
 
 func (s *CommitmentServiceSuite) TestUpdate_AfterTerminateKeepsTerminated() {

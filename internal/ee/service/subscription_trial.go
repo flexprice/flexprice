@@ -57,11 +57,9 @@ func setCreateSubscriptionTrialWindow(req *dto.CreateSubscriptionRequest, sub *s
 	return nil
 }
 
-// ProcessTrialEndDue picks up trialing subs past trial end, moves them to the first real period, and creates
-// the trial-end invoice. Safe to run repeatedly for the same subscription.
+// ProcessTrialEndDue converts due trials and recovers activation from settled first-period invoices.
 func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error) {
-	// Re-query with offset 0 each time: processSubscriptionTrialEnd flips trialing → incomplete, so
-	// offset pagination would skip rows that slide into the first page after earlier rows are updated.
+	// Keyset traversal advances past unpaid or failed candidates without skipping rows changed by this run.
 	const batchSize = 100
 	now := time.Now().UTC()
 	listCtx := ctx
@@ -76,16 +74,19 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 	}
 
 	invoiceService := NewInvoiceService(s.ServiceParams)
+	afterID := ""
 
 	for {
 		filter := &types.SubscriptionFilter{
 			QueryFilter: &types.QueryFilter{
 				Limit:  lo.ToPtr(batchSize),
-				Offset: lo.ToPtr(0),
+				Sort:   lo.ToPtr("id"),
+				Order:  lo.ToPtr(types.OrderAsc),
 				Status: lo.ToPtr(types.StatusPublished),
 			},
-			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusTrialing},
+			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusTrialing, types.SubscriptionStatusIncomplete},
 			TrialEndDueLTE:     &now,
+			AfterID:            afterID,
 		}
 
 		subs, err := s.SubRepo.GetSubscriptionsForBillingPeriodUpdate(listCtx, filter)
@@ -100,22 +101,31 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 		s.Logger.Info(listCtx, "processing trial end batch", "batch_size", len(subs))
 
 		// Derive per-sub context from listCtx (no WithValue chain growth); rows can span envs/tenants.
-		for _, trialingSubscription := range subs {
-			subCtx := derivePerSubscriptionCtx(listCtx, trialingSubscription)
+		for _, candidate := range subs {
+			if candidate == nil || candidate.ID == "" || candidate.ID == afterID {
+				return response, ierr.NewError("trial-end traversal did not advance").Mark(ierr.ErrDatabase)
+			}
+			afterID = candidate.ID
+			subCtx := derivePerSubscriptionCtx(listCtx, candidate)
 
 			responseItem := &dto.SubscriptionUpdatePeriodResponseItem{
-				SubscriptionID: trialingSubscription.ID,
-				PeriodStart:    trialingSubscription.CurrentPeriodStart,
-				PeriodEnd:      trialingSubscription.CurrentPeriodEnd,
+				SubscriptionID: candidate.ID,
+				PeriodStart:    candidate.CurrentPeriodStart,
+				PeriodEnd:      candidate.CurrentPeriodEnd,
 			}
 
-			_, err := s.processSubscriptionTrialEnd(subCtx, trialingSubscription, invoiceService, now)
-			if err != nil {
+			var processErr error
+			if candidate.SubscriptionStatus == types.SubscriptionStatusIncomplete {
+				_, processErr = s.reconcileTrialActivation(subCtx, candidate.ID, now)
+			} else {
+				_, processErr = s.processSubscriptionTrialEnd(subCtx, candidate, invoiceService, now)
+			}
+			if processErr != nil {
 				s.Logger.Error(subCtx, "failed to process trial end for subscription",
-					"subscription_id", trialingSubscription.ID,
-					"error", err)
+					"subscription_id", candidate.ID,
+					"error", processErr)
 				response.TotalFailed++
-				responseItem.Error = err.Error()
+				responseItem.Error = processErr.Error()
 			} else {
 				response.TotalSuccess++
 				responseItem.Success = true
@@ -145,14 +155,53 @@ func derivePerSubscriptionCtx(parentCtx context.Context, sub *subscription.Subsc
 // processSubscriptionTrialEnd with now = time.Now().
 func (s *subscriptionService) ProcessSingleSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, now time.Time) (*dto.InvoiceResponse, error) {
 	invService := NewInvoiceService(s.ServiceParams)
-	return s.processSubscriptionTrialEnd(ctx, sub, invService, now)
+	return s.processGuardedTrialEnd(ctx, sub, invService, now, true)
 }
 
 func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time) (*dto.InvoiceResponse, error) {
+	return s.processGuardedTrialEnd(ctx, sub, invoiceService, now, false)
+}
+
+func (s *subscriptionService) processGuardedTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time, endNow bool) (*dto.InvoiceResponse, error) {
+	if sub == nil || !commitmentTermsDate(now) || invoiceService == nil {
+		return nil, ierr.Validation("trial conversion requires a subscription, invoice service and finite date")
+	}
+	if err := s.validateSubscriptionLifecycle(ctx, sub.ID); err != nil {
+		return nil, err
+	}
+	nested := s.DB.TxFromContext(ctx) != nil || s.BillingTermsStore.InTransaction(ctx)
+	var current *subscription.Subscription
+	var inv *dto.InvoiceResponse
+	err := s.DB.WithTx(types.WithForceWriter(ctx), func(tx context.Context) error {
+		lifecycle, err := s.lockSubscriptionLifecycle(tx, sub.ID, nested)
+		if err != nil {
+			return err
+		}
+		current = subscription.NewSubscriptionBuilder(lifecycle.current).Build()
+		if endNow && (current.SubscriptionStatus != types.SubscriptionStatusTrialing || current.PauseStatus == types.PauseStatusActive || current.CancelledAt != nil || (current.CancelAt != nil && !current.CancelAt.After(now)) || (current.EndDate != nil && !current.EndDate.After(now))) {
+			return ierr.NewError("trial lifecycle changed; refresh the subscription").Mark(ierr.ErrVersionConflict)
+		}
+		if endNow && current.SubscriptionStatus == types.SubscriptionStatusTrialing && current.TrialStart != nil && current.TrialEnd != nil {
+			if now.Before(*current.TrialStart) {
+				return ierr.Validation("trial cannot end before it starts")
+			}
+			current = subscription.NewSubscriptionBuilder(current).WithTrialEnd(&now).Build()
+		}
+		inv, err = s.processLockedTrialEnd(lifecycle.ctx, current, invoiceService, now)
+		return err
+	})
+	if err == nil && current != nil {
+		*sub = *current
+	}
+	return inv, err
+}
+
+func (s *subscriptionService) processLockedTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time) (*dto.InvoiceResponse, error) {
 	if sub.SubscriptionType == types.SubscriptionTypeInherited {
 		return nil, nil
 	}
-	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+	if sub.SubscriptionStatus == types.SubscriptionStatusPaused || sub.PauseStatus == types.PauseStatusActive || sub.CancelledAt != nil ||
+		(sub.CancelAt != nil && !sub.CancelAt.After(now)) || (sub.EndDate != nil && !sub.EndDate.After(now)) {
 		return nil, nil
 	}
 	if sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
@@ -174,7 +223,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, err
 	}
 
-	firstPeriodStart := lo.FromPtr(sub.TrialEnd)
+	firstPeriodStart := lo.FromPtr(sub.TrialEnd).UTC().Truncate(time.Microsecond)
 	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 	paymentParams = paymentParams.NormalizePaymentParameters()
 
@@ -189,7 +238,8 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		}
 
 		var errInv error
-		trialEndInvoice, _, errInv = invoiceService.CreateSubscriptionInvoice(txCtx, &dto.CreateSubscriptionInvoiceRequest{
+		collectionCtx := withTrialEndCollection(txCtx, sub, now)
+		trialEndInvoice, _, errInv = invoiceService.CreateSubscriptionInvoice(collectionCtx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
 			PeriodStart:    firstPeriodStart,
 			PeriodEnd:      firstPeriodEnd,
@@ -207,12 +257,12 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		"first_period_start", firstPeriodStart,
 		"first_period_end", firstPeriodEnd)
 
-	// Runs after commit: webhooks and credit grants must not fire if the tx above rolled back.
+	// Activation waits for the outermost commit when conversion runs inside a caller transaction.
 	if trialEndInvoice == nil {
-		if err := s.completeTrialConversionToActive(ctx, sub); err != nil {
+		if err := s.requestTrialActivation(ctx, sub.ID, now); err != nil {
 			return nil, err
 		}
-		s.Logger.Info(ctx, "subscription activated after zero-amount trial end",
+		s.Logger.Info(ctx, "requested trial activation after zero-amount invoice",
 			"subscription_id", sub.ID)
 	}
 	return trialEndInvoice, nil
@@ -221,19 +271,17 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 // convertTrialToFirstPaidPeriod moves sub out of trial into incomplete with its first paid period starting at start.
 // Calendar subs bill a short first period; anniversary subs re-anchor at start for a full one.
 func (s *subscriptionService) convertTrialToFirstPaidPeriod(ctx context.Context, sub *subscription.Subscription, start time.Time) (time.Time, error) {
+	start = start.UTC().Truncate(time.Microsecond)
 	anchor, end, err := trialConversionPeriod(sub, start)
 	if err != nil {
 		return time.Time{}, err
 	}
-	sub.BillingAnchor = anchor
-	sub.TrialEnd = lo.ToPtr(start)
-	// The trial has ended, but activation waits for invoice settlement or the zero-amount completion hook.
-	sub.SubscriptionStatus = types.SubscriptionStatusIncomplete
-	sub.CurrentPeriodStart = start
-	sub.CurrentPeriodEnd = end
-	if err := s.SubRepo.Update(ctx, sub); err != nil {
+	updated := subscription.NewSubscriptionBuilder(sub).WithBillingAnchor(anchor).WithTrialEnd(&start).
+		WithStatus(types.SubscriptionStatusIncomplete).WithCurrentPeriodStart(start).WithCurrentPeriodEnd(end).Build()
+	if err := s.SubRepo.Update(ctx, updated); err != nil {
 		return time.Time{}, err
 	}
+	*sub = *updated
 	return end, s.cascadeTrialEndToInherited(ctx, sub)
 }
 
@@ -248,30 +296,8 @@ func (s *subscriptionService) cascadeTrialEndToInherited(ctx context.Context, pa
 		return err
 	}
 	for _, child := range children {
-		child.TrialEnd = parentSub.TrialEnd
-		child.SubscriptionStatus = types.SubscriptionStatusIncomplete
-		child.BillingAnchor = parentSub.BillingAnchor
-		child.CurrentPeriodStart = parentSub.CurrentPeriodStart
-		child.CurrentPeriodEnd = parentSub.CurrentPeriodEnd
-		if err := s.SubRepo.Update(ctx, child); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// cascadeTrialActivationToInherited propagates active status to all inherited subscriptions
-// once the parent's trial-end invoice is paid (or was zero-amount). Mirrors cascadeResumeToInherited.
-func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Context, parentSub *subscription.Subscription) error {
-	if parentSub.SubscriptionType != types.SubscriptionTypeParent {
-		return nil
-	}
-	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
-	if err != nil {
-		return err
-	}
-	for _, child := range children {
-		child.SubscriptionStatus = types.SubscriptionStatusActive
+		child = subscription.NewSubscriptionBuilder(child).WithTrialEnd(parentSub.TrialEnd).WithStatus(types.SubscriptionStatusIncomplete).
+			WithBillingAnchor(parentSub.BillingAnchor).WithCurrentPeriodStart(parentSub.CurrentPeriodStart).WithCurrentPeriodEnd(parentSub.CurrentPeriodEnd).Build()
 		if err := s.SubRepo.Update(ctx, child); err != nil {
 			return err
 		}

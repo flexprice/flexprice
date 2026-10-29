@@ -34,6 +34,7 @@ type SubscriptionChangeServiceTestSuite struct {
 
 func (s *SubscriptionChangeServiceTestSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_change")
 	s.setupServices()
 }
 
@@ -46,7 +47,8 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		CheckoutSessionRepo:          s.GetStores().CheckoutSessionRepo,
 		Logger:                       s.GetLogger(),
 		Config:                       s.GetConfig(),
-		DB:                           s.GetDB(),
+		DB:                           &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:            &lifecycleTestStore{},
 		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
 		TaxRateRepo:                  s.GetStores().TaxRateRepo,
 		AuthRepo:                     s.GetStores().AuthRepo,

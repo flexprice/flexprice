@@ -144,3 +144,59 @@ func (b *subscriptionBuilder) Build() *Subscription {
 	}
 	return b.subscription
 }
+
+// WithTrialEnd sets or clears the trial's end date.
+func (b *subscriptionBuilder) WithTrialEnd(date *time.Time) *subscriptionBuilder {
+	if b != nil && b.subscription != nil {
+		b.subscription.TrialEnd = nil
+		if date != nil {
+			copied := *date
+			b.subscription.TrialEnd = &copied
+		}
+	}
+	return b
+}
+
+// WithBillingAnchor sets the subscription calendar's anchor.
+func (b *subscriptionBuilder) WithBillingAnchor(anchor time.Time) *subscriptionBuilder {
+	if b != nil && b.subscription != nil {
+		b.subscription.BillingAnchor = anchor
+	}
+	return b
+}
+
+// WithStartDate sets the subscription term's start.
+func (b *subscriptionBuilder) WithStartDate(date time.Time) *subscriptionBuilder {
+	if b != nil && b.subscription != nil {
+		b.subscription.StartDate = date
+	}
+	return b
+}
+
+// WithTrialStart sets or clears the trial's start date.
+func (b *subscriptionBuilder) WithTrialStart(date *time.Time) *subscriptionBuilder {
+	if b != nil && b.subscription != nil {
+		b.subscription.TrialStart = nil
+		if date != nil {
+			copied := *date
+			b.subscription.TrialStart = &copied
+		}
+	}
+	return b
+}
+
+// WithLineItems copies the subscription's line item snapshot.
+func (b *subscriptionBuilder) WithLineItems(items []*SubscriptionLineItem) *subscriptionBuilder {
+	if b != nil && b.subscription != nil {
+		b.subscription.LineItems = nil
+		if items != nil {
+			b.subscription.LineItems = make([]*SubscriptionLineItem, len(items))
+			for i, item := range items {
+				if item != nil {
+					b.subscription.LineItems[i] = NewSubscriptionLineItemBuilder(item).Build()
+				}
+			}
+		}
+	}
+	return b
+}

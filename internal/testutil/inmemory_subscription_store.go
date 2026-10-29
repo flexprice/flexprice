@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -16,7 +17,6 @@ type InMemorySubscriptionStore struct {
 	*InMemoryStore[*subscription.Subscription]
 	lineItems     map[string][]*subscription.SubscriptionLineItem // map[subscriptionID][]lineItems (initial batch from CreateWithLineItems)
 	lineItemStore *InMemorySubscriptionLineItemStore              // optional: when set, GetWithLineItems merges in line items created via SubscriptionLineItemRepo.Create
-	invoiceStore  *InMemoryInvoiceStore                           // optional: when set, MarkOverdueGatedSubscriptionsIncomplete checks invoices
 	pauses        map[string][]*subscription.SubscriptionPause    // map[subscriptionID][]pauses
 	pauseByID     map[string]*subscription.SubscriptionPause      // map[pauseID]pause
 }
@@ -427,7 +427,7 @@ func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.S
 
 // GetSubscriptionsForBillingPeriodUpdate returns subscriptions across all tenants for billing-period jobs.
 func (s *InMemorySubscriptionStore) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
-	return s.ListAll(ctx, filter)
+	return s.List(ctx, filter)
 }
 
 // CreateWithLineItems creates a subscription with its line items
@@ -681,11 +681,6 @@ func (s *InMemorySubscriptionStore) GetSubscriptionsWithAutoInvoiceThreshold(ctx
 	return results, nil
 }
 
-// SetInvoiceStore lets MarkOverdueGatedSubscriptionsIncomplete see invoices, mirroring the ent repository's join.
-func (s *InMemorySubscriptionStore) SetInvoiceStore(store *InMemoryInvoiceStore) {
-	s.invoiceStore = store
-}
-
 func (s *InMemorySubscriptionStore) ListEnvironmentsWithGatedActiveSubscriptions(ctx context.Context) ([]types.TenantEnvironment, error) {
 	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {
@@ -693,65 +688,39 @@ func (s *InMemorySubscriptionStore) ListEnvironmentsWithGatedActiveSubscriptions
 	}
 
 	envs := lo.FilterMap(subs, func(sub *subscription.Subscription, _ int) (types.TenantEnvironment, bool) {
-		return types.TenantEnvironment{TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID}, isGatedActive(sub)
+		return types.TenantEnvironment{TenantID: sub.TenantID, EnvironmentID: sub.EnvironmentID}, isPaymentLifecycleCandidate(sub)
 	})
 	return lo.Uniq(envs), nil
 }
 
-func (s *InMemorySubscriptionStore) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
-	if s.invoiceStore == nil {
-		return nil, nil
+func (s *InMemorySubscriptionStore) ListPaymentLifecycleCandidates(ctx context.Context, afterID string, limit int) ([]*subscription.Subscription, error) {
+	if types.GetTenantID(ctx) == "" || types.GetEnvironmentID(ctx) == "" || limit < 1 || limit > 100 || len(afterID) > 50 {
+		return nil, ierr.Validation("invalid payment lifecycle discovery")
 	}
-	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-	windowStart := asOf.AddDate(0, 0, -graceDays)
-
-	invoices, err := s.invoiceStore.InMemoryStore.List(ctx, nil, nil, nil)
+	rows, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	overdue := make(map[string]bool)
-	for _, inv := range invoices {
-		if inv.TenantID != tenantID || inv.EnvironmentID != environmentID || inv.SubscriptionID == nil || inv.DueDate == nil {
-			continue
+	rows = lo.Filter(rows, func(sub *subscription.Subscription, _ int) bool {
+		return sub.TenantID == types.GetTenantID(ctx) && sub.EnvironmentID == types.GetEnvironmentID(ctx) && sub.ID > afterID && isPaymentLifecycleCandidate(sub)
+	})
+	slices.SortFunc(rows, func(a, b *subscription.Subscription) int {
+		if a.ID < b.ID {
+			return -1
 		}
-		if inv.Status != types.StatusPublished ||
-			inv.InvoiceType != types.InvoiceTypeSubscription ||
-			inv.InvoiceStatus != types.InvoiceStatusFinalized ||
-			inv.BillingReason != string(types.InvoiceBillingReasonSubscriptionCycle) ||
-			!lo.Contains([]types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusFailed}, inv.PaymentStatus) ||
-			!inv.AmountRemaining.IsPositive() {
-			continue
+		if a.ID > b.ID {
+			return 1
 		}
-		if inv.DueDate.After(asOf) || !inv.DueDate.After(windowStart) {
-			continue
-		}
-		overdue[*inv.SubscriptionID] = true
+		return 0
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
 	}
-
-	subs, err := s.InMemoryStore.List(ctx, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for _, sub := range subs {
-		if sub.TenantID != tenantID || sub.EnvironmentID != environmentID || !overdue[sub.ID] || !isGatedActive(sub) {
-			continue
-		}
-		updated := *sub
-		updated.SubscriptionStatus = types.SubscriptionStatusIncomplete
-		updated.UpdatedAt = asOf
-		if err := s.InMemoryStore.Update(ctx, sub.ID, &updated); err != nil {
-			return nil, err
-		}
-		ids = append(ids, sub.ID)
-	}
-	return ids, nil
+	return rows, nil
 }
 
-func isGatedActive(sub *subscription.Subscription) bool {
-	return sub.Status == types.StatusPublished &&
-		sub.SubscriptionStatus == types.SubscriptionStatusActive &&
-		types.PaymentBehavior(sub.PaymentBehavior).IsIncompleteType()
+func isPaymentLifecycleCandidate(sub *subscription.Subscription) bool {
+	return sub.Status == types.StatusPublished && (sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || (sub.SubscriptionStatus == types.SubscriptionStatusActive && types.PaymentBehavior(sub.PaymentBehavior).IsIncompleteType()))
 }
 
 // Clear removes all data from the store

@@ -157,59 +157,44 @@ func (s *stripeSubscriptionService) CreateSubscription(ctx context.Context, stri
 }
 
 func (s *stripeSubscriptionService) UpdateSubscription(ctx context.Context, stripeSubscriptionID string, services *ServiceDependencies) error {
-	err := services.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Step 1: Fetch Stripe Subscription
-		stripeSubscription, err := s.fetchStripeSubscription(txCtx, stripeSubscriptionID)
-		if err != nil {
-			return err
-		}
-		// Step 2: Check if the mapping with the stripe subscription id exists
-		filter := &types.EntityIntegrationMappingFilter{
-			EntityType:        types.IntegrationEntityTypeSubscription,
-			ProviderTypes:     []string{"stripe"},
-			ProviderEntityIDs: []string{stripeSubscriptionID},
-		}
-
-		existingMappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(txCtx, filter)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to check for existing subscription mapping").
-				Mark(ierr.ErrInternal)
-		}
-
-		// Step 3: Get the existing mapping
-		if len(existingMappings.Items) == 0 {
-			return ierr.NewError("no existing subscription mapping found").
-				WithHint("Existing subscription mapping not found").
-				Mark(ierr.ErrInternal)
-		}
-
-		existingSubscriptionMapping := existingMappings.Items[0]
-
-		// Step 4: Get the exisitng subcription
-		existingSubscription, err := services.SubscriptionService.GetSubscription(txCtx, existingSubscriptionMapping.EntityID)
-		if err != nil {
-			return err
-		}
-
-		planChange, err := s.isPlanChange(txCtx, existingSubscription, stripeSubscription, services)
-		if err != nil {
-			return err
-		}
-
-		if planChange {
-			return s.handlePlanChange(txCtx, existingSubscription, stripeSubscription, services)
-		} else {
-			return s.handleNormalChange(txCtx, existingSubscription, stripeSubscription, services)
-		}
-	})
+	stripeSubscription, err := s.fetchStripeSubscription(ctx, stripeSubscriptionID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update subscription",
-			"error", err,
-			"subscription_id", stripeSubscriptionID)
+		return err
+	}
+	if err := s.applySubscriptionUpdate(ctx, stripeSubscription, services); err != nil {
+		s.logger.Error(ctx, "failed to update subscription", "error", err, "subscription_id", stripeSubscriptionID)
 		return err
 	}
 	return nil
+}
+
+func (s *stripeSubscriptionService) applySubscriptionUpdate(ctx context.Context, stripeSubscription *stripe.Subscription, services *ServiceDependencies) error {
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityType:        types.IntegrationEntityTypeSubscription,
+		ProviderTypes:     []string{"stripe"},
+		ProviderEntityIDs: []string{stripeSubscription.ID},
+	}
+	mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(ctx, filter)
+	if err != nil {
+		return ierr.WithError(err).WithHint("Failed to check for existing subscription mapping").Mark(ierr.ErrInternal)
+	}
+	if len(mappings.Items) == 0 {
+		return ierr.NewError("no existing subscription mapping found").WithHint("Existing subscription mapping not found").Mark(ierr.ErrInternal)
+	}
+	current, err := services.SubscriptionService.GetSubscription(ctx, mappings.Items[0].EntityID)
+	if err != nil {
+		return err
+	}
+	planChange, err := s.isPlanChange(ctx, current, stripeSubscription, services)
+	if err != nil {
+		return err
+	}
+	if !planChange {
+		return s.handleNormalChange(ctx, current, stripeSubscription, services)
+	}
+	return services.DB.WithTx(ctx, func(tx context.Context) error {
+		return s.handlePlanChange(tx, current, stripeSubscription, services)
+	})
 }
 
 func (s *stripeSubscriptionService) CancelSubscription(ctx context.Context, stripeSubscriptionID string, services *ServiceDependencies) error {

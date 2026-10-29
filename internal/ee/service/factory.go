@@ -81,17 +81,18 @@ import (
 // ServiceParams holds common dependencies for services
 // TODO: start using this for all services init
 type ServiceParams struct {
-	Logger               *logger.Logger
-	Config               *config.Configuration
-	DB                   postgres.IClient
-	PDFGenerator         pdf.Generator
-	TracingSvc           *tracing.Service
-	InMemoryCache        cache.InMemoryCache
-	RedisCache           cache.RedisCache
-	Locker               cache.Locker
-	BillingTerms         billingterms.Service
-	BillingTermsStore    domainBillingTerms.ExecutionStore
-	BillingScheduleItems domainBillingTerms.ScheduleItemRepository
+	Logger                     *logger.Logger
+	Config                     *config.Configuration
+	DB                         postgres.IClient
+	PDFGenerator               pdf.Generator
+	TracingSvc                 *tracing.Service
+	InMemoryCache              cache.InMemoryCache
+	RedisCache                 cache.RedisCache
+	Locker                     cache.Locker
+	BillingTerms               billingterms.Service
+	BillingTermsStore          domainBillingTerms.ExecutionStore
+	BillingScheduleItems       domainBillingTerms.ScheduleItemRepository
+	BillingScheduleProvisioner BillingScheduleProvisioner
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -283,6 +284,7 @@ func NewServiceParams(
 	billingTerms billingterms.Service,
 	billingTermsStore domainBillingTerms.ExecutionStore,
 	billingScheduleItems domainBillingTerms.ScheduleItemRepository,
+	billingScheduleProvisioner BillingScheduleProvisioner,
 	productRepo productRepo.Repository,
 	contractService contractsvc.ContractService,
 	pobService pobsvc.PerformanceObligationService,
@@ -303,6 +305,7 @@ func NewServiceParams(
 		BillingTerms:                 billingTerms,
 		BillingTermsStore:            billingTermsStore,
 		BillingScheduleItems:         billingScheduleItems,
+		BillingScheduleProvisioner:   billingScheduleProvisioner,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

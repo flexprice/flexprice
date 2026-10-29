@@ -645,7 +645,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return nil, false, err
 	}
 
-	ctx = revalidateTrialEndCollection(ctx, inv)
+	ctx = revalidatePendingCollection(ctx, inv)
 
 	// Early return for finalized/voided — no lock needed, these are immutable.
 	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusSkipped {
@@ -787,7 +787,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if lockErr != nil {
 			return lockErr
 		}
-		txCtx = revalidateTrialEndCollection(txCtx, inv)
+		txCtx = revalidatePendingCollection(txCtx, inv)
 
 		gatedSession, sessionOwned, lockErr := s.isInvoiceGatedOnCheckout(txCtx, inv, req.SourceID())
 		if lockErr != nil {
@@ -836,7 +836,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return nil, skipped, err
 	}
 
-	ctx = withoutTrialEndCollection(ctx)
+	ctx = withoutPendingCollection(ctx)
 
 	if computed {
 		computedInvoice := invoice.NewInvoiceBuilder(inv).Build()
@@ -2695,8 +2695,8 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		}
 		computeOverride.ProrationBehavior = req.ProrationBehavior
 	}
-	computeCtx := bindTrialEndCollection(ctx, &draft.Invoice)
-	ctx = withoutTrialEndCollection(ctx)
+	computeCtx := bindPendingCollection(ctx, &draft.Invoice)
+	ctx = withoutPendingCollection(ctx)
 	_, skipped, err := s.ComputeInvoice(computeCtx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err

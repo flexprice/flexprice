@@ -277,7 +277,7 @@ func TestInvoiceTrialEndBillingCollectionPostgres(t *testing.T) {
 			require.NoError(t, err)
 			ctx := f.ctx
 			if authorized {
-				ctx = bindTrialEndCollection(withTrialEndCollection(ctx, sub, time.Now().UTC()), f.invoice)
+				ctx = bindPendingCollection(withTrialEndCollection(ctx, sub, time.Now().UTC()), f.invoice)
 			}
 			inv, _, err := f.service.ComputeInvoice(ctx, f.invoice.ID, nil)
 			require.NoError(t, err)

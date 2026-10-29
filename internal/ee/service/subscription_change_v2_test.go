@@ -48,6 +48,7 @@ func TestSubscriptionChangeV2(t *testing.T) {
 
 func (s *SubscriptionChangeV2Suite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
+	s.WithEnvironment("env_change_v2")
 	s.svc = NewSubscriptionService(s.serviceParams())
 	s.setupTestData()
 }
@@ -61,7 +62,9 @@ func (s *SubscriptionChangeV2Suite) serviceParams() ServiceParams {
 	return ServiceParams{
 		Logger:                     s.GetLogger(),
 		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
+		DB:                         &lifecycleTestDB{IClient: s.GetDB()},
+		BillingTermsStore:          &lifecycleTestStore{},
+		CommitmentRepo:             st.CommitmentRepo,
 		CheckoutSessionRepo:        st.CheckoutSessionRepo,
 		SubRepo:                    st.SubscriptionRepo,
 		SubscriptionLineItemRepo:   st.SubscriptionLineItemRepo,
@@ -173,6 +176,7 @@ func (s *SubscriptionChangeV2Suite) createSubscription(planID string) *subscript
 		PlanID:             planID,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		SubscriptionType:   types.SubscriptionTypeStandalone,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
 		Currency:           "usd",
 		BillingAnchor:      s.td.periodStart,
 		StartDate:          s.td.periodStart,
