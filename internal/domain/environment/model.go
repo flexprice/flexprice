@@ -6,9 +6,9 @@ import (
 )
 
 type Environment struct {
-	ID   string                `db:"id" json:"id"`
-	Name string                `db:"name" json:"name"`
-	Type types.EnvironmentType `db:"type" json:"type"`
+	ID   string                `json:"id"`
+	Name string                `json:"name"`
+	Type types.EnvironmentType `json:"type"`
 
 	types.BaseModel
 }

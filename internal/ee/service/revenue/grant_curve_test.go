@@ -155,7 +155,7 @@ func TestGrantsBillable_GuardMirrorsEngine(t *testing.T) {
 	m := &meter.Meter{ID: "m", Aggregation: meter.Aggregation{Type: types.AggregationSum}}
 	flat := &price.Price{ID: "p", Amount: decimal.NewFromInt(1), BillingModel: types.BILLING_MODEL_FLAT_FEE}
 	tiered := &price.Price{ID: "p2", BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
-		Tiers: price.JSONBTiers{{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(1)}}}
+		Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(1)}}}
 	grants := []*entitlementgrant.EntitlementGrant{grantCurveGrant("eg", nil, time.Time{}, time.Time{}, "ec")}
 
 	assert.True(t, grantsBillable(nil, flat, m, grants))

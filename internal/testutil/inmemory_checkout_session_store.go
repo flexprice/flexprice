@@ -62,7 +62,7 @@ func (s *InMemoryCheckoutSessionStore) Get(ctx context.Context, id string) (*dom
 func cloneCheckoutSession(stored *domainCheckout.CheckoutSession) *domainCheckout.CheckoutSession {
 	session := *stored
 	if raw, err := json.Marshal(stored.Configuration); err == nil {
-		var cfg domainCheckout.JSONBCheckoutConfiguration
+		var cfg types.CheckoutConfiguration
 		if json.Unmarshal(raw, &cfg) == nil {
 			session.Configuration = cfg
 		}
@@ -212,7 +212,7 @@ func checkoutSessionFilterFn(ctx context.Context, session *domainCheckout.Checko
 		}
 	}
 	if cfg := filter.Configuration; cfg != nil && !cfg.IsEmpty() {
-		sessionCfg := session.Configuration.ToCheckoutConfiguration()
+		sessionCfg := session.Configuration
 		if cfg.WalletID != "" {
 			if sessionCfg.WalletTopupParams == nil || sessionCfg.WalletTopupParams.WalletID != cfg.WalletID {
 				return false
@@ -280,7 +280,7 @@ func (s *InMemoryCheckoutSessionStore) MarkCompleted(ctx context.Context, sessio
 	session.CheckoutStatus = types.CheckoutStatusCompleted
 	session.CompletedAt = &completedAt
 	if providerResult != nil {
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+		session.ProviderResult = providerResult
 	}
 	if err := s.InMemoryStore.Update(ctx, sessionID, session); err != nil {
 		return false, err

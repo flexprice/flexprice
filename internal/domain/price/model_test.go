@@ -26,8 +26,8 @@ func TestBillsIdenticallyTo_SeparatesPricesThatOnlyLookAlike(t *testing.T) {
 
 	pkgA, pkgB := base(), base()
 	pkgA.BillingModel, pkgB.BillingModel = types.BILLING_MODEL_PACKAGE, types.BILLING_MODEL_PACKAGE
-	pkgA.TransformQuantity = JSONBTransformQuantity{DivideBy: 100}
-	pkgB.TransformQuantity = JSONBTransformQuantity{DivideBy: 500}
+	pkgA.TransformQuantity = TransformQuantity{DivideBy: 100}
+	pkgB.TransformQuantity = TransformQuantity{DivideBy: 500}
 	assert.False(t, pkgA.BillsIdenticallyTo(pkgB),
 		"$20 per 100 units and $20 per 500 units are a 5x difference, not the same price")
 

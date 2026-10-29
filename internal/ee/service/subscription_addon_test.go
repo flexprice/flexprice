@@ -696,7 +696,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutConcurrentGuard() {
 			Action:          action,
 			CheckoutStatus:  types.CheckoutStatusPending,
 			PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-			Configuration:   domainCheckout.ToJSONBCheckoutConfiguration(cfg),
+			Configuration:   cfg,
 			ExpiresAt:       time.Now().UTC().Add(time.Hour),
 			BaseModel:       types.GetDefaultBaseModel(ctx),
 		}))
@@ -779,7 +779,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutSessionCreateFailure_Arc
 		Action:          types.CheckoutActionAddAddon,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: &types.AddAddonParams{
 				SubscriptionID: "subs_some_other_subscription",
 				Addons: []types.AddAddonRef{{
@@ -789,7 +789,7 @@ func (s *SubscriptionServiceSuite) TestAddAddon_CheckoutSessionCreateFailure_Arc
 					StartDate:     s.testData.now,
 				}},
 			},
-		}),
+		},
 		IdempotencyKey: &idempKey,
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
 		BaseModel:      types.GetDefaultBaseModel(ctx),
@@ -883,7 +883,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonCheckout(
 		Action:          types.CheckoutActionAddAddon,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: &types.AddAddonParams{
 				SubscriptionID: sub.ID,
 				Addons: []types.AddAddonRef{{
@@ -894,7 +894,7 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonCheckout(
 					StartDate:         attach.getRequestedStart(),
 				}},
 			},
-		}),
+		},
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -954,7 +954,7 @@ func (s *SubscriptionServiceSuite) TestCompleteAddAddonCheckout_ReplayIsIdempote
 	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 	session, pending, _ := s.seedPayFirstAddonCheckout(addonID)
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 
 	// Applied directly, twice, so the second call is not short-circuited by the session's own
 	// terminal-status guard — this isolates the association-level replay guard.
@@ -989,7 +989,7 @@ func (s *SubscriptionServiceSuite) TestCompleteAddAddonCheckout_SubscriptionCanc
 	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	err := subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
@@ -1052,7 +1052,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonCheckout_CleanupLeavesActivatedAs
 	s.seedFixedPriceAddon(addonID, decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 	session, pending, _ := s.seedPayFirstAddonCheckout(addonID)
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams))
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}

@@ -2144,17 +2144,17 @@ type CommitmentUsageBreakdown struct {
 }
 
 type SubscriptionUsageByMetersResponse struct {
-	SubscriptionLineItemID string             `json:"subscription_line_item_id,omitempty"` // For feature_usage: direct match by sub_line_item_id
-	Amount                 float64            `json:"amount"`
-	Currency               string             `json:"currency"`
-	DisplayAmount          string             `json:"display_amount"`
-	Quantity               float64            `json:"quantity"`
-	FilterValues           price.JSONBFilters `json:"filter_values"`
-	MeterID                string             `json:"meter_id"`
-	MeterDisplayName       string             `json:"meter_display_name"`
-	Price                  *price.Price       `json:"price"`
-	IsOverage              bool               `json:"is_overage"`               // Whether this charge is at overage rate
-	OverageFactor          float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
+	SubscriptionLineItemID string              `json:"subscription_line_item_id,omitempty"` // For feature_usage: direct match by sub_line_item_id
+	Amount                 float64             `json:"amount"`
+	Currency               string              `json:"currency"`
+	DisplayAmount          string              `json:"display_amount"`
+	Quantity               float64             `json:"quantity"`
+	FilterValues           map[string][]string `json:"filter_values"`
+	MeterID                string              `json:"meter_id"`
+	MeterDisplayName       string              `json:"meter_display_name"`
+	Price                  *price.Price        `json:"price"`
+	IsOverage              bool                `json:"is_overage"`               // Whether this charge is at overage rate
+	OverageFactor          float64             `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
 
 	// BucketedUsageResult holds per-bucket usage data for bucketed meters (MAX/SUM with bucket_size).
 	// Populated by GetMeterUsageBySubscription so CalculateMeterUsageCharges doesn't re-query ClickHouse.

@@ -11,22 +11,22 @@ import (
 
 // Coupon represents a discount coupon entity
 type Coupon struct {
-	ID                string                  `json:"id" db:"id"`
-	Name              string                  `json:"name" db:"name"`
-	RedeemAfter       *time.Time              `json:"redeem_after" db:"redeem_after"`
-	RedeemBefore      *time.Time              `json:"redeem_before" db:"redeem_before"`
-	MaxRedemptions    *int                    `json:"max_redemptions" db:"max_redemptions"`
-	TotalRedemptions  int                     `json:"total_redemptions" db:"total_redemptions"`
-	Rules             *map[string]interface{} `json:"rules" db:"rules"`
-	AmountOff         *decimal.Decimal        `json:"amount_off" db:"amount_off" swaggertype:"string"`
-	PercentageOff     *decimal.Decimal        `json:"percentage_off" db:"percentage_off" swaggertype:"string"`
-	Type              types.CouponType        `json:"type" db:"type"`
-	Cadence           types.CouponCadence     `json:"cadence" db:"cadence"`
-	DurationInPeriods *int                    `json:"duration_in_periods" db:"duration_in_periods"`
-	Currency          string                  `json:"currency" db:"currency"`
-	CouponCode        *string                 `json:"coupon_code,omitempty" db:"coupon_code"`
-	Metadata          *map[string]string      `json:"metadata" db:"metadata"`
-	EnvironmentID     string                  `json:"environment_id" db:"environment_id"`
+	ID                string                  `json:"id"`
+	Name              string                  `json:"name"`
+	RedeemAfter       *time.Time              `json:"redeem_after"`
+	RedeemBefore      *time.Time              `json:"redeem_before"`
+	MaxRedemptions    *int                    `json:"max_redemptions"`
+	TotalRedemptions  int                     `json:"total_redemptions"`
+	Rules             *map[string]interface{} `json:"rules"`
+	AmountOff         *decimal.Decimal        `json:"amount_off" swaggertype:"string"`
+	PercentageOff     *decimal.Decimal        `json:"percentage_off" swaggertype:"string"`
+	Type              types.CouponType        `json:"type"`
+	Cadence           types.CouponCadence     `json:"cadence"`
+	DurationInPeriods *int                    `json:"duration_in_periods"`
+	Currency          string                  `json:"currency"`
+	CouponCode        *string                 `json:"coupon_code,omitempty"`
+	Metadata          *map[string]string      `json:"metadata"`
+	EnvironmentID     string                  `json:"environment_id"`
 	types.BaseModel
 }
 

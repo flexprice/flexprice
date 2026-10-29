@@ -10,37 +10,37 @@ import (
 // SubscriptionPause represents a pause configuration for a subscription
 type SubscriptionPause struct {
 	// ID is the unique identifier for the subscription pause
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// SubscriptionID is the identifier for the subscription
-	SubscriptionID string `db:"subscription_id" json:"subscription_id"`
+	SubscriptionID string `json:"subscription_id"`
 
-	PauseStatus types.PauseStatus `db:"pause_status" json:"pause_status"`
-	PauseMode   types.PauseMode   `db:"pause_mode" json:"pause_mode"`
-	ResumeMode  types.ResumeMode  `db:"resume_mode" json:"resume_mode,omitempty"`
+	PauseStatus types.PauseStatus `json:"pause_status"`
+	PauseMode   types.PauseMode   `json:"pause_mode"`
+	ResumeMode  types.ResumeMode  `json:"resume_mode,omitempty"`
 
 	// PauseStart is when the pause actually started
-	PauseStart time.Time `db:"pause_start" json:"pause_start"`
+	PauseStart time.Time `json:"pause_start"`
 
 	// PauseEnd is when the pause will end (null for indefinite)
-	PauseEnd *time.Time `db:"pause_end" json:"pause_end,omitempty"`
+	PauseEnd *time.Time `json:"pause_end,omitempty"`
 
 	// ResumedAt is when the pause was actually ended (if manually resumed)
-	ResumedAt *time.Time `db:"resumed_at" json:"resumed_at,omitempty"`
+	ResumedAt *time.Time `json:"resumed_at,omitempty"`
 
 	// OriginalPeriodStart is the start of the billing period when the pause was created
-	OriginalPeriodStart time.Time `db:"original_period_start" json:"original_period_start"`
+	OriginalPeriodStart time.Time `json:"original_period_start"`
 
 	// OriginalPeriodEnd is the end of the billing period when the pause was created
-	OriginalPeriodEnd time.Time `db:"original_period_end" json:"original_period_end"`
+	OriginalPeriodEnd time.Time `json:"original_period_end"`
 
 	// Reason is the reason for pausing
-	Reason string `db:"reason" json:"reason,omitempty"`
+	Reason string `json:"reason,omitempty"`
 
-	Metadata types.Metadata `db:"metadata" json:"metadata,omitempty"`
+	Metadata types.Metadata `json:"metadata,omitempty"`
 
 	// EnvironmentID is the environment identifier for the pause
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }

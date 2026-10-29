@@ -168,13 +168,13 @@ func (s *CheckoutCreateDraftSubscriptionSuite) newSession() *domainCheckout.Chec
 		CustomerID:     s.customer.ID,
 		Action:         types.CheckoutActionCreateSubscription,
 		CheckoutStatus: types.CheckoutStatusInitiated,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			CreateSubscriptionParams: &types.CreateSubscriptionParams{
 				PlanID:        s.planID,
 				Currency:      "usd",
 				BillingPeriod: types.BILLING_PERIOD_MONTHLY,
 			},
-		}),
+		},
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
 }

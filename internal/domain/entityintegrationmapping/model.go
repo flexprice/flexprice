@@ -11,25 +11,25 @@ import (
 // EntityIntegrationMapping represents an entity integration mapping in the system
 type EntityIntegrationMapping struct {
 	// ID is the unique identifier for the mapping
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// EntityID is the FlexPrice entity ID (e.g., customer_id, plan_id, etc.)
-	EntityID string `db:"entity_id" json:"entity_id"`
+	EntityID string `json:"entity_id"`
 
 	// EntityType is the type of entity (e.g., customer, plan, invoice, subscription, etc.)
-	EntityType types.IntegrationEntityType `db:"entity_type" json:"entity_type"`
+	EntityType types.IntegrationEntityType `json:"entity_type"`
 
 	// ProviderType is the payment provider type (e.g., stripe, razorpay, etc.)
-	ProviderType string `db:"provider_type" json:"provider_type"`
+	ProviderType string `json:"provider_type"`
 
 	// ProviderEntityID is the provider's entity ID (e.g., stripe_customer_id, etc.)
-	ProviderEntityID string `db:"provider_entity_id" json:"provider_entity_id"`
+	ProviderEntityID string `json:"provider_entity_id"`
 
 	// Metadata contains provider-specific data
-	Metadata map[string]interface{} `db:"metadata" json:"metadata"`
+	Metadata map[string]interface{} `json:"metadata"`
 
 	// EnvironmentID is the environment identifier
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }

@@ -2936,7 +2936,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceArrear,
 					MeterID:            s.testData.meters.apiCalls.ID,
-					TransformQuantity: price.JSONBTransformQuantity{
+					TransformQuantity: price.TransformQuantity{
 						DivideBy: 10,   // 10 units per package
 						Round:    "up", // Round up
 					},

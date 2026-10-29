@@ -15,19 +15,19 @@ import (
 // marketplace it's mapped to. Synced is true only once every connection currently relevant to this
 // record has a Syncs entry. Failure detail is never persisted on the row — only logged.
 type UsageRecord struct {
-	ID                 string                                `db:"id" json:"id"`
-	CustomerID         string                                `db:"customer_id" json:"customer_id"`
-	CustomerExternalID string                                `db:"customer_external_id" json:"customer_external_id"`
-	SubscriptionID     string                                `db:"subscription_id" json:"subscription_id"`
-	PlanID             string                                `db:"plan_id" json:"plan_id"`
-	Quantity           decimal.Decimal                       `db:"quantity" json:"quantity"`
-	Amount             decimal.Decimal                       `db:"amount" json:"amount"`
-	Currency           string                                `db:"currency" json:"currency"`
-	PeriodStart        time.Time                             `db:"period_start" json:"period_start"`
-	PeriodEnd          time.Time                             `db:"period_end" json:"period_end"`
-	Synced             bool                                  `db:"synced" json:"synced"`
-	Syncs              map[string]types.UsageRecordSyncEntry `db:"syncs" json:"syncs"`
-	EnvironmentID      string                                `db:"environment_id" json:"environment_id"`
+	ID                 string                                `json:"id"`
+	CustomerID         string                                `json:"customer_id"`
+	CustomerExternalID string                                `json:"customer_external_id"`
+	SubscriptionID     string                                `json:"subscription_id"`
+	PlanID             string                                `json:"plan_id"`
+	Quantity           decimal.Decimal                       `json:"quantity"`
+	Amount             decimal.Decimal                       `json:"amount"`
+	Currency           string                                `json:"currency"`
+	PeriodStart        time.Time                             `json:"period_start"`
+	PeriodEnd          time.Time                             `json:"period_end"`
+	Synced             bool                                  `json:"synced"`
+	Syncs              map[string]types.UsageRecordSyncEntry `json:"syncs"`
+	EnvironmentID      string                                `json:"environment_id"`
 	types.BaseModel
 }
 

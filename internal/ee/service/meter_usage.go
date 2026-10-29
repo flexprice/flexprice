@@ -2282,7 +2282,7 @@ func (s *meterUsageService) ConvertToBillingCharges(
 			SubscriptionLineItemID: lu.LineItem.ID,
 			Currency:               lu.Price.Currency,
 			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, lu.Price.Currency),
-			FilterValues:           make(price.JSONBFilters),
+			FilterValues:           make(map[string][]string),
 			MeterID:                lu.MeterID,
 			Price:                  lu.Price,
 			BucketedUsageResult:    lu.BucketedResult,

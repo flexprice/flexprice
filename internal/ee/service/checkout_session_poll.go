@@ -159,7 +159,7 @@ func (s *checkoutSessionService) fetchProviderPaymentState(
 	// The session kept its own copy, and without this fallback such a checkout could
 	// never be reconciled and would expire unpaid-looking after a lost webhook.
 	if req.GatewayPaymentID == "" && req.GatewayTrackingID == "" {
-		if pr := session.ProviderResult.ToProviderResult(); pr != nil {
+		if pr := session.ProviderResult; pr != nil {
 			req.GatewayPaymentID = pr.ProviderPaymentIntentID
 			req.GatewayTrackingID = pr.ProviderSessionID
 		}

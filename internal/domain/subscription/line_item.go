@@ -13,44 +13,44 @@ import (
 
 // SubscriptionLineItem represents a line item in a subscription
 type SubscriptionLineItem struct {
-	ID                  string                               `db:"id" json:"id"`
-	SubscriptionID      string                               `db:"subscription_id" json:"subscription_id"`
-	CustomerID          string                               `db:"customer_id" json:"customer_id"`
-	EntityID            string                               `db:"entity_id" json:"entity_id,omitempty"`
-	EntityType          types.SubscriptionLineItemEntityType `db:"entity_type" json:"entity_type,omitempty"`
-	PlanDisplayName     string                               `db:"plan_display_name" json:"plan_display_name,omitempty"`
-	PriceID             string                               `db:"price_id" json:"price_id"`
-	PriceType           types.PriceType                      `db:"price_type" json:"price_type,omitempty"`
-	MeterID             string                               `db:"meter_id" json:"meter_id,omitempty"`
-	MeterDisplayName    string                               `db:"meter_display_name" json:"meter_display_name,omitempty"`
-	PriceUnitID         *string                              `db:"price_unit_id" json:"price_unit_id"`
-	PriceUnit           *string                              `db:"price_unit" json:"price_unit"`
-	DisplayName         string                               `db:"display_name" json:"display_name,omitempty"`
-	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity" swaggertype:"string"`
-	Currency            string                               `db:"currency" json:"currency"`
-	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
-	BillingPeriodCount  int                                  `db:"billing_period_count" json:"billing_period_count"` // from price at create; default 1
-	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
-	StartDate           time.Time                            `db:"start_date" json:"start_date,omitempty"`
-	EndDate             time.Time                            `db:"end_date" json:"end_date,omitempty"`
-	SubscriptionPhaseID *string                              `db:"subscription_phase_id" json:"subscription_phase_id,omitempty"`
-	AddonAssociationID  *string                              `db:"addon_association_id" json:"addon_association_id,omitempty"`
-	Metadata            map[string]string                    `db:"metadata" json:"metadata,omitempty"`
-	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
+	ID                  string                               `json:"id"`
+	SubscriptionID      string                               `json:"subscription_id"`
+	CustomerID          string                               `json:"customer_id"`
+	EntityID            string                               `json:"entity_id,omitempty"`
+	EntityType          types.SubscriptionLineItemEntityType `json:"entity_type,omitempty"`
+	PlanDisplayName     string                               `json:"plan_display_name,omitempty"`
+	PriceID             string                               `json:"price_id"`
+	PriceType           types.PriceType                      `json:"price_type,omitempty"`
+	MeterID             string                               `json:"meter_id,omitempty"`
+	MeterDisplayName    string                               `json:"meter_display_name,omitempty"`
+	PriceUnitID         *string                              `json:"price_unit_id"`
+	PriceUnit           *string                              `json:"price_unit"`
+	DisplayName         string                               `json:"display_name,omitempty"`
+	Quantity            decimal.Decimal                      `json:"quantity" swaggertype:"string"`
+	Currency            string                               `json:"currency"`
+	BillingPeriod       types.BillingPeriod                  `json:"billing_period"`
+	BillingPeriodCount  int                                  `json:"billing_period_count"` // from price at create; default 1
+	InvoiceCadence      types.InvoiceCadence                 `json:"invoice_cadence"`
+	StartDate           time.Time                            `json:"start_date,omitempty"`
+	EndDate             time.Time                            `json:"end_date,omitempty"`
+	SubscriptionPhaseID *string                              `json:"subscription_phase_id,omitempty"`
+	AddonAssociationID  *string                              `json:"addon_association_id,omitempty"`
+	Metadata            map[string]string                    `json:"metadata,omitempty"`
+	EnvironmentID       string                               `json:"environment_id"`
 
 	// Version lineage, set by the service when a line item is replaced by a new version
 	PredecessorLineItemID *string `db:"predecessor_line_item_id" json:"predecessor_line_item_id,omitempty"`
 	SuccessorLineItemID   *string `db:"successor_line_item_id" json:"successor_line_item_id,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal       `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
-	CommitmentQuantity      *decimal.Decimal       `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
-	CommitmentType          types.CommitmentType   `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal       `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
-	CommitmentTrueUpEnabled bool                   `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
-	CommitmentWindowed      bool                   `db:"commitment_windowed" json:"commitment_windowed"`
-	CommitmentDuration      *types.BillingPeriod   `db:"commitment_duration" json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty" swaggertype:"string"`
+	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled"`
+	CommitmentWindowed      bool                   `json:"commitment_windowed"`
+	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 

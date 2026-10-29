@@ -922,7 +922,7 @@ func (s *walletService) blockedByPendingTopupSession(
 		CheckoutSession: sessionResp,
 	}
 
-	if params := blocking.Configuration.ToCheckoutConfiguration().WalletTopupParams; params != nil && params.WalletTransactionID != "" {
+	if params := blocking.Configuration.WalletTopupParams; params != nil && params.WalletTransactionID != "" {
 		tx, err := s.WalletRepo.GetTransactionByID(ctx, params.WalletTransactionID)
 		if err != nil {
 			return nil, err

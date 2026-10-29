@@ -78,9 +78,9 @@ func (s *SubscriptionServiceSuite) seedPayFirstAddonBatchCheckoutFor(
 		Action:          types.CheckoutActionAddAddon,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			AddAddonParams: addonChangeCheckoutParams(config, overrides),
-		}),
+		},
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -121,7 +121,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_GatedBatch_PersistsPending
 	s.Empty(s.prorationCredits(), "a gated batch moves no money")
 
 	// The session records both halves so completion can replay them.
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	s.Require().NotNil(cfg.AddAddonParams)
 	s.Len(cfg.AddAddonParams.Addons, 1)
 	s.Require().Len(cfg.AddAddonParams.Removes, 1)
@@ -181,7 +181,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Completion_ReplayIsIdempot
 
 	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
 	session, _, _ := s.seedPayFirstAddonBatchCheckout("addon_pfr_in", outgoing, at)
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 
 	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams))
 	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams),
@@ -208,7 +208,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Completion_SubscriptionNoL
 	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	err := subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "got %v", err)
@@ -448,7 +448,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_DraftDiscountedNoth
 	s.Zero(couponRedemptions(ctx, s.Require(), s.GetStores(), couponID), "a gated attach redeems nothing until payment")
 	s.Empty(subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), s.testData.subscription.ID))
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	s.Require().Len(cfg.AddAddonParams.Addons, 1)
 	s.Require().Len(cfg.AddAddonParams.Addons[0].Coupons, 1, "the resolved coupon rides on the session")
 	s.NotEmpty(cfg.AddAddonParams.Addons[0].Coupons[0].AssociationID)
@@ -458,7 +458,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_CompletionCreatesPr
 	ctx := s.GetContext()
 	subService := s.service.(*subscriptionService)
 	session, _, draft, couponID := s.seedCouponedPayFirstCheckout("addon_cpn_pf_done", "CPN_PF_DONE", nil)
-	ref := session.Configuration.ToCheckoutConfiguration().AddAddonParams.Addons[0].Coupons[0]
+	ref := session.Configuration.AddAddonParams.Addons[0].Coupons[0]
 
 	checkoutSvc := &checkoutSessionService{ServiceParams: subService.ServiceParams}
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
@@ -495,7 +495,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Coupon_CompletionWithExhau
 	c.TotalRedemptions = 1
 	s.Require().NoError(s.GetStores().CouponRepo.Update(ctx, c))
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	err = subService.applyAddAddonCheckoutParams(ctx, cfg.AddAddonParams)
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err), "got %v", err)
@@ -595,12 +595,12 @@ func (s *SubscriptionServiceSuite) seedGroupedPayFirstCheckout(
 		Action:          types.CheckoutActionAddAddon,
 		CheckoutStatus:  types.CheckoutStatusPending,
 		PaymentProvider: types.CheckoutPaymentProviderRazorpay,
-		Configuration: domainCheckout.ToJSONBCheckoutConfiguration(types.CheckoutConfiguration{
+		Configuration: types.CheckoutConfiguration{
 			AddAddonBatchParams: []*types.AddAddonParams{
 				addonChangeCheckoutParams(parentConfig, nil),
 				addonChangeCheckoutParams(childConfig, nil),
 			},
-		}),
+		},
 		CheckoutInvoiceID: &draft.ID,
 		CheckoutPaymentID: &payResp.ID,
 		ExpiresAt:         time.Now().UTC().Add(time.Hour),
@@ -787,7 +787,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_DraftAndCompleti
 	s.True(draft.Total.LessThan(listPrice.getQuote().NetAmount()),
 		"the draft must bill the override, drafted %s against list %s", draft.Total, listPrice.getQuote().NetAmount())
 
-	ref := session.Configuration.ToCheckoutConfiguration().AddAddonParams.Addons[0].PriceOverrides
+	ref := session.Configuration.AddAddonParams.Addons[0].PriceOverrides
 	s.Require().Len(ref, 1)
 	s.Equal("price_addon_pfo_in", ref[0].PriceID)
 	s.Equal(1, s.subscriptionScopedPrices(sub.ID), "execute mints the override price once")
@@ -796,7 +796,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_DraftAndCompleti
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 		ProviderPaymentIntentID: "pay_addons_override_001",
 	}))
-	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, session.Configuration.ToCheckoutConfiguration().AddAddonParams),
+	s.Require().NoError(subService.applyAddAddonCheckoutParams(ctx, session.Configuration.AddAddonParams),
 		"a second delivery is a no-op")
 
 	lineItems := s.addonLineItemsFor(sub.ID, "addon_pfo_in")
@@ -815,7 +815,7 @@ func (s *SubscriptionServiceSuite) TestAddonsCheckout_Overrides_PriceGoneFailsCo
 	at := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
 
 	session, _, _ := s.seedPayFirstAddonBatchCheckoutFor(s.overriddenAdd("addon_pfg_in", at, 10), "", at)
-	params := session.Configuration.ToCheckoutConfiguration().AddAddonParams
+	params := session.Configuration.AddAddonParams
 	params.Addons[0].PriceOverrides[0].PriceID = "price_no_longer_on_addon"
 
 	err := subService.applyAddAddonCheckoutParams(ctx, params)

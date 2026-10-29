@@ -28,7 +28,7 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 				InvoiceID:      invResp.ID,
 			},
 		}
-		session.Result = (*domainCheckout.JSONBCheckoutResult)(&result)
+		session.Result = &result
 
 		payResp, err := s.createCheckoutPayment(ctx, &invResp.Invoice, session.PaymentProvider)
 		if err != nil {
@@ -51,7 +51,7 @@ func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, sess
 			return err
 		}
 		s.recordGatewayHandles(ctx, payResp.ID, providerResult)
-		session.ProviderResult = (*domainCheckout.JSONBCheckoutProviderResult)(providerResult)
+		session.ProviderResult = providerResult
 		session.CheckoutStatus = types.CheckoutStatusPending
 
 	default:
@@ -128,7 +128,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 		LineItems:  checkoutLineItemsFor(inv),
 	}
 
-	cfg := lo.FromPtr(session.PaymentProviderConfig.ToCheckoutPaymentProviderConfig())
+	cfg := lo.FromPtr(session.PaymentProviderConfig)
 
 	var resp *interfaces.CheckoutProviderResponse
 
@@ -359,7 +359,7 @@ func (s *checkoutSessionService) completeModifySubscriptionCheckout(
 		return err
 	}
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	params := cfg.ModifySubscriptionParams
 	invoiceID := *session.CheckoutInvoiceID
 	paymentID := *session.CheckoutPaymentID
@@ -390,7 +390,7 @@ func (s *checkoutSessionService) completeAddAddonCheckout(
 		return err
 	}
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	entries := cfg.AddAddonEntries()
 	invoiceID := *session.CheckoutInvoiceID
 	paymentID := *session.CheckoutPaymentID
@@ -431,7 +431,7 @@ func (s *checkoutSessionService) completeWalletTopupCheckout(
 		return err
 	}
 
-	cfg := session.Configuration.ToCheckoutConfiguration()
+	cfg := session.Configuration
 	params := cfg.WalletTopupParams
 
 	w, err := s.WalletRepo.GetWalletByID(ctx, params.WalletID)
@@ -463,7 +463,7 @@ func (s *checkoutSessionService) completeSubscriptionCheckout(ctx context.Contex
 	var invoiceId string
 	var paymentId string
 
-	if cfg := session.Configuration.ToCheckoutConfiguration(); cfg.CreateSubscriptionParams != nil {
+	if cfg := session.Configuration; cfg.CreateSubscriptionParams != nil {
 		subscriptionId = cfg.CreateSubscriptionParams.SubscriptionID
 	}
 	invoiceId = lo.FromPtr(session.CheckoutInvoiceID)

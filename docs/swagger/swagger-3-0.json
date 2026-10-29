@@ -26886,7 +26886,7 @@
             "description": "LookupKey used for looking up the price in the database"
           },
           "metadata": {
-            "$ref": "#/components/schemas/price.JSONBMetadata"
+            "$ref": "#/components/schemas/types.Metadata"
           },
           "meter": {
             "$ref": "#/components/schemas/MeterResponse"
@@ -26957,7 +26957,7 @@
             }
           },
           "transform_quantity": {
-            "$ref": "#/components/schemas/price.JSONBTransformQuantity"
+            "$ref": "#/components/schemas/price.TransformQuantity"
           },
           "trial_period_days": {
             "type": "integer",
@@ -29802,7 +29802,13 @@
             "type": "string"
           },
           "filter_values": {
-            "$ref": "#/components/schemas/price.JSONBFilters"
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
           "is_overage": {
             "type": "boolean",
@@ -37605,33 +37611,6 @@
           }
         }
       },
-      "price.JSONBFilters": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "price.JSONBMetadata": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        }
-      },
-      "price.JSONBTransformQuantity": {
-        "type": "object",
-        "properties": {
-          "divide_by": {
-            "type": "integer",
-            "description": "Divide quantity by this number"
-          },
-          "round": {
-            "$ref": "#/components/schemas/types.RoundType"
-          }
-        }
-      },
       "price.Price": {
         "type": "object",
         "properties": {
@@ -37718,7 +37697,7 @@
             "description": "LookupKey used for looking up the price in the database"
           },
           "metadata": {
-            "$ref": "#/components/schemas/price.JSONBMetadata"
+            "$ref": "#/components/schemas/types.Metadata"
           },
           "meter_id": {
             "type": "string",
@@ -37780,7 +37759,7 @@
             }
           },
           "transform_quantity": {
-            "$ref": "#/components/schemas/price.JSONBTransformQuantity"
+            "$ref": "#/components/schemas/price.TransformQuantity"
           },
           "trial_period_days": {
             "type": "integer",
@@ -39087,7 +39066,7 @@
             "type": "string"
           },
           "metadata": {
-            "$ref": "#/components/schemas/price.JSONBMetadata"
+            "$ref": "#/components/schemas/types.Metadata"
           },
           "meter": {
             "$ref": "#/components/schemas/webhookDto.Meter"
@@ -39111,7 +39090,7 @@
             }
           },
           "transform_quantity": {
-            "$ref": "#/components/schemas/price.JSONBTransformQuantity"
+            "$ref": "#/components/schemas/price.TransformQuantity"
           },
           "type": {
             "$ref": "#/components/schemas/types.PriceType"

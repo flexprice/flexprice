@@ -12,55 +12,55 @@ import (
 // Customer represents a customer in the system
 type Customer struct {
 	// ID is the unique identifier for the customer
-	ID string `db:"id" json:"id"`
+	ID string `json:"id"`
 
 	// ExternalID is the external identifier for the customer
-	ExternalID string `db:"external_id" json:"external_id"`
+	ExternalID string `json:"external_id"`
 
 	// Name is the name of the customer
-	Name string `db:"name" json:"name" activity:"drop"`
+	Name string `json:"name" activity:"drop"`
 
 	// Email is the email of the customer
-	Email string `db:"email" json:"email" activity:"drop"`
+	Email string `json:"email" activity:"drop"`
 
 	// Contact is an optional contact number for the customer (e.g. phone)
-	Contact *string `db:"contact" json:"contact,omitempty" activity:"drop"`
+	Contact *string `json:"contact,omitempty" activity:"drop"`
 
 	// BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.
-	BillingCurrency *string `db:"billing_currency" json:"billing_currency,omitempty"`
+	BillingCurrency *string `json:"billing_currency,omitempty"`
 
-	ContactPersons []*ContactPerson `db:"contact_persons" json:"contact_persons,omitempty" activity:"drop"`
+	ContactPersons []*ContactPerson `json:"contact_persons,omitempty" activity:"drop"`
 
 	// AddressLine1 is the first line of the customer's address
-	AddressLine1 string `db:"address_line1" json:"address_line1" activity:"drop"`
+	AddressLine1 string `json:"address_line1" activity:"drop"`
 
 	// AddressLine2 is the second line of the customer's address
-	AddressLine2 string `db:"address_line2" json:"address_line2" activity:"drop"`
+	AddressLine2 string `json:"address_line2" activity:"drop"`
 
 	// AddressCity is the city of the customer's address
-	AddressCity string `db:"address_city" json:"address_city" activity:"drop"`
+	AddressCity string `json:"address_city" activity:"drop"`
 
 	// AddressState is the state of the customer's address
-	AddressState string `db:"address_state" json:"address_state" activity:"drop"`
+	AddressState string `json:"address_state" activity:"drop"`
 
 	// AddressPostalCode is the postal code of the customer's address
-	AddressPostalCode string `db:"address_postal_code" json:"address_postal_code" activity:"drop"`
+	AddressPostalCode string `json:"address_postal_code" activity:"drop"`
 
 	// AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)
-	AddressCountry string `db:"address_country" json:"address_country"`
+	AddressCountry string `json:"address_country"`
 
 	// Timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata").
 	// Defaults to "UTC". Inherited by subscriptions at creation time.
-	Timezone string `db:"timezone" json:"timezone"`
+	Timezone string `json:"timezone"`
 
 	// TaxTreatment is the customer's tax treatment — taxable (default) or exempt.
-	TaxTreatment types.TaxTreatment `db:"tax_treatment" json:"tax_treatment"`
+	TaxTreatment types.TaxTreatment `json:"tax_treatment"`
 
 	// Metadata
-	Metadata map[string]string `db:"metadata" json:"metadata" activity:"drop"`
+	Metadata map[string]string `json:"metadata" activity:"drop"`
 
 	// EnvironmentID is the environment identifier for the customer
-	EnvironmentID string `db:"environment_id" json:"environment_id"`
+	EnvironmentID string `json:"environment_id"`
 
 	types.BaseModel
 }
