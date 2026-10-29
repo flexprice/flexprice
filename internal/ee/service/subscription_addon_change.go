@@ -369,9 +369,8 @@ func changeAtDate(changeAt types.ScheduleType, now, periodEnd time.Time) time.Ti
 	return now
 }
 
-// attachQuantity is the quantity an attach will carry. Override quantities are written onto the
-// line items only at Persist, after grants are resolved, so they are read from the request.
-// An override replaces its price's quantity; a zero override keeps the default, as Persist does.
+// attachQuantity is the quantity an attach will carry, with request overrides replacing their
+// price's quantity, since Persist writes them only after grants resolve (zero keeps the default).
 func attachQuantity(attach *addonAttachParams) decimal.Decimal {
 	overrides := make(map[string]decimal.Decimal)
 	for _, override := range attach.getRequest().OverrideLineItems {

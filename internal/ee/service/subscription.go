@@ -6710,10 +6710,8 @@ func withAssociationWindow(ent *dto.EntitlementResponse, assoc *dto.AddonAssocia
 	return &updatedEntResp
 }
 
-// addonQuantitiesAt is each addon association's quantity as of at: the largest quantity on
-// its live fixed-price line items. Associations without one are absent and count once.
-// Line items are read fresh: the subscription's loaded ones can predate an attach or a
-// quantity change.
+// addonQuantitiesAt maps each addon association to its stored fixed-price quantity at at;
+// associations without one are absent and count once.
 func (s *subscriptionService) addonQuantitiesAt(
 	ctx context.Context,
 	sub *subscription.Subscription,
