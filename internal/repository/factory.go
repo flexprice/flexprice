@@ -26,6 +26,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/customerdeletion"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
@@ -367,6 +368,10 @@ func NewGroupRepository(p RepositoryParams) group.Repository {
 
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
+}
+
+func NewCustomerDeletionRepository(p RepositoryParams) customerdeletion.Repository {
+	return entRepo.NewCustomerDeletionRepository(p.EntClient, p.Logger)
 }
 
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
