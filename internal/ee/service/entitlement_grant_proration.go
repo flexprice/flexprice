@@ -272,8 +272,9 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 		switch {
 		case !neverReset && closed != nil:
 			existingQuota, _ = closed.Remaining()
-		case neverReset && closed != nil && !cfg.removesFeature(featureID):
+		case neverReset && closed != nil && len(surviving) > 0 && !cfg.removesFeature(featureID):
 			// Nothing leaves, so the cap carries as it stands, prorated segments included.
+			// With no surviving config the live row is a detached addon's, so it adds nothing.
 			existingQuota = closed.Quota
 		}
 		// E.g. incoming 150, old remaining 20, no surviving configs: normal gets 170; NEVER gets 150.

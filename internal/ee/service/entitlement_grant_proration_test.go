@@ -421,6 +421,22 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_Seco
 	s.True(live.Quota.Equal(want), "expected %s, got %s", want, live.Quota)
 }
 
+// A detached addon leaves its window open; a later attach on the same feature must not
+// inherit that quota. e.g. A=100 detached, then B=50 attached: the cap is 50, not 150.
+func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NeverReset_ReattachIgnoresDetachedAddon() {
+	featureID := s.seedNeverGrantFeature("feat_never_reattach")
+	s.seedGrantAddon("addon_never_reattach_a", "ent_never_reattach_a", featureID, 100, "")
+	s.seedGrantAddon("addon_never_reattach_b", "ent_never_reattach_b", featureID, 50, "")
+	s.seedCycleGrant("ent_never_reattach_a", featureID, 100)
+
+	s.Require().NoError(s.attachAddon("addon_never_reattach_b", s.testData.now, types.ProrationBehaviorNone))
+
+	live := s.liveRow(featureID)
+	s.Require().NotNil(live)
+	s.True(live.Quota.Equal(decimal.NewFromInt(50)), "expected 50, got %s", live.Quota)
+	s.assertTiled(featureID)
+}
+
 // Removing an addon from a never-reset feature takes its quota off the cap at once, whatever
 // the proration: the cap is always the configs still on the feature.
 func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_DropsAddonQuotaAtOnce() {
