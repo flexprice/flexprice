@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type commitmentBuilder struct {
@@ -51,6 +52,18 @@ func (b *commitmentBuilder) WithStatus(s types.CommitmentStatus) *commitmentBuil
 
 func (b *commitmentBuilder) WithTerminatedAt(t time.Time) *commitmentBuilder {
 	b.c.TerminatedAt = &t
+	return b
+}
+
+// WithTotalAmount sets the currency-rounded contractual collection target.
+func (b *commitmentBuilder) WithTotalAmount(amount decimal.Decimal) *commitmentBuilder {
+	b.c.TotalAmount = &amount
+	return b
+}
+
+// WithInvoiceDelivery maps collection delivery onto the existing storage field.
+func (b *commitmentBuilder) WithInvoiceDelivery(delivery types.BillingTermDelivery) *commitmentBuilder {
+	b.c.InstalmentInvoicing = lo.ToPtr(string(delivery))
 	return b
 }
 

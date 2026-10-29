@@ -12,7 +12,9 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingscheduleitem"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -349,6 +351,75 @@ func init() {
 	auth.DefaultUpdatedAt = authDescUpdatedAt.Default.(func() time.Time)
 	// auth.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	auth.UpdateDefaultUpdatedAt = authDescUpdatedAt.UpdateDefault.(func() time.Time)
+	billingscheduleitemMixin := schema.BillingScheduleItem{}.Mixin()
+	billingscheduleitemMixinFields0 := billingscheduleitemMixin[0].Fields()
+	_ = billingscheduleitemMixinFields0
+	billingscheduleitemMixinFields1 := billingscheduleitemMixin[1].Fields()
+	_ = billingscheduleitemMixinFields1
+	billingscheduleitemFields := schema.BillingScheduleItem{}.Fields()
+	_ = billingscheduleitemFields
+	// billingscheduleitemDescTenantID is the schema descriptor for tenant_id field.
+	billingscheduleitemDescTenantID := billingscheduleitemMixinFields0[0].Descriptor()
+	// billingscheduleitem.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	billingscheduleitem.TenantIDValidator = billingscheduleitemDescTenantID.Validators[0].(func(string) error)
+	// billingscheduleitemDescStatus is the schema descriptor for status field.
+	billingscheduleitemDescStatus := billingscheduleitemMixinFields0[1].Descriptor()
+	// billingscheduleitem.DefaultStatus holds the default value on creation for the status field.
+	billingscheduleitem.DefaultStatus = billingscheduleitemDescStatus.Default.(string)
+	// billingscheduleitemDescCreatedAt is the schema descriptor for created_at field.
+	billingscheduleitemDescCreatedAt := billingscheduleitemMixinFields0[2].Descriptor()
+	// billingscheduleitem.DefaultCreatedAt holds the default value on creation for the created_at field.
+	billingscheduleitem.DefaultCreatedAt = billingscheduleitemDescCreatedAt.Default.(func() time.Time)
+	// billingscheduleitemDescUpdatedAt is the schema descriptor for updated_at field.
+	billingscheduleitemDescUpdatedAt := billingscheduleitemMixinFields0[3].Descriptor()
+	// billingscheduleitem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	billingscheduleitem.DefaultUpdatedAt = billingscheduleitemDescUpdatedAt.Default.(func() time.Time)
+	// billingscheduleitem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	billingscheduleitem.UpdateDefaultUpdatedAt = billingscheduleitemDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// billingscheduleitemDescEnvironmentID is the schema descriptor for environment_id field.
+	billingscheduleitemDescEnvironmentID := billingscheduleitemMixinFields1[0].Descriptor()
+	// billingscheduleitem.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	billingscheduleitem.DefaultEnvironmentID = billingscheduleitemDescEnvironmentID.Default.(string)
+	// billingscheduleitemDescOwnerType is the schema descriptor for owner_type field.
+	billingscheduleitemDescOwnerType := billingscheduleitemFields[1].Descriptor()
+	// billingscheduleitem.OwnerTypeValidator is a validator for the "owner_type" field. It is called by the builders before save.
+	billingscheduleitem.OwnerTypeValidator = billingscheduleitemDescOwnerType.Validators[0].(func(string) error)
+	// billingscheduleitemDescOwnerID is the schema descriptor for owner_id field.
+	billingscheduleitemDescOwnerID := billingscheduleitemFields[2].Descriptor()
+	// billingscheduleitem.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	billingscheduleitem.OwnerIDValidator = billingscheduleitemDescOwnerID.Validators[0].(func(string) error)
+	// billingscheduleitemDescCustomerID is the schema descriptor for customer_id field.
+	billingscheduleitemDescCustomerID := billingscheduleitemFields[4].Descriptor()
+	// billingscheduleitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	billingscheduleitem.CustomerIDValidator = billingscheduleitemDescCustomerID.Validators[0].(func(string) error)
+	// billingscheduleitemDescCurrency is the schema descriptor for currency field.
+	billingscheduleitemDescCurrency := billingscheduleitemFields[6].Descriptor()
+	// billingscheduleitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	billingscheduleitem.CurrencyValidator = billingscheduleitemDescCurrency.Validators[0].(func(string) error)
+	// billingscheduleitemDescKind is the schema descriptor for kind field.
+	billingscheduleitemDescKind := billingscheduleitemFields[7].Descriptor()
+	// billingscheduleitem.DefaultKind holds the default value on creation for the kind field.
+	billingscheduleitem.DefaultKind = types.BillingScheduleItemKind(billingscheduleitemDescKind.Default.(string))
+	// billingscheduleitemDescBillTrigger is the schema descriptor for bill_trigger field.
+	billingscheduleitemDescBillTrigger := billingscheduleitemFields[8].Descriptor()
+	// billingscheduleitem.BillTriggerValidator is a validator for the "bill_trigger" field. It is called by the builders before save.
+	billingscheduleitem.BillTriggerValidator = billingscheduleitemDescBillTrigger.Validators[0].(func(string) error)
+	// billingscheduleitemDescDescription is the schema descriptor for description field.
+	billingscheduleitemDescDescription := billingscheduleitemFields[11].Descriptor()
+	// billingscheduleitem.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	billingscheduleitem.DescriptionValidator = billingscheduleitemDescDescription.Validators[0].(func(string) error)
+	// billingscheduleitemDescDelivery is the schema descriptor for delivery field.
+	billingscheduleitemDescDelivery := billingscheduleitemFields[14].Descriptor()
+	// billingscheduleitem.DeliveryValidator is a validator for the "delivery" field. It is called by the builders before save.
+	billingscheduleitem.DeliveryValidator = billingscheduleitemDescDelivery.Validators[0].(func(string) error)
+	// billingscheduleitemDescScheduleStatus is the schema descriptor for schedule_status field.
+	billingscheduleitemDescScheduleStatus := billingscheduleitemFields[15].Descriptor()
+	// billingscheduleitem.DefaultScheduleStatus holds the default value on creation for the schedule_status field.
+	billingscheduleitem.DefaultScheduleStatus = types.BillingScheduleStatus(billingscheduleitemDescScheduleStatus.Default.(string))
+	// billingscheduleitemDescMetadata is the schema descriptor for metadata field.
+	billingscheduleitemDescMetadata := billingscheduleitemFields[19].Descriptor()
+	// billingscheduleitem.DefaultMetadata holds the default value on creation for the metadata field.
+	billingscheduleitem.DefaultMetadata = billingscheduleitemDescMetadata.Default.(types.Metadata)
 	billingsequenceFields := schema.BillingSequence{}.Fields()
 	_ = billingsequenceFields
 	// billingsequenceDescTenantID is the schema descriptor for tenant_id field.
@@ -373,6 +444,63 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	billingtermMixin := schema.BillingTerm{}.Mixin()
+	billingtermMixinFields0 := billingtermMixin[0].Fields()
+	_ = billingtermMixinFields0
+	billingtermMixinFields1 := billingtermMixin[1].Fields()
+	_ = billingtermMixinFields1
+	billingtermFields := schema.BillingTerm{}.Fields()
+	_ = billingtermFields
+	// billingtermDescTenantID is the schema descriptor for tenant_id field.
+	billingtermDescTenantID := billingtermMixinFields0[0].Descriptor()
+	// billingterm.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	billingterm.TenantIDValidator = billingtermDescTenantID.Validators[0].(func(string) error)
+	// billingtermDescStatus is the schema descriptor for status field.
+	billingtermDescStatus := billingtermMixinFields0[1].Descriptor()
+	// billingterm.DefaultStatus holds the default value on creation for the status field.
+	billingterm.DefaultStatus = billingtermDescStatus.Default.(string)
+	// billingtermDescCreatedAt is the schema descriptor for created_at field.
+	billingtermDescCreatedAt := billingtermMixinFields0[2].Descriptor()
+	// billingterm.DefaultCreatedAt holds the default value on creation for the created_at field.
+	billingterm.DefaultCreatedAt = billingtermDescCreatedAt.Default.(func() time.Time)
+	// billingtermDescUpdatedAt is the schema descriptor for updated_at field.
+	billingtermDescUpdatedAt := billingtermMixinFields0[3].Descriptor()
+	// billingterm.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	billingterm.DefaultUpdatedAt = billingtermDescUpdatedAt.Default.(func() time.Time)
+	// billingterm.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	billingterm.UpdateDefaultUpdatedAt = billingtermDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// billingtermDescEnvironmentID is the schema descriptor for environment_id field.
+	billingtermDescEnvironmentID := billingtermMixinFields1[0].Descriptor()
+	// billingterm.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	billingterm.DefaultEnvironmentID = billingtermDescEnvironmentID.Default.(string)
+	// billingtermDescOwnerType is the schema descriptor for owner_type field.
+	billingtermDescOwnerType := billingtermFields[1].Descriptor()
+	// billingterm.OwnerTypeValidator is a validator for the "owner_type" field. It is called by the builders before save.
+	billingterm.OwnerTypeValidator = billingtermDescOwnerType.Validators[0].(func(string) error)
+	// billingtermDescOwnerID is the schema descriptor for owner_id field.
+	billingtermDescOwnerID := billingtermFields[2].Descriptor()
+	// billingterm.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
+	billingterm.OwnerIDValidator = billingtermDescOwnerID.Validators[0].(func(string) error)
+	// billingtermDescKind is the schema descriptor for kind field.
+	billingtermDescKind := billingtermFields[3].Descriptor()
+	// billingterm.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	billingterm.KindValidator = billingtermDescKind.Validators[0].(func(string) error)
+	// billingtermDescValueType is the schema descriptor for value_type field.
+	billingtermDescValueType := billingtermFields[4].Descriptor()
+	// billingterm.ValueTypeValidator is a validator for the "value_type" field. It is called by the builders before save.
+	billingterm.ValueTypeValidator = billingtermDescValueType.Validators[0].(func(string) error)
+	// billingtermDescOnTrigger is the schema descriptor for on_trigger field.
+	billingtermDescOnTrigger := billingtermFields[7].Descriptor()
+	// billingterm.DefaultOnTrigger holds the default value on creation for the on_trigger field.
+	billingterm.DefaultOnTrigger = billingtermDescOnTrigger.Default.(bool)
+	// billingtermDescIntervalCount is the schema descriptor for interval_count field.
+	billingtermDescIntervalCount := billingtermFields[11].Descriptor()
+	// billingterm.IntervalCountValidator is a validator for the "interval_count" field. It is called by the builders before save.
+	billingterm.IntervalCountValidator = billingtermDescIntervalCount.Validators[0].(func(int) error)
+	// billingtermDescMetadata is the schema descriptor for metadata field.
+	billingtermDescMetadata := billingtermFields[15].Descriptor()
+	// billingterm.DefaultMetadata holds the default value on creation for the metadata field.
+	billingterm.DefaultMetadata = billingtermDescMetadata.Default.(types.Metadata)
 	checkoutsessionMixin := schema.CheckoutSession{}.Mixin()
 	checkoutsessionMixinFields0 := checkoutsessionMixin[0].Fields()
 	_ = checkoutsessionMixinFields0
@@ -1664,27 +1792,27 @@ func init() {
 	// invoicelineitem.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	invoicelineitem.CustomerIDValidator = invoicelineitemDescCustomerID.Validators[0].(func(string) error)
 	// invoicelineitemDescAmount is the schema descriptor for amount field.
-	invoicelineitemDescAmount := invoicelineitemFields[15].Descriptor()
+	invoicelineitemDescAmount := invoicelineitemFields[16].Descriptor()
 	// invoicelineitem.DefaultAmount holds the default value on creation for the amount field.
 	invoicelineitem.DefaultAmount = invoicelineitemDescAmount.Default.(decimal.Decimal)
 	// invoicelineitemDescQuantity is the schema descriptor for quantity field.
-	invoicelineitemDescQuantity := invoicelineitemFields[16].Descriptor()
+	invoicelineitemDescQuantity := invoicelineitemFields[17].Descriptor()
 	// invoicelineitem.DefaultQuantity holds the default value on creation for the quantity field.
 	invoicelineitem.DefaultQuantity = invoicelineitemDescQuantity.Default.(decimal.Decimal)
 	// invoicelineitemDescCurrency is the schema descriptor for currency field.
-	invoicelineitemDescCurrency := invoicelineitemFields[17].Descriptor()
+	invoicelineitemDescCurrency := invoicelineitemFields[18].Descriptor()
 	// invoicelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	invoicelineitem.CurrencyValidator = invoicelineitemDescCurrency.Validators[0].(func(string) error)
 	// invoicelineitemDescPrepaidCreditsApplied is the schema descriptor for prepaid_credits_applied field.
-	invoicelineitemDescPrepaidCreditsApplied := invoicelineitemFields[22].Descriptor()
+	invoicelineitemDescPrepaidCreditsApplied := invoicelineitemFields[23].Descriptor()
 	// invoicelineitem.DefaultPrepaidCreditsApplied holds the default value on creation for the prepaid_credits_applied field.
 	invoicelineitem.DefaultPrepaidCreditsApplied = invoicelineitemDescPrepaidCreditsApplied.Default.(decimal.Decimal)
 	// invoicelineitemDescLineItemDiscount is the schema descriptor for line_item_discount field.
-	invoicelineitemDescLineItemDiscount := invoicelineitemFields[23].Descriptor()
+	invoicelineitemDescLineItemDiscount := invoicelineitemFields[24].Descriptor()
 	// invoicelineitem.DefaultLineItemDiscount holds the default value on creation for the line_item_discount field.
 	invoicelineitem.DefaultLineItemDiscount = invoicelineitemDescLineItemDiscount.Default.(decimal.Decimal)
 	// invoicelineitemDescInvoiceLevelDiscount is the schema descriptor for invoice_level_discount field.
-	invoicelineitemDescInvoiceLevelDiscount := invoicelineitemFields[24].Descriptor()
+	invoicelineitemDescInvoiceLevelDiscount := invoicelineitemFields[25].Descriptor()
 	// invoicelineitem.DefaultInvoiceLevelDiscount holds the default value on creation for the invoice_level_discount field.
 	invoicelineitem.DefaultInvoiceLevelDiscount = invoicelineitemDescInvoiceLevelDiscount.Default.(decimal.Decimal)
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()

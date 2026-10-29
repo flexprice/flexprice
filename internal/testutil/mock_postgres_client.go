@@ -64,6 +64,10 @@ func (c *MockPostgresClient) LockWithWait(ctx context.Context, req postgres.Lock
 	return nil
 }
 
+func (c *MockPostgresClient) TryLock(ctx context.Context, req postgres.LockRequest) error {
+	return nil
+}
+
 func (c *MockPostgresClient) Close() error {
 	return nil
 }

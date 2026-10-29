@@ -52,9 +52,19 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 	if !CheckEnvironmentFilter(ctx, sub.EnvironmentID) {
 		return false
 	}
+	if len(f.SubscriptionIDs) > 0 && !lo.Contains(f.SubscriptionIDs, sub.ID) {
+		return false
+	}
+
+	if f.AfterID != "" && sub.ID <= f.AfterID {
+		return false
+	}
 
 	// Filter by customer ID
 	if f.CustomerID != "" && sub.CustomerID != f.CustomerID {
+		return false
+	}
+	if len(f.InvoicingCustomerIDs) > 0 && (sub.InvoicingCustomerID == nil || !lo.Contains(f.InvoicingCustomerIDs, *sub.InvoicingCustomerID)) {
 		return false
 	}
 
@@ -229,8 +239,22 @@ func (s *InMemorySubscriptionStore) GetForUpdate(ctx context.Context, id string)
 	return s.Get(ctx, id)
 }
 
+// GetForUpdateNowait matches Get; the in-memory store has no row locks.
+func (s *InMemorySubscriptionStore) GetForUpdateNowait(ctx context.Context, id string) (*subscription.Subscription, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemorySubscriptionStore) List(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
-	subs, err := s.InMemoryStore.List(ctx, filter, subscriptionFilterFn, subscriptionSortFn)
+	sorter := subscriptionSortFn
+	if filter != nil && filter.GetSort() == "id" {
+		sorter = func(a, b *subscription.Subscription) bool {
+			if filter.GetOrder() == types.OrderAsc {
+				return a.ID < b.ID
+			}
+			return a.ID > b.ID
+		}
+	}
+	subs, err := s.InMemoryStore.List(ctx, filter, subscriptionFilterFn, sorter)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscriptions").

@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/billingscheduleitem"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -21,12 +22,13 @@ import (
 // InvoiceLineItemQuery is the builder for querying InvoiceLineItem entities.
 type InvoiceLineItemQuery struct {
 	config
-	ctx                    *QueryContext
-	order                  []invoicelineitem.OrderOption
-	inters                 []Interceptor
-	predicates             []predicate.InvoiceLineItem
-	withInvoice            *InvoiceQuery
-	withCouponApplications *CouponApplicationQuery
+	ctx                     *QueryContext
+	order                   []invoicelineitem.OrderOption
+	inters                  []Interceptor
+	predicates              []predicate.InvoiceLineItem
+	withBillingScheduleItem *BillingScheduleItemQuery
+	withInvoice             *InvoiceQuery
+	withCouponApplications  *CouponApplicationQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -61,6 +63,28 @@ func (_q *InvoiceLineItemQuery) Unique(unique bool) *InvoiceLineItemQuery {
 func (_q *InvoiceLineItemQuery) Order(o ...invoicelineitem.OrderOption) *InvoiceLineItemQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryBillingScheduleItem chains the current query on the "billing_schedule_item" edge.
+func (_q *InvoiceLineItemQuery) QueryBillingScheduleItem() *BillingScheduleItemQuery {
+	query := (&BillingScheduleItemClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(invoicelineitem.Table, invoicelineitem.FieldID, selector),
+			sqlgraph.To(billingscheduleitem.Table, billingscheduleitem.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, invoicelineitem.BillingScheduleItemTable, invoicelineitem.BillingScheduleItemColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // QueryInvoice chains the current query on the "invoice" edge.
@@ -294,17 +318,29 @@ func (_q *InvoiceLineItemQuery) Clone() *InvoiceLineItemQuery {
 		return nil
 	}
 	return &InvoiceLineItemQuery{
-		config:                 _q.config,
-		ctx:                    _q.ctx.Clone(),
-		order:                  append([]invoicelineitem.OrderOption{}, _q.order...),
-		inters:                 append([]Interceptor{}, _q.inters...),
-		predicates:             append([]predicate.InvoiceLineItem{}, _q.predicates...),
-		withInvoice:            _q.withInvoice.Clone(),
-		withCouponApplications: _q.withCouponApplications.Clone(),
+		config:                  _q.config,
+		ctx:                     _q.ctx.Clone(),
+		order:                   append([]invoicelineitem.OrderOption{}, _q.order...),
+		inters:                  append([]Interceptor{}, _q.inters...),
+		predicates:              append([]predicate.InvoiceLineItem{}, _q.predicates...),
+		withBillingScheduleItem: _q.withBillingScheduleItem.Clone(),
+		withInvoice:             _q.withInvoice.Clone(),
+		withCouponApplications:  _q.withCouponApplications.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithBillingScheduleItem tells the query-builder to eager-load the nodes that are connected to
+// the "billing_schedule_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *InvoiceLineItemQuery) WithBillingScheduleItem(opts ...func(*BillingScheduleItemQuery)) *InvoiceLineItemQuery {
+	query := (&BillingScheduleItemClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withBillingScheduleItem = query
+	return _q
 }
 
 // WithInvoice tells the query-builder to eager-load the nodes that are connected to
@@ -407,7 +443,8 @@ func (_q *InvoiceLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	var (
 		nodes       = []*InvoiceLineItem{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
+			_q.withBillingScheduleItem != nil,
 			_q.withInvoice != nil,
 			_q.withCouponApplications != nil,
 		}
@@ -430,6 +467,12 @@ func (_q *InvoiceLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withBillingScheduleItem; query != nil {
+		if err := _q.loadBillingScheduleItem(ctx, query, nodes, nil,
+			func(n *InvoiceLineItem, e *BillingScheduleItem) { n.Edges.BillingScheduleItem = e }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withInvoice; query != nil {
 		if err := _q.loadInvoice(ctx, query, nodes, nil,
 			func(n *InvoiceLineItem, e *Invoice) { n.Edges.Invoice = e }); err != nil {
@@ -448,6 +491,38 @@ func (_q *InvoiceLineItemQuery) sqlAll(ctx context.Context, hooks ...queryHook) 
 	return nodes, nil
 }
 
+func (_q *InvoiceLineItemQuery) loadBillingScheduleItem(ctx context.Context, query *BillingScheduleItemQuery, nodes []*InvoiceLineItem, init func(*InvoiceLineItem), assign func(*InvoiceLineItem, *BillingScheduleItem)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*InvoiceLineItem)
+	for i := range nodes {
+		if nodes[i].BillingScheduleItemID == nil {
+			continue
+		}
+		fk := *nodes[i].BillingScheduleItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(billingscheduleitem.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "billing_schedule_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (_q *InvoiceLineItemQuery) loadInvoice(ctx context.Context, query *InvoiceQuery, nodes []*InvoiceLineItem, init func(*InvoiceLineItem), assign func(*InvoiceLineItem, *Invoice)) error {
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*InvoiceLineItem)
@@ -535,6 +610,9 @@ func (_q *InvoiceLineItemQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != invoicelineitem.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withBillingScheduleItem != nil {
+			_spec.Node.AddColumnOnce(invoicelineitem.FieldBillingScheduleItemID)
 		}
 		if _q.withInvoice != nil {
 			_spec.Node.AddColumnOnce(invoicelineitem.FieldInvoiceID)

@@ -308,6 +308,7 @@ func closePostCommitHooks(ctx context.Context) []func() {
 // ("unexpected Parse response") and poisons the connection for whoever picks
 // it up next, so failures surface in unrelated requests.
 func WithoutDBTransaction(ctx context.Context) context.Context {
+	ctx = withoutInvoiceLockAdmission(ctx)
 	if ctx.Value(CtxDBTransaction) == nil {
 		return ctx
 	}

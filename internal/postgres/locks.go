@@ -6,9 +6,44 @@ import (
 	"fmt"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
+
+// NonblockingLocker acquires legacy advisory locks without waiting behind earlier caller locks.
+type NonblockingLocker interface {
+	TryLock(context.Context, LockRequest) error
+}
+
+// TryLock uses the same transaction-scoped key as LockWithWait.
+func (c *Client) TryLock(ctx context.Context, req LockRequest) error {
+	if ctx == nil || c == nil || c.TxFromContext(ctx) == nil {
+		return ierr.NewError("advisory lock requires a transaction").Mark(ierr.ErrInvalidOperation)
+	}
+	if req.Key == "" {
+		return ierr.Validation("advisory lock requires a key")
+	}
+	rows, err := c.Writer(ctx).QueryContext(ctx, "SELECT pg_try_advisory_xact_lock(hashtext($1))", req.Key)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		return ierr.NewError("advisory lock returned no result").Mark(ierr.ErrDatabase)
+	}
+	var acquired bool
+	if err := rows.Scan(&acquired); err != nil {
+		return err
+	}
+	if !acquired {
+		return ierr.NewError("billing dependencies are being changed; retry the request").Mark(ierr.ErrVersionConflict)
+	}
+	return rows.Err()
+}
 
 // LockRequest represents a request to acquire an advisory lock
 type LockRequest struct {

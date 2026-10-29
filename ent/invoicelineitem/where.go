@@ -138,6 +138,11 @@ func PriceID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPriceID, v))
 }
 
+// BillingScheduleItemID applies equality check predicate on the "billing_schedule_item_id" field. It's identical to BillingScheduleItemIDEQ.
+func BillingScheduleItemID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldBillingScheduleItemID, v))
+}
+
 // PriceType applies equality check predicate on the "price_type" field. It's identical to PriceTypeEQ.
 func PriceType(v types.PriceType) predicate.InvoiceLineItem {
 	vc := string(v)
@@ -1191,6 +1196,81 @@ func PriceIDEqualFold(v string) predicate.InvoiceLineItem {
 // PriceIDContainsFold applies the ContainsFold predicate on the "price_id" field.
 func PriceIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldPriceID, v))
+}
+
+// BillingScheduleItemIDEQ applies the EQ predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDNEQ applies the NEQ predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDIn applies the In predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldBillingScheduleItemID, vs...))
+}
+
+// BillingScheduleItemIDNotIn applies the NotIn predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldBillingScheduleItemID, vs...))
+}
+
+// BillingScheduleItemIDGT applies the GT predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDGTE applies the GTE predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDLT applies the LT predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDLTE applies the LTE predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDContains applies the Contains predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDHasPrefix applies the HasPrefix predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDHasSuffix applies the HasSuffix predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDIsNil applies the IsNil predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldBillingScheduleItemID))
+}
+
+// BillingScheduleItemIDNotNil applies the NotNil predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldBillingScheduleItemID))
+}
+
+// BillingScheduleItemIDEqualFold applies the EqualFold predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldBillingScheduleItemID, v))
+}
+
+// BillingScheduleItemIDContainsFold applies the ContainsFold predicate on the "billing_schedule_item_id" field.
+func BillingScheduleItemIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldBillingScheduleItemID, v))
 }
 
 // PriceTypeEQ applies the EQ predicate on the "price_type" field.
@@ -2420,6 +2500,29 @@ func FxConversionIsNil() predicate.InvoiceLineItem {
 // FxConversionNotNil applies the NotNil predicate on the "fx_conversion" field.
 func FxConversionNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldFxConversion))
+}
+
+// HasBillingScheduleItem applies the HasEdge predicate on the "billing_schedule_item" edge.
+func HasBillingScheduleItem() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, BillingScheduleItemTable, BillingScheduleItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasBillingScheduleItemWith applies the HasEdge predicate on the "billing_schedule_item" edge with a given conditions (other predicates).
+func HasBillingScheduleItemWith(preds ...predicate.BillingScheduleItem) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(func(s *sql.Selector) {
+		step := newBillingScheduleItemStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

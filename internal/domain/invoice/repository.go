@@ -15,6 +15,8 @@ type Repository interface {
 	// GetForUpdate retrieves an invoice with a row-level lock (SELECT FOR UPDATE).
 	// Must be called within a transaction so the lock is held until commit/rollback.
 	GetForUpdate(ctx context.Context, id string) (*Invoice, error)
+	// GetForUpdateNowait requires a transaction and returns a conflict when the row is busy.
+	GetForUpdateNowait(ctx context.Context, id string) (*Invoice, error)
 	Update(ctx context.Context, inv *Invoice) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
@@ -33,6 +35,8 @@ type Repository interface {
 
 	// Idempotency operations
 	GetByIdempotencyKey(ctx context.Context, key string) (*Invoice, error)
+	// GetByRecalculatedInvoiceID returns the scoped original invoice that owns a replacement.
+	GetByRecalculatedInvoiceID(ctx context.Context, replacementID string) (*Invoice, error)
 
 	// Period validation
 	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error)

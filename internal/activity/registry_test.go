@@ -13,6 +13,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/feature"
@@ -30,6 +31,7 @@ import (
 
 var entColumns = map[types.SystemEntityType][]string{
 	types.SystemEntityTypeCustomer:        customer.Columns,
+	types.SystemEntityTypeCommitment:      commitment.Columns,
 	types.SystemEntityTypeSubscription:    subscription.Columns,
 	types.SystemEntityTypeInvoice:         invoice.Columns,
 	types.SystemEntityTypeCreditNote:      creditnote.Columns,
@@ -47,7 +49,7 @@ var entColumns = map[types.SystemEntityType][]string{
 func bareRow(t *testing.T, name string) any {
 	t.Helper()
 	rows := map[string]any{
-		"Customer": &ent.Customer{ID: "x"}, "Subscription": &ent.Subscription{ID: "x"}, "Invoice": &ent.Invoice{ID: "x"},
+		"Commitment": &ent.Commitment{ID: "x"}, "Customer": &ent.Customer{ID: "x"}, "Subscription": &ent.Subscription{ID: "x"}, "Invoice": &ent.Invoice{ID: "x"},
 		"CreditNote": &ent.CreditNote{ID: "x"}, "Wallet": &ent.Wallet{ID: "x"}, "Payment": &ent.Payment{ID: "x"},
 		"PaymentMethod": &ent.PaymentMethod{ID: "x"}, "Refund": &ent.Refund{ID: "x"}, "CheckoutSession": &ent.CheckoutSession{ID: "x"},
 		"Plan": &ent.Plan{ID: "x"}, "Price": &ent.Price{ID: "x"}, "Feature": &ent.Feature{ID: "x"},

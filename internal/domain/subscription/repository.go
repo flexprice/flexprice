@@ -14,6 +14,8 @@ type Repository interface {
 	GetTimezone(ctx context.Context, id string) (string, error)
 
 	GetForUpdate(ctx context.Context, id string) (*Subscription, error)
+	// GetForUpdateNowait requires a transaction and returns a conflict when the scoped row is locked.
+	GetForUpdateNowait(ctx context.Context, id string) (*Subscription, error)
 	Update(ctx context.Context, subscription *Subscription) error
 	UpdatePlan(ctx context.Context, id string, planID string) error
 	Delete(ctx context.Context, id string) error

@@ -2,7 +2,7 @@ name: Run Tests
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'feat/FLE-1513-billing-terms-*' ]
   push:
     branches: [ main, develop ]
 
@@ -13,6 +13,18 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: billing_terms
+          POSTGRES_PASSWORD: billing_terms_local
+          POSTGRES_DB: billing_terms_test
+        ports: [ '5432:5432' ]
+        options: >-
+          --health-cmd "pg_isready -U billing_terms -d billing_terms_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -29,6 +41,9 @@ jobs:
         run: go mod download
 
       - name: Run Tests
+        env:
+          FLEXPRICE_BILLING_TERMS_TEST_DSN: postgres://billing_terms:billing_terms_local@localhost:5432/billing_terms_test?sslmode=disable
+          FLEXPRICE_TEST_POSTGRES_DSN: postgres://billing_terms:billing_terms_local@localhost:5432/billing_terms_test?sslmode=disable
         run: |
           make test-coverage
 

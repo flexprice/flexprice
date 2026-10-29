@@ -55,6 +55,8 @@ type InvoiceLineItem struct {
 
 	// commitment_id links this line item to the commitment it bills.
 	CommitmentID *string `json:"commitment_id,omitempty"`
+	// BillingScheduleItemID retains the exact scheduled charge that created this line.
+	BillingScheduleItemID *string `json:"billing_schedule_item_id,omitempty"`
 
 	// parent_line_item_id links this line item to the line item it replaced, if it was created by editing
 	// an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
@@ -107,6 +109,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
 		SubscriptionLineItemID:      e.SubscriptionLineItemID,
 		CommitmentID:                e.CommitmentID,
+		BillingScheduleItemID:       e.BillingScheduleItemID,
 		ParentLineItemID:            e.ParentLineItemID,
 		CustomCurrency:              e.CustomCurrency,
 		FxConversion:                e.FxConversion,

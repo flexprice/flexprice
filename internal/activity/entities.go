@@ -2,6 +2,7 @@ package activity
 
 import (
 	"github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/feature"
@@ -29,6 +30,12 @@ func Registrations() *Registry {
 			EntityType: types.SystemEntityTypeSubscription, EntName: "Subscription",
 			Snapshot: snapshotOf(subscription.GetSubscriptionFromEnt),
 			Actions:  []Action{SubscriptionArchived, SubscriptionCancelled, SubscriptionPlanChanged, SubscriptionActivated, SubscriptionPaused, SubscriptionResumed},
+		},
+		Registration{
+			EntityType: types.SystemEntityTypeCommitment, EntName: "Commitment",
+			Snapshot: snapshotOf(commitment.FromEnt),
+			Label:    []string{"invoice_label", "name"},
+			Actions:  []Action{CommitmentBillingTermsReplaced, CommitmentBillingItemTriggered},
 		},
 		Registration{
 			EntityType: types.SystemEntityTypeInvoice, EntName: "Invoice",

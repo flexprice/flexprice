@@ -16,7 +16,9 @@ import (
 	"github.com/flexprice/flexprice/ent/alertsettings"
 	"github.com/flexprice/flexprice/ent/analyticsview"
 	"github.com/flexprice/flexprice/ent/auth"
+	"github.com/flexprice/flexprice/ent/billingscheduleitem"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -604,6 +606,68 @@ func scanReturningAuth(rows *sql.Rows) ([]*Auth, error) {
 	return out, rows.Err()
 }
 
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*BillingScheduleItem.
+func (_u *BillingScheduleItemUpdate) SaveReturning(ctx context.Context) ([]*BillingScheduleItem, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *BillingScheduleItemUpdate) sqlSaveReturning(ctx context.Context) ([]*BillingScheduleItem, error) {
+	var out []*BillingScheduleItem
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", billingscheduleitem.Table, billingscheduleitem.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingScheduleItem(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*BillingScheduleItem.
+func (_d *BillingScheduleItemDelete) ExecReturning(ctx context.Context) ([]*BillingScheduleItem, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *BillingScheduleItemDelete) sqlExecReturning(ctx context.Context) ([]*BillingScheduleItem, error) {
+	var out []*BillingScheduleItem
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", billingscheduleitem.Table, billingscheduleitem.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingScheduleItem(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningBillingScheduleItem(rows *sql.Rows) ([]*BillingScheduleItem, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*BillingScheduleItem
+	for rows.Next() {
+		node := &BillingScheduleItem{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*BillingSequence.
 func (_u *BillingSequenceUpdate) SaveReturning(ctx context.Context) ([]*BillingSequence, error) {
 	_u.defaults()
@@ -651,6 +715,68 @@ func scanReturningBillingSequence(rows *sql.Rows) ([]*BillingSequence, error) {
 	var out []*BillingSequence
 	for rows.Next() {
 		node := &BillingSequence{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*BillingTerm.
+func (_u *BillingTermUpdate) SaveReturning(ctx context.Context) ([]*BillingTerm, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *BillingTermUpdate) sqlSaveReturning(ctx context.Context) ([]*BillingTerm, error) {
+	var out []*BillingTerm
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", billingterm.Table, billingterm.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingTerm(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*BillingTerm.
+func (_d *BillingTermDelete) ExecReturning(ctx context.Context) ([]*BillingTerm, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *BillingTermDelete) sqlExecReturning(ctx context.Context) ([]*BillingTerm, error) {
+	var out []*BillingTerm
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", billingterm.Table, billingterm.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningBillingTerm(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningBillingTerm(rows *sql.Rows) ([]*BillingTerm, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*BillingTerm
+	for rows.Next() {
+		node := &BillingTerm{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

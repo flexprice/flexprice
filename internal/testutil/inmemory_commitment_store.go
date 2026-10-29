@@ -22,7 +22,7 @@ func NewInMemoryCommitmentStore() *InMemoryCommitmentStore {
 }
 
 // commitmentFilterFn mirrors the scoped query and applyCommitmentFilter in the ent repo.
-// TODO: generic Filters and Sort conditions are not applied here.
+// TODO: generic Filters are not applied here; List supports ID sorting only.
 func commitmentFilterFn(ctx context.Context, c *commitment.Commitment, filter interface{}) bool {
 	if c == nil || c.Status != types.StatusPublished {
 		return false
@@ -45,7 +45,8 @@ func commitmentFilterFn(ctx context.Context, c *commitment.Commitment, filter in
 		f.ScopeType != nil && *f.ScopeType != c.ScopeEntityType,
 		len(f.ScopeIDs) > 0 && !lo.Contains(f.ScopeIDs, c.ScopeEntityID),
 		f.ActiveFrom != nil && !c.EndDate.After(*f.ActiveFrom),
-		f.ActiveTo != nil && !c.StartDate.Before(*f.ActiveTo):
+		f.ActiveTo != nil && !c.StartDate.Before(*f.ActiveTo),
+		f.AfterID != "" && c.ID <= f.AfterID:
 		return false
 	}
 
@@ -163,7 +164,16 @@ func (s *InMemoryCommitmentStore) List(ctx context.Context, f *commitment.Filter
 		f = commitment.NewNoLimitFilter()
 	}
 
-	return s.InMemoryStore.List(ctx, f, commitmentFilterFn, commitmentSortFn)
+	sorter := commitmentSortFn
+	if len(f.Sort) == 1 && f.Sort[0] != nil && f.Sort[0].Field == "id" {
+		sorter = func(a, b *commitment.Commitment) bool {
+			if f.Sort[0].Direction == types.SortDirectionDesc {
+				return a.ID > b.ID
+			}
+			return a.ID < b.ID
+		}
+	}
+	return s.InMemoryStore.List(ctx, f, commitmentFilterFn, sorter)
 }
 
 func (s *InMemoryCommitmentStore) Count(ctx context.Context, f *commitment.Filter) (int, error) {

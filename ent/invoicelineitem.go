@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/billingscheduleitem"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/internal/types"
@@ -49,6 +50,8 @@ type InvoiceLineItem struct {
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
 	PriceID *string `json:"price_id,omitempty"`
+	// BillingScheduleItemID holds the value of the "billing_schedule_item_id" field.
+	BillingScheduleItemID *string `json:"billing_schedule_item_id,omitempty"`
 	// PriceType holds the value of the "price_type" field.
 	PriceType *types.PriceType `json:"price_type,omitempty"`
 	// MeterID holds the value of the "meter_id" field.
@@ -103,13 +106,26 @@ type InvoiceLineItem struct {
 
 // InvoiceLineItemEdges holds the relations/edges for other nodes in the graph.
 type InvoiceLineItemEdges struct {
+	// BillingScheduleItem holds the value of the billing_schedule_item edge.
+	BillingScheduleItem *BillingScheduleItem `json:"billing_schedule_item,omitempty"`
 	// Invoice holds the value of the invoice edge.
 	Invoice *Invoice `json:"invoice,omitempty"`
 	// Invoice line item can have multiple coupon applications
 	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
+}
+
+// BillingScheduleItemOrErr returns the BillingScheduleItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e InvoiceLineItemEdges) BillingScheduleItemOrErr() (*BillingScheduleItem, error) {
+	if e.BillingScheduleItem != nil {
+		return e.BillingScheduleItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: billingscheduleitem.Label}
+	}
+	return nil, &NotLoadedError{edge: "billing_schedule_item"}
 }
 
 // InvoiceOrErr returns the Invoice value or an error if the edge
@@ -117,7 +133,7 @@ type InvoiceLineItemEdges struct {
 func (e InvoiceLineItemEdges) InvoiceOrErr() (*Invoice, error) {
 	if e.Invoice != nil {
 		return e.Invoice, nil
-	} else if e.loadedTypes[0] {
+	} else if e.loadedTypes[1] {
 		return nil, &NotFoundError{label: invoice.Label}
 	}
 	return nil, &NotLoadedError{edge: "invoice"}
@@ -126,7 +142,7 @@ func (e InvoiceLineItemEdges) InvoiceOrErr() (*Invoice, error) {
 // CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
 // was not loaded in eager-loading.
 func (e InvoiceLineItemEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.CouponApplications, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_applications"}
@@ -143,7 +159,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
-		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldCommitmentID, invoicelineitem.FieldParentLineItemID:
+		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldBillingScheduleItemID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldCommitmentID, invoicelineitem.FieldParentLineItemID:
 			values[i] = new(sql.NullString)
 		case invoicelineitem.FieldCreatedAt, invoicelineitem.FieldUpdatedAt, invoicelineitem.FieldPeriodStart, invoicelineitem.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -256,6 +272,13 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PriceID = new(string)
 				*_m.PriceID = value.String
+			}
+		case invoicelineitem.FieldBillingScheduleItemID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_schedule_item_id", values[i])
+			} else if value.Valid {
+				_m.BillingScheduleItemID = new(string)
+				*_m.BillingScheduleItemID = value.String
 			}
 		case invoicelineitem.FieldPriceType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -432,6 +455,11 @@ func (_m *InvoiceLineItem) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryBillingScheduleItem queries the "billing_schedule_item" edge of the InvoiceLineItem entity.
+func (_m *InvoiceLineItem) QueryBillingScheduleItem() *BillingScheduleItemQuery {
+	return NewInvoiceLineItemClient(_m.config).QueryBillingScheduleItem(_m)
+}
+
 // QueryInvoice queries the "invoice" edge of the InvoiceLineItem entity.
 func (_m *InvoiceLineItem) QueryInvoice() *InvoiceQuery {
 	return NewInvoiceLineItemClient(_m.config).QueryInvoice(_m)
@@ -514,6 +542,11 @@ func (_m *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	if v := _m.PriceID; v != nil {
 		builder.WriteString("price_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BillingScheduleItemID; v != nil {
+		builder.WriteString("billing_schedule_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
