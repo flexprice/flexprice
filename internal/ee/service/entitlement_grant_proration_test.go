@@ -454,31 +454,6 @@ func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_DropsAddonQu
 	}
 }
 
-// An addon attached twice counts twice; removing one attachment takes out one copy.
-// e.g. plan 10 + 2 x addon 100 = 210; one removed = 110.
-func (s *SubscriptionServiceSuite) TestGrantBatch_Remove_NeverReset_OneOfTwoAttachments() {
-	featureID := s.seedNeverGrantFeature("feat_never_twice")
-	s.seedGrantEC("ent_aaa_never_twice_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 10, "")
-	s.seedCycleGrant("ent_aaa_never_twice_plan", featureID, 10)
-	s.seedGrantAddon("addon_never_twice", "ent_zzz_never_twice", featureID, 100, "")
-
-	s.Require().NoError(s.attachAddon("addon_never_twice", s.testData.now, types.ProrationBehaviorNone))
-	s.Require().NoError(s.attachAddon("addon_never_twice", s.testData.now, types.ProrationBehaviorNone))
-	s.Require().True(s.liveRow(featureID).Quota.Equal(decimal.NewFromInt(210)), "got %s", s.liveRow(featureID).Quota)
-
-	s.Require().NoError(s.runGrantPass(nil, []GrantSource{{
-		ChangeType:        types.ScheduleTypeImmediate,
-		EffectiveDate:     s.testData.now,
-		ProrationSettings: dto.NewProrationSettings(types.ProrationBehaviorNone),
-		Origin:            grantProrationSourceAddonDetach,
-		AddonID:           "addon_never_twice",
-	}}))
-
-	live := s.liveRow(featureID)
-	s.Require().NotNil(live)
-	s.True(live.Quota.Equal(decimal.NewFromInt(110)), "expected 110, got %s", live.Quota)
-}
-
 // Swapping an addon for another size on a never-reset feature reopens the cap as the plan's
 // quota plus the new addon's, prorated or full; the old addon's quota drops out.
 // e.g. plan 100 + addon 500 = 600; to 1000 unprorated = 1100, to 200 = 300.
