@@ -2,9 +2,11 @@ package ent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	entSchema "github.com/flexprice/flexprice/ent/schema"
 	entUser "github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainUser "github.com/flexprice/flexprice/internal/domain/user"
@@ -12,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/lib/pq"
 )
 
 type userRepository struct {
@@ -70,6 +73,13 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 
 	if err != nil {
 		SetSpanError(span, err)
+		var pqErr *pq.Error
+		if ent.IsConstraintError(err) && errors.As(err, &pqErr) &&
+			(pqErr.Constraint == entSchema.UserEmailLowerConstraint || pqErr.Constraint == "idx_user_email_unique") {
+			return ierr.WithError(err).
+				WithHint("A user with this email already exists").
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create user").
 			WithReportableDetails(map[string]interface{}{
