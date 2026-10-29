@@ -12,6 +12,7 @@ import (
 )
 
 // SettlementRequest dates the shortfall authorized by the owner's frozen collection target.
+// Terminal settlement may collect after the original service term ends.
 type SettlementRequest struct {
 	Owner  domain.OwnerRef
 	BillOn time.Time
@@ -58,6 +59,9 @@ func (s *service) WithSettlement(ctx context.Context, req SettlementRequest, app
 		shortfall := owner.CollectionTarget.Sub(current.summary.AssignedAmount)
 		if shortfall.IsNegative() {
 			return integrity("settlement target is below retained assigned principal")
+		}
+		if shortfall.IsPositive() && billingDate(req.BillOn).Before(owner.StartDate) {
+			return ierr.Validation("a settlement charge cannot precede the owner service term")
 		}
 		if shortfall.IsPositive() && current.owner.RetainedItemCount >= MaxItems {
 			return ierr.Validation("retained principal leaves no room for a settlement item")

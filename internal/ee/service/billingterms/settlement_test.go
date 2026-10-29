@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	domain "github.com/flexprice/flexprice/internal/domain/billingterms"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -11,6 +12,47 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSettlementDatePolicy(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		date   func(*domain.OwnerSnapshot) time.Time
+		target int64
+		valid  bool
+	}{
+		{"pre-service charge rejected", func(owner *domain.OwnerSnapshot) time.Time { return owner.StartDate.Add(-time.Hour) }, 100, false},
+		{"pre-service zero closure", func(owner *domain.OwnerSnapshot) time.Time { return owner.StartDate.Add(-time.Hour) }, 0, true},
+		{"service start", func(owner *domain.OwnerSnapshot) time.Time { return owner.StartDate }, 100, true},
+		{"service end", func(owner *domain.OwnerSnapshot) time.Time { return owner.EndDate }, 100, true},
+		{"late terminal collection", func(owner *domain.OwnerSnapshot) time.Time { return owner.EndDate.Add(time.Hour) }, 100, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, core, db := newCore(t)
+			initial, err := core.Initialize(ctx, InitializeRequest{Owner: db.owner.Owner, Rows: annualRows()})
+			require.NoError(t, err)
+			billOn := test.date(&db.owner)
+			settled, err := core.WithSettlement(ctx, SettlementRequest{Owner: db.owner.Owner, BillOn: billOn}, func(context.Context, State) (bool, error) {
+				db.owner.CollectionTarget = decimal.NewFromInt(test.target)
+				return true, nil
+			})
+			if !test.valid {
+				require.True(t, ierr.IsValidation(err), "%v", err)
+				current, err := core.Get(ctx, db.owner.Owner)
+				require.NoError(t, err)
+				require.Equal(t, initial.StateToken(), current.StateToken())
+				require.Equal(t, sourceIDs(initial), sourceIDs(current))
+				return
+			}
+			require.NoError(t, err)
+			if test.target == 0 {
+				require.Empty(t, settled.Items())
+				return
+			}
+			require.Len(t, settled.Items(), 1)
+			require.True(t, settled.Items()[0].BillOn.Equal(billOn))
+		})
+	}
+}
 
 func TestSettlementRetainsPrincipalAndReplays(t *testing.T) {
 	ctx, core, db := newCore(t)

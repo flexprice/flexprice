@@ -78,6 +78,31 @@ func TestCalendarRejectsInvalidInputs(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCalendarDailyAndWeeklyAnchoredGrid(t *testing.T) {
+	for _, test := range []struct {
+		name, anchor, start, end, timezone, want string
+		interval                                 types.BillingPeriod
+		count                                    int
+	}{
+		{"daily partial", "2027-01-01T12:00:00Z", "2027-01-15T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-15T12:00:00Z", types.BILLING_PERIOD_DAILY, 1},
+		{"daily multiple", "2027-01-01T12:00:00Z", "2027-01-02T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-03T12:00:00Z", types.BILLING_PERIOD_DAILY, 2},
+		{"daily before anchor", "2027-01-15T12:00:00Z", "2027-01-02T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-03T12:00:00Z", types.BILLING_PERIOD_DAILY, 2},
+		{"large stride before anchor", "2027-01-15T12:00:00Z", "2027-01-02T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-15T12:00:00Z", types.BILLING_PERIOD_DAILY, math.MaxInt32},
+		{"weekly partial", "2027-01-01T12:00:00Z", "2027-01-15T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-15T12:00:00Z", types.BILLING_PERIOD_WEEKLY, 1},
+		{"weekly multiple", "2027-01-01T12:00:00Z", "2027-01-08T09:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-15T12:00:00Z", types.BILLING_PERIOD_WEEKLY, 2},
+		{"DST wall clock", "2027-03-07T17:00:00Z", "2027-03-14T13:00:00Z", "2027-04-01T00:00:00Z", "America/New_York", "2027-03-14T16:00:00Z", types.BILLING_PERIOD_WEEKLY, 1},
+		{"exact boundary advances", "2027-01-01T12:00:00Z", "2027-01-15T12:00:00Z", "2027-02-01T00:00:00Z", "UTC", "2027-01-16T12:00:00Z", types.BILLING_PERIOD_DAILY, 1},
+		{"clips partial", "2027-01-01T12:00:00Z", "2027-01-15T09:00:00Z", "2027-01-15T10:00:00Z", "UTC", "2027-01-15T10:00:00Z", types.BILLING_PERIOD_DAILY, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calendar := testCalendar(t, date(t, test.anchor), test.timezone)
+			next, err := calendar.Next(date(t, test.start), date(t, test.end), test.interval, test.count)
+			require.NoError(t, err)
+			require.Equal(t, date(t, test.want), next)
+		})
+	}
+}
+
 func TestOwnerTimezoneMustBeExplicit(t *testing.T) {
 	for _, timezone := range []string{"", "Local", "Unknown/Zone"} {
 		t.Run(timezone, func(t *testing.T) {

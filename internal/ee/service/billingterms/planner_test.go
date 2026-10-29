@@ -129,6 +129,20 @@ func TestPlannerSplitting(t *testing.T) {
 	}
 }
 
+func TestPlannerRejectsZeroRoundedProportionalOccurrence(t *testing.T) {
+	req := testRequest(t)
+	req.Owner.OriginalTotal = decimal.RequireFromString("0.03")
+	req.Owner.CollectionTarget = req.Owner.OriginalTotal
+	req.Owner.StartDate = date(t, "2027-01-01T00:00:00Z")
+	req.Owner.EndDate = date(t, "2027-03-02T00:00:00Z")
+	rule := recurringRule()
+	rule.Split = ptr(types.BillingTermProportional)
+	req.Rows = []RuleInput{rule}
+	_, err := NewPlanner().Plan(context.Background(), req)
+	require.True(t, ierr.IsValidation(err), "%v", err)
+	require.ErrorContains(t, err, "every rounded remainder occurrence must be positive")
+}
+
 func TestPlannerEditsAndPercent(t *testing.T) {
 	req := testRequest(t)
 	req.Edit = true

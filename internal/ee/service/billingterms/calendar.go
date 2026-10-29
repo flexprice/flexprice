@@ -58,12 +58,44 @@ func (c *calendar) Next(start, end time.Time, interval types.BillingPeriod, coun
 		limit /= 12
 	}
 	if count > limit {
+		if (interval == types.BILLING_PERIOD_DAILY || interval == types.BILLING_PERIOD_WEEKLY) && c.anchor.After(start) && c.anchor.Before(end) {
+			return c.anchor.UTC(), nil
+		}
 		return end.UTC(), nil
+	}
+	if interval == types.BILLING_PERIOD_DAILY || interval == types.BILLING_PERIOD_WEEKLY {
+		days := count
+		if interval == types.BILLING_PERIOD_WEEKLY {
+			days *= 7
+		}
+		return c.nextDayBoundary(start, end, days), nil
 	}
 	return types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: start, BillingAnchor: c.anchor,
 		Unit: count, Period: interval, SubscriptionEndDate: &end, Timezone: c.timezone,
 	})
+}
+
+func (c *calendar) nextDayBoundary(start, end time.Time, days int) time.Time {
+	location, _ := time.LoadLocation(c.timezone)
+	anchor, current := c.anchor.In(location), start.In(location)
+	anchorDay := time.Date(anchor.Year(), anchor.Month(), anchor.Day(), 0, 0, 0, 0, time.UTC)
+	currentDay := time.Date(current.Year(), current.Month(), current.Day(), 0, 0, 0, 0, time.UTC)
+	// Compare civil days without time.Duration overflow or DST-length assumptions.
+	distance := (currentDay.Unix() - anchorDay.Unix()) / 86400
+	step := int64(days)
+	index := distance / step
+	if distance%step < 0 {
+		index--
+	}
+	next := time.Date(anchor.Year(), anchor.Month(), anchor.Day()+int(index*step), anchor.Hour(), anchor.Minute(), anchor.Second(), anchor.Nanosecond(), location)
+	if !next.After(start) {
+		next = time.Date(anchor.Year(), anchor.Month(), anchor.Day()+int((index+1)*step), anchor.Hour(), anchor.Minute(), anchor.Second(), anchor.Nanosecond(), location)
+	}
+	if next.After(end) {
+		return end.UTC()
+	}
+	return next.UTC()
 }
 
 func validCount(count int) bool { return count > 0 && count <= math.MaxInt32 }

@@ -35,13 +35,14 @@ type billingCoreFixture struct {
 
 func newBillingCoreFixture(t *testing.T, db *billingPostgresFixture, ctx context.Context) *billingCoreFixture {
 	t.Helper()
+	db.seedCustomer(t, ctx)
 	start := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
 	owner := domain.OwnerSnapshot{
 		Owner:    domain.OwnerRef{Type: "standalone_fee", ID: types.GenerateUUIDWithPrefix("fee")},
 		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
 		OriginalTotal: decimal.NewFromInt(100), CollectionTarget: decimal.NewFromInt(100),
 		StartDate: start, EndDate: start.AddDate(1, 0, 0), Timezone: "UTC", Currency: "usd",
-		CustomerID: "core_customer", Delivery: types.BillingTermSeparateInvoice,
+		CustomerID: billingTestCustomerID(ctx), Delivery: types.BillingTermSeparateInvoice,
 		CanEdit: true, CanCollect: true, Description: "Independent fixed fee", LifecycleKey: "active",
 	}
 	resolver, err := core.NewOwnerResolver(&billingCoreOwner{snapshot: owner})
@@ -381,6 +382,7 @@ func TestBillingTermsCoreTimestampPrecisionPostgres(t *testing.T) {
 func TestBillingTermsExecutionTransactionsPostgres(t *testing.T) {
 	f := newBillingPostgresFixture(t)
 	ctx := billingTestContext("core_tenant", "core_environment")
+	f.seedCustomer(t, ctx)
 	store := NewBillingTermsExecutionStore(f.client)
 	owner := domain.OwnerRef{Type: "standalone_fee", ID: "contract_transaction"}
 	rule := newBillingTestRule(ctx, owner)

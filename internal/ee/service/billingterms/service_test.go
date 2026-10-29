@@ -665,6 +665,28 @@ func TestCoreTimestampPrecisionRetry(t *testing.T) {
 	}
 }
 
+func TestCoreCalendarChangePreservesInstalledRules(t *testing.T) {
+	ctx, core, db := newCore(t)
+	rows := annualRows()
+	initial, err := core.Initialize(ctx, InitializeRequest{Owner: db.owner.Owner, Rows: rows})
+	require.NoError(t, err)
+	db.owner.CalendarAnchor = db.owner.StartDate.AddDate(0, 0, 14)
+	db.owner.AlignmentKey = "updated-calendar"
+	db.owner.Calendar = testCalendar(t, db.owner.CalendarAnchor, db.owner.Timezone)
+	changed, err := core.Get(ctx, db.owner.Owner)
+	require.NoError(t, err)
+	require.NotEqual(t, initial.StateToken(), changed.StateToken())
+	preview, err := core.Preview(ctx, PreviewRequest{Owner: db.owner.Owner, Rows: rows})
+	require.NoError(t, err)
+	require.True(t, preview.Noop())
+	saved, err := core.Replace(ctx, ReplaceRequest{Owner: db.owner.Owner, Rows: rows, ExpectedState: initial.StateToken()})
+	require.NoError(t, err)
+	require.True(t, saved.Noop())
+	require.Equal(t, changed.StateToken(), saved.StateToken())
+	require.Equal(t, sourceIDs(initial), sourceIDs(saved))
+	require.Equal(t, initial.Items(), saved.Items())
+}
+
 func TestCoreFullReleaseAndDeferralSummary(t *testing.T) {
 	ctx, core, db := newCore(t)
 	initial, err := core.Initialize(ctx, InitializeRequest{Owner: db.owner.Owner, Rows: annualRows()})
