@@ -1049,6 +1049,86 @@ var (
 			},
 		},
 	}
+	// CustomerDeletionCategoriesColumns holds the columns for the "customer_deletion_categories" table.
+	CustomerDeletionCategoriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "request_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "category", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(60)"}},
+		{Name: "disposition", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "legal_basis", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "verified_at", Type: field.TypeTime, Nullable: true},
+		{Name: "verification_result", Type: field.TypeJSON, Nullable: true},
+	}
+	// CustomerDeletionCategoriesTable holds the schema information for the "customer_deletion_categories" table.
+	CustomerDeletionCategoriesTable = &schema.Table{
+		Name:       "customer_deletion_categories",
+		Columns:    CustomerDeletionCategoriesColumns,
+		PrimaryKey: []*schema.Column{CustomerDeletionCategoriesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "customerdeletioncategory_request_id_category",
+				Unique:  true,
+				Columns: []*schema.Column{CustomerDeletionCategoriesColumns[8], CustomerDeletionCategoriesColumns[9]},
+			},
+			{
+				Name:    "customerdeletioncategory_tenant_id_environment_id_disposition",
+				Unique:  false,
+				Columns: []*schema.Column{CustomerDeletionCategoriesColumns[1], CustomerDeletionCategoriesColumns[7], CustomerDeletionCategoriesColumns[10]},
+			},
+		},
+	}
+	// CustomerDeletionRequestsColumns holds the columns for the "customer_deletion_requests" table.
+	CustomerDeletionRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "external_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "state", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "requested_at", Type: field.TypeTime},
+		{Name: "suppressed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "redacted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cooldown_until", Type: field.TypeTime, Nullable: true},
+		{Name: "irreversible_started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "requested_via", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "retention_policy", Type: field.TypeJSON, Nullable: true},
+		{Name: "failure_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+	}
+	// CustomerDeletionRequestsTable holds the schema information for the "customer_deletion_requests" table.
+	CustomerDeletionRequestsTable = &schema.Table{
+		Name:       "customer_deletion_requests",
+		Columns:    CustomerDeletionRequestsColumns,
+		PrimaryKey: []*schema.Column{CustomerDeletionRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "customerdeletionrequest_tenant_id_environment_id_customer_id",
+				Unique:  true,
+				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[8]},
+			},
+			{
+				Name:    "customerdeletionrequest_tenant_id_environment_id_external_id",
+				Unique:  true,
+				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[9]},
+			},
+			{
+				Name:    "customerdeletionrequest_tenant_id_environment_id_state",
+				Unique:  false,
+				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[10]},
+			},
+		},
+	}
 	// EntitlementsColumns holds the columns for the "entitlements" table.
 	EntitlementsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -3480,6 +3560,8 @@ var (
 		CreditNotesTable,
 		CreditNoteLineItemsTable,
 		CustomersTable,
+		CustomerDeletionCategoriesTable,
+		CustomerDeletionRequestsTable,
 		EntitlementsTable,
 		EntitlementGrantsTable,
 		EntityIntegrationMappingsTable,

@@ -273,6 +273,30 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The CustomerDeletionCategoryFunc type is an adapter to allow the use of ordinary
+// function as CustomerDeletionCategory mutator.
+type CustomerDeletionCategoryFunc func(context.Context, *ent.CustomerDeletionCategoryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CustomerDeletionCategoryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CustomerDeletionCategoryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerDeletionCategoryMutation", m)
+}
+
+// The CustomerDeletionRequestFunc type is an adapter to allow the use of ordinary
+// function as CustomerDeletionRequest mutator.
+type CustomerDeletionRequestFunc func(context.Context, *ent.CustomerDeletionRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CustomerDeletionRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CustomerDeletionRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerDeletionRequestMutation", m)
+}
+
 // The EntitlementFunc type is an adapter to allow the use of ordinary
 // function as Entitlement mutator.
 type EntitlementFunc func(context.Context, *ent.EntitlementMutation) (ent.Value, error)

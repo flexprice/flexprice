@@ -135,6 +135,9 @@ const (
 	UUID_PREFIX_JOURNAL_LINE               = "jl"
 	UUID_PREFIX_EVENT_DELETION_REQUEST     = "evtdel"
 
+	UUID_PREFIX_CUSTOMER_DELETION_REQUEST  = "cdr"
+	UUID_PREFIX_CUSTOMER_DELETION_CATEGORY = "cdc"
+
 	// UUID_PREFIX_COMMITMENT prefixes first-class subscription commitment IDs.
 	UUID_PREFIX_COMMITMENT = "cmt"
 

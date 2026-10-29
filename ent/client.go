@@ -37,6 +37,8 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/customerdeletioncategory"
+	"github.com/flexprice/flexprice/ent/customerdeletionrequest"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -137,6 +139,10 @@ type Client struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// CustomerDeletionCategory is the client for interacting with the CustomerDeletionCategory builders.
+	CustomerDeletionCategory *CustomerDeletionCategoryClient
+	// CustomerDeletionRequest is the client for interacting with the CustomerDeletionRequest builders.
+	CustomerDeletionRequest *CustomerDeletionRequestClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
 	// EntitlementGrant is the client for interacting with the EntitlementGrant builders.
@@ -264,6 +270,8 @@ func (c *Client) init() {
 	c.CreditNote = NewCreditNoteClient(c.config)
 	c.CreditNoteLineItem = NewCreditNoteLineItemClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
+	c.CustomerDeletionCategory = NewCustomerDeletionCategoryClient(c.config)
+	c.CustomerDeletionRequest = NewCustomerDeletionRequestClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.EntitlementGrant = NewEntitlementGrantClient(c.config)
 	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
@@ -425,6 +433,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditNote:                       NewCreditNoteClient(cfg),
 		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
 		Customer:                         NewCustomerClient(cfg),
+		CustomerDeletionCategory:         NewCustomerDeletionCategoryClient(cfg),
+		CustomerDeletionRequest:          NewCustomerDeletionRequestClient(cfg),
 		Entitlement:                      NewEntitlementClient(cfg),
 		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
@@ -513,6 +523,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditNote:                       NewCreditNoteClient(cfg),
 		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
 		Customer:                         NewCustomerClient(cfg),
+		CustomerDeletionCategory:         NewCustomerDeletionCategoryClient(cfg),
+		CustomerDeletionRequest:          NewCustomerDeletionRequestClient(cfg),
 		Entitlement:                      NewEntitlementClient(cfg),
 		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
@@ -594,7 +606,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
+		c.CustomerDeletionCategory, c.CustomerDeletionRequest, c.Entitlement,
+		c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.EventDeletionRequest, c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken,
 		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
 		c.JournalEntry, c.JournalLine, c.Meter, c.MeterUsageCheckpoint, c.Payment,
@@ -619,7 +632,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
+		c.CustomerDeletionCategory, c.CustomerDeletionRequest, c.Entitlement,
+		c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
 		c.EventDeletionRequest, c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken,
 		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
 		c.JournalEntry, c.JournalLine, c.Meter, c.MeterUsageCheckpoint, c.Payment,
@@ -682,6 +696,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CreditNoteLineItem.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
+	case *CustomerDeletionCategoryMutation:
+		return c.CustomerDeletionCategory.mutate(ctx, m)
+	case *CustomerDeletionRequestMutation:
+		return c.CustomerDeletionRequest.mutate(ctx, m)
 	case *EntitlementMutation:
 		return c.Entitlement.mutate(ctx, m)
 	case *EntitlementGrantMutation:
@@ -3992,6 +4010,272 @@ func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value
 		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
+	}
+}
+
+// CustomerDeletionCategoryClient is a client for the CustomerDeletionCategory schema.
+type CustomerDeletionCategoryClient struct {
+	config
+}
+
+// NewCustomerDeletionCategoryClient returns a client for the CustomerDeletionCategory from the given config.
+func NewCustomerDeletionCategoryClient(c config) *CustomerDeletionCategoryClient {
+	return &CustomerDeletionCategoryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `customerdeletioncategory.Hooks(f(g(h())))`.
+func (c *CustomerDeletionCategoryClient) Use(hooks ...Hook) {
+	c.hooks.CustomerDeletionCategory = append(c.hooks.CustomerDeletionCategory, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `customerdeletioncategory.Intercept(f(g(h())))`.
+func (c *CustomerDeletionCategoryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CustomerDeletionCategory = append(c.inters.CustomerDeletionCategory, interceptors...)
+}
+
+// Create returns a builder for creating a CustomerDeletionCategory entity.
+func (c *CustomerDeletionCategoryClient) Create() *CustomerDeletionCategoryCreate {
+	mutation := newCustomerDeletionCategoryMutation(c.config, OpCreate)
+	return &CustomerDeletionCategoryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CustomerDeletionCategory entities.
+func (c *CustomerDeletionCategoryClient) CreateBulk(builders ...*CustomerDeletionCategoryCreate) *CustomerDeletionCategoryCreateBulk {
+	return &CustomerDeletionCategoryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CustomerDeletionCategoryClient) MapCreateBulk(slice any, setFunc func(*CustomerDeletionCategoryCreate, int)) *CustomerDeletionCategoryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CustomerDeletionCategoryCreateBulk{err: fmt.Errorf("calling to CustomerDeletionCategoryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CustomerDeletionCategoryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CustomerDeletionCategoryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CustomerDeletionCategory.
+func (c *CustomerDeletionCategoryClient) Update() *CustomerDeletionCategoryUpdate {
+	mutation := newCustomerDeletionCategoryMutation(c.config, OpUpdate)
+	return &CustomerDeletionCategoryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CustomerDeletionCategoryClient) UpdateOne(_m *CustomerDeletionCategory) *CustomerDeletionCategoryUpdateOne {
+	mutation := newCustomerDeletionCategoryMutation(c.config, OpUpdateOne, withCustomerDeletionCategory(_m))
+	return &CustomerDeletionCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CustomerDeletionCategoryClient) UpdateOneID(id string) *CustomerDeletionCategoryUpdateOne {
+	mutation := newCustomerDeletionCategoryMutation(c.config, OpUpdateOne, withCustomerDeletionCategoryID(id))
+	return &CustomerDeletionCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CustomerDeletionCategory.
+func (c *CustomerDeletionCategoryClient) Delete() *CustomerDeletionCategoryDelete {
+	mutation := newCustomerDeletionCategoryMutation(c.config, OpDelete)
+	return &CustomerDeletionCategoryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CustomerDeletionCategoryClient) DeleteOne(_m *CustomerDeletionCategory) *CustomerDeletionCategoryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CustomerDeletionCategoryClient) DeleteOneID(id string) *CustomerDeletionCategoryDeleteOne {
+	builder := c.Delete().Where(customerdeletioncategory.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CustomerDeletionCategoryDeleteOne{builder}
+}
+
+// Query returns a query builder for CustomerDeletionCategory.
+func (c *CustomerDeletionCategoryClient) Query() *CustomerDeletionCategoryQuery {
+	return &CustomerDeletionCategoryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCustomerDeletionCategory},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CustomerDeletionCategory entity by its id.
+func (c *CustomerDeletionCategoryClient) Get(ctx context.Context, id string) (*CustomerDeletionCategory, error) {
+	return c.Query().Where(customerdeletioncategory.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CustomerDeletionCategoryClient) GetX(ctx context.Context, id string) *CustomerDeletionCategory {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CustomerDeletionCategoryClient) Hooks() []Hook {
+	return c.hooks.CustomerDeletionCategory
+}
+
+// Interceptors returns the client interceptors.
+func (c *CustomerDeletionCategoryClient) Interceptors() []Interceptor {
+	return c.inters.CustomerDeletionCategory
+}
+
+func (c *CustomerDeletionCategoryClient) mutate(ctx context.Context, m *CustomerDeletionCategoryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CustomerDeletionCategoryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CustomerDeletionCategoryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CustomerDeletionCategoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CustomerDeletionCategoryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CustomerDeletionCategory mutation op: %q", m.Op())
+	}
+}
+
+// CustomerDeletionRequestClient is a client for the CustomerDeletionRequest schema.
+type CustomerDeletionRequestClient struct {
+	config
+}
+
+// NewCustomerDeletionRequestClient returns a client for the CustomerDeletionRequest from the given config.
+func NewCustomerDeletionRequestClient(c config) *CustomerDeletionRequestClient {
+	return &CustomerDeletionRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `customerdeletionrequest.Hooks(f(g(h())))`.
+func (c *CustomerDeletionRequestClient) Use(hooks ...Hook) {
+	c.hooks.CustomerDeletionRequest = append(c.hooks.CustomerDeletionRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `customerdeletionrequest.Intercept(f(g(h())))`.
+func (c *CustomerDeletionRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CustomerDeletionRequest = append(c.inters.CustomerDeletionRequest, interceptors...)
+}
+
+// Create returns a builder for creating a CustomerDeletionRequest entity.
+func (c *CustomerDeletionRequestClient) Create() *CustomerDeletionRequestCreate {
+	mutation := newCustomerDeletionRequestMutation(c.config, OpCreate)
+	return &CustomerDeletionRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CustomerDeletionRequest entities.
+func (c *CustomerDeletionRequestClient) CreateBulk(builders ...*CustomerDeletionRequestCreate) *CustomerDeletionRequestCreateBulk {
+	return &CustomerDeletionRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CustomerDeletionRequestClient) MapCreateBulk(slice any, setFunc func(*CustomerDeletionRequestCreate, int)) *CustomerDeletionRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CustomerDeletionRequestCreateBulk{err: fmt.Errorf("calling to CustomerDeletionRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CustomerDeletionRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CustomerDeletionRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CustomerDeletionRequest.
+func (c *CustomerDeletionRequestClient) Update() *CustomerDeletionRequestUpdate {
+	mutation := newCustomerDeletionRequestMutation(c.config, OpUpdate)
+	return &CustomerDeletionRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CustomerDeletionRequestClient) UpdateOne(_m *CustomerDeletionRequest) *CustomerDeletionRequestUpdateOne {
+	mutation := newCustomerDeletionRequestMutation(c.config, OpUpdateOne, withCustomerDeletionRequest(_m))
+	return &CustomerDeletionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CustomerDeletionRequestClient) UpdateOneID(id string) *CustomerDeletionRequestUpdateOne {
+	mutation := newCustomerDeletionRequestMutation(c.config, OpUpdateOne, withCustomerDeletionRequestID(id))
+	return &CustomerDeletionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CustomerDeletionRequest.
+func (c *CustomerDeletionRequestClient) Delete() *CustomerDeletionRequestDelete {
+	mutation := newCustomerDeletionRequestMutation(c.config, OpDelete)
+	return &CustomerDeletionRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CustomerDeletionRequestClient) DeleteOne(_m *CustomerDeletionRequest) *CustomerDeletionRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CustomerDeletionRequestClient) DeleteOneID(id string) *CustomerDeletionRequestDeleteOne {
+	builder := c.Delete().Where(customerdeletionrequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CustomerDeletionRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for CustomerDeletionRequest.
+func (c *CustomerDeletionRequestClient) Query() *CustomerDeletionRequestQuery {
+	return &CustomerDeletionRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCustomerDeletionRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CustomerDeletionRequest entity by its id.
+func (c *CustomerDeletionRequestClient) Get(ctx context.Context, id string) (*CustomerDeletionRequest, error) {
+	return c.Query().Where(customerdeletionrequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CustomerDeletionRequestClient) GetX(ctx context.Context, id string) *CustomerDeletionRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CustomerDeletionRequestClient) Hooks() []Hook {
+	return c.hooks.CustomerDeletionRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *CustomerDeletionRequestClient) Interceptors() []Interceptor {
+	return c.inters.CustomerDeletionRequest
+}
+
+func (c *CustomerDeletionRequestClient) mutate(ctx context.Context, m *CustomerDeletionRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CustomerDeletionRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CustomerDeletionRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CustomerDeletionRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CustomerDeletionRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CustomerDeletionRequest mutation op: %q", m.Op())
 	}
 }
 
@@ -10621,7 +10905,8 @@ type (
 		AnalyticsView, Auth, BillingSequence, CheckoutSession, Commitment, Connection,
 		Contract, ContractAssociation, Costsheet, Coupon, CouponApplication,
 		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
-		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
+		CreditNoteLineItem, Customer, CustomerDeletionCategory,
+		CustomerDeletionRequest, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, EventDeletionRequest, FXRate, Feature,
 		Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
 		InvoiceSequence, JournalEntry, JournalLine, Meter, MeterUsageCheckpoint,
@@ -10638,7 +10923,8 @@ type (
 		AnalyticsView, Auth, BillingSequence, CheckoutSession, Commitment, Connection,
 		Contract, ContractAssociation, Costsheet, Coupon, CouponApplication,
 		CouponAssociation, CreditGrant, CreditGrantApplication, CreditNote,
-		CreditNoteLineItem, Customer, Entitlement, EntitlementGrant,
+		CreditNoteLineItem, Customer, CustomerDeletionCategory,
+		CustomerDeletionRequest, Entitlement, EntitlementGrant,
 		EntityIntegrationMapping, Environment, EventDeletionRequest, FXRate, Feature,
 		Group, HostedInvoiceToken, IncomingWebhookEvent, Invoice, InvoiceLineItem,
 		InvoiceSequence, JournalEntry, JournalLine, Meter, MeterUsageCheckpoint,

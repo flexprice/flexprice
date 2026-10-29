@@ -31,6 +31,8 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/customerdeletioncategory"
+	"github.com/flexprice/flexprice/ent/customerdeletionrequest"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -1519,6 +1521,130 @@ func scanReturningCustomer(rows *sql.Rows) ([]*Customer, error) {
 	var out []*Customer
 	for rows.Next() {
 		node := &Customer{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CustomerDeletionCategory.
+func (_u *CustomerDeletionCategoryUpdate) SaveReturning(ctx context.Context) ([]*CustomerDeletionCategory, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CustomerDeletionCategoryUpdate) sqlSaveReturning(ctx context.Context) ([]*CustomerDeletionCategory, error) {
+	var out []*CustomerDeletionCategory
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", customerdeletioncategory.Table, customerdeletioncategory.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCustomerDeletionCategory(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CustomerDeletionCategory.
+func (_d *CustomerDeletionCategoryDelete) ExecReturning(ctx context.Context) ([]*CustomerDeletionCategory, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CustomerDeletionCategoryDelete) sqlExecReturning(ctx context.Context) ([]*CustomerDeletionCategory, error) {
+	var out []*CustomerDeletionCategory
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", customerdeletioncategory.Table, customerdeletioncategory.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCustomerDeletionCategory(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCustomerDeletionCategory(rows *sql.Rows) ([]*CustomerDeletionCategory, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CustomerDeletionCategory
+	for rows.Next() {
+		node := &CustomerDeletionCategory{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CustomerDeletionRequest.
+func (_u *CustomerDeletionRequestUpdate) SaveReturning(ctx context.Context) ([]*CustomerDeletionRequest, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CustomerDeletionRequestUpdate) sqlSaveReturning(ctx context.Context) ([]*CustomerDeletionRequest, error) {
+	var out []*CustomerDeletionRequest
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", customerdeletionrequest.Table, customerdeletionrequest.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCustomerDeletionRequest(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CustomerDeletionRequest.
+func (_d *CustomerDeletionRequestDelete) ExecReturning(ctx context.Context) ([]*CustomerDeletionRequest, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CustomerDeletionRequestDelete) sqlExecReturning(ctx context.Context) ([]*CustomerDeletionRequest, error) {
+	var out []*CustomerDeletionRequest
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", customerdeletionrequest.Table, customerdeletionrequest.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCustomerDeletionRequest(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCustomerDeletionRequest(rows *sql.Rows) ([]*CustomerDeletionRequest, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CustomerDeletionRequest
+	for rows.Next() {
+		node := &CustomerDeletionRequest{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err
