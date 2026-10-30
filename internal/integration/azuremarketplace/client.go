@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -168,7 +170,7 @@ func (c *client) GetToken(ctx context.Context, tenantID, clientID, clientSecret 
 		}
 	}
 
-	return Token{AccessToken: parsed.AccessToken, ExpiresAt: time.Now().UTC().Add(ttl)}, nil
+	return Token{AccessToken: parsed.AccessToken, ExpiresAt: clock.Now().Add(ttl)}, nil
 }
 
 // azureUsageEventWire is the usageEvent wire format.

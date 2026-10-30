@@ -8,8 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -21,9 +27,6 @@ import (
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -173,7 +176,7 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 	meta := map[string]interface{}{
 		MetaKeyCreatedVia:       CreatedViaFlexpriceToProvider,
 		MetaKeyPaddleCustomerID: paddleCustomerID,
-		MetaKeySyncedAt:         time.Now().UTC().Format(time.RFC3339),
+		MetaKeySyncedAt:         clock.Now().Format(time.RFC3339),
 	}
 	if paddleAddressID != "" {
 		meta[MetaKeyPaddleAddressID] = paddleAddressID
@@ -273,7 +276,7 @@ func (s *PaddleSyncService) EnsureBulkProductSynced(ctx context.Context, req Ens
 			ProviderEntityID: product.ID,
 			Metadata: map[string]interface{}{
 				MetaKeyPaddleProductID: product.ID,
-				MetaKeySyncedAt:        time.Now().UTC().Format(time.RFC3339),
+				MetaKeySyncedAt:        clock.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
@@ -491,7 +494,7 @@ func (s *PaddleSyncService) syncAddressForMapping(
 		_, err = s.mappingService.UpdateEntityIntegrationMapping(ctx, mappingID, apidto.UpdateEntityIntegrationMappingRequest{
 			Metadata: map[string]interface{}{
 				MetaKeyPaddleAddressID: addr.ID,
-				MetaKeySyncedAt:        time.Now().UTC().Format(time.RFC3339),
+				MetaKeySyncedAt:        clock.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
@@ -772,7 +775,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	invoiceMeta := map[string]interface{}{
 		MetaKeyPaddleTransactionID:  txn.ID,
 		MetaKeyPaddleSubscriptionID: subResp.PaddleSubscriptionID,
-		MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
+		MetaKeySyncedAt:             clock.Now().Format(time.RFC3339),
 	}
 	if checkoutURL != "" {
 		invoiceMeta[MetaKeyPaddleCheckoutURL] = checkoutURL
@@ -907,7 +910,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 				Metadata: map[string]interface{}{
 					MetaKeyCreatedVia:          CreatedViaProviderToFlexprice,
 					MetaKeyPaddleCustomerEmail: paddleCustomer.Email,
-					MetaKeySyncedAt:            time.Now().UTC().Format(time.RFC3339),
+					MetaKeySyncedAt:            clock.Now().Format(time.RFC3339),
 				},
 			})
 			if err != nil {
@@ -952,7 +955,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 		Metadata: map[string]interface{}{
 			MetaKeyCreatedVia:          CreatedViaProviderToFlexprice,
 			MetaKeyPaddleCustomerEmail: paddleCustomer.Email,
-			MetaKeySyncedAt:            time.Now().UTC().Format(time.RFC3339),
+			MetaKeySyncedAt:            clock.Now().Format(time.RFC3339),
 		},
 	})
 	if err != nil {
@@ -1099,7 +1102,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			ProviderEntityID: paddleSubID,
 			Metadata: map[string]interface{}{
 				MetaKeyPaddleSubscriptionID: paddleSubID,
-				MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
+				MetaKeySyncedAt:             clock.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
@@ -1124,7 +1127,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	// Activate the FlexPrice subscription.
 	switch sub.SubscriptionStatus {
 	//case types.SubscriptionStatusIncomplete:
-	//	if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
+	//	if sub.TrialEnd != nil && sub.TrialEnd.After(clock.Now()) {
 	//		sub.SubscriptionStatus = types.SubscriptionStatusTrialing
 	//		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 	//			return fmt.Errorf("setting subscription to trialing: %w", err)
@@ -1142,7 +1145,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	//	}
 	case types.SubscriptionStatusDraft:
-		startDate := time.Now().UTC()
+		startDate := clock.Now()
 		if data.StartedAt != nil {
 			if parsed, parseErr := time.Parse(time.RFC3339, *data.StartedAt); parseErr == nil {
 				startDate = parsed

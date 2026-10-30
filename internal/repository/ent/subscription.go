@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponassociation"
@@ -20,8 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -238,7 +241,7 @@ func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*
 
 func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subscription) error {
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription", "update", map[string]interface{}{
@@ -371,7 +374,7 @@ func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, plan
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetPlanID(planID).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -410,7 +413,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Exec(ctx)
 
@@ -926,8 +929,8 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetStatus(string(item.Status)).
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
-				SetCreatedAt(time.Now()).
-				SetUpdatedAt(time.Now())
+				SetCreatedAt(clock.Now()).
+				SetUpdatedAt(clock.Now())
 		}
 
 		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
@@ -1091,7 +1094,7 @@ func (r *subscriptionRepository) UpdatePause(ctx context.Context, pause *domainS
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	p, err := client.SubscriptionPause.Query().
 		Where(

@@ -3,7 +3,10 @@ package product
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -16,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type repository struct {
@@ -171,7 +173,7 @@ func (r *repository) Update(ctx context.Context, p *domainProduct.Product) error
 		).
 		SetName(p.Name()).
 		SetDescription(p.Description()).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
@@ -195,7 +197,7 @@ func (r *repository) Delete(ctx context.Context, id string) error {
 			entProduct.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {

@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
@@ -17,8 +21,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // EntitlementService defines the interface for entitlement operations
@@ -954,7 +956,7 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeEntitlement,
 		EntityID:      entitlementID,
@@ -1081,7 +1083,7 @@ func (s *entitlementService) resettleGrantWindows(
 		FeatureID:      e.FeatureID,
 		Delta:          delta,
 		Unlimited:      unlimited,
-		At:             time.Now().UTC(),
+		At:             clock.Now(),
 		Source:         "entitlement_updated",
 	})
 	return err

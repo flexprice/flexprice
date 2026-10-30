@@ -3,9 +3,13 @@ package contract
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	entContract "github.com/flexprice/flexprice/ent/contract"
 	entContractAssociation "github.com/flexprice/flexprice/ent/contractassociation"
@@ -18,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type repository struct {
@@ -241,7 +243,7 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		).
 		SetContractStatus(string(c.ContractStatus())).
 		SetStatus(string(c.Status())).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if c.TermStart() == nil {
 		update.ClearTermStart()

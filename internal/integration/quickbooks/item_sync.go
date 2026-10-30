@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -12,7 +16,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // QuickBooksItemSyncService defines the interface for QuickBooks item synchronization
@@ -234,7 +237,7 @@ func (s *ItemSyncService) createItemMapping(
 		EnvironmentID:    environmentID,
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 			"quickbooks_item_name": itemName,
 		},
 	}

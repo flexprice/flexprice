@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"entgo.io/ent/dialect/sql"
 
 	"github.com/flexprice/flexprice/ent"
@@ -145,7 +147,7 @@ func (r *entitlementGrantRepository) Update(ctx context.Context, g *domainGrant.
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetStatus(string(g.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -207,7 +209,7 @@ func (r *entitlementGrantRepository) UpdateSnapshot(ctx context.Context, g *doma
 		SetGrantStatus(defaultedGrantStatus(g.GrantStatus)).
 		SetNillableLastComputedAt(g.LastComputedAt).
 		SetNillableQuotaCrossedAt(g.QuotaCrossedAt).
-		SetUpdatedAt(time.Now().UTC())
+		SetUpdatedAt(clock.Now())
 	if g.QuotaCrossedAt == nil {
 		q.ClearQuotaCrossedAt()
 	}
@@ -252,7 +254,7 @@ func (r *entitlementGrantRepository) CloseWindow(ctx context.Context, id string,
 			entitlementgrant.ValidToGT(validTo),
 		).
 		SetValidTo(validTo.UTC()).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx); err != nil {
 		SetSpanError(span, err)

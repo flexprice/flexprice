@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with HubSpot
@@ -75,9 +78,9 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 
 	// Set due date (Unix timestamp in milliseconds).
 	// Clamp to at least 15 minutes from now so wallet top-up invoices
-	// (DueDate = time.Now()) don't fail HubSpot validation.
+	// (DueDate = clock.Now()) don't fail HubSpot validation.
 	if inv.DueDate != nil {
-		minDueDate := time.Now().UTC().Add(15 * time.Minute)
+		minDueDate := clock.Now().Add(15 * time.Minute)
 		dueDate := *inv.DueDate
 		if dueDate.Before(minDueDate) {
 			dueDate = minDueDate

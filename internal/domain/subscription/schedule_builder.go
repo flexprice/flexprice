@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -37,7 +39,7 @@ func NewPendingScheduleBuilder(
 	scheduleType types.SubscriptionScheduleChangeType,
 	scheduledAt time.Time,
 ) *subscriptionScheduleBuilder {
-	now := time.Now().UTC()
+	now := clock.Now()
 	b := &subscriptionScheduleBuilder{schedule: &SubscriptionSchedule{
 		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
 		ScheduleType: scheduleType,

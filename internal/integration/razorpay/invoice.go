@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -14,13 +19,11 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // razorpayMinExpireByBuffer is the minimum expire_by window applied when an
 // invoice's due date is in the past or too close to now (e.g. wallet top-ups
-// which are created with DueDate = time.Now()). 15 minutes is Razorpay's
+// which are created with DueDate = clock.Now()). 15 minutes is Razorpay's
 // hard minimum requirement.
 const razorpayMinExpireByBuffer = 15 * time.Minute
 
@@ -562,9 +565,9 @@ func (s *InvoiceSyncService) buildInvoiceData(
 
 	// Add due date if available (Unix timestamp in seconds).
 	// Razorpay requires expire_by to be at least 15 minutes in the future.
-	// Wallet top-up invoices have DueDate = time.Now(), so we clamp upward.
+	// Wallet top-up invoices have DueDate = clock.Now(), so we clamp upward.
 	if flexInvoice.DueDate != nil {
-		minExpireBy := time.Now().UTC().Add(razorpayMinExpireByBuffer)
+		minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer)
 		expireBy := *flexInvoice.DueDate
 		if expireBy.Before(minExpireBy) {
 			expireBy = minExpireBy

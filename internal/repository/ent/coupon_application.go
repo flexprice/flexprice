@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponapplication"
@@ -191,7 +192,7 @@ func (r *couponApplicationRepository) Update(ctx context.Context, ca *domainCoup
 			couponapplication.TenantID(ca.TenantID),
 			couponapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if ca.Metadata != nil {
@@ -242,7 +243,7 @@ func (r *couponApplicationRepository) Delete(ctx context.Context, id string) err
 			couponapplication.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"go.temporal.io/api/serviceerror"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -13,7 +17,6 @@ import (
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"go.temporal.io/api/serviceerror"
 )
 
 // runMeterUsagePostInsertSideEffects runs customer resolution/onboarding and
@@ -161,7 +164,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		TenantID:                 tenantID,
 		EnvironmentID:            envID,
 		CustomerID:               cust.ID,
-		ScheduledFor:             time.Now().UTC().Add(delay),
+		ScheduledFor:             clock.Now().Add(delay),
 		StaleAfter:               staleAfter,
 		WalletAlertsEnabled:      walletEnabled,
 		SpendAlertsEnabled:       spendEnabled,

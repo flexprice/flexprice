@@ -10,6 +10,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -18,7 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // bucketedCurveInput describes one bucketed usage line item to split per day.
@@ -170,7 +173,7 @@ func (s *revenueService) buildBucketedCurve(ctx context.Context, in bucketedCurv
 // todayEnd is the local midnight starting tomorrow — the walk bound that keeps
 // an open period from booking days that have not happened.
 func todayEnd(loc *time.Location) time.Time {
-	now := time.Now().In(loc)
+	now := clock.Now().In(loc)
 	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
 }
 

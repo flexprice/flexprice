@@ -3,9 +3,13 @@ package pob
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	entContract "github.com/flexprice/flexprice/ent/contract"
 	entPOB "github.com/flexprice/flexprice/ent/performanceobligation"
@@ -19,8 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type repository struct {
@@ -255,7 +257,7 @@ func (r *repository) Update(ctx context.Context, p *domainPOB.PerformanceObligat
 		SetServiceStart(p.ServiceStart()).
 		SetPobStatus(string(p.POBStatus())).
 		SetStatus(string(p.Status())).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if p.ServiceEnd() == nil {
 		update.ClearServiceEnd()

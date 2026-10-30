@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domaininvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/shopspring/decimal"
 )
 
 // DashboardService provides dashboard functionality
@@ -139,7 +142,7 @@ func (s *dashboardService) getRecentSubscriptions(ctx context.Context) (*dto.Rec
 		totalCount += pc.Count
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	periodStart := now.AddDate(0, 0, -7) // 7 days ago
 	return &dto.RecentSubscriptionsResponse{
 		TotalCount:  totalCount,
@@ -157,7 +160,7 @@ func (s *dashboardService) getInvoicePaymentStatus(ctx context.Context) (*dto.In
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	periodStart := now.AddDate(0, 0, -7) // T-7 days from now
 	return &dto.InvoicePaymentStatusResponse{
 		Paid:        status.Succeeded,

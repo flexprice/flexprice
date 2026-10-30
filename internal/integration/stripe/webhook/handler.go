@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/flexprice/flexprice/internal/metrics"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/metrics"
+
+	stripeapi "github.com/stripe/stripe-go/v82"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -16,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
 // Handler handles Stripe webhook events
@@ -295,7 +299,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
-	now := time.Now()
+	now := clock.Now()
 	errorMsg := "Payment failed"
 	if paymentIntent.LastPaymentError != nil && paymentIntent.LastPaymentError.Msg != "" {
 		errorMsg = paymentIntent.LastPaymentError.Msg

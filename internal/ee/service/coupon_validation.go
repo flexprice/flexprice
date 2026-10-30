@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -119,7 +120,7 @@ func (s *couponValidationService) validateCouponBusinessRules(coupon coupon.Coup
 
 // Date range validation
 func (s *couponValidationService) validateCouponDateRange(coupon coupon.Coupon) error {
-	now := time.Now()
+	now := clock.Now()
 
 	// Check redeem_after date
 	if coupon.RedeemAfter != nil {

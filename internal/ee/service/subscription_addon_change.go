@@ -7,13 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // errAddonChangeNotACharge is returned from the pay-first transaction so it rolls back instead of committing.
@@ -236,9 +239,8 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 	config := &addonChangeConfig{sub: sub}
 
 	// One `now` for the whole change: resolving per entry would give each immediate entry a
-	// different timestamp and split one proration pass into several. It is cut to Postgres'
-	// microseconds, so the commitment guard sees the stored dates it compares against.
-	now := time.Now().UTC().Truncate(time.Microsecond)
+	// different timestamp and split one proration pass into several.
+	now := clock.Now()
 
 	for _, remove := range req.Removes {
 		removeReq := resolveRemoveChangeAt(remove, now, sub.CurrentPeriodEnd)
@@ -342,8 +344,7 @@ func resolveAttachChangeAt(
 		resolved.ChangeAt = nil
 	}
 
-	// A caller's start_date is cut to microseconds as `now` is, so the stored start is the one the guard checks.
-	resolved.StartDate = lo.ToPtr(lo.FromPtrOr(resolved.StartDate, now).Truncate(time.Microsecond))
+	resolved.StartDate = lo.ToPtr(lo.FromPtrOr(resolved.StartDate, now))
 	return resolved
 }
 

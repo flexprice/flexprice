@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // convertInvoiceAmounts converts a draft's amounts to the billing currency at a frozen rate, spreading
@@ -280,7 +283,7 @@ func (s *invoiceService) convertToBillingCurrency(ctx context.Context, inv *invo
 		inv.LineItems = lineItems
 	}
 
-	if err := convertInvoiceAmounts(inv, resolution, time.Now().UTC()); err != nil {
+	if err := convertInvoiceAmounts(inv, resolution, clock.Now()); err != nil {
 		return err
 	}
 

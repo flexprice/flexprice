@@ -2,7 +2,11 @@ package webhook
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -11,8 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Handler handles Nomod webhook events
@@ -165,7 +167,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, charge *nomod.Charge
 		"amount", amount.String(),
 		"currency", charge.Currency)
 
-	now := time.Now()
+	now := clock.Now()
 	createReq := dto.CreatePaymentRequest{
 		Amount:            amount,
 		Currency:          charge.Currency,
@@ -282,7 +284,7 @@ func (h *Handler) handlePaymentLinkPayment(ctx context.Context, charge *nomod.Ch
 	}
 
 	// Update payment to succeeded
-	now := time.Now()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		SucceededAt:      &now,

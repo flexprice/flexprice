@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // CustomerPortalService provides customer portal functionality
@@ -564,7 +567,7 @@ func (s *customerPortalService) validatePropertyKeys(ctx context.Context, req dt
 	}
 	// Same defaults as GetDetailedAnalytics for a request without a window.
 	if lookup.EndTime.IsZero() {
-		lookup.EndTime = time.Now().UTC()
+		lookup.EndTime = clock.Now()
 	}
 	if lookup.StartTime.IsZero() {
 		lookup.StartTime = lookup.EndTime.Add(-6 * time.Hour)

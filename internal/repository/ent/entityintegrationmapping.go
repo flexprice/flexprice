@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -16,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type entityIntegrationMappingRepository struct {
@@ -266,7 +268,7 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 		SetProviderEntityID(mapping.ProviderEntityID).
 		SetMetadata(mapping.Metadata).
 		SetStatus(string(mapping.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	_, err := updateQuery.Save(ctx)
@@ -328,7 +330,7 @@ func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping
 			entityintegrationmapping.EnvironmentID(environmentID),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

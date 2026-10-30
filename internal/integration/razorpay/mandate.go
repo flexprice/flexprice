@@ -6,11 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // toPaise converts a major-unit decimal (rupees) to paise for Razorpay API calls.
@@ -83,7 +86,7 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 		expiresAt := time.Unix(t.ExpiredAt, 0).UTC()
 		out.AutoChargeableTill = &expiresAt
 
-		if time.Now().UTC().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
+		if clock.Now().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
 			types.RecurringPaymentStatusRejected, types.RecurringPaymentStatusCancelled,
 		}, out.Status) {
 			out.Status = types.RecurringPaymentStatusExpired
@@ -143,7 +146,7 @@ func SelectUsableToken(
 	preferredMethod types.PaymentMethodType,
 	invoiceTotal decimal.Decimal,
 ) (*interfaces.ProviderPaymentMethod, bool) {
-	now := time.Now().UTC()
+	now := clock.Now()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
 		expiresAt, maxAmount := pm.RecurringAutoChargeableTill(), pm.RecurringMaxAmount()
 

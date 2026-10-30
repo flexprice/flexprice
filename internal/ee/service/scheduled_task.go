@@ -5,6 +5,11 @@ import (
 	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/sdk/client"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -20,8 +25,6 @@ import (
 	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 )
 
 // ScheduledTaskService handles scheduled task operations
@@ -73,7 +76,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	}
 
 	// Create scheduled task
-	now := time.Now()
+	now := clock.Now()
 
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
@@ -402,7 +405,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 
 	// Update enabled status
 	task.Enabled = newEnabled
-	task.UpdatedAt = time.Now()
+	task.UpdatedAt = clock.Now()
 	task.UpdatedBy = types.GetUserID(ctx)
 
 	// Save updated task
@@ -498,7 +501,7 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 	// Mark the task as deleted
 	task.Status = types.StatusDeleted
 	task.Enabled = false // Disable when deleting
-	task.UpdatedAt = time.Now()
+	task.UpdatedAt = clock.Now()
 	task.UpdatedBy = types.GetUserID(ctx)
 
 	// Save the deleted task
@@ -736,7 +739,7 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 	} else {
 		// Calculate automatically based on interval boundaries
 		interval := types.ScheduledTaskInterval(task.Interval)
-		currentTime := time.Now()
+		currentTime := clock.Now()
 
 		// Calculate interval boundaries for force run
 		startTime, endTime = s.CalculateIntervalBoundaries(currentTime, interval)

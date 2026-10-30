@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -15,8 +20,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TabsInvoiceService interface {
@@ -208,7 +211,7 @@ func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, oblig
 		"tabs_customer_id": tabsCustomerID,
 		"tabs_invoice_id":  tabsInvoiceID,
 		"obligation_ids":   obligationIDs,
-		"synced_at":        time.Now().UTC().Format(time.RFC3339),
+		"synced_at":        clock.Now().Format(time.RFC3339),
 	}
 }
 

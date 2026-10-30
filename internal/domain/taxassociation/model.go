@@ -3,9 +3,12 @@ package taxassociation
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // TaxAssociation is the model entity for the TaxAssociation schema.
@@ -58,7 +61,7 @@ func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
 		Currency:      ent.Currency,
 		EnvironmentID: ent.EnvironmentID,
 		Metadata:      ent.Metadata,
-		StartDate:     lo.FromPtrOr(ent.StartDate, time.Now().UTC()),
+		StartDate:     lo.FromPtrOr(ent.StartDate, clock.Now()),
 		EndDate:       ent.EndDate,
 		TaxBehavior:   taxBehavior,
 		BaseModel: types.BaseModel{

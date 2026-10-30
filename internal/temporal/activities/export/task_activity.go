@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -63,7 +65,7 @@ func (a *TaskActivity) CreateTask(ctx context.Context, input CreateTaskInput) (*
 	ctx = types.SetEnvironmentID(ctx, input.EnvID)
 
 	// Create task with pre-generated ID
-	now := time.Now()
+	now := clock.Now()
 	baseModel := types.GetDefaultBaseModel(ctx)
 
 	a.logger.Info(ctx, "creating task with base model",
@@ -171,7 +173,7 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 	ctx = types.SetUserID(ctx, userID)
 
 	// Update timestamps based on status
-	now := time.Now()
+	now := clock.Now()
 	existingTask.UpdatedAt = now
 	existingTask.UpdatedBy = userID
 
@@ -253,7 +255,7 @@ func (a *TaskActivity) CompleteTask(ctx context.Context, input CompleteTaskInput
 	}
 	ctx = types.SetUserID(ctx, userID)
 
-	now := time.Now()
+	now := clock.Now()
 	existingTask.CompletedAt = &now
 	existingTask.UpdatedAt = now
 	existingTask.UpdatedBy = userID

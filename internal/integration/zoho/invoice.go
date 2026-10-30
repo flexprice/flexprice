@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -17,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const (
@@ -162,7 +165,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		EnvironmentID:    flexInvoice.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			"synced_at":           time.Now().UTC().Format(time.RFC3339),
+			"synced_at":           clock.Now().Format(time.RFC3339),
 			"zoho_status":         zohoInv.Status,
 			"flexprice_invoice":   req.InvoiceID,
 			"zoho_invoice_number": zohoInv.InvoiceNumber,
@@ -418,7 +421,7 @@ func (s *InvoiceService) MarkInvoicePaidInZoho(ctx context.Context, flexpriceInv
 		CustomerID:  zohoInv.CustomerID,
 		PaymentMode: settings.ZohoPaymentMode(),
 		Amount:      zohoInv.Balance,
-		Date:        time.Now().UTC().Format("2006-01-02"),
+		Date:        clock.Now().Format("2006-01-02"),
 		Invoices: []CustomerPaymentInvoiceApply{
 			NewCustomerPaymentInvoiceApply(zohoInvoiceID, zohoInv.Balance),
 		},

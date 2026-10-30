@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
@@ -147,7 +148,7 @@ func (r *creditnoteLineItemRepository) Update(ctx context.Context, item *domainC
 		SetMetadata(item.Metadata).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -189,7 +190,7 @@ func (r *creditnoteLineItemRepository) Delete(ctx context.Context, id string) er
 		).
 		SetStatus(string(types.StatusDeleted)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {

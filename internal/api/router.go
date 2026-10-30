@@ -1,6 +1,8 @@
 package api
 
 import (
+	"github.com/gin-gonic/gin"
+
 	"github.com/flexprice/flexprice/docs/swagger"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
@@ -13,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/gin-gonic/gin"
 )
 
 type Handlers struct {
@@ -103,6 +104,9 @@ func NewRouter(
 	hostedInvoiceService service.HostedInvoiceService,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
+
+	// Process-global: also covers the admin engine and any future engine.
+	middleware.InstallMicrosecondBinding()
 
 	// Create a new gin engine without default middleware
 	router := gin.New()

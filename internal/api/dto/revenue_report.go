@@ -3,12 +3,15 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // periodLayout is the YYYY-MM form of report periods.
@@ -37,7 +40,7 @@ func (r *RollforwardRequest) Validate() error {
 	if err != nil {
 		return err
 	}
-	if end.After(utils.LastEndedMonth(time.Now())) {
+	if end.After(utils.LastEndedMonth(clock.Now())) {
 		return ierr.NewError("period_end must be an ended month").
 			WithHint("Only ended months can be reported").
 			Mark(ierr.ErrValidation)

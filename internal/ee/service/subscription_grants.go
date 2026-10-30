@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // SubscriptionGrantService owns credit grants and entitlement grants for any subscription
@@ -134,7 +137,7 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	cfg.entitlementChangeAt = entitlementChangeAt(req, now)
 
 	if err := s.validateChangeBoundary(ctx, cfg, now); err != nil {

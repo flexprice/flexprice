@@ -3,7 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -12,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreditAdjustmentService is a type alias for the interface
@@ -304,7 +306,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
 				"invoice_id": inv.ID,
 				"wallet_id":  walletID,
-				"ts":         time.Now().UnixNano(),
+				"ts":         clock.Now().UnixNano(),
 			})
 
 			walletDebitOperation := &wallet.WalletOperation{
@@ -373,7 +375,7 @@ const appliedBeforeFinalizationSourceID = "applied_before_finalization"
 // capToEligibleCredits limits each wallet to credits not expired as of the invoice's period end.
 // The wallet balance still includes expired credits the expiry job hasn't removed yet.
 func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv *invoice.Invoice, wallets []*wallet.Wallet) ([]*wallet.Wallet, error) {
-	reference := time.Now().UTC()
+	reference := clock.Now()
 	if inv.PeriodEnd != nil {
 		reference = *inv.PeriodEnd
 	}

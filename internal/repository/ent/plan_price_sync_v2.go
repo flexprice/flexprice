@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 // CurrentPlanSequence returns max(prices.sequence) for the plan's published,
@@ -376,7 +378,7 @@ func (r *planPriceSyncRepository) ReanchorSubSyncedSequence(
 			subscription.EnvironmentID(environmentID),
 		).
 		SetSyncedPriceSequence(seq).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(userID).
 		SaveReturning(ctx); err != nil {
 		SetSpanError(span, err)

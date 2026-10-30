@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
@@ -12,8 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -605,7 +608,7 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 // close reference for the overall shape; this differs by being per-association
 // and by matching catalog prices with the divisor-compatible addon attach rule.
 func (s *addonService) SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error) {
-	syncStart := time.Now()
+	syncStart := clock.Mono()
 
 	if addonID == "" {
 		return nil, ierr.NewError("addon ID is required").
@@ -752,7 +755,7 @@ func (s *addonService) activeAddonUsagePrices(ctx context.Context, addonID strin
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	return lo.Filter(prices, func(p *domainPrice.Price, _ int) bool {
 		if p.Type != types.PRICE_TYPE_USAGE {
 			return false

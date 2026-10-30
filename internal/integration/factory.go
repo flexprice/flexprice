@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
@@ -53,7 +56,6 @@ import (
 	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // Factory manages different payment integration providers and storage providers
@@ -962,7 +964,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           time.Now().UTC(),
+			VoidedAt:           clock.Now(),
 		}); lifecycleErr != nil {
 			return false, false, lifecycleErr
 		}
@@ -983,7 +985,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         time.Now().UTC(),
+		RefundedAt:         clock.Now(),
 	}); lifecycleErr != nil {
 		return false, false, lifecycleErr
 	}
@@ -1064,7 +1066,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   "",
-			FailedAt:           time.Now().UTC(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       err.Error(),
 		}); failErr != nil {
 			m.Logger.Error(ctx, "failed to record payment failure after charge error",

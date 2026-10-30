@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 // AlertLogsService defines the interface for alert logs operations
@@ -216,8 +219,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			BaseModel: types.BaseModel{
 				TenantID:  types.GetTenantID(ctx),
 				Status:    types.StatusPublished,
-				CreatedAt: time.Now().UTC(),
-				UpdatedAt: time.Now().UTC(),
+				CreatedAt: clock.Now(),
+				UpdatedAt: clock.Now(),
 				CreatedBy: types.GetUserID(ctx),
 				UpdatedBy: types.GetUserID(ctx),
 			},
@@ -509,7 +512,7 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityType(alertLog.EntityType),
 		EntityID:      alertLog.EntityID,

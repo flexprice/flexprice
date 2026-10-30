@@ -4,15 +4,17 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PaymentService handles Paddle payment operations for webhook processing.
@@ -156,7 +158,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	}
 
 	// Update payment to succeeded status
-	now := time.Now().UTC()
+	now := clock.Now()
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: lo.ToPtr(paddleTransactionID),

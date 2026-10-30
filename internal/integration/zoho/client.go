@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -431,7 +433,7 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 
 	if md.AccessToken != "" && md.AccessTokenExpiresAt != "" {
 		exp, err := time.Parse(time.RFC3339, md.AccessTokenExpiresAt)
-		if err == nil && time.Now().UTC().Before(exp.Add(-1*time.Minute)) {
+		if err == nil && clock.Now().Before(exp.Add(-1*time.Minute)) {
 			token, err := c.encryptionService.Decrypt(md.AccessToken)
 			if err == nil && token != "" {
 				return token, nil
@@ -501,9 +503,9 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 	if tokenResp.APIDomain != "" {
 		md.APIDomain = tokenResp.APIDomain
 	}
-	md.AccessTokenExpiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
+	md.AccessTokenExpiresAt = clock.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
 	conn.EncryptedSecretData.ZohoBooks = md
-	conn.UpdatedAt = time.Now().UTC()
+	conn.UpdatedAt = clock.Now()
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
 		return "", err

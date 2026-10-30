@@ -3,7 +3,10 @@ package activities
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -19,7 +22,6 @@ import (
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const ActivityPrefix = "EnvironmentActivities"
@@ -580,7 +582,7 @@ func (a *EnvironmentActivities) resolveOrCreateProduct(sourceCtx, targetCtx cont
 		return existing[0].ID(), nil
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	newProduct := domainProduct.NewBuilder(sourceProduct).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRODUCT)).
 		WithStatus(types.StatusPublished).

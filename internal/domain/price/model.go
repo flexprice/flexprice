@@ -8,12 +8,15 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // max active prices per entity is 3000
@@ -756,7 +759,7 @@ func (p *Price) GetRootPriceID() string {
 // IsActive checks if the price is currently active based on status and dates
 func (p *Price) IsActive(currentTime *time.Time) bool {
 	if currentTime == nil {
-		currentTime = lo.ToPtr(time.Now().UTC())
+		currentTime = lo.ToPtr(clock.Now())
 	}
 
 	// Check if price is published
