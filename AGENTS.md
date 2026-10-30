@@ -60,6 +60,7 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
   - Gin's JSON, query and form bindings truncate client-supplied times at ingress (`internal/api/binding.go`).
   - An ent write hook truncates every time field as the storage backstop (`internal/postgres/ent_hooks.go`).
 - Whole-second alignment of business dates (billing period edges, commitment terms) is a DTO-layer rule (`ApplyDefaults`), not a precision concern.
+- ClickHouse is deliberately its own precision domain and needs no normalization: raw events are `DateTime64(3)` (ms; the driver floors, never rounds up) and `meter_usage` timestamps are whole-second window starts by construction. Event timestamps are never exact-compared in memory against stored rows — keep it that way.
 
 ### Observability
 - Structured logging via `internal/logger` (ctx-first API); always propagate `ctx` for trace correlation.
