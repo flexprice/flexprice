@@ -1,0 +1,168 @@
+pipeline {
+    agent any
+
+    options {
+        buildDiscarder(logRotator(
+            numToKeepStr: '10',
+            artifactNumToKeepStr: '10'
+        ))
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    environment {
+        DOCKER_BUILDKIT = '1'
+
+        GITHUB_CREDS = credentials('github-creds')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials-id')
+
+        INFISICAL_CLIENT_ID = credentials('INFISICAL_CLIENT_ID')
+        INFISICAL_CLIENT_SECRET = credentials('INFISICAL_CLIENT_SECRET')
+        INFISICAL_URL = 'https://secret.tapfin.in'
+        INFISICAL_PROJECT_ID = '1c8820db-4f94-47de-b887-0a2684f1cd8d'
+        INFISICAL_ENV = 'flexprice-uat-backend'
+
+        TARGET_SERVER = 'root@187.127.165.207'
+        SSH_PORT = '4005'
+
+        IMAGE_NAME = 'tapfin/flexprice-uat'
+        DEPLOY_NAME = 'flexprice-uat'
+        API_PORT = '3020'
+    }
+
+    stages {
+
+        stage('Checkout Source') {
+            steps {
+                git(
+                    branch: 'main',
+                    credentialsId: 'github-creds',
+                    url: 'https://github.com/tapfin-tech/flexprice.git'
+                )
+            }
+        }
+
+        stage('Fetch Secrets') {
+            steps {
+                sh '''
+                    set +x
+
+                    echo "Login Infisical"
+
+                    export INFISICAL_TOKEN=$(infisical login \
+                        --method=universal-auth \
+                        --client-id=$INFISICAL_CLIENT_ID \
+                        --client-secret=$INFISICAL_CLIENT_SECRET \
+                        --domain=$INFISICAL_URL \
+                        --plain \
+                        --silent)
+
+                    infisical export \
+                        --projectId=$INFISICAL_PROJECT_ID \
+                        --env=$INFISICAL_ENV \
+                        --domain=$INFISICAL_URL \
+                        --token=$INFISICAL_TOKEN \
+                        --format=json > secrets.json
+
+                    python3 <<'EOF'
+import json
+
+with open("secrets.json") as f:
+    data=json.load(f)
+
+with open(".env","w") as env:
+    if isinstance(data,list):
+        for item in data:
+            key=item.get("key")
+            value=str(item.get("value",""))
+            value=value.replace("\\n","\\\\n")
+            env.write(f"{key}={value}\\n")
+    else:
+        for key,value in data.items():
+            value=str(value)
+            value=value.replace("\\n","\\\\n")
+            env.write(f"{key}={value}\\n")
+EOF
+
+                    rm -f secrets.json
+                    echo "Secrets Loaded"
+                    wc -l .env
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker pull $IMAGE_NAME:latest || true
+
+                    docker build \
+                        --cache-from $IMAGE_NAME:latest \
+                        -t $IMAGE_NAME:$BUILD_NUMBER \
+                        -t $IMAGE_NAME:latest .
+                '''
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withDockerRegistry(
+                        credentialsId:'dockerhub-credentials-id',
+                        url:'https://index.docker.io/v1/'
+                    ) {
+                        sh '''
+                            docker push $IMAGE_NAME:$BUILD_NUMBER
+                            docker push $IMAGE_NAME:latest
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Server') {
+            steps {
+                sshagent(credentials:['ghostnode-server']) {
+                    sh '''
+                        scp -P $SSH_PORT -o StrictHostKeyChecking=no \
+                            deploy/uat/deploy.sh $TARGET_SERVER:/tmp/$DEPLOY_NAME-deploy.sh
+
+                        # The env file holds secrets: remove it from the server whatever happens.
+                        status=0
+                        scp -P $SSH_PORT -o StrictHostKeyChecking=no \
+                            .env $TARGET_SERVER:/tmp/$DEPLOY_NAME.env || status=$?
+                        if [ $status -eq 0 ]; then
+                            ssh -p $SSH_PORT -o StrictHostKeyChecking=no $TARGET_SERVER \
+                                "chmod 600 /tmp/$DEPLOY_NAME.env && bash /tmp/$DEPLOY_NAME-deploy.sh $IMAGE_NAME:$BUILD_NUMBER /tmp/$DEPLOY_NAME.env $API_PORT" \
+                                || status=$?
+                        fi
+                        ssh -p $SSH_PORT -o StrictHostKeyChecking=no $TARGET_SERVER \
+                            "rm -f /tmp/$DEPLOY_NAME.env /tmp/$DEPLOY_NAME-deploy.sh" || true
+                        exit $status
+                    '''
+                }
+            }
+        }
+
+    }   // closes stages
+
+    post {
+        always {
+            sh 'rm -f .env'
+            cleanWs()
+        }
+
+        success {
+            echo "Deployment Successful Build ${BUILD_NUMBER}"
+        }
+
+        failure {
+            echo "Pipeline Failed Build ${BUILD_NUMBER}"
+        }
+    }
+}
