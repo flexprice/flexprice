@@ -1107,7 +1107,7 @@ func (s *MeterUsageServiceSuite) newCommitment(
 		Binding:            true,
 		CollectionMethod:   lo.ToPtr(types.CommitmentCollectionPerPeriod),
 		StartDate:          s.periodStart,
-		EndDate:            s.periodStart.AddDate(0, 6, 0),
+		EndDate:            lo.ToPtr(s.periodStart.AddDate(0, 6, 0)),
 		CommitmentStatus:   types.CommitmentStatusActive,
 		OnEarlyTermination: lo.ToPtr(types.CommitmentTerminationForfeit),
 		EnvironmentID:      types.GetEnvironmentID(ctx),

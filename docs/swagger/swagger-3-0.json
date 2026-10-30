@@ -11244,6 +11244,75 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/prices/{id}/history": {
+      "get": {
+        "tags": [
+          "Prices"
+        ],
+        "summary": "Get price history",
+        "description": "Use when you need every version of a plan price, oldest first. Pass the ID of any version; the same timeline is returned.",
+        "operationId": "getPriceHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Price ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPricesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Price not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/products": {
       "get": {
         "tags": [
@@ -12811,6 +12880,75 @@
           }
         ],
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/subscriptions/lineitems/{id}/history": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription line item history",
+        "description": "Use when you need every version of a subscription line item, oldest first. Pass the ID of any version; the same timeline is returned. Versions cancelled before they started are left out unless requested directly.",
+        "operationId": "getSubscriptionLineItemHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Line item ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSubscriptionLineItemsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Line item not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
       }
     },
     "/subscriptions/schedules": {
@@ -21855,6 +21993,7 @@
           },
           "end_date": {
             "type": "string",
+            "description": "EndDate is exclusive; nil for an open-ended commitment, which runs until terminated.",
             "format": "date-time"
           },
           "environment_id": {
@@ -22684,7 +22823,6 @@
       },
       "CreateCommitmentRequest": {
         "required": [
-          "end_date",
           "measurement",
           "name",
           "scope",
@@ -22711,6 +22849,7 @@
           },
           "end_date": {
             "type": "string",
+            "description": "EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.",
             "format": "date-time"
           },
           "idempotency_key": {
@@ -36677,6 +36816,9 @@
           "normalize_fixed_to": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
+          "payment_gateways": {
+            "$ref": "#/components/schemas/types.ZohoPaymentGatewaySettings"
+          },
           "payment_mode": {
             "type": "string",
             "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode."
@@ -40606,6 +40748,58 @@
           "TenantInternalStatusSuspended"
         ],
         "x-speakeasy-name-override": "TenantInternalStatus"
+      },
+      "types.ZohoPayPalPaymentMethod": {
+        "type": "string",
+        "enum": [
+          "standard",
+          "adaptive"
+        ],
+        "x-enum-varnames": [
+          "ZohoPayPalPaymentMethodStandard",
+          "ZohoPayPalPaymentMethodAdaptive"
+        ],
+        "x-speakeasy-name-override": "ZohoPayPalPaymentMethod"
+      },
+      "types.ZohoPaymentGateway": {
+        "type": "string",
+        "enum": [
+          "paypal",
+          "stripe",
+          "authorize_net",
+          "payflow_pro",
+          "2checkout",
+          "braintree",
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "ZohoPaymentGatewayPayPal",
+          "ZohoPaymentGatewayStripe",
+          "ZohoPaymentGatewayAuthorizeNet",
+          "ZohoPaymentGatewayPayflowPro",
+          "ZohoPaymentGateway2Checkout",
+          "ZohoPaymentGatewayBraintree",
+          "ZohoPaymentGatewayRazorpay"
+        ],
+        "x-speakeasy-name-override": "ZohoPaymentGateway"
+      },
+      "types.ZohoPaymentGatewaySettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ZohoPaymentGateway"
+            }
+          },
+          "paypal_payment_method": {
+            "$ref": "#/components/schemas/types.ZohoPayPalPaymentMethod"
+          }
+        },
+        "x-speakeasy-name-override": "ZohoPaymentGatewaySettings"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

@@ -303,6 +303,10 @@ func (s *subscriptionService) createAddonDetachParams(
 				}).
 				Mark(ierr.ErrValidation)
 		}
+
+		// Checked as requested, then cut to microseconds as the change's `now` is: cutting first could pull a date
+		// just past the period end onto it.
+		effectiveEndDate = effectiveEndDate.Truncate(time.Microsecond)
 	}
 
 	return &addonDetachParams{

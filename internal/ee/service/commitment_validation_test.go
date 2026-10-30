@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ func validReq(subID, priceID string) dto.CreateCommitmentRequest {
 		CommittedPrice: ratePrice("0.048"),
 		Measurement:    types.CommitmentMeasurementBillingPeriod,
 		StartDate:      jan,
-		EndDate:        jan.AddDate(1, 0, 0),
+		EndDate:        lo.ToPtr(jan.AddDate(1, 0, 0)),
 		Binding:        lo.ToPtr(true),
 	}
 }
@@ -189,8 +190,18 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
 		}, false},
 		{"C21 label too long", func(r *dto.CreateCommitmentRequest) { r.InvoiceLabel = string(make([]byte, 256)) }, false},
-		{"C2 end before start", func(r *dto.CreateCommitmentRequest) { r.EndDate = r.StartDate }, false},
+		{"C2 end before start", func(r *dto.CreateCommitmentRequest) { r.EndDate = lo.ToPtr(r.StartDate) }, false},
+		{"D8 open-ended without end_date", func(r *dto.CreateCommitmentRequest) { r.EndDate = nil }, true},
 	}
+
+	t.Run("term edges align to whole seconds", func(t *testing.T) {
+		r := validReq("subs_1", "price_1")
+		r.StartDate = r.StartDate.Add(750 * time.Millisecond)
+		r.EndDate = lo.ToPtr(r.EndDate.Add(250 * time.Millisecond))
+		r.ApplyDefaults("UTC")
+		require.True(t, r.StartDate.Equal(r.StartDate.Truncate(time.Second)))
+		require.True(t, r.EndDate.Equal(r.EndDate.Truncate(time.Second)))
+	})
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -320,9 +331,215 @@ func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
 	}
 }
 
+// An open-ended commitment holds its scope forever: any later overlapping commitment on its scope must share its type
+// and measurement and take another priority, however far off it starts, until a termination's period has ended.
+func (s *CommitmentServiceSuite) TestValidation_OpenEndedOverlap() {
+	years := time.Date(2032, 1, 1, 0, 0, 0, 0, time.UTC)
+	terminatedAt := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	amountFrom := func(start time.Time, priority int) func(r *dto.CreateCommitmentRequest) {
+		return func(r *dto.CreateCommitmentRequest) {
+			r.Type, r.CommittedPrice, r.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
+			r.StartDate, r.EndDate, r.Priority = start, lo.ToPtr(start.AddDate(1, 0, 0)), priority
+		}
+	}
+	quantityFrom := func(start time.Time, priority int) func(r *dto.CreateCommitmentRequest) {
+		return func(r *dto.CreateCommitmentRequest) {
+			r.StartDate, r.EndDate, r.Priority = start, lo.ToPtr(start.AddDate(1, 0, 0)), priority
+		}
+	}
+
+	tests := []struct {
+		name      string
+		terminate bool
+		mutateB   func(r *dto.CreateCommitmentRequest)
+		wantErr   string
+	}{
+		{name: "different type years later", mutateB: amountFrom(years, 1), wantErr: "different type or measurement"},
+		{name: "same type and priority years later", mutateB: quantityFrom(years, 0), wantErr: "priority 0"},
+		{name: "same type at another priority years later", mutateB: quantityFrom(years, 1)},
+		{
+			name:    "open-ended of a different type years later",
+			mutateB: func(r *dto.CreateCommitmentRequest) { amountFrom(years, 1)(r); r.EndDate = nil },
+			wantErr: "different type or measurement",
+		},
+		{
+			name:      "different type inside the terminated commitment's last period",
+			terminate: true,
+			mutateB:   amountFrom(time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC), 1),
+			wantErr:   "different type or measurement",
+		},
+		{name: "different type after the terminated commitment's last period", terminate: true, mutateB: amountFrom(time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC), 1)},
+		{name: "same type and priority from the termination", terminate: true, mutateB: quantityFrom(terminatedAt, 0)},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			a := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			a.EndDate = nil
+			created, err := s.svc.Create(s.GetContext(), a)
+			s.Require().NoError(err)
+			if tc.terminate {
+				_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &terminatedAt})
+				s.Require().NoError(err)
+			}
+
+			b := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			tc.mutateB(&b)
+			_, err = s.svc.Create(s.GetContext(), b)
+			if tc.wantErr == "" {
+				s.Require().NoError(err)
+				return
+			}
+
+			s.requireValidation(err, tc.wantErr)
+		})
+	}
+}
+
+// An open-ended commitment needs no end inside the subscription's: it stops when the subscription does.
+func (s *CommitmentServiceSuite) TestValidation_OpenEndedOnSubscriptionWithEndDate() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.EndDate = lo.ToPtr(sub.StartDate.AddDate(0, 6, 0))
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+}
+
+// A term starting at or after a scheduled subscription end has no billable period, whatever its own end.
+// A subscription starting mid-second accepts a commitment dated at its own start: ApplyDefaults
+// aligns term edges to whole seconds, and the sub-start bound compares at that granularity too.
+func (s *CommitmentServiceSuite) TestValidation_AcceptsStartMatchingAMidSecondSubscriptionStart() {
+	ctx := s.GetContext()
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.StartDate = sub.StartDate.Add(500 * time.Millisecond)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	// The usage lines inherit the mid-second start, as subscription creation sets them.
+	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+	s.Require().NoError(err)
+	line.StartDate = sub.StartDate
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.StartDate = sub.StartDate // truncates to the second's start in ApplyDefaults
+	created, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+	s.True(created.StartDate.Equal(sub.StartDate.Truncate(time.Second)))
+}
+
+func (s *CommitmentServiceSuite) TestValidation_StartAtOrAfterSubscriptionEnd() {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	subEnd := sub.StartDate.AddDate(0, 6, 0)
+	sub.EndDate = lo.ToPtr(subEnd)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+
+	tests := []struct {
+		name    string
+		start   time.Time
+		end     *time.Time
+		wantErr string
+	}{
+		{"open-ended at the subscription end", subEnd, nil, "start_date must be before the subscription end"},
+		{"open-ended after the subscription end", subEnd.AddDate(0, 1, 0), nil, "start_date must be before the subscription end"},
+		{"finite at the subscription end", subEnd, lo.ToPtr(subEnd.AddDate(0, 1, 0)), "start_date must be before the subscription end"},
+		{"open-ended an instant before the subscription end", subEnd.Add(-time.Second), nil, ""},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+			req.StartDate, req.EndDate = tt.start, tt.end
+			_, err := s.svc.Create(s.GetContext(), req)
+			if tt.wantErr == "" {
+				s.Require().NoError(err)
+				return
+			}
+
+			s.requireValidation(err, tt.wantErr)
+		})
+	}
+}
+
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsOpenEndedCommitmentForever() {
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	req.EndDate = nil
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, time.Date(2040, 1, 1, 0, 0, 0, 0, time.UTC), nil)
+	s.requireValidation(err, "different meter")
+}
+
+// endSubscriptionAt schedules the fixture subscription's end.
+func (s *CommitmentServiceSuite) endSubscriptionAt(end time.Time) *subscription.Subscription {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), s.fx.sub.ID)
+	s.Require().NoError(err)
+	sub.EndDate = lo.ToPtr(end)
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+	s.fx.sub.EndDate = lo.ToPtr(end)
+	return sub
+}
+
+// An open-ended commitment on a subscription with an end stops guarding price attaches once it ends.
+func (s *CommitmentServiceSuite) TestCheckPriceAttach_OpenEndedStopsAtSubscriptionEnd() {
+	sub := s.endSubscriptionAt(time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC))
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
+	req.EndDate = nil
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	err = s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC), nil)
+	s.requireValidation(err, "different meter")
+	s.Require().NoError(
+		s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC), nil),
+	)
+}
+
+// A binding open-ended commitment needs its scope covered only until a finite subscription ends.
+func (s *CommitmentServiceSuite) TestLineItemDetach_OpenEndedStopsAtSubscriptionEnd() {
+	jun := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	subEnd := time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC)
+	s.endSubscriptionAt(subEnd)
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	err = s.detachCheck(s.fx.lineAPI.ID, jun)
+	s.requireValidation(err, created.ID, "terminate the commitment first")
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, subEnd))
+
+	// A successor ending with the subscription, as its lines do, covers the rest of the term.
+	successor := *s.fx.lineAPI
+	successor.ID, successor.StartDate, successor.EndDate = "subs_line_api_successor", jun, subEnd
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &successor))
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, jun))
+}
+
+// A binding open-ended commitment's scope must stay covered for good, not only to some term end.
+func (s *CommitmentServiceSuite) TestLineItemDetach_RejectsEndingOpenEndedCommitmentScope() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	err = s.detachCheck(s.fx.lineAPI.ID, time.Date(2035, 2, 1, 0, 0, 0, 0, time.UTC))
+	s.requireValidation(err, created.ID, "terminate the commitment first")
+}
+
 func (s *CommitmentServiceSuite) TestValidation_MidPeriodEndOverlap() {
 	// A ends on 10 May 2027, mid-way through a billing period whose invoice still bills its floor.
-	endsMidMay := func(r *dto.CreateCommitmentRequest) { r.EndDate = time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC) }
+	endsMidMay := func(r *dto.CreateCommitmentRequest) {
+		r.EndDate = lo.ToPtr(time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC))
+	}
 	amountFrom := func(start time.Time) func(r *dto.CreateCommitmentRequest) {
 		return func(r *dto.CreateCommitmentRequest) {
 			r.Type, r.CommittedPrice, r.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
@@ -584,7 +801,7 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsTerminatedCommitment
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsMidPeriodEndThroughPeriodEnd() {
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
-	req.EndDate = time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	req.EndDate = lo.ToPtr(time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC))
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
@@ -937,4 +1154,53 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsPriceOverrideEmptying
 			EffectiveFrom: lo.ToPtr(s.fx.sub.StartDate.AddDate(0, 1, 0)),
 		})
 	s.requireValidation(err, "terminate the commitment first")
+}
+
+// microsecondLineItemRepo stores line item dates the way Postgres does: rounded to the nearest microsecond.
+type microsecondLineItemRepo struct {
+	subscription.LineItemRepository
+}
+
+func (r *microsecondLineItemRepo) Create(ctx context.Context, li *subscription.SubscriptionLineItem) error {
+	stored := *li
+	stored.StartDate, stored.EndDate = stored.StartDate.Round(time.Microsecond), stored.EndDate.Round(time.Microsecond)
+	return r.LineItemRepository.Create(ctx, &stored)
+}
+
+func (r *microsecondLineItemRepo) Update(ctx context.Context, li *subscription.SubscriptionLineItem) error {
+	stored := *li
+	stored.StartDate, stored.EndDate = stored.StartDate.Round(time.Microsecond), stored.EndDate.Round(time.Microsecond)
+	return r.LineItemRepository.Update(ctx, &stored)
+}
+
+// An end instant with nanoseconds that round up stores the successor's start after the end the guard checks, which it
+// would report as a sub-microsecond gap in the binding commitment's coverage.
+func (s *CommitmentServiceSuite) TestLineItemUpdate_PriceEditKeepsCoverageAcrossMicrosecondRounding() {
+	ctx := s.GetContext()
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	_, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	// The edited line is the scope's only cover after January.
+	only, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, "subs_line_api_only")
+	s.Require().NoError(err)
+	only.EndDate = s.fx.sub.StartDate.AddDate(0, 1, 0)
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, only))
+
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.SubscriptionLineItemRepo = &microsecondLineItemRepo{LineItemRepository: s.GetStores().SubscriptionLineItemRepo}
+	effectiveFrom := time.Date(2027, 2, 1, 0, 0, 0, 123456789, time.UTC)
+	resp, err := NewSubscriptionService(params).UpdateSubscriptionLineItem(ctx, s.fx.lineAPI.ID,
+		dto.UpdateSubscriptionLineItemRequest{
+			Amount:        lo.ToPtr(dec("0.07")),
+			EffectiveFrom: lo.ToPtr(effectiveFrom),
+		})
+	s.Require().NoError(err)
+
+	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+	s.Require().NoError(err)
+	successor, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, resp.ID)
+	s.Require().NoError(err)
+	s.True(successor.StartDate.Equal(ended.EndDate), "successor starts %s, predecessor ends %s", successor.StartDate, ended.EndDate)
 }

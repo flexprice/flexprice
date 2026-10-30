@@ -143,7 +143,10 @@ func (Commitment) Fields() []ent.Field {
 		field.Time("start_date").
 			Immutable(),
 
+		// Null for an open-ended commitment, which runs until terminated.
 		field.Time("end_date").
+			Optional().
+			Nillable().
 			Immutable(),
 
 		field.String("on_early_termination").

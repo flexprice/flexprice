@@ -1857,6 +1857,8 @@ definitions:
       customer_id:
         type: string
       end_date:
+        description: EndDate is exclusive; nil for an open-ended commitment, which
+          runs until terminated.
         type: string
       environment_id:
         type: string
@@ -2443,6 +2445,8 @@ definitions:
       committed_price:
         $ref: '#/definitions/CommitmentPriceInput'
       end_date:
+        description: EndDate is exclusive; omit it for an open-ended commitment, which
+          bills every period until terminated.
         type: string
       idempotency_key:
         maxLength: 128
@@ -2479,7 +2483,6 @@ definitions:
       value:
         type: string
     required:
-    - end_date
     - measurement
     - name
     - scope
@@ -13047,6 +13050,12 @@ definitions:
           NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
           For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
           qty=3, rate=$100. Empty string means no normalization (keep original).
+      payment_gateways:
+        allOf:
+        - $ref: '#/definitions/types.ZohoPaymentGatewaySettings'
+        description: |-
+          Online payment gateways attached to the Zoho invoice as payment options, so the Zoho
+          invoice carries online payment links.
       payment_mode:
         description: |-
           Zoho payment modes are merchant-editable free strings with no id, so this is passed
@@ -15978,6 +15987,46 @@ definitions:
     - TenantInternalStatusTrialing
     - TenantInternalStatusActive
     - TenantInternalStatusSuspended
+  types.ZohoPayPalPaymentMethod:
+    enum:
+    - standard
+    - adaptive
+    type: string
+    x-enum-varnames:
+    - ZohoPayPalPaymentMethodStandard
+    - ZohoPayPalPaymentMethodAdaptive
+  types.ZohoPaymentGateway:
+    enum:
+    - paypal
+    - stripe
+    - authorize_net
+    - payflow_pro
+    - 2checkout
+    - braintree
+    - razorpay
+    type: string
+    x-enum-varnames:
+    - ZohoPaymentGatewayPayPal
+    - ZohoPaymentGatewayStripe
+    - ZohoPaymentGatewayAuthorizeNet
+    - ZohoPaymentGatewayPayflowPro
+    - ZohoPaymentGateway2Checkout
+    - ZohoPaymentGatewayBraintree
+    - ZohoPaymentGatewayRazorpay
+  types.ZohoPaymentGatewaySettings:
+    properties:
+      enabled:
+        type: boolean
+      gateways:
+        items:
+          $ref: '#/definitions/types.ZohoPaymentGateway'
+        type: array
+      paypal_payment_method:
+        allOf:
+        - $ref: '#/definitions/types.ZohoPayPalPaymentMethod'
+        description: Sent as additional_field1 on the PayPal gateway. Required when
+          PayPal is selected.
+    type: object
   webhookDto.AlertWebhookPayload:
     properties:
       alert_status:
@@ -22722,6 +22771,44 @@ paths:
       summary: Update price
       tags:
       - Prices
+  /prices/{id}/history:
+    get:
+      consumes:
+      - application/json
+      description: Use when you need every version of a plan price, oldest first.
+        Pass the ID of any version; the same timeline is returned.
+      operationId: getPriceHistory
+      parameters:
+      - description: Price ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPricesResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Price not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get price history
+      tags:
+      - Prices
+      x-scope: read
   /prices/bulk:
     post:
       consumes:
@@ -24655,6 +24742,45 @@ paths:
       summary: Update subscription line item
       tags:
       - Subscriptions
+  /subscriptions/lineitems/{id}/history:
+    get:
+      consumes:
+      - application/json
+      description: Use when you need every version of a subscription line item, oldest
+        first. Pass the ID of any version; the same timeline is returned. Versions
+        cancelled before they started are left out unless requested directly.
+      operationId: getSubscriptionLineItemHistory
+      parameters:
+      - description: Line item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListSubscriptionLineItemsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Line item not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get subscription line item history
+      tags:
+      - Subscriptions
+      x-scope: read
   /subscriptions/lineitems/search:
     post:
       consumes:

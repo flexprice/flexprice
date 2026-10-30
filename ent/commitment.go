@@ -77,7 +77,7 @@ type Commitment struct {
 	// StartDate holds the value of the "start_date" field.
 	StartDate time.Time `json:"start_date,omitempty"`
 	// EndDate holds the value of the "end_date" field.
-	EndDate time.Time `json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
 	// OnEarlyTermination holds the value of the "on_early_termination" field.
 	OnEarlyTermination *types.CommitmentEarlyTermination `json:"on_early_termination,omitempty"`
 	// CommitmentStatus holds the value of the "commitment_status" field.
@@ -313,7 +313,8 @@ func (_m *Commitment) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field end_date", values[i])
 			} else if value.Valid {
-				_m.EndDate = value.Time
+				_m.EndDate = new(time.Time)
+				*_m.EndDate = value.Time
 			}
 		case commitment.FieldOnEarlyTermination:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -480,8 +481,10 @@ func (_m *Commitment) String() string {
 	builder.WriteString("start_date=")
 	builder.WriteString(_m.StartDate.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("end_date=")
-	builder.WriteString(_m.EndDate.Format(time.ANSIC))
+	if v := _m.EndDate; v != nil {
+		builder.WriteString("end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.OnEarlyTermination; v != nil {
 		builder.WriteString("on_early_termination=")

@@ -72,7 +72,7 @@ func (r *commitmentRepository) Create(ctx context.Context, c *domain.Commitment)
 		SetNillableTotalAmount(c.TotalAmount).
 		SetNillableInstalmentInvoicing(c.InstalmentInvoicing).
 		SetStartDate(c.StartDate).
-		SetEndDate(c.EndDate).
+		SetNillableEndDate(c.EndDate).
 		SetNillableOnEarlyTermination(c.OnEarlyTermination).
 		SetNillableIdempotencyKey(c.IdempotencyKey).
 		SetMetadata(c.Metadata).
@@ -351,7 +351,7 @@ func applyCommitmentFilter(q *ent.CommitmentQuery, f *domain.Filter) (*ent.Commi
 	}
 
 	if f.ActiveFrom != nil {
-		preds = append(preds, entcommitment.EndDateGT(*f.ActiveFrom))
+		preds = append(preds, entcommitment.Or(entcommitment.EndDateIsNil(), entcommitment.EndDateGT(*f.ActiveFrom)))
 	}
 
 	if f.ActiveTo != nil {
