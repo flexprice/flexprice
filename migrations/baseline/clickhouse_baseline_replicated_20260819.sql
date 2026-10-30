@@ -12,9 +12,10 @@
 -- operator sets them automatically; a hand-rolled cluster needs them in
 -- config.d/macros.xml):
 --
---   {cluster}  cluster name shared by all nodes
---   {shard}    shard number
---   {replica}  replica identifier, UNIQUE per node in a shard
+--   {cluster}       cluster name shared by all nodes
+--   {installation}  CHI name; Keeper paths are scoped under it
+--   {shard}         shard number
+--   {replica}       replica identifier, UNIQUE per node in a shard
 --
 -- Verify before applying:
 --   SELECT * FROM system.macros;
@@ -66,7 +67,7 @@ CREATE TABLE IF NOT EXISTS flexprice.events ON CLUSTER '{cluster}'
             id
     )
 )
-ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}', ingested_at)
+ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{installation}/{shard}/flexprice/{table}', '{replica}', ingested_at)
 -- DEVIATION FROM PROD: prod partitions this table monthly, toYYYYMM(timestamp).
 -- Daily here per intended design. Changing this on an existing table requires a
 -- new table + backfill + EXCHANGE TABLES; the partition key cannot be altered.
@@ -94,7 +95,7 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage ON CLUSTER '{cluster}'
     `source` LowCardinality(String) DEFAULT '',
     `properties` String DEFAULT '' CODEC(ZSTD(3))
 )
-ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}', ingested_at)
+ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{installation}/{shard}/flexprice/{table}', '{replica}', ingested_at)
 PARTITION BY toYYYYMMDD(timestamp)
 PRIMARY KEY (tenant_id, environment_id, external_customer_id, meter_id, timestamp)
 ORDER BY (tenant_id, environment_id, external_customer_id, meter_id, timestamp, id)
@@ -143,7 +144,7 @@ CREATE TABLE IF NOT EXISTS flexprice.activity_logs ON CLUSTER '{cluster}'
     INDEX idx_actor_id actor_id TYPE bloom_filter(0.01) GRANULARITY 1,
     INDEX idx_request_id request_id TYPE bloom_filter(0.01) GRANULARITY 1
 )
-ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/{database}/{table}', '{replica}', ingested_at)
+ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{installation}/{shard}/flexprice/{table}', '{replica}', ingested_at)
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, environment_id, occurred_at, id)
 SETTINGS index_granularity = 8192
