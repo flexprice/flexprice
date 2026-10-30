@@ -1974,3 +1974,65 @@ func TestCreateLineItemFromPrice_KeepsPeriodCount(t *testing.T) {
 	item := (&subscriptionService{}).createLineItemFromPrice(context.Background(), priceResp, sub, "addon_1", "assoc_1", time.Now())
 	require.Equal(t, 6, item.BillingPeriodCount)
 }
+
+// A cancellation dated at period end keeps the addon live until its end_date, so a caller
+// mirroring entitlements must be able to see it; the default read still lists active only.
+func (s *SubscriptionServiceSuite) TestGetActiveAddonAssociations_OptInCancelled() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+	sub := s.testData.subscription
+
+	featureID := "feat_cancelled_opt_in"
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, &feature.Feature{
+		ID:        featureID,
+		Name:      "Cancelled Opt-in Feature",
+		Type:      types.FeatureTypeMetered,
+		MeterID:   s.testData.meters.apiCalls.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+
+	addonID := "addon_cancelled_opt_in"
+	s.seedMeteredAddon(addonID, featureID, types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY)
+
+	start := s.testData.now
+	end := s.testData.now.Add(24 * time.Hour)
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, &addonassociation.AddonAssociation{
+		ID:          "assoc_active_opt_in",
+		EntityID:    sub.ID,
+		EntityType:  types.AddonAssociationEntityTypeSubscription,
+		AddonID:     addonID,
+		StartDate:   &start,
+		AddonStatus: types.AddonStatusActive,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+	s.NoError(s.GetStores().AddonAssociationRepo.Create(ctx, &addonassociation.AddonAssociation{
+		ID:          "assoc_cancelled_opt_in",
+		EntityID:    sub.ID,
+		EntityType:  types.AddonAssociationEntityTypeSubscription,
+		AddonID:     addonID,
+		StartDate:   &start,
+		EndDate:     &end,
+		AddonStatus: types.AddonStatusCancelled,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}))
+
+	hasAssoc := func(resp *dto.ListAddonAssociationsResponse, assocID string) bool {
+		for _, item := range resp.Items {
+			if item.AddonAssociation.ID == assocID {
+				return true
+			}
+		}
+		return false
+	}
+
+	defaultResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID)
+	s.NoError(err)
+	s.True(hasAssoc(defaultResp, "assoc_active_opt_in"), "default read must list active associations")
+	s.False(hasAssoc(defaultResp, "assoc_cancelled_opt_in"), "default read must keep listing active associations only")
+
+	optInResp, err := subService.GetActiveAddonAssociations(ctx, sub.ID,
+		types.AddonStatusActive, types.AddonStatusCancelled)
+	s.NoError(err)
+	s.True(hasAssoc(optInResp, "assoc_active_opt_in"), "active association must stay listed alongside cancelled")
+	s.True(hasAssoc(optInResp, "assoc_cancelled_opt_in"), "cancelled association must surface when the caller asks for it")
+}
