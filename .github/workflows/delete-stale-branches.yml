@@ -39,7 +39,7 @@ jobs:
           DEFAULT=$(gh repo view "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq '.defaultBranchRef.name')
 
           # Branches that must never be deleted here (plus default branch above)
-          PROTECTED_NAMES=(main master develop)
+          PROTECTED_NAMES=(main master develop uat production)
 
           # Only same-repo PR heads: fork PRs use branches on the fork, not on this repo
           mapfile -t OPEN_PR_BRANCHES < <(
@@ -85,7 +85,7 @@ jobs:
             echo ""
             echo "**Rule:** delete remote \`refs/heads/*\` whose tip \`committer\` date is **before** $(date -u -d '2 months ago' -Iseconds) (UTC)."
             echo ""
-            echo "**Skipped:** default branch (\`${DEFAULT}\`), named long-lived branches (\`main\` / \`master\` / \`develop\`), and any branch that is the **head** of an **open** PR."
+            echo "**Skipped:** default branch (\`${DEFAULT}\`), named long-lived branches (\`main\` / \`master\` / \`develop\` / \`uat\` / \`production\`), and any branch that is the **head** of an **open** PR."
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
