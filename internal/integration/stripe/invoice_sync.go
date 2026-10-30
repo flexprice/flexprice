@@ -113,7 +113,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		InvoiceID:       req.InvoiceID,
 		StripeInvoiceID: finalizedInvoice.ID,
 		Status:          string(finalizedInvoice.Status),
-		Amount:          decimal.NewFromInt(finalizedInvoice.Total).Div(decimal.NewFromInt(100)),
+		Amount:          types.FromSmallestUnit(finalizedInvoice.Total, string(finalizedInvoice.Currency)),
 		Currency:        string(finalizedInvoice.Currency),
 		InvoiceURL:      finalizedInvoice.HostedInvoiceURL,
 		PaymentURL:      finalizedInvoice.HostedInvoiceURL, // Same as invoice URL for Stripe
@@ -262,8 +262,8 @@ func buildInvoiceItemParams(
 	stripeInvoiceID string,
 	productIDByPriceID map[string]string,
 ) *stripe.InvoiceItemCreateParams {
-	amountCents := lineItem.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 	currency := strings.ToLower(lineItem.Currency)
+	amountCents := types.ToSignedSmallestUnit(lineItem.Amount, currency)
 
 	params := &stripe.InvoiceItemCreateParams{
 		Customer:    stripe.String(customerID),
@@ -388,7 +388,6 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 	}
 
 	stripeInvoiceID := mapping.ProviderEntityID
-	amountCents := paymentAmount.Mul(decimal.NewFromInt(100)).IntPart()
 
 	s.logger.Info(ctx, "syncing external payment to Stripe",
 		"invoice_id", invoiceID,
@@ -403,6 +402,8 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 			WithHint("Unable to get invoice from Stripe").
 			Mark(ierr.ErrSystem)
 	}
+
+	amountCents := types.ToSmallestUnit(paymentAmount, string(stripeInvoice.Currency))
 
 	// Only proceed if invoice is finalized and not fully paid
 	if stripeInvoice.Status != stripe.InvoiceStatusOpen {
@@ -636,7 +637,7 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 		}
 	}
 
-	// Add new payment amount (convert to cents as decimal for precision)
+	// Add new payment amount (metadata key stores cents for backward compatibility)
 	paymentAmountCents := paymentAmount.Mul(decimal.NewFromInt(100))
 	newTotalCredits := currentCredits.Add(paymentAmountCents)
 

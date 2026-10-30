@@ -524,7 +524,12 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *Char
 	}
 
 	// Create PaymentIntent with saved payment method
-	amountInCents := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+	amountInCents := types.ToSmallestUnit(req.Amount, req.Currency)
+	if !types.FromSmallestUnit(amountInCents, req.Currency).Equal(req.Amount) {
+		return nil, ierr.NewError("amount is not representable in the currency's smallest unit").
+			WithHint("Amount must be a whole multiple of the currency's smallest unit").
+			Mark(ierr.ErrValidation)
+	}
 	params := &stripe.PaymentIntentCreateParams{
 		Amount:        stripe.Int64(amountInCents),
 		Currency:      stripe.String(req.Currency),
@@ -701,7 +706,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 		paymentIntentID = session.PaymentIntent.ID
 		paymentStatus = string(session.PaymentIntent.Status)
 		if session.PaymentIntent.Amount > 0 {
-			amount = decimal.NewFromInt(session.PaymentIntent.Amount).Div(decimal.NewFromInt(100))
+			amount = types.FromSmallestUnit(session.PaymentIntent.Amount, string(session.PaymentIntent.Currency))
 		}
 		if session.PaymentIntent.Currency != "" {
 			currency = string(session.PaymentIntent.Currency)
@@ -733,7 +738,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 	if amount.IsZero() && session.LineItems != nil && len(session.LineItems.Data) > 0 {
 		item := session.LineItems.Data[0]
 		if item.AmountTotal > 0 {
-			amount = decimal.NewFromInt(item.AmountTotal).Div(decimal.NewFromInt(100))
+			amount = types.FromSmallestUnit(item.AmountTotal, string(item.Currency))
 		}
 		if item.Currency != "" && currency == "" {
 			currency = string(item.Currency)
@@ -831,10 +836,10 @@ func (s *PaymentService) GetPaymentStatusByPaymentIntent(ctx context.Context, pa
 		paymentMethodID = paymentIntent.PaymentMethod.ID
 	}
 
-	// Convert amount from cents to decimal
+	// Convert amount from smallest unit to decimal
 	var amount decimal.Decimal
 	if paymentIntent.Amount > 0 {
-		amount = decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+		amount = types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 	}
 
 	// Get currency
@@ -1684,7 +1689,7 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	}
 
 	// Reconcile invoice with external payment
-	amount := decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+	amount := types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 	err = s.reconcileInvoiceWithExternalPayment(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
 		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
@@ -1781,8 +1786,8 @@ func (s *PaymentService) hasSettledInvoicePaymentIntent(ctx context.Context, str
 
 // CreateExternalPaymentRecord creates a payment record in the given status for an external Stripe payment
 func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymentIntent *stripe.PaymentIntent, invoiceID string, status types.PaymentStatus, eventID string, paymentService interfaces.PaymentService) error {
-	// Convert amount from cents to decimal
-	amount := decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
+	// Convert amount from smallest unit to decimal
+	amount := types.FromSmallestUnit(paymentIntent.Amount, string(paymentIntent.Currency))
 
 	// Create payment record
 	gatewayType := types.PaymentGatewayTypeStripe
