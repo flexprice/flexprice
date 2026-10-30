@@ -247,6 +247,38 @@ func (h *SubscriptionHandler) QuerySubscriptionLineItems(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get subscription line item history
+// @ID getSubscriptionLineItemHistory
+// @Description Use when you need every version of a subscription line item, oldest first. Pass the ID of any version; the same timeline is returned. Versions cancelled before they started are left out unless requested directly.
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Line item ID"
+// @Success 200 {object} dto.ListSubscriptionLineItemsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Line item not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /subscriptions/lineitems/{id}/history [get]
+func (h *SubscriptionHandler) GetSubscriptionLineItemHistory(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("id is required").
+			WithHint("Line item ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetSubscriptionLineItemHistory(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Cancel subscription
 // @ID cancelSubscription
 // @Description Use when a customer churns or downgrades. Supports immediate or end-of-period cancellation and proration. Ideal for self-serve or support-driven cancellations.

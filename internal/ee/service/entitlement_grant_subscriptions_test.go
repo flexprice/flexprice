@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -483,6 +484,40 @@ func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_RefusesCommitme
 	_, err = NewCommitmentService(s.buildServiceParams()).Create(s.GetContext(), dto.CreateCommitmentRequest{SubscriptionID: fx.sub.ID})
 	s.Require().Error(err)
 	s.Contains(err.Error(), "subscription has a subscription entitlement grant")
+}
+
+// A terminated open-ended commitment matches the active-window query forever; only a live term blocks the grant.
+func (s *EntitlementGrantSuite) TestSubscriptionEntitlementGrant_IgnoresTerminatedOpenEndedCommitment() {
+	s.enableEntitlementAlerts()
+	ctx := s.GetContext()
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	fx := s.newSubGrantSubscription("commit-terminated-open")
+	dead := &commitment.Commitment{
+		ID:               "cmt_dead_open",
+		SubscriptionID:   fx.sub.ID,
+		CustomerID:       fx.sub.CustomerID,
+		Name:             "dead",
+		InvoiceLabel:     "dead",
+		Currency:         fx.sub.Currency,
+		ScopeEntityType:  types.CommitmentScopeSubscription,
+		ScopeEntityID:    fx.sub.ID,
+		Type:             types.COMMITMENT_TYPE_AMOUNT,
+		Value:            decimal.NewFromInt(10),
+		Measurement:      types.CommitmentMeasurementBillingPeriod,
+		Timezone:         "UTC",
+		Priority:         1,
+		StartDate:        fx.sub.CurrentPeriodStart.AddDate(0, -2, 0),
+		CommitmentStatus: types.CommitmentStatusTerminated,
+		TerminatedAt:     lo.ToPtr(fx.sub.CurrentPeriodStart.AddDate(0, -1, 0)),
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	created, err := s.GetStores().CommitmentRepo.Create(ctx, dead)
+	s.Require().NoError(err)
+	s.Require().NotNil(created)
+
+	_, err = s.entService.CreateEntitlement(ctx, subscriptionEntitlementGrantRequest(fx.sub.ID, 50, ""))
+	s.Require().NoError(err, "a commitment that ended before this period must not block the grant")
 }
 
 func (s *EntitlementGrantSuite) TestUpdateSubscriptionEntitlementGrant_RepeatedEditAddsNothing() {

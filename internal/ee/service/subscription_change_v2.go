@@ -978,10 +978,14 @@ func (s *subscriptionService) loadSubscriptionForChange(
 
 func (s *subscriptionService) applyPlanChangeLineItems(ctx context.Context, r *planChangeRequest) error {
 	for _, move := range r.carriedLineItems {
-		updated := subscription.NewSubscriptionLineItemBuilder(move.LineItem).
+		builder := subscription.NewSubscriptionLineItemBuilder(move.LineItem).
 			WithPlan(r.toPlan.ID, r.toPlan.Name).
-			WithPrice(move.NewPrice).
-			Build()
+			WithPrice(move.NewPrice)
+		// A target price scheduled to end ends the line carried onto it
+		if move.NewPrice.EndDate != nil {
+			builder = builder.WithEndDate(*move.NewPrice.EndDate)
+		}
+		updated := builder.Build()
 
 		if err := s.SubscriptionLineItemRepo.Update(ctx, updated); err != nil {
 			return err
@@ -1003,7 +1007,12 @@ func (s *subscriptionService) applyPlanChangeLineItems(ctx context.Context, r *p
 	}
 	toCreate := make([]*subscription.SubscriptionLineItem, 0, len(r.openingLineItems))
 	for _, move := range r.openingLineItems {
-		toCreate = append(toCreate, move.LineItem)
+		item := move.LineItem
+		// A target price scheduled to end ends the line opened for it
+		if priceEnd := move.NewPrice.EndDate; priceEnd != nil && (item.EndDate.IsZero() || priceEnd.Before(item.EndDate)) {
+			item = subscription.NewSubscriptionLineItemBuilder(item).WithEndDate(*priceEnd).Build()
+		}
+		toCreate = append(toCreate, item)
 	}
 	return s.SubscriptionLineItemRepo.CreateBulk(ctx, toCreate)
 }

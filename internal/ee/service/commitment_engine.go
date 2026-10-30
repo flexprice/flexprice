@@ -365,43 +365,60 @@ func (r lineRenderer) overageLines(
 	line *usageLine,
 	windows []decimal.Decimal,
 ) []dto.CreateInvoiceLineItemRequest {
-	qty, amount := decimal.Zero, decimal.Zero
-	// The line's own price charges overage units at the margin above the covered ones, per bucket for bucketed
-	// lines; an overage price charges the period's overage total afresh.
-	perWindow := line.PerWindow && line.OveragePrice == nil
+	if stack.Type == types.COMMITMENT_TYPE_AMOUNT {
+		value := decimal.Zero
+		for _, units := range windows {
+			if units.IsPositive() {
+				value = value.Add(units)
+			}
+		}
+
+		switch {
+		case value.IsPositive():
+			return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), proportionalQuantity(line, value), value)}
+		case line.Cost.IsZero() && line.Quantity.IsPositive():
+			// Free usage takes no capacity, but its quantity still shows on the invoice.
+			return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), line.Quantity, decimal.Zero)}
+		}
+
+		return nil
+	}
+
+	// Remainder in windows a commitment applies to bills at the custom rate; the rest at the line's own margin.
+	listQty, listAmount, overageQty := decimal.Zero, decimal.Zero, decimal.Zero
 	for w, units := range windows {
 		if !units.IsPositive() {
 			continue
 		}
 
-		qty = qty.Add(units)
-		switch {
-		case stack.Type == types.COMMITMENT_TYPE_AMOUNT:
-			amount = amount.Add(units)
-		case perWindow:
-			amount = amount.Add(r.marginalCost(line.Price, line.Usage[w], units))
+		applied := lo.SomeBy(stack.Commitments, func(sc *stackedCommitment) bool {
+			return sc.PoolOf[w] >= 0 && lo.Contains(sc.Lines, line)
+		})
+		if line.OveragePrice != nil && applied {
+			overageQty = overageQty.Add(units)
+			continue
+		}
+
+		listQty = listQty.Add(units)
+		if line.PerWindow {
+			listAmount = listAmount.Add(r.marginalCost(line.Price, line.Usage[w], units))
 		}
 	}
 
-	if stack.Type == types.COMMITMENT_TYPE_QUANTITY && !perWindow && qty.IsPositive() {
-		if line.OveragePrice != nil {
-			amount = r.cost(line.OveragePrice, qty)
-		} else {
-			amount = r.marginalCost(line.Price, line.Quantity, qty)
+	var rows []dto.CreateInvoiceLineItemRequest
+	if overageQty.IsPositive() {
+		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), overageQty, r.cost(line.OveragePrice, overageQty)))
+	}
+
+	if listQty.IsPositive() {
+		if !line.PerWindow {
+			listAmount = r.marginalCost(line.Price, line.Quantity.Sub(overageQty), listQty)
 		}
+
+		rows = append(rows, r.row(nil, line, types.CommitmentLineOverage, line.displayName(), listQty, listAmount))
 	}
 
-	switch {
-	case qty.IsPositive() && stack.Type == types.COMMITMENT_TYPE_AMOUNT:
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), proportionalQuantity(line, qty), amount)}
-	case qty.IsPositive():
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), qty, amount)}
-	case stack.Type == types.COMMITMENT_TYPE_AMOUNT && line.Cost.IsZero() && line.Quantity.IsPositive():
-		// Free usage takes no capacity, but its quantity still shows on the invoice.
-		return []dto.CreateInvoiceLineItemRequest{r.row(nil, line, types.CommitmentLineOverage, line.displayName(), line.Quantity, decimal.Zero)}
-	}
-
-	return nil
+	return rows
 }
 
 // marginalCost prices the top qty units of full. A margin is well defined only for monotone marginal models (flat

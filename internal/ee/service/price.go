@@ -25,6 +25,8 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
+	// GetPriceHistory returns every version of a plan price, oldest first.
+	GetPriceHistory(ctx context.Context, id string) (*dto.ListPricesResponse, error)
 	GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
@@ -524,6 +526,62 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	}
 
 	return response, nil
+}
+
+func (s *priceService) GetPriceHistory(ctx context.Context, id string) (*dto.ListPricesResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("price_id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	p, err := s.PriceRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if p.EntityType != types.PRICE_ENTITY_TYPE_PLAN {
+		return nil, ierr.NewError("price history is only available for plan prices").
+			WithHint("Price history is only available for plan prices").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":    id,
+				"entity_type": p.EntityType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Every version points at the root, so one level of parent_price_id covers the whole lineage.
+	rootID := p.GetRootPriceID()
+	versions, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
+		WithParentPriceID(rootID).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+		WithEntityIDs([]string{p.EntityID}).
+		WithAllowExpiredPrices(true))
+	if err != nil {
+		return nil, err
+	}
+
+	root := p
+	if rootID != p.ID {
+		if root, err = s.PriceRepo.Get(ctx, rootID); err != nil {
+			return nil, err
+		}
+	}
+	versions = append(versions, root)
+
+	sort.SliceStable(versions, func(i, j int) bool {
+		a, b := versions[i], versions[j]
+		if !lo.FromPtr(a.StartDate).Equal(lo.FromPtr(b.StartDate)) {
+			return lo.FromPtr(a.StartDate).Before(lo.FromPtr(b.StartDate))
+		}
+		return a.CreatedAt.Before(b.CreatedAt)
+	})
+
+	items := lo.Map(versions, func(v *price.Price, _ int) *dto.PriceResponse { return &dto.PriceResponse{Price: v} })
+	return &dto.ListPricesResponse{
+		Items:      items,
+		Pagination: types.NewPaginationResponse(len(items), len(items), 0),
+	}, nil
 }
 
 func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error) {

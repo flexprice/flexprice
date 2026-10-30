@@ -308,6 +308,17 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			startDate = lo.FromPtr(priceResponse.Price.StartDate)
 		}
 		item.StartDate = startDate
+
+		// A price that has ended by the time the line item starts gets no line item. A price
+		// ending later ends the line item at the earlier of its own end and the line item's end.
+		if priceEnd := priceResponse.Price.EndDate; priceEnd != nil {
+			if !priceEnd.After(item.StartDate) {
+				continue
+			}
+			if item.EndDate.IsZero() || priceEnd.Before(item.EndDate) {
+				item.EndDate = *priceEnd
+			}
+		}
 		lineItems = append(lineItems, item)
 	}
 
@@ -1265,6 +1276,21 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			lineItem := req.ToSubscriptionLineItem(ctx, params)
 			return lineItem
 		})
+
+		// Same price end date rule as the first phase
+		phaseItemsToCreate := make([]*subscription.SubscriptionLineItem, 0, len(phaseLineItems))
+		for _, item := range phaseLineItems {
+			if priceEnd := priceMap[item.PriceID].Price.EndDate; priceEnd != nil {
+				if !priceEnd.After(item.StartDate) {
+					continue
+				}
+				if item.EndDate.IsZero() || priceEnd.Before(item.EndDate) {
+					item.EndDate = *priceEnd
+				}
+			}
+			phaseItemsToCreate = append(phaseItemsToCreate, item)
+		}
+		phaseLineItems = phaseItemsToCreate
 
 		// Create original price to line item mapping before processing overrides
 		// This captures the mapping before any price overrides change the PriceID

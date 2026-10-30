@@ -155,6 +155,63 @@ func (s *PriceServiceSuite) TestGetPrice() {
 	s.Nil(resp)
 }
 
+func (s *PriceServiceSuite) TestGetPriceHistory() {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1, t2 := t0.AddDate(0, 1, 0), t0.AddDate(0, 2, 0)
+
+	newPrice := func(id string, entityType types.PriceEntityType, entityID, parentID string, start time.Time, end *time.Time) *price.Price {
+		return &price.Price{
+			ID:            id,
+			Amount:        decimal.NewFromInt(100),
+			Currency:      "usd",
+			EntityType:    entityType,
+			EntityID:      entityID,
+			ParentPriceID: parentID,
+			StartDate:     lo.ToPtr(start),
+			EndDate:       end,
+			BaseModel:     types.GetDefaultBaseModel(s.ctx),
+		}
+	}
+
+	// Created newest first so the result order comes from the sort, not insertion.
+	for _, p := range []*price.Price{
+		newPrice("p3", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "p1", t2, nil),
+		newPrice("p2", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "p1", t1, lo.ToPtr(t2)),
+		newPrice("p1", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "", t0, lo.ToPtr(t1)),
+		newPrice("override", types.PRICE_ENTITY_TYPE_SUBSCRIPTION, "sub-1", "p1", t1, nil),
+		newPrice("unrelated", types.PRICE_ENTITY_TYPE_PLAN, "plan-1", "", t0, nil),
+	} {
+		s.Require().NoError(s.priceRepo.Create(s.ctx, p))
+	}
+
+	tests := []struct {
+		name    string
+		id      string
+		wantIDs []string
+		wantErr bool
+	}{
+		{name: "from root", id: "p1", wantIDs: []string{"p1", "p2", "p3"}},
+		{name: "from latest version", id: "p3", wantIDs: []string{"p1", "p2", "p3"}},
+		{name: "never edited", id: "unrelated", wantIDs: []string{"unrelated"}},
+		{name: "subscription override rejected", id: "override", wantErr: true},
+		{name: "not found", id: "missing", wantErr: true},
+		{name: "empty id", id: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := s.priceService.GetPriceHistory(s.ctx, tt.id)
+			if tt.wantErr {
+				s.Error(err)
+				s.Nil(resp)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal(tt.wantIDs, lo.Map(resp.Items, func(r *dto.PriceResponse, _ int) string { return r.ID }))
+		})
+	}
+}
+
 func (s *PriceServiceSuite) TestGetPrices() {
 	// Prepopulate the repository with prices associated with a plan_id
 	_ = s.priceRepo.Create(s.ctx, &price.Price{

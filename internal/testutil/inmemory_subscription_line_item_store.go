@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -299,6 +300,56 @@ func (s *InMemorySubscriptionLineItemStore) ListBySubscription(ctx context.Conte
 		SubscriptionIDs: []string{sub.ID},
 	}
 	return s.List(ctx, filter)
+}
+
+// ListLineage mirrors the ent recursive walk: predecessor pointers up, successor pointers down,
+// column first with metadata fallback, within the anchor's subscription.
+func (s *InMemorySubscriptionLineItemStore) ListLineage(ctx context.Context, id string) ([]*subscription.SubscriptionLineItem, error) {
+	anchor, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	pointer := func(col *string, metadata map[string]string, key string) string {
+		if col != nil {
+			return *col
+		}
+		return metadata[key]
+	}
+
+	seen := map[string]*subscription.SubscriptionLineItem{anchor.ID: anchor}
+	walk := func(next func(*subscription.SubscriptionLineItem) string) {
+		cur := anchor
+		for depth := 0; depth < 100; depth++ {
+			nextID := next(cur)
+			if nextID == "" || seen[nextID] != nil {
+				return
+			}
+			item, err := s.Get(ctx, nextID)
+			if err != nil || item.SubscriptionID != anchor.SubscriptionID {
+				return
+			}
+			seen[nextID] = item
+			cur = item
+		}
+	}
+	walk(func(li *subscription.SubscriptionLineItem) string {
+		return pointer(li.PredecessorLineItemID, li.Metadata, types.SubscriptionLineItemMetadataKeyPredecessorID)
+	})
+	walk(func(li *subscription.SubscriptionLineItem) string {
+		return pointer(li.SuccessorLineItemID, li.Metadata, types.SubscriptionLineItemMetadataKeySuccessorID)
+	})
+
+	items := lo.Filter(lo.Values(seen), func(li *subscription.SubscriptionLineItem, _ int) bool {
+		return li.Status != types.StatusDeleted || li.ID == anchor.ID
+	})
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].StartDate.Equal(items[j].StartDate) {
+			return items[i].StartDate.Before(items[j].StartDate)
+		}
+		return lineItemSortFn(items[i], items[j])
+	})
+	return items, nil
 }
 
 // List retrieves subscription line items based on filter

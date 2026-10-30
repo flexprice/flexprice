@@ -308,6 +308,14 @@ func (_c *CommitmentCreate) SetEndDate(v time.Time) *CommitmentCreate {
 	return _c
 }
 
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (_c *CommitmentCreate) SetNillableEndDate(v *time.Time) *CommitmentCreate {
+	if v != nil {
+		_c.SetEndDate(*v)
+	}
+	return _c
+}
+
 // SetOnEarlyTermination sets the "on_early_termination" field.
 func (_c *CommitmentCreate) SetOnEarlyTermination(v types.CommitmentEarlyTermination) *CommitmentCreate {
 	_c.mutation.SetOnEarlyTermination(v)
@@ -566,9 +574,6 @@ func (_c *CommitmentCreate) check() error {
 	if _, ok := _c.mutation.StartDate(); !ok {
 		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "Commitment.start_date"`)}
 	}
-	if _, ok := _c.mutation.EndDate(); !ok {
-		return &ValidationError{Name: "end_date", err: errors.New(`ent: missing required field "Commitment.end_date"`)}
-	}
 	if v, ok := _c.mutation.OnEarlyTermination(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "on_early_termination", err: fmt.Errorf(`ent: validator failed for field "Commitment.on_early_termination": %w`, err)}
@@ -731,7 +736,7 @@ func (_c *CommitmentCreate) createSpec() (*Commitment, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.EndDate(); ok {
 		_spec.SetField(commitment.FieldEndDate, field.TypeTime, value)
-		_node.EndDate = value
+		_node.EndDate = &value
 	}
 	if value, ok := _c.mutation.OnEarlyTermination(); ok {
 		_spec.SetField(commitment.FieldOnEarlyTermination, field.TypeString, value)

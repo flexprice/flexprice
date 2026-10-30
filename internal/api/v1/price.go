@@ -114,6 +114,38 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get price history
+// @ID getPriceHistory
+// @Description Use when you need every version of a plan price, oldest first. Pass the ID of any version; the same timeline is returned.
+// @Tags Prices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Price ID"
+// @Success 200 {object} dto.ListPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Price not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @x-scope "read"
+// @Router /prices/{id}/history [get]
+func (h *PriceHandler) GetPriceHistory(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("id is required").
+			WithHint("Price ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetPriceHistory(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *PriceHandler) ListPrices(c *gin.Context) {
 	var filter types.PriceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {

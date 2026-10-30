@@ -1064,6 +1064,9 @@ func (m *mockSubscriptionService) UpdateSubscriptionLineItem(ctx context.Context
 func (m *mockSubscriptionService) ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*apidto.ListSubscriptionLineItemsResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetSubscriptionLineItemHistory(ctx context.Context, lineItemID string) (*apidto.ListSubscriptionLineItemsResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	return nil
 }

@@ -20,17 +20,17 @@ import (
 // commitmentLoader turns the commitments overlapping one invoice calculation and the subscription's usage into
 // allocated commitment stacks. It is empty when commitments are off or nothing overlaps the period.
 type commitmentLoader struct {
-	billing           *billingService
-	sub               *subscription.Subscription
-	periodStart       time.Time
-	periodEnd         time.Time
-	asOf              time.Time
-	charges           map[string][]*dto.SubscriptionUsageByMetersResponse
-	meters            map[string]*meter.Meter
-	source            types.UsageSource
+	billing     *billingService
+	sub         *subscription.Subscription
+	periodStart time.Time
+	periodEnd   time.Time
+	asOf        time.Time
+	charges     map[string][]*dto.SubscriptionUsageByMetersResponse
+	meters      map[string]*meter.Meter
+	source      types.UsageSource
 	// usageEnd caps usage reads when periodEnd is projected past the queried window; zero means periodEnd.
-	usageEnd   time.Time
-	subContext *commitmentContext
+	usageEnd          time.Time
+	subContext        *commitmentContext
 	priceSvc          PriceService
 	commitments       []*stackedCommitment    // in D5 order
 	scopeByCommitment map[string]*loadedScope // keyed by commitment ID
@@ -105,8 +105,7 @@ func (s *billingService) newCommitmentLoader(
 	})
 
 	for _, c := range active {
-		effectiveEnd := c.EffectiveEnd()
-		if !effectiveEnd.After(periodStart) {
+		if c.EndedBy(periodStart) {
 			continue
 		}
 
@@ -116,7 +115,7 @@ func (s *billingService) newCommitmentLoader(
 			c.ScopeEntityID,
 			l.subContext,
 			maxTime(periodStart, c.StartDate),
-			minTime(periodEnd, effectiveEnd),
+			lo.ToPtr(c.Until(periodEnd)),
 		)
 		callScopeLineItems := lo.FilterMap(scopeLineItems, func(li *subscription.SubscriptionLineItem, _ int) (*subscription.SubscriptionLineItem, bool) {
 			item, ok := callLineItemByID[li.ID]
@@ -158,7 +157,7 @@ func (s *billingService) newCommitmentLoader(
 				Mark(ierr.ErrInvalidOperation)
 		}
 
-		periods, err := commitmentPeriods(c, sub, amountOf, bucket)
+		periods, err := commitmentPeriods(c, sub, amountOf, bucket, periodStart, periodEnd)
 		if err != nil {
 			return nil, err
 		}
@@ -332,7 +331,7 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 					Binding:      sc.C.Binding,
 					Currency:     l.sub.Currency,
 					AppliesFrom:  maxTime(l.periodStart, sc.C.StartDate),
-					AppliesTo:    minTime(l.periodEnd, sc.C.EffectiveEnd()),
+					AppliesTo:    sc.C.Until(l.periodEnd),
 				}
 				byID[sc.C.ID] = b
 				out = append(out, b)
@@ -508,8 +507,8 @@ func accrues(c *commitment.Commitment, t, from time.Time) bool {
 }
 
 // splitLineIntoBuckets lays a bucketed line's usage out one bucket per window, each priced on its own as normal billing
-// prices it. A bucket joins the window containing its start, so an instant off the grid lands rather than vanishes;
-// one before the first window joins it.
+// prices it. A bucket joins the window containing max(its key, line start), so an instant off the grid lands rather than
+// vanishes; one before the first window joins it.
 func (l *commitmentLoader) splitLineIntoBuckets(
 	ctx context.Context,
 	stack *commitmentStack,
@@ -522,7 +521,9 @@ func (l *commitmentLoader) splitLineIntoBuckets(
 			break
 		}
 
-		at := max(sort.Search(len(stack.Windows), func(i int) bool { return stack.Windows[i].After(t) })-1, 0)
+		// A bucket opened before its line (ClickHouse weeks start on Sunday) draws capacity from the line's start.
+		start := maxTime(t, line.Item.StartDate)
+		at := max(sort.Search(len(stack.Windows), func(i int) bool { return stack.Windows[i].After(start) })-1, 0)
 		quantities[at] = quantities[at].Add(v)
 	}
 
@@ -543,11 +544,13 @@ func (l *commitmentLoader) splitLineIntoBuckets(
 	}
 }
 
-// buildPeriodStack gives the stack a window per span between commitment starts and effective ends, plus one per usage
-// bucket of its bucketed lines; each commitment's single pool spans the windows it is in force. With no boundary
-// inside the invoice window and no bucketed line, that is one window and one pool per commitment.
+// buildPeriodStack splits a billing period at commitment boundaries, line versions, and usage buckets.
+// Each commitment shares one capacity pool across the windows it applies to.
 func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitmentStack) error {
-	boundaryStarts := inForceBoundaries(stack.Commitments, l.periodStart, l.periodEnd)
+	boundaryStarts := periodSplits(l.periodStart, l.periodEnd, lo.FlatMap(stack.Commitments, func(sc *stackedCommitment, _ int) []time.Time {
+		// An end past the range, or none, lands at end and adds no boundary.
+		return []time.Time{sc.C.StartDate, sc.C.Until(l.periodEnd)}
+	}))
 	lineMeters, err := l.buildStackLines(ctx, stack)
 	if err != nil {
 		return err
@@ -556,7 +559,10 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 	// Windows start at the usage buckets' own keys, not a generated grid, which may disagree with them (ClickHouse
 	// weeks start on Sunday); a bucket starting before the period joins the first window, as it joins the first span.
 	bucketedUsage := make([]map[time.Time]decimal.Decimal, len(stack.Lines))
-	windowStarts := append([]time.Time(nil), boundaryStarts...)
+	versionStarts := periodSplits(l.periodStart, l.periodEnd, lo.FlatMap(stack.Lines, func(line *usageLine, _ int) []time.Time {
+		return []time.Time{line.Item.StartDate, line.Item.EndDate}
+	}))
+	windowStarts := append(append([]time.Time(nil), boundaryStarts...), versionStarts...)
 	for i, line := range stack.Lines {
 		m := lineMeters[i]
 		if !price.IsBucketedMax(line.Price, m) && !price.IsBucketedSum(line.Price, m) {
@@ -568,8 +574,9 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 		}
 
 		for t := range bucketedUsage[i] {
-			if t.After(l.periodStart) {
-				windowStarts = append(windowStarts, t)
+			// A bucket opened before its line (ClickHouse weeks start on Sunday) draws capacity from the line's start.
+			if at := maxTime(t, line.Item.StartDate); at.After(l.periodStart) {
+				windowStarts = append(windowStarts, at)
 			}
 		}
 	}
@@ -592,8 +599,9 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 		sc.Pools = []capacityPool{{Capacity: sc.Period.Capacity}}
 		sc.PoolOf = make([]int, len(stack.Windows))
 		for w, t := range stack.Windows {
-			// Start is compared at whole seconds, as the period edges are.
-			if sc.C.StartDate.Truncate(time.Second).After(t) || !sc.C.EffectiveEnd().After(t) {
+			// Start is compared at whole seconds, as the period edges are; the subscription's own end
+			// bounds an open-ended commitment (termEnd), so no capacity survives the subscription.
+			if sc.C.StartDate.Truncate(time.Second).After(t) || endReached(termEnd(l.sub, sc.C), t) {
 				sc.PoolOf[w] = -1
 			}
 		}
@@ -603,7 +611,7 @@ func (l *commitmentLoader) buildPeriodStack(ctx context.Context, stack *commitme
 }
 
 // splitLineAcrossBoundaries prices an unbucketed line's period quantity the way the normal path does and lays its
-// usage out per span, each at the window where the span starts.
+// usage out per span, each at the window where the line's version starts within the span.
 func (l *commitmentLoader) splitLineAcrossBoundaries(
 	ctx context.Context,
 	stack *commitmentStack,
@@ -632,24 +640,23 @@ func (l *commitmentLoader) splitLineAcrossBoundaries(
 
 	line.Usage = make([]decimal.Decimal, len(stack.Windows))
 	for i, t := range boundaryStarts {
-		at := sort.Search(len(stack.Windows), func(w int) bool { return !stack.Windows[w].Before(t) })
-		line.Usage[at] = spanValues[i]
+		from := maxTime(t, line.Item.StartDate)
+		at := max(sort.Search(len(stack.Windows), func(w int) bool { return stack.Windows[w].After(from) })-1, 0)
+		line.Usage[at] = line.Usage[at].Add(spanValues[i])
 	}
 
 	return nil
 }
 
-// inForceBoundaries returns the starts of the sub-ranges of [start, end) between commitment starts and effective ends.
+// periodSplits returns the starts of the sub-ranges [start, end) is split into at the given instants.
 // Times in the same second as the period edges do not split it, since computed billing dates drop sub-second precision.
-func inForceBoundaries(commitments []*stackedCommitment, start time.Time, end time.Time) []time.Time {
+func periodSplits(start time.Time, end time.Time, instants []time.Time) []time.Time {
 	from, to := start.Truncate(time.Second), end.Truncate(time.Second)
 	boundaries := []time.Time{start}
-	for _, sc := range commitments {
-		for _, t := range []time.Time{sc.C.StartDate, sc.C.EffectiveEnd()} {
-			sec := t.Truncate(time.Second)
-			if sec.After(from) && sec.Before(to) {
-				boundaries = append(boundaries, t)
-			}
+	for _, t := range instants {
+		sec := t.Truncate(time.Second)
+		if sec.After(from) && sec.Before(to) {
+			boundaries = append(boundaries, t)
 		}
 	}
 

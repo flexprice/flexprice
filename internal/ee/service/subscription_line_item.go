@@ -415,6 +415,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if req.EffectiveFrom != nil {
 		endDate = req.EffectiveFrom.UTC()
 	}
+	endDate = endDate.Truncate(time.Microsecond)
 
 	var resp *dto.SubscriptionLineItemResponse
 	detach := func(ctx context.Context) error {
@@ -454,28 +455,32 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 	}
 
 	// Set end date and update
-	var effectiveFrom time.Time
+	var requested time.Time
 	if req.EffectiveFrom != nil {
-		effectiveFrom = req.EffectiveFrom.UTC()
+		requested = req.EffectiveFrom.UTC()
 	} else {
-		effectiveFrom = time.Now().UTC()
+		requested = time.Now().UTC()
 	}
 
 	// Validate effective from date is on or after start date
-	if effectiveFrom.Before(lineItem.StartDate) {
+	if requested.Before(lineItem.StartDate) {
 		return nil, ierr.NewError("effective from date must be on or after start date").
 			WithHint("The effective from date must be on or after the line item's start date").
 			WithReportableDetails(map[string]interface{}{
 				"line_item_id":   lineItemID,
 				"start_date":     lineItem.StartDate,
-				"effective_from": effectiveFrom,
+				"effective_from": requested,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := validateLineItemEndDateChange(lineItem, effectiveFrom); err != nil {
+	if err := validateLineItemEndDateChange(lineItem, requested); err != nil {
 		return nil, err
 	}
+
+	// Validated as requested, stored cut to Postgres' microseconds like the end the commitment guard checked:
+	// cutting first could pull a date just past an existing end onto it, which the end-date check accepts.
+	effectiveFrom := requested.Truncate(time.Microsecond)
 
 	// Capture a snapshot before mutating EndDate — the proration service uses EndDate==zero
 	// to distinguish "active recurring" from "onetime" (pre-existing EndDate at period boundary).
@@ -745,11 +750,13 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Determine end date for existing line item
-	endDate := time.Now().UTC()
+	// Determine end date for existing line item. Postgres keeps microseconds, so the end is cut to them: the
+	// commitment guard compares it with the successor's stored start, which must not round past it.
+	requestedEnd := time.Now().UTC()
 	if req.EffectiveFrom != nil {
-		endDate = req.EffectiveFrom.UTC()
+		requestedEnd = req.EffectiveFrom.UTC()
 	}
+	endDate := requestedEnd.Truncate(time.Microsecond)
 
 	// Check if we need to create a new line item (with price overrides)
 	if req.ShouldCreateNewLineItem() {
@@ -789,7 +796,8 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 					Mark(ierr.ErrValidation)
 			}
 
-			if err := validateLineItemEndDateChange(locked, endDate); err != nil {
+			// The requested end, not the cut one: cutting could pull one just past an existing end onto it.
+			if err := validateLineItemEndDateChange(locked, requestedEnd); err != nil {
 				return err
 			}
 
@@ -1301,6 +1309,28 @@ func (s *subscriptionService) ListSubscriptionLineItems(ctx context.Context, fil
 			filter.GetLimit(),
 			filter.GetOffset(),
 		),
+	}, nil
+}
+
+func (s *subscriptionService) GetSubscriptionLineItemHistory(ctx context.Context, lineItemID string) (*dto.ListSubscriptionLineItemsResponse, error) {
+	if lineItemID == "" {
+		return nil, ierr.NewError("line_item_id is required").
+			WithHint("Line item ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	items, err := s.SubscriptionLineItemRepo.ListLineage(ctx, lineItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	responses := lo.Map(items, func(item *subscription.SubscriptionLineItem, _ int) *dto.SubscriptionLineItemResponse {
+		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: item}
+	})
+
+	return &dto.ListSubscriptionLineItemsResponse{
+		Items:      responses,
+		Pagination: types.NewPaginationResponse(len(responses), len(responses), 0),
 	}, nil
 }
 
