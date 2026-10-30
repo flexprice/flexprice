@@ -34,12 +34,15 @@ func (CustomerDeletionRequest) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			NotEmpty().
+			Immutable().
 			Comment("Internal customer ID; stable across later redaction"),
+		// mutating this would release a retired key
 		field.String("external_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
 			NotEmpty().
+			Immutable().
 			Comment("Permanent, never cleared; tenant-facing key and never-reuse registry value"),
 		field.String("state").
 			SchemaType(map[string]string{

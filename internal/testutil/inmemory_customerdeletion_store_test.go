@@ -362,3 +362,30 @@ func TestInMemoryCustomerDeletionStore_DuplicateCategoryRejected(t *testing.T) {
 	require.NoError(t, listErr)
 	assert.Empty(t, stored)
 }
+
+func TestInMemoryCustomerDeletionStore_NestedPolicyIsolated(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	request.RetentionPolicy = map[string]interface{}{
+		"invoices": map[string]interface{}{"basis": "tax"},
+		"stores":   []interface{}{"pg", "clickhouse"},
+	}
+	require.NoError(t, store.Create(ctx, request, categories))
+
+	// mutating the caller's map must not reach the store
+	request.RetentionPolicy["invoices"].(map[string]interface{})["basis"] = "tampered"
+	request.RetentionPolicy["stores"].([]interface{})[0] = "tampered"
+
+	stored, err := store.GetByCustomerID(ctx, "cust_1")
+	require.NoError(t, err)
+	assert.Equal(t, "tax", stored.RetentionPolicy["invoices"].(map[string]interface{})["basis"])
+	assert.Equal(t, "pg", stored.RetentionPolicy["stores"].([]interface{})[0])
+
+	// and a mutation of what we read back must not reach it either
+	stored.RetentionPolicy["invoices"].(map[string]interface{})["basis"] = "tampered_again"
+	again, err := store.GetByCustomerID(ctx, "cust_1")
+	require.NoError(t, err)
+	assert.Equal(t, "tax", again.RetentionPolicy["invoices"].(map[string]interface{})["basis"])
+}

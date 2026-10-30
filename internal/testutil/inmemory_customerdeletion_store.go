@@ -26,14 +26,39 @@ func NewInMemoryCustomerDeletionStore() *InMemoryCustomerDeletionStore {
 	}
 }
 
+// deepCopyJSONMap recurses; a shallow copy still aliases nested values
+func deepCopyJSONMap(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		out[k] = deepCopyJSONValue(v)
+	}
+	return out
+}
+
+func deepCopyJSONValue(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		return deepCopyJSONMap(t)
+	case []interface{}:
+		out := make([]interface{}, len(t))
+		for i, item := range t {
+			out[i] = deepCopyJSONValue(item)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
 func copyDeletionRequest(r *customerdeletion.CustomerDeletionRequest) *customerdeletion.CustomerDeletionRequest {
 	if r == nil {
 		return nil
 	}
 	c := *r
-	if r.RetentionPolicy != nil {
-		c.RetentionPolicy = lo.Assign(map[string]interface{}{}, r.RetentionPolicy)
-	}
+	c.RetentionPolicy = deepCopyJSONMap(r.RetentionPolicy)
 	return &c
 }
 
@@ -42,9 +67,7 @@ func copyDeletionCategory(c *customerdeletion.CustomerDeletionCategory) *custome
 		return nil
 	}
 	cp := *c
-	if c.VerificationResult != nil {
-		cp.VerificationResult = lo.Assign(map[string]interface{}{}, c.VerificationResult)
-	}
+	cp.VerificationResult = deepCopyJSONMap(c.VerificationResult)
 	return &cp
 }
 
