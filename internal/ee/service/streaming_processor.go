@@ -106,6 +106,14 @@ func (sp *StreamingProcessor) ProcessFileStream(
 		}
 	}
 
+	// Spreadsheet exports routinely carry padding around cells, and csv's
+	// TrimLeadingSpace does not reach inside quoted fields or touch trailing
+	// space. An untrimmed header silently fails to match its case in the
+	// processors' switch, and an untrimmed value becomes a lookup key that never
+	// matches an event property — both fail without an error. Trim once here so
+	// every chunk processor sees clean cells.
+	trimFields(headers)
+
 	sp.Logger.Debug(ctx, "parsed CSV headers", "headers", headers)
 
 	var chunk [][]string
@@ -132,6 +140,7 @@ func (sp *StreamingProcessor) ProcessFileStream(
 			continue
 		}
 
+		trimFields(record)
 		chunk = append(chunk, record)
 
 		if len(chunk) >= config.ChunkSize {
@@ -261,4 +270,11 @@ func (sp *StreamingProcessor) updateTaskProgress(ctx context.Context, t *task.Ta
 		"successful", successful,
 		"failed", failed,
 		"chunk_index", chunkIndex)
+}
+
+// trimFields trims surrounding whitespace from every cell of a CSV row in place.
+func trimFields(row []string) {
+	for i := range row {
+		row[i] = strings.TrimSpace(row[i])
+	}
 }
