@@ -960,8 +960,8 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 }
 
 func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
-	// Always return 200 OK to Moyasar to prevent retries
-	// We log errors internally but don't expose them to Moyasar
+	// Return 200 OK to Moyasar unless processing hit a transient failure, which
+	// answers 500 so Moyasar redelivers. Errors are logged, never exposed.
 	//
 	// Skipped when the request was aborted: a rejected webhook must keep its own
 	// status rather than be overwritten with a success body.
@@ -1109,6 +1109,9 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 			"error", err,
 			"event_type", event.Type,
 			"environment_id", environmentID)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"error": "Webhook processing failed, please retry",
+		})
 		return
 	}
 

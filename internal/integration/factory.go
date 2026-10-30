@@ -957,6 +957,41 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		return false, false, ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
+	// Retries must not release twice: settle a void or refund that already happened,
+	// close a failed charge as voided (nothing to release), and wait on an unfinished one.
+	current, err := m.Client.GetPayment(ctx, gatewayPaymentID)
+	if err != nil {
+		return false, false, err
+	}
+	switch moyasar.MoyasarPaymentStatus(current.Status) {
+	case moyasar.MoyasarPaymentStatusVoided:
+		if err := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		}); err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	case moyasar.MoyasarPaymentStatusRefunded:
+		if err := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			RefundedAt:         time.Now().UTC(),
+		}); err != nil {
+			return false, false, err
+		}
+		return false, true, nil
+	case moyasar.MoyasarPaymentStatusInitiated:
+		return false, false, nil
+	case moyasar.MoyasarPaymentStatusFailed:
+		return false, false, m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   gatewayPaymentID,
+			VoidedAt:           time.Now().UTC(),
+		})
+	}
+
 	// Try void first
 	if _, voidErr := m.Client.VoidPayment(ctx, gatewayPaymentID); voidErr == nil {
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
@@ -1005,6 +1040,8 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 		Gateway:           string(types.SecretProviderMoyasar),
 		Amount:            decimal.NewFromInt(1),
 		Currency:          moyasar.DefaultCurrency,
+		// One payment per attempt: a shared one, once failed, can't record a later successful card.
+		IdempotencyKey: types.GenerateUUIDWithPrefix("moyasar_card_setup"),
 	})
 	if err != nil {
 		return "", "", err
