@@ -88,6 +88,12 @@ func (s *subscriptionService) resolvePlanChange(
 		return nil, err
 	}
 
+	// Read before the prices so synced_price_sequence never claims a change the new line items missed.
+	targetSeq, err := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, toPlan.Plan.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Plan change v2 does not currently support caller-driven price selection —
 	// pass nil so the strict-equal default applies (matches historical behavior
 	// on this path).
@@ -123,9 +129,7 @@ func (s *subscriptionService) resolvePlanChange(
 	if err != nil {
 		return nil, err
 	}
-	if updatedSub.SyncedPriceSequence, err = s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, r.toPlan.ID); err != nil {
-		return nil, err
-	}
+	updatedSub.SyncedPriceSequence = targetSeq
 	r.updatedSub = updatedSub
 
 	carriedLineItems, openingLineItems, closingLineItems, err := s.resolveLineItems(ctx, sub, targetPrices, toPlan, effectiveAt)

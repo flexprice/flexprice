@@ -557,6 +557,44 @@ func (s *SubscriptionChangeV2Suite) TestExecute_PlanAllowancesUseAddonGrantChang
 	}
 }
 
+// A plan change on a never-reset meter grants the new plan's quota as the change prorates it,
+// with no leftover from the old plan: the running total already carries the usage.
+func (s *SubscriptionChangeV2Suite) TestExecute_NeverResetPlanAllowanceFollowsProration() {
+	for _, behavior := range []types.ProrationBehavior{types.ProrationBehaviorNone, types.ProrationBehaviorCreateProrations} {
+		s.Run(string(behavior), func() {
+			ctx := s.GetContext()
+			f, oldEC, newEC := s.planAllowanceFixture(types.ResetUsageNever)
+			sub := s.createSubscription(s.td.starter.ID)
+			at := time.Now().UTC().Truncate(time.Second)
+			predecessor := entitlementgrant.NewEntitlementGrantBuilder(
+				s.createEntitlementGrant(sub, oldEC.ID, f.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)).
+				WithQuota(decimal.NewFromInt(100)).WithUsage(decimal.NewFromInt(80)).WithLastComputedAt(lo.ToPtr(at.Add(-time.Second))).
+				Build()
+			_, err := s.GetStores().EntitlementGrantRepo.Update(ctx, predecessor)
+			s.Require().NoError(err)
+
+			_, err = s.svc.ExecutePlanChange(ctx, sub.ID, s.changeRequest(s.td.pro.ID, behavior), at)
+			s.Require().NoError(err)
+			current, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+			s.Require().NoError(err)
+			grants, err := NewEntitlementGrantService(s.serviceParams()).LiveGrantsByFeature(ctx, current, at)
+			s.Require().NoError(err)
+			s.Require().Len(grants[f.ID], 1)
+			g := grants[f.ID][0]
+			s.Equal(newEC.ID, g.EntitlementConfigID)
+
+			want := decimal.NewFromInt(1000)
+			if behavior == types.ProrationBehaviorCreateProrations {
+				coefficient, err := decimal.NewFromString(g.Metadata["proration_coefficient"])
+				s.Require().NoError(err)
+				s.True(coefficient.LessThan(decimal.NewFromInt(1)), "a mid-cycle change is scaled, got %s", coefficient)
+				want = want.Mul(coefficient).Round(entitlementGrantQuotaScale)
+			}
+			s.True(g.Quota.Equal(want), "expected %s, got %s", want, g.Quota)
+		})
+	}
+}
+
 func (s *SubscriptionChangeV2Suite) TestExecute_PlanChangeDoesNotCountPreChangeUsageTwice() {
 	ctx := s.GetContext()
 	f, oldEC, newEC := s.planAllowanceFixture(types.ResetUsageBillingPeriod)

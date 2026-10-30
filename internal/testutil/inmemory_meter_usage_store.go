@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -417,15 +418,21 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 		}
 
 		buckets := bucketRecords(recs, params.WindowSize, params.BillingAnchor)
+		dims := parseInMemoryGroupBy(params.GroupBy)
 		points := make([]events.MeterUsageResult, 0, len(buckets))
 		for _, b := range buckets {
-			points = append(points, events.MeterUsageResult{
-				WindowStart: b.start,
-				Value:       aggregateScalar(b.records, params.AggregationType),
-				EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
-			})
+			groups := groupMeterUsageRecords(b.records, dims)
+			keys := lo.Keys(groups)
+			sort.Strings(keys)
+			for _, key := range keys {
+				points = append(points, events.MeterUsageResult{
+					WindowStart: b.start,
+					Value:       aggregateScalar(groups[key], params.AggregationType),
+					EventCount:  uint64(distinctIDCount(groups[key])), // #nosec G115 -- test store, bounded
+				})
+			}
 		}
-		sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
+		sort.SliceStable(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 		for _, p := range points {
 			res.TotalValue = res.TotalValue.Add(p.Value)
 			res.EventCount += p.EventCount
@@ -512,19 +519,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		// only reads Value, and per-row group identity isn't consumed downstream.
 		// groupKey is just used here for stable sort order within a bucket.
 		for bucket, recs := range byBucket {
-			byCombo := make(map[string][]*events.MeterUsage)
-			for _, r := range recs {
-				var parts []string
-				for _, d := range dims {
-					if d.isSource {
-						parts = append(parts, "s="+r.Source)
-					} else {
-						parts = append(parts, d.propName+"="+propertyValue(r.Properties, d.propName))
-					}
-				}
-				k := strings.Join(parts, "|")
-				byCombo[k] = append(byCombo[k], r)
-			}
+			byCombo := groupMeterUsageRecords(recs, dims)
 			for k, crecs := range byCombo {
 				entries = append(entries, entry{
 					bucket:     bucket,
@@ -759,6 +754,24 @@ func parseInMemoryGroupBy(groupBy []string) []inMemoryGroupByDim {
 		}
 	}
 	return out
+}
+
+// groupMeterUsageRecords encodes the dimension tuple so values containing delimiters stay distinct.
+func groupMeterUsageRecords(records []*events.MeterUsage, dims []inMemoryGroupByDim) map[string][]*events.MeterUsage {
+	groups := make(map[string][]*events.MeterUsage)
+	for _, record := range records {
+		values := make([]string, len(dims))
+		for i, dim := range dims {
+			if dim.isSource {
+				values[i] = record.Source
+			} else {
+				values[i] = propertyValue(record.Properties, dim.propName)
+			}
+		}
+		key, _ := json.Marshal(values) // A string slice always marshals successfully.
+		groups[string(key)] = append(groups[string(key)], record)
+	}
+	return groups
 }
 
 // propsString produces a deterministic serialization for entry.props sorting.

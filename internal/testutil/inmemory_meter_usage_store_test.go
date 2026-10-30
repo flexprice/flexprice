@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetEarliestUsageTimestamp_ScopedByTenantAndEnvironment(t *testing.T) {
@@ -166,4 +168,157 @@ func TestGetCumulativeDailyUsage_HonorsTimezone(t *testing.T) {
 			t.Fatalf("expected UTC fallback to split into 2 day buckets, got %d: %+v", len(points), points)
 		}
 	})
+}
+
+func TestGroupedMeterUsagePreservesDistinctGroups(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		groupBy []string
+		sources []string
+		plans   []string
+		regions []string
+	}{
+		{
+			name:    "source and property",
+			groupBy: []string{"source", "properties.plan"},
+			sources: []string{"a|plan=b", "a"},
+			plans:   []string{"c", "b|plan=c"},
+		},
+		{
+			name:    "multiple properties",
+			groupBy: []string{"properties.plan", "properties.region"},
+			plans:   []string{"a|region=b", "a"},
+			regions: []string{"c", "b|region=c"},
+			sources: []string{"api", "api"},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			store := NewInMemoryMeterUsageStore()
+			at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+			for i, qty := range []int64{7, 9} {
+				props := map[string]interface{}{"plan": tt.plans[i]}
+				if len(tt.regions) > 0 {
+					props["region"] = tt.regions[i]
+				}
+				require.NoError(t, store.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+					Event: events.Event{
+						ID:            tt.plans[i],
+						TenantID:      "tenant",
+						EnvironmentID: "env",
+						Source:        tt.sources[i],
+						Properties:    props,
+						Timestamp:     at,
+					},
+					MeterID:  "meter",
+					QtyTotal: decimal.NewFromInt(qty),
+				}}))
+			}
+			params := &events.MeterUsageQueryParams{
+				TenantID:        "tenant",
+				EnvironmentID:   "env",
+				MeterIDs:        []string{"meter"},
+				AggregationType: types.AggregationMax,
+				WindowSize:      types.WindowSizeDay,
+				GroupBy:         tt.groupBy,
+			}
+			results, err := store.GetUsageMultiMeter(ctx, params)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.Equal(t, "16", results[0].TotalValue.String())
+			require.Len(t, results[0].Points, 2)
+			params.MeterID, params.MeterIDs = "meter", nil
+			bucketed, err := store.GetUsageForBucketedMeters(ctx, params)
+			require.NoError(t, err)
+			require.Equal(t, "16", bucketed.Value.String())
+			require.Len(t, bucketed.Results, 2)
+		})
+	}
+}
+
+func TestGroupedMultiMeterUsesRequestedAggregation(t *testing.T) {
+	ctx := context.Background()
+	store := NewInMemoryMeterUsageStore()
+	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	for _, seed := range []struct {
+		id       string
+		hash     string
+		quantity int64
+		offset   time.Duration
+	}{
+		{
+			id:       "first",
+			hash:     "hash-a",
+			quantity: 7,
+			offset:   time.Hour,
+		},
+		{
+			id:       "second",
+			hash:     "hash-b",
+			quantity: 9,
+		},
+		{
+			id:       "second",
+			hash:     "hash-b",
+			quantity: 9,
+		},
+	} {
+		require.NoError(t, store.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+			Event: events.Event{
+				ID:            seed.id,
+				TenantID:      "tenant",
+				EnvironmentID: "env",
+				Source:        "api",
+				Timestamp:     at.Add(seed.offset),
+			},
+			MeterID:    "meter",
+			QtyTotal:   decimal.NewFromInt(seed.quantity),
+			UniqueHash: seed.hash,
+		}}))
+	}
+	for _, tt := range []struct {
+		aggregation types.AggregationType
+		want        string
+	}{
+		{
+			aggregation: types.AggregationCount,
+			want:        "2",
+		},
+		{
+			aggregation: types.AggregationCountUnique,
+			want:        "2",
+		},
+		{
+			aggregation: types.AggregationSum,
+			want:        "25",
+		},
+		{
+			aggregation: types.AggregationMax,
+			want:        "9",
+		},
+		{
+			aggregation: types.AggregationAvg,
+			want:        "8.3333333333333333",
+		},
+		{
+			aggregation: types.AggregationLatest,
+			want:        "7",
+		},
+	} {
+		t.Run(string(tt.aggregation), func(t *testing.T) {
+			results, err := store.GetUsageMultiMeter(ctx, &events.MeterUsageQueryParams{
+				TenantID:        "tenant",
+				EnvironmentID:   "env",
+				MeterIDs:        []string{"meter"},
+				AggregationType: tt.aggregation,
+				WindowSize:      types.WindowSizeDay,
+				GroupBy:         []string{"source"},
+			})
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.Equal(t, tt.want, results[0].TotalValue.String())
+			require.Len(t, results[0].Points, 1)
+			require.Equal(t, uint64(2), results[0].EventCount)
+		})
+	}
 }
