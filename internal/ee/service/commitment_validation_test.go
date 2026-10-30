@@ -423,7 +423,7 @@ func (s *CommitmentServiceSuite) TestValidation_AcceptsStartMatchingAMidSecondSu
 	// The usage lines inherit the mid-second start, as subscription creation sets them.
 	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
 	s.Require().NoError(err)
-	line.StartDate = sub.StartDate
+	line = subscription.NewSubscriptionLineItemBuilder(line).WithStartDate(sub.StartDate).Build()
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
 
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
