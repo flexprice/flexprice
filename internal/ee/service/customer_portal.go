@@ -310,22 +310,11 @@ func (s *customerPortalService) GetWallet(ctx context.Context, walletID string) 
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	walletService := NewWalletService(s.ServiceParams)
-
-	// Get the wallet balance
-	wallet, err := walletService.GetWalletBalance(ctx, walletID)
-	if err != nil {
+	if _, err := s.authorizeWallet(ctx, walletID); err != nil {
 		return nil, err
 	}
 
-	// Verify it belongs to this customer
-	if wallet.CustomerID != customerID {
-		return nil, ierr.NewError("wallet not found").
-			WithHint("Wallet does not belong to this customer").
-			Mark(ierr.ErrNotFound)
-	}
-
-	return wallet, nil
+	return NewWalletService(s.ServiceParams).GetWalletBalance(ctx, walletID)
 }
 
 // GetAnalytics returns usage analytics for the portal customer
@@ -517,23 +506,11 @@ func (s *customerPortalService) GetWalletTransactions(ctx context.Context, walle
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	walletService := NewWalletService(s.ServiceParams)
-
-	// First verify the wallet belongs to this customer by getting the wallet
-	wallet, err := walletService.GetWalletBalance(ctx, walletID)
-	if err != nil {
+	if _, err := s.authorizeWallet(ctx, walletID); err != nil {
 		return nil, err
 	}
 
-	// Verify it belongs to this customer
-	if wallet.CustomerID != customerID {
-		return nil, ierr.NewError("wallet not found").
-			WithHint("Wallet does not belong to this customer").
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Get the transactions
-	return walletService.GetWalletTransactions(ctx, walletID, filter)
+	return NewWalletService(s.ServiceParams).GetWalletTransactions(ctx, walletID, filter)
 }
 
 // validatePropertyKeys rejects property group-by and filter keys hidden from portal users.

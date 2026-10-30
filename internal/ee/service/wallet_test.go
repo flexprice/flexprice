@@ -607,6 +607,13 @@ func (s *WalletServiceSuite) setupWallet() {
 }
 
 func (s *WalletServiceSuite) TestCreateWallet() {
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+		ID:         "customer-2",
+		ExternalID: "ext-customer-2",
+		Name:       "Customer Two",
+		Email:      "c2@test.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}))
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
@@ -4575,8 +4582,16 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
+			custID := s.GetUUID()
+			s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+				ID:         custID,
+				ExternalID: "ext-" + custID,
+				Name:       "Currency Customer",
+				Email:      "currency@test.com",
+				BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+			}))
 			resp, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-				CustomerID: s.GetUUID(),
+				CustomerID: custID,
 				Currency:   tt.currency,
 			})
 			if tt.wantErr {
@@ -4585,6 +4600,31 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 			}
 			s.NoError(err)
 			s.Equal(tt.currency, resp.Currency)
+		})
+	}
+}
+
+func (s *WalletServiceSuite) TestCreateWallet_CustomerMustExist() {
+	tests := []struct {
+		name       string
+		customerID string
+		wantErr    bool
+	}{
+		{"unknown customer id", "cust_does_not_exist", true},
+		{"existing customer id", s.testData.customer.ID, false},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			_, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
+				CustomerID: tc.customerID,
+				Currency:   "eur",
+			})
+			if tc.wantErr {
+				s.Error(err)
+				s.True(ierr.IsNotFound(err))
+				return
+			}
+			s.NoError(err)
 		})
 	}
 }

@@ -904,6 +904,11 @@ func (s *oauthService) ExchangeCodeForConnection(
 		if err := json.Unmarshal(bodyBytes, &tokenResp); err != nil {
 			return "", ierr.WithError(err).WithHint("Failed to parse Zoho token response").Mark(ierr.ErrInternal)
 		}
+		if tokenResp.APIDomain != "" {
+			if err := types.ValidateZohoEndpoint(tokenResp.APIDomain, "api_domain"); err != nil {
+				return "", err
+			}
+		}
 		if tokenResp.RefreshToken == "" {
 			return "", ierr.NewError("Zoho refresh token missing in token exchange response").
 				WithHint("Ensure OAuth authorize request used access_type=offline and prompt=consent").

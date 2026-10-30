@@ -314,9 +314,6 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 // customer's billing currency, since its top-up invoices could never be converted.
 func (s *walletService) validateWalletConvertible(ctx context.Context, ccCfg types.CustomCurrencyConfig, customerID, currency string) error {
 	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if ierr.IsNotFound(err) {
-		return nil
-	}
 	if err != nil {
 		return err
 	}
