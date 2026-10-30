@@ -13,22 +13,22 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// CustomerDeletionRepository implements the customer deletion repository using ent
-type CustomerDeletionRepository struct {
+// customerDeletionRepository implements the customer deletion repository using ent
+type customerDeletionRepository struct {
 	client postgres.IClient
 	logger *logger.Logger
 }
 
 // NewCustomerDeletionRepository creates a new customer deletion repository
-func NewCustomerDeletionRepository(client postgres.IClient, logger *logger.Logger) *CustomerDeletionRepository {
-	return &CustomerDeletionRepository{
+func NewCustomerDeletionRepository(client postgres.IClient, logger *logger.Logger) domaincd.Repository {
+	return &customerDeletionRepository{
 		client: client,
 		logger: logger,
 	}
 }
 
 // Create writes the request row and its category rows atomically
-func (r *CustomerDeletionRepository) Create(ctx context.Context, request *domaincd.CustomerDeletionRequest, categories []*domaincd.CustomerDeletionCategory) error {
+func (r *customerDeletionRepository) Create(ctx context.Context, request *domaincd.CustomerDeletionRequest, categories []*domaincd.CustomerDeletionCategory) error {
 	if request == nil {
 		return ierr.NewError("deletion request is required").
 			WithHint("A deletion request must be provided").
@@ -144,7 +144,7 @@ func (r *CustomerDeletionRepository) Create(ctx context.Context, request *domain
 }
 
 // GetByCustomerID retrieves the deletion request for an internal customer ID
-func (r *CustomerDeletionRepository) GetByCustomerID(ctx context.Context, customerID string) (*domaincd.CustomerDeletionRequest, error) {
+func (r *customerDeletionRepository) GetByCustomerID(ctx context.Context, customerID string) (*domaincd.CustomerDeletionRequest, error) {
 	client := r.client.Reader(ctx)
 	request, err := client.CustomerDeletionRequest.
 		Query().
@@ -173,7 +173,7 @@ func (r *CustomerDeletionRepository) GetByCustomerID(ctx context.Context, custom
 }
 
 // GetByExternalID retrieves the deletion request for a retired external ID
-func (r *CustomerDeletionRepository) GetByExternalID(ctx context.Context, externalID string) (*domaincd.CustomerDeletionRequest, error) {
+func (r *customerDeletionRepository) GetByExternalID(ctx context.Context, externalID string) (*domaincd.CustomerDeletionRequest, error) {
 	client := r.client.Reader(ctx)
 	request, err := client.CustomerDeletionRequest.
 		Query().
@@ -202,7 +202,7 @@ func (r *CustomerDeletionRepository) GetByExternalID(ctx context.Context, extern
 }
 
 // ListCategories retrieves the category rows of a request
-func (r *CustomerDeletionRepository) ListCategories(ctx context.Context, requestID string) ([]*domaincd.CustomerDeletionCategory, error) {
+func (r *customerDeletionRepository) ListCategories(ctx context.Context, requestID string) ([]*domaincd.CustomerDeletionCategory, error) {
 	client := r.client.Reader(ctx)
 	categories, err := client.CustomerDeletionCategory.
 		Query().
@@ -224,7 +224,7 @@ func (r *CustomerDeletionRepository) ListCategories(ctx context.Context, request
 }
 
 // UpdateState transitions state only when the current state equals from
-func (r *CustomerDeletionRepository) UpdateState(ctx context.Context, requestID string, from, to string) error {
+func (r *customerDeletionRepository) UpdateState(ctx context.Context, requestID string, from, to string) error {
 	client := r.client.Writer(ctx)
 	affected, err := client.CustomerDeletionRequest.
 		Update().
