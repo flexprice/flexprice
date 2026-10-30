@@ -33,6 +33,7 @@ import (
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/memlimit"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
@@ -706,6 +707,9 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 
 	case types.ModeTemporalWorker:
+		// Exports hold large buffers; collect garbage before the container is OOM-killed.
+		memlimit.Apply(context.Background(), log)
+
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
