@@ -195,8 +195,9 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_PerEntryDates_OneDocumentFromT
 	s.seedFixedPriceAddon("addon_date_early", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 	s.seedFixedPriceAddon("addon_date_late", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 
-	early := sub.CurrentPeriodStart.Add(5 * 24 * time.Hour)
-	late := sub.CurrentPeriodStart.Add(20 * 24 * time.Hour)
+	// Callers' dates with nanoseconds, which the change stores cut to microseconds.
+	early := sub.CurrentPeriodStart.Add(5*24*time.Hour + 789*time.Nanosecond)
+	late := sub.CurrentPeriodStart.Add(20*24*time.Hour + 789*time.Nanosecond)
 
 	config, _, err := s.addonChangeService().Execute(ctx, AddonChangeRequest{
 		Subscription: sub,
@@ -207,13 +208,13 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_PerEntryDates_OneDocumentFromT
 	})
 	s.Require().NoError(err)
 
-	s.True(config.getPeriodStart().Equal(early),
+	s.True(config.getPeriodStart().Equal(early.Truncate(time.Microsecond)),
 		"the document opens at the earliest entry regardless of request order")
 
 	invoices := s.oneOffInvoicesFor(sub.ID)
 	s.Require().Len(invoices, 1, "different dates still settle as one document")
 	s.Require().NotNil(invoices[0].PeriodStart)
-	s.True(invoices[0].PeriodStart.Equal(early))
+	s.True(invoices[0].PeriodStart.Equal(early.Truncate(time.Microsecond)))
 
 	// Same price, later start ⇒ strictly less charged for the late entry.
 	s.Require().Len(config.getQuote().ChargeLineItems, 2)
@@ -476,7 +477,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_FutureAddOntoFreshFeature_IsAl
 
 	rows := s.sortedGrantsForFeature(featureID)
 	s.Require().Len(rows, 1)
-	s.True(rows[0].ValidFrom.Equal(at), "the window opens on its own date, not today")
+	s.True(rows[0].ValidFrom.Equal(at.Truncate(time.Microsecond)), "the window opens on its own date, not today")
 }
 
 func (s *SubscriptionServiceSuite) TestAddonBatch_FutureRemoveOfLastConfig_IsAllowed() {
@@ -563,7 +564,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoFreshFeaturesDifferentDates
 
 	second := s.sortedGrantsForFeature(secondID)
 	s.Require().Len(second, 1)
-	s.True(second[0].ValidFrom.Equal(later), "each feature keeps its own date when nothing is cut")
+	s.True(second[0].ValidFrom.Equal(later.Truncate(time.Microsecond)), "each feature keeps its own date when nothing is cut")
 }
 
 // One pooled row carries one coefficient, so two addons feeding a feature must share an instant.
@@ -644,7 +645,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoAddsOnOneFeatureSameDate_Is
 
 	rows := s.sortedGrantsForFeature(featureID)
 	s.Require().Len(rows, 1, "both addons pool into one row")
-	s.True(rows[0].ValidFrom.Equal(at))
+	s.True(rows[0].ValidFrom.Equal(at.Truncate(time.Microsecond)))
 }
 
 // -----------------------------------------------------------------------------

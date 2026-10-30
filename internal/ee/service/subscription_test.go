@@ -633,7 +633,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_BackdatedAttachIsA
 	s.Require().NoError(err)
 	addonItem, found := lo.Find(items, func(li *subscription.SubscriptionLineItem) bool { return li.EntityID == addonID })
 	s.Require().True(found)
-	s.True(addonItem.StartDate.Equal(backdated), "the line item keeps the requested start date")
+	s.True(addonItem.StartDate.Equal(backdated.Truncate(time.Microsecond)), "the line item keeps the requested start date")
 }
 
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
@@ -1356,7 +1356,9 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixedMonthly))
 
-	s.testData.now = time.Now().UTC()
+	// Nanoseconds a Linux clock gives and a macOS one does not: stored instants are cut to Postgres'
+	// microseconds, and the suite must catch an assertion that forgets it on either clock.
+	s.testData.now = time.Now().UTC().Truncate(time.Microsecond).Add(789 * time.Nanosecond)
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
 		PlanID:             s.testData.plan.ID,
@@ -3432,7 +3434,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			BaseModel:          types.GetDefaultBaseModel(ctx),
 		}))
 
-		attachAt := time.Now().UTC()
+		attachAt := time.Now().UTC().Truncate(time.Microsecond).Add(789 * time.Nanosecond)
 		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
 			SubscriptionID: subWithAddon.ID,
 			AddAddonToSubscriptionRequest: dto.AddAddonToSubscriptionRequest{
@@ -3451,7 +3453,8 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 		preItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilterPre)
 		s.NoError(err)
 		s.NotEmpty(preItems)
-		futureStart := attachAt.Add(7 * 24 * time.Hour)
+		// Written straight to the store, so cut to the microseconds Postgres would have kept.
+		futureStart := attachAt.Add(7 * 24 * time.Hour).Truncate(time.Microsecond)
 		for _, li := range preItems {
 			li.StartDate = futureStart
 			s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
@@ -5632,7 +5635,8 @@ func (s *SubscriptionServiceSuite) TestTerminateSubscriptionResources_Idempotent
 	})
 	s.NoError(err)
 
-	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour)
+	// A stored cancel_at, so whole microseconds as Postgres keeps it.
+	effectiveDate := s.testData.now.Add(3 * 24 * time.Hour).Truncate(time.Microsecond)
 
 	s.NoError(subService.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
 		SubscriptionID:     sub.ID,
@@ -9127,7 +9131,8 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_FiresScheduledC
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
-		CurrentPeriodEnd:   s.testData.now.Add(24 * time.Hour),
+		// The cancellation fires at this stored edge, so whole microseconds as Postgres keeps it.
+		CurrentPeriodEnd:   s.testData.now.Add(24 * time.Hour).Truncate(time.Microsecond),
 		BillingAnchor:      s.testData.now.Add(-24 * time.Hour),
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
@@ -11226,7 +11231,7 @@ func (s *SubscriptionServiceSuite) TestChangeDateLimits() {
 		s.NoError(err)
 	})
 
-	sub := s.testData.subscription
+	sub := s.monthlyPeriodSubscription()
 	attach := func(at time.Time) error {
 		_, err := s.service.AddAddonToSubscription(ctx, &dto.AddAddonRequest{
 			SubscriptionID: sub.ID,

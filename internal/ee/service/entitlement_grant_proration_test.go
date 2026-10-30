@@ -191,9 +191,9 @@ func (s *SubscriptionServiceSuite) TestAddonParallelGrant_TickAnchorsAtAssociati
 	s.Require().NotNil(addonRow, "the addon's parallel slot must be opened by the tick")
 	s.True(addonRow.Quota.Equal(decimal.NewFromInt(400)),
 		"parallel carries its own quota, not the pool: got %s", addonRow.Quota)
-	s.True(addonRow.ValidFrom.Equal(attachedAt),
+	s.True(addonRow.ValidFrom.Equal(attachedAt.Truncate(time.Microsecond)),
 		"the addon's slot must start when it was attached, not at the cycle start: got %s want %s",
-		addonRow.ValidFrom, attachedAt)
+		addonRow.ValidFrom, attachedAt.Truncate(time.Microsecond))
 	s.False(addonRow.ValidFrom.Equal(sub.CurrentPeriodStart), "must not backdate to the cycle start")
 }
 
@@ -257,7 +257,7 @@ func (s *SubscriptionServiceSuite) TestAddonEntitlementProration_NewFeature_Crea
 	s.Equal("ent_new_addon", got.EntitlementConfigID)
 	want := s.expectedProrated(600)
 	s.True(got.Quota.Equal(want), "expected prorated quota %s, got %s", want, got.Quota)
-	s.True(got.ValidFrom.Equal(s.testData.now), "a feature new to the sub starts at the attach, got %s", got.ValidFrom)
+	s.True(got.ValidFrom.Equal(s.testData.now.Truncate(time.Microsecond)), "a feature new to the sub starts at the attach, got %s", got.ValidFrom)
 	s.True(got.ValidTo.Equal(s.testData.subscription.CurrentPeriodEnd))
 }
 
@@ -1042,6 +1042,7 @@ func (s *SubscriptionServiceSuite) TestOpenGrants_NegativeQuota_ClampedForSucces
 // feeds the feature. This pins WHEN that happens for a period-end removal.
 func (s *SubscriptionServiceSuite) TestGrantBatch_RemoveAtPeriodEnd_AssociationStopsNextCycle() {
 	ctx := s.GetContext()
+	s.monthlyPeriodSubscription()
 	featureID := s.seedGrantFeature("feat_b_assoc_end")
 	s.seedGrantEC("ent_b_assoc_plan", featureID, types.ENTITLEMENT_ENTITY_TYPE_PLAN, s.testData.plan.ID, 1000, "")
 	s.seedCycleGrant("ent_b_assoc_plan", featureID, 1000)
