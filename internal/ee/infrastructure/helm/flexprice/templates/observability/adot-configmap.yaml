@@ -1,0 +1,65 @@
+{{- if .Values.adot.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flexprice.fullname" . }}-adot-config
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: adot-collector
+data:
+  collector.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: {{ .Values.adot.memoryLimiterMiB }}
+      batch: {}
+    exporters:
+      {{- if .Values.adot.exporters.xray }}
+      awsxray:
+        region: {{ .Values.adot.region | quote }}
+      {{- end }}
+      {{- if .Values.adot.exporters.cloudwatchMetrics }}
+      awsemf:
+        region: {{ .Values.adot.region | quote }}
+        namespace: {{ .Values.adot.metricNamespace | quote }}
+        log_group_name: {{ .Values.adot.logGroups.metrics | quote }}
+        dimension_rollup_option: NoDimensionRollup
+      {{- end }}
+      {{- if .Values.adot.exporters.cloudwatchLogs }}
+      awscloudwatchlogs:
+        region: {{ .Values.adot.region | quote }}
+        log_group_name: {{ .Values.adot.logGroups.logs | quote }}
+        log_stream_name: otel
+      {{- end }}
+    service:
+      extensions: [health_check]
+      pipelines:
+        {{- if .Values.adot.exporters.xray }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [awsxray]
+        {{- end }}
+        {{- if .Values.adot.exporters.cloudwatchMetrics }}
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [awsemf]
+        {{- end }}
+        {{- if .Values.adot.exporters.cloudwatchLogs }}
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [awscloudwatchlogs]
+        {{- end }}
+{{- end }}
