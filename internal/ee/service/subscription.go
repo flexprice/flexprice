@@ -5170,6 +5170,9 @@ func (s *subscriptionService) TerminateSubscriptionResources(
 		return err
 	}
 
+	// Every resource must end at one stored instant; addon line items truncate on their own path.
+	req.EffectiveDate = req.EffectiveDate.Truncate(time.Microsecond)
+
 	if err := s.cancelAddonsForSubscription(ctx, req.SubscriptionID, req.EffectiveDate, req.CancellationReason); err != nil {
 		return err
 	}
@@ -6167,12 +6170,14 @@ func (s *subscriptionService) determineEffectiveDate(
 	cancellationType types.CancellationType,
 	customDate *time.Time,
 ) (time.Time, error) {
-	now := time.Now().UTC()
+	// Whole microseconds, like every stored instant: a raw nanosecond date would end the addon lines
+	// (which truncate) a hair before the association, plan lines and commitments.
+	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	switch cancellationType {
 	case types.CancellationTypeImmediate:
 		if customDate != nil && customDate.Before(now) {
-			return customDate.UTC(), nil
+			return customDate.UTC().Truncate(time.Microsecond), nil
 		}
 		// A subscription that has not started yet ends at its start, never before it:
 		// an earlier end date would persist a row whose end precedes its own period.

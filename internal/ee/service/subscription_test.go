@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -5414,16 +5415,18 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 		})
 		s.NoError(err)
 		s.Equal(types.SubscriptionStatusCancelled, resp.Status)
-		s.True(resp.EffectiveDate.Equal(validBackdate), "effective date should match cancel_at")
+		// Stored instants are whole microseconds; the request may carry nanoseconds.
+		storedCancelAt := validBackdate.Truncate(time.Microsecond)
+		s.True(resp.EffectiveDate.Equal(storedCancelAt), "effective date should match cancel_at")
 
 		// Verify persisted state
 		updated, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), backdateSub.ID)
 		s.NoError(err)
 		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
 		s.NotNil(updated.EndDate)
-		s.True(updated.EndDate.Equal(validBackdate), "EndDate should equal cancel_at")
+		s.True(updated.EndDate.Equal(storedCancelAt), "EndDate should equal cancel_at")
 		s.NotNil(updated.CancelAt)
-		s.True(updated.CancelAt.Equal(validBackdate), "CancelAt should equal cancel_at")
+		s.True(updated.CancelAt.Equal(storedCancelAt), "CancelAt should equal cancel_at")
 
 		s.T().Logf("✅ Backdated immediate cancellation completed successfully")
 	})
@@ -11340,4 +11343,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPerio
 	s.True(addonCharge(start, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)).IsZero(), "addon is free in [Jan 15, Feb 1)")
 	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
 		"addon is billed in full from Feb 1")
+}
+
+// An immediate cancellation lands on one whole-microsecond instant for every resource; raw
+// nanosecond clocks and custom dates must not end addon lines a hair before the rest.
+func TestDetermineEffectiveDate_CutsToMicroseconds(t *testing.T) {
+	svc := &subscriptionService{}
+	sub := &subscription.Subscription{
+		CurrentPeriodStart: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CurrentPeriodEnd:   time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	got, err := svc.determineEffectiveDate(sub, types.CancellationTypeImmediate, nil)
+	require.NoError(t, err)
+	require.Zero(t, got.Nanosecond()%int(time.Microsecond))
+
+	custom := time.Date(2026, 1, 10, 0, 0, 0, 789, time.UTC)
+	got, err = svc.determineEffectiveDate(sub, types.CancellationTypeImmediate, &custom)
+	require.NoError(t, err)
+	require.True(t, got.Equal(custom.Truncate(time.Microsecond)), "got %s", got)
 }
