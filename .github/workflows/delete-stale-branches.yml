@@ -39,7 +39,7 @@ jobs:
           DEFAULT=$(gh repo view "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq '.defaultBranchRef.name')
 
           # Branches that must never be deleted here (plus default branch above)
-          PROTECTED_NAMES=(main master develop)
+          PROTECTED_NAMES=(main master develop uat production)
 
           # Only same-repo PR heads: fork PRs use branches on the fork, not on this repo
           mapfile -t OPEN_PR_BRANCHES < <(
