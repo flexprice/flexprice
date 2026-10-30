@@ -85,7 +85,7 @@ jobs:
             echo ""
             echo "**Rule:** delete remote \`refs/heads/*\` whose tip \`committer\` date is **before** $(date -u -d '2 months ago' -Iseconds) (UTC)."
             echo ""
-            echo "**Skipped:** default branch (\`${DEFAULT}\`), named long-lived branches (\`main\` / \`master\` / \`develop\`), and any branch that is the **head** of an **open** PR."
+            echo "**Skipped:** default branch (\`${DEFAULT}\`), named long-lived branches (\`main\` / \`master\` / \`develop\` / \`uat\` / \`production\`), and any branch that is the **head** of an **open** PR."
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
 
