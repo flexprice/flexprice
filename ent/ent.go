@@ -34,6 +34,8 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/customerdeletioncategory"
+	"github.com/flexprice/flexprice/ent/customerdeletionrequest"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -163,6 +165,8 @@ func checkColumn(t, c string) error {
 			creditnote.Table:                       creditnote.ValidColumn,
 			creditnotelineitem.Table:               creditnotelineitem.ValidColumn,
 			customer.Table:                         customer.ValidColumn,
+			customerdeletioncategory.Table:         customerdeletioncategory.ValidColumn,
+			customerdeletionrequest.Table:          customerdeletionrequest.ValidColumn,
 			entitlement.Table:                      entitlement.ValidColumn,
 			entitlementgrant.Table:                 entitlementgrant.ValidColumn,
 			entityintegrationmapping.Table:         entityintegrationmapping.ValidColumn,
