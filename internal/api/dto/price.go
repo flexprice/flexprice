@@ -137,6 +137,8 @@ type PriceResponse struct {
 	Group       *GroupResponse        `json:"group,omitempty"`
 	PricingUnit *PriceUnitResponse    `json:"pricing_unit,omitempty"`
 	Feature     *PriceFeatureResponse `json:"feature,omitempty"`
+	// Warnings lists defaults applied on create that the caller may want to set explicitly.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // PriceFeatureResponse is the price-relevant view of the metered feature behind a price
@@ -453,6 +455,19 @@ func (r *CreatePriceRequest) Validate() error {
 	return nil
 }
 
+func (r *CreatePriceRequest) usesDefaultFixedStartDate() bool {
+	return r.StartDate == nil && r.Type == types.PRICE_TYPE_FIXED
+}
+
+// StartDateWarnings reports when a fixed price was created without start_date and got the default.
+func (r *CreatePriceRequest) StartDateWarnings() []string {
+	if !r.usesDefaultFixedStartDate() {
+		return nil
+	}
+	return []string{fmt.Sprintf("start_date not set; defaulted to %s. Set start_date to control when the price takes effect.",
+		priceDomain.DefaultFixedPriceStartDate().Format(time.RFC3339))}
+}
+
 // ToPrice converts the request to a Price domain object
 // Service layer should handle price unit conversion BEFORE calling this method
 func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, error) {
@@ -463,8 +478,12 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 
 	startDate := r.StartDate
 	if startDate == nil {
-		now := time.Now().UTC()
-		startDate = &now
+		// Usage keeps now so plan/addon price sync doesn't bill usage from before the price existed.
+		def := time.Now().UTC()
+		if r.usesDefaultFixedStartDate() {
+			def = priceDomain.DefaultFixedPriceStartDate()
+		}
+		startDate = &def
 	}
 
 	metadata := priceDomain.JSONBMetadata(r.Metadata)

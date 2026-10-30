@@ -26089,6 +26089,13 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

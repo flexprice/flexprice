@@ -6945,6 +6945,12 @@ definitions:
         type: string
       updated_by:
         type: string
+      warnings:
+        description: Warnings lists defaults applied on create that the caller may
+          want to set explicitly.
+        items:
+          type: string
+        type: array
     type: object
   PriceUnitConfig:
     properties:

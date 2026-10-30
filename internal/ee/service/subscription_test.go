@@ -11336,3 +11336,51 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_NoneAddonDatedMidPerio
 	s.True(addonCharge(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)).Equal(decimal.NewFromInt(31)),
 		"addon is billed in full from Feb 1")
 }
+
+// A fixed price created without start_date on the day of a backdated subscription must not push its line item past the subscription start.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_SameDayFixedPriceStartsWithBackdatedSubscription() {
+	ctx := s.GetContext()
+	pl := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Same Day Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	amount := decimal.NewFromInt(8000)
+	priceReq := dto.CreatePriceRequest{
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             &amount,
+	}
+	p, err := priceReq.ToPrice(ctx)
+	s.NoError(err)
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	subStart := time.Now().UTC().Add(-10 * time.Hour).Truncate(time.Millisecond)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             pl.ID,
+		StartDate:          lo.ToPtr(subStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.LatestInvoice)
+	s.True(amount.Equal(resp.LatestInvoice.Total), "opening invoice total %s, want %s", resp.LatestInvoice.Total, amount)
+
+	_, items, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, resp.ID)
+	s.Require().NoError(err)
+	item, ok := lo.Find(items, func(li *subscription.SubscriptionLineItem) bool { return li.PriceID == p.ID })
+	s.Require().True(ok)
+	s.True(item.StartDate.Equal(subStart), "line item start %s, want %s", item.StartDate, subStart)
+}

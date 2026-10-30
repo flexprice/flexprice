@@ -3,6 +3,7 @@ package dto_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -199,4 +200,51 @@ func TestCreatePriceRequest_ToPrice_TierRoundDefaultsUp(t *testing.T) {
 	assert.Equal(t, types.ROUND_UP, p.Tiers[1].TransformQuantity.Round)
 	assert.Equal(t, types.ROUND_DOWN, p.Tiers[2].TransformQuantity.Round)
 	assert.Empty(t, req.Tiers[1].TransformQuantity.Round)
+}
+
+func TestCreatePriceRequest_ToPrice_DefaultStartDate(t *testing.T) {
+	tests := []struct {
+		name          string
+		mutate        func(r *dto.CreatePriceRequest)
+		wantFixedDate bool
+	}{
+		{name: "recurring fixed defaults to fixed past date", mutate: func(r *dto.CreatePriceRequest) {}, wantFixedDate: true},
+		{name: "onetime fixed defaults to fixed past date", mutate: func(r *dto.CreatePriceRequest) {
+			r.BillingPeriod = types.BILLING_PERIOD_ONETIME
+		}, wantFixedDate: true},
+		{name: "usage defaults to now", mutate: func(r *dto.CreatePriceRequest) {
+			r.Type = types.PRICE_TYPE_USAGE
+			r.MeterID = "meter_test_123"
+			r.InvoiceCadence = types.InvoiceCadenceArrear
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := validFlatFeeRequest()
+			tt.mutate(&req)
+			before := time.Now().UTC()
+
+			p, err := req.ToPrice(context.Background())
+			require.NoError(t, err)
+			require.NotNil(t, p.StartDate)
+			if tt.wantFixedDate {
+				assert.True(t, p.StartDate.Equal(price.DefaultFixedPriceStartDate()))
+				assert.Len(t, req.StartDateWarnings(), 1)
+				return
+			}
+			assert.False(t, p.StartDate.Before(before))
+			assert.Empty(t, req.StartDateWarnings())
+		})
+	}
+}
+
+func TestCreatePriceRequest_ToPrice_ExplicitStartDateKept(t *testing.T) {
+	req := validFlatFeeRequest()
+	start := time.Date(2026, time.October, 21, 18, 30, 0, 0, time.UTC)
+	req.StartDate = &start
+
+	p, err := req.ToPrice(context.Background())
+	require.NoError(t, err)
+	assert.True(t, p.StartDate.Equal(start))
+	assert.Empty(t, req.StartDateWarnings())
 }

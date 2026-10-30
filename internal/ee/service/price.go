@@ -124,7 +124,7 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	response := &dto.PriceResponse{Price: p}
+	response := &dto.PriceResponse{Price: p, Warnings: req.StartDateWarnings()}
 
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
@@ -421,8 +421,8 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		}
 
 		// Add successful prices to response
-		for _, p := range prices {
-			priceResp := &dto.PriceResponse{Price: p}
+		for i, p := range prices {
+			priceResp := &dto.PriceResponse{Price: p, Warnings: req.Items[i].StartDateWarnings()}
 			response.Items = append(response.Items, priceResp)
 		}
 
