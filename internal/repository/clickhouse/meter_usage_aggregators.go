@@ -132,6 +132,11 @@ func BuildMultiMeterQuery(aggExpr, countExpr string, params *events.MeterUsageQu
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
 	if windowExpr != "" {
+		groupBy := "meter_id, window_start"
+		// Preserve each billing group as a separate value within its meter and window.
+		for _, dim := range bucketedGroupByDims(params.GroupBy) {
+			groupBy += ", " + dim.sql
+		}
 		return fmt.Sprintf(`
 			SELECT
 				meter_id,
@@ -140,10 +145,10 @@ func BuildMultiMeterQuery(aggExpr, countExpr string, params *events.MeterUsageQu
 				%s AS event_count
 			FROM meter_usage %s
 			WHERE %s
-			GROUP BY meter_id, window_start
-			ORDER BY meter_id, window_start ASC
+			GROUP BY %s
+			ORDER BY %s
 			%s
-		`, windowExpr, aggExpr, countExpr, finalClause, where, settings)
+		`, windowExpr, aggExpr, countExpr, finalClause, where, groupBy, groupBy, settings)
 	}
 
 	return fmt.Sprintf(`
