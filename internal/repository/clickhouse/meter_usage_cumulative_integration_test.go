@@ -115,12 +115,20 @@ func TestGetDailyUsageByMeter_Integration(t *testing.T) {
 
 func TestGetUsageMultiMeterBillingGroups_Integration(t *testing.T) {
 	store := newRealClickHouseTestStore(t)
-	repo := &MeterUsageRepository{store: store, qb: NewMeterUsageQueryBuilder()}
+	repo := &MeterUsageRepository{
+		store: store,
+		qb:    NewMeterUsageQueryBuilder(),
+	}
 	params := &events.MeterUsageQueryParams{
-		TenantID: "batch_tenant", EnvironmentID: "batch_env", ExternalCustomerIDs: []string{"batch_customer"},
-		MeterIDs: []string{"meter_a", "meter_b"}, AggregationType: types.AggregationMax,
-		WindowSize: types.WindowSizeDay, GroupBy: []string{"properties.instance"},
-		StartTime: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndTime: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC),
+		TenantID:            "batch_tenant",
+		EnvironmentID:       "batch_env",
+		ExternalCustomerIDs: []string{"batch_customer"},
+		MeterIDs:            []string{"meter_a", "meter_b"},
+		AggregationType:     types.AggregationMax,
+		WindowSize:          types.WindowSizeDay,
+		GroupBy:             []string{"properties.instance"},
+		StartTime:           time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:             time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC),
 	}
 	// A CTE fixture exercises the real query and scanner without writing shared tables.
 	fixture := `WITH meter_usage AS (

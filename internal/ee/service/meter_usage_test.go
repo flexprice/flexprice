@@ -5772,16 +5772,67 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 		volumeCost  string
 		flatAmounts []string
 	}{
-		{name: "cross", quantities: []float64{60, 90}, slabCost: "250", volumeCost: "150"},
-		{name: "boundary", quantities: []float64{40, 60}, slabCost: "200", volumeCost: "200"},
-		{name: "above", quantities: []float64{40, 61}, slabCost: "201", volumeCost: "101"},
-		{name: "three_tiers", quantities: []float64{25, 75, 150}, slabCost: "325", volumeCost: "125"},
-		{name: "fractional", quantities: []float64{40.25, 60.25}, slabCost: "200.5", volumeCost: "100.5"},
-		{name: "flat", quantities: []float64{60, 90}, slabCost: "268", volumeCost: "161", flatAmounts: []string{"7", "11", "13"}},
-		{name: "rounding", quantities: []float64{1, 50, 100}, slabCost: "251", volumeCost: "151"},
-		{name: "mixed_sign", quantities: []float64{200, -50}, slabCost: "250", volumeCost: "150"},
-		{name: "negative_net", quantities: []float64{50, -70}, slabCost: "-40", volumeCost: "-40"},
-		{name: "zero", quantities: []float64{0, 0}, slabCost: "0", volumeCost: "0"},
+		{
+			name:       "cross",
+			quantities: []float64{60, 90},
+			slabCost:   "250",
+			volumeCost: "150",
+		},
+		{
+			name:       "boundary",
+			quantities: []float64{40, 60},
+			slabCost:   "200",
+			volumeCost: "200",
+		},
+		{
+			name:       "above",
+			quantities: []float64{40, 61},
+			slabCost:   "201",
+			volumeCost: "101",
+		},
+		{
+			name:       "three_tiers",
+			quantities: []float64{25, 75, 150},
+			slabCost:   "325",
+			volumeCost: "125",
+		},
+		{
+			name:       "fractional",
+			quantities: []float64{40.25, 60.25},
+			slabCost:   "200.5",
+			volumeCost: "100.5",
+		},
+		{
+			name:        "flat",
+			quantities:  []float64{60, 90},
+			slabCost:    "268",
+			volumeCost:  "161",
+			flatAmounts: []string{"7", "11", "13"},
+		},
+		{
+			name:       "rounding",
+			quantities: []float64{1, 50, 100},
+			slabCost:   "251",
+			volumeCost: "151",
+		},
+		{
+			name:       "mixed_sign",
+			quantities: []float64{200, -50},
+			slabCost:   "250",
+			volumeCost: "150",
+		},
+		{
+			name:       "negative_net",
+			quantities: []float64{50, -70},
+			slabCost:   "-40",
+			volumeCost: "-40",
+		},
+		{
+			name:       "zero",
+			quantities: []float64{0, 0},
+			slabCost:   "0",
+			volumeCost: "0",
+		},
 	}
 	for _, mode := range []types.BillingTier{types.BILLING_TIER_SLAB, types.BILLING_TIER_VOLUME} {
 		for _, tt := range tests {
@@ -5790,18 +5841,34 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 				id := string(mode) + "_" + tt.name
 				m := s.createMeterWithAggregation(ctx, "meter_"+id, "api_call", types.AggregationSum)
 				tiers := []price.PriceTier{
-					{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")},
-					{UpTo: lo.ToPtr(uint64(200)), UnitAmount: dec("1")},
-					{UnitAmount: dec("0.5")},
+					{
+						UpTo:       lo.ToPtr(uint64(100)),
+						UnitAmount: dec("2"),
+					},
+					{
+						UpTo:       lo.ToPtr(uint64(200)),
+						UnitAmount: dec("1"),
+					},
+					{
+						UnitAmount: dec("0.5"),
+					},
 				}
 				for i, amount := range tt.flatAmounts {
 					tiers[i].FlatAmount = lo.ToPtr(dec(amount))
 				}
 				p := &price.Price{
-					ID: "price_" + id, Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
-					BillingModel: types.BILLING_MODEL_TIERED, TierMode: mode, Tiers: tiers,
-					Type: types.PRICE_TYPE_USAGE, MeterID: m.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-					InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+					ID:             "price_" + id,
+					Currency:       "usd",
+					EntityType:     types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:       "plan_1",
+					BillingModel:   types.BILLING_MODEL_TIERED,
+					TierMode:       mode,
+					Tiers:          tiers,
+					Type:           types.PRICE_TYPE_USAGE,
+					MeterID:        m.ID,
+					BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+					InvoiceCadence: types.InvoiceCadenceArrear,
+					BaseModel:      types.GetDefaultBaseModel(ctx),
 				}
 				s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
 				s.createLineItemForMeter(ctx, "li_"+id, m.ID, p.ID)
@@ -5818,7 +5885,8 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 				}
 				baseline := s.detailedAnalytics([]string{m.ID}, nil, nil, "")
 				s.True(baseline.TotalCost.Equal(want), "total %s, want %s", baseline.TotalCost, want)
-				for _, groupBy := range [][]string{nil, {"source"}, {"properties.region"}} {
+				for _, groupBy := range [][]string{nil, {"source"},
+					{"properties.region"}} {
 					for _, window := range []types.WindowSize{types.WindowSizeHour, types.WindowSizeDay, types.WindowSizeMonth} {
 						resp := s.detailedAnalytics([]string{m.ID}, nil, groupBy, window)
 						s.True(resp.TotalCost.Equal(want), "group %v window %s total %s", groupBy, window, resp.TotalCost)
@@ -5844,9 +5912,13 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 				}
 				for _, propertyFilter := range []bool{false, true} {
 					params := &events.MeterUsageDetailedAnalyticsParams{
-						TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-						ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
-						StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
+						TenantID:           types.GetTenantID(ctx),
+						EnvironmentID:      types.GetEnvironmentID(ctx),
+						ExternalCustomerID: s.customer.ExternalID,
+						MeterIDs:           []string{m.ID},
+						StartTime:          s.periodStart,
+						EndTime:            s.periodEnd,
+						WindowSize:         types.WindowSizeDay,
 					}
 					if propertyFilter {
 						params.PropertyFilters = map[string][]string{"region": {"east"}}
@@ -5879,19 +5951,55 @@ func (s *MeterUsageServiceSuite) TestRegularMeter_UnequalWindowShares() {
 		wantUsage   string
 		wantCost    string
 	}{
-		{name: "package", aggregation: types.AggregationSum, model: types.BILLING_MODEL_PACKAGE, wantUsage: "200", wantCost: "14"},
-		{name: "max_tiers", aggregation: types.AggregationMax, model: types.BILLING_MODEL_TIERED, wantUsage: "150", wantCost: "250"},
-		{name: "flat_fee", aggregation: types.AggregationSum, model: types.BILLING_MODEL_FLAT_FEE, wantUsage: "200", wantCost: "1400"},
+		{
+			name:        "package",
+			aggregation: types.AggregationSum,
+			model:       types.BILLING_MODEL_PACKAGE,
+			wantUsage:   "200",
+			wantCost:    "14",
+		},
+		{
+			name:        "max_tiers",
+			aggregation: types.AggregationMax,
+			model:       types.BILLING_MODEL_TIERED,
+			wantUsage:   "150",
+			wantCost:    "250",
+		},
+		{
+			name:        "flat_fee",
+			aggregation: types.AggregationSum,
+			model:       types.BILLING_MODEL_FLAT_FEE,
+			wantUsage:   "200",
+			wantCost:    "1400",
+		},
 	} {
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			m := s.createMeterWithAggregation(ctx, "meter_windows_"+tt.name, "api_call", tt.aggregation)
 			p := &price.Price{
-				ID: "price_windows_" + tt.name, Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
-				BillingModel: tt.model, Amount: dec("7"), TransformQuantity: price.JSONBTransformQuantity{DivideBy: 100, Round: types.ROUND_UP},
-				TierMode: types.BILLING_TIER_SLAB, Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
-				Type: types.PRICE_TYPE_USAGE, MeterID: m.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-				InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+				ID:           "price_windows_" + tt.name,
+				Currency:     "usd",
+				EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:     "plan_1",
+				BillingModel: tt.model,
+				Amount:       dec("7"),
+				TransformQuantity: price.JSONBTransformQuantity{
+					DivideBy: 100,
+					Round:    types.ROUND_UP,
+				},
+				TierMode: types.BILLING_TIER_SLAB,
+				Tiers: []price.PriceTier{{
+					UpTo:       lo.ToPtr(uint64(100)),
+					UnitAmount: dec("2"),
+				},
+					{
+						UnitAmount: dec("1"),
+					}},
+				Type:           types.PRICE_TYPE_USAGE,
+				MeterID:        m.ID,
+				BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+				InvoiceCadence: types.InvoiceCadenceArrear,
+				BaseModel:      types.GetDefaultBaseModel(ctx),
 			}
 			s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
 			s.createLineItemForMeter(ctx, "li_windows_"+tt.name, m.ID, p.ID)
@@ -5929,25 +6037,73 @@ func (s *MeterUsageServiceSuite) TestFilteredGroups_ShareWholeLineCost() {
 			fullUsage     string
 			selectedUsage string
 		}{
-			{name: "sum", aggregation: types.AggregationSum, slabCost: "1250", volumeCost: "1150", fullUsage: "1150", selectedUsage: "150"},
-			{name: "max", aggregation: types.AggregationMax, slabCost: "600", volumeCost: "500", fullUsage: "500", selectedUsage: "45"},
-			{name: "bucketed_sum", aggregation: types.AggregationSum, bucket: types.WindowSizeDay, slabCost: "1350", volumeCost: "1150", fullUsage: "1150", selectedUsage: "150"},
-			{name: "bucketed_max", aggregation: types.AggregationMax, bucket: types.WindowSizeDay, slabCost: "1200", volumeCost: "1000", fullUsage: "1000", selectedUsage: "90"},
+			{
+				name:          "sum",
+				aggregation:   types.AggregationSum,
+				slabCost:      "1250",
+				volumeCost:    "1150",
+				fullUsage:     "1150",
+				selectedUsage: "150",
+			},
+			{
+				name:          "max",
+				aggregation:   types.AggregationMax,
+				slabCost:      "600",
+				volumeCost:    "500",
+				fullUsage:     "500",
+				selectedUsage: "45",
+			},
+			{
+				name:          "bucketed_sum",
+				aggregation:   types.AggregationSum,
+				bucket:        types.WindowSizeDay,
+				slabCost:      "1350",
+				volumeCost:    "1150",
+				fullUsage:     "1150",
+				selectedUsage: "150",
+			},
+			{
+				name:          "bucketed_max",
+				aggregation:   types.AggregationMax,
+				bucket:        types.WindowSizeDay,
+				slabCost:      "1200",
+				volumeCost:    "1000",
+				fullUsage:     "1000",
+				selectedUsage: "90",
+			},
 		} {
 			s.Run(string(mode)+"/"+tt.name, func() {
 				id := "filtered_" + string(mode) + "_" + tt.name
 				m := &meter.Meter{
-					ID: "meter_" + id, Name: id, EventName: "api_call",
-					Aggregation: meter.Aggregation{Type: tt.aggregation, BucketSize: tt.bucket},
-					BaseModel:   types.GetDefaultBaseModel(ctx),
+					ID:        "meter_" + id,
+					Name:      id,
+					EventName: "api_call",
+					Aggregation: meter.Aggregation{
+						Type:       tt.aggregation,
+						BucketSize: tt.bucket,
+					},
+					BaseModel: types.GetDefaultBaseModel(ctx),
 				}
 				s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
 				p := &price.Price{
-					ID: "price_" + id, Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
-					BillingModel: types.BILLING_MODEL_TIERED, TierMode: mode,
-					Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
-					Type:  types.PRICE_TYPE_USAGE, MeterID: m.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-					InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+					ID:           "price_" + id,
+					Currency:     "usd",
+					EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+					EntityID:     "plan_1",
+					BillingModel: types.BILLING_MODEL_TIERED,
+					TierMode:     mode,
+					Tiers: []price.PriceTier{{
+						UpTo:       lo.ToPtr(uint64(100)),
+						UnitAmount: dec("2"),
+					},
+						{
+							UnitAmount: dec("1"),
+						}},
+					Type:           types.PRICE_TYPE_USAGE,
+					MeterID:        m.ID,
+					BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+					InvoiceCadence: types.InvoiceCadenceArrear,
+					BaseModel:      types.GetDefaultBaseModel(ctx),
 				}
 				s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
 				s.createLineItemForMeter(ctx, "li_"+id, m.ID, p.ID)
@@ -5973,17 +6129,37 @@ func (s *MeterUsageServiceSuite) TestFilteredGroups_ShareWholeLineCost() {
 					sources    []string
 					properties map[string][]string
 				}{
-					{name: "sources", sources: []string{"alpha", "beta"}},
-					{name: "properties", properties: map[string][]string{"region": {"keep"}}},
-					{name: "both", sources: []string{"alpha", "beta"}, properties: map[string][]string{"region": {"keep"}}},
-					{name: "empty", sources: []string{"missing"}},
+					{
+						name:    "sources",
+						sources: []string{"alpha", "beta"},
+					},
+					{
+						name:       "properties",
+						properties: map[string][]string{"region": {"keep"}},
+					},
+					{
+						name:       "both",
+						sources:    []string{"alpha", "beta"},
+						properties: map[string][]string{"region": {"keep"}},
+					},
+					{
+						name:    "empty",
+						sources: []string{"missing"},
+					},
 				} {
-					for _, groupBy := range [][]string{nil, {"source"}, {"properties.project"}} {
+					for _, groupBy := range [][]string{nil, {"source"},
+						{"properties.project"}} {
 						resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-							TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-							ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
-							StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
-							GroupBy: groupBy, Sources: filter.sources, PropertyFilters: filter.properties,
+							TenantID:           types.GetTenantID(ctx),
+							EnvironmentID:      types.GetEnvironmentID(ctx),
+							ExternalCustomerID: s.customer.ExternalID,
+							MeterIDs:           []string{m.ID},
+							StartTime:          s.periodStart,
+							EndTime:            s.periodEnd,
+							WindowSize:         types.WindowSizeDay,
+							GroupBy:            groupBy,
+							Sources:            filter.sources,
+							PropertyFilters:    filter.properties,
 						})
 						s.Require().NoError(err)
 						if filter.name == "empty" {
@@ -6029,13 +6205,35 @@ func (s *MeterUsageServiceSuite) TestAnalytics_SignedUsageAllocations() {
 		quantities []float64
 		sources    []string
 	}{
-		{name: "positive net", quantities: []float64{100, -30}},
-		{name: "negative net", quantities: []float64{50, -70}},
-		{name: "all negative", quantities: []float64{-10, -20}},
-		{name: "zero net", quantities: []float64{100, -100}},
-		{name: "zero group", quantities: []float64{100, -100, 50}, sources: []string{"alpha", "alpha", "beta"}},
-		{name: "zero usage", quantities: []float64{0, 0}},
-		{name: "fractional", quantities: []float64{1.25, -2.5}},
+		{
+			name:       "positive net",
+			quantities: []float64{100, -30},
+		},
+		{
+			name:       "negative net",
+			quantities: []float64{50, -70},
+		},
+		{
+			name:       "all negative",
+			quantities: []float64{-10, -20},
+		},
+		{
+			name:       "zero net",
+			quantities: []float64{100, -100},
+		},
+		{
+			name:       "zero group",
+			quantities: []float64{100, -100, 50},
+			sources:    []string{"alpha", "alpha", "beta"},
+		},
+		{
+			name:       "zero usage",
+			quantities: []float64{0, 0},
+		},
+		{
+			name:       "fractional",
+			quantities: []float64{1.25, -2.5},
+		},
 	} {
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
@@ -6051,13 +6249,20 @@ func (s *MeterUsageServiceSuite) TestAnalytics_SignedUsageAllocations() {
 				s.insertMeterUsageWithProps(ctx, m.ID, s.customer.ExternalID, sourcesByEvent[i],
 					time.Date(2026, 1, 5+i, 12, 0, 0, 0, time.UTC), quantity, nil)
 			}
-			for _, sources := range [][]string{nil, {"alpha"}, {"beta"}, {"alpha", "beta"}} {
+			for _, sources := range [][]string{nil, {"alpha"},
+				{"beta"},
+				{"alpha", "beta"}} {
 				for _, groupBy := range [][]string{nil, {"source"}} {
 					resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-						TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-						ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
-						StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
-						Sources: sources, GroupBy: groupBy,
+						TenantID:           types.GetTenantID(ctx),
+						EnvironmentID:      types.GetEnvironmentID(ctx),
+						ExternalCustomerID: s.customer.ExternalID,
+						MeterIDs:           []string{m.ID},
+						StartTime:          s.periodStart,
+						EndTime:            s.periodEnd,
+						WindowSize:         types.WindowSizeDay,
+						Sources:            sources,
+						GroupBy:            groupBy,
 					})
 					s.Require().NoError(err)
 					want := decimal.Zero
@@ -6088,32 +6293,136 @@ func (s *MeterUsageServiceSuite) TestAnalytics_SignedUsageAllocations() {
 
 func (s *MeterUsageServiceSuite) TestAnalytics_SignedAllocationRounding() {
 	weights := []decimal.Decimal{dec("200"), dec("-50"), decimal.Zero}
-	shares := amortizeUsage(dec("250"), weights, types.AggregationSum)
+	shares := allocateUsageCost(dec("250"), weights, types.AggregationSum)
 	s.True(shares[0].Sub(dec("333.3333333333333333")).Abs().LessThan(dec("0.000000001")))
 	s.True(shares[1].Sub(dec("-83.3333333333333333")).Abs().LessThan(dec("0.000000001")))
 	s.True(shares[2].IsZero())
 	s.True(shares[0].Add(shares[1]).Add(shares[2]).Equal(dec("250")))
 
-	shares = amortizeUsage(dec("250"), weights, types.AggregationMax)
+	shares = allocateUsageCost(dec("250"), weights, types.AggregationMax)
 	s.True(shares[0].Equal(dec("250")))
 	s.True(shares[1].IsZero())
 	s.True(shares[2].IsZero())
 }
 
+func (s *MeterUsageServiceSuite) TestAnalytics_AllocationReturnsResultsWithoutChangingInput() {
+	for _, withCommitment := range []bool{false, true} {
+		s.Run("commitment="+strconv.FormatBool(withCommitment), func() {
+			originals := []*events.DetailedUsageAnalytic{
+				{
+					SubLineItemID:   "selected",
+					Source:          "alpha",
+					AggregationType: types.AggregationSum,
+					TotalUsage:      dec("60"),
+					TotalCost:       dec("120"),
+					Points: []events.UsageAnalyticPoint{
+						{
+							Usage: dec("30"),
+							Cost:  dec("60"),
+						},
+						{
+							Usage: dec("30"),
+							Cost:  dec("60"),
+						},
+					},
+					BucketPoints: []events.UsageAnalyticPoint{
+						{
+							Usage: dec("60"),
+							Cost:  dec("120"),
+						},
+					},
+				},
+				{
+					SubLineItemID: "untouched",
+					TotalCost:     dec("7"),
+				},
+				{
+					SubLineItemID:   "selected",
+					Source:          "beta",
+					AggregationType: types.AggregationSum,
+					TotalUsage:      dec("90"),
+					TotalCost:       dec("180"),
+					Points: []events.UsageAnalyticPoint{
+						{
+							Usage: dec("90"),
+							Cost:  dec("180"),
+						},
+					},
+				},
+			}
+			before := make([]events.DetailedUsageAnalytic, len(originals))
+			for i, original := range originals {
+				before[i] = *original
+				before[i].Points = slices.Clone(original.Points)
+				before[i].BucketPoints = slices.Clone(original.BucketPoints)
+			}
+			data := &AnalyticsData{
+				Analytics:  originals,
+				LineTotals: map[string]decimal.Decimal{"selected": dec("250")},
+			}
+			if withCommitment {
+				data.LineCommitments = map[string]*types.CommitmentInfo{
+					"selected": {
+						ComputedCommitmentUtilizedAmount: dec("150"),
+						ComputedOverageAmount:            dec("50"),
+						ComputedTrueUpAmount:             dec("50"),
+					},
+				}
+			}
+
+			allocated := allocateLineItemCosts(data)
+
+			s.Require().Len(allocated, 3)
+			for i, wantCost := range []string{"100", "7", "150"} {
+				s.Equal(before[i], *data.Analytics[i], "allocation must not change input groups or points")
+				s.True(allocated[i].TotalCost.Equal(dec(wantCost)))
+			}
+			s.Equal("alpha", allocated[0].Source)
+			s.Equal("beta", allocated[2].Source)
+			s.True(allocated[0].Points[0].Cost.Equal(dec("50")))
+			s.True(allocated[0].Points[1].Cost.Equal(dec("50")))
+			s.True(allocated[0].BucketPoints[0].Cost.Equal(dec("100")))
+			if withCommitment {
+				s.Require().NotNil(allocated[0].CommitmentInfo)
+				s.True(allocated[0].CommitmentInfo.ComputedTrueUpAmount.Equal(dec("20")))
+				s.True(allocated[0].Points[0].ComputedTrueUpAmount.Equal(dec("10")))
+				s.True(data.LineCommitments["selected"].ComputedTrueUpAmount.Equal(dec("50")))
+			}
+		})
+	}
+}
+
 func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesCharges() {
 	ctx := s.GetContext()
 	m := &meter.Meter{
-		ID: "meter_zero_buckets", EventName: "api_call",
-		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeDay},
-		BaseModel:   types.GetDefaultBaseModel(ctx),
+		ID:        "meter_zero_buckets",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeDay,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
 	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
 	p := &price.Price{
-		ID: "price_zero_buckets", Currency: "usd", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
-		BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
-		Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
-		Type:  types.PRICE_TYPE_USAGE, MeterID: m.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+		ID:           "price_zero_buckets",
+		Currency:     "usd",
+		EntityType:   types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:     "plan_1",
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_SLAB,
+		Tiers: []price.PriceTier{{
+			UpTo:       lo.ToPtr(uint64(100)),
+			UnitAmount: dec("2"),
+		},
+			{
+				UnitAmount: dec("1"),
+			}},
+		Type:           types.PRICE_TYPE_USAGE,
+		MeterID:        m.ID,
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
 	s.createLineItemForMeter(ctx, "li_zero_buckets", m.ID, p.ID)
@@ -6126,10 +6435,15 @@ func (s *MeterUsageServiceSuite) TestAnalytics_NetZeroBucketedUsagePreservesChar
 	for _, sources := range [][]string{nil, {"alpha"}} {
 		for _, groupBy := range [][]string{nil, {"source"}} {
 			resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
-				TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-				ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{m.ID},
-				StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay,
-				Sources: sources, GroupBy: groupBy,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: s.customer.ExternalID,
+				MeterIDs:           []string{m.ID},
+				StartTime:          s.periodStart,
+				EndTime:            s.periodEnd,
+				WindowSize:         types.WindowSizeDay,
+				Sources:            sources,
+				GroupBy:            groupBy,
 			})
 			s.Require().NoError(err)
 			s.Require().Len(resp.Items, 1)
@@ -6151,38 +6465,93 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 		wantCost    string
 		wantReads   int
 	}{
-		{name: "sum", aggregation: types.AggregationSum, selected: "150", wantCost: "183.3333333333333333", wantReads: 1},
-		{name: "max", aggregation: types.AggregationMax, selected: "90", wantCost: "140", wantReads: 1},
-		{name: "bucketed_sum", aggregation: types.AggregationSum, bucket: types.WindowSizeDay, selected: "150", wantCost: "183.3333333333333333", wantReads: 2},
-		{name: "bucketed_max", aggregation: types.AggregationMax, bucket: types.WindowSizeDay, selected: "90", wantCost: "140", wantReads: 2},
-		{name: "grouped_bucketed_max", aggregation: types.AggregationMax, bucket: types.WindowSizeDay, groupBy: "instance", selected: "150", wantCost: "250", wantReads: 2},
+		{
+			name:        "sum",
+			aggregation: types.AggregationSum,
+			selected:    "150",
+			wantCost:    "183.3333333333333333",
+			wantReads:   1,
+		},
+		{
+			name:        "max",
+			aggregation: types.AggregationMax,
+			selected:    "90",
+			wantCost:    "140",
+			wantReads:   1,
+		},
+		{
+			name:        "bucketed_sum",
+			aggregation: types.AggregationSum,
+			bucket:      types.WindowSizeDay,
+			selected:    "150",
+			wantCost:    "183.3333333333333333",
+			wantReads:   2,
+		},
+		{
+			name:        "bucketed_max",
+			aggregation: types.AggregationMax,
+			bucket:      types.WindowSizeDay,
+			selected:    "90",
+			wantCost:    "140",
+			wantReads:   2,
+		},
+		{
+			name:        "grouped_bucketed_max",
+			aggregation: types.AggregationMax,
+			bucket:      types.WindowSizeDay,
+			groupBy:     "instance",
+			selected:    "150",
+			wantCost:    "250",
+			wantReads:   2,
+		},
 	} {
 		s.Run(tt.name, func() {
 			ctx := s.GetContext()
 			usage := &SubscriptionMeterUsage{
 				Subscription:        &subscription.Subscription{},
 				ExternalCustomerIDs: []string{s.customer.ExternalID},
-				MeterMap:            make(map[string]*meter.Meter), PriceMap: make(map[string]*price.Price),
+				MeterMap:            make(map[string]*meter.Meter),
+				PriceMap:            make(map[string]*price.Price),
 			}
 			for i := 0; i < 1000; i++ {
 				id := tt.name + "_" + strconv.Itoa(i)
 				m := &meter.Meter{
-					ID:          "meter_" + id,
-					Aggregation: meter.Aggregation{Type: tt.aggregation, BucketSize: tt.bucket, GroupBy: tt.groupBy},
+					ID: "meter_" + id,
+					Aggregation: meter.Aggregation{
+						Type:       tt.aggregation,
+						BucketSize: tt.bucket,
+						GroupBy:    tt.groupBy,
+					},
 				}
 				p := &price.Price{
-					ID: "price_" + id, MeterID: m.ID, Currency: "usd",
-					BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
-					Tiers: []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: dec("2")}, {UnitAmount: dec("1")}},
+					ID:           "price_" + id,
+					MeterID:      m.ID,
+					Currency:     "usd",
+					BillingModel: types.BILLING_MODEL_TIERED,
+					TierMode:     types.BILLING_TIER_SLAB,
+					Tiers: []price.PriceTier{{
+						UpTo:       lo.ToPtr(uint64(100)),
+						UnitAmount: dec("2"),
+					},
+						{
+							UnitAmount: dec("1"),
+						}},
 				}
 				li := &subscription.SubscriptionLineItem{
-					ID: "li_" + id, MeterID: m.ID, PriceID: p.ID,
-					StartDate: s.periodStart, EndDate: s.periodEnd,
+					ID:        "li_" + id,
+					MeterID:   m.ID,
+					PriceID:   p.ID,
+					StartDate: s.periodStart,
+					EndDate:   s.periodEnd,
 				}
 				usage.Subscription.LineItems = append(usage.Subscription.LineItems, li)
 				usage.MeterMap[m.ID], usage.PriceMap[p.ID] = m, p
 				usage.LineItemUsages = append(usage.LineItemUsages, &LineItemMeterUsage{
-					LineItem: li, Meter: m, Price: p, Usage: dec(tt.selected), EventCount: 2,
+					LineItem:   li,
+					Meter:      m,
+					Price:      p,
+					Usage:      dec(tt.selected),
+					EventCount: 2,
 				})
 				for j, quantity := range []float64{60, 90, 120, 180} {
 					source := "selected"
@@ -6194,12 +6563,17 @@ func (s *MeterUsageServiceSuite) TestAnalytics_ThousandLineAllocationsUseBatched
 				}
 			}
 
-			repo := &countingMeterUsageRepo{MeterUsageRepository: s.meterUsageRepo}
+			repo := &countingMeterUsageRepo{
+				MeterUsageRepository: s.meterUsageRepo,
+			}
 			params := fullServiceParams(&s.BaseServiceTestSuite)
 			params.MeterUsageRepo = repo
 			svc := NewMeterUsageService(params).(*meterUsageService)
-			totals, commitments, err := svc.wholeLineTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
-				StartTime: s.periodStart, EndTime: s.periodEnd, Sources: []string{"selected"}, GroupBy: []string{"source"},
+			totals, commitments, err := svc.calculateLineItemTotals(ctx, usage, &events.MeterUsageDetailedAnalyticsParams{
+				StartTime: s.periodStart,
+				EndTime:   s.periodEnd,
+				Sources:   []string{"selected"},
+				GroupBy:   []string{"source"},
 			}, &s.periodStart, s.periodEnd)
 			s.Require().NoError(err)
 			s.Empty(commitments)
