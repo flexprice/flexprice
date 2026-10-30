@@ -406,6 +406,9 @@ temporal:
 secrets:
   encryption_key: "super-secret-encryption-key"
 
+telemetry:
+  disabled: true
+
 billing:
   tenant_id: ""
   environment_id: ""
