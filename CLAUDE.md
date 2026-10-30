@@ -201,6 +201,7 @@ flexprice/
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations
+8. Extend or add an integration journey covering the endpoint (see below)
 
 ### Ent Schema Changes
 
@@ -252,6 +253,21 @@ An ent hook on the writer client records every write to a registered entity (`in
 6. **Customer:** an entry takes `customer_id` from the snapshot. If the entity has no `customer_id`, add `GetLinkedCustomerID(ctx, id)` to its repository (reading rows in any status) and register it in `NewLinkedCustomers` (`internal/activity/linked_customer.go`).
 7. **Writes:** convert any count-only bulk update or delete of the entity to `SaveReturning` / `ExecReturning`.
 8. **Tests:** add the entity to `entColumns` and `bareRow` in `internal/activity/registry_test.go`; the registry tests skip entities missing there.
+
+## Integration Journeys (API-level tests)
+
+YAML-defined customer workflows in `integration-testing-suite/journeys/` run
+against live targets through the published Go SDK. **When you add or change an
+API endpoint or billing behavior, update the journeys in the same PR** — the
+same way you'd add unit tests. Authoring guide:
+`integration-testing-suite/CLAUDE.md`.
+
+```bash
+make journeys-validate          # static validation (no network/secrets) — must pass
+make journeys-ops               # list every SDK operation callable from YAML
+make journeys-coverage          # SDK operations with no journey coverage yet
+make journeys-run TAGS=sanity   # live run (needs FLEXPRICE_API_KEY or FLEXPRICE_TARGETS)
+```
 
 ## Testing Conventions
 

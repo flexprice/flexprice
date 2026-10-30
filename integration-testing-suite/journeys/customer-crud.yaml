@@ -1,0 +1,53 @@
+# Smoke journey: the customer object lifecycle.
+# Doubles as the minimal "hello world" example for integrating Flexprice:
+# create a customer keyed by your own external_id, look it up both ways,
+# update it, and clean up.
+journey: customer-crud
+description: Create, fetch (by id and external id), update, and delete a customer
+tags: [sanity, smoke, customers]
+
+steps:
+  - id: customer
+    name: Create Customer
+    call: Customers.CreateCustomer
+    with:
+      external_id: "it-cust-{{ .run.id }}"
+      name: "Integration Test Customer {{ .run.id }}"
+      email: "it-{{ .run.id }}@test.flexprice.io"
+      metadata: { source: integration_journeys }
+    capture:
+      customer_id: id
+      external_id: external_id
+    expect:
+      - { path: external_id, equals: "it-cust-{{ .run.id }}" }
+      - { path: id, not_empty: true }
+
+  - id: get_by_id
+    name: Get Customer by ID
+    call: Customers.GetCustomer
+    with: "{{ .steps.customer.customer_id }}"
+    expect:
+      - { path: external_id, equals: "{{ .steps.customer.external_id }}" }
+
+  - id: get_by_external
+    name: Get Customer by External ID
+    call: Customers.GetCustomerByExternalID
+    with: "{{ .steps.customer.external_id }}"
+    expect:
+      - { path: id, equals: "{{ .steps.customer.customer_id }}" }
+
+  - id: update
+    name: Update Customer Name
+    call: Customers.UpdateCustomer
+    # UpdateCustomer(body, id, external_customer_id) — identify by id.
+    args:
+      - { name: "Renamed Customer {{ .run.id }}" }
+      - "{{ .steps.customer.customer_id }}"
+      - null
+    expect:
+      - { path: name, equals: "Renamed Customer {{ .run.id }}" }
+
+teardown:
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: "{{ .steps.customer.customer_id }}"
