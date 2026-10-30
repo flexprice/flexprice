@@ -197,8 +197,9 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 			WithEntityIDs(planIDs).
 			WithStatus(types.StatusPublished)
 
-		// If features should be expanded, propagate the expansion to entitlements
-		if filter.GetExpand().Has(types.ExpandFeatures) {
+		// If features should be expanded (nested under entitlements), propagate to entitlements
+		// so each entitlement carries its feature. "features" is not a root-level plan expand.
+		if filter.GetExpand().Has(types.ExpandFeatures) || filter.GetExpand().GetNested(types.ExpandEntitlements).Has(types.ExpandFeatures) {
 			entFilter = entFilter.WithExpand(string(types.ExpandFeatures))
 		}
 
