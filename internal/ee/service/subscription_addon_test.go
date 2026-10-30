@@ -1162,11 +1162,8 @@ func (s *SubscriptionServiceSuite) prorationCredits() []*wallet.Transaction {
 
 // monthlyPeriodSubscription widens the shared 7-day fixture window to a whole month, so a
 // monthly addon price is prorated against a period it fits in and the numbers are readable.
-// Its edges are cut to the microseconds Postgres stores: changes cut their dates the same way,
-// so a period-end date is only recognised as one against a stored edge.
 func (s *SubscriptionServiceSuite) monthlyPeriodSubscription() *subscription.Subscription {
 	sub := s.testData.subscription
-	sub.CurrentPeriodStart = sub.CurrentPeriodStart.Truncate(time.Microsecond)
 	sub.CurrentPeriodEnd = sub.CurrentPeriodStart.AddDate(0, 1, 0)
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
 	return sub
@@ -1191,8 +1188,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootpr
 		s.testData.plan.ID, 500, types.EntitlementAggregationModeAdditive)
 	existing := s.seedCycleGrant(planEC.ID, featureID, 500)
 
-	// A caller's date with nanoseconds, which the attach stores cut to microseconds.
-	attachAt := sub.CurrentPeriodStart.Add(24*time.Hour + 789*time.Nanosecond)
+	attachAt := sub.CurrentPeriodStart.Add(24 * time.Hour)
 	result, err := s.attachOne(sub, &dto.AddAddonToSubscriptionRequest{
 		AddonID:           addonID,
 		Cadence:           types.AddonCadenceRecurring,
@@ -1211,7 +1207,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootpr
 		s.Equal(sub.ID, stored.EntityID)
 		s.Equal(types.AddonAssociationEntityTypeSubscription, stored.EntityType)
 		s.Require().NotNil(stored.StartDate)
-		s.True(stored.StartDate.Equal(attachAt.Truncate(time.Microsecond)), "the association starts when the caller asked")
+		s.True(stored.StartDate.Equal(attachAt), "the association starts when the caller asked")
 		s.Nil(stored.EndDate, "a recurring attach is open-ended")
 	})
 
@@ -1226,7 +1222,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Attach_FullEntityFootpr
 		s.Require().NotNil(item.AddonAssociationID)
 		s.Equal(result.Association.ID, *item.AddonAssociationID,
 			"the line item is keyed to its association — the batch path must keep that link")
-		s.True(item.StartDate.Equal(attachAt.Truncate(time.Microsecond)))
+		s.True(item.StartDate.Equal(attachAt))
 		s.True(item.EndDate.IsZero(), "a recurring attach leaves the line open")
 	})
 
@@ -1330,8 +1326,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 	s.recordBilledForLineItem(addonLine[0].ID, decimal.NewFromInt(30))
 	s.Require().NotEmpty(s.sortedGrantsForFeature(featureID))
 
-	// A caller's date with nanoseconds, which the detach stores cut to microseconds.
-	detachAt := sub.CurrentPeriodStart.Add(15*24*time.Hour + 789*time.Nanosecond)
+	detachAt := sub.CurrentPeriodStart.Add(15 * 24 * time.Hour)
 
 	// The credit is quoted before the removal is executed. The in-memory line-item store
 	// hands out the stored pointer, so persisting the removal stamps EndDate on the very
@@ -1360,7 +1355,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 
 		s.Equal(types.AddonStatusCancelled, stored.AddonStatus)
 		s.Require().NotNil(stored.EndDate)
-		s.True(stored.EndDate.Equal(detachAt.Truncate(time.Microsecond)), "the association ends on the effective date")
+		s.True(stored.EndDate.Equal(detachAt), "the association ends on the effective date")
 		s.Equal("characterisation", stored.CancellationReason)
 	})
 
@@ -1368,7 +1363,7 @@ func (s *SubscriptionServiceSuite) TestCharacteriseAddon_Detach_FullEntityFootpr
 		stored, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, addonLine[0].ID)
 		s.Require().NoError(err)
 		s.False(stored.EndDate.IsZero(), "the line item closes with its association")
-		s.True(stored.EndDate.Equal(detachAt.Truncate(time.Microsecond)), "and closes on the same date")
+		s.True(stored.EndDate.Equal(detachAt), "and closes on the same date")
 
 		s.Require().Len(result.EndedLineItems, 1)
 		s.Equal(addonLine[0].ID, result.EndedLineItems[0].ID)

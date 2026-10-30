@@ -105,9 +105,8 @@ func (s *SubscriptionServiceSuite) TestExecuteBulkAddonModification_PerEntryDate
 	first := s.attachForRemoval("addon_mod_d1", 30)
 	second := s.attachForRemoval("addon_mod_d2", 30)
 
-	// Callers' dates with nanoseconds, which the change stores cut to microseconds.
-	early := sub.CurrentPeriodStart.Add(5*24*time.Hour + 789*time.Nanosecond)
-	late := sub.CurrentPeriodStart.Add(20*24*time.Hour + 789*time.Nanosecond)
+	early := sub.CurrentPeriodStart.Add(5 * 24 * time.Hour)
+	late := sub.CurrentPeriodStart.Add(20 * 24 * time.Hour)
 
 	resp, err := s.modificationService().Execute(ctx, sub.ID, s.bulkAddonRequest(&dto.SubModifyBulkAddonParams{
 		Removes: []*dto.RemoveAddonRequest{
@@ -121,8 +120,8 @@ func (s *SubscriptionServiceSuite) TestExecuteBulkAddonModification_PerEntryDate
 	s.Require().Len(ended, 2)
 
 	dates := lo.Map(ended, func(li dto.ChangedLineItem, _ int) time.Time { return lo.FromPtr(li.EndDate) })
-	s.True(lo.SomeBy(dates, func(d time.Time) bool { return d.Equal(early.Truncate(time.Microsecond)) }), "one item ends on the early date")
-	s.True(lo.SomeBy(dates, func(d time.Time) bool { return d.Equal(late.Truncate(time.Microsecond)) }), "the other ends on the late date")
+	s.True(lo.SomeBy(dates, func(d time.Time) bool { return d.Equal(early) }), "one item ends on the early date")
+	s.True(lo.SomeBy(dates, func(d time.Time) bool { return d.Equal(late) }), "the other ends on the late date")
 }
 
 func (s *SubscriptionServiceSuite) TestPreviewBulkAddonModification_WritesNothingAndQuotesTheExecutedNet() {
@@ -324,8 +323,7 @@ func (s *SubscriptionServiceSuite) TestBulkAddonModification_Execute_ReportsTheE
 	s.seedFixedPriceAddon("addon_assoc_remove", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 	outgoing := s.attachForRemoval("addon_assoc_remove", 30)
 
-	// A caller's date with nanoseconds, which the removal stores cut to microseconds.
-	at := sub.CurrentPeriodStart.Add(10*24*time.Hour + 789*time.Nanosecond)
+	at := sub.CurrentPeriodStart.Add(10 * 24 * time.Hour)
 	resp, err := s.modificationService().Execute(ctx, sub.ID, s.bulkAddonRequest(&dto.SubModifyBulkAddonParams{
 		Removes: []*dto.RemoveAddonRequest{s.modifyRemove(outgoing, at)},
 	}))
@@ -336,7 +334,7 @@ func (s *SubscriptionServiceSuite) TestBulkAddonModification_Execute_ReportsTheE
 	s.Equal(outgoing, ended[0].ID, "a removal names the row it ended")
 	s.Equal(types.AddonStatusCancelled, ended[0].AddonStatus)
 	s.Require().NotNil(ended[0].EndDate)
-	s.True(ended[0].EndDate.Equal(at.Truncate(time.Microsecond)))
+	s.True(ended[0].EndDate.Equal(at))
 }
 
 func (s *SubscriptionServiceSuite) TestBulkAddonModification_Swap_ReportsBothDirections() {

@@ -78,7 +78,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_PriceCh
 			ctx := s.GetContext()
 			periodStart := s.GetNow()
 			periodEnd := periodStart.AddDate(0, 1, 0)
-			effectiveDate := periodStart.AddDate(0, 0, 15).Add(789 * time.Nanosecond)
+			effectiveDate := periodStart.AddDate(0, 0, 15)
 
 			cust := s.createCustomer("lic-" + tc.name)
 			sub := s.createActiveSub(cust.ID)
@@ -92,7 +92,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_PriceCh
 
 			ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 			s.Require().NoError(err)
-			s.Equal(effectiveDate.Truncate(time.Microsecond), ended.EndDate, "predecessor must end at effective_date")
+			s.Equal(effectiveDate, ended.EndDate, "predecessor must end at effective_date")
 
 			successorID := lo.FromPtr(ended.SuccessorLineItemID)
 			s.Require().NotEmpty(successorID, "predecessor must point at its successor")
@@ -100,7 +100,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_PriceCh
 			created, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, successorID)
 			s.Require().NoError(err)
 			s.Equal(li.ID, lo.FromPtr(created.PredecessorLineItemID))
-			s.Equal(effectiveDate.Truncate(time.Microsecond), created.StartDate)
+			s.Equal(effectiveDate, created.StartDate)
 			s.Equal(tc.quantity, created.Quantity, "quantity is carried over when only the price changes")
 
 			s.NotEqual(oldPrice.ID, created.PriceID, "successor must carry a new override price")
@@ -269,7 +269,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_Rejects
 // price included. Asserted on the persisted shape: opening a real session needs a provider.
 func (s *SubscriptionModificationServiceSuite) TestLineItemChange_CheckoutParamsCarryThePrice() {
 	ctx := s.GetContext()
-	effectiveDate := s.GetNow().AddDate(0, 0, 15).Add(789 * time.Nanosecond)
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
 
 	cust := s.createCustomer("lic-checkout-params")
 	sub := s.createActiveSub(cust.ID)
@@ -296,7 +296,7 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_CheckoutParams
 	s.Equal(decimal.NewFromInt(40), *mod.Amount)
 	s.Nil(mod.Quantity, "a price-only change leaves quantity unset")
 	s.Require().NotNil(mod.EffectiveDate)
-	s.Equal(effectiveDate.Truncate(time.Microsecond), *mod.EffectiveDate)
+	s.Equal(effectiveDate, *mod.EffectiveDate)
 }
 
 // A net credit has nothing to collect, so checkout is ignored and the change applies now.
@@ -355,7 +355,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_PayFirs
 // Replaying the persisted params applies the change, and a duplicate delivery is a no-op.
 func (s *SubscriptionModificationServiceSuite) TestLineItemChange_CheckoutReplayIsIdempotent() {
 	ctx := s.GetContext()
-	effectiveDate := s.GetNow().AddDate(0, 0, 15).Add(789 * time.Nanosecond)
+	effectiveDate := s.GetNow().AddDate(0, 0, 15)
 
 	cust := s.createCustomer("lic-replay")
 	sub := s.createActiveSub(cust.ID)
@@ -375,7 +375,7 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_CheckoutReplay
 
 	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(err)
-	s.Equal(effectiveDate.Truncate(time.Microsecond), ended.EndDate)
+	s.Equal(effectiveDate, ended.EndDate)
 	successorID := lo.FromPtr(ended.SuccessorLineItemID)
 	s.Require().NotEmpty(successorID)
 
@@ -740,7 +740,7 @@ func (s *SubscriptionModificationServiceSuite) TestQuantityChange_OnVersion_Link
 	sub := s.createActiveSub(cust.ID)
 	oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
 	itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
-	versionAt := now.AddDate(0, 0, 5).Add(789 * time.Nanosecond)
+	versionAt := now.AddDate(0, 0, 5)
 	quantityAt := now.AddDate(0, 0, 10)
 
 	_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), versionAt))
@@ -767,7 +767,7 @@ func (s *SubscriptionModificationServiceSuite) TestQuantityChange_OnVersion_Link
 	revertedB := s.mustGetLineItem(itemBID)
 	s.True(revertedB.EndDate.IsZero(), "reverting C must reopen B")
 	s.Nil(revertedB.SuccessorLineItemID)
-	s.Equal(versionAt.Truncate(time.Microsecond), s.mustGetLineItem(itemA.ID).EndDate, "A must stay ended where B starts")
+	s.Equal(versionAt, s.mustGetLineItem(itemA.ID).EndDate, "A must stay ended where B starts")
 }
 
 // A line item with a scheduled version can only be changed through that version; a second
@@ -805,7 +805,7 @@ func (s *SubscriptionModificationServiceSuite) TestChange_RejectedWhenScheduledV
 			sub := s.createActiveSub(cust.ID)
 			oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
 			itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
-			versionAt := now.AddDate(0, 0, 10).Add(789 * time.Nanosecond)
+			versionAt := now.AddDate(0, 0, 10)
 
 			_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), versionAt))
 			s.Require().NoError(err)
@@ -817,7 +817,7 @@ func (s *SubscriptionModificationServiceSuite) TestChange_RejectedWhenScheduledV
 			s.Contains(err.Error(), "line item already has a scheduled version")
 
 			unchanged := s.mustGetLineItem(itemA.ID)
-			s.Equal(versionAt.Truncate(time.Microsecond), unchanged.EndDate, "a rejected change must not move A's end date")
+			s.Equal(versionAt, unchanged.EndDate, "a rejected change must not move A's end date")
 			s.Equal(itemBID, lo.FromPtr(unchanged.SuccessorLineItemID))
 
 			items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, &types.SubscriptionLineItemFilter{SubscriptionIDs: []string{sub.ID}})

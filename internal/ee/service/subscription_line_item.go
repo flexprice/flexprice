@@ -5,13 +5,14 @@ import (
 	"maps"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
@@ -167,7 +168,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	// Apply proration for the add if requested. Skip usage prices (unknown future consumption).
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
 		lineItem.PriceType != types.PRICE_TYPE_USAGE {
-		effectiveDate := time.Now().UTC()
+		effectiveDate := types.Now()
 		if req.StartDate != nil {
 			effectiveDate = req.StartDate.UTC()
 		}
@@ -390,7 +391,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	if lineItem.StartDate.After(now) {
 		if req.EffectiveFrom != nil && req.EffectiveFrom.UTC().After(now) {
 			return nil, ierr.NewError("cannot schedule deletion of a line item that has not started").
@@ -415,7 +416,6 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	if req.EffectiveFrom != nil {
 		endDate = req.EffectiveFrom.UTC()
 	}
-	endDate = endDate.Truncate(time.Microsecond)
 
 	var resp *dto.SubscriptionLineItemResponse
 	detach := func(ctx context.Context) error {
@@ -459,7 +459,7 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 	if req.EffectiveFrom != nil {
 		requested = req.EffectiveFrom.UTC()
 	} else {
-		requested = time.Now().UTC()
+		requested = types.Now()
 	}
 
 	// Validate effective from date is on or after start date
@@ -478,9 +478,7 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 		return nil, err
 	}
 
-	// Validated as requested, stored cut to Postgres' microseconds like the end the commitment guard checked:
-	// cutting first could pull a date just past an existing end onto it, which the end-date check accepts.
-	effectiveFrom := requested.Truncate(time.Microsecond)
+	effectiveFrom := requested
 
 	// Capture a snapshot before mutating EndDate — the proration service uses EndDate==zero
 	// to distinguish "active recurring" from "onetime" (pre-existing EndDate at period boundary).
@@ -750,13 +748,10 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Determine end date for existing line item. Postgres keeps microseconds, so the end is cut to them: the
-	// commitment guard compares it with the successor's stored start, which must not round past it.
-	requestedEnd := time.Now().UTC()
+	endDate := types.Now()
 	if req.EffectiveFrom != nil {
-		requestedEnd = req.EffectiveFrom.UTC()
+		endDate = req.EffectiveFrom.UTC()
 	}
-	endDate := requestedEnd.Truncate(time.Microsecond)
 
 	// Check if we need to create a new line item (with price overrides)
 	if req.ShouldCreateNewLineItem() {
@@ -796,8 +791,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 					Mark(ierr.ErrValidation)
 			}
 
-			// The requested end, not the cut one: cutting could pull one just past an existing end onto it.
-			if err := validateLineItemEndDateChange(locked, requestedEnd); err != nil {
+			if err := validateLineItemEndDateChange(locked, endDate); err != nil {
 				return err
 			}
 

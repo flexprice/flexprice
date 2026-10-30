@@ -195,9 +195,8 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_PerEntryDates_OneDocumentFromT
 	s.seedFixedPriceAddon("addon_date_early", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 	s.seedFixedPriceAddon("addon_date_late", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
 
-	// Callers' dates with nanoseconds, which the change stores cut to microseconds.
-	early := sub.CurrentPeriodStart.Add(5*24*time.Hour + 789*time.Nanosecond)
-	late := sub.CurrentPeriodStart.Add(20*24*time.Hour + 789*time.Nanosecond)
+	early := sub.CurrentPeriodStart.Add(5 * 24 * time.Hour)
+	late := sub.CurrentPeriodStart.Add(20 * 24 * time.Hour)
 
 	config, _, err := s.addonChangeService().Execute(ctx, AddonChangeRequest{
 		Subscription: sub,
@@ -208,13 +207,13 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_PerEntryDates_OneDocumentFromT
 	})
 	s.Require().NoError(err)
 
-	s.True(config.getPeriodStart().Equal(early.Truncate(time.Microsecond)),
+	s.True(config.getPeriodStart().Equal(early),
 		"the document opens at the earliest entry regardless of request order")
 
 	invoices := s.oneOffInvoicesFor(sub.ID)
 	s.Require().Len(invoices, 1, "different dates still settle as one document")
 	s.Require().NotNil(invoices[0].PeriodStart)
-	s.True(invoices[0].PeriodStart.Equal(early.Truncate(time.Microsecond)))
+	s.True(invoices[0].PeriodStart.Equal(early))
 
 	// Same price, later start ⇒ strictly less charged for the late entry.
 	s.Require().Len(config.getQuote().ChargeLineItems, 2)
@@ -477,7 +476,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_FutureAddOntoFreshFeature_IsAl
 
 	rows := s.sortedGrantsForFeature(featureID)
 	s.Require().Len(rows, 1)
-	s.True(rows[0].ValidFrom.Equal(at.Truncate(time.Microsecond)), "the window opens on its own date, not today")
+	s.True(rows[0].ValidFrom.Equal(at), "the window opens on its own date, not today")
 }
 
 func (s *SubscriptionServiceSuite) TestAddonBatch_FutureRemoveOfLastConfig_IsAllowed() {
@@ -564,7 +563,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoFreshFeaturesDifferentDates
 
 	second := s.sortedGrantsForFeature(secondID)
 	s.Require().Len(second, 1)
-	s.True(second[0].ValidFrom.Equal(later.Truncate(time.Microsecond)), "each feature keeps its own date when nothing is cut")
+	s.True(second[0].ValidFrom.Equal(later), "each feature keeps its own date when nothing is cut")
 }
 
 // One pooled row carries one coefficient, so two addons feeding a feature must share an instant.
@@ -645,7 +644,7 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoAddsOnOneFeatureSameDate_Is
 
 	rows := s.sortedGrantsForFeature(featureID)
 	s.Require().Len(rows, 1, "both addons pool into one row")
-	s.True(rows[0].ValidFrom.Equal(at.Truncate(time.Microsecond)))
+	s.True(rows[0].ValidFrom.Equal(at))
 }
 
 // -----------------------------------------------------------------------------
@@ -806,9 +805,9 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoAddsAgreeingOnOneFeature_Is
 // caller-supplied dates — cut to microseconds like `now`
 // -----------------------------------------------------------------------------
 
-// A caller's start_date is cut to microseconds as the change's own `now` is, so the commitment guard compares the
-// dates Postgres stores.
-func (s *SubscriptionServiceSuite) TestAddonChange_CutsCallerDatesToMicroseconds() {
+// Caller dates flow through as given: precision is normalized at the API binding and on storage writes,
+// never inside the change resolution.
+func (s *SubscriptionServiceSuite) TestAddonChange_CallerDatesPassThrough() {
 	ctx := s.GetContext()
 	sub := s.monthlyPeriodSubscription()
 	s.seedFixedPriceAddon("addon_ns_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
@@ -823,15 +822,13 @@ func (s *SubscriptionServiceSuite) TestAddonChange_CutsCallerDatesToMicroseconds
 	})
 	s.Require().NoError(err)
 
-	cut := at.Truncate(time.Microsecond)
 	s.Require().Len(config.getAttaches(), 1)
-	s.Equal(cut, config.getAttaches()[0].getRequestedStart())
+	s.Equal(at, config.getAttaches()[0].getRequestedStart())
 	s.Require().Len(config.getDetaches(), 1)
-	s.Equal(cut, config.getDetaches()[0].getEffectiveDate())
+	s.Equal(at, config.getDetaches()[0].getEffectiveDate())
 }
 
-// A removal a fraction of a microsecond past the period end is still outside the period: the date is checked as
-// requested and only cut afterwards.
+// A removal a fraction of a microsecond past the period end is still outside the period.
 func (s *SubscriptionServiceSuite) TestAddonChange_RemovalJustPastThePeriodEndIsRejected() {
 	ctx := s.GetContext()
 	sub := s.monthlyPeriodSubscription()

@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const (
@@ -299,7 +300,7 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItems))
 
 	for i := range params.LineItems {
@@ -309,7 +310,6 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		if change.EffectiveDate != nil {
 			effectiveDate = change.EffectiveDate.UTC()
 		}
-		effectiveDate = effectiveDate.Truncate(time.Microsecond)
 		if err := validateEffectiveDateWithinCurrentPeriod(effectiveDate, sub); err != nil {
 			return nil, err
 		}
@@ -347,7 +347,7 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		return nil, err
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItemModifications))
 
 	for _, m := range params.LineItemModifications {
@@ -355,7 +355,6 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		if m.EffectiveDate != nil {
 			effectiveDate = m.EffectiveDate.UTC()
 		}
-		effectiveDate = effectiveDate.Truncate(time.Microsecond)
 
 		change := dto.LineItemChange{ID: m.LineItemID, Quantity: m.Quantity, Amount: m.Amount}
 

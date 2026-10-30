@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -13,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CommitmentService manages first-class subscription commitments.
@@ -453,7 +454,7 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	effectiveAt := lo.FromPtrOr(req.EffectiveAt, time.Now().UTC()).Truncate(time.Microsecond)
+	effectiveAt := lo.FromPtrOr(req.EffectiveAt, types.Now())
 	var out *commitment.Commitment
 	var invoiceID *string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
