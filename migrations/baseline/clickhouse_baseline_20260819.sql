@@ -29,18 +29,7 @@ CREATE TABLE IF NOT EXISTS flexprice.events
     CONSTRAINT check_event_name CHECK event_name != '',
     CONSTRAINT check_tenant_id CHECK tenant_id != '',
     CONSTRAINT check_event_id CHECK id != '',
-    CONSTRAINT check_environment_id CHECK environment_id != '',
-    PROJECTION proj_by_customer_event
-    (
-        SELECT *
-        ORDER BY
-            tenant_id,
-            environment_id,
-            external_customer_id,
-            event_name,
-            timestamp,
-            id
-    )
+    CONSTRAINT check_environment_id CHECK environment_id != ''
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 -- DEVIATION FROM PROD: prod partitions this table monthly, toYYYYMM(timestamp).
