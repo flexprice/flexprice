@@ -68,34 +68,6 @@ func (_u *CustomerDeletionRequestUpdate) ClearUpdatedBy() *CustomerDeletionReque
 	return _u
 }
 
-// SetCustomerID sets the "customer_id" field.
-func (_u *CustomerDeletionRequestUpdate) SetCustomerID(v string) *CustomerDeletionRequestUpdate {
-	_u.mutation.SetCustomerID(v)
-	return _u
-}
-
-// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (_u *CustomerDeletionRequestUpdate) SetNillableCustomerID(v *string) *CustomerDeletionRequestUpdate {
-	if v != nil {
-		_u.SetCustomerID(*v)
-	}
-	return _u
-}
-
-// SetExternalID sets the "external_id" field.
-func (_u *CustomerDeletionRequestUpdate) SetExternalID(v string) *CustomerDeletionRequestUpdate {
-	_u.mutation.SetExternalID(v)
-	return _u
-}
-
-// SetNillableExternalID sets the "external_id" field if the given value is not nil.
-func (_u *CustomerDeletionRequestUpdate) SetNillableExternalID(v *string) *CustomerDeletionRequestUpdate {
-	if v != nil {
-		_u.SetExternalID(*v)
-	}
-	return _u
-}
-
 // SetState sets the "state" field.
 func (_u *CustomerDeletionRequestUpdate) SetState(v string) *CustomerDeletionRequestUpdate {
 	_u.mutation.SetState(v)
@@ -293,16 +265,6 @@ func (_u *CustomerDeletionRequestUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *CustomerDeletionRequestUpdate) check() error {
-	if v, ok := _u.mutation.CustomerID(); ok {
-		if err := customerdeletionrequest.CustomerIDValidator(v); err != nil {
-			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.customer_id": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.ExternalID(); ok {
-		if err := customerdeletionrequest.ExternalIDValidator(v); err != nil {
-			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.external_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.State(); ok {
 		if err := customerdeletionrequest.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.state": %w`, err)}
@@ -345,12 +307,6 @@ func (_u *CustomerDeletionRequestUpdate) sqlSave(ctx context.Context) (_node int
 	}
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(customerdeletionrequest.FieldEnvironmentID, field.TypeString)
-	}
-	if value, ok := _u.mutation.CustomerID(); ok {
-		_spec.SetField(customerdeletionrequest.FieldCustomerID, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.ExternalID(); ok {
-		_spec.SetField(customerdeletionrequest.FieldExternalID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(customerdeletionrequest.FieldState, field.TypeString, value)
@@ -454,34 +410,6 @@ func (_u *CustomerDeletionRequestUpdateOne) SetNillableUpdatedBy(v *string) *Cus
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (_u *CustomerDeletionRequestUpdateOne) ClearUpdatedBy() *CustomerDeletionRequestUpdateOne {
 	_u.mutation.ClearUpdatedBy()
-	return _u
-}
-
-// SetCustomerID sets the "customer_id" field.
-func (_u *CustomerDeletionRequestUpdateOne) SetCustomerID(v string) *CustomerDeletionRequestUpdateOne {
-	_u.mutation.SetCustomerID(v)
-	return _u
-}
-
-// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (_u *CustomerDeletionRequestUpdateOne) SetNillableCustomerID(v *string) *CustomerDeletionRequestUpdateOne {
-	if v != nil {
-		_u.SetCustomerID(*v)
-	}
-	return _u
-}
-
-// SetExternalID sets the "external_id" field.
-func (_u *CustomerDeletionRequestUpdateOne) SetExternalID(v string) *CustomerDeletionRequestUpdateOne {
-	_u.mutation.SetExternalID(v)
-	return _u
-}
-
-// SetNillableExternalID sets the "external_id" field if the given value is not nil.
-func (_u *CustomerDeletionRequestUpdateOne) SetNillableExternalID(v *string) *CustomerDeletionRequestUpdateOne {
-	if v != nil {
-		_u.SetExternalID(*v)
-	}
 	return _u
 }
 
@@ -695,16 +623,6 @@ func (_u *CustomerDeletionRequestUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *CustomerDeletionRequestUpdateOne) check() error {
-	if v, ok := _u.mutation.CustomerID(); ok {
-		if err := customerdeletionrequest.CustomerIDValidator(v); err != nil {
-			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.customer_id": %w`, err)}
-		}
-	}
-	if v, ok := _u.mutation.ExternalID(); ok {
-		if err := customerdeletionrequest.ExternalIDValidator(v); err != nil {
-			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.external_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.State(); ok {
 		if err := customerdeletionrequest.StateValidator(v); err != nil {
 			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.state": %w`, err)}
@@ -764,12 +682,6 @@ func (_u *CustomerDeletionRequestUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if _u.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(customerdeletionrequest.FieldEnvironmentID, field.TypeString)
-	}
-	if value, ok := _u.mutation.CustomerID(); ok {
-		_spec.SetField(customerdeletionrequest.FieldCustomerID, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.ExternalID(); ok {
-		_spec.SetField(customerdeletionrequest.FieldExternalID, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.State(); ok {
 		_spec.SetField(customerdeletionrequest.FieldState, field.TypeString, value)
