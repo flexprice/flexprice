@@ -770,9 +770,11 @@ func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types
 		EntityType:    types.SystemEntityTypePayment,
 		EntityID:      paymentID,
 	}
-	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
-	}
+	types.AfterCommit(ctx, func(ctx context.Context) {
+		if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+			s.Logger.Error(ctx,"failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+		}
+	})
 }
 
 // GetPaymentByGatewayTrackingID retrieves a payment by its gateway tracking ID and gateway type

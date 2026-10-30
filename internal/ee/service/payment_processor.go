@@ -971,9 +971,11 @@ func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName typ
 		EntityType:    types.SystemEntityTypePayment,
 		EntityID:      paymentID,
 	}
-	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		p.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
-	}
+	types.AfterCommit(ctx, func(ctx context.Context) {
+		if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+			p.Logger.Error(ctx,"failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+		}
+	})
 }
 
 // handleCardPayment processes card payments using saved payment methods
