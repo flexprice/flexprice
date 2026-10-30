@@ -218,6 +218,21 @@ func ResolveCustomerForUsageEvent(
 		return nil, err
 	}
 
+	// Erroring here would retry an event that can never succeed
+	if params.CustomerDeletionRepo != nil {
+		retired, retiredErr := params.CustomerDeletionRepo.IsExternalIDRetired(ctx, event.ExternalCustomerID)
+		if retiredErr != nil {
+			return nil, retiredErr
+		}
+		if retired {
+			params.Logger.Info(ctx, "skipping customer onboarding for a retired external ID",
+				"event_id", event.ID,
+				"external_customer_id", event.ExternalCustomerID,
+			)
+			return nil, nil
+		}
+	}
+
 	params.Logger.Debug(ctx, "customer not found for event, attempting onboarding workflow",
 		"event_id", event.ID,
 		"external_customer_id", event.ExternalCustomerID,
