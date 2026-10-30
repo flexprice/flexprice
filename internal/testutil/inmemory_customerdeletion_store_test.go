@@ -305,3 +305,60 @@ func TestInMemoryCustomerDeletionStore_ConcurrentUpdateStateFromSameState(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, winner, got.State)
 }
+
+func TestInMemoryCustomerDeletionStore_ZeroRequestedAtRejected(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	request.RequestedAt = time.Time{}
+
+	err := store.Create(ctx, request, categories)
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+}
+
+func TestInMemoryCustomerDeletionStore_EmptyCategoriesRejected(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, _ := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+
+	for name, categories := range map[string][]*customerdeletion.CustomerDeletionCategory{
+		"nil":      nil,
+		"empty":    {},
+		"all_nil":  {nil},
+		"two_nils": {nil, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := store.Create(ctx, request, categories)
+			require.Error(t, err)
+			assert.True(t, ierr.IsValidation(err))
+		})
+	}
+
+	// a rejected request must not occupy the customer key
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	require.NoError(t, store.Create(ctx, request, categories))
+}
+
+func TestInMemoryCustomerDeletionStore_DuplicateCategoryRejected(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	categories = append(categories, &customerdeletion.CustomerDeletionCategory{
+		ID:          "cdr_1_cat_other",
+		Category:    categories[0].Category,
+		Disposition: customerdeletion.DispositionPending,
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	})
+
+	err := store.Create(ctx, request, categories)
+	require.Error(t, err)
+	assert.True(t, ierr.IsAlreadyExists(err))
+
+	stored, listErr := store.categories.List(ctx, nil, nil, nil)
+	require.NoError(t, listErr)
+	assert.Empty(t, stored)
+}

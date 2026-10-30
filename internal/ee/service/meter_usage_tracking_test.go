@@ -475,7 +475,14 @@ func TestResolveCustomerForUsageEvent(t *testing.T) {
 			SuppressedAt: &now,
 			RequestedVia: customerdeletion.RequestedViaAPI,
 			BaseModel:    types.GetDefaultBaseModel(ctx),
-		}, nil))
+		}, []*customerdeletion.CustomerDeletionCategory{
+			{
+				ID:          "cdc_retired",
+				Category:    customerdeletion.CategoryCustomerPG,
+				Disposition: customerdeletion.DispositionPending,
+				BaseModel:   types.GetDefaultBaseModel(ctx),
+			},
+		}))
 
 		retiredParams := ServiceParams{
 			Logger:               logger.NewNoopLogger(),

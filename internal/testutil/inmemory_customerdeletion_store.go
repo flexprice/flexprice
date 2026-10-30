@@ -60,6 +60,17 @@ func (s *InMemoryCustomerDeletionStore) Create(ctx context.Context, request *cus
 			Mark(ierr.ErrValidation)
 	}
 
+	// SLA clock cannot start at zero
+	if request.RequestedAt.IsZero() {
+		return ierr.NewError("requested_at is required").
+			WithHint("A deletion request must carry its request time").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := customerdeletion.ValidateCategories(request.ID, categories); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -87,7 +98,6 @@ func (s *InMemoryCustomerDeletionStore) Create(ctx context.Context, request *cus
 	}
 
 	pending := make([]*customerdeletion.CustomerDeletionCategory, 0, len(categories))
-	seen := make(map[string]struct{}, len(categories))
 	for _, category := range categories {
 		if category == nil {
 			continue
@@ -95,17 +105,6 @@ func (s *InMemoryCustomerDeletionStore) Create(ctx context.Context, request *cus
 		category.TenantID = tenantID
 		category.EnvironmentID = environmentID
 		category.RequestID = request.ID
-
-		if _, dup := seen[category.ID]; dup {
-			return ierr.NewError("duplicate customer deletion category id").
-				WithHintf("Category ID %s appears twice in the same request", category.ID).
-				WithReportableDetails(map[string]any{
-					"request_id": request.ID,
-					"id":         category.ID,
-				}).
-				Mark(ierr.ErrAlreadyExists)
-		}
-		seen[category.ID] = struct{}{}
 
 		if _, err := s.categories.Get(ctx, category.ID); err == nil {
 			return ierr.NewError("customer deletion category already exists").

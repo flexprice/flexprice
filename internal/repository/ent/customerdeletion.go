@@ -42,6 +42,10 @@ func (r *CustomerDeletionRepository) Create(ctx context.Context, request *domain
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := domaincd.ValidateCategories(request.ID, categories); err != nil {
+		return err
+	}
+
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
@@ -207,7 +211,8 @@ func (r *CustomerDeletionRepository) IsExternalIDRetired(ctx context.Context, ex
 		return false, nil
 	}
 
-	retired, err := r.client.Reader(ctx).CustomerDeletionRequest.
+	// replica lag would release a retired identifier
+	retired, err := r.client.Reader(types.WithForceWriter(ctx)).CustomerDeletionRequest.
 		Query().
 		Where(
 			customerdeletionrequest.ExternalID(externalID),

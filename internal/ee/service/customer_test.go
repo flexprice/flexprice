@@ -85,7 +85,15 @@ func (s *CustomerServiceSuite) retireExternalID(ctx context.Context, externalID 
 		RequestedVia: customerdeletion.RequestedViaAPI,
 		BaseModel:    types.GetDefaultBaseModel(ctx),
 	}
-	s.NoError(s.GetStores().CustomerDeletionRepo.Create(ctx, request, nil))
+	categories := []*customerdeletion.CustomerDeletionCategory{
+		{
+			ID:          types.GenerateUUID(),
+			Category:    customerdeletion.CategoryCustomerPG,
+			Disposition: customerdeletion.DispositionPending,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		},
+	}
+	s.NoError(s.GetStores().CustomerDeletionRepo.Create(ctx, request, categories))
 }
 
 // Reads details as the HTTP error handler does
