@@ -13,3 +13,11 @@ import "time"
 func Now() time.Time {
 	return time.Now().UTC().Truncate(time.Microsecond)
 }
+
+// Mono returns the current time with the monotonic clock reading intact, for
+// elapsed-time measurement (time.Since anchors, deadlines) in business code,
+// where Now's truncation would drop the reading and expose the measurement to
+// wall-clock steps. Never store it or compare it with stored instants.
+func Mono() time.Time {
+	return time.Now()
+}

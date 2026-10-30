@@ -608,7 +608,7 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 // close reference for the overall shape; this differs by being per-association
 // and by matching catalog prices with the divisor-compatible addon attach rule.
 func (s *addonService) SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error) {
-	syncStart := clock.Now()
+	syncStart := clock.Mono()
 
 	if addonID == "" {
 		return nil, ierr.NewError("addon ID is required").

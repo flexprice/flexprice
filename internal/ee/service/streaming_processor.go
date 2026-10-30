@@ -116,7 +116,7 @@ func (sp *StreamingProcessor) ProcessFileStream(
 	totalSuccessful := 0
 	totalFailed := 0
 	var allErrors []string
-	lastProgressUpdate := clock.Now()
+	lastProgressUpdate := clock.Mono()
 
 	for {
 		record, err := csvReader.Read()
@@ -159,7 +159,7 @@ func (sp *StreamingProcessor) ProcessFileStream(
 
 			if chunkIndex%config.BatchSize == 0 || time.Since(lastProgressUpdate) >= config.UpdateInterval {
 				sp.updateTaskProgress(ctx, t, totalProcessed, totalSuccessful, totalFailed, chunkIndex)
-				lastProgressUpdate = clock.Now()
+				lastProgressUpdate = clock.Mono()
 			}
 		}
 	}

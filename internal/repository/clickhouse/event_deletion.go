@@ -413,7 +413,7 @@ func (r *EventDeletionLogRepository) waitForMutation(ctx context.Context, table,
 		WHERE database = currentDatabase() AND table = ? AND position(command, ?) > 0
 	`
 
-	deadline := clock.Now().Add(mutationDeadline)
+	deadline := clock.Mono().Add(mutationDeadline)
 	for {
 		var total, done uint64
 		var failReason string
@@ -444,7 +444,7 @@ func (r *EventDeletionLogRepository) waitForMutation(ctx context.Context, table,
 			return nil
 		}
 
-		if clock.Now().After(deadline) {
+		if clock.Mono().After(deadline) {
 			return ierr.WithError(types.ErrMutationTimeout).
 				WithHint("The delete took too long and was cancelled. Retry it for the same period").
 				WithReportableDetails(map[string]interface{}{

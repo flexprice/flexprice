@@ -336,7 +336,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				}
 
 				// Record the start time for this meter
-				processingStart := clock.Now()
+				processingStart := clock.Mono()
 
 				// Create a timeout context for this specific request
 				reqCtx, reqCancel := context.WithTimeout(ctx, timeoutDuration)
@@ -473,7 +473,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 			spanFinisher = &tracing.SpanFinisher{Span: span}
 		}
 
-		processingStart := clock.Now()
+		processingStart := clock.Mono()
 		reqCtx, reqCancel := context.WithTimeout(callCtx, timeoutDuration)
 		result, err := s.GetUsageByMeter(reqCtx, r)
 		reqCancel()

@@ -84,7 +84,7 @@ func (s *eventDeletionWindowService) loadWindow(ctx context.Context, key string)
 		// almost certainly still running. loadedAt still advances, so a down database
 		// is retried once per interval rather than once per event.
 		s.mu.Lock()
-		window := &deletionWindow{loadedAt: clock.Now()}
+		window := &deletionWindow{loadedAt: clock.Mono()}
 		if previous, ok := s.windows[key]; ok {
 			window.byCustomer = previous.byCustomer
 		}
@@ -97,7 +97,7 @@ func (s *eventDeletionWindowService) loadWindow(ctx context.Context, key string)
 	for _, request := range requests {
 		byCustomer[request.ExternalCustomerID] = request
 	}
-	window := &deletionWindow{loadedAt: clock.Now(), byCustomer: byCustomer}
+	window := &deletionWindow{loadedAt: clock.Mono(), byCustomer: byCustomer}
 
 	s.mu.Lock()
 	s.windows[key] = window

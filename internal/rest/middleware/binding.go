@@ -1,4 +1,4 @@
-package api
+package middleware
 
 import (
 	"net/http"
@@ -11,13 +11,13 @@ import (
 
 var installBindingOnce sync.Once
 
-// installMicrosecondBinding wraps gin's JSON, query and form bindings so every
+// InstallMicrosecondBinding wraps gin's JSON, query and form bindings so every
 // bound request has its time fields truncated to microseconds, the precision
 // Postgres stores. This is the one ingress point for client-supplied
 // timestamps (the Go SDK serializes nanoseconds); together with clock.Now()
 // for generated instants and the ent write hook as a backstop, no other layer
 // needs to handle precision.
-func installMicrosecondBinding() {
+func InstallMicrosecondBinding() {
 	installBindingOnce.Do(func() {
 		binding.JSON = microsecondBinding{inner: binding.JSON}
 		binding.Query = microsecondValueBinding{inner: binding.Query}
