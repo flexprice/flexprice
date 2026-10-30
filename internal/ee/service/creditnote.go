@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -676,7 +678,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		originalStatus = cn.CreditNoteStatus
 
 		cn.CreditNoteStatus = types.CreditNoteStatusVoided
-		cn.VoidedAt = lo.ToPtr(types.Now())
+		cn.VoidedAt = lo.ToPtr(clock.Now())
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
 			return err
 		}
@@ -793,7 +795,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string, r
 		}
 
 		cn.CreditNoteStatus = types.CreditNoteStatusFinalized
-		cn.FinalizedAt = lo.ToPtr(types.Now())
+		cn.FinalizedAt = lo.ToPtr(clock.Now())
 		if err := s.CreditNoteRepo.Update(tx, cn); err != nil {
 			return err
 		}
@@ -1123,7 +1125,7 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeCreditNote,
 		EntityID:      creditNoteID,

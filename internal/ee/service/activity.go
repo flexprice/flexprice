@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/oklog/ulid/v2"
 	"github.com/samber/lo"
 
@@ -46,7 +48,7 @@ func activityValidation(format string, args ...any) error {
 }
 
 func (s *activityService) List(ctx context.Context, req *dto.ListActivityRequest) (*dto.ListActivityResponse, error) {
-	now := types.Now()
+	now := clock.Now()
 	query, limit, err := s.buildQuery(req, now)
 	if err != nil {
 		return nil, err

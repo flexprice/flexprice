@@ -3,6 +3,8 @@ package types
 import (
 	"context"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 )
 
 // BaseModel is a base model for all domain models that need to be persisted in the database
@@ -17,7 +19,7 @@ type BaseModel struct {
 }
 
 func GetDefaultBaseModel(ctx context.Context) BaseModel {
-	now := Now()
+	now := clock.Now()
 	return BaseModel{
 		TenantID:  GetTenantID(ctx),
 		Status:    StatusPublished,

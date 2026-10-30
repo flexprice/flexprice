@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -170,7 +172,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
 		SetTaxBehavior(taxBehavior).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableEndDate(t.EndDate).
 		SetMetadata(t.Metadata)
@@ -212,7 +214,7 @@ func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfi
 			entTaxConfig.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

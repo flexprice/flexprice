@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -986,7 +988,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		var newPriceResp *dto.PriceResponse
 
 		// Set termination end date - use EndDate from request if provided, otherwise use current time
-		terminationEndDate := types.Now()
+		terminationEndDate := clock.Now()
 		if req.EffectiveFrom != nil {
 			terminationEndDate = *req.EffectiveFrom
 		}
@@ -1135,7 +1137,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	if req.EndDate != nil {
 		endDate = req.EndDate.UTC()
 	} else {
-		endDate = types.Now()
+		endDate = clock.Now()
 	}
 
 	// Validate end date is on or after start date

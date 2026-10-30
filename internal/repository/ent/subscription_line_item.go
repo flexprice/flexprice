@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -367,7 +369,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
-		SetUpdatedAt(types.Now())
+		SetUpdatedAt(clock.Now())
 	if item.EndDate.IsZero() {
 		builder.ClearEndDate()
 	} else {

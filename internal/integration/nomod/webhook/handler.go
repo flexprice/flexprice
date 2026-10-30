@@ -3,6 +3,8 @@ package webhook
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -165,7 +167,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, charge *nomod.Charge
 		"amount", amount.String(),
 		"currency", charge.Currency)
 
-	now := types.Now()
+	now := clock.Now()
 	createReq := dto.CreatePaymentRequest{
 		Amount:            amount,
 		Currency:          charge.Currency,
@@ -282,7 +284,7 @@ func (h *Handler) handlePaymentLinkPayment(ctx context.Context, charge *nomod.Ch
 	}
 
 	// Update payment to succeeded
-	now := types.Now()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		SucceededAt:      &now,

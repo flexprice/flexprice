@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -218,7 +220,7 @@ func (s *CustomerService) createCustomerMapping(
 		ProviderType:     string(types.SecretProviderQuickBooks),
 		ProviderEntityID: quickBooksCustomerID,
 		Metadata: map[string]interface{}{
-			"synced_at":                        types.Now().Format(time.RFC3339),
+			"synced_at":                        clock.Now().Format(time.RFC3339),
 			"quickbooks_customer_display_name": quickBooksCustomer.DisplayName,
 		},
 		EnvironmentID: flexpriceCustomer.EnvironmentID,

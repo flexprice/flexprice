@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/cache"
@@ -962,7 +964,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           types.Now(),
+			VoidedAt:           clock.Now(),
 		}); lifecycleErr != nil {
 			return false, false, lifecycleErr
 		}
@@ -983,7 +985,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         types.Now(),
+		RefundedAt:         clock.Now(),
 	}); lifecycleErr != nil {
 		return false, false, lifecycleErr
 	}
@@ -1064,7 +1066,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   "",
-			FailedAt:           types.Now(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       err.Error(),
 		}); failErr != nil {
 			m.Logger.Error(ctx, "failed to record payment failure after charge error",

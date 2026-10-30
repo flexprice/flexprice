@@ -3,6 +3,8 @@ package auth
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -37,8 +39,8 @@ func NewAuth(userID string, provider types.AuthProvider, token string) *Auth {
 		Provider:  provider,
 		Token:     token,
 		Status:    types.StatusPublished,
-		CreatedAt: types.Now(),
-		UpdatedAt: types.Now(),
+		CreatedAt: clock.Now(),
+		UpdatedAt: clock.Now(),
 	}
 }
 

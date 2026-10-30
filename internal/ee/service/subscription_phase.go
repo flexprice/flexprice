@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -146,7 +148,7 @@ func (s *subscriptionPhaseService) UpdateSubscriptionPhase(ctx context.Context, 
 		phase.Metadata = *req.Metadata
 	}
 
-	phase.UpdatedAt = types.Now()
+	phase.UpdatedAt = clock.Now()
 	phase.UpdatedBy = types.GetUserID(ctx)
 
 	if err := s.SubscriptionPhaseRepo.Update(ctx, phase); err != nil {
@@ -205,7 +207,7 @@ func (s *subscriptionPhaseService) publishSystemEvent(ctx context.Context, event
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeSubscription,
 		EntityID:      phaseID,

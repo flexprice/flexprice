@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
@@ -204,7 +206,7 @@ func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params Reco
 
 	succeededAt := params.SucceededAt
 	if succeededAt.IsZero() {
-		succeededAt = types.Now()
+		succeededAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{
@@ -375,7 +377,7 @@ func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params Reco
 
 	failedAt := params.FailedAt
 	if failedAt.IsZero() {
-		failedAt = types.Now()
+		failedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
@@ -462,7 +464,7 @@ func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params Recor
 
 	voidedAt := params.VoidedAt
 	if voidedAt.IsZero() {
-		voidedAt = types.Now()
+		voidedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusVoided)),
@@ -543,7 +545,7 @@ func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params Rec
 
 	refundedAt := params.RefundedAt
 	if refundedAt.IsZero() {
-		refundedAt = types.Now()
+		refundedAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{

@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -284,7 +286,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 		SetUnitPlural(f.UnitPlural).
 		SetMetadata(map[string]string(f.Metadata)).
 		SetMeterID(f.MeterID).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	// GroupID: set by service from request; "" means clear. Caller must set intentionally (service only sets when req.GroupID != nil).
 	if f.GroupID != "" {
@@ -359,7 +361,7 @@ func (r *featureRepository) Delete(ctx context.Context, id string) error {
 			feature.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -565,7 +567,7 @@ func (r *featureRepository) ClearByGroupID(ctx context.Context, groupID string) 
 			feature.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		ClearGroupID().
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {

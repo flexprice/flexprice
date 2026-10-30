@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -281,7 +283,7 @@ func (s *invoiceService) convertToBillingCurrency(ctx context.Context, inv *invo
 		inv.LineItems = lineItems
 	}
 
-	if err := convertInvoiceAmounts(inv, resolution, types.Now()); err != nil {
+	if err := convertInvoiceAmounts(inv, resolution, clock.Now()); err != nil {
 		return err
 	}
 

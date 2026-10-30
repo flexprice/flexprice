@@ -4,8 +4,11 @@ import (
 	"math"
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // LoadTimezone resolves an IANA name (or known abbreviation) to a *time.Location.
@@ -230,7 +233,7 @@ func CalculateBillingPeriods(p *CalculateBillingPeriodsParams) ([]Period, error)
 	// If endDate is nil, use current time
 	boundaryEnd := p.EndDate
 	if boundaryEnd == nil {
-		boundaryEnd = lo.ToPtr(Now())
+		boundaryEnd = lo.ToPtr(clock.Now())
 	}
 
 	for currentEnd.Before(*boundaryEnd) {

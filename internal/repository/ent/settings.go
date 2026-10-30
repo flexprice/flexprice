@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -103,7 +105,7 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetValue(s.Value).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -146,7 +148,7 @@ func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -331,7 +333,7 @@ func (r *settingsRepository) archiveSetting(ctx context.Context, key types.Setti
 				settings.Status(string(types.StatusPublished)),
 			).
 			SetStatus(string(types.StatusArchived)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			Save(ctx)
 

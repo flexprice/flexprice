@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 
@@ -301,7 +303,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Caller asserts a sync-relevant field is changing (i.e. end_date being
@@ -410,7 +412,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetSequence(nextSeq).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -670,7 +672,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	}
 
 	if !f.AllowExpiredPrices {
-		now := types.Now()
+		now := clock.Now()
 
 		// Filter for active prices:
 		// - Start date should be before or equal to current time (or null)
@@ -859,7 +861,7 @@ func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) er
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		ClearGroupID().
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {

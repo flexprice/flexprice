@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"go.temporal.io/api/serviceerror"
 
 	"github.com/flexprice/flexprice/internal/cache"
@@ -162,7 +164,7 @@ func (s *meterUsageTrackingService) scheduleUsageAlertWorkflow(ctx context.Conte
 		TenantID:                 tenantID,
 		EnvironmentID:            envID,
 		CustomerID:               cust.ID,
-		ScheduledFor:             types.Now().Add(delay),
+		ScheduledFor:             clock.Now().Add(delay),
 		StaleAfter:               staleAfter,
 		WalletAlertsEnabled:      walletEnabled,
 		SpendAlertsEnabled:       spendEnabled,

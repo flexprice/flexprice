@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -304,7 +306,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
 				"invoice_id": inv.ID,
 				"wallet_id":  walletID,
-				"ts":         types.Now().UnixNano(),
+				"ts":         clock.Now().UnixNano(),
 			})
 
 			walletDebitOperation := &wallet.WalletOperation{
@@ -373,7 +375,7 @@ const appliedBeforeFinalizationSourceID = "applied_before_finalization"
 // capToEligibleCredits limits each wallet to credits not expired as of the invoice's period end.
 // The wallet balance still includes expired credits the expiry job hasn't removed yet.
 func (s *creditAdjustmentService) capToEligibleCredits(ctx context.Context, inv *invoice.Invoice, wallets []*wallet.Wallet) ([]*wallet.Wallet, error) {
-	reference := types.Now()
+	reference := clock.Now()
 	if inv.PeriodEnd != nil {
 		reference = *inv.PeriodEnd
 	}

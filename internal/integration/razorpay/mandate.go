@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -84,7 +86,7 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 		expiresAt := time.Unix(t.ExpiredAt, 0).UTC()
 		out.AutoChargeableTill = &expiresAt
 
-		if types.Now().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
+		if clock.Now().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
 			types.RecurringPaymentStatusRejected, types.RecurringPaymentStatusCancelled,
 		}, out.Status) {
 			out.Status = types.RecurringPaymentStatusExpired
@@ -144,7 +146,7 @@ func SelectUsableToken(
 	preferredMethod types.PaymentMethodType,
 	invoiceTotal decimal.Decimal,
 ) (*interfaces.ProviderPaymentMethod, bool) {
-	now := types.Now()
+	now := clock.Now()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
 		expiresAt, maxAmount := pm.RecurringAutoChargeableTill(), pm.RecurringMaxAmount()
 

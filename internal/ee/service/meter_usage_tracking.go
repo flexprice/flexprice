@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/samber/lo"
@@ -125,7 +127,7 @@ func (s *meterUsageTrackingService) PublishEvent(ctx context.Context, event *eve
 		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, types.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, clock.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
@@ -225,7 +227,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 }
 
 func stampIngestedAt(records []*events.MeterUsage) {
-	now := types.Now()
+	now := clock.Now()
 	for _, record := range records {
 		record.IngestedAt = now
 	}
@@ -620,7 +622,7 @@ func (s *meterUsageTrackingService) publishRejectedEventWebhook(ctx context.Cont
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeEvent,
 		EntityID:      event.ID,

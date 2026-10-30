@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -117,7 +119,7 @@ func (r *UpdateCreditGrantRequest) Validate() error {
 	}
 
 	if r.EndDate != nil {
-		if r.EndDate.Before(types.Now()) {
+		if r.EndDate.Before(clock.Now()) {
 			return errors.NewError("end_date cannot be in the past").
 				WithHint("Please provide a valid end date").
 				WithReportableDetails(map[string]interface{}{

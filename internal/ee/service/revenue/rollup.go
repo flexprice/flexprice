@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -960,7 +962,7 @@ func (s *revenueService) scanScopeFor(ctx context.Context, req types.RollupDirty
 		activeParents: activeParents,
 		accruing:      accruing,
 		since:         req.Since,
-		now:           types.Now(),
+		now:           clock.Now(),
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"go.temporal.io/sdk/activity"
 
@@ -92,7 +92,7 @@ func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context
 	log := activity.GetLogger(ctx)
 	log.Info("Processing subscription renewal-due alerts (cron activity)")
 	if runTime.IsZero() {
-		runTime = types.Now()
+		runTime = clock.Now()
 	}
 	if err := a.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx, runTime); err != nil {
 		a.logger.Error(ctx, "ProcessRenewalDueAlertsActivity failed",

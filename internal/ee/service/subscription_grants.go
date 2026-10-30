@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -135,7 +137,7 @@ func (s *subscriptionGrantService) Resolve(ctx context.Context, req GrantChangeR
 		return nil, err
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	cfg.entitlementChangeAt = entitlementChangeAt(req, now)
 
 	if err := s.validateChangeBoundary(ctx, cfg, now); err != nil {

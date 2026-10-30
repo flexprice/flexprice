@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v82"
@@ -119,7 +121,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		InvoiceURL:      finalizedInvoice.HostedInvoiceURL,
 		PaymentURL:      finalizedInvoice.HostedInvoiceURL, // Same as invoice URL for Stripe
 		CreatedAt:       time.Unix(finalizedInvoice.Created, 0),
-		UpdatedAt:       types.Now(),
+		UpdatedAt:       clock.Now(),
 	}
 
 	s.logger.Info(ctx, "Stripe invoice sync completed successfully",
@@ -178,8 +180,8 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Stripe requires due_date when collection_method is send_invoice.
 	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
 	if collectionMethod == types.CollectionMethodSendInvoice {
-		minDueDate := types.Now().Add(15 * time.Minute)
-		dueDate := types.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		minDueDate := clock.Now().Add(15 * time.Minute)
+		dueDate := clock.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
 		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
 			dueDate = *flexInvoice.DueDate
 		}
@@ -577,7 +579,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 		ProviderType:     "stripe",
 		ProviderEntityID: stripeInvoiceID,
 		Metadata: map[string]interface{}{
-			"sync_timestamp": types.Now().Unix(),
+			"sync_timestamp": clock.Now().Unix(),
 			"sync_source":    "flexprice",
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),

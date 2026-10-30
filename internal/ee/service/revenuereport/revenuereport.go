@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -252,7 +254,7 @@ func (s *revenueReportService) GetWaterfall(ctx context.Context, req *dto.Waterf
 		return nil, err
 	}
 	groupBy := req.ReportGroupBy()
-	now := lo.FromPtrOr(req.AsOf, types.Now()).UTC()
+	now := lo.FromPtrOr(req.AsOf, clock.Now()).UTC()
 
 	// e.g. ["2026-01", "2026-02"]
 	periods := lo.Map(utils.Months(start, end), func(month time.Time, _ int) string { return month.Format(periodLayout) })

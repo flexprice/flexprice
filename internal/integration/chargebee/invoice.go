@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/chargebee/chargebee-go/v3/enum"
 	chargebeeInvoice "github.com/chargebee/chargebee-go/v3/models/invoice"
 	"github.com/samber/lo"
@@ -814,7 +816,7 @@ func (s *InvoiceService) ReconcileInvoicePayment(ctx context.Context, invoiceID 
 
 	// Set PaidAt timestamp if payment succeeded or overpaid (and not already set)
 	if (newPaymentStatus == types.PaymentStatusSucceeded || newPaymentStatus == types.PaymentStatusOverpaid) && inv.PaidAt == nil {
-		now := types.Now()
+		now := clock.Now()
 		inv.PaidAt = &now
 	}
 
@@ -908,7 +910,7 @@ func (s *InvoiceService) ProcessChargebeePaymentFromWebhook(
 	}
 
 	// Step 3: Create payment record in FlexPrice using repository
-	now := types.Now()
+	now := clock.Now()
 	methodType, mapped := paymentMethodTypeFor(enum.PaymentMethod(req.PaymentMethod))
 	if !mapped {
 		methodType = types.PaymentMethodTypeCard

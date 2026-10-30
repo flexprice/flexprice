@@ -7,6 +7,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -806,7 +808,7 @@ func (s *journalService) post(ctx context.Context, e *domainJournal.Entry) (stri
 		WithLines(lo.Map(e.Lines(), func(l *domainJournal.Line, _ int) *domainJournal.Line {
 			return domainJournal.NewLineBuilder(l).WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_JOURNAL_LINE)).Build()
 		})).
-		WithCreatedAt(types.Now())
+		WithCreatedAt(clock.Now())
 	if e.EventType() != types.JournalEventRevenueEarned && e.EventType() != types.JournalEventRevenueOffset {
 		b = b.WithIdempotencyKey(string(e.EventType()) + ":" + e.SourceEntityID())
 	}

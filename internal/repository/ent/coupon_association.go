@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	entsql "entgo.io/ent/dialect/sql"
 
 	"github.com/flexprice/flexprice/ent"
@@ -103,7 +105,7 @@ func applyActiveOnlyFilter(query CouponAssociationQuery, activePeriodStart, acti
 		periodStart = periodEnd
 	} else {
 		// No period provided, use current time
-		now := types.Now()
+		now := clock.Now()
 		periodStart = now
 		periodEnd = now
 	}
@@ -348,7 +350,7 @@ func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCoup
 			couponassociation.TenantID(ca.TenantID),
 			couponassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Handle optional metadata

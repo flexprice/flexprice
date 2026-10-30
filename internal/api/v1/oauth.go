@@ -4,6 +4,8 @@ import (
 	"crypto/subtle"
 	"net/http"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -93,7 +95,7 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		Metadata:      req.Metadata,
 		SyncConfig:    req.SyncConfig, // Pass through the sync configuration
 		CSRFState:     csrfState,
-		ExpiresAt:     types.Now().Add(service.OAuthSessionTTL),
+		ExpiresAt:     clock.Now().Add(service.OAuthSessionTTL),
 	}
 
 	// Store session in cache (credentials will be encrypted)

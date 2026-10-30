@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -195,7 +197,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
 	updated, err := client.Secret.UpdateOneID(id).
-		SetLastUsedAt(types.Now()).
+		SetLastUsedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {

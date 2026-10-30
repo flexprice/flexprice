@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -139,7 +141,7 @@ func (r *hostedInvoiceTokenRepository) UpdateExpiresAt(ctx context.Context, invo
 			hostedinvoicetoken.RevokedAtIsNil(),
 		).
 		SetExpiresAt(expiresAt).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
@@ -160,7 +162,7 @@ func (r *hostedInvoiceTokenRepository) Revoke(ctx context.Context, id string) er
 	span := StartRepositorySpan(ctx, "hosted_invoice_token", "revoke", map[string]interface{}{"token_id": id})
 	defer FinishSpan(span)
 
-	now := types.Now()
+	now := clock.Now()
 	client := r.client.Writer(ctx)
 	n, err := client.HostedInvoiceToken.Update().
 		Where(
@@ -208,7 +210,7 @@ func (r *hostedInvoiceTokenRepository) RevokeByInvoiceID(ctx context.Context, in
 	span := StartRepositorySpan(ctx, "hosted_invoice_token", "revoke_by_invoice", map[string]interface{}{"invoice_id": invoiceID})
 	defer FinishSpan(span)
 
-	now := types.Now()
+	now := clock.Now()
 	_, err := r.client.Writer(ctx).HostedInvoiceToken.Update().
 		Where(
 			hostedinvoicetoken.TenantID(types.GetTenantID(ctx)),

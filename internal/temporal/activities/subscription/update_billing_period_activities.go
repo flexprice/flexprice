@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"go.temporal.io/sdk/temporal"
 
@@ -544,12 +546,12 @@ func (s *BillingActivities) ProcessPendingPlanChangesActivity(
 	}
 
 	// Guard: Check if schedule is due (scheduled_at <= now)
-	if schedule.ScheduledAt.After(types.Now()) {
+	if schedule.ScheduledAt.After(clock.Now()) {
 		s.logger.Info(ctx, "schedule not yet due, skipping execution",
 			"schedule_id", schedule.ID,
 			"subscription_id", sub.ID,
 			"scheduled_at", schedule.ScheduledAt,
-			"current_time", types.Now())
+			"current_time", clock.Now())
 		return &subscriptionModels.ProcessPendingPlanChangesActivityOutput{
 			Success:    true,
 			WasChanged: false,
@@ -628,7 +630,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 	if err != nil {
 		// Mark schedule as failed
 		schedule.Status = types.ScheduleStatusFailed
-		schedule.ExecutedAt = lo.ToPtr(types.Now())
+		schedule.ExecutedAt = lo.ToPtr(clock.Now())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
@@ -645,7 +647,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 	if response == nil {
 		err := fmt.Errorf("subscription change returned nil response")
 		schedule.Status = types.ScheduleStatusFailed
-		schedule.ExecutedAt = lo.ToPtr(types.Now())
+		schedule.ExecutedAt = lo.ToPtr(clock.Now())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
@@ -660,7 +662,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 	if response.OldSubscription.ID == "" || response.NewSubscription.ID == "" {
 		err := fmt.Errorf("subscription change response missing required subscription IDs")
 		schedule.Status = types.ScheduleStatusFailed
-		schedule.ExecutedAt = lo.ToPtr(types.Now())
+		schedule.ExecutedAt = lo.ToPtr(clock.Now())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
@@ -674,7 +676,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 
 	// Mark schedule as completed
 	schedule.Status = types.ScheduleStatusExecuted
-	schedule.ExecutedAt = lo.ToPtr(types.Now())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 
 	// Set execution result
 	result := &subscription.PlanChangeResult{

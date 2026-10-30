@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -57,7 +59,7 @@ func NewFXRateService(params ServiceParams) FXRateService {
 }
 
 func (s *fxRateService) ResolveRate(ctx context.Context, req ResolveFXRateRequest) (*FXRateResolution, error) {
-	return s.resolveRateAt(ctx, req, types.Now())
+	return s.resolveRateAt(ctx, req, clock.Now())
 }
 
 // resolveRateAt is ResolveRate with an injected clock, so validity windows are testable.

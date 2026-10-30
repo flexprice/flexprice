@@ -3,6 +3,8 @@ package user
 import (
 	"github.com/samber/lo"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -37,8 +39,8 @@ func NewUser(email, tenantID string) *User {
 			Status:    types.StatusPublished,
 			CreatedBy: types.DefaultUserID,
 			UpdatedBy: types.DefaultUserID,
-			CreatedAt: types.Now(),
-			UpdatedAt: types.Now(),
+			CreatedAt: clock.Now(),
+			UpdatedAt: clock.Now(),
 		},
 	}
 }

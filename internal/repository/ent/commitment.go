@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -184,7 +186,7 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
 		SetNillableTerminatedAt(c.TerminatedAt).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CommitmentStatus != "" {
@@ -229,7 +231,7 @@ func (r *commitmentRepository) Delete(ctx context.Context, id string) error {
 			entcommitment.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {

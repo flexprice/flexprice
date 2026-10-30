@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	entUser "github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -106,7 +108,7 @@ func (r *userRepository) Update(ctx context.Context, user *domainUser.User) erro
 			entUser.TenantID(tenantID),
 		).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(types.Now())
+		SetUpdatedAt(clock.Now())
 
 	if user.Metadata != nil {
 		updateQuery = updateQuery.SetMetadata(user.Metadata)
@@ -168,7 +170,7 @@ func (r *userRepository) UpdateRoles(ctx context.Context, id string, roles []str
 		).
 		SetRoles(roles).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -221,7 +223,7 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {

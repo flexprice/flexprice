@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -27,7 +29,7 @@ const (
 )
 
 func (s *walletService) CreditExpiryCutoff() time.Time {
-	return types.Now().Add(-settlementGracePeriod)
+	return clock.Now().Add(-settlementGracePeriod)
 }
 
 // draftAllocation is a draft invoice and the most it may take from an expiring credit.
@@ -258,7 +260,7 @@ func (s *walletService) HasPendingExpiringCredit(ctx context.Context, customerID
 	if err != nil {
 		return false, err
 	}
-	now := types.Now()
+	now := clock.Now()
 	for _, w := range wallets {
 		if w.WalletStatus != types.WalletStatusActive || w.WalletType != types.WalletTypePrePaid ||
 			!types.IsMatchingCurrency(w.Currency, currency) {

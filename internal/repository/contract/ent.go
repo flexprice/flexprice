@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"entgo.io/ent/dialect/sql"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
@@ -241,7 +243,7 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		).
 		SetContractStatus(string(c.ContractStatus())).
 		SetStatus(string(c.Status())).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if c.TermStart() == nil {
 		update.ClearTermStart()

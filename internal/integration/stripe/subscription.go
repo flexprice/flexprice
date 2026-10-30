@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/stripe/stripe-go/v82"
 
@@ -136,7 +138,7 @@ func (s *stripeSubscriptionService) CreateSubscription(ctx context.Context, stri
 				"created_via":            "stripe_subscription_service",
 				"stripe_subscription_id": stripeSubscriptionID,
 				"mapping_type":           "proxy",
-				"synced_at":              types.Now().Format(time.RFC3339),
+				"synced_at":              clock.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
@@ -330,7 +332,7 @@ func (s *stripeSubscriptionService) createOrFindCustomer(ctx context.Context, st
 		Metadata: map[string]interface{}{
 			"created_via":        "stripe_subscription_service",
 			"stripe_customer_id": stripeCustomerID,
-			"synced_at":          types.Now().Format(time.RFC3339),
+			"synced_at":          clock.Now().Format(time.RFC3339),
 		},
 	})
 	if err != nil {
@@ -539,7 +541,7 @@ func (s *stripeSubscriptionService) createFlexPriceSubscriptionWithoutTx(ctx con
 			"created_via":            "stripe_subscription_service",
 			"stripe_subscription_id": stripeSub.ID,
 			"mapping_type":           "proxy",
-			"synced_at":              types.Now().Format(time.RFC3339),
+			"synced_at":              clock.Now().Format(time.RFC3339),
 		},
 	})
 	if err != nil {

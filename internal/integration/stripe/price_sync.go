@@ -3,6 +3,8 @@ package stripe
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/stripe/stripe-go/v82"
 
@@ -128,7 +130,7 @@ func (s *stripePriceSyncService) EnsureBulkProductsSynced(ctx context.Context, i
 			ProviderType:     "stripe",
 			ProviderEntityID: product.ID,
 			Metadata: map[string]interface{}{
-				"sync_timestamp": types.Now().Unix(),
+				"sync_timestamp": clock.Now().Unix(),
 				"sync_source":    "flexprice",
 			},
 			EnvironmentID: types.GetEnvironmentID(ctx),

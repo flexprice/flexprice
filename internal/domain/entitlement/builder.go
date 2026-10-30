@@ -3,7 +3,7 @@ package entitlement
 import (
 	"time"
 
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
 )
 
 // entitlementBuilder copies an existing entitlement and applies field updates.
@@ -41,7 +41,7 @@ func (b *entitlementBuilder) WithUpdatedBy(userID string) *entitlementBuilder {
 		return b
 	}
 	b.entitlement.UpdatedBy = userID
-	b.entitlement.UpdatedAt = types.Now()
+	b.entitlement.UpdatedAt = clock.Now()
 	return b
 }
 

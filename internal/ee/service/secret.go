@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -371,7 +373,7 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 	}
 
 	// Check if the secret has expired
-	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(types.Now()) {
+	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(clock.Now()) {
 		return nil, ierr.NewError("secret has expired").
 			WithHint("Secret has expired").
 			Mark(ierr.ErrValidation)

@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -280,7 +282,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 		SetSubscriptionStatusAtApplication(a.SubscriptionStatusAtApplication).
 		SetRetryCount(a.RetryCount).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetAppliedAt(lo.FromPtr(a.AppliedAt)).
 		SetFailureReason(lo.FromPtr(a.FailureReason)).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -340,7 +342,7 @@ func (r *creditGrantApplicationRepository) Delete(ctx context.Context, applicati
 			cga.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -379,7 +381,7 @@ func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx cont
 				types.ApplicationStatusPending,
 				types.ApplicationStatusFailed,
 			),
-			cga.ScheduledForLT(types.Now()),
+			cga.ScheduledForLT(clock.Now()),
 			cga.Status(string(types.StatusPublished)),
 		).
 		All(ctx)

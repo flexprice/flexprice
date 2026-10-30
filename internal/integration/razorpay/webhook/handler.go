@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/metrics"
 
 	"github.com/samber/lo"
@@ -183,7 +185,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
-	now := types.Now()
+	now := clock.Now()
 
 	// Convert amount from smallest currency unit (paise) to standard unit
 	amount := decimal.NewFromInt(payment.Amount).Div(decimal.NewFromInt(100))
@@ -344,7 +346,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
-	now := types.Now()
+	now := clock.Now()
 
 	// Determine payment method ID based on payment method type
 	paymentMethodID := getPaymentMethodID(payment)

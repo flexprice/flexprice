@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -394,7 +396,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableStartDate(e.StartDate).
 		SetNillableEndDate(e.EndDate).
 		SetStatus(string(e.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetGrantMeasure(e.GrantMeasure).
 		SetGrantDurationUnit(e.GrantDurationUnit).
@@ -466,7 +468,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -609,7 +611,7 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

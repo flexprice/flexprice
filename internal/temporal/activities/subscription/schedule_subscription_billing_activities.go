@@ -3,6 +3,8 @@ package subscription
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"go.temporal.io/sdk/activity"
 
@@ -55,7 +57,7 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 		}
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	offset := 0
 	batchSize := input.BatchSize
 	totalProcessed := 0

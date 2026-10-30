@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -464,7 +466,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 
 	startDate := r.StartDate
 	if startDate == nil {
-		now := types.Now()
+		now := clock.Now()
 		startDate = &now
 	}
 

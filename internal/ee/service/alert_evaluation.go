@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -68,7 +70,7 @@ func (s *alertService) evaluateSpendAlertsForSubscriptions(ctx context.Context, 
 	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
 	billingSvc := NewBillingService(s.ServiceParams)
 	alertLogsSvc := NewAlertLogsService(s.ServiceParams)
-	now := types.Now()
+	now := clock.Now()
 
 	for _, cfg := range subCfgs {
 		sub, ok := subsByID[cfg.EntityID]
@@ -185,7 +187,7 @@ func (s *alertService) EvaluateSpendAndEntitlementAlertsForCustomer(
 	if cust == nil {
 		return nil
 	}
-	at := types.Now()
+	at := clock.Now()
 
 	subs, err := s.listActiveSubscriptions(ctx, cust.ID)
 	if err != nil {
@@ -233,7 +235,7 @@ func (s *alertService) RefreshEntitlementGrantsForCustomer(ctx context.Context, 
 	if len(subs) == 0 {
 		return nil
 	}
-	at := types.Now()
+	at := clock.Now()
 	grantSvc := NewEntitlementGrantService(s.ServiceParams)
 	grants, meta, err := grantSvc.EnsureGrantsForSubscriptions(ctx, cust, subs, at)
 	if err != nil {

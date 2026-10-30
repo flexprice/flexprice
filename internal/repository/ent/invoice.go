@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 
@@ -452,7 +454,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item removal failed").Mark(ierr.ErrDatabase)
@@ -612,7 +614,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
 		SetNillableInvoiceNumber(inv.InvoiceNumber).
 		SetNillableBillingSequence(inv.BillingSequence).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
 		SetSubtotal(inv.Subtotal).
@@ -692,7 +694,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 		SetPeriodEnd(periodEnd).
 		SetBillingReason(billingReason).
 		SetIdempotencyKey(idempotencyKey).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1).
 		SaveReturning(ctx)
@@ -729,7 +731,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item deletion failed").Mark(ierr.ErrDatabase)
@@ -745,7 +747,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice deletion failed").Mark(ierr.ErrDatabase)
@@ -1010,7 +1012,7 @@ func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timez
 	}
 
 	// Get current time in the specified timezone
-	now := types.Now().In(loc)
+	now := clock.Now().In(loc)
 
 	switch format {
 	case types.InvoiceNumberFormatYYYYMM:

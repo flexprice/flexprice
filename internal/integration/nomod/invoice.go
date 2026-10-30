@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -158,7 +160,7 @@ func (s *InvoiceSyncService) buildInvoiceRequest(
 		dueDateStr = flexInvoice.DueDate.Format("2006-01-02")
 	} else {
 		// Default to 30 days from now if no due date
-		dueDateStr = types.Now().AddDate(0, 0, 30).Format("2006-01-02")
+		dueDateStr = clock.Now().AddDate(0, 0, 30).Format("2006-01-02")
 	}
 
 	// Build request
@@ -347,7 +349,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"nomod_code":         nomodInvoice.Code,
 		"nomod_status":       nomodInvoice.Status,
 		"sync_source":        "flexprice",
-		"synced_at":          types.Now().Format(time.RFC3339),
+		"synced_at":          clock.Now().Format(time.RFC3339),
 	}
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{

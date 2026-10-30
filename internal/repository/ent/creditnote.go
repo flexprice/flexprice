@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 
@@ -333,7 +335,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item removal failed").Mark(ierr.ErrDatabase)
@@ -402,7 +404,7 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 		SetMetadata(cn.Metadata).
 		SetNillableVoidedAt(cn.VoidedAt).
 		SetNillableFinalizedAt(cn.FinalizedAt).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Execute update
@@ -464,7 +466,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item deletion failed").Mark(ierr.ErrDatabase)
@@ -480,7 +482,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(types.Now()).
+			SetUpdatedAt(clock.Now()).
 			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note deletion failed").Mark(ierr.ErrDatabase)

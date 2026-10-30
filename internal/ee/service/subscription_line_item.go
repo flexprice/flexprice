@@ -5,6 +5,8 @@ import (
 	"maps"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -168,7 +170,7 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 	// Apply proration for the add if requested. Skip usage prices (unknown future consumption).
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
 		lineItem.PriceType != types.PRICE_TYPE_USAGE {
-		effectiveDate := types.Now()
+		effectiveDate := clock.Now()
 		if req.StartDate != nil {
 			effectiveDate = req.StartDate.UTC()
 		}
@@ -391,7 +393,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	if lineItem.StartDate.After(now) {
 		if req.EffectiveFrom != nil && req.EffectiveFrom.UTC().After(now) {
 			return nil, ierr.NewError("cannot schedule deletion of a line item that has not started").
@@ -459,7 +461,7 @@ func (s *subscriptionService) deleteSubscriptionLineItem(ctx context.Context, li
 	if req.EffectiveFrom != nil {
 		requested = req.EffectiveFrom.UTC()
 	} else {
-		requested = types.Now()
+		requested = clock.Now()
 	}
 
 	// Validate effective from date is on or after start date
@@ -748,7 +750,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	endDate := types.Now()
+	endDate := clock.Now()
 	if req.EffectiveFrom != nil {
 		endDate = req.EffectiveFrom.UTC()
 	}

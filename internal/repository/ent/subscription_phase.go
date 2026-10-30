@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -251,7 +253,7 @@ func (r *subscriptionPhaseRepository) Delete(ctx context.Context, id string) err
 			subscriptionphase.StatusNotIn(string(types.StatusDeleted)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Exec(ctx)
 
@@ -453,7 +455,7 @@ func (o *SubscriptionPhaseQueryOptions) applyEntityQueryOptions(_ context.Contex
 
 	// Apply active only filter
 	if f.ActiveOnly {
-		activeAt := types.Now()
+		activeAt := clock.Now()
 		if f.ActiveAt != nil {
 			activeAt = *f.ActiveAt
 		}

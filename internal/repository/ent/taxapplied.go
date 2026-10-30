@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -207,7 +209,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 		SetCurrency(ta.Currency).
 		SetMetadata(ta.Metadata).
 		SetStatus(string(ta.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -263,7 +265,7 @@ func (r *taxappliedRepository) Delete(ctx context.Context, id string) error {
 			taxapplied.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -169,7 +171,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":      types.Now().Format(time.RFC3339),
+			"synced_at":      clock.Now().Format(time.RFC3339),
 			"zoho_item_name": itemResp.Name,
 		},
 	}

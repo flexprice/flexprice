@@ -3,6 +3,8 @@ package coupon
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -33,7 +35,7 @@ type Coupon struct {
 
 // IsValid checks if the coupon is valid for redemption
 func (c *Coupon) IsValid() bool {
-	now := types.Now()
+	now := clock.Now()
 
 	// Check if coupon is within valid date range
 	if c.RedeemAfter != nil && now.Before(*c.RedeemAfter) {

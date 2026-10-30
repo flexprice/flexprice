@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -186,7 +188,7 @@ func resolveTime(raw TimeSpecRaw, supplied map[string][]string) (TimeSpec, error
 }
 
 // parseRelativeRange resolves a relative range token into a concrete
-// [from, to) UTC window anchored at types.Now(). Supported tokens:
+// [from, to) UTC window anchored at clock.Now(). Supported tokens:
 //   - "today"          — start of today (UTC) .. now
 //   - "yesterday"       — start of yesterday (UTC) .. start of today (UTC)
 //   - "last_N_days"     — now-N*24h .. now
@@ -196,7 +198,7 @@ func resolveTime(raw TimeSpecRaw, supplied map[string][]string) (TimeSpec, error
 //   - "this_quarter"    — start of quarter (UTC) .. now
 //   - "this_year"       — Jan 1 (UTC) .. now
 func parseRelativeRange(token string) (time.Time, time.Time, error) {
-	now := types.Now()
+	now := clock.Now()
 	switch token {
 	case "today":
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)

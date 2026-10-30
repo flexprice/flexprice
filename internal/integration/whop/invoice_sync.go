@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -88,9 +90,9 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		return nil, err
 	}
 
-	defaultDueDate := types.Now().AddDate(0, 0, DefaultInvoiceDueDays).UTC()
+	defaultDueDate := clock.Now().AddDate(0, 0, DefaultInvoiceDueDays).UTC()
 	dueDate := defaultDueDate
-	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(types.Now()) {
+	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(clock.Now()) {
 		dueDate = flexInvoice.DueDate.UTC()
 	}
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/nyaruka/phonenumbers"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
@@ -309,7 +311,7 @@ func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *c
 		EnvironmentID:    customer.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			mappingKeySyncedAt:         types.Now().Format(time.RFC3339),
+			mappingKeySyncedAt:         clock.Now().Format(time.RFC3339),
 			mappingKeyContactName:      contact.ContactName,
 			mappingKeyPrimaryEmail:     contact.Email,
 			mappingKeyPrimaryContactID: contact.PrimaryContact,

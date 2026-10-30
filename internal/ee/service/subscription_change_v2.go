@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -1478,7 +1480,7 @@ func (s *subscriptionService) ExecuteScheduledPlanChangeV2(
 	}
 
 	schedule.Status = types.ScheduleStatusExecuted
-	schedule.ExecutedAt = lo.ToPtr(types.Now())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 	if err := schedule.SetPlanChangeV2Result(&subscription.PlanChangeV2Result{
 		SubscriptionID: schedule.SubscriptionID,
 		FromPlanID:     resp.FromPlan.ID,
@@ -1505,7 +1507,7 @@ func (s *subscriptionService) failPlanChangeSchedule(
 	cause error,
 ) {
 	schedule.Status = types.ScheduleStatusFailed
-	schedule.ExecutedAt = lo.ToPtr(types.Now())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 	schedule.ErrorMessage = lo.ToPtr(cause.Error())
 
 	if err := s.SubScheduleRepo.Update(ctx, schedule); err != nil {
@@ -1577,7 +1579,7 @@ func (s *subscriptionService) resolvePendingPlanChangeSchedule(
 
 	superseded := subscription.NewSubscriptionScheduleBuilder(existing).
 		WithStatus(types.ScheduleStatusCancelled).
-		WithCancelledAt(types.Now()).
+		WithCancelledAt(clock.Now()).
 		WithUpdatedBy(types.GetUserID(ctx)).
 		Build()
 
@@ -1602,7 +1604,7 @@ func resolveEffectiveAt(sub *subscription.Subscription, req dto.SubscriptionChan
 		return sub.CurrentPeriodEnd
 	}
 
-	return types.Now()
+	return clock.Now()
 }
 
 // schedulePlanChangeForPeriodEnd records a deferred change.

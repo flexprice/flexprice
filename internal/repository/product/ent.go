@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -171,7 +173,7 @@ func (r *repository) Update(ctx context.Context, p *domainProduct.Product) error
 		).
 		SetName(p.Name()).
 		SetDescription(p.Description()).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
@@ -195,7 +197,7 @@ func (r *repository) Delete(ctx context.Context, id string) error {
 			entProduct.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {

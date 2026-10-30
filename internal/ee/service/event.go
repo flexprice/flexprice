@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/sourcegraph/conc/pool"
@@ -334,7 +336,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				}
 
 				// Record the start time for this meter
-				processingStart := types.Now()
+				processingStart := clock.Now()
 
 				// Create a timeout context for this specific request
 				reqCtx, reqCancel := context.WithTimeout(ctx, timeoutDuration)
@@ -471,7 +473,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 			spanFinisher = &tracing.SpanFinisher{Span: span}
 		}
 
-		processingStart := types.Now()
+		processingStart := clock.Now()
 		reqCtx, reqCancel := context.WithTimeout(callCtx, timeoutDuration)
 		result, err := s.GetUsageByMeter(reqCtx, r)
 		reqCancel()

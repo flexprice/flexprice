@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
@@ -192,7 +192,7 @@ func (s *selfBillingService) RunHourly(ctx context.Context) error {
 		return nil
 	}
 
-	pushErr := s.pushUsage(ctx, types.Now())
+	pushErr := s.pushUsage(ctx, clock.Now())
 	syncErr := s.syncStatuses(ctx)
 	return errors.Join(pushErr, syncErr)
 }

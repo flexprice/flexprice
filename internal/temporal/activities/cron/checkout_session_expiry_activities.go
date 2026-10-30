@@ -3,7 +3,7 @@ package cron
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -25,7 +25,7 @@ func NewCheckoutSessionExpiryActivities(
 
 // ExpireCheckoutSessionsActivity archives all expired checkout sessions across every tenant and environment.
 func (a *CheckoutSessionExpiryActivities) ExpireCheckoutSessionsActivity(ctx context.Context) (*cronModels.CheckoutSessionExpiryWorkflowResult, error) {
-	now := types.Now()
+	now := clock.Now()
 	r, err := a.checkoutSvc.CleanupAllExpiredSessions(ctx, &now)
 	if err != nil {
 		a.logger.Error(ctx, "ExpireCheckoutSessionsActivity failed",

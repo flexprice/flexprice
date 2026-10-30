@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -235,7 +237,7 @@ func (s *ItemSyncService) createItemMapping(
 		EnvironmentID:    environmentID,
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":            types.Now().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 			"quickbooks_item_name": itemName,
 		},
 	}

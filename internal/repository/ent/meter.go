@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -320,7 +322,7 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -372,7 +374,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetFilters(m.ToEntFilters()).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

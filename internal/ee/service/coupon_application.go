@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -69,7 +71,7 @@ func (s *couponApplicationService) CreateCouponApplication(ctx context.Context, 
 			InvoiceID:           req.InvoiceID,
 			InvoiceLineItemID:   req.InvoiceLineItemID,
 			SubscriptionID:      req.SubscriptionID,
-			AppliedAt:           types.Now(),
+			AppliedAt:           clock.Now(),
 			OriginalPrice:       req.OriginalPrice,
 			FinalPrice:          req.FinalPrice,
 			DiscountedAmount:    req.DiscountedAmount,
@@ -280,7 +282,7 @@ func (s *couponApplicationService) prepareCouponApplications(ctx context.Context
 			InvoiceID:           inv.ID,
 			InvoiceLineItemID:   &targetLineItem.ID,
 			SubscriptionID:      lo.CoalesceOrEmpty(targetLineItem.SubscriptionID, inv.SubscriptionID),
-			AppliedAt:           types.Now(),
+			AppliedAt:           clock.Now(),
 			OriginalPrice:       targetLineItem.Amount,
 			FinalPrice:          discountResult.FinalPrice,
 			DiscountedAmount:    discountResult.Discount,
@@ -364,7 +366,7 @@ func (s *couponApplicationService) prepareCouponApplications(ctx context.Context
 			CouponAssociationID: couponAssociationID,
 			InvoiceID:           inv.ID,
 			SubscriptionID:      inv.SubscriptionID,
-			AppliedAt:           types.Now(),
+			AppliedAt:           clock.Now(),
 			OriginalPrice:       runningSubTotal.Add(discountResult.Discount), // Original before this discount
 			FinalPrice:          discountResult.FinalPrice,
 			DiscountedAmount:    discountResult.Discount,

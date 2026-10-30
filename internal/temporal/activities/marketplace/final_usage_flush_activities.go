@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"go.temporal.io/sdk/activity"
 
@@ -158,7 +160,7 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 				Field:    lo.ToPtr("period_end"),
 				Operator: lo.ToPtr(types.GREATER_THAN_EQUAL),
 				DataType: lo.ToPtr(types.DataTypeDate),
-				Value:    &types.Value{Date: lo.ToPtr(types.Now().Add(-backlogSubmissionWindow))},
+				Value:    &types.Value{Date: lo.ToPtr(clock.Now().Add(-backlogSubmissionWindow))},
 			},
 			{
 				Field:    lo.ToPtr("period_end"),

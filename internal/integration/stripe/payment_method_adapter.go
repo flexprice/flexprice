@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	stripeapi "github.com/stripe/stripe-go/v82"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -58,7 +60,7 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 		Type:     stripeapi.String(string(stripeapi.PaymentMethodTypeCard)),
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	out := make([]interfaces.ProviderPaymentMethod, 0)
 	for pm, err := range stripeClient.V1PaymentMethods.List(ctx, params) {
 		if err != nil {

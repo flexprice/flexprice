@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -218,7 +220,7 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetName(c.Name).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CouponCode != nil {
@@ -284,7 +286,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -346,7 +348,7 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string, 
 
 	affected, err := updateQuery.
 		AddTotalRedemptions(1).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

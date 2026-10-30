@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -84,7 +86,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(types.Now()),
+		RefundedAt:       lo.ToPtr(clock.Now()),
 		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
 	}
 	if refundID != "" {

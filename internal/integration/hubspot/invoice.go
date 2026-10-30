@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -76,9 +78,9 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 
 	// Set due date (Unix timestamp in milliseconds).
 	// Clamp to at least 15 minutes from now so wallet top-up invoices
-	// (DueDate = types.Now()) don't fail HubSpot validation.
+	// (DueDate = clock.Now()) don't fail HubSpot validation.
 	if inv.DueDate != nil {
-		minDueDate := types.Now().Add(15 * time.Minute)
+		minDueDate := clock.Now().Add(15 * time.Minute)
 		dueDate := *inv.DueDate
 		if dueDate.Before(minDueDate) {
 			dueDate = minDueDate

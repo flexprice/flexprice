@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -565,7 +567,7 @@ func (s *customerPortalService) validatePropertyKeys(ctx context.Context, req dt
 	}
 	// Same defaults as GetDetailedAnalytics for a request without a window.
 	if lookup.EndTime.IsZero() {
-		lookup.EndTime = types.Now()
+		lookup.EndTime = clock.Now()
 	}
 	if lookup.StartTime.IsZero() {
 		lookup.StartTime = lookup.EndTime.Add(-6 * time.Hour)

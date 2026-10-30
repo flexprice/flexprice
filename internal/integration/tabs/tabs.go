@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -209,7 +211,7 @@ func tabsInvoiceMetadata(contractID, tabsCustomerID, tabsInvoiceID string, oblig
 		"tabs_customer_id": tabsCustomerID,
 		"tabs_invoice_id":  tabsInvoiceID,
 		"obligation_ids":   obligationIDs,
-		"synced_at":        types.Now().Format(time.RFC3339),
+		"synced_at":        clock.Now().Format(time.RFC3339),
 	}
 }
 

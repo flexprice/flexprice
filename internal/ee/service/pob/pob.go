@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -82,7 +84,7 @@ func (s *performanceObligationService) SyncForSubscription(ctx context.Context, 
 		lineItemsByPOB[p.ID()] = append(lineItemsByPOB[p.ID()], li)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	synced := make([]*domainPOB.PerformanceObligation, 0, len(pobs))
 	for id, existing := range pobs {
 		next := derivePOB(existing, lineItemsByPOB[id], c, now)
@@ -374,7 +376,7 @@ func (s *performanceObligationService) resolveForLineItem(ctx context.Context, l
 		WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).
 		WithEntityID(li.ID).
 		WithStatus(types.StatusPublished).
-		WithCreatedAt(types.Now()).
+		WithCreatedAt(clock.Now()).
 		Build()
 
 	predecessor, err := s.predecessorPOB(ctx, li, c)
@@ -419,7 +421,7 @@ func (s *performanceObligationService) predecessorPOB(ctx context.Context, li *s
 }
 
 func newPOB(li *subscription.SubscriptionLineItem, c *domainContract.Contract) *domainPOB.PerformanceObligation {
-	now := types.Now()
+	now := clock.Now()
 	return domainPOB.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PERFORMANCE_OBLIGATION)).
 		WithContractID(c.ID()).

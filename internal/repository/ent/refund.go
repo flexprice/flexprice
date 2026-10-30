@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -165,7 +167,7 @@ func (r *refundRepository) Update(ctx context.Context, ref *domainRefund.Refund)
 		SetNillableFailureReason(ref.FailureReason).
 		SetGatewayMetadata(ref.GatewayMetadata).
 		SetMetadata(ref.Metadata).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetNillableInitiatedAt(ref.InitiatedAt).
 		SetNillableSucceededAt(ref.SucceededAt).
 		SetNillableFailedAt(ref.FailedAt).

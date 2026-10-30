@@ -3,7 +3,7 @@ package v1
 import (
 	"net/http"
 
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/gin-gonic/gin"
 
@@ -70,7 +70,7 @@ func (h *SubscriptionHandler) ExecuteSubscriptionPlanChangeV2(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.ExecutePlanChange(c.Request.Context(), subscriptionID, req, types.Now())
+	resp, err := h.service.ExecutePlanChange(c.Request.Context(), subscriptionID, req, clock.Now())
 	if err != nil {
 		c.Error(err)
 		return

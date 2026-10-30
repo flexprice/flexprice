@@ -3,6 +3,8 @@ package cron
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	domainPayment "github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
@@ -109,7 +111,7 @@ func (a *MoyasarAuthPaymentSettlementActivities) reconcilePaymentStatus(
 		if err := moyasarIntegration.Lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			SucceededAt:        types.Now(),
+			SucceededAt:        clock.Now(),
 		}); err != nil {
 			a.logger.Error(ctx, "failed to record payment success",
 				"payment_id", flexpricePaymentID,
@@ -129,7 +131,7 @@ func (a *MoyasarAuthPaymentSettlementActivities) reconcilePaymentStatus(
 		if err := moyasarIntegration.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			FailedAt:           types.Now(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       "payment failed (reconciled by cron)",
 		}); err != nil {
 			a.logger.Error(ctx, "failed to record payment failure",

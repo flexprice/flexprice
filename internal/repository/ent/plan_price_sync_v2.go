@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 
@@ -370,7 +372,7 @@ func (r *planPriceSyncRepository) ReanchorSubSyncedSequence(
 			subscription.EnvironmentID(environmentID),
 		).
 		SetSyncedPriceSequence(seq).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(userID).
 		SaveReturning(ctx); err != nil {
 		SetSpanError(span, err)

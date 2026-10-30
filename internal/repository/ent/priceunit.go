@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -239,7 +241,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 		SetName(priceUnit.Name).
 		SetSymbol(priceUnit.Symbol).
 		SetStatus(string(priceUnit.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(priceUnit.Metadata).
 		Save(ctx)
@@ -298,7 +300,7 @@ func (r *priceUnitRepository) Delete(ctx context.Context, priceUnit *domainPrice
 			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

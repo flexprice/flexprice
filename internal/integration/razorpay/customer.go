@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -221,7 +223,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		Metadata: map[string]interface{}{
 			"created_via":          "flexprice_to_provider",
 			"razorpay_customer_id": razorpayCustomerID,
-			"synced_at":            types.Now().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),

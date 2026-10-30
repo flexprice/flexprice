@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -64,7 +66,7 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 	// Re-query with offset 0 each time: processSubscriptionTrialEnd flips trialing → incomplete, so
 	// offset pagination would skip rows that slide into the first page after earlier rows are updated.
 	const batchSize = 100
-	now := types.Now()
+	now := clock.Now()
 	listCtx := ctx
 
 	s.Logger.Info(ctx, "starting trial end processing", "current_time", now)
@@ -143,7 +145,7 @@ func derivePerSubscriptionCtx(parentCtx context.Context, sub *subscription.Subsc
 
 // ProcessSingleSubscriptionTrialEnd is the public entry point for ending a single subscription's
 // trial on demand (e.g. from the modification API). It delegates to the private batch-oriented
-// processSubscriptionTrialEnd with now = types.Now().
+// processSubscriptionTrialEnd with now = clock.Now().
 func (s *subscriptionService) ProcessSingleSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, now time.Time) (*dto.InvoiceResponse, error) {
 	invService := NewInvoiceService(s.ServiceParams)
 	return s.processSubscriptionTrialEnd(ctx, sub, invService, now)

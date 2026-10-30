@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -163,7 +165,7 @@ func (s *alertService) UpdateAlertSettings(ctx context.Context, id string, req d
 
 	alertSettings.Config = newConfig
 	alertSettings.Enabled = newConfig.IsAlertEnabled()
-	alertSettings.UpdatedAt = types.Now()
+	alertSettings.UpdatedAt = clock.Now()
 	alertSettings.UpdatedBy = types.GetUserID(ctx)
 
 	if err := s.AlertRepo.Update(ctx, alertSettings); err != nil {

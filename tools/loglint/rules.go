@@ -313,7 +313,7 @@ func isContextType(typ types.Type) bool {
 }
 
 // runLL010 flags time.Now() in business-layer packages, where instants flow to
-// Postgres and must be born at its microsecond precision — use types.Now().
+// Postgres and must be born at its microsecond precision — use clock.Now().
 // Raw time.Now() stays allowed in infra packages (timers want the monotonic
 // clock) and in tests.
 func runLL010(pass *analysis.Pass) {
@@ -354,9 +354,9 @@ func runLL010(pass *analysis.Pass) {
 			return
 		}
 		file := pass.Fset.Position(call.Pos()).Filename
-		if strings.HasSuffix(file, "_test.go") || strings.HasSuffix(file, "clock.go") {
+		if strings.HasSuffix(file, "_test.go") {
 			return
 		}
-		pass.Reportf(call.Pos(), "LL010: time.Now() banned in business layers — use types.Now() (born at Postgres microsecond precision)")
+		pass.Reportf(call.Pos(), "LL010: time.Now() banned in business layers — use clock.Now() (born at Postgres microsecond precision)")
 	})
 }

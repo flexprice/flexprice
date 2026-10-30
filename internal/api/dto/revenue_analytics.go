@@ -3,6 +3,8 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -61,7 +63,7 @@ const revenueAnalyticsMaxRangeDays = 90
 
 func (r *RevenueAnalyticsRequest) Validate() error {
 	if r.EndTime.IsZero() {
-		r.EndTime = types.Now()
+		r.EndTime = clock.Now()
 	}
 	if r.StartTime.IsZero() || !r.StartTime.Before(r.EndTime) {
 		return ierr.NewError("invalid time range").

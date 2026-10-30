@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -41,7 +43,7 @@ func (s *subscriptionModificationService) validateTrialEndRequest(
 	// Date-specific validation only applies to scheduled_date action.
 	if params.Action == dto.TrialEndActionScheduledDate {
 		newTrialEnd := params.NewTrialEnd.UTC()
-		now := types.Now()
+		now := clock.Now()
 		if !newTrialEnd.After(now) {
 			return ierr.NewError("new_trial_end must be in the future").
 				WithHint("To end the trial immediately, use action 'immediate'").
@@ -106,7 +108,7 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	ctx context.Context,
 	sub *subscription.Subscription,
 ) (*dto.SubscriptionModifyResponse, error) {
-	now := types.Now()
+	now := clock.Now()
 	sub.TrialEnd = lo.ToPtr(now)
 	invRes, err := s.subscriptionService.ProcessSingleSubscriptionTrialEnd(ctx, sub, now)
 	if err != nil {
@@ -148,7 +150,7 @@ func (s *subscriptionModificationService) settleTrialEndPayFirst(
 	checkout *dto.CheckoutParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
-	start := types.Now()
+	start := clock.Now()
 
 	_, end, err := trialConversionPeriod(sub, start)
 	if err != nil {
@@ -290,7 +292,7 @@ func (s *subscriptionModificationService) previewTrialEnd(
 	}
 
 	status := types.SubscriptionStatusIncomplete
-	endDate := types.Now()
+	endDate := clock.Now()
 	if params.Action == dto.TrialEndActionScheduledDate {
 		status = types.SubscriptionStatusTrialing
 		endDate = params.NewTrialEnd.UTC()

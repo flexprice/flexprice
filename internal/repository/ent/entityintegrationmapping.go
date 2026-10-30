@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -266,7 +268,7 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 		SetProviderEntityID(mapping.ProviderEntityID).
 		SetMetadata(mapping.Metadata).
 		SetStatus(string(mapping.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	_, err := updateQuery.Save(ctx)
@@ -328,7 +330,7 @@ func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping
 			entityintegrationmapping.EnvironmentID(environmentID),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

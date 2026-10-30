@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"entgo.io/ent/dialect/sql"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
@@ -255,7 +257,7 @@ func (r *repository) Update(ctx context.Context, p *domainPOB.PerformanceObligat
 		SetServiceStart(p.ServiceStart()).
 		SetPobStatus(string(p.POBStatus())).
 		SetStatus(string(p.Status())).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if p.ServiceEnd() == nil {
 		update.ClearServiceEnd()

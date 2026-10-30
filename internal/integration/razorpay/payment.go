@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -326,7 +328,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		expireBy := *req.ExpiresAt
 		// Clamp past the floor, not onto it: Razorpay checks the bound on receipt, so a
 		// timestamp sitting exactly on it is already stale by then.
-		if minExpireBy := types.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
+		if minExpireBy := clock.Now().Add(razorpayMinExpireByBuffer + razorpayExpireBySafetyMargin); expireBy.Before(minExpireBy) {
 			expireBy = minExpireBy
 		}
 		paymentLinkData["expire_by"] = expireBy.Unix()
@@ -400,7 +402,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 		createdAt = int64(createdAtFloat)
 	} else {
 		// Fallback to current time if created_at is missing
-		createdAt = types.Now().Unix()
+		createdAt = clock.Now().Unix()
 		s.logger.Info(ctx, "missing created_at in Razorpay payment link response, using current time",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
@@ -675,7 +677,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	paymentMethodID := extractPaymentMethodID(payment, method)
 
 	// Create payment record with all details in metadata (for traceability)
-	now := types.Now()
+	now := clock.Now()
 	gatewayType := types.PaymentGatewayTypeRazorpay
 	createReq := &dto.CreatePaymentRequest{
 		DestinationType:   types.PaymentDestinationTypeInvoice,
@@ -1088,7 +1090,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 	if existingPayment.PaymentStatus != types.PaymentStatusSucceeded && existingPayment.PaymentStatus != types.PaymentStatusOverpaid {
 		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
 			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
-			SucceededAt:      lo.ToPtr(types.Now()),
+			SucceededAt:      lo.ToPtr(clock.Now()),
 			GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
 		}); err != nil {
 			return ierr.WithError(err).
@@ -1104,7 +1106,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(types.Now()),
+		RefundedAt:       lo.ToPtr(clock.Now()),
 		GatewayPaymentID: lo.ToPtr(razorpayPaymentID),
 	}
 	if refundID != "" {

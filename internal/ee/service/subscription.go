@@ -8,6 +8,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
@@ -203,7 +205,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 
 	// Setup subscription dates
 	if sub.StartDate.IsZero() {
-		sub.StartDate = types.Now().Truncate(time.Millisecond)
+		sub.StartDate = clock.Now().Truncate(time.Millisecond)
 	} else {
 		sub.StartDate = sub.StartDate.UTC().Truncate(time.Millisecond)
 	}
@@ -2214,7 +2216,7 @@ func (s *subscriptionService) CancelSubscription(
 	}
 
 	// Built before the cancellation mutates the subscription. The immediate-cancellation key is
-	// derived from the current period precisely because effectiveDate is types.Now(), and
+	// derived from the current period precisely because effectiveDate is clock.Now(), and
 	// updateSubscriptionForCancellation now closes CurrentPeriodEnd at that same effectiveDate —
 	// deriving the key afterwards would make it differ on every retry and could double-credit.
 	prorationCreditKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
@@ -2411,7 +2413,7 @@ func (s *subscriptionService) CancelSubscription(
 		Reason:            req.Reason,
 		ProrationDetails:  prorationDetails,
 		TotalCreditAmount: totalCreditAmount,
-		ProcessedAt:       types.Now(),
+		ProcessedAt:       clock.Now(),
 	}
 
 	// Note: Proration invoice is no longer created during cancellation
@@ -2891,7 +2893,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 	if req.LifetimeUsage {
 		usageStartTime = time.Time{}
-		usageEndTime = types.Now()
+		usageEndTime = clock.Now()
 	}
 
 	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, subscription.ID, usageStartTime, req.LifetimeUsage)
@@ -3290,7 +3292,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 // TODO: move to billing service
 func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error) {
 	const batchSize = 100
-	now := types.Now()
+	now := clock.Now()
 
 	s.Logger.Info(ctx, "starting billing period updates",
 		"current_time", now)
@@ -3848,7 +3850,7 @@ func (s *subscriptionService) processPendingPlanChanges(
 	}
 
 	// Guard: Check if schedule is due (scheduled_at <= now)
-	now := types.Now()
+	now := clock.Now()
 	if schedule.ScheduledAt.After(now) {
 		s.Logger.Info(ctx, "schedule not yet due, skipping execution",
 			"schedule_id", schedule.ID,
@@ -3913,7 +3915,7 @@ func (s *subscriptionService) executeScheduledPlanChange(
 	if err != nil {
 		// Mark schedule as failed
 		schedule.Status = types.ScheduleStatusFailed
-		schedule.ExecutedAt = lo.ToPtr(types.Now())
+		schedule.ExecutedAt = lo.ToPtr(clock.Now())
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.Logger.Error(ctx, "failed to update schedule status to failed",
@@ -3927,7 +3929,7 @@ func (s *subscriptionService) executeScheduledPlanChange(
 
 	// Mark schedule as completed
 	schedule.Status = types.ScheduleStatusExecuted
-	schedule.ExecutedAt = lo.ToPtr(types.Now())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 
 	// Set execution result
 	result := &subscription.PlanChangeResult{
@@ -3960,7 +3962,7 @@ func (s *subscriptionService) cancelAllPendingSchedules(ctx context.Context, sub
 	for _, schedule := range schedules {
 		if schedule.Status == types.ScheduleStatusPending {
 			schedule.Status = types.ScheduleStatusCancelled
-			schedule.CancelledAt = lo.ToPtr(types.Now())
+			schedule.CancelledAt = lo.ToPtr(clock.Now())
 			schedule.UpdatedBy = types.GetUserID(ctx)
 
 			if err := s.SubScheduleRepo.Update(ctx, schedule); err != nil {
@@ -4001,7 +4003,7 @@ func (s *subscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Con
 	}
 
 	// Mark the schedule as executed
-	now := types.Now()
+	now := clock.Now()
 	schedule.Status = types.ScheduleStatusExecuted
 	schedule.ExecutedAt = &now
 	schedule.UpdatedAt = now
@@ -4386,7 +4388,7 @@ func (s *subscriptionService) PauseSubscription(
 			return err
 		}
 
-		pauseAt := types.Now()
+		pauseAt := clock.Now()
 		if err := s.validatePause(txCtx, lockedSub, pauseAt); err != nil {
 			return err
 		}
@@ -4575,7 +4577,7 @@ func (s *subscriptionService) ResumeSubscription(
 				Mark(ierr.ErrValidation)
 		}
 
-		resumeAt := types.Now()
+		resumeAt := clock.Now()
 		if lockedSub.EndDate != nil && !lockedSub.EndDate.After(resumeAt) {
 			return ierr.NewError("subscription has reached its end date").
 				WithHint("A subscription past its end date cannot be resumed").
@@ -4741,7 +4743,7 @@ func (s *subscriptionService) publishSubscriptionCreatedEvent(ctx context.Contex
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeSubscription,
 		EntityID:      sub.ID,
@@ -4771,7 +4773,7 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeSubscription,
 		EntityID:      subscriptionID,
@@ -5122,7 +5124,7 @@ func (s *subscriptionService) createAddonAttachParams(
 		addonAssociation.SyncedPriceSequence = currentAddonSeq
 	}
 
-	addonRequestedStart := lo.Ternary(req.StartDate != nil, lo.FromPtr(req.StartDate), types.Now())
+	addonRequestedStart := lo.Ternary(req.StartDate != nil, lo.FromPtr(req.StartDate), clock.Now())
 	if req.StartDate == nil && sub.CurrentPeriodStart.After(addonRequestedStart) {
 		addonRequestedStart = sub.CurrentPeriodStart
 	}
@@ -5702,7 +5704,7 @@ func (s *subscriptionService) MarkSubscriptionIncomplete(ctx context.Context, in
 	if sub.SubscriptionStatus != types.SubscriptionStatusActive || !types.PaymentBehavior(sub.PaymentBehavior).IsIncompleteType() {
 		return nil
 	}
-	isOverdue := inv.DueDate != nil && !types.Now().Before(*inv.DueDate)
+	isOverdue := inv.DueDate != nil && !clock.Now().Before(*inv.DueDate)
 	if types.CollectionMethod(sub.CollectionMethod) != types.CollectionMethodChargeAutomatically && !isOverdue {
 		return nil
 	}
@@ -5731,7 +5733,7 @@ func (s *subscriptionService) ProcessOverdueSubscriptionInvoices(ctx context.Con
 	}
 
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	now := types.Now()
+	now := clock.Now()
 	var failures []error
 	for _, env := range envs {
 		tenantCtx := context.WithValue(ctx, types.CtxTenantID, env.TenantID)
@@ -5860,7 +5862,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 	// Process each application
 	successCount := 0
 	failureCount := 0
-	now := types.Now()
+	now := clock.Now()
 	for _, cga := range applications {
 		if cga.PeriodStart.After(now) {
 			continue
@@ -6005,7 +6007,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			"invoice_count", len(invoices))
 
 		// Filter invoices that are past grace period
-		now := types.Now()
+		now := clock.Now()
 		eligibleInvoices := lo.Filter(invoices, func(inv *invoice.Invoice, _ int) bool {
 			// Must have a subscription ID
 			if inv.SubscriptionID == nil {
@@ -6194,7 +6196,7 @@ func (s *subscriptionService) determineEffectiveDate(
 	cancellationType types.CancellationType,
 	customDate *time.Time,
 ) (time.Time, error) {
-	now := types.Now()
+	now := clock.Now()
 
 	switch cancellationType {
 	case types.CancellationTypeImmediate:
@@ -6227,7 +6229,7 @@ func (s *subscriptionService) determineEffectiveDate(
 }
 
 // buildCancellationProrationKey returns a stable idempotency key for wallet proration credits on cancel.
-// For immediate cancellation, effectiveDate is types.Now() and must not be used alone (retries would change it).
+// For immediate cancellation, effectiveDate is clock.Now() and must not be used alone (retries would change it).
 // For other cancellation types, effectiveDate is already deterministic from subscription or request.
 func (s *subscriptionService) buildCancellationProrationKey(
 	sub *subscription.Subscription,
@@ -6308,7 +6310,7 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 	effectiveDate time.Time,
 	reason string,
 ) error {
-	now := types.Now()
+	now := clock.Now()
 
 	// Update cancellation fields
 	// For immediate cancellations, cancelled_at is the time of the subscription cancellation
@@ -6524,7 +6526,7 @@ func (s *subscriptionService) buildMeterUsageResponse(ctx context.Context, subMe
 	}
 	if req.LifetimeUsage {
 		usageStartTime = time.Time{}
-		usageEndTime = types.Now()
+		usageEndTime = clock.Now()
 	}
 
 	if len(subMeterUsage.LineItemUsages) == 0 {
@@ -6770,7 +6772,7 @@ func (s *subscriptionService) GetSubscriptionEntitlementsForSubscription(ctx con
 			WithHint("A subscription must be provided to resolve entitlements").
 			Mark(ierr.ErrValidation)
 	}
-	return s.resolveSubscriptionEntitlements(ctx, sub, types.Now(), false)
+	return s.resolveSubscriptionEntitlements(ctx, sub, clock.Now(), false)
 }
 
 func (s *subscriptionService) GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*dto.EntitlementResponse, error) {
@@ -7055,7 +7057,7 @@ func (s *subscriptionService) GetActiveAggregatedSubscriptionEntitlements(ctx co
 	if err != nil {
 		return nil, err
 	}
-	entitlements, err := s.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, types.Now())
+	entitlements, err := s.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, clock.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -7091,7 +7093,7 @@ func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Cont
 	}
 
 	grantStates, err := NewEntitlementGrantService(s.ServiceParams).
-		GrantStateByFeature(ctx, sub, types.Now())
+		GrantStateByFeature(ctx, sub, clock.Now())
 	if err != nil {
 		s.Logger.Error(ctx, "failed to load entitlement grant state, returning entitlements without it",
 			"error", err, "subscription_id", sub.ID)
@@ -7491,7 +7493,7 @@ func (s *subscriptionService) GetUpcomingCreditGrantApplications(ctx context.Con
 
 	// Create filter for upcoming grants
 	// Include pending and failed statuses (failed ones can be retried)
-	now := types.Now()
+	now := clock.Now()
 	filter := types.NewNoLimitCreditGrantApplicationFilter()
 	filter.SubscriptionIDs = req.SubscriptionIDs
 	filter.ApplicationStatuses = []types.ApplicationStatus{
@@ -7603,7 +7605,7 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 		End:   currentEnd,
 	})
 
-	now := types.Now()
+	now := clock.Now()
 
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
@@ -7711,8 +7713,8 @@ func (s *subscriptionService) createCancellationSchedule(
 		Status:         types.ScheduleStatusPending,
 		TenantID:       sub.TenantID,
 		EnvironmentID:  sub.EnvironmentID,
-		CreatedAt:      types.Now(),
-		UpdatedAt:      types.Now(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 		CreatedBy:      types.GetUserID(ctx),
 		UpdatedBy:      types.GetUserID(ctx),
 		StatusColumn:   types.StatusPublished,
@@ -8479,7 +8481,7 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 // mid-period invoices when current-period usage has crossed that threshold.
 func (s *subscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error) {
 	const batchSize = 1000
-	effectiveTime := types.Now()
+	effectiveTime := clock.Now()
 
 	s.Logger.Info(ctx, "starting auto invoice threshold billing run", "effective_time", effectiveTime)
 
@@ -8755,7 +8757,7 @@ func (s *subscriptionService) processPendingPlanChangeV2(
 	if err != nil {
 		return err
 	}
-	if schedule == nil || schedule.ScheduledAt.After(types.Now()) {
+	if schedule == nil || schedule.ScheduledAt.After(clock.Now()) {
 		return nil
 	}
 

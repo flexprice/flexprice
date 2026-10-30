@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -352,7 +354,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetTimezone(c.Timezone).
 		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// SetNillable is a no-op on nil, so it cannot clear a column. Callers load the customer before
@@ -418,7 +420,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 

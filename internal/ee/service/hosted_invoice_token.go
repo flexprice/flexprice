@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/auth"
@@ -100,7 +102,7 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 	if err != nil {
 		return nil, err
 	}
-	now := types.Now()
+	now := clock.Now()
 	for _, token := range tokens {
 		if token.IsActive(now) {
 			urls[token.InvoiceID] = hostedInvoiceURL(s.Config, token.ID)
@@ -140,7 +142,7 @@ func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoic
 			return err
 		}
 
-		now := types.Now()
+		now := clock.Now()
 		token = &hostedinvoicetoken.HostedInvoiceToken{
 			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_HOSTED_INVOICE_TOKEN),
 			EnvironmentID: types.GetEnvironmentID(ctx),

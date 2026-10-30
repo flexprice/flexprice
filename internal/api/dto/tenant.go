@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -92,8 +94,8 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		InternalStatus: types.TenantInternalStatusTrialing,
 		BillingDetails: billingDetails,
 		Metadata:       r.Metadata,
-		CreatedAt:      types.Now(),
-		UpdatedAt:      types.Now(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 	}
 
 }

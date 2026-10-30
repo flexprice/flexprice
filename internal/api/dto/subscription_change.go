@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -310,7 +312,7 @@ type BillingCycleInfo struct {
 
 // ToSubscriptionChange converts the request to a domain subscription change
 func (r *SubscriptionChangeRequest) ToSubscriptionChange(ctx context.Context, subscriptionID string) *subscription.SubscriptionChange {
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 
 	billingCycleAnchor := types.BillingCycleAnchorUnchanged
 

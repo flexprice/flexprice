@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	flexent "github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/systemevent"
@@ -77,7 +79,7 @@ func (r *SystemEventRepository) OnConsumed(ctx context.Context, event *types.Web
 	}
 
 	client := r.client.Writer(ctx)
-	now := types.Now()
+	now := clock.Now()
 
 	err = client.SystemEvent.Create().
 		SetID(event.ID).
@@ -125,7 +127,7 @@ func (r *SystemEventRepository) OnDelivered(ctx context.Context, eventID string,
 	}
 
 	client := r.client.Writer(ctx)
-	now := types.Now()
+	now := clock.Now()
 
 	return client.SystemEvent.UpdateOneID(eventID).
 		SetUpdatedAt(now).
@@ -141,7 +143,7 @@ func (r *SystemEventRepository) OnFailed(ctx context.Context, eventID, reason st
 		return nil
 	}
 	return r.client.Writer(ctx).SystemEvent.UpdateOneID(eventID).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetFailureReason(reason).
 		AddFailureCount(1).
 		Exec(ctx)

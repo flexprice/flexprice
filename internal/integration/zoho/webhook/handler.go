@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/metrics"
 
 	"github.com/samber/lo"
@@ -225,7 +227,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 		return err
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	_, err = deps.PaymentService.UpdatePayment(ctx, payResp.ID, dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: &gatewayID,

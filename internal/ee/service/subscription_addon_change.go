@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -238,7 +240,7 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 
 	// One `now` for the whole change: resolving per entry would give each immediate entry a
 	// different timestamp and split one proration pass into several.
-	now := types.Now()
+	now := clock.Now()
 
 	for _, remove := range req.Removes {
 		removeReq := resolveRemoveChangeAt(remove, now, sub.CurrentPeriodEnd)

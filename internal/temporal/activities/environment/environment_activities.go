@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
@@ -580,7 +582,7 @@ func (a *EnvironmentActivities) resolveOrCreateProduct(sourceCtx, targetCtx cont
 		return existing[0].ID(), nil
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	newProduct := domainProduct.NewBuilder(sourceProduct).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRODUCT)).
 		WithStatus(types.StatusPublished).

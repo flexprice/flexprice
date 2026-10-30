@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
@@ -352,7 +354,7 @@ func (r *creditGrantRepository) Update(ctx context.Context, cg *domainCreditGran
 		SetName(cg.Name).
 		SetScope(cg.Scope).
 		SetStatus(string(cg.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetNillableEndDate(cg.EndDate).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(cg.Metadata)
@@ -397,7 +399,7 @@ func (r *creditGrantRepository) Delete(ctx context.Context, id string) error {
 			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -440,7 +442,7 @@ func (r *creditGrantRepository) DeleteBulk(ctx context.Context, ids []string) er
 			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

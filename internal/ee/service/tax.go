@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -1263,7 +1265,7 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 				TaxAmount:     line.taxAmount,
 				TaxBehavior:   line.taxBehavior,
 				Currency:      inv.Currency,
-				AppliedAt:     types.Now(),
+				AppliedAt:     clock.Now(),
 			},
 			TaxRate: rate.TaxRateResponse,
 		})
@@ -1534,7 +1536,7 @@ func (s *taxService) PersistTaxResult(ctx context.Context, entityType types.TaxR
 			applied.EntityID = entityID
 			applied.Currency = currency
 			applied.Provider = result.Provider
-			applied.AppliedAt = types.Now()
+			applied.AppliedAt = clock.Now()
 			applied.EnvironmentID = types.GetEnvironmentID(ctx)
 			applied.BaseModel = types.GetDefaultBaseModel(ctx)
 
@@ -1889,7 +1891,7 @@ func (s *taxService) recordReversal(ctx context.Context, req dto.TaxReversalRequ
 		return nil
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	for _, applied := range filed {
 		details := types.ExternalTaxDetails{}
 		if applied.ExternalTaxDetails != nil {

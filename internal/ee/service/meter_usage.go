@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -460,7 +462,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	}
 	if req.LifetimeUsage {
 		usageStartTime = time.Time{}
-		usageEndTime = types.Now()
+		usageEndTime = clock.Now()
 	}
 
 	// 4. Get line items for this subscription
@@ -1171,7 +1173,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 
 	// Set defaults
 	if params.EndTime.IsZero() {
-		params.EndTime = types.Now()
+		params.EndTime = clock.Now()
 	}
 	if params.StartTime.IsZero() {
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)

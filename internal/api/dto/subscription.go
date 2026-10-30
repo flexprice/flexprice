@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -892,7 +894,7 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	}
 
 	if r.CancellationType == types.CancellationTypeImmediate && r.CancelAt != nil {
-		now := types.Now()
+		now := clock.Now()
 		if r.CancelAt.After(now) {
 			return ierr.NewError("cancel_at cannot be a future date for immediate cancellation").
 				WithHint("Use cancellation_type 'scheduled_date' to schedule a future cancellation").
@@ -1220,7 +1222,7 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	// Set default start date if not provided
 	if r.StartDate == nil {
-		now := types.Now()
+		now := clock.Now()
 		r.StartDate = &now
 	}
 
@@ -1471,7 +1473,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 	}
 
 	// Compare only the date portions (ignore time) - don't allow before current day
-	now := types.Now()
+	now := clock.Now()
 	startDateOnly := time.Date(request.StartDate.Year(), request.StartDate.Month(), request.StartDate.Day(), 0, 0, 0, 0, time.UTC)
 	nowDateOnly := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 

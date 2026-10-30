@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
@@ -217,8 +219,8 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			BaseModel: types.BaseModel{
 				TenantID:  types.GetTenantID(ctx),
 				Status:    types.StatusPublished,
-				CreatedAt: types.Now(),
-				UpdatedAt: types.Now(),
+				CreatedAt: clock.Now(),
+				UpdatedAt: clock.Now(),
 				CreatedBy: types.GetUserID(ctx),
 				UpdatedBy: types.GetUserID(ctx),
 			},
@@ -510,7 +512,7 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     types.Now(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityType(alertLog.EntityType),
 		EntityID:      alertLog.EntityID,

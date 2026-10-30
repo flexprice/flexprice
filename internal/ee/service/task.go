@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -230,7 +232,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, id string, status ty
 			Mark(ierr.ErrValidation)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	t.TaskStatus = status
 	t.UpdatedAt = now
 	t.UpdatedBy = types.GetUserID(ctx)
@@ -521,7 +523,7 @@ func (p *EventsChunkProcessor) parseTimestamp(eventReq *dto.IngestEventRequest) 
 		}
 		eventReq.Timestamp = timestamp
 	} else {
-		eventReq.Timestamp = types.Now()
+		eventReq.Timestamp = clock.Now()
 	}
 	return nil
 }

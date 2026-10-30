@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -42,7 +44,7 @@ func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSu
 			continue
 		}
 
-		plan, err := c.subscribedPlan(ctx, details, types.Now())
+		plan, err := c.subscribedPlan(ctx, details, clock.Now())
 		return &remoteSubscription{
 			id:       sub.id,
 			status:   types.SubscriptionStatus(lo.FromPtr(details.SubscriptionStatus)),
@@ -66,7 +68,7 @@ func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanRes
 	}
 
 	out := newSummaryPlan(plan)
-	now := types.Now()
+	now := clock.Now()
 	meters := make(map[string]*sdktypes.MeterResponse)
 
 	for i := range plan.Prices {

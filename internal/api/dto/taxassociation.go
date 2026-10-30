@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -73,7 +75,7 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 }
 
 func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxassociation.TaxAssociation {
-	startDate := types.Now()
+	startDate := clock.Now()
 	if r.StartDate != nil {
 		startDate = r.StartDate.UTC()
 	}

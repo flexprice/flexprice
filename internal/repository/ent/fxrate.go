@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
@@ -188,7 +190,7 @@ func (r *fxRateRepository) Update(ctx context.Context, fr *domainFXRate.FXRate) 
 		SetRate(fr.Rate).
 		SetMetadata(fr.Metadata).
 		SetStatus(string(fr.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if fr.StartDate != nil {
@@ -232,7 +234,7 @@ func (r *fxRateRepository) Delete(ctx context.Context, fr *domainFXRate.FXRate) 
 			fxrate.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

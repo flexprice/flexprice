@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -499,7 +501,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 	// Set default start/end times if not provided
 	if params.EndTime.IsZero() {
-		params.EndTime = types.Now()
+		params.EndTime = clock.Now()
 	}
 
 	if params.StartTime.IsZero() {

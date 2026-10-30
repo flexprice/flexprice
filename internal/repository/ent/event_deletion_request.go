@@ -3,6 +3,8 @@ package ent
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	entDeletion "github.com/flexprice/flexprice/ent/eventdeletionrequest"
 	domainEvents "github.com/flexprice/flexprice/internal/domain/events"
@@ -161,7 +163,7 @@ func (r *eventDeletionRequestRepository) MarkTerminal(
 	})
 	defer FinishSpan(span)
 
-	now := types.Now()
+	now := clock.Now()
 	update := r.client.Writer(ctx).EventDeletionRequest.Update().
 		Where(
 			entDeletion.TenantID(types.GetTenantID(ctx)),

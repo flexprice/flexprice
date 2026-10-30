@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -166,7 +168,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			resp = chargedResp
 			// The debit lands after the settlement window, so the session must outlive it
 			// or the late capture is refunded.
-			if settleBy := types.Now().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
+			if settleBy := clock.Now().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
 				session.ExpiresAt = settleBy
 			}
 			break
@@ -534,7 +536,7 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	}
 
 	statusStr := string(types.PaymentStatusSucceeded)
-	now := types.Now()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,

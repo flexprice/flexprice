@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/ee/service"
 
 	"github.com/shopspring/decimal"
@@ -169,7 +171,7 @@ func (s *revenueService) buildUsageCurve(ctx context.Context, in usageCurveInput
 	// period that has not started yet clamps away to nothing.
 	asOf := in.AsOf
 	if asOf.IsZero() {
-		asOf = types.Now()
+		asOf = clock.Now()
 	}
 	nowLocal := asOf.In(loc)
 	tomorrow := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)

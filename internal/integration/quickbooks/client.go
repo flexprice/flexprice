@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -1003,7 +1005,7 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 	conn.EncryptedSecretData.QuickBooks.AuthCode = ""    // Clear auth code after successful exchange
 	conn.EncryptedSecretData.QuickBooks.RedirectURI = "" // Clear redirect URI
 
-	conn.UpdatedAt = types.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
@@ -1184,7 +1186,7 @@ func (c *Client) RefreshAccessToken(ctx context.Context) error {
 	conn.EncryptedSecretData.QuickBooks.RefreshToken = encryptedRefreshToken
 	conn.EncryptedSecretData.QuickBooks.AuthCode = "" // Clear auth code if present
 
-	conn.UpdatedAt = types.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {

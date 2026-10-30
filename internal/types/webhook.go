@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 )
 
 // WebhookEventName represents a webhook event name string.
@@ -43,7 +45,7 @@ func NewWebhookEvent(eventName WebhookEventName) *WebhookEventBuilder {
 		event: &WebhookEvent{
 			ID:        GenerateUUIDWithPrefix(UUID_PREFIX_SYSTEM_EVENT),
 			EventName: eventName,
-			Timestamp: Now(),
+			Timestamp: clock.Now(),
 		},
 	}
 }

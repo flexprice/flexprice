@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -454,7 +456,7 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 	}
 
 	if c.InitialCreditsToLoad.IsPositive() {
-		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, types.Now())
+		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, clock.Now())
 	}
 
 	return req, nil
@@ -523,7 +525,7 @@ func (c *CreateSubscriptionActionConfig) ToDTO(params interface{}) (interface{},
 		startDate = actionParams.EventTimestamp
 	} else {
 		// Use current time (fallback)
-		now := types.Now()
+		now := clock.Now()
 		startDate = &now
 	}
 

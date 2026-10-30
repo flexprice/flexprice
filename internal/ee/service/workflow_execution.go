@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
@@ -64,7 +66,7 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 	}
 
 	// Create workflow execution domain model (workflow_status defaults to Running at start)
-	now := types.Now()
+	now := clock.Now()
 	exec := &workflowexecution.WorkflowExecution{
 		WorkflowID:     input.WorkflowID,
 		RunID:          input.RunID,

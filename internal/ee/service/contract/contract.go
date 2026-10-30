@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -40,7 +42,7 @@ func (s *contractService) SyncForSubscription(ctx context.Context, sub *subscrip
 		return nil, err
 	}
 
-	next := deriveContractStatus(sub, existing, types.Now())
+	next := deriveContractStatus(sub, existing, clock.Now())
 	if err := s.contractRepo.Update(ctx, next); err != nil {
 		return nil, err
 	}
@@ -105,7 +107,7 @@ func (s *contractService) GetContracts(ctx context.Context, filter *contractRepo
 }
 
 func (s *contractService) createForSubscription(ctx context.Context, sub *subscription.Subscription) (*domainContract.Contract, error) {
-	now := types.Now()
+	now := clock.Now()
 	c := domainContract.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
 		WithCustomerID(sub.CustomerID).

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -156,7 +158,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	}
 
 	// Update payment to succeeded status
-	now := types.Now()
+	now := clock.Now()
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: lo.ToPtr(paddleTransactionID),

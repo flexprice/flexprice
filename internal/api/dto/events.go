@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/addon"
@@ -506,7 +508,7 @@ func (r *GetMonitoringDataRequest) Validate() error {
 
 	// Default to last 24 hours if start_time and end_time are not provided
 	if r.StartTime.IsZero() && r.EndTime.IsZero() {
-		r.EndTime = types.Now()
+		r.EndTime = clock.Now()
 		r.StartTime = r.EndTime.Add(-24 * time.Hour)
 	} else if r.StartTime.IsZero() || r.EndTime.IsZero() {
 		return ierr.NewError("both start_time and end_time must be provided, or neither").
@@ -739,7 +741,7 @@ func (r *ReprocessRawEventsRequest) Validate() error {
 
 	// If end_date is not provided, default to current time
 	if r.EndDate == "" {
-		r.EndDate = types.Now().Format(time.RFC3339)
+		r.EndDate = clock.Now().Format(time.RFC3339)
 	}
 
 	// Validate end_date format (RFC3339)

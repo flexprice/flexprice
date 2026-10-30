@@ -6,6 +6,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -107,7 +109,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	}
 
 	// Calculate effective date
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 
 	// Calculate proration if needed.
 	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
@@ -250,7 +252,7 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 		}
 
 		// Calculate effective date
-		effectiveDate := types.Now()
+		effectiveDate := clock.Now()
 
 		// Execute the change based on type
 		result, err := s.executeChange(txCtx, currentSub, lineItems, targetPlan, changeType, req, effectiveDate)
@@ -369,8 +371,8 @@ func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
 		Status:         types.ScheduleStatusPending,
 		TenantID:       sub.TenantID,
 		EnvironmentID:  sub.EnvironmentID,
-		CreatedAt:      types.Now(),
-		UpdatedAt:      types.Now(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 		CreatedBy:      types.GetUserID(ctx),
 		UpdatedBy:      types.GetUserID(ctx),
 		StatusColumn:   types.StatusPublished,
@@ -684,7 +686,7 @@ func (s *subscriptionChangeService) generateWarnings(
 		warnings = append(warnings, "This is a downgrade. You may lose access to certain features.")
 	}
 
-	if currentSub.TrialEnd != nil && currentSub.TrialEnd.After(types.Now()) {
+	if currentSub.TrialEnd != nil && currentSub.TrialEnd.After(clock.Now()) {
 		warnings = append(warnings, "Changing plans during trial period may end your trial immediately.")
 	}
 

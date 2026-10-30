@@ -5,6 +5,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	servicecontrol "google.golang.org/api/servicecontrol/v1"
 
@@ -401,7 +403,7 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 	return types.UsageRecordSyncEntry{
 		AgreementID:  licenseArn,
 		ReportingID:  res.MeteringRecordID,
-		SyncedAt:     types.Now(),
+		SyncedAt:     clock.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }
@@ -555,7 +557,7 @@ func (r *MarketplaceReporter) reportGCPRecord(ctx context.Context, rec *usagerec
 	return types.UsageRecordSyncEntry{
 		AgreementID:  consumerID,
 		ReportingID:  reportResult.OperationID,
-		SyncedAt:     types.Now(),
+		SyncedAt:     clock.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }
@@ -718,7 +720,7 @@ func (r *MarketplaceReporter) reportAzureRecord(ctx context.Context, rec *usager
 	return types.UsageRecordSyncEntry{
 		AgreementID:  resourceID,
 		ReportingID:  res.UsageEventID,
-		SyncedAt:     types.Now(),
+		SyncedAt:     clock.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }

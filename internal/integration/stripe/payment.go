@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stripe/stripe-go/v82"
@@ -115,7 +117,7 @@ func computeCheckoutDiscount(session *stripe.CheckoutSession, requestedAmount de
 			AmountOff:      lo.TernaryF(d.Coupon != nil, func() int64 { return d.Coupon.AmountOff }, func() int64 { return 0 }),
 			PercentOff:     lo.TernaryF(d.Coupon != nil, func() float64 { return d.Coupon.PercentOff }, func() float64 { return 0 }),
 			PromotionCode:  lo.TernaryF(d.PromotionCode != nil, func() string { return d.PromotionCode.Code }, func() string { return "" }),
-			AppliedAt:      types.Now(),
+			AppliedAt:      clock.Now(),
 		})
 	}
 
@@ -1830,7 +1832,7 @@ func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymen
 	}
 
 	// Update payment to the final status with all Stripe details (same as regular Stripe charge)
-	now := types.Now()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(status)),
 		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
@@ -2220,7 +2222,7 @@ func (s *PaymentService) recordLateCaptureRefund(
 	refundID string,
 	paymentService interfaces.PaymentService,
 ) error {
-	now := types.Now()
+	now := clock.Now()
 	metadata := existingPayment.Metadata
 	if refundID != "" {
 		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"stripe_refund_id": refundID})

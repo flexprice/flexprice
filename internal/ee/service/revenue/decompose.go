@@ -8,6 +8,8 @@ package revenue
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/ee/service"
 
 	"github.com/samber/lo"
@@ -394,7 +396,7 @@ func newPeriodOnlyFact(li previewLineItem, period revenuePeriod, day time.Time, 
 		Currency:          li.Currency,
 		Status:            types.FactProvisional,
 		Version:           1,
-		ComputedAt:        types.Now(),
+		ComputedAt:        clock.Now(),
 	}
 }
 
@@ -493,7 +495,7 @@ func decomposeUsageMarginal(li previewLineItem, curve []dayCharge) []*revenuefac
 			Currency:          li.Currency,
 			Status:            types.FactProvisional,
 			Version:           1,
-			ComputedAt:        types.Now(),
+			ComputedAt:        clock.Now(),
 		})
 		prev = dc
 	}

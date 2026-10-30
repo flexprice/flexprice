@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -285,7 +287,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetCustomCurrency(item.CustomCurrency).
 		SetStatus(string(item.Status)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if item.FxConversion != nil {
@@ -340,7 +342,7 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(types.Now()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

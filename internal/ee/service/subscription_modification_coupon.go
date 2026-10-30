@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -17,7 +19,7 @@ func (s *subscriptionModificationService) executeCouponModification(
 	subscriptionID string,
 	params *dto.SubModifyCouponParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
 		return s.executeAddCoupon(ctx, subscriptionID, params, lo.FromPtrOr(params.StartDate, effectiveDate))
@@ -237,7 +239,7 @@ func (s *subscriptionModificationService) previewCouponModification(
 	subscriptionID string,
 	params *dto.SubModifyCouponParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
 		return s.previewAddCoupon(ctx, subscriptionID, params, effectiveDate)

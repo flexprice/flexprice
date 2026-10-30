@@ -3,6 +3,8 @@ package secret
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -93,5 +95,5 @@ func (s *Secret) IsExpired() bool {
 	if s.ExpiresAt == nil {
 		return false
 	}
-	return s.ExpiresAt.Before(types.Now())
+	return s.ExpiresAt.Before(clock.Now())
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -15,7 +17,7 @@ func (s *subscriptionModificationService) executeTaxModification(
 	subscriptionID string,
 	params *dto.SubModifyTaxParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 	if params.EffectiveDate != nil {
 		effectiveDate = params.EffectiveDate.UTC()
 	}
@@ -183,7 +185,7 @@ func (s *subscriptionModificationService) previewTaxModification(
 	subscriptionID string,
 	params *dto.SubModifyTaxParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := types.Now()
+	effectiveDate := clock.Now()
 	if params.EffectiveDate != nil {
 		effectiveDate = params.EffectiveDate.UTC()
 	}

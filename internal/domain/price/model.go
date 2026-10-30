@@ -8,6 +8,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -757,7 +759,7 @@ func (p *Price) GetRootPriceID() string {
 // IsActive checks if the price is currently active based on status and dates
 func (p *Price) IsActive(currentTime *time.Time) bool {
 	if currentTime == nil {
-		currentTime = lo.ToPtr(types.Now())
+		currentTime = lo.ToPtr(clock.Now())
 	}
 
 	// Check if price is published

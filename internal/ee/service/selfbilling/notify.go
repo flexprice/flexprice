@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -50,7 +52,7 @@ func (s *selfBillingService) notify(ctx context.Context, a alert) {
 	}
 
 	a.Region = s.Config.Billing.Region
-	a.OccurredAt = types.Now()
+	a.OccurredAt = clock.Now()
 
 	detached := context.WithoutCancel(ctx)
 	go func() {

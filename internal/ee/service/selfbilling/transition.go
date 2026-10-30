@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
@@ -58,7 +60,7 @@ func targetStatus(current types.TenantInternalStatus, sub *remoteSubscription, n
 func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.Tenant, sub *remoteSubscription) (types.TenantInternalStatus, error) {
 	ctx = types.SetTenantID(ctx, t.ID)
 
-	next, reason := targetStatus(t.InternalStatus, sub, types.Now())
+	next, reason := targetStatus(t.InternalStatus, sub, clock.Now())
 	if next != t.InternalStatus {
 		updated := tenant.NewBuilder(t).WithInternalStatus(next).Build()
 		if err := s.TenantRepo.Update(ctx, updated); err != nil {

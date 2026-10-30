@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -362,7 +364,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"moyasar_payment_url": moyasarInvoice.URL,
 		"moyasar_status":      moyasarInvoice.Status,
 		"sync_source":         "flexprice",
-		"synced_at":           types.Now().Format(time.RFC3339),
+		"synced_at":           clock.Now().Format(time.RFC3339),
 	}
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{

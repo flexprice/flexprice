@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -300,7 +302,7 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		return nil, err
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItems))
 
 	for i := range params.LineItems {
@@ -347,7 +349,7 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		return nil, err
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	mods := make([]*lineItemChangeMod, 0, len(params.LineItemModifications))
 
 	for _, m := range params.LineItemModifications {

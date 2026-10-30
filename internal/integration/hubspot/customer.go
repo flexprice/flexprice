@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -178,7 +180,7 @@ func (s *CustomerService) createEntityIntegrationMapping(
 		Metadata: map[string]interface{}{
 			"created_via":     "provider_to_flexprice",
 			"hubspot_deal_id": dealID,
-			"synced_at":       types.Now().Format(time.RFC3339),
+			"synced_at":       clock.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),

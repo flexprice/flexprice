@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/usagerecord"
@@ -147,7 +149,7 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 			usagerecord.EnvironmentID(environmentID),
 			usagerecord.Synced(false),
 			usagerecord.StatusEQ(string(types.StatusPublished)),
-			usagerecord.PeriodEndGTE(types.Now().Add(-submissionWindow)),
+			usagerecord.PeriodEndGTE(clock.Now().Add(-submissionWindow)),
 		).
 		All(ctx)
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/ent"
 	entrevenuefact "github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
@@ -87,7 +89,7 @@ func (r *revenueFactRepository) UpsertProvisional(ctx context.Context, facts []*
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-	now := types.Now()
+	now := clock.Now()
 
 	span := StartRepositorySpan(ctx, "revenue_fact", "upsert_provisional", map[string]interface{}{
 		"tenant_id":      tenantID,
@@ -345,7 +347,7 @@ func (r *revenueFactRepository) RevertByInvoice(ctx context.Context, invoiceID s
 			return nil
 		}
 
-		now := types.Now()
+		now := clock.Now()
 		bulk := make([]*ent.RevenueFactCreate, 0, len(originals))
 		for _, row := range originals {
 			rev := revenuefact.NewRevert(revenuefact.FromEnt(row), now)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -110,8 +112,8 @@ func (s *subscriptionScheduleService) SchedulePlanChange(
 		Status:         types.ScheduleStatusPending,
 		TenantID:       sub.TenantID,
 		EnvironmentID:  sub.EnvironmentID,
-		CreatedAt:      types.Now(),
-		UpdatedAt:      types.Now(),
+		CreatedAt:      clock.Now(),
+		UpdatedAt:      clock.Now(),
 		CreatedBy:      types.GetUserID(ctx),
 		UpdatedBy:      types.GetUserID(ctx),
 		StatusColumn:   types.StatusPublished,
@@ -157,7 +159,7 @@ func (s *subscriptionScheduleService) Cancel(ctx context.Context, scheduleID str
 			return fmt.Errorf("failed to restore subscription state: %w", err)
 		}
 
-		now := types.Now()
+		now := clock.Now()
 		schedule.Status = types.ScheduleStatusCancelled
 		schedule.CancelledAt = &now
 		schedule.UpdatedAt = now
@@ -354,7 +356,7 @@ func (s *subscriptionScheduleService) executePlanChange(
 		OldSubscriptionID: schedule.SubscriptionID,
 		NewSubscriptionID: changeResponse.NewSubscription.ID,
 		ChangeType:        string(changeResponse.ChangeType),
-		EffectiveDate:     types.Now(),
+		EffectiveDate:     clock.Now(),
 	}
 
 	s.Logger.Info(ctx, "plan change executed successfully",
@@ -377,7 +379,7 @@ func (s *subscriptionScheduleService) MarkAsExecuting(ctx context.Context, sched
 	}
 
 	schedule.Status = types.ScheduleStatusExecuting
-	schedule.UpdatedAt = types.Now()
+	schedule.UpdatedAt = clock.Now()
 
 	return s.SubScheduleRepo.Update(ctx, schedule)
 }
@@ -389,7 +391,7 @@ func (s *subscriptionScheduleService) MarkAsExecuted(ctx context.Context, schedu
 		return fmt.Errorf("failed to get schedule: %w", err)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	schedule.Status = types.ScheduleStatusExecuted
 	schedule.ExecutedAt = &now
 	schedule.UpdatedAt = now
@@ -418,7 +420,7 @@ func (s *subscriptionScheduleService) MarkAsFailed(ctx context.Context, schedule
 		return fmt.Errorf("failed to get schedule: %w", err)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	schedule.Status = types.ScheduleStatusFailed
 	schedule.ExecutedAt = &now
 	schedule.ErrorMessage = &errorMsg

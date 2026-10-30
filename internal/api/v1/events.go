@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 
@@ -450,7 +452,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 const eventLookupDefaultLookback = 14 * 24 * time.Hour
 
 func parseEventLookupWindow(startTimeStr, endTimeStr string) (domainevents.TimeRange, error) {
-	window := domainevents.TimeRange{End: types.Now()}
+	window := domainevents.TimeRange{End: clock.Now()}
 	var err error
 	if endTimeStr != "" {
 		if window.End, err = time.Parse(time.RFC3339, endTimeStr); err != nil {
@@ -493,7 +495,7 @@ func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time
 
 func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time, error) {
 	if endTime.IsZero() {
-		endTime = types.Now()
+		endTime = clock.Now()
 	}
 
 	if startTime.IsZero() {

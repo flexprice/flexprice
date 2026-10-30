@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -367,7 +369,7 @@ func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
 			WithEnvironmentID(types.GetEnvironmentID(ctx)).
 			WithBaseModel(types.GetDefaultBaseModel(ctx)).
 			Build()
-		grant, err := s.initializeRunningGrantUsage(ctx, grant, types.Now())
+		grant, err := s.initializeRunningGrantUsage(ctx, grant, clock.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -1383,7 +1385,7 @@ func (s *entitlementService) takeOverGrantWindowsFromParent(ctx context.Context,
 		FeatureID:      e.FeatureID,
 		Delta:          delta,
 		Unlimited:      e.IsUnlimitedGrant(),
-		At:             types.Now(),
+		At:             clock.Now(),
 		Source:         "override_created",
 	})
 	return err
@@ -1414,7 +1416,7 @@ func (s *entitlementService) settleGrantWindowsForDeletedEC(ctx context.Context,
 			FeatureID:      e.FeatureID,
 			Delta:          delta,
 			Unlimited:      parent.IsUnlimitedGrant(),
-			At:             types.Now(),
+			At:             clock.Now(),
 			Source:         "override_removed",
 		})
 		return err
@@ -1438,7 +1440,7 @@ func (s *entitlementService) settleGrantWindowsForDeletedEC(ctx context.Context,
 		sub:                     sub,
 		entitlementsToRemove:    removed,
 		survivingECsByFeature:   surviving,
-		entitlementChangeAt:     types.Now(),
+		entitlementChangeAt:     clock.Now(),
 		entitlementChangeOrigin: grantProrationSourceEntitlementGone,
 	})
 }

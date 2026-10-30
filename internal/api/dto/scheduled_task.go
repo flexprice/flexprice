@@ -3,6 +3,8 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -158,7 +160,7 @@ func (r *TriggerForceRunRequest) Validate() error {
 		}
 
 		// Validate that end time is not in the future
-		now := types.Now()
+		now := clock.Now()
 		if r.EndTime.After(now) {
 			return ierr.NewError("end_time cannot be in the future").
 				WithHint("End time must be in the past or present").

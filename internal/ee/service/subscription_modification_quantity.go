@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
@@ -86,7 +88,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItemModifications))
 	for _, m := range params.LineItemModifications {
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, m.LineItemID)
@@ -319,7 +321,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := types.Now()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItems))
 
 	for _, change := range params.LineItems {
