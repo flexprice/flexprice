@@ -45,6 +45,25 @@ func AllowWhenSuspended() PermissionOption {
 	return func(r *permissionRules) { r.allowWhenSuspended = true }
 }
 
+func abortIfSuspended(c *gin.Context) bool {
+	if types.GetTenantInternalStatus(c.Request.Context()) != types.TenantInternalStatusSuspended {
+		return false
+	}
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		"message": "tenant account is suspended",
+	})
+	return true
+}
+
+// BlockWhenSuspended rejects writes from suspended tenants on routes without RBAC.
+func BlockWhenSuspended() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !abortIfSuspended(c) {
+			c.Next()
+		}
+	}
+}
+
 // SuperAdminOnly restricts a route to a person holding super_admin. Use it for
 // routes that administer people, such as changing another user's roles, where a
 // service account must be refused no matter which roles its key was minted with.
@@ -69,13 +88,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity types.Entity, action ty
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		// Suspended tenants are blocked from all write operations. Checked first
-		// so a suspended tenant hears about the suspension rather than a narrower
-		// role problem it cannot act on until the account is restored.
-		if action == types.ActionWrite && !rules.allowWhenSuspended && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "tenant account is suspended",
-			})
+		if action == types.ActionWrite && !rules.allowWhenSuspended && abortIfSuspended(c) {
 			return
 		}
 
