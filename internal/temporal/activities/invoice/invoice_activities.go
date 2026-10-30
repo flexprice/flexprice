@@ -2,9 +2,11 @@ package invoice
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -12,6 +14,7 @@ import (
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -124,6 +127,35 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 	}
 	return &invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput{
 		InvoiceID: draft.ID,
+	}, nil
+}
+
+// ListPastPeriodDraftsActivity returns the subscription's cycle drafts whose period has ended.
+func (s *InvoiceActivities) ListPastPeriodDraftsActivity(
+	ctx context.Context,
+	input invoiceModels.ListPastPeriodDraftsActivityInput,
+) (*invoiceModels.ListPastPeriodDraftsActivityOutput, error) {
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.SubscriptionID = input.SubscriptionID
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
+	filter.PeriodEndLTE = lo.ToPtr(time.Now().UTC())
+
+	drafts, err := s.serviceParams.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Error(ctx, "failed to list past-period drafts for subscription",
+			"subscription_id", input.SubscriptionID,
+			"error", err)
+		return nil, err
+	}
+
+	return &invoiceModels.ListPastPeriodDraftsActivityOutput{
+		InvoiceIDs: lo.Map(drafts, func(inv *invoice.Invoice, _ int) string { return inv.ID }),
 	}, nil
 }
 

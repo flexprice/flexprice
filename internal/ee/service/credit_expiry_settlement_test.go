@@ -1122,6 +1122,7 @@ func (s *CreditExpiryInvoiceRaceSuite) finalizationCase(expiryAgo time.Duration)
 	tx := s.seedGrant("wtxn_pending", decimal.NewFromInt(30), start, now.Add(-expiryAgo))
 	inv := s.cycleDraft("inv_hold", "subs_hold", 20, start, end)
 	computedAt := now.Add(-125 * time.Minute)
+	inv.CreatedAt = computedAt
 	inv.LastComputedAt = &computedAt
 	s.NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
 	return inv, tx

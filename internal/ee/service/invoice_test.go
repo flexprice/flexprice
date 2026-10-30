@@ -3404,12 +3404,51 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_CycleDraftAfterPeriodEndIsDu
 	computedAt := periodEnd.Add(time.Hour)
 	inv, err := s.invoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
+	inv.CreatedAt = computedAt
 	inv.LastComputedAt = &computedAt
 	s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
 
 	due, err := s.service.IsFinalizationDue(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.True(due, "a computed cycle draft whose period has ended should finalize")
+}
+
+func (s *InvoiceServiceSuite) TestIsFinalizationDue_DelayCountsFromCreation() {
+	ctx := s.GetContext()
+	periodStart := s.testData.now.Add(-40 * 24 * time.Hour)
+	periodEnd := s.testData.now.Add(-10 * 24 * time.Hour)
+
+	tests := []struct {
+		name         string
+		createdAgo   time.Duration
+		recomputeAgo time.Duration
+		wantDue      bool
+	}{
+		{name: "created past the delay, recomputed just now", createdAgo: 3 * time.Hour, recomputeAgo: time.Minute, wantDue: true},
+		{name: "created inside the delay", createdAgo: time.Hour, recomputeAgo: time.Minute, wantDue: false},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.invoiceRepo.Clear()
+			s.seedInvoiceConfigDelay(7200)
+
+			draft, err := s.service.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{SubscriptionID: s.testData.subscription.ID, PeriodStart: periodStart, PeriodEnd: periodEnd, ReferencePoint: types.ReferencePointPeriodEnd})
+			s.Require().NoError(err)
+
+			now := time.Now().UTC()
+			recomputedAt := now.Add(-tt.recomputeAgo)
+			inv, err := s.invoiceRepo.Get(ctx, draft.ID)
+			s.Require().NoError(err)
+			inv.CreatedAt = now.Add(-tt.createdAgo)
+			inv.LastComputedAt = &recomputedAt
+			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
+			s.Require().NoError(err)
+			s.Equal(tt.wantDue, due)
+		})
+	}
 }
 
 // A listed invoice must carry the same tax_summary the detail endpoint returns. The page's

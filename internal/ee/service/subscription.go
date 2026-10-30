@@ -7854,14 +7854,16 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWithOpti
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"user_id", userID,
-		"skip_if_already_invoiced", opts.SkipIfAlreadyInvoiced)
+		"skip_if_already_invoiced", opts.SkipIfAlreadyInvoiced,
+		"recompute_past_period_drafts", opts.RecomputePastPeriodDrafts)
 
 	workflowInput := invoiceTemporalModels.DraftAndComputeSubscriptionInvoiceWorkflowInput{
-		SubscriptionID:        subscriptionID,
-		TenantID:              tenantID,
-		EnvironmentID:         environmentID,
-		UserID:                userID,
-		SkipIfAlreadyInvoiced: opts.SkipIfAlreadyInvoiced,
+		SubscriptionID:            subscriptionID,
+		TenantID:                  tenantID,
+		EnvironmentID:             environmentID,
+		UserID:                    userID,
+		SkipIfAlreadyInvoiced:     opts.SkipIfAlreadyInvoiced,
+		RecomputePastPeriodDrafts: opts.RecomputePastPeriodDrafts,
 	}
 	if err := workflowInput.Validate(); err != nil {
 		return nil, ierr.WithError(err).WithHint("Invalid workflow input").Mark(ierr.ErrValidation)

@@ -1651,7 +1651,8 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return true, nil
 	}
 
-	dueAt := inv.LastComputedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
+	// Counted from creation: the daily recompute moves LastComputedAt and would keep pushing this back.
+	dueAt := inv.CreatedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
 	return time.Now().UTC().After(dueAt), nil
 }
 
