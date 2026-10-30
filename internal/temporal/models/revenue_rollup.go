@@ -14,12 +14,20 @@ type RevenueRollupInput struct {
 	// itself -- this carries the cursor from its last heartbeat into a new run.
 	ResumeEnvironmentID       string `json:"resume_environment_id,omitempty"`
 	ResumeAfterSubscriptionID string `json:"resume_after_subscription_id,omitempty"`
+	// ForceFull rolls every active subscription regardless of what changed.
+	// Needed after any cleanup: a subscription whose period opened before the
+	// grace window is invisible to every incremental trigger, so a cleared
+	// table would otherwise stay mostly empty until the scheduled rebuild.
+	ForceFull bool `json:"force_full,omitempty"`
 }
 
 // RevenueRollupWorkflowResult mirrors the counts from RevenueRollupService.RollupDirty.
 type RevenueRollupWorkflowResult struct {
 	Rolled  int `json:"rolled"`
 	Skipped int `json:"skipped"`
+	// ScopedOut is how many subscriptions the scan considered and found
+	// nothing to recompute for — the denominator for Rolled.
+	ScopedOut int `json:"scoped_out"`
 }
 
 // RevenueSweepResult mirrors the counts from RevenueService.ReconcileBookedInvoices.
@@ -32,6 +40,7 @@ type RevenueSweepResult struct {
 // RollupDirtyActivityInput carries the scan window and any manual resume point.
 type RollupDirtyActivityInput struct {
 	Since                     time.Time `json:"since"`
+	ForceFull                 bool      `json:"force_full,omitempty"`
 	ResumeEnvironmentID       string    `json:"resume_environment_id,omitempty"`
 	ResumeAfterSubscriptionID string    `json:"resume_after_subscription_id,omitempty"`
 }
