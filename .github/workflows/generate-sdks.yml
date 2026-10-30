@@ -131,12 +131,12 @@ jobs:
       # make swagger needs Node (fix_swagger_internal_types.mjs) and Python 3 (fix_swagger_refs.sh)
       # before OpenAPI generation — not only for Speakeasy steps below.
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "20"
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
@@ -204,31 +204,31 @@ jobs:
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-go
           path: api/go/
 
       - name: Upload api-typescript artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-typescript
           path: api/typescript/
 
       - name: Upload api-python artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-python
           path: api/python/
 
       - name: Upload api-mcp artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: api-mcp
           path: api/mcp/
 
       - name: Upload openapi-spec artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: openapi-spec
           path: docs/swagger/swagger-3-0.json
@@ -279,7 +279,7 @@ jobs:
           persist-credentials: false
 
       - name: Download openapi-spec artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: openapi-spec
           path: release-spec
@@ -375,7 +375,7 @@ jobs:
           persist-credentials: false
 
       - name: Download artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -491,7 +491,7 @@ jobs:
             artifact: api-mcp
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ matrix.artifact }}
           path: sdk
@@ -508,7 +508,7 @@ jobs:
 
       - name: Set up Node (TypeScript)
         if: matrix.lang == 'typescript'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -546,7 +546,7 @@ jobs:
 
       - name: Set up Python
         if: matrix.lang == 'python'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
 
