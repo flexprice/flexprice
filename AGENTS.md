@@ -53,6 +53,14 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Every query bounded by `max_memory_usage = 90GB` (hardcoded — do not remove).
 - Analytics queries → ClickHouse. Transactional reads/writes → PostgreSQL.
 
+### Time precision (one contract, never per-entity)
+- Every stored instant is whole microseconds — Postgres's precision; lib/pq ROUNDS nanoseconds half-up, so an untruncated time can read back later than what was written.
+- Three boundaries enforce this; business code never calls `.Truncate(time.Microsecond)`:
+  - `types.Now()` for generated instants — bare `time.Now()` in business layers fails loglint **LL010** (infra timers and tests may keep `time.Now()`).
+  - Gin's JSON binding truncates client-supplied times at ingress (`internal/api/binding.go`).
+  - An ent write hook truncates every time field as the storage backstop (`internal/postgres/ent_hooks.go`).
+- Whole-second alignment of business dates (billing period edges, commitment terms) is a DTO-layer rule (`ApplyDefaults`), not a precision concern.
+
 ### Observability
 - Structured logging via `internal/logger` (ctx-first API); always propagate `ctx` for trace correlation.
 - No `fmt.Println` or bare `log.Print` in production paths.

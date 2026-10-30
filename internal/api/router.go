@@ -104,6 +104,9 @@ func NewRouter(
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
+	// Process-global: also covers the admin engine and any future engine.
+	installMicrosecondBinding()
+
 	// Create a new gin engine without default middleware
 	router := gin.New()
 

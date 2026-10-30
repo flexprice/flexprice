@@ -43,7 +43,7 @@ func NewWebhookEvent(eventName WebhookEventName) *WebhookEventBuilder {
 		event: &WebhookEvent{
 			ID:        GenerateUUIDWithPrefix(UUID_PREFIX_SYSTEM_EVENT),
 			EventName: eventName,
-			Timestamp: time.Now().UTC(),
+			Timestamp: Now(),
 		},
 	}
 }

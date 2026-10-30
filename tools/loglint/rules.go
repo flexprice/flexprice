@@ -311,3 +311,52 @@ func isContextType(typ types.Type) bool {
 	// Fallback: handle aliases / workflow.Context / pointer wrappers via string match.
 	return strings.Contains(typ.String(), "context.Context")
 }
+
+// runLL010 flags time.Now() in business-layer packages, where instants flow to
+// Postgres and must be born at its microsecond precision — use types.Now().
+// Raw time.Now() stays allowed in infra packages (timers want the monotonic
+// clock) and in tests.
+func runLL010(pass *analysis.Pass) {
+	businessPkgs := []string{
+		"internal/ee/service",
+		"internal/service",
+		"internal/domain",
+		"internal/repository",
+		"internal/api",
+		"internal/temporal",
+		"internal/integration",
+		"internal/types",
+	}
+	gated := false
+	for _, p := range businessPkgs {
+		if strings.Contains(pass.Pkg.Path(), p) {
+			gated = true
+			break
+		}
+	}
+	if !gated {
+		return
+	}
+
+	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+	insp.Preorder([]ast.Node{(*ast.CallExpr)(nil)}, func(n ast.Node) {
+		call := n.(*ast.CallExpr)
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Now" {
+			return
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return
+		}
+		pkgName, ok := pass.TypesInfo.Uses[ident].(*types.PkgName)
+		if !ok || pkgName.Imported().Path() != "time" {
+			return
+		}
+		file := pass.Fset.Position(call.Pos()).Filename
+		if strings.HasSuffix(file, "_test.go") || strings.HasSuffix(file, "clock.go") {
+			return
+		}
+		pass.Reportf(call.Pos(), "LL010: time.Now() banned in business layers — use types.Now() (born at Postgres microsecond precision)")
+	})
+}

@@ -89,7 +89,7 @@ type OAuthSession struct {
 
 // IsExpired checks if the OAuth session has expired
 func (s *OAuthSession) IsExpired() bool {
-	return time.Now().UTC().After(s.ExpiresAt.UTC())
+	return Now().After(s.ExpiresAt.UTC())
 }
 
 // Validate validates the OAuth session fields

@@ -230,7 +230,7 @@ func CalculateBillingPeriods(p *CalculateBillingPeriodsParams) ([]Period, error)
 	// If endDate is nil, use current time
 	boundaryEnd := p.EndDate
 	if boundaryEnd == nil {
-		boundaryEnd = lo.ToPtr(time.Now())
+		boundaryEnd = lo.ToPtr(Now())
 	}
 
 	for currentEnd.Before(*boundaryEnd) {

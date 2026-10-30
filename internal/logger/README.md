@@ -164,6 +164,7 @@ A custom `go/analysis` analyzer (`go vet -vettool=./bin/loglint`) enforces these
 | LL007 | `log.Info/Error/...` with no `"operation"` key (warning) |
 | LL008 | Info message starts with dev-checkpoint phrase (warning) |
 | LL009 | `ctx` passed in fields position instead of as first arg |
+| LL010 | `time.Now()` in business layers — use `types.Now()` (born at Postgres microsecond precision; infra timers and tests are exempt) |
 
 Run locally: `make lint`  
 CI gate: `make lint-ci` (fails on any violation)

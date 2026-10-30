@@ -17,7 +17,7 @@ type BaseModel struct {
 }
 
 func GetDefaultBaseModel(ctx context.Context) BaseModel {
-	now := time.Now().UTC()
+	now := Now()
 	return BaseModel{
 		TenantID:  GetTenantID(ctx),
 		Status:    StatusPublished,

@@ -20,5 +20,6 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	runLL006(pass)
 	runLL008(pass)
 	runLL009(pass)
+	runLL010(pass)
 	return nil, nil
 }
