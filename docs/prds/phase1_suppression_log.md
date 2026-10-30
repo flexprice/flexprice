@@ -48,7 +48,7 @@ This reverses the earlier design, which snapshotted the external ID temporarily 
 - The registry's unique index is the enforcement point. Customer creation consults it and rejects retired IDs.
 - `subject_ref` pseudonymisation and per-tenant salt/secret design are **dropped from scope entirely**. Their only purpose was letting the audit row survive the clearing of a temporary identifier. Nothing is cleared, so there is nothing to pseudonymise. This removes an enablement prerequisite that FLE-1837 and FLE-1840 previously carried.
 
-Compliance note that must reach the retention annex: an external ID is frequently itself personal data — email-shaped, phone-shaped, or a customer name. Retaining it permanently is supportable under GDPR Article 5(2) accountability, since an erasure cannot be evidenced without identifying its subject, and a suppression list is the recognised mechanism for preventing re-creation of erased data. It is nonetheless a deliberate retention of one identifier and must appear in the annex as its own line with its own stated legal basis. Do not describe the resulting record as anonymised; it is not.
+Compliance note that must reach the retention annex: an external ID is frequently itself personal data — email-shaped, phone-shaped, or a customer name. Retaining it permanently needs its own lawful basis under GDPR Article 6 and a storage-limitation rationale under Article 5(1)(e); Article 5(2) accountability obliges us to demonstrate compliance but does not by itself supply that basis. The supporting argument is that an erasure cannot be evidenced without identifying its subject, and that a suppression list is the recognised mechanism for preventing re-creation of erased data. It is nonetheless a deliberate retention of one identifier and must appear in the annex as its own line with its own stated legal basis. Do not describe the resulting record as anonymised; it is not.
 
 ## 4. Data model
 
@@ -175,7 +175,9 @@ In `ApplyStatusFilter` (`:443`), exclude `suppressed` in the empty-status branch
 
 ### 5.4 Cache: suppression is not immediate, and the spec must say so
 
-The deployed cache is **in-process, not Redis**. `internal/cache/init.go:29-33` falls through to `InitializeInMemoryCache` for anything that is not explicitly `redis`, and `internal/config/config.yaml:162-164` ships `enabled: false`, `type: "inmemory"`. `ExpiryDefaultInMemory` is 30 minutes (`internal/cache/expiry.go:6`).
+The deployed cache is **in-process, not Redis**. `internal/cache/init.go:29-33` falls through to `InitializeInMemoryCache` for anything that is not explicitly `redis`, and `internal/config/config.yaml:514-519` ships `cache.enabled: false` with both `inmemory.enabled` and `redis.enabled` false.
+
+The TTL is **30 minutes regardless of backend**, because `customerRepository.SetCache` (`internal/repository/ent/customer.go:578`) passes `cache.ExpiryDefaultRedis` explicitly rather than a backend-appropriate default. Note that `ExpiryDefaultInMemory` is 2 minutes (`internal/cache/expiry.go:6`), so the in-process path is carrying the Redis TTL — worth a separate fix, but the 30-minute window below is what ships today.
 
 Consequences, both of which must be designed for rather than hidden:
 
@@ -213,11 +215,11 @@ GET    /v1/customers/deletion-requests?external_id=…  → 200, answers "what w
 
 The third route is the one that justifies permanent external-ID retention, and it must keep working after the customer row itself is redacted in Phase 2.
 
-On route ordering: **registration order does not matter here.** Gin 1.10.0 (`go.mod:24`) uses a radix tree that prefers a static segment over a wildcard sibling regardless of order, so `/customers/deletion-requests` wins against `/customers/:id` either way. The comment at `internal/api/router.go:216` ("must come first!") is stale folklore from an older Gin and is disproved by its own route — `GET /usage` is registered *after* `GET /:id` at `:208` and works. Do not propagate it; fixing that comment is a welcome drive-by.
+On route ordering: **registration order does not matter here.** Gin 1.12.0 (`go.mod:28`) uses a radix tree that prefers a static segment over a wildcard sibling regardless of order, so `/customers/deletion-requests` wins against `/customers/:id` either way. The comment at `internal/api/router.go:216` ("must come first!") is stale folklore from an older Gin and is disproved by its own route — `GET /usage` is registered *after* `GET /:id` at `:208` and works. Do not propagate it; fixing that comment is a welcome drive-by.
 
 The real Gin hazard in this group is different: a **panic at startup** if two different wildcard names occupy the same position, e.g. adding `/customers/:slug` beside the existing `/customers/:id`. Reordering does not fix that; using the same param name does. The group already holds `/:id`, `/lookup/:lookup_key`, `/external/:external_id`, `/portal/:external_id` and `/usage`, so keep any new wildcard consistent with `:id`.
 
-`POST` body: `requested_via` (`api` / `written`) and optionally `reason`. Default `api` when absent.
+`POST` body: `requested_via` (`api` / `written`), defaulting to `api` when absent. **No `reason` field.** The schema's only free-text column is `failure_reason`, which records why an erasure failed rather than why it was requested; overloading it would corrupt the one field an operator reads when diagnosing a stuck request. A requester-supplied justification needs its own column, which Phase 1 does not add.
 
 Response states plainly what has happened — `state: suppressed`, one category `customer_pg: pending` — and must not include any field implying deletion is complete. There is no `completed_at` in a Phase 1 response because nothing is complete.
 
@@ -281,7 +283,7 @@ The customer-table unique index is partial on `status = 'published'` (`ent/schem
 
 Unrelated bug noticed while reading this code, worth a separate ticket: `:380-387` appends `cust.ExternalID` to `old_external_ids` metadata *after* overwriting it at `:378`, so the trail records the new ID rather than the old one. `old_external_ids` is therefore not a reliable audit trail today and must not be relied on by this feature.
 
-*Automatic creation on the event path* — `handleMissingCustomer`, defined at `internal/ee/service/meter_usage_tracking_post_insert.go:1171`, called from `prepareProcessedEvents` at `:510` and from `prepareProcessedEventsV2` at `:852`. **Two callers, not one.** Both handle the return identically, so a check inside the function covers both, but both log independently and both need the distinct skip message.
+*Automatic creation on the event path* — **superseded, see the correction in §6.2 above.** On current `develop` the function is `ResolveCustomerForUsageEvent` with a single caller; `handleMissingCustomer`, `prepareProcessedEvents` and `prepareProcessedEventsV2` do not exist, and the line numbers in the rest of this subsection and in §9 come from the older layout. Treat the shape of the argument as current and every symbol name and line number in it as stale.
 
 Here the correct behaviour is **skip, not error**. Check the registry first and return `(nil, nil)` for a retired external ID.
 
@@ -336,7 +338,7 @@ Blocked by FLE-1887.
 
 ### FLE-1889 — read suppression (M — re-estimated after review, was S)
 
-Blocked by FLE-1887.
+Blocked by FLE-1887 **and FLE-1888**. FLE-1888 is a hard blocker, not a preference: read suppression is what makes the customer lookup fail, and the retirement guard is what stops the resulting miss from entering the create-on-miss event path. Shipping 1889 first lets suppression's own 404 trigger the recreation of a suppressed customer.
 
 1. `StatusSuppressed` in `internal/types/status.go`. No validator or enum to update — `Status` has no `Validate()`, and `varchar(20)` fits.
 2. Predicate in `Get`; verify `GetByLookupKey` (already filters published at `:180`).
@@ -388,7 +390,7 @@ FLE-1887 and FLE-1837 start together. Then strictly in order: **FLE-1889 follows
 
 ## 9. Risks and open items
 
-**Create-on-miss on the event path is a confirmed resurrection hole, and it sets the ticket order.** Verified 2026-10-29:
+**Create-on-miss on the event path is a confirmed resurrection hole, and it sets the ticket order.** The hole and the ordering it forces are current; the symbol names and line numbers below are from the pre-move layout and are superseded by §6.2's correction. Originally verified 2026-10-29:
 
 - `internal/ee/service/meter_usage_tracking_post_insert.go:501` looks the customer up by external ID during event processing. On failure, `:510` calls `handleMissingCustomer`, which runs a customer-onboarding **workflow that creates the customer** and then loads it at `:1328`.
 - `internal/ee/service/costsheet_usage_tracking.go:328` does the same lookup but returns the error without creating.
@@ -412,7 +414,7 @@ Consequences for sequencing:
 
 **`retention_policy` has no content yet.** FLE-1837 defines what goes in it. Phase 1 can write an empty object, but the column must exist from the first migration or every existing request row is unauditable.
 
-**The external ID retention needs a lawyer's sign-off**, not just this document. §3 states the Article 5(2) basis, which is the standard reading, but the annex line is a contractual commitment and this is engineering shape, not legal advice.
+**The external ID retention needs a lawyer's sign-off**, not just this document. §3 sets out the argument but deliberately does not assert a lawful basis: that needs an Article 6 basis and an Article 5(1)(e) storage-limitation rationale, both of which are counsel's to confirm. The annex line is a contractual commitment and this is engineering shape, not legal advice.
 
 **Authorization is unsettled and must not be defaulted.** Per §6.0, this endpoint suppresses a customer platform-wide. FLE-1847 specifies super-admin authorization and feature gating for Phase 4; Phase 1 must not ship weaker. Settle it or flag the route off.
 

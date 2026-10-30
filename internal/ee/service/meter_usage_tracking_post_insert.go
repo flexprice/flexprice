@@ -225,7 +225,7 @@ func ResolveCustomerForUsageEvent(
 			return nil, retiredErr
 		}
 		if retired {
-			params.Logger.Info(ctx, "skipping customer onboarding for a retired external ID, event dropped for compliance",
+			params.Logger.Info(ctx, "skipping customer onboarding for a retired external ID",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
