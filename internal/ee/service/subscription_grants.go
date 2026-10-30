@@ -406,15 +406,26 @@ func (s *subscriptionGrantService) resolveSurvivingGrantECs(
 		return byFeature, nil
 	}
 
-	removedIDs := lo.SliceToMap(removedECs, func(ec *entitlement.Entitlement) (string, bool) {
-		return ec.ID, true
-	})
+	// An addon attached twice lists its config twice, so a removal takes out one entry per
+	// leaving attachment, not every entry with that config ID.
+	leaving := make(map[string]int, len(removedECs))
+	for _, ec := range removedECs {
+		leaving[ec.ID]++
+	}
 
 	surviving := make(map[string][]*entitlement.Entitlement, len(byFeature))
 	for featureID, ecs := range byFeature {
-		kept := lo.Filter(ecs, func(ec *entitlement.Entitlement, _ int) bool {
-			return ec != nil && !removedIDs[ec.ID]
-		})
+		kept := make([]*entitlement.Entitlement, 0, len(ecs))
+		for _, ec := range ecs {
+			if ec == nil {
+				continue
+			}
+			if leaving[ec.ID] > 0 {
+				leaving[ec.ID]--
+				continue
+			}
+			kept = append(kept, ec)
+		}
 		if len(kept) > 0 {
 			surviving[featureID] = kept
 		}

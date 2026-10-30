@@ -2751,7 +2751,7 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_NeverMeterValidation() {
 		{"amount", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureAmount, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "quantity measure"},
 		{"day", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitDay, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "subscription_period duration"},
 		{"parallel", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeParallel, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "parallel grants"},
-		{"addon", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon grants"},
+		{"addon", types.AggregationSum, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_ADDON, ""},
 		{"count", types.AggregationCount, types.ResetUsageNever, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "SUM aggregation"},
 		{"normal_amount", types.AggregationSum, types.ResetUsageBillingPeriod, types.EntitlementGrantMeasureAmount, types.EntitlementGrantDurationUnitSubscriptionPeriod, types.EntitlementAggregationModeAdditive, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
 		{"normal_day_parallel", types.AggregationSum, types.ResetUsageBillingPeriod, types.EntitlementGrantMeasureQuantity, types.EntitlementGrantDurationUnitDay, types.EntitlementAggregationModeParallel, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
@@ -2794,7 +2794,7 @@ func (s *EntitlementGrantSuite) TestCreateEntitlement_LegacyLimitOnUnsupportedNe
 		wantError   string
 	}{
 		{"count_plan", types.AggregationCount, types.ENTITLEMENT_ENTITY_TYPE_PLAN, "require SUM aggregation"},
-		{"sum_addon", types.AggregationSum, types.ENTITLEMENT_ENTITY_TYPE_ADDON, "addon grants are not supported"},
+		{"sum_addon", types.AggregationSum, types.ENTITLEMENT_ENTITY_TYPE_ADDON, ""},
 		{"sum_plan", types.AggregationSum, types.ENTITLEMENT_ENTITY_TYPE_PLAN, ""},
 	} {
 		s.Run(tc.name, func() {
