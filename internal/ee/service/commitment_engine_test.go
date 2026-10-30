@@ -1135,3 +1135,115 @@ func TestCommitmentInvoiceLinesPackageLinePricesOverageAfresh(t *testing.T) {
 		}, lines)
 	}
 }
+
+// A custom overage price charges only remainder in windows the commitment applies to; usage before it starts or after it
+// ends bills on the line's own price, as it would with no commitment.
+func TestCommitmentInvoiceLinesOveragePriceCoversOnlyInForceUsage(t *testing.T) {
+	// The line's price costs 1 a unit up to 120 and 2 above; the overage price costs its flat amount a unit.
+	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
+		if p.ID == "overage_a" {
+			return qty.Mul(p.Amount)
+		}
+
+		first := decimal.Min(qty, intDec(120))
+		return first.Add(qty.Sub(first).Mul(intDec(2)))
+	}
+	overagePrice := &price.Price{ID: "overage_a", BillingModel: types.BILLING_MODEL_FLAT_FEE, Amount: intDec(3)}
+
+	tests := []struct {
+		name         string
+		usage        []string
+		poolOf       []int
+		capacities   []string
+		measurement  types.CommitmentMeasurement
+		perWindow    bool
+		overagePrice *price.Price
+		want         []wantLine
+	}{
+		{
+			name:         "usage before the commitment starts bills at the line's price, beyond capacity at the overage price",
+			usage:        []string{"20", "50"},
+			poolOf:       []int{-1, 0},
+			capacities:   []string{"30"},
+			measurement:  types.CommitmentMeasurementBillingPeriod,
+			overagePrice: overagePrice,
+			want: []wantLine{
+				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+				{types.CommitmentLineOverage, "Usage a", "20", "60"},
+				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+			},
+		},
+		{
+			name:         "usage after a mid-period end bills at the line's price, beyond capacity at the overage price",
+			usage:        []string{"50", "20"},
+			poolOf:       []int{0, -1},
+			capacities:   []string{"30"},
+			measurement:  types.CommitmentMeasurementBillingPeriod,
+			overagePrice: overagePrice,
+			want: []wantLine{
+				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+				{types.CommitmentLineOverage, "Usage a", "20", "60"},
+				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+			},
+		},
+		{
+			name:         "with capacity to spare only the out-of-force usage is left, at the line's price",
+			usage:        []string{"20", "30"},
+			poolOf:       []int{-1, 0},
+			capacities:   []string{"30"},
+			measurement:  types.CommitmentMeasurementBillingPeriod,
+			overagePrice: overagePrice,
+			want: []wantLine{
+				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+				{types.CommitmentLineOverage, "Usage a", "20", "20"},
+			},
+		},
+		{
+			// The bucket before the start prices alone on the line's tiers: cost(130) = 140.
+			name:         "a bucketed line prices an out-of-force bucket alone on its own price",
+			usage:        []string{"130", "15", "5"},
+			poolOf:       []int{-1, 0, 1},
+			capacities:   []string{"10", "10"},
+			measurement:  types.CommitmentMeasurementWindow,
+			perWindow:    true,
+			overagePrice: overagePrice,
+			want: []wantLine{
+				{types.CommitmentLineUtilized, "Label c1", "15", "15"},
+				{types.CommitmentLineOverage, "Usage a", "5", "15"},
+				{types.CommitmentLineOverage, "Usage a", "130", "140"},
+			},
+		},
+		{
+			name:        "without an overage price every leftover unit bills at the line's price in one row",
+			usage:       []string{"20", "50"},
+			poolOf:      []int{-1, 0},
+			capacities:  []string{"30"},
+			measurement: types.CommitmentMeasurementBillingPeriod,
+			want: []wantLine{
+				{types.CommitmentLineUtilized, "Label c1", "30", "30"},
+				{types.CommitmentLineOverage, "Usage a", "40", "40"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			total := decimal.Zero
+			for _, u := range tt.usage {
+				total = total.Add(dec(u))
+			}
+
+			line := invoiceLine("a", total.String(), "0", tt.usage...)
+			line.PerWindow, line.OveragePrice = tt.perWindow, tt.overagePrice
+			lines := renderStack(t, &commitmentStack{
+				Type:        types.COMMITMENT_TYPE_QUANTITY,
+				Measurement: tt.measurement,
+				Windows:     engineWindows(len(tt.usage)),
+				Lines:       []*usageLine{line},
+				Commitments: []*stackedCommitment{committed("c1", false, "0", tt.poolOf, []*usageLine{line}, tt.capacities...)},
+			}, cost)
+
+			requireLines(t, tt.want, lines)
+		})
+	}
+}

@@ -210,6 +210,11 @@ type countingMeterUsageRepo struct {
 	reads int
 }
 
+func (r *countingMeterUsageRepo) GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error) {
+	r.reads++
+	return r.MeterUsageRepository.GetUsageMultiMeter(ctx, params)
+}
+
 func (r *countingMeterUsageRepo) GetUsage(
 	ctx context.Context,
 	params *events.MeterUsageQueryParams,
@@ -704,6 +709,65 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodEndsMidPeriod() 
 	s.True(total.Equal(dec("34")), "total %s", total)
 }
 
+// A commitment's custom overage price charges only beyond-capacity usage while it applies; usage outside it bills at the
+// line's own $1 price.
+func (s *BillingServiceSuite) TestCommitmentLoader_OveragePriceSkipsUsageOutsideTheCommitment() {
+	mid := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		startAtMid bool
+		within     string // committed units at $0.5
+		beyondCap  string // beyond-capacity units while the commitment applies, at the $3 overage price
+		total      string
+	}{
+		{
+			// 31 a month is 17 for the 17 days from 15 Aug; 3 of the 20 calls after it are beyond capacity.
+			name:       "usage before a mid-period start",
+			startAtMid: true,
+			within:     "17",
+			beyondCap:  "3",
+			total:      "37.5",
+		},
+		{
+			// 31 a month is 14 for the 14 days to 15 Aug; 6 of the 20 calls before it are beyond capacity.
+			name:      "usage after a mid-period end",
+			within:    "14",
+			beyondCap: "6",
+			total:     "45",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.setupTestData()
+			s.enableCommitmentsV2()
+			sub, p := s.apiFixture("sub_overage_scope")
+			start, end := sub.CurrentPeriodStart, mid
+			if tt.startAtMid {
+				start, end = mid, sub.CurrentPeriodEnd
+			}
+
+			c := s.newTestCommitment("cmt_overage_scope", sub, types.COMMITMENT_TYPE_QUANTITY, "31", p.ID, start, end)
+			c.CommittedPriceID = lo.ToPtr(s.usagePriceFor("price_overage_scope_committed", s.testData.meters.apiCalls, "0.5").ID)
+			c.OveragePriceID = lo.ToPtr(s.usagePriceFor("price_overage_scope_overage", s.testData.meters.apiCalls, "3").ID)
+			s.storeCommitment(c)
+
+			lines, total, err := s.loaderFor(sub, s.meterUsage(sub), sub.CurrentPeriodStart, sub.CurrentPeriodEnd).InvoiceLines(ctx)
+			s.Require().NoError(err)
+			s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Quantity.Round(6).Equal(dec(tt.within)))
+
+			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
+			s.Require().Len(overage, 2)
+			s.True(overage[0].Quantity.Round(6).Equal(dec(tt.beyondCap)), "beyond-capacity overage %s", overage[0].Quantity)
+			s.True(overage[0].Amount.Equal(dec(tt.beyondCap).Mul(dec("3"))), "beyond-capacity overage %s", overage[0].Amount)
+			s.True(overage[1].Quantity.Equal(dec("20")), "out-of-force usage %s", overage[1].Quantity)
+			s.True(overage[1].Amount.Equal(dec("20")), "out-of-force usage %s", overage[1].Amount)
+			s.True(total.Equal(dec(tt.total)), "total %s", total)
+		})
+	}
+}
+
 // One pool spans every span a commitment applies to, so usage before a later commitment starts draws it down.
 func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSplit() {
 	ctx := s.GetContext()
@@ -1022,6 +1086,125 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodMixedLinesShareO
 	_, total, err := l.InvoiceLines(ctx)
 	s.Require().NoError(err)
 	s.True(total.Equal(dec("100")), "total %s", total)
+}
+
+// Capacity fills in time order across a line's versions: a flat version, a daily-bucketed one and a flat one again each
+// draw it in their own windows, so the overage lands on the last version and carries its price.
+func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodFillsVersionsInTimeOrder() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	m := &meter.Meter{
+		ID:          "meter_versions",
+		Name:        "Tokens",
+		EventName:   "tokens",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	v1, v2, v3 := s.usagePriceFor("price_versions_v1", m, "0.1"), s.usagePriceFor("price_versions_v2", m, "0.12"), s.usagePriceFor("price_versions_v3", m, "0.08")
+	v2.BucketSize = types.WindowSizeDay
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, v2, false))
+
+	lines := lo.Map([]*price.Price{v1, v2, v3}, func(p *price.Price, _ int) *subscription.SubscriptionLineItem {
+		return &subscription.SubscriptionLineItem{ID: "subs_line_" + p.ID, PriceID: p.ID, MeterID: m.ID, DisplayName: "Tokens"}
+	})
+	sub := s.fixedDateSub("sub_versions", lines...)
+	aug10, aug20 := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)
+	lines[0].EndDate = aug10
+	lines[1].StartDate, lines[1].EndDate = aug10, aug20
+	lines[2].StartDate = aug20
+	for _, li := range lines {
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
+	}
+
+	c := s.newTestCommitment("cmt_versions", sub, types.COMMITMENT_TYPE_QUANTITY, "350", "", sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	c.ScopeEntityType, c.ScopeEntityID = types.CommitmentScopeMeter, m.ID
+	c.CommittedPriceID = lo.ToPtr(s.usagePriceFor("price_versions_committed", nil, "0.05").ID)
+	s.storeCommitment(c)
+
+	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{
+		{SubscriptionLineItemID: lines[0].ID, Price: v1, Quantity: 100, Amount: 10},
+		bucketCharge(lines[1], v2, map[int]string{12: "100", 15: "100"}),
+		{SubscriptionLineItemID: lines[2].ID, Price: v3, Quantity: 150, Amount: 12},
+	}}
+	l := s.loaderFor(sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	stacks, _, err := l.Stacks(ctx)
+	s.Require().NoError(err)
+	s.Require().Len(stacks, 1)
+	s.Equal([]time.Time{
+		sub.CurrentPeriodStart,
+		aug10,
+		time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC),
+		aug20,
+	}, stacks[0].Windows)
+
+	// v1's 100 and v2's 200 come first; 50 of v3's 150 fill the rest, and its other 100 are overage at $0.08.
+	invoiceLines, total, err := l.InvoiceLines(ctx)
+	s.Require().NoError(err)
+	overage := loaderLinesOfKind(invoiceLines, types.CommitmentLineOverage)
+	s.Require().Len(overage, 1)
+	s.Equal(v3.ID, lo.FromPtr(overage[0].PriceID))
+	s.True(overage[0].Quantity.Equal(dec("100")), "overage quantity %s", overage[0].Quantity)
+	s.True(overage[0].Amount.Equal(dec("8")), "overage %s", overage[0].Amount)
+	s.True(total.Equal(dec("25.5")), "total %s", total)
+}
+
+// A weekly bucket is keyed on its Sunday, before a version starting midweek: it still draws capacity from the version's
+// start, after the earlier flat version, so the overage lands on the bucketed version and carries its price.
+func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodWeeklyBucketFillsFromItsVersionStart() {
+	ctx := s.GetContext()
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	m := &meter.Meter{
+		ID:          "meter_weekly_versions",
+		Name:        "Tokens",
+		EventName:   "tokens",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "tokens"},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	v1, v2 := s.usagePriceFor("price_weekly_v1", m, "0.1"), s.usagePriceFor("price_weekly_v2", m, "0.12")
+	v2.BucketSize = types.WindowSizeWeek
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, v2, false))
+
+	lines := lo.Map([]*price.Price{v1, v2}, func(p *price.Price, _ int) *subscription.SubscriptionLineItem {
+		return &subscription.SubscriptionLineItem{ID: "subs_line_" + p.ID, PriceID: p.ID, MeterID: m.ID, DisplayName: "Tokens"}
+	})
+	sub := s.fixedDateSub("sub_weekly_versions", lines...)
+	aug10, aug12 := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)
+	lines[0].StartDate, lines[0].EndDate = aug10, aug12
+	lines[1].StartDate = aug12
+	for _, li := range lines {
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, li))
+	}
+
+	c := s.newTestCommitment("cmt_weekly_versions", sub, types.COMMITMENT_TYPE_QUANTITY, "30", "", sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	c.ScopeEntityType, c.ScopeEntityID = types.CommitmentScopeMeter, m.ID
+	c.CommittedPriceID = lo.ToPtr(s.usagePriceFor("price_weekly_committed", nil, "0.05").ID)
+	s.storeCommitment(c)
+
+	// v2's week is keyed Sunday 9 August, before v1 starts on the 10th.
+	usage := &dto.GetUsageBySubscriptionResponse{Currency: "usd", Charges: []*dto.SubscriptionUsageByMetersResponse{
+		{SubscriptionLineItemID: lines[0].ID, Price: v1, Quantity: 30, Amount: 3},
+		bucketCharge(lines[1], v2, map[int]string{9: "30"}),
+	}}
+	l := s.loaderFor(sub, usage, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	stacks, _, err := l.Stacks(ctx)
+	s.Require().NoError(err)
+	s.Require().Len(stacks, 1)
+	s.Equal([]time.Time{sub.CurrentPeriodStart, aug10, aug12}, stacks[0].Windows)
+
+	// v1's 30 fill the commitment; v2's 30 are overage at $0.12.
+	invoiceLines, total, err := l.InvoiceLines(ctx)
+	s.Require().NoError(err)
+	overage := loaderLinesOfKind(invoiceLines, types.CommitmentLineOverage)
+	s.Require().Len(overage, 1)
+	s.Equal(v2.ID, lo.FromPtr(overage[0].PriceID))
+	s.True(overage[0].Quantity.Equal(dec("30")), "overage quantity %s", overage[0].Quantity)
+	s.True(overage[0].Amount.Equal(dec("3.6")), "overage %s", overage[0].Amount)
+	s.True(total.Equal(dec("5.1")), "total %s", total)
 }
 
 // A tiered committed price prorates each partial invoice's floor as the step in the period's cumulative floor, so the

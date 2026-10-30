@@ -309,6 +309,7 @@ func (s *subscriptionModificationService) buildLineItemChangeRequest(
 		if change.EffectiveDate != nil {
 			effectiveDate = change.EffectiveDate.UTC()
 		}
+		effectiveDate = effectiveDate.Truncate(time.Microsecond)
 		if err := validateEffectiveDateWithinCurrentPeriod(effectiveDate, sub); err != nil {
 			return nil, err
 		}
@@ -354,6 +355,7 @@ func (s *subscriptionModificationService) requestFromLineItemChangeParams(
 		if m.EffectiveDate != nil {
 			effectiveDate = m.EffectiveDate.UTC()
 		}
+		effectiveDate = effectiveDate.Truncate(time.Microsecond)
 
 		change := dto.LineItemChange{ID: m.LineItemID, Quantity: m.Quantity, Amount: m.Amount}
 

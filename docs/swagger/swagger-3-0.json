@@ -5954,7 +5954,7 @@
           "Events"
         ],
         "summary": "Get usage analytics",
-        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.",
+        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.\nGroups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.\nSource/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.\nWhen full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.\nAnalytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.\nFor non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.",
         "operationId": "getUsageAnalytics",
         "requestBody": {
           "description": "Request body",
@@ -11244,6 +11244,75 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/prices/{id}/history": {
+      "get": {
+        "tags": [
+          "Prices"
+        ],
+        "summary": "Get price history",
+        "description": "Use when you need every version of a plan price, oldest first. Pass the ID of any version; the same timeline is returned.",
+        "operationId": "getPriceHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Price ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPricesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Price not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/products": {
       "get": {
         "tags": [
@@ -12811,6 +12880,75 @@
           }
         ],
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/subscriptions/lineitems/{id}/history": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription line item history",
+        "description": "Use when you need every version of a subscription line item, oldest first. Pass the ID of any version; the same timeline is returned. Versions cancelled before they started are left out unless requested directly.",
+        "operationId": "getSubscriptionLineItemHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Line item ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSubscriptionLineItemsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Line item not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
       }
     },
     "/subscriptions/schedules": {

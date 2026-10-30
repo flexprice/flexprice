@@ -106,6 +106,13 @@ type CreateCommitmentRequest struct {
 
 // ApplyDefaults fills label, timezone and the binding-dependent settings.
 func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
+	// Term edges align to whole seconds, like every computed billing date; the loader's window grid
+	// and pool checks compare at that granularity.
+	r.StartDate = r.StartDate.Truncate(time.Second)
+	if r.EndDate != nil {
+		r.EndDate = lo.ToPtr(r.EndDate.Truncate(time.Second))
+	}
+
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
 	}

@@ -54,15 +54,15 @@ jobs:
 
       - name: Resolve dev version
         id: version
-        env:
-          RUN_NUMBER: ${{ github.run_number }}
         run: |
           LATEST=$(npm view @flexprice/sdk@latest version)
           if ! [[ "$LATEST" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "::error::Unexpected latest version of @flexprice/sdk on npm: $LATEST"
             exit 1
           fi
-          VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))-dev.${RUN_NUMBER}"
+          BASE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+          LAST=$(npm view @flexprice/sdk time --json | jq -er --arg p "$BASE-dev." '[keys[] | select(startswith($p)) | ltrimstr($p) | tonumber?] | max // 0')
+          VERSION="$BASE-dev.$((LAST + 1))"
           echo "Dev version $VERSION (npm latest $LATEST)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -95,7 +95,9 @@ jobs:
       - name: Apply dev version to SDK artifact
         env:
           SDK_VERSION: ${{ steps.version.outputs.version }}
-        run: ./scripts/force-sdk-version.sh "$SDK_VERSION"
+        run: |
+          ./scripts/force-sdk-version.sh "$SDK_VERSION"
+          (cd api/typescript && npm pkg set flexpriceCommit="$GITHUB_SHA")
 
       - name: Upload api-typescript artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -112,13 +114,19 @@ jobs:
       VERSION: ${{ needs.generate.outputs.version }}
       REPO: ${{ vars.SDK_TYPESCRIPT_REPO || 'flexprice/javascript-sdk' }}
     steps:
-      # Re-runs keep the run number, so skip when npm dev already has this run's build or a newer one.
+      # Skip when npm dev was built from this commit or a newer one, so a re-run never publishes older code.
       - name: Check npm dev tag
         id: devtag
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          DEV=$(npm view @flexprice/sdk dist-tags.dev)
-          if [[ "$DEV" =~ -dev\.([0-9]+)$ ]] && (( BASH_REMATCH[1] >= GITHUB_RUN_NUMBER )); then
-            echo "::notice::npm dev is already at ${DEV}, so ${VERSION} is not pushed or published."
+          DEV_COMMIT=$(npm view @flexprice/sdk@dev flexpriceCommit)
+          if [ -n "$DEV_COMMIT" ]; then
+            STATUS=$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/compare/${DEV_COMMIT}...${GITHUB_SHA}?per_page=1" | jq -r .status)
+          fi
+          if [ "$STATUS" = "identical" ] || [ "$STATUS" = "behind" ]; then
+            echo "::notice::npm dev was built from ${DEV_COMMIT::7}, the same as or newer than ${GITHUB_SHA::7}, so ${VERSION} is not pushed or published."
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"

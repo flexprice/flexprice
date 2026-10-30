@@ -20191,8 +20191,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when building analytics views (e.g. usage by feature or customer
-        over time). Supports filtering, grouping, and time-series breakdown.
+      description: |-
+        Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.
+        Groups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.
+        Source/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.
+        When full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.
+        Analytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.
+        For non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.
       operationId: getUsageAnalytics
       parameters:
       - description: Request body
@@ -22771,6 +22776,44 @@ paths:
       summary: Update price
       tags:
       - Prices
+  /prices/{id}/history:
+    get:
+      consumes:
+      - application/json
+      description: Use when you need every version of a plan price, oldest first.
+        Pass the ID of any version; the same timeline is returned.
+      operationId: getPriceHistory
+      parameters:
+      - description: Price ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPricesResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Price not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get price history
+      tags:
+      - Prices
+      x-scope: read
   /prices/bulk:
     post:
       consumes:
@@ -24704,6 +24747,45 @@ paths:
       summary: Update subscription line item
       tags:
       - Subscriptions
+  /subscriptions/lineitems/{id}/history:
+    get:
+      consumes:
+      - application/json
+      description: Use when you need every version of a subscription line item, oldest
+        first. Pass the ID of any version; the same timeline is returned. Versions
+        cancelled before they started are left out unless requested directly.
+      operationId: getSubscriptionLineItemHistory
+      parameters:
+      - description: Line item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListSubscriptionLineItemsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Line item not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get subscription line item history
+      tags:
+      - Subscriptions
+      x-scope: read
   /subscriptions/lineitems/search:
     post:
       consumes:

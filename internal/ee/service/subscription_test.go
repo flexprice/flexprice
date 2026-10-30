@@ -1135,6 +1135,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
+		MeterUsageCheckpointRepo:   s.GetStores().MeterUsageCheckpointRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,

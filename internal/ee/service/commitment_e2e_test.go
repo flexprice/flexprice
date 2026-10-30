@@ -757,7 +757,7 @@ func (s *CommitmentE2ESuite) TestAnalytics_GroupedDailyWindowSplitsTheInvoice() 
 		map[string]string{"trainer": "237.25", "inference": "178.75"})
 }
 
-// A sources filter sees part of the line, so the commitment is not applied and the source bills its own tier walk.
+// Console retains 150/300 of the $100 usage charge; the commitment floor stays excluded.
 func (s *CommitmentE2ESuite) TestAnalytics_SourcesFilterSkipsCommitments() {
 	tokens := s.planWith("analytics_filtered", types.BILLING_PERIOD_MONTHLY, s.tokens, "0", tokenSlabs...)
 	sub := s.subscribe(tokens, s.jan)
@@ -766,7 +766,8 @@ func (s *CommitmentE2ESuite) TestAnalytics_SourcesFilterSkipsCommitments() {
 
 	resp := s.usageAnalytics([]string{"source"}, []string{"console"}, "")
 	s.Require().Len(resp.Items, 1)
-	s.True(resp.Items[0].TotalCost.Equal(dec("62.5")), "console alone walks the slabs to %s", resp.Items[0].TotalCost)
+	s.True(resp.Items[0].TotalCost.Equal(dec("50")), "console receives half the unfiltered usage charge, got %s", resp.Items[0].TotalCost)
+	s.True(resp.TotalCost.Equal(resp.Items[0].TotalCost))
 	s.Nil(resp.Items[0].CommitmentInfo)
 }
 

@@ -4909,7 +4909,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.",
+                "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.\nGroups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.\nSource/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.\nWhen full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.\nAnalytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.\nFor non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9318,6 +9318,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/prices/{id}/history": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need every version of a plan price, oldest first. Pass the ID of any version; the same timeline is returned.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Prices"
+                ],
+                "summary": "Get price history",
+                "operationId": "getPriceHistory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Price ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPricesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Price not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/products": {
             "get": {
                 "security": [
@@ -10625,6 +10682,63 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/subscriptions/lineitems/{id}/history": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need every version of a subscription line item, oldest first. Pass the ID of any version; the same timeline is returned. Versions cancelled before they started are left out unless requested directly.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription line item history",
+                "operationId": "getSubscriptionLineItemHistory",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Line item ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListSubscriptionLineItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Line item not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/subscriptions/schedules": {

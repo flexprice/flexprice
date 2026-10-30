@@ -636,6 +636,10 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
+	if f.ParentPriceID != nil {
+		query = query.Where(price.ParentPriceID(*f.ParentPriceID))
+	}
+
 	if len(f.ProductIDs) > 0 {
 		query = query.Where(price.ProductIDIn(f.ProductIDs...))
 	}

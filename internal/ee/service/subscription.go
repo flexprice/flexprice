@@ -174,6 +174,16 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 	s.overRideSubscriptionBasedOnIntegration(ctx, sub, &req)
 
+	// Read the plan sequence before the prices: a change landing in between gets a higher
+	// sequence, so synced_price_sequence never claims a change its line items missed.
+	currentPlanSeq, err := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, plan.ID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read current plan price sequence").
+			WithReportableDetails(map[string]any{"plan_id": plan.ID}).
+			Mark(ierr.ErrDatabase)
+	}
+
 	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, plan.ID, types.PRICE_ENTITY_TYPE_PLAN, sub, req.Workflow, req.IncludePriceIDs)
 	if err != nil {
@@ -308,6 +318,17 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 			startDate = lo.FromPtr(priceResponse.Price.StartDate)
 		}
 		item.StartDate = startDate
+
+		// A price that has ended by the time the line item starts gets no line item. A price
+		// ending later ends the line item at the earlier of its own end and the line item's end.
+		if priceEnd := priceResponse.Price.EndDate; priceEnd != nil {
+			if !priceEnd.After(item.StartDate) {
+				continue
+			}
+			if item.EndDate.IsZero() || priceEnd.Before(item.EndDate) {
+				item.EndDate = *priceEnd
+			}
+		}
 		lineItems = append(lineItems, item)
 	}
 
@@ -347,14 +368,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 		sub.SubscriptionStatus = types.SubscriptionStatusDraft
 	}
 
-	// Stamp the sub with the plan's current max prices.sequence so new subscriptions are considered already-synced.
-	currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, plan.ID)
-	if seqErr != nil {
-		return nil, ierr.WithError(seqErr).
-			WithHint("Failed to read current plan price sequence").
-			WithReportableDetails(map[string]any{"plan_id": plan.ID}).
-			Mark(ierr.ErrDatabase)
-	}
+	// New subscriptions start already synced up to the sequence read before their prices.
 	sub.SyncedPriceSequence = currentPlanSeq
 
 	s.Logger.Info(ctx, "creating subscription",
@@ -1265,6 +1279,21 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			lineItem := req.ToSubscriptionLineItem(ctx, params)
 			return lineItem
 		})
+
+		// Same price end date rule as the first phase
+		phaseItemsToCreate := make([]*subscription.SubscriptionLineItem, 0, len(phaseLineItems))
+		for _, item := range phaseLineItems {
+			if priceEnd := priceMap[item.PriceID].Price.EndDate; priceEnd != nil {
+				if !priceEnd.After(item.StartDate) {
+					continue
+				}
+				if item.EndDate.IsZero() || priceEnd.Before(item.EndDate) {
+					item.EndDate = *priceEnd
+				}
+			}
+			phaseItemsToCreate = append(phaseItemsToCreate, item)
+		}
+		phaseLineItems = phaseItemsToCreate
 
 		// Create original price to line item mapping before processing overrides
 		// This captures the mapping before any price overrides change the PriceID

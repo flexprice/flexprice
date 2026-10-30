@@ -89,12 +89,9 @@ func (s *subscriptionGrantService) resolveGrantProration(
 			continue
 		}
 
-		// A never-reset allowance is measured against the running total, so it takes the full quota.
-		neverReset, err := (&entitlementGrantService{ServiceParams: s.ServiceParams}).isNeverResetMeter(ctx, featureID)
-		if err != nil {
-			return nil, err
-		}
-		prorate := behavior == types.ProrationBehaviorCreateProrations && !neverReset
+		// The allowance follows the charge's proration, never-reset meters included: a prorated
+		// change grants the prorated quota, an unprorated one the full quota.
+		prorate := behavior == types.ProrationBehaviorCreateProrations
 
 		prorationDate := p.Start
 		if prorate && effectiveDate.After(p.Start) {
@@ -272,8 +269,13 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 		for _, ec := range surviving {
 			existingQuota = existingQuota.Add(lo.FromPtr(ec.GrantQuota))
 		}
-		if !neverReset && closed != nil {
+		switch {
+		case !neverReset && closed != nil:
 			existingQuota, _ = closed.Remaining()
+		case neverReset && closed != nil && len(surviving) > 0 && !cfg.removesFeature(featureID):
+			// Nothing leaves, so the cap carries as it stands, prorated segments included.
+			// With no surviving config the live row is a detached addon's, so it adds nothing.
+			existingQuota = closed.Quota
 		}
 		// E.g. incoming 150, old remaining 20, no surviving configs: normal gets 170; NEVER gets 150.
 		quota := grantToAdd.Quota.Add(existingQuota)
@@ -328,6 +330,13 @@ func (s *subscriptionGrantService) applyEntitlementGrantChange(
 
 	_, err = grantSvc.OpenFeatureBasedEntitlementGrants(ctx, reqs)
 	return err
+}
+
+// removesFeature reports whether a grant config on the feature leaves in this change.
+func (c *GrantChangeConfig) removesFeature(featureID string) bool {
+	return lo.SomeBy(c.entitlementsToRemove, func(ec *entitlement.Entitlement) bool {
+		return ec != nil && ec.FeatureID == featureID && ec.HasGrantConfig()
+	})
 }
 
 func (c *GrantChangeConfig) origin() grantProrationSource {

@@ -234,28 +234,34 @@ func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 	})
 	defer FinishSpan(span)
 
+	// Only prices ended after each sub's synced_price_sequence: ending a price bumps its sequence,
+	// so older ended prices were already applied when the sub was last stamped.
 	query := fmt.Sprintf(`
 		UPDATE subscription_line_items li
 		SET end_date   = GREATEST(COALESCE(li.start_date, p.end_date), p.end_date),
 		    updated_at = NOW(),
 		    updated_by = $4
-		FROM prices p
-		WHERE li.tenant_id       = $1
-		  AND li.environment_id  = $2
-		  AND li.status          = '%s'
-		  AND li.entity_type     = '%s'
-		  AND li.end_date IS NULL
-		  AND li.subscription_id = ANY($5)
-		  AND li.price_id        = p.id
+		FROM subscriptions s, prices p
+		WHERE s.tenant_id        = $1
+		  AND s.environment_id   = $2
+		  AND s.id               = ANY($5)
 		  AND p.tenant_id        = $1
 		  AND p.environment_id   = $2
 		  AND p.entity_id        = $3
 		  AND p.entity_type      = '%s'
 		  AND p.end_date IS NOT NULL
+		  AND p.sequence         > s.synced_price_sequence
+		  AND li.tenant_id       = $1
+		  AND li.environment_id  = $2
+		  AND li.status          = '%s'
+		  AND li.entity_type     = '%s'
+		  AND li.end_date IS NULL
+		  AND li.subscription_id = s.id
+		  AND li.price_id        = p.id
 	`,
+		string(types.PRICE_ENTITY_TYPE_PLAN),
 		string(types.StatusPublished),
 		string(types.SubscriptionLineItemEntityTypePlan),
-		string(types.PRICE_ENTITY_TYPE_PLAN),
 	)
 
 	result, qerr := r.client.Writer(ctx).ExecContext(
