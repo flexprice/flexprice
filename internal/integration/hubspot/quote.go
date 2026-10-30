@@ -100,7 +100,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 
 	// Set expiration date to 30 days from now
 	// Per HubSpot docs: use date format "YYYY-MM-DD" (not RFC3339 timestamp)
-	expirationDate := time.Now().Add(30 * 24 * time.Hour).Format("2006-01-02")
+	expirationDate := types.Now().Add(30 * 24 * time.Hour).Format("2006-01-02")
 
 	// Step 1: Create minimal quote (title + expiry only)
 	// Per HubSpot docs: Create quote with only required properties first
@@ -197,7 +197,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 
 	// Filter for ACTIVE and FIXED pricing only (flat rate)
 	var flatRateLineItems []*subscription.SubscriptionLineItem
-	now := time.Now()
+	now := types.Now()
 	for _, lineItem := range sub.LineItems {
 		if lineItem.PriceType == types.PRICE_TYPE_FIXED && lineItem.IsActive(now) {
 			flatRateLineItems = append(flatRateLineItems, lineItem)

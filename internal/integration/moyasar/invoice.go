@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // MoyasarInvoiceSyncRequest represents a request to sync FlexPrice invoice to Moyasar
@@ -361,7 +362,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		"moyasar_payment_url": moyasarInvoice.URL,
 		"moyasar_status":      moyasarInvoice.Status,
 		"sync_source":         "flexprice",
-		"synced_at":           time.Now().UTC().Format(time.RFC3339),
+		"synced_at":           types.Now().Format(time.RFC3339),
 	}
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{

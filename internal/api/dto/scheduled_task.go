@@ -158,7 +158,7 @@ func (r *TriggerForceRunRequest) Validate() error {
 		}
 
 		// Validate that end time is not in the future
-		now := time.Now()
+		now := types.Now()
 		if r.EndTime.After(now) {
 			return ierr.NewError("end_time cannot be in the future").
 				WithHint("End time must be in the past or present").

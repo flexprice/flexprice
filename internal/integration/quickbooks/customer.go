@@ -218,7 +218,7 @@ func (s *CustomerService) createCustomerMapping(
 		ProviderType:     string(types.SecretProviderQuickBooks),
 		ProviderEntityID: quickBooksCustomerID,
 		Metadata: map[string]interface{}{
-			"synced_at":                        time.Now().UTC().Format(time.RFC3339),
+			"synced_at":                        types.Now().Format(time.RFC3339),
 			"quickbooks_customer_display_name": quickBooksCustomer.DisplayName,
 		},
 		EnvironmentID: flexpriceCustomer.EnvironmentID,

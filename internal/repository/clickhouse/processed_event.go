@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type ProcessedEventRepository struct {
@@ -498,7 +499,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 	// Set default start/end times if not provided
 	if params.EndTime.IsZero() {
-		params.EndTime = time.Now().UTC()
+		params.EndTime = types.Now()
 	}
 
 	if params.StartTime.IsZero() {

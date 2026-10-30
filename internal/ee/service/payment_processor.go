@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -20,8 +22,6 @@ import (
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PaymentProcessorService interface {
@@ -78,7 +78,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		// Update payment status to processing temporarily
 		statusBefore := paymentObj.PaymentStatus
 		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = time.Now().UTC()
+		paymentObj.UpdatedAt = types.Now()
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
@@ -89,7 +89,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		// TODO: take a lock on the payment object here to avoid race conditions
 		statusBefore := paymentObj.PaymentStatus
 		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = time.Now().UTC()
+		paymentObj.UpdatedAt = types.Now()
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
@@ -154,7 +154,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusFailed
 			errMsg := processErr.Error()
 			paymentObj.ErrorMessage = lo.ToPtr(errMsg)
-			failedAt := time.Now().UTC()
+			failedAt := types.Now()
 			paymentObj.FailedAt = &failedAt
 			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 		}
@@ -167,14 +167,14 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
-			succeededAt := time.Now().UTC()
+			succeededAt := types.Now()
 			paymentObj.SucceededAt = &succeededAt
 			p.Logger.Info(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
 			p.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 		}
 	}
 
-	paymentObj.UpdatedAt = time.Now().UTC()
+	paymentObj.UpdatedAt = types.Now()
 	ctx = withPaymentStatusAction(ctx, paymentObj.ID, statusBeforeOutcome, paymentObj.PaymentStatus)
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
@@ -798,7 +798,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	invoice.AmountPaid = totalPaid
 	invoice.AmountRemaining = invoice.AmountDue.Sub(totalPaid)
 	if invoice.AmountRemaining.IsZero() {
-		paidAt := time.Now().UTC()
+		paidAt := types.Now()
 		invoice.PaidAt = &paidAt
 	}
 
@@ -814,7 +814,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 		// Finalize invoice if it's still in draft state
 		if invoice.InvoiceStatus == types.InvoiceStatusDraft && !p.deletionGatedInvoice(ctx, invoice) {
 			invoice.InvoiceStatus = types.InvoiceStatusFinalized
-			finalizedAt := time.Now().UTC()
+			finalizedAt := types.Now()
 			invoice.FinalizedAt = &finalizedAt
 			finalizedNow = true
 			// Best effort: a failed lookup must not leave a paid invoice unfinalized, so it keeps its draft dates.
@@ -966,7 +966,7 @@ func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName typ
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     types.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypePayment,
 		EntityID:      paymentID,
@@ -1097,7 +1097,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		updateReq := &dto.UpdatePaymentRequest{
 			PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
 			ErrorMessage:  lo.ToPtr(err.Error()),
-			FailedAt:      lo.ToPtr(time.Now().UTC()),
+			FailedAt:      lo.ToPtr(types.Now()),
 		}
 
 		paymentService := NewPaymentService(p.ServiceParams)
@@ -1117,7 +1117,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		GatewayPaymentID: lo.ToPtr(paymentIntentResp.ID),
 		PaymentGateway:   lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
 		PaymentMethodID:  lo.ToPtr(paymentObj.PaymentMethodID),
-		SucceededAt:      lo.ToPtr(time.Now().UTC()),
+		SucceededAt:      lo.ToPtr(types.Now()),
 	}
 
 	paymentService := NewPaymentService(p.ServiceParams)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -11,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // RazorpayCustomerService defines the interface for Razorpay customer operations
@@ -220,7 +221,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		Metadata: map[string]interface{}{
 			"created_via":          "flexprice_to_provider",
 			"razorpay_customer_id": razorpayCustomerID,
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            types.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),

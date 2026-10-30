@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"math"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // WorkflowExecutionService provides methods for managing workflow execution records
@@ -64,7 +64,7 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 	}
 
 	// Create workflow execution domain model (workflow_status defaults to Running at start)
-	now := time.Now().UTC()
+	now := types.Now()
 	exec := &workflowexecution.WorkflowExecution{
 		WorkflowID:     input.WorkflowID,
 		RunID:          input.RunID,

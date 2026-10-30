@@ -1,11 +1,10 @@
 package user
 
 import (
-	"time"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type User struct {
@@ -38,8 +37,8 @@ func NewUser(email, tenantID string) *User {
 			Status:    types.StatusPublished,
 			CreatedBy: types.DefaultUserID,
 			UpdatedBy: types.DefaultUserID,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			CreatedAt: types.Now(),
+			UpdatedAt: types.Now(),
 		},
 	}
 }

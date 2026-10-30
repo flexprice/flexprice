@@ -98,7 +98,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	a.logger.Info(ctx, "execution time", "execution_time", executionTime)
 	if executionTime.IsZero() {
 		// Fallback to current time if not provided (for backward compatibility)
-		executionTime = time.Now()
+		executionTime = types.Now()
 	}
 
 	// Calculate start and end times

@@ -3,10 +3,11 @@ package dto
 import (
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // RevenueAnalyticsRequest queries revenue_facts as an analytics surface.
@@ -60,7 +61,7 @@ const revenueAnalyticsMaxRangeDays = 90
 
 func (r *RevenueAnalyticsRequest) Validate() error {
 	if r.EndTime.IsZero() {
-		r.EndTime = time.Now().UTC()
+		r.EndTime = types.Now()
 	}
 	if r.StartTime.IsZero() || !r.StartTime.Before(r.EndTime) {
 		return ierr.NewError("invalid time range").

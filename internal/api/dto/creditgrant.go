@@ -4,14 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreateCreditGrantRequest represents the request to create a new credit grant
@@ -116,7 +117,7 @@ func (r *UpdateCreditGrantRequest) Validate() error {
 	}
 
 	if r.EndDate != nil {
-		if r.EndDate.Before(time.Now()) {
+		if r.EndDate.Before(types.Now()) {
 			return errors.NewError("end_date cannot be in the past").
 				WithHint("Please provide a valid end date").
 				WithReportableDetails(map[string]interface{}{

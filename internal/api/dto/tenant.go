@@ -4,10 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 type TenantBillingDetails struct {
@@ -91,8 +92,8 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		InternalStatus: types.TenantInternalStatusTrialing,
 		BillingDetails: billingDetails,
 		Metadata:       r.Metadata,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:      types.Now(),
+		UpdatedAt:      types.Now(),
 	}
 
 }

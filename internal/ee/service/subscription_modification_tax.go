@@ -15,7 +15,7 @@ func (s *subscriptionModificationService) executeTaxModification(
 	subscriptionID string,
 	params *dto.SubModifyTaxParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := time.Now().UTC()
+	effectiveDate := types.Now()
 	if params.EffectiveDate != nil {
 		effectiveDate = params.EffectiveDate.UTC()
 	}
@@ -183,7 +183,7 @@ func (s *subscriptionModificationService) previewTaxModification(
 	subscriptionID string,
 	params *dto.SubModifyTaxParams,
 ) (*dto.SubscriptionModifyResponse, error) {
-	effectiveDate := time.Now().UTC()
+	effectiveDate := types.Now()
 	if params.EffectiveDate != nil {
 		effectiveDate = params.EffectiveDate.UTC()
 	}

@@ -12,6 +12,9 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -23,8 +26,6 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const eventDeduplicationLockTTL = 24 * time.Hour
@@ -124,7 +125,7 @@ func (s *meterUsageTrackingService) PublishEvent(ctx context.Context, event *eve
 		partitionKey = fmt.Sprintf("%s:%s", event.TenantID, event.ExternalCustomerID)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, types.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
@@ -224,7 +225,7 @@ func (s *meterUsageTrackingService) RegisterBulkHandler(router *pubsubRouter.Rou
 }
 
 func stampIngestedAt(records []*events.MeterUsage) {
-	now := time.Now().UTC()
+	now := types.Now()
 	for _, record := range records {
 		record.IngestedAt = now
 	}
@@ -619,7 +620,7 @@ func (s *meterUsageTrackingService) publishRejectedEventWebhook(ctx context.Cont
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     types.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeEvent,
 		EntityID:      event.ID,

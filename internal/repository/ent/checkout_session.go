@@ -7,6 +7,9 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	entCheckout "github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -17,8 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type checkoutSessionRepository struct {
@@ -144,7 +145,7 @@ func (r *checkoutSessionRepository) Update(ctx context.Context, s *domainCheckou
 		SetNillableCancelledAt(s.CancelledAt).
 		SetNillableFailureReason(s.FailureReason).
 		SetMetadata(map[string]string(s.Metadata)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -329,7 +330,7 @@ func (r *checkoutSessionRepository) Delete(ctx context.Context, id string) error
 			entCheckout.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -365,7 +366,7 @@ func (r *checkoutSessionRepository) MarkCompleted(ctx context.Context, sessionID
 		SetCheckoutStatus(types.CheckoutStatusCompleted).
 		SetCompletedAt(completedAt).
 		SetProviderResult(providerResult).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -400,7 +401,7 @@ func (r *checkoutSessionRepository) MarkTerminal(ctx context.Context, sessionID 
 			entCheckout.CheckoutStatusIn(types.ActiveCheckoutStatuses()...),
 		).
 		SetCheckoutStatus(status).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if failureReason != nil {
 		q = q.SetFailureReason(*failureReason)

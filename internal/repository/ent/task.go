@@ -2,7 +2,6 @@ package ent
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/task"
@@ -225,7 +224,7 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 		SetNillableStartedAt(t.StartedAt).
 		SetNillableCompletedAt(t.CompletedAt).
 		SetNillableFailedAt(t.FailedAt).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Execute update
@@ -270,7 +269,7 @@ func (r *taskRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetStatus(string(types.StatusDeleted)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(types.Now()).
 		Save(ctx)
 
 	if err != nil {

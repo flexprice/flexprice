@@ -5,6 +5,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -17,8 +20,6 @@ import (
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PerformanceObligationService keeps each subscription line item's performance obligation in step with the subscription.
@@ -81,7 +82,7 @@ func (s *performanceObligationService) SyncForSubscription(ctx context.Context, 
 		lineItemsByPOB[p.ID()] = append(lineItemsByPOB[p.ID()], li)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	synced := make([]*domainPOB.PerformanceObligation, 0, len(pobs))
 	for id, existing := range pobs {
 		next := derivePOB(existing, lineItemsByPOB[id], c, now)
@@ -373,7 +374,7 @@ func (s *performanceObligationService) resolveForLineItem(ctx context.Context, l
 		WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).
 		WithEntityID(li.ID).
 		WithStatus(types.StatusPublished).
-		WithCreatedAt(time.Now().UTC()).
+		WithCreatedAt(types.Now()).
 		Build()
 
 	predecessor, err := s.predecessorPOB(ctx, li, c)
@@ -418,7 +419,7 @@ func (s *performanceObligationService) predecessorPOB(ctx context.Context, li *s
 }
 
 func newPOB(li *subscription.SubscriptionLineItem, c *domainContract.Contract) *domainPOB.PerformanceObligation {
-	now := time.Now().UTC()
+	now := types.Now()
 	return domainPOB.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PERFORMANCE_OBLIGATION)).
 		WithContractID(c.ID()).

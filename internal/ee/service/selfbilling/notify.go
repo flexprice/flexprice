@@ -50,7 +50,7 @@ func (s *selfBillingService) notify(ctx context.Context, a alert) {
 	}
 
 	a.Region = s.Config.Billing.Region
-	a.OccurredAt = time.Now().UTC()
+	a.OccurredAt = types.Now()
 
 	detached := context.WithoutCancel(ctx)
 	go func() {

@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -18,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/types/integrations"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 // PaymentService defines the interface for payment operations
@@ -765,7 +765,7 @@ func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     types.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypePayment,
 		EntityID:      paymentID,
@@ -901,7 +901,7 @@ func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payme
 		"new_status", newStatus,
 	)
 
-	now := time.Now().UTC()
+	now := types.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: lo.ToPtr(string(newStatus)),
 	}

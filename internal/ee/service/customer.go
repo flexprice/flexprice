@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,7 +14,6 @@ import (
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 type CustomerService = interfaces.CustomerService
@@ -464,7 +464,7 @@ func (s *customerService) publishSystemEvent(ctx context.Context, eventName type
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     types.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeCustomer,
 		EntityID:      customerID,

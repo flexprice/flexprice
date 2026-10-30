@@ -2,14 +2,14 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/product"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // ProductService owns product validation and the delete guard.
@@ -86,7 +86,7 @@ func (s *productService) UpdateProduct(ctx context.Context, id string, req dto.U
 		return nil, err
 	}
 
-	b := product.NewBuilder(existing).WithUpdatedAt(time.Now().UTC())
+	b := product.NewBuilder(existing).WithUpdatedAt(types.Now())
 	if req.Name != nil {
 		b.WithName(*req.Name)
 	}

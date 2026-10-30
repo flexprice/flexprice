@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/creditgrant"
@@ -12,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type creditGrantRepository struct {
@@ -352,7 +352,7 @@ func (r *creditGrantRepository) Update(ctx context.Context, cg *domainCreditGran
 		SetName(cg.Name).
 		SetScope(cg.Scope).
 		SetStatus(string(cg.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetNillableEndDate(cg.EndDate).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(cg.Metadata)
@@ -397,7 +397,7 @@ func (r *creditGrantRepository) Delete(ctx context.Context, id string) error {
 			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -440,7 +440,7 @@ func (r *creditGrantRepository) DeleteBulk(ctx context.Context, ids []string) er
 			creditgrant.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

@@ -590,8 +590,8 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.TenantID = tenantID
 	conn.EnvironmentID = environmentID
 	conn.Status = types.StatusPublished
-	conn.CreatedAt = time.Now()
-	conn.UpdatedAt = time.Now()
+	conn.CreatedAt = types.Now()
+	conn.UpdatedAt = types.Now()
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
 
@@ -1100,7 +1100,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		conn.EncryptedSecretData.Chargebee.WebhookPassword = encPass
 	}
 
-	conn.UpdatedAt = time.Now()
+	conn.UpdatedAt = types.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	// Validate reachability before persisting.
@@ -1154,7 +1154,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 		}
 	}
 
-	conn.UpdatedAt = time.Now()
+	conn.UpdatedAt = types.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	// Delete the connection

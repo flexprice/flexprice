@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -13,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // SecretService defines the interface for secret business logic
@@ -371,7 +371,7 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 	}
 
 	// Check if the secret has expired
-	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(time.Now()) {
+	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(types.Now()) {
 		return nil, ierr.NewError("secret has expired").
 			WithHint("Secret has expired").
 			Mark(ierr.ErrValidation)

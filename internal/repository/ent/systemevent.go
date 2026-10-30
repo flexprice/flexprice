@@ -3,7 +3,6 @@ package ent
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	flexent "github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -78,7 +77,7 @@ func (r *SystemEventRepository) OnConsumed(ctx context.Context, event *types.Web
 	}
 
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := types.Now()
 
 	err = client.SystemEvent.Create().
 		SetID(event.ID).
@@ -126,7 +125,7 @@ func (r *SystemEventRepository) OnDelivered(ctx context.Context, eventID string,
 	}
 
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := types.Now()
 
 	return client.SystemEvent.UpdateOneID(eventID).
 		SetUpdatedAt(now).
@@ -142,7 +141,7 @@ func (r *SystemEventRepository) OnFailed(ctx context.Context, eventID, reason st
 		return nil
 	}
 	return r.client.Writer(ctx).SystemEvent.UpdateOneID(eventID).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetFailureReason(reason).
 		AddFailureCount(1).
 		Exec(ctx)

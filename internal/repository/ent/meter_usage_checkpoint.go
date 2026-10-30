@@ -3,7 +3,6 @@ package ent
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
@@ -149,7 +148,7 @@ func (r *meterUsageCheckpointRepository) updateExisting(
 		SetTotal(c.Total).
 		SetNillableInvoiceID(c.InvoiceID).
 		SetStatus(string(types.StatusPublished)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {

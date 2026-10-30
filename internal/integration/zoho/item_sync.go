@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // ItemSyncInput holds per-price data needed to create a Zoho item.
@@ -168,7 +169,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":      time.Now().UTC().Format(time.RFC3339),
+			"synced_at":      types.Now().Format(time.RFC3339),
 			"zoho_item_name": itemResp.Name,
 		},
 	}

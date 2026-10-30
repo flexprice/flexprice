@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
@@ -20,7 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // Lifetimes of the one-time links that let a user set their password.
@@ -437,7 +438,7 @@ func (s *userService) UpdateUserRoles(ctx context.Context, id string, req *dto.U
 // Secrets are environment-scoped while roles are tenant-wide, hence the search
 // across every environment rather than just the caller's.
 func (s *userService) ensureNoActiveAPIKeys(ctx context.Context, userID string) error {
-	now := time.Now().UTC()
+	now := types.Now()
 	tenantCtx := types.SetEnvironmentID(ctx, "")
 
 	secrets, err := s.secretRepo.ListAll(tenantCtx, &types.SecretFilter{
@@ -722,7 +723,7 @@ func (s *userService) ChangePassword(ctx context.Context, req *dto.ChangePasswor
 		}
 
 		existingAuth.Token = hashedPassword
-		existingAuth.UpdatedAt = time.Now().UTC()
+		existingAuth.UpdatedAt = types.Now()
 		return s.authRepo.UpdateAuth(txCtx, existingAuth)
 	})
 	if err != nil {
@@ -747,7 +748,7 @@ func (s *userService) signPasswordLink(target *user.User, purpose authProvider.P
 	if purpose == authProvider.PasswordLinkPurposeInvite {
 		ttl = inviteLinkTTL
 	}
-	expiresAt := time.Now().UTC().Add(ttl).Truncate(time.Second)
+	expiresAt := types.Now().Add(ttl).Truncate(time.Second)
 
 	token, err := signer.Sign(authProvider.PasswordLinkClaims{
 		UserID:    target.ID,
@@ -784,7 +785,7 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 
 	// Block archive if the service account has active (published, non-expired) API keys.
 	// Service accounts are tenant-scoped, so check across all environments.
-	now := time.Now().UTC()
+	now := types.Now()
 	tenantCtx := types.SetEnvironmentID(ctx, "")
 	activeCount, err := s.secretRepo.Count(tenantCtx, &types.SecretFilter{
 		QueryFilter: &types.QueryFilter{

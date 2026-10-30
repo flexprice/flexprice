@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/flexprice/flexprice/internal/metrics"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -14,8 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Handler handles Razorpay webhook events
@@ -182,7 +183,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
-	now := time.Now()
+	now := types.Now()
 
 	// Convert amount from smallest currency unit (paise) to standard unit
 	amount := decimal.NewFromInt(payment.Amount).Div(decimal.NewFromInt(100))
@@ -343,7 +344,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	// Update payment status to failed
 	paymentStatus := string(types.PaymentStatusFailed)
-	now := time.Now()
+	now := types.Now()
 
 	// Determine payment method ID based on payment method type
 	paymentMethodID := getPaymentMethodID(payment)

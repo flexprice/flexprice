@@ -147,7 +147,7 @@ func (r *usageRecordRepository) ListUnsynced(ctx context.Context, tenantID, envi
 			usagerecord.EnvironmentID(environmentID),
 			usagerecord.Synced(false),
 			usagerecord.StatusEQ(string(types.StatusPublished)),
-			usagerecord.PeriodEndGTE(time.Now().UTC().Add(-submissionWindow)),
+			usagerecord.PeriodEndGTE(types.Now().Add(-submissionWindow)),
 		).
 		All(ctx)
 

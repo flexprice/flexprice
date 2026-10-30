@@ -7,6 +7,8 @@ import (
 
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -16,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 const invoiceLineItemBatchSize = 1000
@@ -284,7 +285,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetCustomCurrency(item.CustomCurrency).
 		SetStatus(string(item.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if item.FxConversion != nil {
@@ -339,7 +340,7 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

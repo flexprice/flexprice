@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entitlement"
@@ -14,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 var cachedEntityTypes = []types.EntitlementEntityType{
@@ -394,7 +394,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableStartDate(e.StartDate).
 		SetNillableEndDate(e.EndDate).
 		SetStatus(string(e.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetGrantMeasure(e.GrantMeasure).
 		SetGrantDurationUnit(e.GrantDurationUnit).
@@ -466,7 +466,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -609,7 +609,7 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 			entitlement.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

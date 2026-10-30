@@ -8,7 +8,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -29,7 +30,6 @@ import (
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/types"
 	flexwebhook "github.com/flexprice/flexprice/internal/webhook"
-	"github.com/gin-gonic/gin"
 )
 
 // WebhookHandler handles webhook-related endpoints
@@ -358,7 +358,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		return
 	}
 
-	currentTime := time.Now().UnixMilli()
+	currentTime := types.Now().UnixMilli()
 	if !hubspotTimestampFresh(timestampInt, currentTime) {
 		h.logger.Debug(c.Request.Context(), "timestamp outside tolerance, rejecting webhook",
 			"timestamp", timestampInt,

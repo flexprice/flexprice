@@ -93,5 +93,5 @@ func (s *Secret) IsExpired() bool {
 	if s.ExpiresAt == nil {
 		return false
 	}
-	return s.ExpiresAt.Before(time.Now())
+	return s.ExpiresAt.Before(types.Now())
 }

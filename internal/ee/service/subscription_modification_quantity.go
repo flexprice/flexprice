@@ -7,14 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // quantityChangeRequest is the validated, ready-to-apply intent for a quantity change.
@@ -85,7 +86,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItemModifications))
 	for _, m := range params.LineItemModifications {
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, m.LineItemID)
@@ -318,7 +319,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItems))
 
 	for _, change := range params.LineItems {

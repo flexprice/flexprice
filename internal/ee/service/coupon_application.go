@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -10,8 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CouponCalculationResult holds the result of applying coupons to an invoice
@@ -69,7 +69,7 @@ func (s *couponApplicationService) CreateCouponApplication(ctx context.Context, 
 			InvoiceID:           req.InvoiceID,
 			InvoiceLineItemID:   req.InvoiceLineItemID,
 			SubscriptionID:      req.SubscriptionID,
-			AppliedAt:           time.Now(),
+			AppliedAt:           types.Now(),
 			OriginalPrice:       req.OriginalPrice,
 			FinalPrice:          req.FinalPrice,
 			DiscountedAmount:    req.DiscountedAmount,
@@ -280,7 +280,7 @@ func (s *couponApplicationService) prepareCouponApplications(ctx context.Context
 			InvoiceID:           inv.ID,
 			InvoiceLineItemID:   &targetLineItem.ID,
 			SubscriptionID:      lo.CoalesceOrEmpty(targetLineItem.SubscriptionID, inv.SubscriptionID),
-			AppliedAt:           time.Now(),
+			AppliedAt:           types.Now(),
 			OriginalPrice:       targetLineItem.Amount,
 			FinalPrice:          discountResult.FinalPrice,
 			DiscountedAmount:    discountResult.Discount,
@@ -364,7 +364,7 @@ func (s *couponApplicationService) prepareCouponApplications(ctx context.Context
 			CouponAssociationID: couponAssociationID,
 			InvoiceID:           inv.ID,
 			SubscriptionID:      inv.SubscriptionID,
-			AppliedAt:           time.Now(),
+			AppliedAt:           types.Now(),
 			OriginalPrice:       runningSubTotal.Add(discountResult.Discount), // Original before this discount
 			FinalPrice:          discountResult.FinalPrice,
 			DiscountedAmount:    discountResult.Discount,

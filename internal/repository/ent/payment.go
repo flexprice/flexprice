@@ -3,7 +3,8 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/payment"
@@ -17,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type paymentRepository struct {
@@ -340,7 +340,7 @@ func (r *paymentRepository) update(ctx context.Context, p *domainPayment.Payment
 		SetGatewayMetadata(p.GatewayMetadata).
 		SetTrackAttempts(p.TrackAttempts).
 		SetMetadata(p.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetNillableRecordedAt(p.RecordedAt).
 		SetNillableSucceededAt(p.SucceededAt).
 		SetNillableFailedAt(p.FailedAt).
@@ -434,7 +434,7 @@ func (r *paymentRepository) delete(ctx context.Context, id string, expectedStatu
 		Where(predicates...).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SaveReturning(ctx)
 
 	if err != nil {
@@ -647,7 +647,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 		SetNillableGatewayAttemptID(a.GatewayAttemptID).
 		SetNillableErrorMessage(a.ErrorMessage).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		Save(ctx)
 
 	if err != nil {

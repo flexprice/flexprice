@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -13,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // meterUsageBaseChargeInfo holds per-line-item data collected during the main loop
@@ -53,7 +54,7 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 	if !params.AsOf.IsZero() {
 		return params.AsOf
 	}
-	return time.Now().UTC()
+	return types.Now()
 }
 
 // UsageNetForWindow returns sub's usage charges for [periodStart, until) after coupon discounts,
@@ -88,7 +89,7 @@ func (s *billingService) UsageNetForWindow(ctx context.Context, sub *subscriptio
 // All queries (bucketed meters, windowed entitlements, windowed commitments) read from
 // MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
 // the reference instant used to clip line items and windowed commitments (see resolveAsOf);
-// otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
+// otherwise defaults to types.Now(). Callers with no override pass nil.
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -103,7 +104,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	querySource := source
 
-	asOf := time.Now().UTC()
+	asOf := types.Now()
 	if asOfOverride != nil && !asOfOverride.IsZero() {
 		asOf = *asOfOverride
 	}

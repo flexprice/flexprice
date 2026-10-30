@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // CreateWalletRequest represents the request to create a wallet
@@ -238,7 +239,7 @@ func (r *CreateWalletRequest) Validate() error {
 	}
 
 	if r.InitialCreditsExpiryDateUTC != nil {
-		if r.InitialCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+		if r.InitialCreditsExpiryDateUTC.Before(types.Now()) {
 			return ierr.NewError("initial_credits_to_load_expiry_date_utc cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				Mark(ierr.ErrValidation)
@@ -413,7 +414,7 @@ func (r *TopUpWalletRequest) Validate() error {
 
 	if r.ExpiryDateUTC != nil {
 		// check if the expiry date is in the past
-		if r.ExpiryDateUTC.Before(time.Now().UTC()) {
+		if r.ExpiryDateUTC.Before(types.Now()) {
 			return ierr.NewError("expiry_date_utc cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				Mark(ierr.ErrValidation)
@@ -421,7 +422,7 @@ func (r *TopUpWalletRequest) Validate() error {
 	}
 
 	if r.EffectiveDate != nil {
-		if r.EffectiveDate.After(time.Now().UTC()) {
+		if r.EffectiveDate.After(types.Now()) {
 			return ierr.NewError("effective_date cannot be in the future").
 				WithHint("Effective date must be now or in the past").
 				Mark(ierr.ErrValidation)
@@ -457,7 +458,7 @@ func (r *TopUpWalletRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(time.Now().UTC()) {
+	if r.BonusCreditsExpiryDateUTC != nil && r.BonusCreditsExpiryDateUTC.Before(types.Now()) {
 		return ierr.NewError("bonus_credits_expiry_date_utc cannot be in the past").
 			WithHint("Bonus credits expiry date must be in the future").
 			Mark(ierr.ErrValidation)

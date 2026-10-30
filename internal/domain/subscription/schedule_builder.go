@@ -37,7 +37,7 @@ func NewPendingScheduleBuilder(
 	scheduleType types.SubscriptionScheduleChangeType,
 	scheduledAt time.Time,
 ) *subscriptionScheduleBuilder {
-	now := time.Now().UTC()
+	now := types.Now()
 	b := &subscriptionScheduleBuilder{schedule: &SubscriptionSchedule{
 		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
 		ScheduleType: scheduleType,

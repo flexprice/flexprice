@@ -367,7 +367,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 		SetStatus(string(item.Status)).
 		SetUpdatedBy(item.UpdatedBy).
-		SetUpdatedAt(time.Now())
+		SetUpdatedAt(types.Now())
 	if item.EndDate.IsZero() {
 		builder.ClearEndDate()
 	} else {

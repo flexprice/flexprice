@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -13,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v82"
 )
 
 const (
@@ -306,7 +307,7 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, ourCustome
 				"created_via":           "flexprice_to_provider",
 				"stripe_customer_email": ourCustomer.Email,
 				"stripe_customer_name":  ourCustomer.Name,
-				"synced_at":             time.Now().UTC().Format(time.RFC3339),
+				"synced_at":             types.Now().Format(time.RFC3339),
 			},
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			BaseModel:     types.GetDefaultBaseModel(ctx),
@@ -521,7 +522,7 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 			"created_via":           "provider_to_flexprice",
 			"stripe_customer_email": stripeCustomer.Email,
 			"stripe_customer_name":  stripeCustomer.Name,
-			"synced_at":             time.Now().UTC().Format(time.RFC3339),
+			"synced_at":             types.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
@@ -603,7 +604,7 @@ func (s *CustomerService) SyncCustomerToStripe(ctx context.Context, customer *cu
 		"stripe_customer_name":  customer.Name,
 		"sync_direction":        "flexprice_to_provider",
 		"created_via":           "api",
-		"synced_at":             time.Now().UTC().Format(time.RFC3339),
+		"synced_at":             types.Now().Format(time.RFC3339),
 	}, nil
 }
 

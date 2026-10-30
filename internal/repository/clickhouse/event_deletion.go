@@ -7,12 +7,13 @@ import (
 	"time"
 
 	clickhouse_go "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const (
@@ -410,7 +411,7 @@ func (r *EventDeletionLogRepository) waitForMutation(ctx context.Context, table,
 		WHERE database = currentDatabase() AND table = ? AND position(command, ?) > 0
 	`
 
-	deadline := time.Now().Add(mutationDeadline)
+	deadline := types.Now().Add(mutationDeadline)
 	for {
 		var total, done uint64
 		var failReason string
@@ -441,7 +442,7 @@ func (r *EventDeletionLogRepository) waitForMutation(ctx context.Context, table,
 			return nil
 		}
 
-		if time.Now().After(deadline) {
+		if types.Now().After(deadline) {
 			return ierr.WithError(types.ErrMutationTimeout).
 				WithHint("The delete took too long and was cancelled. Retry it for the same period").
 				WithReportableDetails(map[string]interface{}{

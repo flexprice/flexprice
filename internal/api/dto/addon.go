@@ -108,7 +108,7 @@ type AddAddonToSubscriptionRequest struct {
 
 func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, enitiyId string, enitityType types.AddonAssociationEntityType) *addonassociation.AddonAssociation {
 
-	now := time.Now()
+	now := types.Now()
 	startDate := now
 	if a.StartDate != nil {
 		startDate = *a.StartDate

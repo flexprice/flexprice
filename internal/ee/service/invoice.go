@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -32,8 +35,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type InvoiceService interface {
@@ -233,7 +234,7 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 					"customer_id":    req.CustomerID,
 					"period_start":   truncatedToMinute(req.PeriodStart),
 					"period_end":     truncatedToMinute(req.PeriodEnd),
-					"timestamp":      time.Now().UTC(),
+					"timestamp":      types.Now(),
 				})
 			}
 		} else {
@@ -661,7 +662,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			if inv.InvoiceStatus != types.InvoiceStatusDraft {
 				return nil
 			}
-			now := time.Now().UTC()
+			now := types.Now()
 			inv.LastComputedAt = &now
 			inv.InvoiceStatus = types.InvoiceStatusSkipped
 			markedSkipped = true
@@ -812,7 +813,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() && !lo.SomeBy(inv.LineItems, func(item *invoice.InvoiceLineItem) bool {
 			return item != nil && !item.Amount.IsZero()
 		}) && !isTrialStart && !creditsAppliedToDraft.IsPositive() {
-			now := time.Now().UTC()
+			now := types.Now()
 			inv.LastComputedAt = &now
 			inv.InvoiceStatus = types.InvoiceStatusSkipped
 			if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
@@ -872,7 +873,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			}
 		}
 
-		now := time.Now().UTC()
+		now := types.Now()
 		inv.LastComputedAt = &now
 
 		return s.InvoiceRepo.Update(txCtx, inv)
@@ -914,7 +915,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 func (s *invoiceService) saveCompletedCycleUsageCheckpoints(ctx context.Context, inv *invoice.Invoice) error {
 	if s.MeterUsageCheckpointRepo == nil || inv == nil || inv.InvoiceType != types.InvoiceTypeSubscription ||
 		inv.SubscriptionID == nil || inv.PeriodStart == nil || inv.PeriodEnd == nil ||
-		inv.PeriodEnd.After(time.Now().UTC()) || types.InvoiceBillingReason(inv.BillingReason) != types.InvoiceBillingReasonSubscriptionCycle {
+		inv.PeriodEnd.After(types.Now()) || types.InvoiceBillingReason(inv.BillingReason) != types.InvoiceBillingReasonSubscriptionCycle {
 		return nil
 	}
 	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
@@ -1537,7 +1538,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			lockedInv.AmountRemaining = decimal.Zero
 		}
 
-		now := time.Now().UTC()
+		now := types.Now()
 		lockedInv.InvoiceStatus = types.InvoiceStatusFinalized
 		lockedInv.FinalizedAt = &now
 		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
@@ -1652,7 +1653,7 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 	}
 
 	dueAt := inv.LastComputedAt.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
-	return time.Now().UTC().After(dueAt), nil
+	return types.Now().After(dueAt), nil
 }
 
 // ListAllTenantDraftInvoices returns draft invoices across all tenants with LastComputedAt set.
@@ -1818,7 +1819,7 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			return err
 		}
 
-		now := time.Now().UTC()
+		now := types.Now()
 		inv.InvoiceStatus = types.InvoiceStatusVoided
 		inv.VoidedAt = &now
 		if req.Metadata != nil {
@@ -2445,7 +2446,7 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 				Mark(ierr.ErrValidation)
 		}
 
-		now := time.Now().UTC()
+		now := types.Now()
 		inv.PaymentStatus = status
 
 		switch status {
@@ -2556,7 +2557,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	inv.PaymentStatus = status
 
 	switch status {
@@ -3023,7 +3024,7 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		UnpaidFixedCharges:  decimal.Zero,
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 
 	// Process each invoice
 	for _, inv := range mergedInvoices {
@@ -3141,7 +3142,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 		// Skip draft invoices whose billing period hasn't ended yet —
 		// their charges are not yet due and should not reduce wallet balance.
-		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.PeriodEnd != nil && inv.PeriodEnd.After(time.Now().UTC()) {
+		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.PeriodEnd != nil && inv.PeriodEnd.After(types.Now()) {
 			continue
 		}
 
@@ -4151,7 +4152,7 @@ func publishInvoiceWebhook(ctx context.Context, params ServiceParams, eventName 
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     types.Now(),
 		Payload:       json.RawMessage(webhookPayload),
 		EntityType:    types.SystemEntityTypeInvoice,
 		EntityID:      invoiceID,

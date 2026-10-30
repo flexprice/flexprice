@@ -6,14 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nyaruka/phonenumbers"
+	"golang.org/x/text/language"
+	"golang.org/x/text/language/display"
+
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/nyaruka/phonenumbers"
-	"golang.org/x/text/language"
-	"golang.org/x/text/language/display"
 )
 
 const (
@@ -308,7 +309,7 @@ func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *c
 		EnvironmentID:    customer.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 		Metadata: map[string]interface{}{
-			mappingKeySyncedAt:         time.Now().UTC().Format(time.RFC3339),
+			mappingKeySyncedAt:         types.Now().Format(time.RFC3339),
 			mappingKeyContactName:      contact.ContactName,
 			mappingKeyPrimaryEmail:     contact.Email,
 			mappingKeyPrimaryContactID: contact.PrimaryContact,

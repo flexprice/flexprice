@@ -3,15 +3,15 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 func (s *checkoutSessionService) executeCheckoutAction(ctx context.Context, session *domainCheckout.CheckoutSession) error {
@@ -166,7 +166,7 @@ func (s *checkoutSessionService) callCheckoutProvider(
 			resp = chargedResp
 			// The debit lands after the settlement window, so the session must outlive it
 			// or the late capture is refunded.
-			if settleBy := time.Now().UTC().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
+			if settleBy := types.Now().Add(session.PaymentProvider.SavedMethodSettlement()); settleBy.After(session.ExpiresAt) {
 				session.ExpiresAt = settleBy
 			}
 			break
@@ -534,7 +534,7 @@ func (s *checkoutSessionService) finalizeCheckoutInvoiceAndPayment(
 	}
 
 	statusStr := string(types.PaymentStatusSucceeded)
-	now := time.Now().UTC()
+	now := types.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: &statusStr,
 		SucceededAt:   &now,

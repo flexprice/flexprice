@@ -7,6 +7,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -20,8 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Skip reasons logged by RollupSubscription. Multi-period commitments are
@@ -959,7 +960,7 @@ func (s *revenueService) scanScopeFor(ctx context.Context, req types.RollupDirty
 		activeParents: activeParents,
 		accruing:      accruing,
 		since:         req.Since,
-		now:           time.Now().UTC(),
+		now:           types.Now(),
 	}
 }
 

@@ -3,7 +3,8 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	entcommitment "github.com/flexprice/flexprice/ent/commitment"
@@ -15,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type commitmentRepository struct {
@@ -184,7 +184,7 @@ func (r *commitmentRepository) Update(ctx context.Context, c *domain.Commitment)
 		SetInvoiceLabel(c.InvoiceLabel).
 		SetMetadata(c.Metadata).
 		SetNillableTerminatedAt(c.TerminatedAt).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CommitmentStatus != "" {
@@ -229,7 +229,7 @@ func (r *commitmentRepository) Delete(ctx context.Context, id string) error {
 			entcommitment.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {

@@ -3,9 +3,10 @@ package wallet
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // WalletOperation represents the request to credit or debit a wallet
@@ -113,7 +114,7 @@ func (w *WalletOperation) Validate() error {
 	}
 
 	if w.ExpiryDateTime != nil {
-		if w.ExpiryDateTime.Before(time.Now().UTC()) {
+		if w.ExpiryDateTime.Before(types.Now()) {
 			return ierr.NewError("expiry date cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				WithReportableDetails(map[string]interface{}{
@@ -132,7 +133,7 @@ func (w *WalletOperation) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 
-		if expiryTime.Before(time.Now().UTC()) {
+		if expiryTime.Before(types.Now()) {
 			return ierr.NewError("expiry date cannot be in the past").
 				WithHint("Expiry date must be in the future").
 				WithReportableDetails(map[string]interface{}{
@@ -142,7 +143,7 @@ func (w *WalletOperation) Validate() error {
 		}
 	}
 
-	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(time.Now().UTC()) {
+	if w.BonusExpiryDate != nil && w.BonusExpiryDate.Before(types.Now()) {
 		return ierr.NewError("bonus expiry date cannot be in the past").
 			WithHint("Bonus expiry date must be in the future").
 			WithReportableDetails(map[string]interface{}{

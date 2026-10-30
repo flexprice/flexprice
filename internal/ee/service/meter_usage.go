@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -26,8 +29,6 @@ import (
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // defaultPropertyValuesLimit is the number of property values returned when the request sets no limit.
@@ -459,7 +460,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 	}
 	if req.LifetimeUsage {
 		usageStartTime = time.Time{}
-		usageEndTime = time.Now().UTC()
+		usageEndTime = types.Now()
 	}
 
 	// 4. Get line items for this subscription
@@ -1170,7 +1171,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 
 	// Set defaults
 	if params.EndTime.IsZero() {
-		params.EndTime = time.Now().UTC()
+		params.EndTime = types.Now()
 	}
 	if params.StartTime.IsZero() {
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)

@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
@@ -175,7 +174,7 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 
 	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: flexpricePaymentID,
@@ -291,7 +290,7 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 		if lifecycleErr := h.lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           time.Now().UTC(),
+			VoidedAt:           types.Now(),
 		}); lifecycleErr != nil {
 			h.logger.Error(ctx, "failed to record payment voided",
 				"flexprice_payment_id", flexpricePaymentID,
@@ -325,7 +324,7 @@ func (h *Handler) voidOrRefundAuthPayment(ctx context.Context, flexpricePaymentI
 	if lifecycleErr := h.lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         time.Now().UTC(),
+		RefundedAt:         types.Now(),
 	}); lifecycleErr != nil {
 		h.logger.Error(ctx, "failed to record payment refunded",
 			"flexprice_payment_id", flexpricePaymentID,
@@ -416,7 +415,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 	if err := h.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
-		FailedAt:           time.Now().UTC(),
+		FailedAt:           types.Now(),
 		ErrorMessage:       errorMessage,
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record payment failure",

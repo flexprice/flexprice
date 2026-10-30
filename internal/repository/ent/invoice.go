@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
@@ -19,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type invoiceRepository struct {
@@ -451,7 +452,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(types.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item removal failed").Mark(ierr.ErrDatabase)
@@ -611,7 +612,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
 		SetNillableInvoiceNumber(inv.InvoiceNumber).
 		SetNillableBillingSequence(inv.BillingSequence).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
 		SetSubtotal(inv.Subtotal).
@@ -691,7 +692,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 		SetPeriodEnd(periodEnd).
 		SetBillingReason(billingReason).
 		SetIdempotencyKey(idempotencyKey).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		AddVersion(1).
 		SaveReturning(ctx)
@@ -728,7 +729,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(types.Now()).
 			Save(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("line item deletion failed").Mark(ierr.ErrDatabase)
@@ -744,7 +745,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 			).
 			SetStatus(string(types.StatusDeleted)).
 			SetUpdatedBy(types.GetUserID(ctx)).
-			SetUpdatedAt(time.Now()).
+			SetUpdatedAt(types.Now()).
 			SaveReturning(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice deletion failed").Mark(ierr.ErrDatabase)
@@ -1009,7 +1010,7 @@ func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timez
 	}
 
 	// Get current time in the specified timezone
-	now := time.Now().In(loc)
+	now := types.Now().In(loc)
 
 	switch format {
 	case types.InvoiceNumberFormatYYYYMM:

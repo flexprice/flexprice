@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -13,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // matching meters by event name is a hot path for the single-event and bulk consumers.
@@ -319,7 +320,7 @@ func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
 			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -371,7 +372,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 			meter.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetFilters(m.ToEntFilters()).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

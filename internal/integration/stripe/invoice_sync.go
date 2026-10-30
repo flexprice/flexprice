@@ -5,15 +5,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/stripe/stripe-go/v82"
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with Stripe
@@ -118,7 +119,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		InvoiceURL:      finalizedInvoice.HostedInvoiceURL,
 		PaymentURL:      finalizedInvoice.HostedInvoiceURL, // Same as invoice URL for Stripe
 		CreatedAt:       time.Unix(finalizedInvoice.Created, 0),
-		UpdatedAt:       time.Now(),
+		UpdatedAt:       types.Now(),
 	}
 
 	s.logger.Info(ctx, "Stripe invoice sync completed successfully",
@@ -177,8 +178,8 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Stripe requires due_date when collection_method is send_invoice.
 	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
 	if collectionMethod == types.CollectionMethodSendInvoice {
-		minDueDate := time.Now().UTC().Add(15 * time.Minute)
-		dueDate := time.Now().UTC().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		minDueDate := types.Now().Add(15 * time.Minute)
+		dueDate := types.Now().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
 		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
 			dueDate = *flexInvoice.DueDate
 		}
@@ -576,7 +577,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID
 		ProviderType:     "stripe",
 		ProviderEntityID: stripeInvoiceID,
 		Metadata: map[string]interface{}{
-			"sync_timestamp": time.Now().Unix(),
+			"sync_timestamp": types.Now().Unix(),
 			"sync_source":    "flexprice",
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),

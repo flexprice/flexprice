@@ -3,14 +3,14 @@ package v1
 import (
 	"crypto/subtle"
 	"net/http"
-	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/gin-gonic/gin"
 )
 
 // OAuthHandler handles generic OAuth endpoints for multiple providers
@@ -93,7 +93,7 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		Metadata:      req.Metadata,
 		SyncConfig:    req.SyncConfig, // Pass through the sync configuration
 		CSRFState:     csrfState,
-		ExpiresAt:     time.Now().UTC().Add(service.OAuthSessionTTL),
+		ExpiresAt:     types.Now().Add(service.OAuthSessionTTL),
 	}
 
 	// Store session in cache (credentials will be encrypted)

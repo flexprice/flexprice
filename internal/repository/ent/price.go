@@ -3,7 +3,9 @@ package ent
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/lib/pq"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -15,8 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
 )
 
 type priceRepository struct {
@@ -301,7 +301,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bump
 		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// Caller asserts a sync-relevant field is changing (i.e. end_date being
@@ -410,7 +410,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 		).
 		SetSequence(nextSeq).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -670,7 +670,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	}
 
 	if !f.AllowExpiredPrices {
-		now := time.Now().UTC()
+		now := types.Now()
 
 		// Filter for active prices:
 		// - Start date should be before or equal to current time (or null)
@@ -859,7 +859,7 @@ func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) er
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		ClearGroupID().
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {

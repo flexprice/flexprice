@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
@@ -14,7 +16,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const (
@@ -427,7 +428,7 @@ func (s *creditGrantService) InitializeCreditGrantWorkflow(
 
 	// 6. Eager application: if the application is due now or in the past, process it
 	// immediately.
-	if !cga.ScheduledFor.After(time.Now()) {
+	if !cga.ScheduledFor.After(types.Now()) {
 		// Use a background context or a sub-context to avoid blocking the main creation if processing fails
 		// Though for initialization, we might want it to be synchronous if it fails due to validation
 		if err := s.processCatchUpApplications(ctx, cga); err != nil {
@@ -564,7 +565,7 @@ func (s *creditGrantService) DeleteCreditGrant(ctx context.Context, req dto.Dele
 		// read grant.EndDate directly, but that field wasn't assigned until after the call, so the
 		// cutoff was always nil and every pending/failed application got cancelled regardless of
 		// whether it was scheduled before or after the actual effective date.
-		endDate := time.Now().UTC()
+		endDate := types.Now()
 		if req.EffectiveDate != nil && !req.EffectiveDate.IsZero() {
 			endDate = lo.FromPtr(req.EffectiveDate)
 		}
@@ -665,7 +666,7 @@ func (s *creditGrantService) ProcessCreditGrantApplication(ctx context.Context, 
 	}
 	// If the next period is also past-due (backdated subscription), apply it and any
 	// further past-due periods silently. Failures are logged; cron will retry.
-	if nextCGA != nil && !nextCGA.ScheduledFor.After(time.Now().UTC()) {
+	if nextCGA != nil && !nextCGA.ScheduledFor.After(types.Now()) {
 		return s.processCatchUpApplications(ctx, nextCGA)
 	}
 	return nil
@@ -886,14 +887,14 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		// Task 0: Expiry Check
 		// If the grant has an expiration duration, check if it has already expired relative to current time
 		if expiryDate != nil {
-			if expiryDate.Before(time.Now().UTC()) {
+			if expiryDate.Before(types.Now()) {
 				s.Logger.Info(ctx, "Credit grant application period has already expired, skipping application",
 					"cga_id", cga.ID,
 					"grant_id", grant.ID,
 					"expiry_date", expiryDate)
 
 				cga.ApplicationStatus = types.ApplicationStatusSkipped
-				cga.FailureReason = lo.ToPtr(fmt.Sprintf("Credit grant expired before application. Expiry date: %s, Current time: %s", expiryDate.Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339)))
+				cga.FailureReason = lo.ToPtr(fmt.Sprintf("Credit grant expired before application. Expiry date: %s, Current time: %s", expiryDate.Format(time.RFC3339), types.Now().Format(time.RFC3339)))
 				cga.AppliedAt = nil // Ensure applied_at is nil for skipped grants
 				if err := s.CreditGrantApplicationRepo.Update(txCtx, cga); err != nil {
 					return err
@@ -922,7 +923,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 
 		// Task 2: Update CGA status to applied
 		cga.ApplicationStatus = types.ApplicationStatusApplied
-		cga.AppliedAt = lo.ToPtr(time.Now().UTC())
+		cga.AppliedAt = lo.ToPtr(types.Now())
 		// Note: We do NOT clear failure reason even on success - preserve it for audit/history purposes
 
 		if err := s.CreditGrantApplicationRepo.Update(txCtx, cga); err != nil {
@@ -1175,7 +1176,7 @@ func (s *creditGrantService) processCatchUpApplications(
 		}
 
 		// Next period is future-dated — normal cron territory
-		if nextCGA.ScheduledFor.After(time.Now().UTC()) {
+		if nextCGA.ScheduledFor.After(types.Now()) {
 			break
 		}
 
@@ -1383,7 +1384,7 @@ func (s *creditGrantService) deferCreditGrantApplication(
 
 	// Calculate next retry time with exponential backoff (defer for 30 minutes initially)
 	backoffMinutes := 30 * (1 << min(cga.RetryCount, 4))
-	nextRetry := time.Now().UTC().Add(time.Duration(backoffMinutes) * time.Minute)
+	nextRetry := types.Now().Add(time.Duration(backoffMinutes) * time.Minute)
 
 	// Update CGA with deferred status and next retry time and increment retry count so that next time it will be deferred for longer
 	cga.ScheduledFor = nextRetry

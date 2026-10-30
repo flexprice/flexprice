@@ -37,8 +37,8 @@ func NewAuth(userID string, provider types.AuthProvider, token string) *Auth {
 		Provider:  provider,
 		Token:     token,
 		Status:    types.StatusPublished,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: types.Now(),
+		UpdatedAt: types.Now(),
 	}
 }
 

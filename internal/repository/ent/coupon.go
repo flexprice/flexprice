@@ -3,7 +3,8 @@ package ent
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -15,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type couponRepository struct {
@@ -218,7 +218,7 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetName(c.Name).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	if c.CouponCode != nil {
@@ -284,7 +284,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -346,7 +346,7 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string, 
 
 	affected, err := updateQuery.
 		AddTotalRedemptions(1).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

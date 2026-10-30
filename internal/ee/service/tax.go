@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -12,8 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TaxService interface {
@@ -1262,7 +1263,7 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 				TaxAmount:     line.taxAmount,
 				TaxBehavior:   line.taxBehavior,
 				Currency:      inv.Currency,
-				AppliedAt:     time.Now().UTC(),
+				AppliedAt:     types.Now(),
 			},
 			TaxRate: rate.TaxRateResponse,
 		})
@@ -1533,7 +1534,7 @@ func (s *taxService) PersistTaxResult(ctx context.Context, entityType types.TaxR
 			applied.EntityID = entityID
 			applied.Currency = currency
 			applied.Provider = result.Provider
-			applied.AppliedAt = time.Now().UTC()
+			applied.AppliedAt = types.Now()
 			applied.EnvironmentID = types.GetEnvironmentID(ctx)
 			applied.BaseModel = types.GetDefaultBaseModel(ctx)
 
@@ -1888,7 +1889,7 @@ func (s *taxService) recordReversal(ctx context.Context, req dto.TaxReversalRequ
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	for _, applied := range filed {
 		details := types.ExternalTaxDetails{}
 		if applied.ExternalTaxDetails != nil {

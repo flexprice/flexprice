@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // ContractService keeps each subscription's contract in step with the subscription.
@@ -39,7 +40,7 @@ func (s *contractService) SyncForSubscription(ctx context.Context, sub *subscrip
 		return nil, err
 	}
 
-	next := deriveContractStatus(sub, existing, time.Now().UTC())
+	next := deriveContractStatus(sub, existing, types.Now())
 	if err := s.contractRepo.Update(ctx, next); err != nil {
 		return nil, err
 	}
@@ -104,7 +105,7 @@ func (s *contractService) GetContracts(ctx context.Context, filter *contractRepo
 }
 
 func (s *contractService) createForSubscription(ctx context.Context, sub *subscription.Subscription) (*domainContract.Contract, error) {
-	now := time.Now().UTC()
+	now := types.Now()
 	c := domainContract.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
 		WithCustomerID(sub.CustomerID).

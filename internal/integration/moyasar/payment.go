@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PaymentService handles Moyasar payment operations
@@ -452,7 +452,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	}
 
 	// Update payment to succeeded status
-	now := time.Now().UTC()
+	now := types.Now()
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: lo.ToPtr(moyasarPaymentID),

@@ -307,7 +307,7 @@ func (s *InvoiceService) createInvoiceMapping(ctx context.Context, invoiceID, qu
 		EnvironmentID:    environmentID,
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            types.Now().Format(time.RFC3339),
 			"flexprice_invoice_id": invoiceID,
 		},
 	}

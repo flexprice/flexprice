@@ -58,7 +58,7 @@ func targetStatus(current types.TenantInternalStatus, sub *remoteSubscription, n
 func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.Tenant, sub *remoteSubscription) (types.TenantInternalStatus, error) {
 	ctx = types.SetTenantID(ctx, t.ID)
 
-	next, reason := targetStatus(t.InternalStatus, sub, time.Now())
+	next, reason := targetStatus(t.InternalStatus, sub, types.Now())
 	if next != t.InternalStatus {
 		updated := tenant.NewBuilder(t).WithInternalStatus(next).Build()
 		if err := s.TenantRepo.Update(ctx, updated); err != nil {

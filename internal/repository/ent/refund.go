@@ -2,7 +2,9 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/refund"
@@ -11,8 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type refundRepository struct {
@@ -165,7 +165,7 @@ func (r *refundRepository) Update(ctx context.Context, ref *domainRefund.Refund)
 		SetNillableFailureReason(ref.FailureReason).
 		SetGatewayMetadata(ref.GatewayMetadata).
 		SetMetadata(ref.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetNillableInitiatedAt(ref.InitiatedAt).
 		SetNillableSucceededAt(ref.SucceededAt).
 		SetNillableFailedAt(ref.FailedAt).

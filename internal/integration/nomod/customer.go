@@ -194,7 +194,7 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 		Metadata: map[string]interface{}{
 			"created_via":       "flexprice_to_provider",
 			"nomod_customer_id": nomodCustomerID,
-			"synced_at":         time.Now().UTC().Format(time.RFC3339),
+			"synced_at":         types.Now().Format(time.RFC3339),
 		},
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),

@@ -2,11 +2,13 @@ package v1
 
 import (
 	"net/http"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/types"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/gin-gonic/gin"
 )
 
 // @Summary Preview a plan change (v2, swap in place)
@@ -68,7 +70,7 @@ func (h *SubscriptionHandler) ExecuteSubscriptionPlanChangeV2(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.ExecutePlanChange(c.Request.Context(), subscriptionID, req, time.Now().UTC())
+	resp, err := h.service.ExecutePlanChange(c.Request.Context(), subscriptionID, req, types.Now())
 	if err != nil {
 		c.Error(err)
 		return

@@ -43,12 +43,12 @@ func (s *SubscriptionSchedule) IsPending() bool {
 
 // CanBeCancelled returns true if the schedule can be cancelled
 func (s *SubscriptionSchedule) CanBeCancelled() bool {
-	return s.Status == types.ScheduleStatusPending && time.Now().Before(s.ScheduledAt)
+	return s.Status == types.ScheduleStatusPending && types.Now().Before(s.ScheduledAt)
 }
 
 // IsExpired returns true if the execution time has passed but schedule is still pending
 func (s *SubscriptionSchedule) IsExpired() bool {
-	return s.Status == types.ScheduleStatusPending && time.Now().After(s.ScheduledAt)
+	return s.Status == types.ScheduleStatusPending && types.Now().After(s.ScheduledAt)
 }
 
 // DaysUntilExecution returns the number of days until execution

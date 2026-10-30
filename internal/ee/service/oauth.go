@@ -274,8 +274,8 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 		BaseModel: types.BaseModel{
 			TenantID:  session.TenantID,
 			Status:    types.StatusPublished,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
+			CreatedAt: types.Now(),
+			UpdatedAt: types.Now(),
 			CreatedBy: session.TenantID,
 			UpdatedBy: session.TenantID,
 		},
@@ -365,7 +365,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 	}
 
 	// Check if session has expired
-	if time.Now().UTC().After(expiresAt) {
+	if types.Now().After(expiresAt) {
 		// Auto-delete expired session
 		_ = s.connectionRepo.Delete(ctx, conn)
 		return nil, ierr.NewError("OAuth session has expired").
@@ -757,7 +757,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 
 		// Clear metadata - everything sensitive should be in encrypted_secret_data
 		conn.Metadata = nil
-		conn.UpdatedAt = time.Now().UTC()
+		conn.UpdatedAt = types.Now()
 
 		// Update in database
 		if err := s.connectionRepo.Update(ctx, conn); err != nil {
@@ -930,7 +930,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 			}
 		}
 
-		expiresAt := time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+		expiresAt := types.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 		var preservedWebhookSecret string
 		if conn.EncryptedSecretData.ZohoBooks != nil {
 			preservedWebhookSecret = conn.EncryptedSecretData.ZohoBooks.WebhookSecret
@@ -967,7 +967,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 			conn.SyncConfig = session.SyncConfig
 		}
 		conn.Metadata = nil
-		conn.UpdatedAt = time.Now().UTC()
+		conn.UpdatedAt = types.Now()
 
 		if err := s.connectionRepo.Update(ctx, conn); err != nil {
 			return "", ierr.WithError(err).

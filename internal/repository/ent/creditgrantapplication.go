@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	cga "github.com/flexprice/flexprice/ent/creditgrantapplication"
@@ -12,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type creditGrantApplicationRepository struct {
@@ -280,7 +280,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 		SetSubscriptionStatusAtApplication(a.SubscriptionStatusAtApplication).
 		SetRetryCount(a.RetryCount).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetAppliedAt(lo.FromPtr(a.AppliedAt)).
 		SetFailureReason(lo.FromPtr(a.FailureReason)).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -340,7 +340,7 @@ func (r *creditGrantApplicationRepository) Delete(ctx context.Context, applicati
 			cga.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -379,7 +379,7 @@ func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx cont
 				types.ApplicationStatusPending,
 				types.ApplicationStatusFailed,
 			),
-			cga.ScheduledForLT(time.Now().UTC()),
+			cga.ScheduledForLT(types.Now()),
 			cga.Status(string(types.StatusPublished)),
 		).
 		All(ctx)

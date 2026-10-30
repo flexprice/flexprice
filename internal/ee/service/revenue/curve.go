@@ -2,14 +2,16 @@ package revenue
 
 import (
 	"context"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/ee/service"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // dayKeyLayout keys days by calendar date, not time.Time: two time.Time
@@ -167,7 +169,7 @@ func (s *revenueService) buildUsageCurve(ctx context.Context, in usageCurveInput
 	// period that has not started yet clamps away to nothing.
 	asOf := in.AsOf
 	if asOf.IsZero() {
-		asOf = time.Now()
+		asOf = types.Now()
 	}
 	nowLocal := asOf.In(loc)
 	tomorrow := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)

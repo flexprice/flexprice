@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const refundLockTTL = 15 * time.Minute
@@ -83,7 +84,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(time.Now().UTC()),
+		RefundedAt:       lo.ToPtr(types.Now()),
 		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
 	}
 	if refundID != "" {

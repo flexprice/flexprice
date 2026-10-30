@@ -6,6 +6,8 @@ import (
 	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	servicecontrol "google.golang.org/api/servicecontrol/v1"
+
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
@@ -17,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
-	servicecontrol "google.golang.org/api/servicecontrol/v1"
 )
 
 // marketplaceReportingCurrency is the currency all three marketplaces bill in; none offers
@@ -400,7 +401,7 @@ func (r *MarketplaceReporter) reportAWSRecord(ctx context.Context, rec *usagerec
 	return types.UsageRecordSyncEntry{
 		AgreementID:  licenseArn,
 		ReportingID:  res.MeteringRecordID,
-		SyncedAt:     time.Now().UTC(),
+		SyncedAt:     types.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }
@@ -554,7 +555,7 @@ func (r *MarketplaceReporter) reportGCPRecord(ctx context.Context, rec *usagerec
 	return types.UsageRecordSyncEntry{
 		AgreementID:  consumerID,
 		ReportingID:  reportResult.OperationID,
-		SyncedAt:     time.Now().UTC(),
+		SyncedAt:     types.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }
@@ -717,7 +718,7 @@ func (r *MarketplaceReporter) reportAzureRecord(ctx context.Context, rec *usager
 	return types.UsageRecordSyncEntry{
 		AgreementID:  resourceID,
 		ReportingID:  res.UsageEventID,
-		SyncedAt:     time.Now().UTC(),
+		SyncedAt:     types.Now(),
 		ConnectionID: marketplaceConn.conn.ID,
 	}, true
 }

@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/ent"
 	entTaxConfig "github.com/flexprice/flexprice/ent/taxassociation"
@@ -12,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type taxAssociationRepository struct {
@@ -170,7 +170,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetPriority(t.Priority).
 		SetAutoApply(t.AutoApply).
 		SetTaxBehavior(taxBehavior).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableEndDate(t.EndDate).
 		SetMetadata(t.Metadata)
@@ -212,7 +212,7 @@ func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfi
 			entTaxConfig.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

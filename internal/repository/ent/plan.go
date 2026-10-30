@@ -2,7 +2,6 @@ package ent
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/plan"
@@ -352,7 +351,7 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 		SetDescription(p.Description).
 		SetMetadata(p.Metadata).
 		SetNillableDisplayOrder(p.DisplayOrder).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 
@@ -411,7 +410,7 @@ func (r *planRepository) Delete(ctx context.Context, p *domainPlan.Plan) error {
 			plan.TenantID(types.GetTenantID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 

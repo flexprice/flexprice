@@ -88,9 +88,9 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		return nil, err
 	}
 
-	defaultDueDate := time.Now().AddDate(0, 0, DefaultInvoiceDueDays).UTC()
+	defaultDueDate := types.Now().AddDate(0, 0, DefaultInvoiceDueDays).UTC()
 	dueDate := defaultDueDate
-	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(time.Now()) {
+	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(types.Now()) {
 		dueDate = flexInvoice.DueDate.UTC()
 	}
 

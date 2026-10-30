@@ -8,6 +8,7 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -79,7 +80,7 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 		event.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT)
 	}
 	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now().UTC()
+		event.Timestamp = types.Now()
 	}
 
 	// Marshal event payload
@@ -266,7 +267,7 @@ func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wal
 	)
 
 	// Set cache entry with TTL
-	s.cache.ForceCacheSet(ctx, cacheKey, time.Now().Unix(), cache.ExpiryWalletAlertCheck)
+	s.cache.ForceCacheSet(ctx, cacheKey, types.Now().Unix(), cache.ExpiryWalletAlertCheck)
 
 	s.Logger.Debug(ctx, "marked customer as processed in throttle cache",
 		"customer_id", event.CustomerID,

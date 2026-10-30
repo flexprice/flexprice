@@ -142,7 +142,7 @@ func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, cu
 		SuccessURL:            r.SuccessURL,
 		FailureURL:            r.FailureURL,
 		CancelURL:             r.CancelURL,
-		ExpiresAt:             r.ResolveExpiresAt(time.Now()),
+		ExpiresAt:             r.ResolveExpiresAt(types.Now()),
 		Metadata:              r.Metadata,
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}
@@ -211,7 +211,7 @@ func (r *PayFirstCheckoutRequest) ToCheckoutSession(ctx context.Context, custome
 		SuccessURL:            r.Checkout.SuccessURL,
 		FailureURL:            r.Checkout.FailureURL,
 		CancelURL:             r.Checkout.CancelURL,
-		ExpiresAt:             time.Now().UTC().Add(r.Checkout.PaymentProvider.SessionExpiry()),
+		ExpiresAt:             types.Now().Add(r.Checkout.PaymentProvider.SessionExpiry()),
 		Metadata:              r.Checkout.Metadata,
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}

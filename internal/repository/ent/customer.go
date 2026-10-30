@@ -3,7 +3,8 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/customer"
@@ -17,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type customerRepository struct {
@@ -352,7 +352,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetTimezone(c.Timezone).
 		SetTaxTreatment(c.TaxTreatment).
 		SetMetadata(c.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
 	// SetNillable is a no-op on nil, so it cannot clear a column. Callers load the customer before
@@ -418,7 +418,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 

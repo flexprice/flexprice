@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	stripeapi "github.com/stripe/stripe-go/v82"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
 // PaymentMethodAdapter wraps Stripe to implement interfaces.PaymentMethodProvider.
@@ -57,7 +58,7 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 		Type:     stripeapi.String(string(stripeapi.PaymentMethodTypeCard)),
 	}
 
-	now := time.Now()
+	now := types.Now()
 	out := make([]interfaces.ProviderPaymentMethod, 0)
 	for pm, err := range stripeClient.V1PaymentMethods.List(ctx, params) {
 		if err != nil {

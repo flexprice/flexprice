@@ -3,7 +3,8 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -16,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
 )
 
 type taxrateRepository struct {
@@ -253,7 +253,7 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 		SetNillablePercentageValue(t.PercentageValue).
 		SetScope(string(t.Scope)).
 		SetStatus(string(t.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -319,7 +319,7 @@ func (r *taxrateRepository) Delete(ctx context.Context, t *domainTaxRate.TaxRate
 			taxrate.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(types.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 

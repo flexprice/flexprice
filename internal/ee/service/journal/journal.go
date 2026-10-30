@@ -7,6 +7,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
@@ -29,8 +32,6 @@ import (
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // JournalService posts billing and earning events as balanced journal entries.
@@ -805,7 +806,7 @@ func (s *journalService) post(ctx context.Context, e *domainJournal.Entry) (stri
 		WithLines(lo.Map(e.Lines(), func(l *domainJournal.Line, _ int) *domainJournal.Line {
 			return domainJournal.NewLineBuilder(l).WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_JOURNAL_LINE)).Build()
 		})).
-		WithCreatedAt(time.Now().UTC())
+		WithCreatedAt(types.Now())
 	if e.EventType() != types.JournalEventRevenueEarned && e.EventType() != types.JournalEventRevenueOffset {
 		b = b.WithIdempotencyKey(string(e.EventType()) + ":" + e.SourceEntityID())
 	}

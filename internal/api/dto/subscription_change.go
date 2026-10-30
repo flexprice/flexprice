@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // SubscriptionChangeRequest represents the request to change a subscription plan
@@ -309,7 +310,7 @@ type BillingCycleInfo struct {
 
 // ToSubscriptionChange converts the request to a domain subscription change
 func (r *SubscriptionChangeRequest) ToSubscriptionChange(ctx context.Context, subscriptionID string) *subscription.SubscriptionChange {
-	effectiveDate := time.Now()
+	effectiveDate := types.Now()
 
 	billingCycleAnchor := types.BillingCycleAnchorUnchanged
 

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -191,7 +190,7 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 			WithHintf("type is immutable; current type is %q", env.Type).
 			Mark(ierr.ErrValidation)
 	}
-	env.UpdatedAt = time.Now()
+	env.UpdatedAt = types.Now()
 	env.UpdatedBy = userID
 
 	if err := s.repo.Update(ctx, env); err != nil {

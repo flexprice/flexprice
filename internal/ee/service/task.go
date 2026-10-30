@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/task"
@@ -17,8 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TaskService interface {
@@ -229,7 +230,7 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, id string, status ty
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := types.Now()
 	t.TaskStatus = status
 	t.UpdatedAt = now
 	t.UpdatedBy = types.GetUserID(ctx)
@@ -520,7 +521,7 @@ func (p *EventsChunkProcessor) parseTimestamp(eventReq *dto.IngestEventRequest) 
 		}
 		eventReq.Timestamp = timestamp
 	} else {
-		eventReq.Timestamp = time.Now()
+		eventReq.Timestamp = types.Now()
 	}
 	return nil
 }

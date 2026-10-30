@@ -168,7 +168,7 @@ func (c *client) GetToken(ctx context.Context, tenantID, clientID, clientSecret 
 		}
 	}
 
-	return Token{AccessToken: parsed.AccessToken, ExpiresAt: time.Now().UTC().Add(ttl)}, nil
+	return Token{AccessToken: parsed.AccessToken, ExpiresAt: types.Now().Add(ttl)}, nil
 }
 
 // azureUsageEventWire is the usageEvent wire format.
