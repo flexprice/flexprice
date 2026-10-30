@@ -8,7 +8,8 @@
     },
     "gopls": {
         "build.directoryFilters": [
-            "-api/scripts/go"
+            "-api/scripts/go",
+            "-api/custom/go"
         ]
     }
 }
