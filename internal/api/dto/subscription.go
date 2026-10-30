@@ -1725,8 +1725,7 @@ type OverrideEntitlementRequest struct {
 	// EntitlementID references the plan/addon entitlement to override
 	EntitlementID string `json:"entitlement_id" validate:"required"`
 
-	// UsageLimit is the new usage limit (only these 3 fields can be overridden)
-	// For metered features, nil means unlimited usage
+	// Deprecated: use grant_quota; on a grant-backed entitlement a usage_limit is converted to grant_quota.
 	UsageLimit *int64 `json:"usage_limit"`
 
 	// IsEnabled determines if the entitlement is enabled or disabled

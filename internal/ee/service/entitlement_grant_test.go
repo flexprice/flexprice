@@ -2091,8 +2091,38 @@ func (s *EntitlementGrantSuite) TestSubscriptionOverride_InheritsGrantConfig() {
 	// config here would silently downgrade the feature to a legacy entitlement.
 	s.True(rows[0].HasGrantConfig(), "override must inherit the parent grant config")
 	s.Equal(ec.GrantMeasure, rows[0].GrantMeasure)
-	s.Equal(lo.FromPtr(ec.GrantQuota).String(), lo.FromPtr(rows[0].GrantQuota).String())
 	s.Equal(ec.GrantDurationUnit, rows[0].GrantDurationUnit)
+	// Billing reads grant_quota, so the legacy usage_limit becomes the quota rather than being ignored.
+	s.Equal("50", lo.FromPtr(rows[0].GrantQuota).String())
+	s.Nil(rows[0].UsageLimit)
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionOverride_GrantQuotaWinsOverUsageLimit() {
+	sub, ec := s.grantOverrideFixture("quantity")
+	subSvc := NewSubscriptionService(s.buildServiceParams()).(*subscriptionService)
+
+	s.NoError(subSvc.ProcessSubscriptionEntitlementOverrides(s.GetContext(), sub, []dto.OverrideEntitlementRequest{
+		{EntitlementID: ec.ID, UsageLimit: lo.ToPtr(int64(50)), GrantConfigPatch: dto.GrantConfigPatch{GrantQuota: lo.ToPtr(decimal.NewFromInt(250))}},
+	}))
+
+	rows := s.subScopedRows(sub)
+	s.Require().Len(rows, 1)
+	s.Equal("250", lo.FromPtr(rows[0].GrantQuota).String())
+	s.Nil(rows[0].UsageLimit, "no conflicting legacy limit is stored next to the quota")
+}
+
+func (s *EntitlementGrantSuite) TestSubscriptionOverride_UsageLimitNeverBecomesAnAmountQuota() {
+	sub, ec := s.grantOverrideFixture("amount")
+	subSvc := NewSubscriptionService(s.buildServiceParams()).(*subscriptionService)
+
+	s.NoError(subSvc.ProcessSubscriptionEntitlementOverrides(s.GetContext(), sub, []dto.OverrideEntitlementRequest{
+		{EntitlementID: ec.ID, UsageLimit: lo.ToPtr(int64(50))},
+	}))
+
+	rows := s.subScopedRows(sub)
+	s.Require().Len(rows, 1)
+	s.Equal(lo.FromPtr(ec.GrantQuota).String(), lo.FromPtr(rows[0].GrantQuota).String(), "a count is not a currency amount")
+	s.Nil(rows[0].UsageLimit)
 }
 
 func (s *EntitlementGrantSuite) TestSubscriptionOverride_OverridesGrantQuota() {

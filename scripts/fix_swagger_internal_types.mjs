@@ -11,6 +11,9 @@
  *    FeatureType instead of TypesFeatureType.
  * 4. In swagger-3-0.json only: patches string fields with timestamp-like names (created_at, updated_at,
  *    etc.) with format: date-time so the spec has ≥150 date-time fields for SDK generation.
+ * 5. In swagger-3-0.json only: marks properties whose description has a "Deprecated:" notice (at the
+ *    start, or after a sentence or line break, as Go doc comments place it) as deprecated: true. swag
+ *    only carries the comment into the description, so SDKs and docs would otherwise not flag them.
  *
  * Usage: node scripts/fix_swagger_internal_types.mjs [--spec path/to/swagger-3-0.json]
  */
@@ -172,8 +175,22 @@ function main() {
     }
   }
 
+  // 5. Flag properties documented as deprecated.
+  const DEPRECATED_RE = /(^|[.\n]\s*)Deprecated:/;
+  let deprecatedCount = 0;
+  for (const schema of Object.values(schemas)) {
+    if (!schema || typeof schema !== 'object') continue;
+    for (const prop of Object.values(getProperties(schema))) {
+      if (prop && typeof prop.description === 'string' && DEPRECATED_RE.test(prop.description) && prop.deprecated !== true) {
+        prop.deprecated = true;
+        deprecatedCount++;
+      }
+    }
+  }
+
   writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n', 'utf8');
   console.log(`Added x-speakeasy-name-override to ${count} prefixed schemas in swagger-3-0.json.`);
+  console.log(`Marked ${deprecatedCount} properties with a "Deprecated:" notice as deprecated: true in swagger-3-0.json.`);
   console.log(`Patched ${dtCount} timestamp fields with format: date-time in swagger-3-0.json.`);
   if (stripped > 0) {
     console.log(`Stripped incorrect format: date-time from ${stripped} billing_period field(s).`);

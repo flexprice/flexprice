@@ -7283,6 +7283,15 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			// For metered features, UsageLimit can be overridden (including nil for unlimited)
 			// Simply use whatever value is provided (even if nil)
 			newEnt.UsageLimit = override.UsageLimit
+			// A grant-backed entitlement bills from grant_quota, so a legacy usage_limit sets it, as on
+			// create. Explicit grant fields win, and a count never becomes an amount quota.
+			if newEnt.HasGrantConfig() {
+				if newEnt.GrantMeasure == types.EntitlementGrantMeasureQuantity &&
+					override.UsageLimit != nil && override.GrantQuota == nil && override.GrantUnlimited == nil {
+					newEnt.GrantQuota = lo.ToPtr(decimal.NewFromInt(*override.UsageLimit))
+				}
+				newEnt.UsageLimit = nil
+			}
 		default:
 			// For non-metered features, UsageLimit is not relevant, leave as nil
 			newEnt.UsageLimit = nil

@@ -25389,7 +25389,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage_limit": {
-                    "description": "UsageLimit is the new usage limit (only these 3 fields can be overridden)\nFor metered features, nil means unlimited usage",
+                    "description": "Deprecated: use grant_quota; on a grant-backed entitlement a usage_limit is converted to grant_quota.",
                     "type": "integer"
                 }
             }

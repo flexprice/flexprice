@@ -395,6 +395,10 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 			}
 
 			ent := entReq.ToEntitlement(txCtx)
+			if err := s.deriveGrantConfig(txCtx, ent, meterForGrantCheck); err != nil {
+				return err
+			}
+			ent.ApplyGrantDefaults()
 			if err := ent.Validate(); err != nil {
 				return ierr.WithError(err).
 					WithReportableDetails(map[string]interface{}{"index": i}).
@@ -807,6 +811,16 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	if existing.GrantDurationUnit == types.EntitlementGrantDurationUnitSubscriptionPeriod {
 		existing.GrantDurationValue = nil
 		existing.GrantAllocationBehavior = ""
+	}
+
+	// A grant-backed entitlement bills from grant_quota, so a legacy usage_limit sets it. Explicit
+	// grant fields win, and a count never becomes an amount quota.
+	if existing.HasGrantConfig() && req.UsageLimit != nil {
+		if existing.GrantMeasure == types.EntitlementGrantMeasureQuantity && *req.UsageLimit > 0 &&
+			req.GrantQuota == nil && req.GrantUnlimited == nil {
+			existing.GrantQuota = lo.ToPtr(decimal.NewFromInt(*req.UsageLimit))
+		}
+		existing.UsageLimit = nil
 	}
 
 	existing.ApplyGrantDefaults()
