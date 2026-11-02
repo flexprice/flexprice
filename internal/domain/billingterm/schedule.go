@@ -77,7 +77,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 
 	resolved := make([]*resolvedTerm, 0, len(terms))
 	for i, t := range terms {
-		r, err := resolveTerm(i, t, collection, periods)
+		r, err := resolveTerm(i, t, collection, currency, periods)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +136,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 }
 
 // resolveTerm validates one term against the collection period and applies the defaults of its kind.
-func resolveTerm(index int, t *Term, collection types.Period, periods []PeriodValue) (*resolvedTerm, error) {
+func resolveTerm(index int, t *Term, collection types.Period, currency string, periods []PeriodValue) (*resolvedTerm, error) {
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
 		if (t.Amount == nil) == (t.Percentage == nil) {
@@ -145,6 +145,10 @@ func resolveTerm(index int, t *Term, collection types.Period, periods []PeriodVa
 
 		if t.Amount != nil && !t.Amount.IsPositive() {
 			return nil, ierr.Validationf(termErrorFormat, index, "amount", "must be greater than 0")
+		}
+
+		if t.Amount != nil && !t.Amount.Equal(types.RoundToCurrencyPrecision(*t.Amount, currency)) {
+			return nil, ierr.Validationf(termErrorFormat, index, "amount", fmt.Sprintf("must be rounded to %s precision", currency))
 		}
 
 		if t.Percentage != nil && (!t.Percentage.IsPositive() || t.Percentage.GreaterThan(decimal.NewFromInt(100))) {
@@ -316,7 +320,7 @@ func cutSteps(periods []PeriodValue, span types.Period, count int) []PeriodValue
 	return steps
 }
 
-// resolveAmounts rounds fixed amounts to the currency and gives the remainder term whatever the others leave of total.
+// resolveAmounts rounds percentage amounts to the currency and gives the remainder term whatever the others leave of total.
 func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal, currency string) error {
 	var remainder *resolvedTerm
 	others := decimal.Zero
@@ -330,12 +334,10 @@ func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal, currency strin
 			continue
 		}
 
-		perInstalment := lo.FromPtr(r.term.Amount)
+		r.instalmentAmount = lo.FromPtr(r.term.Amount)
 		if r.term.Percentage != nil {
-			perInstalment = total.Mul(*r.term.Percentage).Div(decimal.NewFromInt(100))
+			r.instalmentAmount = types.RoundToCurrencyPrecision(total.Mul(*r.term.Percentage).Div(decimal.NewFromInt(100)), currency)
 		}
-
-		r.instalmentAmount = types.RoundToCurrencyPrecision(perInstalment, currency)
 		r.amount = r.instalmentAmount.Mul(decimal.NewFromInt(int64(r.instalmentCount())))
 		others = others.Add(r.amount)
 	}

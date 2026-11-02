@@ -503,6 +503,13 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].amount:",
 		},
 		{
+			name:    "fixed amount finer than the currency precision",
+			owner:   usd("1200.12", jan2027, jan2028),
+			periods: months,
+			terms:   []*Term{recurringFixed("100.005", types.InvoiceCadenceArrear)},
+			wantMsg: "billing_terms[0].amount: must be rounded to USD precision",
+		},
+		{
 			name:    "percentage 0",
 			owner:   year,
 			periods: months,
