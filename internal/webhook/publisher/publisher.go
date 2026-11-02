@@ -100,26 +100,34 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		}
 	}
 
+	// The row commits with the caller's transaction; the message waits for that commit
+	// because the consumer reads both the row and the entity.
+	publishCtx := types.WithoutDBTransaction(ctx)
+	deferred := types.RegisterPostCommit(ctx, func() {
+		if err := p.send(publishCtx, msg, event); err != nil {
+			p.logger.Error(publishCtx, "failed to publish webhook event after commit",
+				"error", err,
+				"event_id", event.ID,
+				"event_name", event.EventName,
+				"tenant_id", event.TenantID,
+			)
+		}
+	})
+	if deferred {
+		return nil
+	}
+	return p.send(ctx, msg, event)
+}
+
+func (p *webhookPublisher) send(ctx context.Context, msg *message.Message, event *types.WebhookEvent) error {
+	var err error
 	if p.producer != nil {
-		if err := p.producer.Publish(p.config.Topic, msg); err != nil {
-			p.logger.Error(ctx, "failed to publish webhook event",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-				"tenant_id", event.TenantID,
-			)
-			return err
-		}
+		err = p.producer.Publish(p.config.Topic, msg)
 	} else {
-		if err := p.pubSub.Publish(ctx, p.config.Topic, msg); err != nil {
-			p.logger.Error(ctx, "failed to publish webhook event",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-				"tenant_id", event.TenantID,
-			)
-			return err
-		}
+		err = p.pubSub.Publish(ctx, p.config.Topic, msg)
+	}
+	if err != nil {
+		return err
 	}
 
 	p.logger.Debug(ctx, "successfully published webhook event",
@@ -127,7 +135,6 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
 	)
-
 	return nil
 }
 
