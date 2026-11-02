@@ -745,7 +745,11 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		// Trial start invoices preview the first period's charges at $0. Amounts are
 		// computed normally so line item structure is accurate, then forced to zero.
+		// Instalments wait for the first invoice after the trial, so they are dropped.
 		if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart {
+			subInvReq.LineItems = lo.Filter(subInvReq.LineItems, func(item dto.CreateInvoiceLineItemRequest, _ int) bool {
+				return item.BillingInstalmentID == nil
+			})
 			subInvReq.ZeroOutAmounts()
 		}
 		computeReq := subInvReq.ToComputeRequest()
@@ -4239,14 +4243,16 @@ func (s *invoiceService) reconcileLineItems(
 	// producing duplicate persisted lines. Key by (sub-line-item, window) to
 	// give each fanned-out line item its own reconcile identity.
 	type reconcileKey struct {
-		SubLineItemID  string
-		CommitmentID   string
-		CommitmentKind string
-		PeriodStart    time.Time
-		PeriodEnd      time.Time
+		SubLineItemID       string
+		CommitmentID        string
+		CommitmentKind      string
+		BillingInstalmentID string
+		PeriodStart         time.Time
+		PeriodEnd           time.Time
 	}
 	// Commitment lines are keyed by commitment and line kind too: stacked commitments and overage
-	// share a subscription line item, and true-up or settlement lines have none.
+	// share a subscription line item, and true-up or settlement lines have none. Instalment lines are
+	// keyed by their instalment, since two instalments of a commitment can cover the same period.
 	keyOf := func(item *invoice.InvoiceLineItem) (reconcileKey, bool) {
 		if item.PeriodStart == nil || item.PeriodEnd == nil {
 			return reconcileKey{}, false
@@ -4259,6 +4265,7 @@ func (s *invoiceService) reconcileLineItems(
 		if item.CommitmentID != nil {
 			k.CommitmentID = *item.CommitmentID
 			k.CommitmentKind = item.Metadata[types.MetadataKeyCommitmentLineKind]
+			k.BillingInstalmentID = lo.FromPtr(item.BillingInstalmentID)
 			k.SubLineItemID = lo.FromPtr(item.SubscriptionLineItemID)
 			return k, true
 		}
