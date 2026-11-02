@@ -335,7 +335,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_AmountTrueUp() {
 	s.True(stacks[0].Lines[0].Usage[0].Equal(dec("60")))
 }
 
-func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage() {
+func (s *BillingServiceSuite) TestCommitmentLoader_BillingTermsCoverUsage() {
 	tests := []struct {
 		name       string
 		collection types.CommitmentCollectionMethod
@@ -344,6 +344,8 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 		trueUp     string
 		overage    string
 		total      string
+		usageValue string
+		usageTrue  string
 	}{
 		{
 			name:       "billing terms cover usage within the commitment",
@@ -351,6 +353,8 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 			calls:      "7000",
 			utilized:   "0",
 			total:      "0",
+			usageValue: "60",
+			usageTrue:  "40",
 		},
 		{
 			name:       "billing terms still bill the overage",
@@ -359,6 +363,7 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 			utilized:   "0",
 			overage:    "10",
 			total:      "10",
+			usageValue: "100",
 		},
 		{
 			name:       "per period bills the usage and the true-up",
@@ -367,6 +372,8 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 			utilized:   "60",
 			trueUp:     "40",
 			total:      "100",
+			usageValue: "60",
+			usageTrue:  "40",
 		},
 	}
 
@@ -383,15 +390,19 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 			s.storeCommitment(c)
 
 			l := s.loaderFor(s.testData.subscription, s.usageResponse(s.testData.prices.apiCalls, tt.calls), periodStart, periodEnd)
-			lines, total, err := l.InvoiceLines(s.GetContext())
+			lines, total, err := l.BillingLines(s.GetContext())
 			s.Require().NoError(err)
 
 			utilized := s.loaderLine(lines, types.CommitmentLineUtilized, c.ID)
 			s.True(utilized.Amount.Equal(dec(tt.utilized)), "utilized %s", utilized.Amount)
 			s.True(utilized.Quantity.IsPositive(), "utilized quantity %s", utilized.Quantity)
+			if tt.collection == types.CommitmentCollectionBillingTerms {
+				s.Equal(c.InvoiceLabel+" (covered by commitment)", lo.FromPtr(utilized.DisplayName))
+			} else {
+				s.Equal(c.InvoiceLabel, lo.FromPtr(utilized.DisplayName))
+			}
 
 			trueUp := loaderLinesOfKind(lines, types.CommitmentLineTrueUp)
-			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 			if tt.trueUp == "" {
 				s.Empty(trueUp)
 			} else {
@@ -399,6 +410,7 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 				s.True(trueUp[0].Amount.Equal(dec(tt.trueUp)), "true-up %s", trueUp[0].Amount)
 			}
 
+			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
 			if tt.overage == "" {
 				s.Empty(overage)
 			} else {
@@ -406,13 +418,19 @@ func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage(
 				s.True(overage[0].Amount.Equal(dec(tt.overage)), "overage %s", overage[0].Amount)
 			}
 
-			if tt.collection == types.CommitmentCollectionBillingTerms {
-				s.Equal(c.InvoiceLabel+" (covered by commitment)", lo.FromPtr(utilized.DisplayName))
-			} else {
-				s.Equal(c.InvoiceLabel, lo.FromPtr(utilized.DisplayName))
-			}
-
 			s.True(total.Equal(dec(tt.total)), "total %s", total)
+
+			// Usage analytics read the uncovered lines.
+			usageLines, _, err := l.InvoiceLines(s.GetContext())
+			s.Require().NoError(err)
+			s.True(s.loaderLine(usageLines, types.CommitmentLineUtilized, c.ID).Amount.Equal(dec(tt.usageValue)))
+			usageTrueUp := loaderLinesOfKind(usageLines, types.CommitmentLineTrueUp)
+			if tt.usageTrue == "" {
+				s.Empty(usageTrueUp)
+			} else {
+				s.Require().Len(usageTrueUp, 1)
+				s.True(usageTrueUp[0].Amount.Equal(dec(tt.usageTrue)), "usage true-up %s", usageTrueUp[0].Amount)
+			}
 		})
 	}
 }
@@ -1763,6 +1781,53 @@ func (s *BillingServiceSuite) TestCommitmentWiring_MeterUsagePathAppliesCommitme
 	s.True(s.loaderLine(lines, types.CommitmentLineUtilized, c.ID).Amount.Equal(dec("60")))
 	s.True(s.loaderLine(lines, types.CommitmentLineTrueUp, c.ID).Amount.Equal(dec("40")))
 	s.True(total.Equal(dec("100")), "total %s", total)
+}
+
+func (s *BillingServiceSuite) TestCommitmentWiring_BillingTermsCoverUsageOnBothPaths() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	periodStart, periodEnd := sub.CurrentPeriodStart, sub.CurrentPeriodEnd
+	c := s.newTestCommitment(
+		types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), sub,
+		types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
+	)
+	c.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+	s.storeCommitment(c)
+
+	// 12000 calls cost $110 on the slab tiers: $100 is covered by the commitment, $10 is overage.
+	usage := s.usageResponse(s.testData.prices.apiCalls, "12000")
+	raw, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+		Subscription: sub,
+		Usage:        usage,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.Require().NoError(err)
+
+	meterLines, meterTotal, err := s.service.CalculateMeterUsageCharges(
+		s.GetContext(), sub, usage, periodStart, periodEnd, types.UsageSourceInvoiceCreation, nil,
+	)
+	s.Require().NoError(err)
+
+	for path, charged := range map[string]struct {
+		lines []dto.CreateInvoiceLineItemRequest
+		total decimal.Decimal
+	}{
+		"raw usage":   {commitmentLinesOf(raw.LineItems), raw.TotalAmount},
+		"meter usage": {commitmentLinesOf(meterLines), meterTotal},
+	} {
+		s.Require().Len(charged.lines, 2, path)
+		utilized := s.loaderLine(charged.lines, types.CommitmentLineUtilized, c.ID)
+		s.True(utilized.Amount.IsZero(), "%s utilized %s", path, utilized.Amount)
+		s.True(utilized.Quantity.IsPositive(), "%s utilized quantity %s", path, utilized.Quantity)
+		s.Equal(c.InvoiceLabel+" (covered by commitment)", lo.FromPtr(utilized.DisplayName), path)
+		s.Empty(loaderLinesOfKind(charged.lines, types.CommitmentLineTrueUp), path)
+		overage := loaderLinesOfKind(charged.lines, types.CommitmentLineOverage)
+		s.Require().Len(overage, 1, path)
+		s.True(overage[0].Amount.Equal(dec("10")), "%s overage %s", path, overage[0].Amount)
+		s.True(charged.total.Equal(dec("10")), "%s total %s", path, charged.total)
+	}
 }
 
 // A line with a legacy line-item commitment that a new commitment also scopes is billed only by the new one.

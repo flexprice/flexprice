@@ -269,7 +269,7 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
-// InvoiceLines returns the commitment invoice lines and their total.
+// InvoiceLines returns the commitment lines at usage value and their total.
 func (l *commitmentLoader) InvoiceLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
 	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
@@ -279,11 +279,24 @@ func (l *commitmentLoader) InvoiceLines(ctx context.Context) ([]dto.CreateInvoic
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	lines := coverWithBillingTerms(
-		commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost),
-		l.commitments,
-	)
+	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 
+	total := decimal.Zero
+	for _, line := range lines {
+		total = total.Add(line.Amount)
+	}
+
+	return lines, total, nil
+}
+
+// BillingLines returns the lines an invoice bills and their total: InvoiceLines with billing-terms commitments covered.
+func (l *commitmentLoader) BillingLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	usageLines, _, err := l.InvoiceLines(ctx)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	lines := coverWithBillingTerms(usageLines, l.commitments)
 	total := decimal.Zero
 	for _, line := range lines {
 		total = total.Add(line.Amount)

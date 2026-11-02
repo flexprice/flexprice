@@ -1393,7 +1393,7 @@ func (s *billingService) CalculateUsageCharges(
 	}
 
 	if len(handledByCommitments) > 0 {
-		commitmentLines, commitmentTotal, err := commitments.InvoiceLines(ctx)
+		commitmentLines, commitmentTotal, err := commitments.BillingLines(ctx)
 		if err != nil {
 			return nil, err
 		}
