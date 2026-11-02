@@ -56,6 +56,9 @@ type InvoiceLineItem struct {
 	// commitment_id links this line item to the commitment it bills.
 	CommitmentID *string `json:"commitment_id,omitempty"`
 
+	// billing_instalment_id links this line item to the billing instalment it bills.
+	BillingInstalmentID *string `json:"billing_instalment_id,omitempty"`
+
 	// parent_line_item_id links this line item to the line item it replaced, if it was created by editing
 	// an existing line item. Forms a linked-list chain across edits; nil for line items that were never edited.
 	ParentLineItemID *string `json:"parent_line_item_id,omitempty"`
@@ -107,6 +110,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
 		SubscriptionLineItemID:      e.SubscriptionLineItemID,
 		CommitmentID:                e.CommitmentID,
+		BillingInstalmentID:         e.BillingInstalmentID,
 		ParentLineItemID:            e.ParentLineItemID,
 		CustomCurrency:              e.CustomCurrency,
 		FxConversion:                e.FxConversion,
