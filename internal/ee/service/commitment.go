@@ -502,7 +502,8 @@ func (s *commitmentService) Update(
 }
 
 // Terminate ends an active commitment at effective_at, which defaults to now and may not be in the future. A
-// cancellation fee is billed on an immediate one-off invoice, created in the same transaction as the status change.
+// cancellation fee and, under billing terms, a settlement are billed on one immediate one-off invoice, created in the
+// same transaction as the status change.
 func (s *commitmentService) Terminate(
 	ctx context.Context,
 	id string,
@@ -631,8 +632,9 @@ func (s *commitmentService) lockCommitment(ctx context.Context, id string) error
 	return nil
 }
 
-// terminate re-reads the commitment under its lock and must run inside a transaction. The fee invoice is created
-// before the status change so a billing failure leaves the commitment active.
+// terminate re-reads the commitment under its lock and must run inside a transaction. Under billing terms it settles
+// the instalments first. The termination invoice is created before the status change so a billing failure leaves
+// the commitment active.
 func (s *commitmentService) terminate(
 	ctx context.Context,
 	id string,
@@ -658,11 +660,16 @@ func (s *commitmentService) terminate(
 		return nil, nil, ierr.Validationf("effective_at must be before the commitment end %s", c.EffectiveEnd().Format(time.RFC3339))
 	}
 
-	var invoiceID *string
-	if fee != nil {
-		if invoiceID, err = s.billCancellationFee(ctx, c, effectiveAt, *fee); err != nil {
+	var settlement *billingterm.Instalment
+	if lo.FromPtr(c.CollectionMethod) == types.CommitmentCollectionBillingTerms {
+		if settlement, err = s.settle(ctx, c, effectiveAt); err != nil {
 			return nil, nil, err
 		}
+	}
+
+	invoiceID, err := s.billTermination(ctx, c, effectiveAt, fee, settlement)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Kept as requested, even before start_date, where nothing is earned.
@@ -678,19 +685,21 @@ func (s *commitmentService) terminate(
 	return out, invoiceID, nil
 }
 
-// billCancellationFee bills the fee on a one-off invoice, or returns nil when it rounds to nothing.
-func (s *commitmentService) billCancellationFee(
+// billTermination issues the termination invoice carrying the cancellation fee and the settlement, either optional.
+// It returns nil when there is no settlement and no fee, or a fee that rounds to nothing.
+func (s *commitmentService) billTermination(
 	ctx context.Context,
 	c *commitment.Commitment,
 	effectiveAt time.Time,
-	fee decimal.Decimal,
+	fee *decimal.Decimal,
+	settlement *billingterm.Instalment,
 ) (*string, error) {
-	if !c.Binding {
+	if fee != nil && !c.Binding {
 		return nil, ierr.Validation("cancellation_fee requires a binding commitment")
 	}
 
-	amount := types.RoundToCurrencyPrecision(fee, c.Currency)
-	if !amount.IsPositive() {
+	feeAmount := types.RoundToCurrencyPrecision(lo.FromPtr(fee), c.Currency)
+	if settlement == nil && !feeAmount.IsPositive() {
 		return nil, nil
 	}
 
@@ -699,45 +708,77 @@ func (s *commitmentService) billCancellationFee(
 		return nil, err
 	}
 
-	// The fee invoice is dated at effective_at; a closed billing period must not gain charges.
-	if effectiveAt.Before(sub.CurrentPeriodStart) {
-		return nil, ierr.Validationf(
-			"effective_at with a cancellation_fee cannot precede the current billing period start %s",
-			sub.CurrentPeriodStart.Format(time.RFC3339),
-		)
+	// A settlement alone bills instalments only, as the separate-invoice run does. Marked a proration, it would match
+	// the subscription, period and reason that an immediate cancel's final invoice is deduplicated by.
+	reason := types.InvoiceBillingReasonBillingTerms
+	var lines []dto.CreateInvoiceLineItemRequest
+	if settlement != nil {
+		lines = append(lines, instalmentLine(c, settlement))
 	}
 
-	// Nor can it fall at or past the subscription end, which bounds the term the fee covers.
-	if sub.EndDate != nil && !effectiveAt.Before(*sub.EndDate) {
-		return nil, ierr.Validationf(
-			"effective_at with a cancellation_fee must be before the subscription end %s",
-			sub.EndDate.Format(time.RFC3339),
-		)
-	}
-
-	metadata := types.Metadata{
-		types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineCancellationFee),
-		types.MetadataKeyCommitmentID:       c.ID,
-	}
-	if c.InvoiceDescription != nil {
-		metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
-	}
-
-	// The fee covers the rest of the term, or of the billing period holding effective_at for one that never ends;
-	// either stops at the subscription end.
-	periodEnd := c.EffectiveEnd()
-	if c.OpenEnded() {
-		holding, err := periodAt(sub, effectiveAt)
-		if err != nil {
-			return nil, err
+	if feeAmount.IsPositive() {
+		// The fee is dated at effective_at; a closed billing period must not gain charges.
+		if effectiveAt.Before(sub.CurrentPeriodStart) {
+			return nil, ierr.Validationf(
+				"effective_at with a cancellation_fee cannot precede the current billing period start %s",
+				sub.CurrentPeriodStart.Format(time.RFC3339),
+			)
 		}
 
-		periodEnd = &holding.End
+		// Nor can it fall at or past the subscription end, which bounds the term the fee covers.
+		if sub.EndDate != nil && !effectiveAt.Before(*sub.EndDate) {
+			return nil, ierr.Validationf(
+				"effective_at with a cancellation_fee must be before the subscription end %s",
+				sub.EndDate.Format(time.RFC3339),
+			)
+		}
+
+		metadata := types.Metadata{
+			types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineCancellationFee),
+			types.MetadataKeyCommitmentID:       c.ID,
+		}
+		if c.InvoiceDescription != nil {
+			metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
+		}
+
+		// The fee covers the rest of the term, or of the billing period holding effective_at for one that never
+		// ends; either stops at the subscription end.
+		feeEnd := c.EffectiveEnd()
+		if c.OpenEnded() {
+			holding, err := periodAt(sub, effectiveAt)
+			if err != nil {
+				return nil, err
+			}
+
+			feeEnd = &holding.End
+		}
+
+		if sub.EndDate != nil {
+			feeEnd = lo.ToPtr(minTime(*feeEnd, *sub.EndDate))
+		}
+
+		reason = types.InvoiceBillingReasonProration
+		lines = append(lines, dto.CreateInvoiceLineItemRequest{
+			DisplayName:  lo.ToPtr(c.InvoiceLabel + " (cancellation fee)"),
+			Quantity:     decimal.NewFromInt(1),
+			Amount:       feeAmount,
+			PeriodStart:  lo.ToPtr(effectiveAt),
+			PeriodEnd:    feeEnd,
+			CommitmentID: lo.ToPtr(c.ID),
+			EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
+			EntityID:     lo.ToPtr(c.ID),
+			Metadata:     metadata,
+		})
 	}
 
-	if sub.EndDate != nil {
-		periodEnd = lo.ToPtr(minTime(*periodEnd, *sub.EndDate))
+	total := decimal.Zero
+	for _, line := range lines {
+		total = total.Add(line.Amount)
 	}
+
+	// The invoice spans its lines: the term up to effective_at the settlement covers, the rest the fee covers, or both.
+	first := lo.MinBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodStart.Before(*b.PeriodStart) })
+	last := lo.MaxBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodEnd.After(*b.PeriodEnd) })
 
 	billingPeriod := string(sub.BillingPeriod)
 	inv, err := NewInvoiceService(s.ServiceParams).CreateInvoice(ctx, dto.CreateInvoiceRequest{
@@ -745,27 +786,15 @@ func (s *commitmentService) billCancellationFee(
 		SubscriptionID: lo.ToPtr(sub.ID),
 		InvoiceType:    types.InvoiceTypeOneOff,
 		Currency:       c.Currency,
-		BillingReason:  types.InvoiceBillingReasonProration,
-		AmountDue:      amount,
-		Total:          amount,
-		Subtotal:       amount,
-		PeriodStart:    lo.ToPtr(effectiveAt),
-		PeriodEnd:      periodEnd,
+		BillingReason:  reason,
+		AmountDue:      total,
+		Total:          total,
+		Subtotal:       total,
+		PeriodStart:    lo.ToPtr(*first.PeriodStart),
+		PeriodEnd:      lo.ToPtr(*last.PeriodEnd),
 		BillingPeriod:  &billingPeriod,
 		IdempotencyKey: lo.ToPtr("commitment_termination_" + c.ID),
-		LineItems: []dto.CreateInvoiceLineItemRequest{
-			{
-				DisplayName:  lo.ToPtr(c.InvoiceLabel + " (cancellation fee)"),
-				Quantity:     decimal.NewFromInt(1),
-				Amount:       amount,
-				PeriodStart:  lo.ToPtr(effectiveAt),
-				PeriodEnd:    periodEnd,
-				CommitmentID: lo.ToPtr(c.ID),
-				EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
-				EntityID:     lo.ToPtr(c.ID),
-				Metadata:     metadata,
-			},
-		},
+		LineItems:      lines,
 	})
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
@@ -262,6 +263,75 @@ func invoicesToReview(instalments []*billingterm.Instalment) []string {
 	slices.Sort(ids)
 
 	return ids
+}
+
+// settlementDescription labels the instalment that settles a terminated commitment.
+const settlementDescription = "Settlement"
+
+// settle cancels the commitment's scheduled instalments and, when it earned more by effectiveAt than its invoiced
+// instalments bill, creates a settlement instalment for the difference and returns it. Nothing is refunded when they
+// bill more. It must run inside the terminate transaction, under the commitment lock.
+func (s *commitmentService) settle(
+	ctx context.Context,
+	c *commitment.Commitment,
+	effectiveAt time.Time,
+) (*billingterm.Instalment, error) {
+	cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	amountOf, err := s.committedAmountFn(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	earned, err := earnedAmount(c, cc.Sub, amountOf, bucketFor(c, cc), effectiveAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
+	scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+	cancelled, err := s.BillingInstalmentRepo.Cancel(ctx, types.BillingTermOwnerCommitment, c.ID, scheduled)
+	if err != nil {
+		return nil, err
+	}
+
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
+
+	invoiced, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  []string{c.ID},
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusInvoiced},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	unbilled := earned.Sub(sumInstalments(invoiced))
+	if !unbilled.IsPositive() {
+		return nil, nil
+	}
+
+	settlement := billingterm.InstalmentTemplate(ctx, c)
+	settlement.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
+	settlement.Kind = types.InstalmentKindSettlement
+	settlement.BillTrigger = types.InstalmentBillTriggerDate
+	settlement.BillOn = effectiveAt
+	settlement.Amount = unbilled
+	settlement.Description = settlementDescription
+	settlement.ServicePeriodStart = c.StartDate
+	settlement.ServicePeriodEnd = effectiveAt
+	settlement.Delivery = types.InstalmentDeliverySeparateInvoice
+
+	created, err := s.BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{&settlement})
+	if err != nil {
+		return nil, err
+	}
+
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
+	return created[0], nil
 }
 
 func (s *commitmentService) BillDueInstalments(ctx context.Context) error {

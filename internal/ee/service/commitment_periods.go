@@ -210,6 +210,40 @@ func termValue(
 	return lo.ToPtr(commitmentValue(periods)), nil
 }
 
+// earnedAmount is the commitment's value accrued from its start to at, the period holding at prorated.
+func earnedAmount(
+	c *commitment.Commitment,
+	sub *subscription.Subscription,
+	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	bucket types.WindowSize,
+	at time.Time,
+) (decimal.Decimal, error) {
+	if !at.After(c.StartDate) {
+		return decimal.Zero, nil
+	}
+
+	periods, err := commitmentPeriods(c, sub, amountOf, bucket, c.StartDate, at)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	earned := decimal.Zero
+	for _, p := range periods {
+		if !p.End.After(at) {
+			earned = earned.Add(p.Amount)
+			continue
+		}
+
+		if p.Start.Before(at) {
+			earned = earned.Add(clipCommitmentPeriod(c, p, p.Start, at, amountOf, bucket, sub.BillingAnchor).Amount)
+		}
+
+		break
+	}
+
+	return types.RoundToCurrencyPrecision(earned, c.Currency), nil
+}
+
 // periodAt returns the subscription billing period [Start, End) holding t, uncut by the subscription
 // end, with the edges generating every period from sub.StartDate gives, without generating the ones before it.
 func periodAt(sub *subscription.Subscription, t time.Time) (types.Period, error) {
