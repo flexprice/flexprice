@@ -22,6 +22,9 @@ type Repository interface {
 	ListPublishedInScope(ctx context.Context) ([]*Connection, error)
 	List(ctx context.Context, filter *types.ConnectionFilter) ([]*Connection, error)
 	Count(ctx context.Context, filter *types.ConnectionFilter) (int, error)
+	// Update saves the connection's settings; it never changes the owning billing entity.
 	Update(ctx context.Context, connection *Connection) error
+	// UpdateBillingEntity saves only the connection's owning billing entity.
+	UpdateBillingEntity(ctx context.Context, connection *Connection) error
 	Delete(ctx context.Context, connection *Connection) error
 }

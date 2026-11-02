@@ -2,10 +2,12 @@ package ent
 
 import (
 	"context"
+	"errors"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/schema"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/dsl"
@@ -13,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
 
@@ -605,7 +608,6 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 		SetEncryptedSecretData(encryptedSecretDataMap).
 		SetMetadata(c.Metadata).
 		SetSyncConfig(c.SyncConfig).
-		SetNillableBillingEntityID(c.BillingEntityID).
 		SetUpdatedAt(c.UpdatedAt).
 		SetUpdatedBy(c.UpdatedBy).
 		Save(ctx)
@@ -620,15 +622,6 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 					"connection_id": c.ID,
 				}).
 				Mark(ierr.ErrNotFound)
-		}
-		if ent.IsConstraintError(err) {
-			return ierr.WithError(err).
-				WithHint("This billing entity already has a connection for this provider").
-				WithReportableDetails(map[string]any{
-					"connection_id":     c.ID,
-					"billing_entity_id": lo.FromPtr(c.BillingEntityID),
-				}).
-				Mark(ierr.ErrAlreadyExists)
 		}
 
 		return ierr.WithError(err).
@@ -646,6 +639,52 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	afterCommit(ctx, func() { r.SetCache(ctx, &cached) })
 	r.deleteAllPublishedCache(ctx)
 
+	return nil
+}
+
+func (r *connectionRepository) UpdateBillingEntity(ctx context.Context, c *domainConnection.Connection) error {
+	span := StartRepositorySpan(ctx, "connection", "update_billing_entity", map[string]interface{}{
+		"connection_id": c.ID,
+	})
+	defer FinishSpan(span)
+
+	updated, err := r.client.Writer(ctx).Connection.UpdateOneID(c.ID).
+		Where(
+			connection.TenantID(c.TenantID),
+			connection.EnvironmentID(c.EnvironmentID),
+		).
+		SetNillableBillingEntityID(c.BillingEntityID).
+		SetUpdatedAt(c.UpdatedAt).
+		SetUpdatedBy(c.UpdatedBy).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Connection with ID %s was not found", c.ID).
+				WithReportableDetails(map[string]any{"connection_id": c.ID}).
+				Mark(ierr.ErrNotFound)
+		}
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Constraint == schema.ConnectionOwnerProviderUnique {
+			return ierr.WithError(err).
+				WithHintf("A published connection for provider '%s' already exists for this billing entity", c.ProviderType).
+				WithReportableDetails(map[string]any{
+					"connection_id":     c.ID,
+					"billing_entity_id": lo.FromPtr(c.BillingEntityID),
+					"provider_type":     c.ProviderType,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to update connection billing entity").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	*c = *domainConnection.FromEnt(updated)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
+	r.deleteAllPublishedCache(ctx)
 	return nil
 }
 
