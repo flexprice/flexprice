@@ -100,6 +100,16 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		}
 	}
 
+	// The row commits with the caller's transaction; the message waits for that commit
+	// because the consumer reads both the row and the entity.
+	publishCtx := types.WithoutDBTransaction(ctx)
+	if types.RegisterPostCommit(ctx, func() { _ = p.send(publishCtx, msg, event) }) {
+		return nil
+	}
+	return p.send(ctx, msg, event)
+}
+
+func (p *webhookPublisher) send(ctx context.Context, msg *message.Message, event *types.WebhookEvent) error {
 	if p.producer != nil {
 		if err := p.producer.Publish(p.config.Topic, msg); err != nil {
 			p.logger.Error(ctx, "failed to publish webhook event",
