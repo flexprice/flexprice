@@ -216,6 +216,9 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 		incompleteConnection.BillingEntityID = owner
 
 		if err := s.connectionRepo.Create(txCtx, incompleteConnection); err != nil {
+			if ierr.IsAlreadyExists(err) {
+				return err
+			}
 			return ierr.WithError(err).
 				WithHint("Failed to store OAuth session in database").
 				Mark(ierr.ErrDatabase)
