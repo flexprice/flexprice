@@ -389,6 +389,11 @@ func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
 			WithHint("Omit payment_method_id; the customer's active Razorpay mandate for this method is used").
 			WithReportableDetails(details).
 			Mark(ierr.ErrValidation)
+	case gateway == types.PaymentGatewayTypeRazorpay && r.DestinationType != types.PaymentDestinationTypeInvoice:
+		return ierr.NewError("razorpay charges require an invoice destination").
+			WithHint("Set destination_type to INVOICE").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }

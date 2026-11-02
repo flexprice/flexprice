@@ -120,6 +120,10 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if lo.FromPtr(paymentObj.PaymentGateway) == string(types.PaymentGatewayTypeRazorpay) {
 			processErr = p.handleRazorpayTokenCharge(ctx, paymentObj)
 			settledByWebhook = true
+		} else if paymentObj.PaymentMethodType == types.PaymentMethodTypeUPI {
+			processErr = ierr.NewError("UPI payments require the razorpay gateway").
+				WithHint("Set payment_gateway to razorpay for UPI payments").
+				Mark(ierr.ErrValidation)
 		} else {
 			processErr = p.handleCardPayment(ctx, paymentObj)
 		}
@@ -186,6 +190,16 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 
 	paymentObj.UpdatedAt = clock.Now()
 	ctx = withPaymentStatusAction(ctx, paymentObj.ID, statusBeforeOutcome, paymentObj.PaymentStatus)
+	if settledByWebhook && processErr == nil {
+		// A fast webhook may already have settled the charge; keep its result.
+		if err := p.PaymentRepo.UpdateWithExpectedStatus(ctx, paymentObj, types.PaymentStatusProcessing); err != nil {
+			if ierr.IsVersionConflict(err) {
+				return p.PaymentRepo.Get(ctx, paymentObj.ID)
+			}
+			return paymentObj, err
+		}
+		return paymentObj, nil
+	}
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
 	}
@@ -361,6 +375,16 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 	if err != nil {
 		return err
 	}
+	if paymentObj.Amount.GreaterThan(inv.AmountRemaining) {
+		return ierr.NewError("payment amount exceeds invoice remaining balance").
+			WithHint("Payment amount cannot exceed the invoice's remaining balance").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":        paymentObj.ID,
+				"payment_amount":    paymentObj.Amount.String(),
+				"invoice_remaining": inv.AmountRemaining.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	razorpayIntegration, err := p.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
@@ -387,7 +411,7 @@ func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymen
 	}
 	if !charged || result == nil {
 		return ierr.NewError("no usable razorpay token for payment method").
-			WithHintf("Customer has no active %s mandate at Razorpay covering this amount. Collect one first, or use payment_method_type PAYMENT_LINK.", paymentObj.PaymentMethodType).
+			WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", paymentObj.PaymentMethodType).
 			WithReportableDetails(map[string]interface{}{
 				"payment_id":          paymentObj.ID,
 				"invoice_id":          inv.ID,
