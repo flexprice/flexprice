@@ -717,6 +717,8 @@ func (s *InvoiceModificationServiceSuite) SetupTest() {
 		// Voiding resolves the tax engine to reverse what was filed, which reads a setting.
 		SettingsRepo:   s.GetStores().SettingsRepo,
 		TaxAppliedRepo: s.GetStores().TaxAppliedRepo,
+		// Voiding reschedules the invoice's billing instalments.
+		BillingInstalmentRepo: s.GetStores().BillingInstalmentRepo,
 	})
 }
 

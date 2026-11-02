@@ -835,7 +835,15 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if finalizedNow {
 		ctx = activity.WithAction(ctx, invoice.ID, activity.InvoiceFinalized)
 	}
-	if err := p.InvoiceRepo.Update(ctx, invoice); err != nil {
+	err = p.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if finalizedNow {
+			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).claimInstalments(txCtx, invoice); err != nil {
+				return err
+			}
+		}
+		return p.InvoiceRepo.Update(txCtx, invoice)
+	})
+	if err != nil {
 		return err
 	}
 	if finalizedNow {

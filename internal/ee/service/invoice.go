@@ -1550,6 +1550,9 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
 			return err
 		}
+		if err := s.claimInstalments(txCtx, lockedInv); err != nil {
+			return err
+		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
 			return err
@@ -1869,6 +1872,9 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			inv.PaymentStatus = types.PaymentStatusRefunded
 		}
 
+		if err := s.rescheduleInstalments(tx, inv.ID); err != nil {
+			return err
+		}
 		return s.InvoiceRepo.Update(tx, inv)
 	})
 	if err != nil {

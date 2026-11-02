@@ -96,6 +96,7 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		InvoiceRepo:                  stores.InvoiceRepo,
 		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
+		BillingInstalmentRepo:        stores.BillingInstalmentRepo,
 		EntitlementRepo:              stores.EntitlementRepo,
 		EntitlementGrantRepo:         stores.EntitlementGrantRepo,
 		FeatureRepo:                  stores.FeatureRepo,
