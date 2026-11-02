@@ -361,24 +361,20 @@ func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) 
 		}
 	}
 
-	// Add interceptors
+	options.Interceptors = []interceptor.WorkerInterceptor{
+		temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		temporalInterceptor.NewWriterPinInterceptor(),
+		temporalInterceptor.NewActorInterceptor(),
+		temporalInterceptor.NewRequestIDInterceptor(),
+		temporalInterceptor.NewTimePrecisionInterceptor(),
+	}
+
+	// Tracing goes first so its span wraps every other interceptor.
 	if s.tracing != nil && s.tracing.IsEnabled() {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewTracingInterceptor(s.tracing),
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-			temporalInterceptor.NewWriterPinInterceptor(),
-			temporalInterceptor.NewActorInterceptor(),
-			temporalInterceptor.NewRequestIDInterceptor(),
-			temporalInterceptor.NewTimePrecisionInterceptor(),
-		}
-	} else {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-			temporalInterceptor.NewWriterPinInterceptor(),
-			temporalInterceptor.NewActorInterceptor(),
-			temporalInterceptor.NewRequestIDInterceptor(),
-			temporalInterceptor.NewTimePrecisionInterceptor(),
-		}
+		options.Interceptors = append(
+			[]interceptor.WorkerInterceptor{temporalInterceptor.NewTracingInterceptor(s.tracing)},
+			options.Interceptors...,
+		)
 	}
 
 	return options

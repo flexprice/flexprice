@@ -25,10 +25,8 @@ func Mono() time.Time {
 	return time.Now()
 }
 
-// TruncateTimes truncates, in place, every time.Time reachable through ptr to
-// microseconds. It is for ingress boundaries only (HTTP binding, Temporal
-// activity inputs), so instants that business code did not create with Now
-// still arrive at storage precision.
+// TruncateTimes truncates every time.Time reachable through ptr to microseconds, in place.
+// Only ingress boundaries call it; business code creates instants with Now.
 func TruncateTimes(ptr any) {
 	truncateTimes(reflect.ValueOf(ptr))
 }

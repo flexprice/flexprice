@@ -8,11 +8,8 @@ import (
 	"go.temporal.io/sdk/interceptor"
 )
 
-// TimePrecisionInterceptor truncates every time field in an activity's
-// arguments to microseconds before the activity runs. Activities are
-// Temporal's ingress into the service layer, as gin binding is HTTP's:
-// workflow.Now() and schedule times carry the server's nanoseconds, and
-// workflow code cannot call clock.Now() deterministically.
+// TimePrecisionInterceptor truncates activity argument times to microseconds, since
+// workflow.Now() carries the server's nanoseconds and workflows cannot call clock.Now().
 type TimePrecisionInterceptor struct {
 	interceptor.InterceptorBase
 }
