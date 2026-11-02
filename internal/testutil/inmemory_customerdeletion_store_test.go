@@ -285,3 +285,53 @@ func TestInMemoryCustomerDeletionStore_NestedPolicyIsolated(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tax", again.RetentionPolicy["invoices"].(map[string]interface{})["basis"])
 }
+
+func TestInMemoryCustomerDeletionStore_TypedContainersIsolated(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	stores := []string{"pg", "clickhouse"}
+	labels := map[string]string{"basis": "tax"}
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	request.RetentionPolicy = map[string]interface{}{
+		"stores": stores,
+		"labels": labels,
+	}
+	require.NoError(t, store.Create(ctx, request, categories))
+
+	stores[0] = "tampered"
+	labels["basis"] = "tampered"
+
+	stored, err := store.GetByCustomerID(ctx, "cust_1")
+	require.NoError(t, err)
+	assert.Equal(t, "pg", stored.RetentionPolicy["stores"].([]string)[0])
+	assert.Equal(t, "tax", stored.RetentionPolicy["labels"].(map[string]string)["basis"])
+}
+
+func TestInMemoryCustomerDeletionStore_OptionalTimestampsIsolated(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_sandbox")
+	store := NewInMemoryCustomerDeletionStore()
+
+	original := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	cooldown := original.Add(24 * time.Hour)
+	request, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "ext_1")
+	*request.SuppressedAt = original
+	request.CooldownUntil = &cooldown
+	verified := original
+	categories[0].VerifiedAt = &verified
+	require.NoError(t, store.Create(ctx, request, categories))
+
+	*request.SuppressedAt = original.Add(72 * time.Hour)
+	cooldown = cooldown.Add(72 * time.Hour)
+	verified = verified.Add(72 * time.Hour)
+
+	stored, err := store.GetByCustomerID(ctx, "cust_1")
+	require.NoError(t, err)
+	assert.Equal(t, original, *stored.SuppressedAt)
+	assert.Equal(t, original.Add(24*time.Hour), *stored.CooldownUntil)
+
+	cats, err := store.ListCategories(ctx, "cdr_1")
+	require.NoError(t, err)
+	require.Len(t, cats, 1)
+	assert.Equal(t, original, *cats[0].VerifiedAt)
+}
