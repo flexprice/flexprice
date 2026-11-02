@@ -631,7 +631,8 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// neither and must not pay for the fetches.
 	var sub *subscription.Subscription
 	if req.EntityType == types.TaxRateEntityTypeSubscription && req.EntityID != "" {
-		sub, err = s.SubRepo.Get(ctx, req.EntityID)
+		// Read from the writer: callers often link a tax rate right after creating the subscription, before the replica has it.
+		sub, err = s.SubRepo.Get(types.WithForceWriter(ctx), req.EntityID)
 		if err != nil {
 			return nil, err
 		}
