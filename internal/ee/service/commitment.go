@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -64,12 +65,8 @@ func (s *commitmentService) Preview(
 	ctx context.Context,
 	req dto.CreateCommitmentRequest,
 ) (*dto.CommitmentResponse, error) {
-	c, _, value, err := s.prepare(ctx, &req, commitmentCreateOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}, nil
+	preview, _, err := s.prepare(ctx, &req, commitmentCreateOptions{})
+	return preview, err
 }
 
 func (s *commitmentService) requireEnabled(ctx context.Context) error {
@@ -119,6 +116,8 @@ func (s *commitmentService) create(
 	}
 
 	var out *commitment.Commitment
+	var terms []*billingterm.Term
+	var instalments []*billingterm.Instalment
 	var cc *commitmentContext
 	inserted := false
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -149,11 +148,12 @@ func (s *commitmentService) create(
 				Mark(ierr.ErrValidation)
 		}
 
-		var c *commitment.Commitment
-		if c, cc, _, err = s.prepare(txCtx, &req, opts); err != nil {
+		var prepared *dto.CommitmentResponse
+		if prepared, cc, err = s.prepare(txCtx, &req, opts); err != nil {
 			return err
 		}
 
+		c := prepared.Commitment
 		meterID := scopeMeter(c, cc)
 		if c.CommittedPriceID, err = s.createRatePrice(txCtx, c, cc.Sub, meterID, req.CommittedPrice, "committed"); err != nil {
 			return err
@@ -165,6 +165,16 @@ func (s *commitmentService) create(
 
 		if out, err = s.CommitmentRepo.Create(txCtx, c); err != nil {
 			return err
+		}
+
+		if len(prepared.BillingTerms) > 0 {
+			if terms, err = s.BillingTermRepo.CreateMany(txCtx, prepared.BillingTerms); err != nil {
+				return err
+			}
+
+			if instalments, err = s.BillingInstalmentRepo.CreateMany(txCtx, prepared.Instalments); err != nil {
+				return err
+			}
 		}
 
 		inserted = true
@@ -197,7 +207,14 @@ func (s *commitmentService) create(
 		"subscription_id", out.SubscriptionID,
 	)
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentCreated, out)
-	return s.response(ctx, out, cc)
+
+	resp, err := s.response(ctx, out, cc)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.BillingTerms, resp.Instalments = terms, instalments
+	return resp, nil
 }
 
 // findReplay returns the commitment already created under req's idempotency key, or nil when the key is unused.
@@ -228,29 +245,29 @@ func (s *commitmentService) findReplay(ctx context.Context, req dto.CreateCommit
 	return existing, nil
 }
 
-// prepare validates the request and builds the commitment and its value (nil when open-ended) without persisting
-// anything.
+// prepare validates the request and builds the commitment, its value (nil when open-ended) and, under billing
+// terms, the terms and instalments, without persisting anything.
 func (s *commitmentService) prepare(
 	ctx context.Context,
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
-) (*commitment.Commitment, *commitmentContext, *decimal.Decimal, error) {
+) (*dto.CommitmentResponse, *commitmentContext, error) {
 	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	req.ApplyDefaults(cc.Sub.Timezone)
 	if err := req.Validate(); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	if err := s.validateAgainstSubscription(ctx, req, cc, opts); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	c := req.ToCommitment(ctx, cc.Sub)
@@ -267,7 +284,7 @@ func (s *commitmentService) prepare(
 
 		priceReq := rate.in.ToCreatePriceRequest(c, cc.Sub, scopeMeter(c, cc), rate.kind)
 		if err := priceReq.Validate(); err != nil {
-			return nil, nil, nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -279,10 +296,28 @@ func (s *commitmentService) prepare(
 
 	value, err := termValue(c, cc.Sub, amountOf, bucketFor(c, cc))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	return c, cc, value, nil
+	prepared := &dto.CommitmentResponse{Commitment: c, CommitmentValue: value}
+	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return prepared, cc, nil
+	}
+
+	// The commitment is totalled before expansion, which splits that total.
+	prepared.Commitment = commitment.NewCommitmentBuilder(c).
+		WithTotalAmount(types.RoundToCurrencyPrecision(lo.FromPtr(value), c.Currency)).
+		WithInstalmentInvoicing(lo.FromPtr(req.InstalmentInvoicing)).
+		Build()
+	prepared.BillingTerms = lo.Map(req.BillingTerms, func(in dto.BillingTermInput, _ int) *billingterm.Term {
+		return in.ToTerm(ctx, c.ID)
+	})
+
+	if prepared.Instalments, err = s.planInstalments(ctx, prepared.Commitment, cc, amountOf, prepared.BillingTerms); err != nil {
+		return nil, nil, err
+	}
+
+	return prepared, cc, nil
 }
 
 // scopeMeter returns the meter of the first scoped line at the commitment start, which backs its rate prices.

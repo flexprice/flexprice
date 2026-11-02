@@ -186,9 +186,13 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 			r.Binding = lo.ToPtr(false)
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
 		}, false},
-		{"C17 billing_terms not yet supported", func(r *dto.CreateCommitmentRequest) {
+		{"C17 billing_terms without terms", func(r *dto.CreateCommitmentRequest) {
 			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
 		}, false},
+		{"C17 billing_terms with terms", func(r *dto.CreateCommitmentRequest) {
+			r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+			r.BillingTerms = upfrontPlusRemainder()
+		}, true},
 		{"C21 label too long", func(r *dto.CreateCommitmentRequest) { r.InvoiceLabel = string(make([]byte, 256)) }, false},
 		{"C2 end before start", func(r *dto.CreateCommitmentRequest) { r.EndDate = lo.ToPtr(r.StartDate) }, false},
 		{"D8 open-ended without end_date", func(r *dto.CreateCommitmentRequest) { r.EndDate = nil }, true},
@@ -201,6 +205,23 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 		r.ApplyDefaults("UTC")
 		require.True(t, r.StartDate.Equal(r.StartDate.Truncate(time.Second)))
 		require.True(t, r.EndDate.Equal(r.EndDate.Truncate(time.Second)))
+	})
+
+	t.Run("billing_terms default to the subscription invoice", func(t *testing.T) {
+		r := validReq("subs_1", "price_1")
+		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+		r.ApplyDefaults("UTC")
+		require.Equal(t, types.InstalmentDeliverySubscriptionInvoice, lo.FromPtr(r.InstalmentInvoicing))
+
+		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+		r.ApplyDefaults("UTC")
+		require.Equal(t, types.InstalmentDeliverySeparateInvoice, lo.FromPtr(r.InstalmentInvoicing), "a chosen delivery is kept")
+	})
+
+	t.Run("per_period leaves instalment_invoicing unset", func(t *testing.T) {
+		r := validReq("subs_1", "price_1")
+		r.ApplyDefaults("UTC")
+		require.Nil(t, r.InstalmentInvoicing)
 	})
 
 	for _, tc := range tests {

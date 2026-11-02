@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -98,7 +99,10 @@ type CreateCommitmentRequest struct {
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
-	StartDate          time.Time                         `json:"start_date" validate:"required"`
+	// BillingTerms and InstalmentInvoicing apply only to collection_method billing_terms.
+	BillingTerms        []BillingTermInput        `json:"billing_terms,omitempty"`
+	InstalmentInvoicing *types.InstalmentDelivery `json:"instalment_invoicing,omitempty"`
+	StartDate           time.Time                 `json:"start_date" validate:"required"`
 	// EndDate is exclusive; omit it for an open-ended commitment, which bills every period until terminated.
 	EndDate  *time.Time     `json:"end_date,omitempty"`
 	Metadata types.Metadata `json:"metadata,omitempty"`
@@ -127,6 +131,14 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 
 	if *r.Binding && r.CollectionMethod == nil {
 		r.CollectionMethod = lo.ToPtr(types.CommitmentCollectionPerPeriod)
+	}
+
+	if lo.FromPtr(r.CollectionMethod) == types.CommitmentCollectionBillingTerms && r.InstalmentInvoicing == nil {
+		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySubscriptionInvoice)
+	}
+
+	for i := range r.BillingTerms {
+		r.BillingTerms[i].ApplyDefaults()
 	}
 
 	for _, p := range []*CommitmentPriceInput{r.CommittedPrice, r.OveragePrice} {
@@ -193,10 +205,10 @@ func (r *CreateCommitmentRequest) Validate() error {
 		if err := r.CollectionMethod.Validate(); err != nil {
 			return err
 		}
+	}
 
-		if *r.CollectionMethod == types.CommitmentCollectionBillingTerms {
-			return ierr.Validation("collection_method billing_terms is not yet supported")
-		}
+	if err := r.validateBillingTerms(); err != nil {
+		return err
 	}
 
 	if len(r.Name) == 0 || len(r.Name) > 255 || len(r.InvoiceLabel) > 255 {
@@ -205,6 +217,40 @@ func (r *CreateCommitmentRequest) Validate() error {
 
 	if r.InvoiceDescription != nil && len(*r.InvoiceDescription) > 500 {
 		return ierr.Validation("invoice_description must be at most 500 characters")
+	}
+
+	return nil
+}
+
+// validateBillingTerms ties billing_terms and instalment_invoicing to collection_method billing_terms, which needs an
+// end_date. Binding is already required by any collection_method.
+func (r *CreateCommitmentRequest) validateBillingTerms() error {
+	if lo.FromPtr(r.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		switch {
+		case len(r.BillingTerms) > 0:
+			return ierr.Validation("billing_terms require collection_method billing_terms")
+		case r.InstalmentInvoicing != nil:
+			return ierr.Validation("instalment_invoicing requires collection_method billing_terms")
+		}
+
+		return nil
+	}
+
+	switch {
+	case len(r.BillingTerms) == 0:
+		return ierr.Validation("collection_method billing_terms requires billing_terms")
+	case r.EndDate == nil:
+		return ierr.Validation("collection_method billing_terms requires an end_date")
+	}
+
+	if err := lo.FromPtr(r.InstalmentInvoicing).Validate(); err != nil {
+		return err
+	}
+
+	for i, term := range r.BillingTerms {
+		if err := term.Validate(i); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -330,6 +376,10 @@ type CommitmentResponse struct {
 	*commitment.Commitment `json:",inline"`
 	CommitmentValue        *decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
 	TerminationInvoiceID   *string          `json:"termination_invoice_id,omitempty"`
+
+	// BillingTerms and Instalments are set by create and preview.
+	BillingTerms []*billingterm.Term       `json:"billing_terms,omitempty"`
+	Instalments  []*billingterm.Instalment `json:"instalments,omitempty"`
 }
 
 type ListCommitmentsResponse = types.ListResponse[*CommitmentResponse] // @name ListCommitmentsResponse
