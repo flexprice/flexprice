@@ -354,10 +354,11 @@ type UpdateCommitmentRequest struct {
 	Metadata           types.Metadata `json:"metadata,omitempty"`
 }
 
-// TerminateCommitmentRequest ends a commitment early; cancellation_fee is a flat amount in the commitment currency.
+// TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed
+// in the commitment currency.
 type TerminateCommitmentRequest struct {
-	EffectiveAt     *time.Time       `json:"effective_at,omitempty"`
-	CancellationFee *decimal.Decimal `json:"cancellation_fee,omitempty" swaggertype:"string"`
+	EffectiveAt     *time.Time            `json:"effective_at,omitempty"`
+	CancellationFee *CancellationFeeInput `json:"cancellation_fee,omitempty"`
 }
 
 func (r *TerminateCommitmentRequest) Validate() error {
@@ -365,8 +366,8 @@ func (r *TerminateCommitmentRequest) Validate() error {
 		return err
 	}
 
-	if r.CancellationFee != nil && !r.CancellationFee.IsPositive() {
-		return ierr.Validation("cancellation_fee must be greater than zero")
+	if r.CancellationFee != nil {
+		return r.CancellationFee.Validate()
 	}
 
 	return nil

@@ -1653,6 +1653,17 @@ definitions:
       total_credit_amount:
         type: string
     type: object
+  CancellationFeeInput:
+    properties:
+      amount:
+        type: string
+      percentage:
+        type: string
+      type:
+        $ref: '#/definitions/types.CancellationFeeType'
+    required:
+    - type
+    type: object
   ChangedAddonAssociation:
     properties:
       addon_id:
@@ -9847,7 +9858,7 @@ definitions:
   TerminateCommitmentRequest:
     properties:
       cancellation_fee:
-        type: string
+        $ref: '#/definitions/CancellationFeeInput'
       effective_at:
         type: string
     type: object
@@ -16044,6 +16055,14 @@ definitions:
     - BillingTermValueFixed
     - BillingTermValuePercentage
     - BillingTermValueRemainder
+  types.CancellationFeeType:
+    enum:
+    - fixed
+    - percentage
+    type: string
+    x-enum-varnames:
+    - CancellationFeeFixed
+    - CancellationFeePercentage
   types.CommitmentCollectionMethod:
     enum:
     - per_period
@@ -18859,7 +18878,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Ends a commitment early, effective at the given time or now.
+      description: Ends a commitment immediately. effective_at defaults to now and
+        cannot be in the future. A fixed cancellation fee, when given, is billed on
+        a one-off invoice.
       operationId: terminateCommitment
       parameters:
       - description: Commitment ID

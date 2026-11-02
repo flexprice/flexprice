@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/group"
@@ -41,11 +42,11 @@ type commitmentFixtures struct {
 	priceOtherMeterInGroup *price.Price
 }
 
-// seedCommitmentFixtures stores a monthly subscription anchored 1 Jan 2027 with two usage prices in group grp_1,
+// seedCommitmentFixtures stores a monthly subscription anchored 1 Jan 2025 with two usage prices in group grp_1,
 // and enables commitments_v2.
 func seedCommitmentFixtures(t *testing.T, ctx context.Context, stores testutil.Stores) commitmentFixtures {
 	t.Helper()
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	jan := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	fx := commitmentFixtures{}
 
 	fx.customer = &customer.Customer{
@@ -195,6 +196,11 @@ func setCommitmentsV2(t *testing.T, ctx context.Context, stores testutil.Stores,
 	}
 
 	require.NoError(t, stores.SettingsRepo.Create(ctx, setting))
+}
+
+// fixedFee is a fixed cancellation fee of amount.
+func fixedFee(amount string) *dto.CancellationFeeInput {
+	return &dto.CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: lo.ToPtr(dec(amount))}
 }
 
 type CommitmentServiceSuite struct {
@@ -473,7 +479,7 @@ func (s *CommitmentServiceSuite) TestTerminate_OpenEndedAnyTimeWithoutFee() {
 	created, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
-	at := created.StartDate.AddDate(10, 0, 0)
+	at := created.StartDate.AddDate(1, 6, 0)
 	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.Require().NoError(err)
 	s.Equal(types.CommitmentStatusTerminated, resp.CommitmentStatus)
@@ -485,7 +491,7 @@ func (s *CommitmentServiceSuite) TestTerminate_OpenEndedAnyTimeWithoutFee() {
 // With no term end to cover, the fee covers the rest of the billing period holding effective_at, up to a
 // subscription end; a fee at or after that end is rejected.
 func (s *CommitmentServiceSuite) TestTerminate_OpenEndedFeeCoversThePeriodHoldingEffectiveAt() {
-	apr, may := time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC)
+	apr, may := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC), time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
 	subEnd := apr.AddDate(0, 0, 20)
 	tests := []struct {
 		name          string
@@ -520,7 +526,7 @@ func (s *CommitmentServiceSuite) TestTerminate_OpenEndedFeeCoversThePeriodHoldin
 
 // A subscription end set after the commitment, e.g. a scheduled cancellation, bounds a finite term's fee too.
 func (s *CommitmentServiceSuite) TestTerminate_FeeStopsAtAnEarlierSubscriptionEnd() {
-	subEnd := time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC)
+	subEnd := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name          string
 		at            time.Time
@@ -548,7 +554,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FeeStopsAtAnEarlierSubscriptionEn
 func (s *CommitmentServiceSuite) requireFeeCovers(commitmentID string, at, wantPeriodEnd time.Time, wantErr bool) {
 	resp, err := s.svc.Terminate(s.GetContext(), commitmentID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     &at,
-		CancellationFee: lo.ToPtr(dec("75")),
+		CancellationFee: fixedFee("75"),
 	})
 	if wantErr {
 		s.True(ierr.IsValidation(err), "got %v", err)
@@ -697,18 +703,19 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
 	tests := []struct {
 		name string
 		at   time.Time
-		fee  decimal.Decimal
+		fee  *dto.CancellationFeeInput
 	}{
-		{name: "zero fee", at: midTerm, fee: decimal.Zero},
-		{name: "negative fee", at: midTerm, fee: decimal.NewFromInt(-5)},
-		{name: "terminate at end_date", at: *created.EndDate, fee: decimal.NewFromInt(10)},
+		{name: "zero fee", at: midTerm, fee: fixedFee("0")},
+		{name: "negative fee", at: midTerm, fee: fixedFee("-5")},
+		{name: "missing type", at: midTerm, fee: &dto.CancellationFeeInput{Amount: lo.ToPtr(dec("5"))}},
+		{name: "terminate at end_date", at: *created.EndDate, fee: fixedFee("10")},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 				EffectiveAt:     &tt.at,
-				CancellationFee: &tt.fee,
+				CancellationFee: tt.fee,
 			})
 			s.True(ierr.IsValidation(err), "got %v", err)
 		})
@@ -719,7 +726,78 @@ func (s *CommitmentServiceSuite) TestTerminate_RejectsInvalidCancellationFee() {
 	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
 }
 
-// createChargeable creates a binding quantity commitment of 100 units/month at 1.00 for 12 months from 1 Jan 2027,
+func (s *CommitmentServiceSuite) TestTerminate_PercentageFeeNotSupported() {
+	created := s.createChargeable(true)
+	at := created.StartDate.AddDate(0, 3, 0)
+	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+		EffectiveAt: &at,
+		CancellationFee: &dto.CancellationFeeInput{
+			Type:       types.CancellationFeePercentage,
+			Percentage: lo.ToPtr(dec("10")),
+		},
+	})
+	s.requireValidation(err, "percentage cancellation fees are not supported yet")
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+
+	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Empty(invoices)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_RejectsFutureEffectiveAt() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	tests := []struct {
+		name string
+		at   time.Time
+		fee  *dto.CancellationFeeInput
+	}{
+		{name: "an hour ahead", at: clock.Now().Add(time.Hour)},
+		{name: "a year ahead", at: clock.Now().AddDate(1, 0, 0)},
+		{name: "a year ahead with a fee", at: clock.Now().AddDate(1, 0, 0), fee: fixedFee("50")},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
+				EffectiveAt:     &tt.at,
+				CancellationFee: tt.fee,
+			})
+			s.requireValidation(err, "future-dated termination is not supported yet")
+		})
+	}
+
+	got, err := s.svc.Get(s.GetContext(), created.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, got.CommitmentStatus)
+	s.Nil(got.TerminatedAt)
+
+	invoices, err := s.GetStores().InvoiceRepo.List(s.GetContext(), types.NewNoLimitInvoiceFilter())
+	s.Require().NoError(err)
+	s.Empty(invoices)
+}
+
+func (s *CommitmentServiceSuite) TestTerminate_DefaultsEffectiveAtToNow() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.EndDate = nil
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	before := clock.Now()
+	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.TerminatedAt)
+	s.False(resp.TerminatedAt.Before(before), "got %s, want at or after %s", resp.TerminatedAt, before)
+	s.False(resp.TerminatedAt.After(clock.Now()), "got %s", resp.TerminatedAt)
+}
+
+// createChargeable creates a binding quantity commitment of 100 units/month at 1.00 for 12 months from 1 Jan 2025,
 // so 1,200.00 in total and 100.00 earned per month.
 func (s *CommitmentServiceSuite) createChargeable(binding bool) *dto.CommitmentResponse {
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
@@ -745,12 +823,12 @@ func (s *CommitmentServiceSuite) requireLine(line *invoice.InvoiceLineItem, kind
 	s.True(line.Amount.Equal(dec(amount)), "amount %s, want %s", line.Amount, amount)
 }
 
-func (s *CommitmentServiceSuite) TestTerminate_FlatFeeBillsOneOffInvoice() {
+func (s *CommitmentServiceSuite) TestTerminate_FixedFeeObject() {
 	created := s.createChargeable(true)
 	at := created.StartDate.AddDate(0, 3, 0)
 	resp, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     &at,
-		CancellationFee: lo.ToPtr(dec("250.5")),
+		CancellationFee: fixedFee("250.5"),
 	})
 	s.Require().NoError(err)
 	s.Equal(types.CommitmentStatusTerminated, resp.CommitmentStatus)
@@ -785,7 +863,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FeeRequiresBindingCommitment() {
 	at := created.StartDate.AddDate(0, 3, 0)
 	_, err := s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     &at,
-		CancellationFee: lo.ToPtr(decimal.NewFromInt(5)),
+		CancellationFee: fixedFee("5"),
 	})
 	s.requireValidation(err, "binding")
 
@@ -797,7 +875,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FeeRequiresBindingCommitment() {
 func (s *CommitmentServiceSuite) TestTerminate_SecondTerminateBillsNothing() {
 	created := s.createChargeable(true)
 	at := created.StartDate.AddDate(0, 3, 0)
-	req := dto.TerminateCommitmentRequest{EffectiveAt: &at, CancellationFee: lo.ToPtr(decimal.NewFromInt(50))}
+	req := dto.TerminateCommitmentRequest{EffectiveAt: &at, CancellationFee: fixedFee("50")}
 	_, err := s.svc.Terminate(s.GetContext(), created.ID, req)
 	s.Require().NoError(err)
 
@@ -837,7 +915,7 @@ func (s *CommitmentServiceSuite) TestTerminate_InvoiceFailureLeavesCommitmentAct
 	at := created.StartDate.AddDate(0, 3, 0)
 	_, err := NewCommitmentService(params).Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     &at,
-		CancellationFee: lo.ToPtr(decimal.NewFromInt(50)),
+		CancellationFee: fixedFee("50"),
 	})
 	s.Require().Error(err)
 
@@ -880,19 +958,35 @@ func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveCo
 	}
 }
 
-func (s *CommitmentServiceSuite) TestTerminateForSubscription_PullsLaterTerminationBack() {
-	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveOnly() {
+	terminated, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
-	scheduled := created.StartDate.AddDate(0, 2, 0)
-	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &scheduled})
+	terminatedAt := terminated.StartDate.AddDate(0, 2, 0)
+	_, err = s.svc.Terminate(s.GetContext(), terminated.ID, dto.TerminateCommitmentRequest{EffectiveAt: &terminatedAt})
 	s.Require().NoError(err)
 
-	cancelAt := created.StartDate.AddDate(0, 0, 15)
+	active, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceStorage.ID))
+	s.Require().NoError(err)
+
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+	cancelAt := terminated.StartDate.AddDate(0, 0, 15)
 	s.Require().NoError(s.svc.TerminateForSubscription(s.GetContext(), s.fx.sub.ID, cancelAt))
-	got, err := s.svc.Get(s.GetContext(), created.ID)
+
+	got, err := s.svc.Get(s.GetContext(), terminated.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
+	s.True(got.TerminatedAt.Equal(terminatedAt), "a terminated commitment keeps its date, got %s", got.TerminatedAt)
+
+	got, err = s.svc.Get(s.GetContext(), active.ID)
 	s.Require().NoError(err)
 	s.Equal(types.CommitmentStatusTerminated, got.CommitmentStatus)
 	s.True(got.TerminatedAt.Equal(cancelAt), "got %s", got.TerminatedAt)
+
+	events := publisher.Events()
+	s.Require().Len(events, 1)
+	s.Equal(types.WebhookEventCommitmentTerminated, events[0].EventName)
+	s.Equal(active.ID, events[0].EntityID)
 }
 
 func (s *CommitmentServiceSuite) TestActiveForPeriod_IncludesTerminated() {
@@ -926,7 +1020,7 @@ func (s *CommitmentServiceSuite) requireValidation(err error, contains ...string
 func (s *CommitmentServiceSuite) TestValidation_V1_AcceptsEndDateMidPeriod() {
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	req.Type, req.CommittedPrice, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, dec("300")
-	req.EndDate = lo.ToPtr(time.Date(2027, 4, 16, 0, 0, 0, 0, time.UTC))
+	req.EndDate = lo.ToPtr(time.Date(2025, 4, 16, 0, 0, 0, 0, time.UTC))
 	preview, err := s.svc.Preview(s.GetContext(), req)
 	s.Require().NoError(err)
 
@@ -1384,7 +1478,7 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_RejectsPriceOnAnotherCaden
 func (s *CommitmentServiceSuite) TestValidation_FutureScopeLineOnAnotherCadence() {
 	future := *s.fx.lineAPI
 	future.ID, future.BillingPeriod = "subs_line_api_weekly", types.BILLING_PERIOD_WEEKLY
-	future.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	future.StartDate = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &future))
 
 	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
@@ -1428,7 +1522,7 @@ func (s *CommitmentServiceSuite) TestResponse_ResolvesWindowBucketAfterScopeLine
 	s.Require().NoError(err)
 
 	// The scope's only line is versioned on 1 Feb, then the subscription moves on to March.
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	only, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, "subs_line_api_only")
 	s.Require().NoError(err)
 	successor := *only
@@ -1507,7 +1601,7 @@ func (s *CommitmentServiceSuite) TestTerminate_FeeBeforeCurrentPeriodIsRejected(
 	before := sub.CurrentPeriodStart.AddDate(0, -1, 0)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     &before,
-		CancellationFee: lo.ToPtr(dec("25")),
+		CancellationFee: fixedFee("25"),
 	})
 	s.requireValidation(err, "current billing period")
 
@@ -1544,7 +1638,7 @@ func (s *CommitmentServiceSuite) windowMeterCommitment(priority int, start time.
 }
 
 func (s *CommitmentServiceSuite) TestValidation_OverlapRejectsBucketSizeMismatch() {
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	first, err := s.svc.Create(s.GetContext(), s.windowMeterCommitment(0, s.fx.sub.StartDate))
 	s.Require().NoError(err)
 
@@ -1624,7 +1718,7 @@ func (s *CommitmentServiceSuite) TestAttachPrice_RejectsGroupedBucketedPriceJoin
 
 func (s *CommitmentServiceSuite) TestValidation_OverlapChecksEveryLineOfTheOtherScope() {
 	ctx := s.GetContext()
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	first, err := s.svc.Create(ctx, s.windowMeterCommitment(0, s.fx.sub.StartDate))
 	s.Require().NoError(err)
 
@@ -1643,7 +1737,7 @@ func (s *CommitmentServiceSuite) TestValidation_OverlapChecksEveryLineOfTheOther
 }
 
 func (s *CommitmentServiceSuite) TestValidation_OverlapAcceptsMatchingBucketSize() {
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	_, err := s.svc.Create(s.GetContext(), s.windowMeterCommitment(0, s.fx.sub.StartDate))
 	s.Require().NoError(err)
 

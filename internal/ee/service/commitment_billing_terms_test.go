@@ -33,7 +33,7 @@ func upfrontPlusRemainder() []dto.BillingTermInput {
 	}
 }
 
-// billingTermsRequest is a binding amount commitment of 100 a month for ten months from 1 Jan 2027, worth 1,000.
+// billingTermsRequest is a binding amount commitment of 100 a month for ten months from 1 Jan 2025, worth 1,000.
 func (s *CommitmentServiceSuite) billingTermsRequest() dto.CreateCommitmentRequest {
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	req.Type, req.CommittedPrice, req.Value = types.COMMITMENT_TYPE_AMOUNT, nil, dec("100")
@@ -255,22 +255,22 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_KolkataBoundary() {
 	ist, err := time.LoadLocation("Asia/Kolkata")
 	s.Require().NoError(err)
 
-	start := time.Date(2027, 1, 1, 0, 0, 0, 0, ist).UTC()
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, ist).UTC()
 	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, s.fx.sub.ID)
 	s.Require().NoError(err)
 
 	sub.Timezone, sub.StartDate, sub.BillingAnchor = "Asia/Kolkata", start, start
-	sub.CurrentPeriodStart, sub.CurrentPeriodEnd = start, time.Date(2027, 2, 1, 0, 0, 0, 0, ist).UTC()
+	sub.CurrentPeriodStart, sub.CurrentPeriodEnd = start, time.Date(2025, 2, 1, 0, 0, 0, 0, ist).UTC()
 	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
 	line := *s.fx.lineAPI
 	line.StartDate = start
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, &line))
 
-	april := time.Date(2027, 4, 1, 0, 0, 0, 0, ist)
+	april := time.Date(2025, 4, 1, 0, 0, 0, 0, ist)
 	req := s.billingTermsRequest()
 	req.StartDate = start
-	req.EndDate = lo.ToPtr(time.Date(2027, 11, 1, 0, 0, 0, 0, ist).UTC())
+	req.EndDate = lo.ToPtr(time.Date(2025, 11, 1, 0, 0, 0, 0, ist).UTC())
 	req.BillingTerms = []dto.BillingTermInput{
 		{
 			Kind:      types.BillingTermKindOnce,
@@ -287,7 +287,7 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_KolkataBoundary() {
 
 	utcApril := req
 	utcApril.BillingTerms = slices.Clone(req.BillingTerms)
-	utcApril.BillingTerms[1].StartsOn = lo.ToPtr(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC))
+	utcApril.BillingTerms[1].StartsOn = lo.ToPtr(time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC))
 	_, err = s.svc.Create(ctx, utcApril)
 	s.Require().Error(err, "1 Apr 00:00 UTC is no boundary of a Kolkata subscription")
 	s.True(ierr.IsValidation(err), "got %v", err)
@@ -299,7 +299,7 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_KolkataBoundary() {
 	s.Require().Len(resp.Instalments, 8)
 	first := resp.Instalments[1]
 	s.True(first.ServicePeriodStart.Equal(april), "first step starts at %s", first.ServicePeriodStart)
-	s.True(first.ServicePeriodEnd.Equal(time.Date(2027, 5, 1, 0, 0, 0, 0, ist)), "first step ends at %s", first.ServicePeriodEnd)
+	s.True(first.ServicePeriodEnd.Equal(time.Date(2025, 5, 1, 0, 0, 0, 0, ist)), "first step ends at %s", first.ServicePeriodEnd)
 	s.True(first.BillOn.Equal(first.ServicePeriodEnd))
 	s.True(first.Amount.Equal(dec("100")))
 }

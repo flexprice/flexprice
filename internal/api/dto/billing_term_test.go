@@ -114,6 +114,44 @@ func TestBillingTermInput_ApplyDefaults(t *testing.T) {
 	require.Nil(t, in.CoversFrom)
 }
 
+func TestCancellationFeeInput_Validate(t *testing.T) {
+	amount := lo.ToPtr(decimal.NewFromInt(500))
+	percentage := lo.ToPtr(decimal.NewFromInt(10))
+	tests := []struct {
+		name    string
+		input   CancellationFeeInput
+		wantErr string
+	}{
+		{"fixed", CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: amount}, ""},
+		{"fixed with a decimal amount", CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: lo.ToPtr(decimal.RequireFromString("250.5"))}, ""},
+		{"fixed without an amount", CancellationFeeInput{Type: types.CancellationFeeFixed}, "cancellation_fee.amount"},
+		{"fixed with a zero amount", CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: lo.ToPtr(decimal.Zero)}, "cancellation_fee.amount"},
+		{"fixed with a negative amount", CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: lo.ToPtr(decimal.NewFromInt(-5))}, "cancellation_fee.amount"},
+		{"fixed with a percentage", CancellationFeeInput{Type: types.CancellationFeeFixed, Amount: amount, Percentage: percentage}, "cancellation_fee.percentage"},
+		{"percentage is not supported yet", CancellationFeeInput{Type: types.CancellationFeePercentage, Percentage: percentage}, "percentage cancellation fees are not supported yet"},
+		{"percentage of 100 is not supported yet", CancellationFeeInput{Type: types.CancellationFeePercentage, Percentage: lo.ToPtr(decimal.NewFromInt(100))}, "percentage cancellation fees are not supported yet"},
+		{"percentage without a percentage", CancellationFeeInput{Type: types.CancellationFeePercentage}, "cancellation_fee.percentage"},
+		{"percentage of zero", CancellationFeeInput{Type: types.CancellationFeePercentage, Percentage: lo.ToPtr(decimal.Zero)}, "cancellation_fee.percentage"},
+		{"percentage over 100", CancellationFeeInput{Type: types.CancellationFeePercentage, Percentage: lo.ToPtr(decimal.NewFromInt(101))}, "cancellation_fee.percentage"},
+		{"percentage with an amount", CancellationFeeInput{Type: types.CancellationFeePercentage, Amount: amount, Percentage: percentage}, "cancellation_fee.amount"},
+		{"missing type", CancellationFeeInput{Amount: amount}, "cancellation_fee.type"},
+		{"unknown type", CancellationFeeInput{Type: "flat", Amount: amount}, "cancellation_fee.type"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.input.Validate()
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.ErrorContains(t, err, tc.wantErr)
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+		})
+	}
+}
+
 func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 	remainder := BillingTermInput{ValueType: types.BillingTermValueRemainder}
 	tests := []struct {

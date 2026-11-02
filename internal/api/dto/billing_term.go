@@ -104,6 +104,43 @@ func (in BillingTermInput) ToTerm(ctx context.Context, ownerID string) *billingt
 	}
 }
 
+// CancellationFeeInput is the fee billed when a commitment is terminated early: a fixed amount, or a percentage
+// that is accepted by the shape but not billed yet.
+type CancellationFeeInput struct {
+	Type types.CancellationFeeType `json:"type" validate:"required"`
+
+	Amount     *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
+	Percentage *decimal.Decimal `json:"percentage,omitempty" swaggertype:"string"`
+}
+
+// Validate checks that the fields fit the fee type. A well-formed percentage fee is rejected as not supported yet.
+func (in CancellationFeeInput) Validate() error {
+	switch in.Type {
+	case types.CancellationFeeFixed:
+		if in.Percentage != nil {
+			return ierr.Validation("cancellation_fee.percentage: a fixed fee takes an amount")
+		}
+
+		if in.Amount == nil || !in.Amount.IsPositive() {
+			return ierr.Validation("cancellation_fee.amount: must be greater than 0")
+		}
+	case types.CancellationFeePercentage:
+		if in.Amount != nil {
+			return ierr.Validation("cancellation_fee.amount: a percentage fee takes a percentage")
+		}
+
+		if in.Percentage == nil || !in.Percentage.IsPositive() || in.Percentage.GreaterThan(decimal.NewFromInt(100)) {
+			return ierr.Validation("cancellation_fee.percentage: must be greater than 0 and at most 100")
+		}
+
+		return ierr.Validation("percentage cancellation fees are not supported yet")
+	default:
+		return ierr.Validation("cancellation_fee.type: must be fixed or percentage")
+	}
+
+	return nil
+}
+
 // ReplaceBillingTermsRequest is the new set of terms of a commitment, which replaces the current set as a whole.
 type ReplaceBillingTermsRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1"`

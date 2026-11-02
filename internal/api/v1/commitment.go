@@ -198,7 +198,7 @@ func (h *CommitmentHandler) UpdateCommitment(c *gin.Context) {
 
 // @Summary Terminate commitment
 // @ID terminateCommitment
-// @Description Ends a commitment early, effective at the given time or now.
+// @Description Ends a commitment immediately. effective_at defaults to now and cannot be in the future. A fixed cancellation fee, when given, is billed on a one-off invoice.
 // @Tags Commitments
 // @Accept json
 // @Produce json

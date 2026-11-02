@@ -2456,7 +2456,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Ends a commitment early, effective at the given time or now.",
+                "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. A fixed cancellation fee, when given, is billed on a one-off invoice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19463,6 +19463,23 @@ const docTemplate = `{
                 }
             }
         },
+        "CancellationFeeInput": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.CancellationFeeType"
+                }
+            }
+        },
         "ChangedAddonAssociation": {
             "type": "object",
             "properties": {
@@ -30773,7 +30790,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cancellation_fee": {
-                    "type": "string"
+                    "$ref": "#/definitions/CancellationFeeInput"
                 },
                 "effective_at": {
                     "type": "string"
@@ -39109,6 +39126,17 @@ const docTemplate = `{
                 "BillingTermValueFixed",
                 "BillingTermValuePercentage",
                 "BillingTermValueRemainder"
+            ]
+        },
+        "types.CancellationFeeType": {
+            "type": "string",
+            "enum": [
+                "fixed",
+                "percentage"
+            ],
+            "x-enum-varnames": [
+                "CancellationFeeFixed",
+                "CancellationFeePercentage"
             ]
         },
         "types.CommitmentCollectionMethod": {

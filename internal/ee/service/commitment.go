@@ -501,8 +501,8 @@ func (s *commitmentService) Update(
 	return s.response(ctx, updated, nil)
 }
 
-// Terminate ends an active commitment at effective_at (default now). A cancellation fee is billed on an immediate
-// one-off invoice, created in the same transaction as the status change.
+// Terminate ends an active commitment at effective_at, which defaults to now and may not be in the future. A
+// cancellation fee is billed on an immediate one-off invoice, created in the same transaction as the status change.
 func (s *commitmentService) Terminate(
 	ctx context.Context,
 	id string,
@@ -516,12 +516,22 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	effectiveAt := lo.FromPtrOr(req.EffectiveAt, clock.Now())
+	now := clock.Now()
+	effectiveAt := lo.FromPtrOr(req.EffectiveAt, now)
+	if effectiveAt.After(now) {
+		return nil, ierr.Validation("future-dated termination is not supported yet")
+	}
+
+	var fee *decimal.Decimal
+	if req.CancellationFee != nil {
+		fee = req.CancellationFee.Amount
+	}
+
 	var out *commitment.Commitment
 	var invoiceID *string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
-		out, invoiceID, err = s.terminate(txCtx, id, effectiveAt, req.CancellationFee)
+		out, invoiceID, err = s.terminate(txCtx, id, effectiveAt, fee)
 		return err
 	})
 	if err != nil {
@@ -546,8 +556,7 @@ func (s *commitmentService) Terminate(
 	return resp, nil
 }
 
-// TerminateForSubscription terminates every active commitment on the subscription whose term runs past effectiveAt,
-// and pulls a termination scheduled after effectiveAt back to it.
+// TerminateForSubscription terminates every active commitment on the subscription whose term runs past effectiveAt.
 func (s *commitmentService) TerminateForSubscription(
 	ctx context.Context,
 	subscriptionID string,
@@ -562,41 +571,13 @@ func (s *commitmentService) TerminateForSubscription(
 
 		f := commitment.NewNoLimitFilter()
 		f.SubscriptionIDs = []string{subscriptionID}
-		f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive, types.CommitmentStatusTerminated}
+		f.Statuses = []types.CommitmentStatus{types.CommitmentStatusActive}
 		listed, err := s.CommitmentRepo.List(txCtx, f)
 		if err != nil {
 			return err
 		}
 
 		for _, c := range listed {
-			if c.CommitmentStatus == types.CommitmentStatusTerminated {
-				if c.TerminatedAt == nil || !c.TerminatedAt.After(effectiveAt) {
-					continue
-				}
-
-				if err := s.lockCommitment(txCtx, c.ID); err != nil {
-					return err
-				}
-
-				latest, err := s.CommitmentRepo.Get(txCtx, c.ID)
-				if err != nil {
-					return err
-				}
-
-				if _, err := s.CommitmentRepo.Update(txCtx, commitment.NewCommitmentBuilder(latest).WithTerminatedAt(effectiveAt).Build()); err != nil {
-					return err
-				}
-
-				s.Logger.Info(ctx, "commitment.termination_rescheduled",
-					"operation", "commitment.termination_rescheduled",
-					"commitment_id", c.ID,
-					"subscription_id", subscriptionID,
-					"previous_terminated_at", *c.TerminatedAt,
-					"effective_at", effectiveAt,
-				)
-				continue
-			}
-
 			if c.EndedBy(effectiveAt) {
 				continue
 			}

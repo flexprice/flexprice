@@ -425,7 +425,7 @@ func (s *CommitmentE2ESuite) TestTerminateMidPeriod_ClipsTheFloorAndBillsTheFee(
 	terminatedAt := time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC)
 	terminated, err := s.commitments.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{
 		EffectiveAt:     lo.ToPtr(terminatedAt),
-		CancellationFee: lo.ToPtr(dec("500")),
+		CancellationFee: fixedFee("500"),
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(terminated.TerminationInvoiceID)

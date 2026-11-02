@@ -245,14 +245,36 @@ func TestCommitmentHandler_TerminateEmptyBodyOfUnknownLength(t *testing.T) {
 func TestCommitmentHandler_TerminatePassesWholeRequestToService(t *testing.T) {
 	svc := &stubCommitmentService{}
 	router := setupCommitmentRouter(t, svc)
-	body := `{"effective_at":"2027-04-01T00:00:00Z","cancellation_fee":"5"}`
+	body := `{"effective_at":"2025-04-01T00:00:00Z","cancellation_fee":{"type":"fixed","amount":"5"}}`
 	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_4/terminate", body)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, "cmt_4", svc.gotID)
 	require.NotNil(t, svc.gotTerminate.EffectiveAt)
-	require.True(t, svc.gotTerminate.EffectiveAt.Equal(time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC)))
+	require.True(t, svc.gotTerminate.EffectiveAt.Equal(time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)))
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
-	require.True(t, svc.gotTerminate.CancellationFee.Equal(decimal.NewFromInt(5)))
+	require.Equal(t, types.CancellationFeeFixed, svc.gotTerminate.CancellationFee.Type)
+	require.True(t, svc.gotTerminate.CancellationFee.Amount.Equal(decimal.NewFromInt(5)))
+	require.Nil(t, svc.gotTerminate.CancellationFee.Percentage)
+}
+
+func TestCommitmentHandler_TerminateBindsPercentageFee(t *testing.T) {
+	svc := &stubCommitmentService{}
+	router := setupCommitmentRouter(t, svc)
+	body := `{"cancellation_fee":{"type":"percentage","percentage":"10"}}`
+	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_7/terminate", body)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.NotNil(t, svc.gotTerminate.CancellationFee)
+	require.Equal(t, types.CancellationFeePercentage, svc.gotTerminate.CancellationFee.Type)
+	require.True(t, svc.gotTerminate.CancellationFee.Percentage.Equal(decimal.NewFromInt(10)))
+	require.Nil(t, svc.gotTerminate.CancellationFee.Amount)
+}
+
+func TestCommitmentHandler_TerminateRejectsAScalarFee(t *testing.T) {
+	svc := &stubCommitmentService{}
+	router := setupCommitmentRouter(t, svc)
+	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_8/terminate", `{"cancellation_fee":"5"}`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Empty(t, svc.gotID, "the service is never called")
 }
 
 func TestCommitmentHandler_TerminateFeeOnNonBindingIsBadRequest(t *testing.T) {
@@ -261,7 +283,7 @@ func TestCommitmentHandler_TerminateFeeOnNonBindingIsBadRequest(t *testing.T) {
 		Mark(ierr.ErrValidation)
 	svc := &stubCommitmentService{err: svcErr}
 	router := setupCommitmentRouter(t, svc)
-	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_6/terminate", `{"cancellation_fee":"5"}`)
+	w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_6/terminate", `{"cancellation_fee":{"type":"fixed","amount":"5"}}`)
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
 	require.Contains(t, w.Body.String(), "binding")

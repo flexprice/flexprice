@@ -2961,7 +2961,7 @@
           "Commitments"
         ],
         "summary": "Terminate commitment",
-        "description": "Ends a commitment early, effective at the given time or now.",
+        "description": "Ends a commitment immediately. effective_at defaults to now and cannot be in the future. A fixed cancellation fee, when given, is billed on a one-off invoice.",
         "operationId": "terminateCommitment",
         "parameters": [
           {
@@ -22459,6 +22459,23 @@
           }
         }
       },
+      "CancellationFeeInput": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.CancellationFeeType"
+          }
+        }
+      },
       "ChangedAddonAssociation": {
         "type": "object",
         "properties": {
@@ -33176,7 +33193,7 @@
         "type": "object",
         "properties": {
           "cancellation_fee": {
-            "type": "string"
+            "$ref": "#/components/schemas/CancellationFeeInput"
           },
           "effective_at": {
             "type": "string",
@@ -41533,6 +41550,18 @@
           "BillingTermValueRemainder"
         ],
         "x-speakeasy-name-override": "BillingTermValueType"
+      },
+      "types.CancellationFeeType": {
+        "type": "string",
+        "enum": [
+          "fixed",
+          "percentage"
+        ],
+        "x-enum-varnames": [
+          "CancellationFeeFixed",
+          "CancellationFeePercentage"
+        ],
+        "x-speakeasy-name-override": "CancellationFeeType"
       },
       "types.CommitmentCollectionMethod": {
         "type": "string",

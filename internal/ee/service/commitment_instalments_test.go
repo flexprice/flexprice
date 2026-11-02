@@ -14,7 +14,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// yearlyArrearRequest commits 100 a month for a year from 1 Jan 2027, worth 1,200, billed as twelve arrear instalments
+// yearlyArrearRequest commits 100 a month for a year from 1 Jan 2025, worth 1,200, billed as twelve arrear instalments
 // of 100 on subscription invoices.
 func (s *CommitmentServiceSuite) yearlyArrearRequest() dto.CreateCommitmentRequest {
 	req := s.billingTermsRequest()
@@ -93,7 +93,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_ReplacesScheduledOnly() {
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+	sep := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 	resp, err := s.svc.ReplanInstalments(ctx, created.ID, dto.ReplanInstalmentsRequest{Instalments: []dto.ReplanInstalmentInput{
 		{Amount: dec("200"), BillTrigger: lo.ToPtr(types.InstalmentBillTriggerManual)},
 		{Amount: dec("300"), BillOn: &sep, Description: lo.ToPtr("Catch-up")},
@@ -182,7 +182,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_AcceptsTheTermEdges() {
 func (s *CommitmentServiceSuite) TestReplanInstalments_Rejections() {
 	created, _ := s.fiveOfTwelveInvoiced()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
-	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+	sep := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 	date := func(amount string, billOn time.Time) dto.ReplanInstalmentInput {
 		return dto.ReplanInstalmentInput{Amount: dec(amount), BillOn: &billOn}
 	}
@@ -220,7 +220,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_Rejections() {
 func (s *CommitmentServiceSuite) TestReplanInstalments_RejectsAPlanThatMissesTheTotal() {
 	created, before := s.fiveOfTwelveInvoiced()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
-	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+	sep := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 
 	for name, amount := range map[string]string{
 		"short of the total":             "699",
@@ -280,7 +280,7 @@ func (s *CommitmentServiceSuite) racingCommitmentService(race func(ctx context.C
 
 func (s *CommitmentServiceSuite) TestReplanInstalments_SizesThePlanAfterTheCancellation() {
 	created, before := s.fiveOfTwelveInvoiced()
-	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+	sep := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 	repo := s.GetStores().BillingInstalmentRepo
 
 	// A claim that lands just before the cancellation makes six instalments invoiced, leaving 600 to plan.
@@ -308,7 +308,7 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_SizesThePlanAfterTheCance
 func (s *CommitmentServiceSuite) TestReplanInstalments_RejectsInactiveOrPerPeriod() {
 	ctx := s.GetContext()
 	req := dto.ReplanInstalmentsRequest{Instalments: []dto.ReplanInstalmentInput{
-		{Amount: dec("1000"), BillOn: lo.ToPtr(time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC))},
+		{Amount: dec("1000"), BillOn: lo.ToPtr(time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC))},
 	}}
 
 	for name, id := range s.inactiveCommitments() {
@@ -342,7 +342,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_B5() {
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	resp, err := s.svc.BringForwardInstalments(ctx, created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("300"), BillOn: &now})
 	s.Require().NoError(err)
 
@@ -401,7 +401,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_PartialReduction() 
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	_, err := s.svc.BringForwardInstalments(ctx, created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("250"), BillOn: &now})
 	s.Require().NoError(err)
 
@@ -466,7 +466,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_FailsWhenAnInstalme
 		s.Require().NoError(err)
 	})
 
-	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	_, err := racing.BringForwardInstalments(s.GetContext(), created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("300"), BillOn: &now})
 	s.Require().Error(err)
 	s.True(ierr.IsInvalidOperation(err), "got %v", err)
@@ -480,7 +480,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_FailsWhenAnInstalme
 
 func (s *CommitmentServiceSuite) TestBringForwardInstalments_EverythingScheduled() {
 	created, before := s.fiveOfTwelveInvoiced()
-	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 
 	_, err := s.svc.BringForwardInstalments(s.GetContext(), created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("700"), BillOn: &now})
 	s.Require().NoError(err)
@@ -495,7 +495,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_EverythingScheduled
 func (s *CommitmentServiceSuite) TestBringForwardInstalments_Rejections() {
 	created, _ := s.fiveOfTwelveInvoiced()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
-	inTerm := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	inTerm := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name string
@@ -527,7 +527,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_BillsNowByDefault()
 	ctx := s.GetContext()
 	created, before := s.fiveOfTwelveInvoiced()
 
-	// The fixtures sit in 2027; move the term around today so that now falls inside it.
+	// The fixtures sit in 2025; move the term around today so that now falls inside it.
 	stored, err := s.GetStores().CommitmentRepo.Get(ctx, created.ID)
 	s.Require().NoError(err)
 	stored.StartDate = clock.Now().AddDate(0, -1, 0)
@@ -560,7 +560,7 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_DefaultNowOutsideTh
 
 func (s *CommitmentServiceSuite) TestBringForwardInstalments_RejectsInactiveOrPerPeriod() {
 	ctx := s.GetContext()
-	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	req := dto.BringForwardInstalmentsRequest{Amount: dec("100"), BillOn: &now}
 
 	for name, id := range s.inactiveCommitments() {
@@ -623,7 +623,7 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_SetsBillOnAndTriggeredAt(
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()
 
-	billOn := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	billOn := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	asked := clock.Now()
 	triggered, err := s.svc.TriggerInstalment(ctx, created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &billOn})
 	s.Require().NoError(err)
@@ -663,8 +663,8 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_TermEdgesAreInside() {
 // A triggered milestone stays scheduled until an invoice claims it, so the trigger can move its date.
 func (s *CommitmentServiceSuite) TestTriggerInstalment_MovesAScheduledMilestone() {
 	created, milestone := s.milestoneOf(s.milestoneRequest())
-	first := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
-	second := time.Date(2027, 8, 1, 0, 0, 0, 0, time.UTC)
+	first := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
+	second := time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)
 
 	_, err := s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &first})
 	s.Require().NoError(err)
@@ -678,7 +678,7 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_MovesAScheduledMilestone(
 func (s *CommitmentServiceSuite) TestTriggerInstalment_Rejections() {
 	ctx := s.GetContext()
 	repo := s.GetStores().BillingInstalmentRepo
-	inTerm := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	inTerm := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 
 	created, milestone := s.milestoneOf(s.milestoneRequest())
 	dated, ok := lo.Find(created.Instalments, func(inst *billingterm.Instalment) bool {
@@ -736,7 +736,7 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_Rejections() {
 
 func (s *CommitmentServiceSuite) TestTriggerInstalment_RejectsInactiveOrPerPeriod() {
 	ctx := s.GetContext()
-	billOn := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	billOn := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	req := dto.TriggerInstalmentRequest{BillOn: &billOn}
 
 	for name, id := range s.inactiveCommitments() {

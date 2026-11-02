@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -38,7 +39,7 @@ func tieredOverage() *dto.CommitmentPriceInput {
 }
 
 func validReq(subID, priceID string) dto.CreateCommitmentRequest {
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	jan := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	return dto.CreateCommitmentRequest{
 		SubscriptionID: subID,
 		Name:           "Base",
@@ -244,7 +245,7 @@ func TestCreateCommitmentRequest_Validate(t *testing.T) {
 func (s *CommitmentServiceSuite) TestValidation_ScheduledSecondMeterBreaksQuantityCommitment() {
 	future := *s.fx.lineAPI
 	future.ID, future.PriceID, future.MeterID = "subs_line_other_meter", s.fx.priceOtherMeterInGroup.ID, s.fx.meterStorage.ID
-	future.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	future.StartDate = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &future))
 
 	req := validReq(s.fx.sub.ID, "")
@@ -256,7 +257,7 @@ func (s *CommitmentServiceSuite) TestValidation_ScheduledSecondMeterBreaksQuanti
 func (s *CommitmentServiceSuite) TestValidation_ScheduledLegacyLineItemCommitment() {
 	future := *s.fx.lineAPI
 	future.ID, future.CommitmentAmount = "subs_line_api_legacy", lo.ToPtr(decimal.NewFromInt(50))
-	future.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	future.StartDate = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &future))
 
 	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
@@ -271,7 +272,7 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_ReplacedOnlyLineKeepsBucke
 	s.Require().NoError(err)
 
 	// The scope's only line ends where its replacement on an hourly price would start.
-	march := time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)
+	march := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
 	only, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), "subs_line_api_only")
 	s.Require().NoError(err)
 	only.EndDate = march
@@ -294,8 +295,8 @@ func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
 		return func(r *dto.CreateCommitmentRequest) { r.StartDate = start }
 	}
 
-	// A is terminated mid-way through its May 2027 billing period, which it still bills up to the end of.
-	terminatedAt := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	// A is terminated mid-way through its May 2025 billing period, which it still bills up to the end of.
+	terminatedAt := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name    string
 		mutateA func(r *dto.CreateCommitmentRequest)
@@ -305,14 +306,14 @@ func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
 		{
 			name:    "different type in the period A was terminated in",
 			mutateA: amountA,
-			mutateB: startB(time.Date(2027, 5, 15, 0, 0, 0, 0, time.UTC)),
+			mutateB: startB(time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)),
 			wantErr: "different type or measurement",
 		},
 		{
 			name:    "different overage rate in A's final billing period",
 			mutateA: overageA,
 			mutateB: func(r *dto.CreateCommitmentRequest) {
-				r.StartDate = time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC)
+				r.StartDate = time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC)
 				r.OveragePrice = &dto.CommitmentPriceInput{Amount: lo.ToPtr(dec("0.08"))}
 			},
 			wantErr: "different overage price",
@@ -320,7 +321,7 @@ func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
 		{
 			name:    "different type in the next billing period",
 			mutateA: amountA,
-			mutateB: startB(time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)),
+			mutateB: startB(time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)),
 		},
 		{
 			name:    "same type and priority recreated after termination",
@@ -356,7 +357,7 @@ func (s *CommitmentServiceSuite) TestValidation_TerminatedCommitmentOverlap() {
 // and measurement and take another priority, however far off it starts, until a termination's period has ended.
 func (s *CommitmentServiceSuite) TestValidation_OpenEndedOverlap() {
 	years := time.Date(2032, 1, 1, 0, 0, 0, 0, time.UTC)
-	terminatedAt := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	terminatedAt := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
 	amountFrom := func(start time.Time, priority int) func(r *dto.CreateCommitmentRequest) {
 		return func(r *dto.CreateCommitmentRequest) {
 			r.Type, r.CommittedPrice, r.Value = types.COMMITMENT_TYPE_AMOUNT, nil, decimal.NewFromInt(100)
@@ -386,10 +387,10 @@ func (s *CommitmentServiceSuite) TestValidation_OpenEndedOverlap() {
 		{
 			name:      "different type inside the terminated commitment's last period",
 			terminate: true,
-			mutateB:   amountFrom(time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC), 1),
+			mutateB:   amountFrom(time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC), 1),
 			wantErr:   "different type or measurement",
 		},
-		{name: "different type after the terminated commitment's last period", terminate: true, mutateB: amountFrom(time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC), 1)},
+		{name: "different type after the terminated commitment's last period", terminate: true, mutateB: amountFrom(time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC), 1)},
 		{name: "same type and priority from the termination", terminate: true, mutateB: quantityFrom(terminatedAt, 0)},
 	}
 
@@ -510,24 +511,24 @@ func (s *CommitmentServiceSuite) endSubscriptionAt(end time.Time) *subscription.
 
 // An open-ended commitment on a subscription with an end stops guarding price attaches once it ends.
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_OpenEndedStopsAtSubscriptionEnd() {
-	sub := s.endSubscriptionAt(time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC))
+	sub := s.endSubscriptionAt(time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC))
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
 	req.EndDate = nil
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
-	err = s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC), nil)
+	err = s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC), nil)
 	s.requireValidation(err, "different meter")
 	s.Require().NoError(
-		s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC), nil),
+		s.svc.CheckPriceAttach(s.GetContext(), sub, s.fx.priceOtherMeterInGroup, time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC), nil),
 	)
 }
 
 // A binding open-ended commitment needs its scope covered only until a finite subscription ends.
 func (s *CommitmentServiceSuite) TestLineItemDetach_OpenEndedStopsAtSubscriptionEnd() {
-	jun := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
-	subEnd := time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC)
+	jun := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	subEnd := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
 	s.endSubscriptionAt(subEnd)
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	req.EndDate = nil
@@ -557,9 +558,9 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_RejectsEndingOpenEndedCommit
 }
 
 func (s *CommitmentServiceSuite) TestValidation_MidPeriodEndOverlap() {
-	// A ends on 10 May 2027, mid-way through a billing period whose invoice still bills its floor.
+	// A ends on 10 May 2025, mid-way through a billing period whose invoice still bills its floor.
 	endsMidMay := func(r *dto.CreateCommitmentRequest) {
-		r.EndDate = lo.ToPtr(time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC))
+		r.EndDate = lo.ToPtr(time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC))
 	}
 	amountFrom := func(start time.Time) func(r *dto.CreateCommitmentRequest) {
 		return func(r *dto.CreateCommitmentRequest) {
@@ -576,12 +577,12 @@ func (s *CommitmentServiceSuite) TestValidation_MidPeriodEndOverlap() {
 		{
 			name:         "different type after A's end in its final billing period",
 			mutateFirst:  endsMidMay,
-			mutateSecond: amountFrom(time.Date(2027, 5, 15, 0, 0, 0, 0, time.UTC)),
+			mutateSecond: amountFrom(time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)),
 			wantErr:      "different type or measurement",
 		},
 		{
 			name:         "A ending before a different type starts in the same billing period",
-			mutateFirst:  amountFrom(time.Date(2027, 5, 15, 0, 0, 0, 0, time.UTC)),
+			mutateFirst:  amountFrom(time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)),
 			mutateSecond: endsMidMay,
 			wantErr:      "different type or measurement",
 		},
@@ -592,7 +593,7 @@ func (s *CommitmentServiceSuite) TestValidation_MidPeriodEndOverlap() {
 				r.OveragePrice = ratePrice("0.07")
 			},
 			mutateSecond: func(r *dto.CreateCommitmentRequest) {
-				r.StartDate = time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC)
+				r.StartDate = time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC)
 				r.OveragePrice = ratePrice("0.08")
 			},
 			wantErr: "different overage price",
@@ -600,13 +601,13 @@ func (s *CommitmentServiceSuite) TestValidation_MidPeriodEndOverlap() {
 		{
 			name:         "different type from the next billing period",
 			mutateFirst:  endsMidMay,
-			mutateSecond: amountFrom(time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)),
+			mutateSecond: amountFrom(time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)),
 		},
 		{
 			name:        "same type and priority after A's end",
 			mutateFirst: endsMidMay,
 			mutateSecond: func(r *dto.CreateCommitmentRequest) {
-				r.StartDate = time.Date(2027, 5, 15, 0, 0, 0, 0, time.UTC)
+				r.StartDate = time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)
 			},
 		},
 	}
@@ -773,7 +774,7 @@ func (s *CommitmentServiceSuite) TestLineItemAdd_RejectsLegacyCommitmentInScope(
 }
 
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_AllowsLineEndingBeforeCommitmentStart() {
-	march := time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)
+	march := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
 	req.StartDate = march
@@ -793,7 +794,7 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsTerminatedCommitment
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
 	created, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
-	cutoff := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &cutoff})
 	s.Require().NoError(err)
 
@@ -808,28 +809,28 @@ func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsTerminatedCommitment
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
 	created, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
-	cutoff := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &cutoff})
 	s.Require().NoError(err)
 
 	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, cutoff.AddDate(0, 0, 5), nil)
 	s.requireValidation(err, "different meter")
 
-	periodEnd := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, periodEnd, nil))
 }
 
 func (s *CommitmentServiceSuite) TestCheckPriceAttach_GuardsMidPeriodEndThroughPeriodEnd() {
 	req := validReq(s.fx.sub.ID, "")
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeGroup, EntityID: s.fx.groupAPIOnly.ID}
-	req.EndDate = lo.ToPtr(time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC))
+	req.EndDate = lo.ToPtr(time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC))
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
 	err = s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, req.EndDate.AddDate(0, 0, 5), nil)
 	s.requireValidation(err, "different meter")
 
-	periodEnd := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(s.svc.CheckPriceAttach(s.GetContext(), s.fx.sub, s.fx.priceOtherMeterInGroup, periodEnd, nil))
 }
 
@@ -839,7 +840,7 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_LegacyGuardCoversTerminatedC
 	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
 	created, err := s.svc.Create(ctx, req)
 	s.Require().NoError(err)
-	cutoff := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Terminate(ctx, created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &cutoff})
 	s.Require().NoError(err)
 
@@ -849,7 +850,7 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_LegacyGuardCoversTerminatedC
 	line.StartDate = cutoff.AddDate(0, 0, 5)
 	s.requireValidation(rejectLegacyCommitmentInScope(ctx, fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &line), "legacy line-item commitment")
 
-	line.StartDate = time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	line.StartDate = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	s.Require().NoError(rejectLegacyCommitmentInScope(ctx, fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &line))
 }
 
@@ -857,12 +858,12 @@ func (s *CommitmentServiceSuite) TestCreate_RejectsSamePriorityOverFutureCutoff(
 	a := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	created, err := s.svc.Create(s.GetContext(), a)
 	s.Require().NoError(err)
-	cutoff := time.Date(2027, 5, 10, 0, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &cutoff})
 	s.Require().NoError(err)
 
 	b := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
-	b.StartDate = time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC)
+	b.StartDate = time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
 	_, err = s.svc.Create(s.GetContext(), b)
 	s.requireValidation(err, "priority")
 }
@@ -941,20 +942,20 @@ func (s *CommitmentServiceSuite) TestAddonSync_SkipsPriceBreakingCommitment() {
 }
 
 func (s *CommitmentServiceSuite) TestLegacyFields_AllowedWhenLineEndsBeforeCommitmentStarts() {
-	march := time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)
+	march := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	req.StartDate = march
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
 	gone := *s.fx.lineAPI
-	gone.ID, gone.EndDate = "subs_line_api_gone", time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	gone.ID, gone.EndDate = "subs_line_api_gone", time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	gone.CommitmentAmount = lo.ToPtr(dec("50"))
 	s.Require().NoError(rejectLegacyCommitmentInScope(s.GetContext(), fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &gone))
 
 	// The same legacy line overlapping the commitment term is still rejected.
 	overlapping := gone
-	overlapping.ID, overlapping.EndDate = "subs_line_api_overlap", time.Date(2027, 4, 1, 0, 0, 0, 0, time.UTC)
+	overlapping.ID, overlapping.EndDate = "subs_line_api_overlap", time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 	err = rejectLegacyCommitmentInScope(s.GetContext(), fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &overlapping)
 	s.requireValidation(err, "legacy line-item commitment")
 }
@@ -969,7 +970,7 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_RejectsEmptyingBindingCommit
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 
-	err = s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC))
+	err = s.detachCheck(s.fx.lineAPI.ID, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC))
 	s.requireValidation(err, created.ID, "terminate the commitment first")
 }
 
@@ -979,14 +980,14 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_AllowsWhenAnotherScopedLineR
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
-	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)))
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)))
 }
 
 func (s *CommitmentServiceSuite) TestLineItemDetach_AllowsEndDateWithSuccessorOnSamePrice() {
 	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	successor := *s.fx.lineAPI
 	successor.ID, successor.StartDate = "subs_line_api_successor", feb
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Create(s.GetContext(), &successor))
@@ -1000,21 +1001,21 @@ func (s *CommitmentServiceSuite) TestLineItemDetach_IgnoresNonBindingCommitment(
 	_, err := s.svc.Create(s.GetContext(), req)
 	s.Require().NoError(err)
 
-	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)))
+	s.Require().NoError(s.detachCheck(s.fx.lineAPI.ID, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)))
 }
 
 func (s *CommitmentServiceSuite) TestLineItemDetach_RequiresContinuousCoverage() {
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
-	jun := time.Date(2027, 6, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
+	jun := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name      string
 		nextStart *time.Time // a further API-meter line, open-ended from here
 		wantErr   bool
 	}{
 		{name: "the remaining line ends mid-term", wantErr: true},
-		{name: "a second line takes over before the first ends", nextStart: lo.ToPtr(time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC))},
+		{name: "a second line takes over before the first ends", nextStart: lo.ToPtr(time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC))},
 		{name: "a second line takes over on the day the first ends", nextStart: lo.ToPtr(jun)},
-		{name: "a second line leaves a gap", nextStart: lo.ToPtr(time.Date(2027, 7, 1, 0, 0, 0, 0, time.UTC)), wantErr: true},
+		{name: "a second line leaves a gap", nextStart: lo.ToPtr(time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)), wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -1065,8 +1066,15 @@ func (s *CommitmentServiceSuite) TestLineItemDelete_EndsUsageLineUnderCommitment
 
 func (s *CommitmentServiceSuite) TestLineItemDelete_RejectsCancellingTheOnlyScheduledScopedLine() {
 	ctx := s.GetContext()
-	s.Require().True(s.fx.lineAPI.StartDate.After(time.Now()), "the fixture line must not have started")
-	created, err := s.svc.Create(ctx, validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	start := clock.Now().AddDate(0, 1, 0).Truncate(24 * time.Hour)
+	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
+	s.Require().NoError(err)
+	line.StartDate = start
+	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
+
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.StartDate, req.EndDate = start, lo.ToPtr(start.AddDate(1, 0, 0))
+	created, err := s.svc.Create(ctx, req)
 	s.Require().NoError(err)
 
 	_, err = NewSubscriptionService(fullServiceParams(&s.BaseServiceTestSuite)).DeleteSubscriptionLineItem(ctx, s.fx.lineAPI.ID, dto.DeleteSubscriptionLineItemRequest{})
@@ -1098,7 +1106,7 @@ func (s *CommitmentServiceSuite) addonAdd(id string, at time.Time) AddonAdd {
 }
 
 func (s *CommitmentServiceSuite) TestAddonChange_SwapKeepsBindingCommitmentScopeCovered() {
-	feb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+	feb := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name    string
 		swapIn  bool
@@ -1212,7 +1220,7 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_PriceEditKeepsCoverageAcross
 
 	params := fullServiceParams(&s.BaseServiceTestSuite)
 	params.SubscriptionLineItemRepo = &microsecondLineItemRepo{LineItemRepository: s.GetStores().SubscriptionLineItemRepo}
-	effectiveFrom := time.Date(2027, 2, 1, 0, 0, 0, 123456789, time.UTC)
+	effectiveFrom := time.Date(2025, 2, 1, 0, 0, 0, 123456789, time.UTC)
 	resp, err := NewSubscriptionService(params).UpdateSubscriptionLineItem(ctx, s.fx.lineAPI.ID,
 		dto.UpdateSubscriptionLineItemRequest{
 			Amount:        lo.ToPtr(dec("0.07")),
