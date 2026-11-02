@@ -12,6 +12,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -73,7 +74,8 @@ func setupQuickBooksWebhookHandler(t *testing.T, verifierToken string) *WebhookH
 		nil,
 	)
 
-	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	billingEntitySvc := service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore()})
+	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc)
 }
 
 func quickBooksSignature(token, body string) string {

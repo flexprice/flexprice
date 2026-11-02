@@ -1,10 +1,9 @@
 package service
 
 import (
-	"time"
-
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -107,7 +106,7 @@ func (s *billingEntityService) assignConnectionsToEntity(ctx context.Context, en
 			continue
 		}
 		conn.BillingEntityID = &entityID
-		conn.UpdatedAt = time.Now().UTC()
+		conn.UpdatedAt = clock.Now()
 		conn.UpdatedBy = types.GetUserID(ctx)
 		if err := s.ConnectionRepo.UpdateBillingEntity(ctx, conn); err != nil {
 			return err
