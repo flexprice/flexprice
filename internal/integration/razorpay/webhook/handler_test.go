@@ -378,6 +378,16 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_Recor
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus)
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RedeliveredDecline_RecordsNoAttempt() {
+	s.pendingSession()
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+	s.paymentSvc.payment.Attempts = []*dto.PaymentAttemptResponse{{GatewayAttemptID: lo.ToPtr("pay_rzp_001")}}
+
+	s.NoError(s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services))
+
+	s.Empty(s.paymentSvc.failedAttempts())
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_StandaloneLink_LeavesPaymentOpen() {
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
 

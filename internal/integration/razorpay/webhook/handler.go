@@ -311,6 +311,16 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		return nil
 	}
 
+	// Razorpay issues a new pay_ id per attempt, so a known one is a redelivered webhook.
+	if lo.ContainsBy(paymentRecord.Attempts, func(a *dto.PaymentAttemptResponse) bool {
+		return lo.FromPtr(a.GatewayAttemptID) == payment.ID
+	}) {
+		h.logger.Info(ctx, "ignoring redelivered payment.failed webhook",
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", payment.ID)
+		return nil
+	}
+
 	// Build error message
 	errorMsg := "Payment failed"
 	if payment.ErrorDescription != "" {
