@@ -11,6 +11,7 @@ import (
 type InternalPaymentEvent struct {
 	PaymentID string `json:"payment_id"`
 	TenantID  string `json:"tenant_id"`
+	AttemptID string `json:"attempt_id,omitempty"`
 }
 
 type Payment struct {
@@ -59,4 +60,11 @@ type PaymentWebhookPayload struct {
 
 func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.WebhookEventName) *PaymentWebhookPayload {
 	return &PaymentWebhookPayload{EventType: eventType, Payment: NewPayment(payment)}
+}
+
+type PaymentAttemptWebhookPayload struct {
+	EventType       types.WebhookEventName      `json:"event_type"`
+	Payment         *Payment                    `json:"payment"`
+	Attempt         *dto.PaymentAttemptResponse `json:"attempt"`
+	CheckoutSession *CheckoutSession            `json:"checkout_session,omitempty"`
 }

@@ -330,10 +330,18 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		// A session that is no longer pending has already been cleaned up, so nothing
 		// can settle this payment now and the decline is final.
 		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
+			metadata := lo.OmitByValues(types.Metadata{
+				"error_code":   payment.ErrorCode,
+				"error_reason": payment.ErrorReason,
+				"error_source": payment.ErrorSource,
+				"error_step":   payment.ErrorStep,
+				"method":       string(payment.Method),
+			}, []string{""})
 			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
 				FlexpricePaymentID: flexpricePaymentID,
 				GatewayPaymentID:   payment.ID,
 				ErrorMessage:       errorMsg,
+				Metadata:           metadata,
 			}); err != nil {
 				h.logger.Error(ctx, "failed to record failed attempt for payment link",
 					"error", err,
