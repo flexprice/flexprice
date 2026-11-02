@@ -311,6 +311,9 @@ const (
 	// InvoiceBillingReasonSubscriptionResume is the first invoice after a paused subscription resumes.
 	// Compute: advance charges from the resume time to the next billing date (ReferencePointPeriodStart).
 	InvoiceBillingReasonSubscriptionResume InvoiceBillingReason = "SUBSCRIPTION_RESUME"
+
+	// InvoiceBillingReasonBillingTerms is an invoice that carries only billing-term instalments (separate delivery).
+	InvoiceBillingReasonBillingTerms InvoiceBillingReason = "BILLING_TERMS"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -330,6 +333,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonWalletAutoTopup,
 		InvoiceBillingReasonSubscriptionPaused,
 		InvoiceBillingReasonSubscriptionResume,
+		InvoiceBillingReasonBillingTerms,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
