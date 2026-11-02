@@ -697,6 +697,35 @@ type ConnectionMetadata struct {
 	Settings         *ConnectionSettings                `json:"settings,omitempty"`
 }
 
+// WebhookSecretSet reports whether the credential that verifies inbound webhooks is saved;
+// applies is false for providers that receive no webhooks.
+func (c ConnectionMetadata) WebhookSecretSet(provider SecretProvider) (set bool, applies bool) {
+	switch provider {
+	case SecretProviderStripe:
+		return c.Stripe != nil && c.Stripe.WebhookSecret != "", true
+	case SecretProviderRazorpay:
+		return c.Razorpay != nil && c.Razorpay.WebhookSecret != "", true
+	case SecretProviderNomod:
+		return c.Nomod != nil && c.Nomod.WebhookSecret != "", true
+	case SecretProviderMoyasar:
+		return c.Moyasar != nil && c.Moyasar.WebhookSecret != "", true
+	case SecretProviderPaddle:
+		return c.Paddle != nil && c.Paddle.WebhookSecret != "", true
+	case SecretProviderWhop:
+		return c.Whop != nil && c.Whop.WebhookSecret != "", true
+	case SecretProviderZohoBooks:
+		return c.ZohoBooks != nil && c.ZohoBooks.WebhookSecret != "", true
+	case SecretProviderQuickBooks:
+		return c.QuickBooks != nil && c.QuickBooks.WebhookVerifierToken != "", true
+	case SecretProviderChargebee:
+		return c.Chargebee != nil && c.Chargebee.WebhookUsername != "" && c.Chargebee.WebhookPassword != "", true
+	case SecretProviderHubSpot:
+		return c.HubSpot != nil && c.HubSpot.ClientSecret != "", true
+	default:
+		return false, false
+	}
+}
+
 // Validate validates the connection metadata based on provider type
 func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 	switch providerType {
