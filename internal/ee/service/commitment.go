@@ -31,6 +31,16 @@ type CommitmentService interface {
 	Terminate(ctx context.Context, id string, req dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error)
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
 	IsEnabled(ctx context.Context) (bool, error)
+	// GetBillingTerms returns the commitment's published terms and its current instalments.
+	GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error)
+	// PreviewBillingTerms returns what ReplaceBillingTerms would, writing nothing.
+	PreviewBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
+	// ReplaceBillingTerms swaps the whole set of terms and regenerates every instalment.
+	ReplaceBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
+	// ListInstalments returns every instalment of the commitment, cancelled ones included, in billing order.
+	ListInstalments(ctx context.Context, id string) (*dto.ListInstalmentsResponse, error)
+	// GetInstalment returns one instalment of any commitment in the environment.
+	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
 	// CheckPriceAttach rejects a usage price, billed from `at` until `until` (nil when open-ended), that would join a
 	// commitment's scope but break its rules: a single-meter commitment gaining a second meter, a bucket-size mismatch,

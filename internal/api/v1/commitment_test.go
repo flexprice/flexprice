@@ -10,12 +10,14 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
@@ -25,6 +27,7 @@ type stubCommitmentService struct {
 	err          error
 	gotID        string
 	gotTerminate dto.TerminateCommitmentRequest
+	gotReplace   dto.ReplaceBillingTermsRequest
 }
 
 func (s *stubCommitmentService) Preview(context.Context, dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
@@ -53,6 +56,30 @@ func (s *stubCommitmentService) Terminate(_ context.Context, id string, req dto.
 	s.gotID = id
 	s.gotTerminate = req
 	return &dto.CommitmentResponse{Commitment: &commitment.Commitment{}}, s.err
+}
+
+func (s *stubCommitmentService) GetBillingTerms(_ context.Context, id string) (*dto.BillingTermsResponse, error) {
+	s.gotID = id
+	return &dto.BillingTermsResponse{}, s.err
+}
+
+func (s *stubCommitmentService) PreviewBillingTerms(_ context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error) {
+	s.gotID, s.gotReplace = id, req
+	return &dto.BillingTermsResponse{}, s.err
+}
+
+func (s *stubCommitmentService) ReplaceBillingTerms(_ context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error) {
+	s.gotID, s.gotReplace = id, req
+	return &dto.BillingTermsResponse{}, s.err
+}
+
+func (s *stubCommitmentService) ListInstalments(_ context.Context, id string) (*dto.ListInstalmentsResponse, error) {
+	s.gotID = id
+	return &dto.ListInstalmentsResponse{}, s.err
+}
+
+func (s *stubCommitmentService) GetInstalment(context.Context, string) (*billingterm.Instalment, error) {
+	return &billingterm.Instalment{}, s.err
 }
 
 func (s *stubCommitmentService) TerminateForSubscription(context.Context, string, time.Time) error {
@@ -84,6 +111,10 @@ func setupCommitmentRouter(t *testing.T, svc *stubCommitmentService) *gin.Engine
 	router.GET("/v1/commitments/:id", h.GetCommitment)
 	router.PUT("/v1/commitments/:id", h.UpdateCommitment)
 	router.POST("/v1/commitments/:id/terminate", h.TerminateCommitment)
+	router.GET("/v1/commitments/:id/billing-terms", h.GetBillingTerms)
+	router.PUT("/v1/commitments/:id/billing-terms", h.ReplaceBillingTerms)
+	router.POST("/v1/commitments/:id/billing-terms/preview", h.PreviewBillingTerms)
+	router.GET("/v1/commitments/:id/instalments", h.ListInstalments)
 	return router
 }
 
@@ -117,6 +148,18 @@ func TestCommitmentHandler(t *testing.T) {
 		{"get not found", ierr.NewError("missing").
 			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1", ``, http.StatusNotFound, ""},
 		{"terminate empty body", nil, http.MethodPost, "/v1/commitments/cmt_1/terminate", ``, http.StatusOK, "cmt_1"},
+		{"get billing terms ok", nil, http.MethodGet, "/v1/commitments/cmt_1/billing-terms", ``, http.StatusOK, "cmt_1"},
+		{"get billing terms not found", ierr.NewError("missing").
+			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_1/billing-terms", ``, http.StatusNotFound, ""},
+		{"replace billing terms ok", nil, http.MethodPut, "/v1/commitments/cmt_2/billing-terms", `{"billing_terms":[{"kind":"recurring","value_type":"remainder"}]}`, http.StatusOK, "cmt_2"},
+		{"replace billing terms bad json", nil, http.MethodPut, "/v1/commitments/cmt_2/billing-terms", `{`, http.StatusBadRequest, ""},
+		{"replace billing terms inactive", ierr.NewError("terminated").
+			Mark(ierr.ErrInvalidOperation), http.MethodPut, "/v1/commitments/cmt_2/billing-terms", `{"billing_terms":[]}`, http.StatusBadRequest, ""},
+		{"preview billing terms ok", nil, http.MethodPost, "/v1/commitments/cmt_3/billing-terms/preview", `{"billing_terms":[{"kind":"once","value_type":"percentage","percentage":"30"}]}`, http.StatusOK, "cmt_3"},
+		{"preview billing terms bad json", nil, http.MethodPost, "/v1/commitments/cmt_3/billing-terms/preview", `not json`, http.StatusBadRequest, ""},
+		{"list instalments ok", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments", ``, http.StatusOK, "cmt_4"},
+		{"list instalments not found", ierr.NewError("missing").
+			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_4/instalments", ``, http.StatusNotFound, ""},
 	}
 
 	for _, tc := range tests {
@@ -167,4 +210,17 @@ func TestCommitmentHandler_TerminateFeeOnNonBindingIsBadRequest(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	require.NotNil(t, svc.gotTerminate.CancellationFee)
 	require.Contains(t, w.Body.String(), "binding")
+}
+
+func TestCommitmentHandler_ReplaceBillingTermsPassesTermsToService(t *testing.T) {
+	svc := &stubCommitmentService{}
+	router := setupCommitmentRouter(t, svc)
+	body := `{"billing_terms":[{"kind":"once","value_type":"percentage","percentage":"30"},{"kind":"recurring","value_type":"remainder","invoice_cadence":"ARREAR"}]}`
+	w := doCommitmentRequest(router, http.MethodPut, "/v1/commitments/cmt_5/billing-terms", body)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "cmt_5", svc.gotID)
+	require.Len(t, svc.gotReplace.BillingTerms, 2)
+	require.Equal(t, types.BillingTermKindOnce, svc.gotReplace.BillingTerms[0].Kind)
+	require.True(t, svc.gotReplace.BillingTerms[0].Percentage.Equal(decimal.NewFromInt(30)))
+	require.Equal(t, types.BillingTermValueRemainder, svc.gotReplace.BillingTerms[1].ValueType)
 }

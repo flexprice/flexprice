@@ -239,3 +239,146 @@ func (h *CommitmentHandler) TerminateCommitment(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Get billing terms
+// @ID getCommitmentBillingTerms
+// @Description Returns the commitment's current billing terms and the instalments they produce. Cancelled instalments are listed by the instalments endpoint.
+// @Tags Commitments
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Commitment ID"
+// @Success 200 {object} dto.BillingTermsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/billing-terms [get]
+func (h *CommitmentHandler) GetBillingTerms(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.GetBillingTerms(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Edit billing terms
+// @ID replaceCommitmentBillingTerms
+// @Description Replaces the whole set of billing terms of an active commitment. Every current instalment is cancelled, including invoiced ones, and the new terms generate fresh instalments against the unchanged total. Invoices are not touched; invoices_to_review lists the finalized invoices that carry a replaced instalment.
+// @Tags Commitments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Commitment ID"
+// @Param billing_terms body dto.ReplaceBillingTermsRequest true "Billing terms"
+// @Success 200 {object} dto.BillingTermsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/billing-terms [put]
+func (h *CommitmentHandler) ReplaceBillingTerms(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ReplaceBillingTermsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.ReplaceBillingTerms(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Preview billing terms edit
+// @ID previewCommitmentBillingTerms
+// @Description Returns what editing the billing terms would produce, without saving anything: the resolved terms, the new instalments and the invoices to review.
+// @Tags Commitments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Commitment ID"
+// @Param billing_terms body dto.ReplaceBillingTermsRequest true "Billing terms"
+// @Success 200 {object} dto.BillingTermsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/billing-terms/preview [post]
+func (h *CommitmentHandler) PreviewBillingTerms(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ReplaceBillingTermsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.PreviewBillingTerms(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary List instalments
+// @ID listCommitmentInstalments
+// @Description Lists every instalment of the commitment in billing order, cancelled ones included.
+// @Tags Commitments
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Commitment ID"
+// @Success 200 {object} dto.ListInstalmentsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/instalments [get]
+func (h *CommitmentHandler) ListInstalments(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.ListInstalments(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

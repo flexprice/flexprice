@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -110,4 +111,51 @@ func TestBillingTermInput_ApplyDefaults(t *testing.T) {
 	require.True(t, in.StartsOn.Equal(jan.Add(time.Second)))
 	require.Nil(t, in.EndsOn)
 	require.Nil(t, in.CoversFrom)
+}
+
+func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
+	remainder := BillingTermInput{ValueType: types.BillingTermValueRemainder}
+	tests := []struct {
+		name    string
+		req     ReplaceBillingTermsRequest
+		wantErr string
+	}{
+		{"one term", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{remainder}}, ""},
+		{"no terms", ReplaceBillingTermsRequest{}, "BillingTerms"},
+		{"empty terms", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{}}, "BillingTerms"},
+		{
+			"a term that fails its own rule",
+			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
+				remainder,
+				{ValueType: types.BillingTermValuePercentage},
+			}},
+			"billing_terms[1].percentage",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.Validate()
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.True(t, ierr.IsValidation(err), "got %v", err)
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestReplaceBillingTermsRequest_ApplyDefaults(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	req := ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
+		{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))},
+		{StartsOn: lo.ToPtr(jan.Add(time.Second + 1))},
+	}}
+
+	req.ApplyDefaults()
+
+	require.True(t, req.BillingTerms[0].BillOn.Equal(jan))
+	require.True(t, req.BillingTerms[1].StartsOn.Equal(jan.Add(time.Second)))
 }

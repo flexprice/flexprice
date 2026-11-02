@@ -411,6 +411,119 @@ definitions:
     - metrics
     - shape
     type: object
+  billingterm.Instalment:
+    properties:
+      amount:
+        type: string
+      bill_on:
+        type: string
+      bill_trigger:
+        $ref: '#/definitions/types.InstalmentBillTrigger'
+      billing_term_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      delivery:
+        $ref: '#/definitions/types.InstalmentDelivery'
+      description:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      instalment_status:
+        $ref: '#/definitions/types.InstalmentStatus'
+      invoice_id:
+        type: string
+      kind:
+        $ref: '#/definitions/types.InstalmentKind'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      owner_id:
+        type: string
+      owner_type:
+        $ref: '#/definitions/types.BillingTermOwnerType'
+      service_period_end:
+        type: string
+      service_period_start:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        type: string
+      tenant_id:
+        type: string
+      triggered_at:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  billingterm.Term:
+    properties:
+      amount:
+        description: Amount is nil for a remainder term; Percentage keeps what the
+          tenant entered, for display.
+        type: string
+      bill_on:
+        type: string
+      bill_trigger:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentBillTrigger'
+        description: Once terms.
+      covers_from:
+        type: string
+      covers_to:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      ends_on:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
+      kind:
+        $ref: '#/definitions/types.BillingTermKind'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      owner_id:
+        type: string
+      owner_type:
+        $ref: '#/definitions/types.BillingTermOwnerType'
+      percentage:
+        type: string
+      period_count:
+        type: integer
+      split:
+        $ref: '#/definitions/types.BillingTermSplit'
+      starts_on:
+        description: Recurring terms.
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      value_type:
+        $ref: '#/definitions/types.BillingTermValueType'
+    type: object
   commitment.Filter:
     properties:
       active_from:
@@ -1357,6 +1470,54 @@ definitions:
       start_time:
         type: string
     type: object
+  BillingTermInput:
+    properties:
+      amount:
+        type: string
+      bill_on:
+        type: string
+      bill_trigger:
+        $ref: '#/definitions/types.InstalmentBillTrigger'
+      covers_from:
+        type: string
+      covers_to:
+        type: string
+      description:
+        type: string
+      ends_on:
+        type: string
+      invoice_cadence:
+        $ref: '#/definitions/types.InvoiceCadence'
+      kind:
+        $ref: '#/definitions/types.BillingTermKind'
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      percentage:
+        type: string
+      period_count:
+        type: integer
+      split:
+        $ref: '#/definitions/types.BillingTermSplit'
+      starts_on:
+        type: string
+      value_type:
+        $ref: '#/definitions/types.BillingTermValueType'
+    type: object
+  BillingTermsResponse:
+    properties:
+      billing_terms:
+        items:
+          $ref: '#/definitions/billingterm.Term'
+        type: array
+      instalments:
+        items:
+          $ref: '#/definitions/billingterm.Instalment'
+        type: array
+      invoices_to_review:
+        items:
+          type: string
+        type: array
+    type: object
   BucketSummary:
     properties:
       base_charge:
@@ -1838,6 +1999,11 @@ definitions:
         items:
           $ref: '#/definitions/types.ActiveWindow'
         type: array
+      billing_terms:
+        description: BillingTerms and Instalments are set by create and preview.
+        items:
+          $ref: '#/definitions/billingterm.Term'
+        type: array
       binding:
         type: boolean
       collection_method:
@@ -1867,7 +2033,11 @@ definitions:
       idempotency_key:
         type: string
       instalment_invoicing:
-        type: string
+        $ref: '#/definitions/types.InstalmentDelivery'
+      instalments:
+        items:
+          $ref: '#/definitions/billingterm.Instalment'
+        type: array
       invoice_description:
         type: string
       invoice_label:
@@ -2437,6 +2607,12 @@ definitions:
         items:
           $ref: '#/definitions/types.ActiveWindow'
         type: array
+      billing_terms:
+        description: BillingTerms and InstalmentInvoicing apply only to collection_method
+          billing_terms.
+        items:
+          $ref: '#/definitions/BillingTermInput'
+        type: array
       binding:
         description: default false
         type: boolean
@@ -2451,6 +2627,8 @@ definitions:
       idempotency_key:
         maxLength: 128
         type: string
+      instalment_invoicing:
+        $ref: '#/definitions/types.InstalmentDelivery'
       invoice_description:
         maxLength: 500
         type: string
@@ -5643,6 +5821,10 @@ definitions:
         type: string
       amount:
         type: string
+      billing_instalment_id:
+        description: billing_instalment_id links this line item to the billing instalment
+          it bills.
+        type: string
       commitment_id:
         description: commitment_id links this line item to the commitment it bills.
         type: string
@@ -6268,6 +6450,13 @@ definitions:
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListInstalmentsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/billingterm.Instalment'
+        type: array
     type: object
   ListPaymentsResponse:
     properties:
@@ -7210,6 +7399,16 @@ definitions:
         type: string
     required:
     - addon_association_id
+    type: object
+  ReplaceBillingTermsRequest:
+    properties:
+      billing_terms:
+        items:
+          $ref: '#/definitions/BillingTermInput'
+        minItems: 1
+        type: array
+    required:
+    - billing_terms
     type: object
   ReportCatalogEntry:
     properties:
@@ -12864,6 +13063,7 @@ definitions:
     - WALLET_AUTO_TOPUP
     - SUBSCRIPTION_PAUSED
     - SUBSCRIPTION_RESUME
+    - BILLING_TERMS
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -12877,6 +13077,7 @@ definitions:
     - InvoiceBillingReasonWalletAutoTopup
     - InvoiceBillingReasonSubscriptionPaused
     - InvoiceBillingReasonSubscriptionResume
+    - InvoiceBillingReasonBillingTerms
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -15025,6 +15226,10 @@ definitions:
         type: string
       amount:
         type: string
+      billing_instalment_id:
+        description: billing_instalment_id links this line item to the billing instalment
+          it bills.
+        type: string
       commitment_id:
         description: commitment_id links this line item to the commitment it bills.
         type: string
@@ -15761,6 +15966,38 @@ definitions:
     - AmortizationDaily
     - AmortizationPeriodEven
     - AmortizationPeriodEvenProrated
+  types.BillingTermKind:
+    enum:
+    - once
+    - recurring
+    type: string
+    x-enum-varnames:
+    - BillingTermKindOnce
+    - BillingTermKindRecurring
+  types.BillingTermOwnerType:
+    enum:
+    - commitment
+    type: string
+    x-enum-varnames:
+    - BillingTermOwnerCommitment
+  types.BillingTermSplit:
+    enum:
+    - even
+    - proportional
+    type: string
+    x-enum-varnames:
+    - BillingTermSplitEven
+    - BillingTermSplitProportional
+  types.BillingTermValueType:
+    enum:
+    - fixed
+    - percentage
+    - remainder
+    type: string
+    x-enum-varnames:
+    - BillingTermValueFixed
+    - BillingTermValuePercentage
+    - BillingTermValueRemainder
   types.CommitmentCollectionMethod:
     enum:
     - per_period
@@ -15839,6 +16076,40 @@ definitions:
     x-enum-varnames:
     - ImprovementHigher
     - ImprovementLower
+  types.InstalmentBillTrigger:
+    enum:
+    - date
+    - manual
+    type: string
+    x-enum-varnames:
+    - InstalmentBillTriggerDate
+    - InstalmentBillTriggerManual
+  types.InstalmentDelivery:
+    enum:
+    - subscription_invoice
+    - separate_invoice
+    type: string
+    x-enum-varnames:
+    - InstalmentDeliverySubscriptionInvoice
+    - InstalmentDeliverySeparateInvoice
+  types.InstalmentKind:
+    enum:
+    - instalment
+    - settlement
+    type: string
+    x-enum-varnames:
+    - InstalmentKindInstalment
+    - InstalmentKindSettlement
+  types.InstalmentStatus:
+    enum:
+    - scheduled
+    - invoiced
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - InstalmentStatusScheduled
+    - InstalmentStatusInvoiced
+    - InstalmentStatusCancelled
   types.JournalDirection:
     enum:
     - debit
@@ -18209,6 +18480,168 @@ paths:
       summary: Update commitment
       tags:
       - Commitments
+  /commitments/{id}/billing-terms:
+    get:
+      description: Returns the commitment's current billing terms and the instalments
+        they produce. Cancelled instalments are listed by the instalments endpoint.
+      operationId: getCommitmentBillingTerms
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingTermsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get billing terms
+      tags:
+      - Commitments
+      x-scope: read
+    put:
+      consumes:
+      - application/json
+      description: Replaces the whole set of billing terms of an active commitment.
+        Every current instalment is cancelled, including invoiced ones, and the new
+        terms generate fresh instalments against the unchanged total. Invoices are
+        not touched; invoices_to_review lists the finalized invoices that carry a
+        replaced instalment.
+      operationId: replaceCommitmentBillingTerms
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Billing terms
+        in: body
+        name: billing_terms
+        required: true
+        schema:
+          $ref: '#/definitions/ReplaceBillingTermsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingTermsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Edit billing terms
+      tags:
+      - Commitments
+  /commitments/{id}/billing-terms/preview:
+    post:
+      consumes:
+      - application/json
+      description: 'Returns what editing the billing terms would produce, without
+        saving anything: the resolved terms, the new instalments and the invoices
+        to review.'
+      operationId: previewCommitmentBillingTerms
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Billing terms
+        in: body
+        name: billing_terms
+        required: true
+        schema:
+          $ref: '#/definitions/ReplaceBillingTermsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BillingTermsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Preview billing terms edit
+      tags:
+      - Commitments
+      x-scope: read
+  /commitments/{id}/instalments:
+    get:
+      description: Lists every instalment of the commitment in billing order, cancelled
+        ones included.
+      operationId: listCommitmentInstalments
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListInstalmentsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List instalments
+      tags:
+      - Commitments
+      x-scope: read
   /commitments/{id}/terminate:
     post:
       consumes:

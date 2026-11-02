@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -101,4 +102,44 @@ func (in BillingTermInput) ToTerm(ctx context.Context, ownerID string) *billingt
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
+}
+
+// ReplaceBillingTermsRequest is the new set of terms of a commitment, which replaces the current set as a whole.
+type ReplaceBillingTermsRequest struct {
+	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1"`
+}
+
+// ApplyDefaults aligns the dates of every term to whole seconds.
+func (r *ReplaceBillingTermsRequest) ApplyDefaults() {
+	for i := range r.BillingTerms {
+		r.BillingTerms[i].ApplyDefaults()
+	}
+}
+
+// Validate checks the rules that need only the request. Call ApplyDefaults first.
+func (r ReplaceBillingTermsRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	for i, term := range r.BillingTerms {
+		if err := term.Validate(i); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// BillingTermsResponse is a commitment's terms with the instalments they produce. InvoicesToReview lists the
+// invoices that carry an instalment an edit replaced.
+type BillingTermsResponse struct {
+	BillingTerms     []*billingterm.Term       `json:"billing_terms"`
+	Instalments      []*billingterm.Instalment `json:"instalments"`
+	InvoicesToReview []string                  `json:"invoices_to_review,omitempty"`
+}
+
+// ListInstalmentsResponse is the instalments of a commitment in billing order.
+type ListInstalmentsResponse struct {
+	Items []*billingterm.Instalment `json:"items"`
 }
