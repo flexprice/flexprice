@@ -18880,8 +18880,10 @@ paths:
       consumes:
       - application/json
       description: Ends a commitment immediately. effective_at defaults to now and
-        cannot be in the future. A fixed cancellation fee, when given, is billed on
-        a one-off invoice.
+        cannot be in the future. Under billing terms, its scheduled instalments are
+        cancelled and any amount it earned beyond what is already invoiced is billed
+        as a settlement. The settlement and a fixed cancellation fee, when given,
+        are billed together on one one-off invoice.
       operationId: terminateCommitment
       parameters:
       - description: Commitment ID
