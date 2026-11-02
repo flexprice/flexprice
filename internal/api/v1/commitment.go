@@ -480,3 +480,55 @@ func (h *CommitmentHandler) BringForwardInstalments(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Trigger instalment
+// @ID triggerCommitmentInstalment
+// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date. Until it is triggered, a manual instalment waits at the end of the term.
+// @Tags Commitments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Commitment ID"
+// @Param instalment_id path string true "Instalment ID"
+// @Param trigger body dto.TriggerInstalmentRequest false "Trigger request"
+// @Success 200 {object} billingterm.Instalment
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/instalments/{instalment_id}/trigger [post]
+func (h *CommitmentHandler) TriggerInstalment(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	instalmentID := c.Param("instalment_id")
+	if instalmentID == "" {
+		c.Error(ierr.NewError("instalment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// An empty body, even one of unknown length, means trigger now.
+	var req dto.TriggerInstalmentRequest
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid request format").
+				Mark(ierr.ErrValidation))
+			return
+		}
+	}
+
+	resp, err := h.commitmentService.TriggerInstalment(c.Request.Context(), id, instalmentID, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

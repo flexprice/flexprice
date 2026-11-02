@@ -741,6 +741,7 @@ func NewRouter(
 			commitments.GET("/:id/instalments", read(types.EntityCommitment, types.ActionRead), handlers.Commitment.ListInstalments)
 			commitments.PUT("/:id/instalments", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.ReplanInstalments)
 			commitments.POST("/:id/instalments/bring-forward", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.BringForwardInstalments)
+			commitments.POST("/:id/instalments/:instalment_id/trigger", write(types.EntityCommitment, types.ActionWrite), handlers.Commitment.TriggerInstalment)
 		}
 
 		// Coupon routes

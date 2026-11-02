@@ -33,6 +33,8 @@ type stubCommitmentService struct {
 
 	gotReplan       dto.ReplanInstalmentsRequest
 	gotBringForward dto.BringForwardInstalmentsRequest
+	gotInstalmentID string
+	gotTrigger      dto.TriggerInstalmentRequest
 }
 
 func (s *stubCommitmentService) Preview(context.Context, dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
@@ -93,6 +95,15 @@ func (s *stubCommitmentService) BringForwardInstalments(_ context.Context, id st
 	return &dto.ListInstalmentsResponse{}, s.err
 }
 
+func (s *stubCommitmentService) TriggerInstalment(
+	_ context.Context,
+	id, instalmentID string,
+	req dto.TriggerInstalmentRequest,
+) (*billingterm.Instalment, error) {
+	s.gotID, s.gotInstalmentID, s.gotTrigger = id, instalmentID, req
+	return &billingterm.Instalment{}, s.err
+}
+
 func (s *stubCommitmentService) GetInstalment(context.Context, string) (*billingterm.Instalment, error) {
 	return &billingterm.Instalment{}, s.err
 }
@@ -134,6 +145,7 @@ func setupCommitmentRouter(t *testing.T, svc *stubCommitmentService) *gin.Engine
 	router.GET("/v1/commitments/:id/instalments", h.ListInstalments)
 	router.PUT("/v1/commitments/:id/instalments", h.ReplanInstalments)
 	router.POST("/v1/commitments/:id/instalments/bring-forward", h.BringForwardInstalments)
+	router.POST("/v1/commitments/:id/instalments/:instalment_id/trigger", h.TriggerInstalment)
 	return router
 }
 
@@ -194,6 +206,15 @@ func TestCommitmentHandler(t *testing.T) {
 			Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `{"amount":"300"}`, http.StatusBadRequest, ""},
 		{"bring forward not found", ierr.NewError("missing").
 			Mark(ierr.ErrNotFound), http.MethodPost, "/v1/commitments/cmt_9/instalments/bring-forward", `{"amount":"300"}`, http.StatusNotFound, ""},
+		{"trigger instalment empty body", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", ``, http.StatusOK, "cmt_10"},
+		{"trigger instalment empty object", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `{}`, http.StatusOK, "cmt_10"},
+		{"trigger instalment bad json", nil, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `not json`, http.StatusBadRequest, ""},
+		{"trigger instalment not manual", ierr.NewError("date instalment").
+			Mark(ierr.ErrInvalidOperation), http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `{}`, http.StatusBadRequest, ""},
+		{"trigger instalment outside the term", ierr.NewError("outside the term").
+			Mark(ierr.ErrValidation), http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `{"bill_on":"2099-01-01T00:00:00Z"}`, http.StatusBadRequest, ""},
+		{"trigger instalment not found", ierr.NewError("missing").
+			Mark(ierr.ErrNotFound), http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_1/trigger", `{}`, http.StatusNotFound, ""},
 	}
 
 	for _, tc := range tests {
@@ -333,4 +354,44 @@ func TestCommitmentHandler_BringForwardInstalmentsPassesRequestToService(t *test
 			require.True(t, svc.gotBringForward.BillOn.Equal(*tc.wantBillOn))
 		})
 	}
+}
+
+func TestCommitmentHandler_TriggerInstalmentPassesRequestToService(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantBillOn *time.Time
+	}{
+		{"default date", ``, nil},
+		{"explicit date", `{"bill_on":"2027-06-15T00:00:00Z"}`, lo.ToPtr(time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC))},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &stubCommitmentService{}
+			router := setupCommitmentRouter(t, svc)
+			w := doCommitmentRequest(router, http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_2/trigger", tc.body)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			require.Equal(t, "cmt_10", svc.gotID)
+			require.Equal(t, "binst_2", svc.gotInstalmentID)
+			if tc.wantBillOn == nil {
+				require.Nil(t, svc.gotTrigger.BillOn)
+				return
+			}
+
+			require.True(t, svc.gotTrigger.BillOn.Equal(*tc.wantBillOn))
+		})
+	}
+}
+
+func TestCommitmentHandler_TriggerInstalmentEmptyBodyOfUnknownLength(t *testing.T) {
+	svc := &stubCommitmentService{}
+	router := setupCommitmentRouter(t, svc)
+	req := httptest.NewRequest(http.MethodPost, "/v1/commitments/cmt_10/instalments/binst_3/trigger", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/json")
+	req.ContentLength = -1
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, "binst_3", svc.gotInstalmentID)
 }

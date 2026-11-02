@@ -43,6 +43,8 @@ type CommitmentService interface {
 	// BringForwardInstalments moves an amount of the earliest scheduled instalments into one new instalment billed now
 	// or on the given date. It returns the resulting plan.
 	BringForwardInstalments(ctx context.Context, id string, req dto.BringForwardInstalmentsRequest) (*dto.ListInstalmentsResponse, error)
+	// TriggerInstalment bills a manual instalment of the commitment on the given date or now, and returns it.
+	TriggerInstalment(ctx context.Context, id, instalmentID string, req dto.TriggerInstalmentRequest) (*billingterm.Instalment, error)
 	// ListInstalments returns the commitment's instalments in billing order; empty statuses list every status, cancelled included.
 	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.

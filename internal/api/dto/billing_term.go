@@ -234,6 +234,18 @@ func (r BringForwardInstalmentsRequest) Validate() error {
 	return nil
 }
 
+// TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.
+type TriggerInstalmentRequest struct {
+	BillOn *time.Time `json:"bill_on,omitempty"`
+}
+
+// ApplyDefaults aligns bill_on to whole seconds.
+func (r *TriggerInstalmentRequest) ApplyDefaults() {
+	if r.BillOn != nil {
+		r.BillOn = lo.ToPtr(r.BillOn.Truncate(time.Second))
+	}
+}
+
 // ListInstalmentsResponse is the instalments of a commitment in billing order.
 type ListInstalmentsResponse struct {
 	Items []*billingterm.Instalment `json:"items"`

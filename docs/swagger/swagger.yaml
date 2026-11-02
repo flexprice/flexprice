@@ -9987,6 +9987,11 @@ definitions:
       workflow_id:
         type: string
     type: object
+  TriggerInstalmentRequest:
+    properties:
+      bill_on:
+        type: string
+    type: object
   UpdateAddonRequest:
     properties:
       description:
@@ -18753,6 +18758,55 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Re-plan instalments
+      tags:
+      - Commitments
+  /commitments/{id}/instalments/{instalment_id}/trigger:
+    post:
+      consumes:
+      - application/json
+      description: Bills a manual instalment of an active commitment on bill_on, now
+        by default, which must fall within the commitment term. The instalment goes
+        on the first subscription invoice at or after that date. Until it is triggered,
+        a manual instalment waits at the end of the term.
+      operationId: triggerCommitmentInstalment
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Instalment ID
+        in: path
+        name: instalment_id
+        required: true
+        type: string
+      - description: Trigger request
+        in: body
+        name: trigger
+        schema:
+          $ref: '#/definitions/TriggerInstalmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/billingterm.Instalment'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Trigger instalment
       tags:
       - Commitments
   /commitments/{id}/instalments/bring-forward:

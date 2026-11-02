@@ -2866,6 +2866,95 @@
         "x-codegen-request-body-name": "bring_forward"
       }
     },
+    "/commitments/{id}/instalments/{instalment_id}/trigger": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Trigger instalment",
+        "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date. Until it is triggered, a manual instalment waits at the end of the term.",
+        "operationId": "triggerCommitmentInstalment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "instalment_id",
+            "in": "path",
+            "description": "Instalment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Trigger request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerInstalmentRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/billingterm.Instalment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "trigger"
+      }
+    },
     "/commitments/{id}/terminate": {
       "post": {
         "tags": [
@@ -33241,6 +33330,14 @@
             "format": "date-time"
           },
           "workflow_id": {
+            "type": "string"
+          }
+        }
+      },
+      "TriggerInstalmentRequest": {
+        "type": "object",
+        "properties": {
+          "bill_on": {
             "type": "string"
           }
         }

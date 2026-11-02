@@ -266,3 +266,15 @@ func TestBringForwardInstalmentsRequest(t *testing.T) {
 	none.ApplyDefaults()
 	require.Nil(t, none.BillOn)
 }
+
+func TestTriggerInstalmentRequest_ApplyDefaults(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	req := TriggerInstalmentRequest{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))}
+	req.ApplyDefaults()
+	require.True(t, req.BillOn.Equal(jan))
+
+	none := TriggerInstalmentRequest{}
+	none.ApplyDefaults()
+	require.Nil(t, none.BillOn)
+}

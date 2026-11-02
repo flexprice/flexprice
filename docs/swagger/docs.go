@@ -2378,6 +2378,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/commitments/{id}/instalments/{instalment_id}/trigger": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date. Until it is triggered, a manual instalment waits at the end of the term.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Commitments"
+                ],
+                "summary": "Trigger instalment",
+                "operationId": "triggerCommitmentInstalment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Commitment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Instalment ID",
+                        "name": "instalment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trigger request",
+                        "name": "trigger",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/TriggerInstalmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/billingterm.Instalment"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/commitments/{id}/terminate": {
             "post": {
                 "security": [
@@ -30875,6 +30946,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "workflow_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "TriggerInstalmentRequest": {
+            "type": "object",
+            "properties": {
+                "bill_on": {
                     "type": "string"
                 }
             }
