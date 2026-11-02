@@ -835,16 +835,26 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if finalizedNow {
 		ctx = activity.WithAction(ctx, invoice.ID, activity.InvoiceFinalized)
 	}
+	// Unlike the finalize action, a stale instalment never fails here: a received payment must not be dropped.
+	var unclaimed []string
 	err = p.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if finalizedNow {
-			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).claimInstalments(txCtx, invoice); err != nil {
+			stale, err := NewInvoiceService(p.ServiceParams).(*invoiceService).claimInstalments(txCtx, invoice)
+			if err != nil {
 				return err
 			}
+			unclaimed = stale
 		}
 		return p.InvoiceRepo.Update(txCtx, invoice)
 	})
 	if err != nil {
 		return err
+	}
+	if len(unclaimed) > 0 {
+		p.Logger.Error(ctx, "finalized a paid invoice carrying instalments that are no longer scheduled",
+			"error", "instalments changed since the invoice was computed",
+			"invoice_id", invoice.ID,
+			"instalment_ids", unclaimed)
 	}
 	if finalizedNow {
 		if err := NewHostedInvoiceTokenService(p.ServiceParams).Issue(ctx, invoice); err != nil {

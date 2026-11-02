@@ -1550,8 +1550,14 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
 			return err
 		}
-		if err := s.claimInstalments(txCtx, lockedInv); err != nil {
+		unclaimed, err := s.claimInstalments(txCtx, lockedInv)
+		if err != nil {
 			return err
+		}
+		if len(unclaimed) > 0 {
+			return ierr.NewError("invoice carries instalments that changed since it was computed").
+				WithHint("Recompute the invoice and finalize again").
+				Mark(ierr.ErrInvalidOperation)
 		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {

@@ -3,40 +3,35 @@ package service
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
 
-// claimInstalments marks the instalments on a finalizing invoice as billed by it. It runs in the finalize
-// transaction, so a draft carrying an instalment that is no longer scheduled fails the whole finalization.
-func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invoice) error {
+// claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it, in the caller's
+// finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
+func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invoice) (unclaimed []string, err error) {
 	lines, err := s.InvoiceLineItemRepo.ListByInvoiceID(ctx, inv.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ids := lo.FilterMap(lines, func(line *invoice.InvoiceLineItem, _ int) (string, bool) {
 		return lo.FromPtr(line.BillingInstalmentID), line.BillingInstalmentID != nil
 	})
 	if len(ids) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	claimed, err := s.BillingInstalmentRepo.Claim(ctx, inv.ID, ids)
 	if err != nil {
-		return err
-	}
-
-	if len(claimed) < len(ids) {
-		return ierr.NewError("invoice carries instalments that changed since it was computed").
-			WithHint("Recompute the invoice and finalize again").
-			Mark(ierr.ErrInvalidOperation)
+		return nil, err
 	}
 
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentInvoiced, claimed)
-	return nil
+	claimedIDs := lo.Map(claimed, func(inst *billingterm.Instalment, _ int) string { return inst.ID })
+	return lo.Without(ids, claimedIDs...), nil
 }
 
 // rescheduleInstalments puts a voided invoice's instalments back on schedule. It runs in the void transaction.

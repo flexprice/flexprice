@@ -191,3 +191,46 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_ClaimsInstalments() {
 	}
 	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
+
+// A draft paid in full after an edit cancelled its instalments still records the payment and is finalized; the
+// cancelled instalments stay cancelled and unclaimed.
+func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
+	ctx := s.GetContext()
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	computed, commitmentID := s.januaryDraft(NewInvoiceService(params), "paid_stale")
+	stale := instalmentIDs(s.billedInstalments(computed.ID))
+
+	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	draft, err := s.GetStores().InvoiceRepo.Get(ctx, computed.ID)
+	s.Require().NoError(err)
+	paid := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     draft.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            draft.AmountDue,
+		Currency:          draft.Currency,
+		PaymentStatus:     types.PaymentStatusSucceeded,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	processor := &paymentProcessor{ServiceParams: params}
+	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
+
+	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+	s.Equal(types.PaymentStatusSucceeded, finalized.PaymentStatus)
+	s.True(finalized.AmountPaid.Equal(paid.Amount), "amount paid %s", finalized.AmountPaid)
+
+	for _, inst := range s.billedInstalments(draft.ID) {
+		s.Contains(stale, inst.ID)
+		s.Equal(types.InstalmentStatusCancelled, inst.InstalmentStatus)
+		s.Nil(inst.InvoiceID)
+	}
+	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+}
