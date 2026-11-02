@@ -369,6 +369,7 @@ func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) 
 			temporalInterceptor.NewWriterPinInterceptor(),
 			temporalInterceptor.NewActorInterceptor(),
 			temporalInterceptor.NewRequestIDInterceptor(),
+			temporalInterceptor.NewTimePrecisionInterceptor(),
 		}
 	} else {
 		options.Interceptors = []interceptor.WorkerInterceptor{
@@ -376,6 +377,7 @@ func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) 
 			temporalInterceptor.NewWriterPinInterceptor(),
 			temporalInterceptor.NewActorInterceptor(),
 			temporalInterceptor.NewRequestIDInterceptor(),
+			temporalInterceptor.NewTimePrecisionInterceptor(),
 		}
 	}
 
