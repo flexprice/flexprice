@@ -217,6 +217,10 @@ func (s *commitmentService) create(
 		"subscription_id", out.SubscriptionID,
 	)
 	s.publishSystemEvent(ctx, types.WebhookEventCommitmentCreated, out)
+	if len(terms) > 0 {
+		publishBillingTermsEvent(ctx, s.ServiceParams, types.WebhookEventBillingTermsCreated, out)
+		publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, instalments)
+	}
 
 	resp, err := s.response(ctx, out, cc)
 	if err != nil {

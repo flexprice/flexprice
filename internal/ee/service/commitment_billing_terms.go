@@ -143,14 +143,16 @@ func (s *commitmentService) ReplaceBillingTerms(
 		return nil, err
 	}
 
+	var c *commitment.Commitment
+	var cancelled []*billingterm.Instalment
 	var resp *dto.BillingTermsResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {
 			return err
 		}
 
-		c, err := s.CommitmentRepo.Get(txCtx, id)
-		if err != nil {
+		var err error
+		if c, err = s.CommitmentRepo.Get(txCtx, id); err != nil {
 			return err
 		}
 
@@ -163,7 +165,7 @@ func (s *commitmentService) ReplaceBillingTerms(
 			return err
 		}
 
-		cancelled, err := s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, []types.InstalmentStatus{
+		cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, []types.InstalmentStatus{
 			types.InstalmentStatusScheduled,
 			types.InstalmentStatusInvoiced,
 		})
@@ -190,6 +192,10 @@ func (s *commitmentService) ReplaceBillingTerms(
 		"instalments", len(resp.Instalments),
 		"invoices_to_review", len(resp.InvoicesToReview),
 	)
+
+	publishBillingTermsEvent(ctx, s.ServiceParams, types.WebhookEventBillingTermsUpdated, c)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, resp.Instalments)
 
 	return resp, nil
 }

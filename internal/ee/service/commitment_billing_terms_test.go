@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"slices"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -440,6 +442,8 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_InvalidTermsChangeNothi
 	s.Require().NoError(err)
 
 	terms, instalments := s.storedTerms(created.ID), s.storedInstalments()
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
 
 	for name, req := range map[string]dto.ReplaceBillingTermsRequest{
 		"no terms":         {},
@@ -461,6 +465,7 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_InvalidTermsChangeNothi
 
 	s.Equal(terms, s.storedTerms(created.ID))
 	s.Equal(instalments, s.storedInstalments())
+	s.Empty(publisher.Events(), "a rejected edit publishes nothing")
 }
 
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_QuantityCommitmentUsesTheCommittedPrice() {
@@ -672,4 +677,102 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_ReadsWhenDisabledAndEmptyFo
 	listed, err := s.svc.ListInstalments(ctx, perPeriod.ID, nil)
 	s.Require().NoError(err)
 	s.Empty(listed.Items)
+}
+
+// instalmentEventIDs returns the instalment ids carried by the published events with the given name, in order.
+func (s *CommitmentServiceSuite) instalmentEventIDs(events []*types.WebhookEvent, name types.WebhookEventName) []string {
+	var ids []string
+	for _, event := range events {
+		if event.EventName != name {
+			continue
+		}
+
+		s.Equal(types.SystemEntityTypeBillingInstalment, event.EntityType)
+
+		var payload webhookDto.InternalBillingInstalmentEvent
+		s.Require().NoError(json.Unmarshal(event.Payload, &payload))
+		s.Equal(event.EntityID, payload.InstalmentID)
+		s.Equal(types.GetTenantID(s.GetContext()), payload.TenantID)
+		ids = append(ids, payload.InstalmentID)
+	}
+
+	return ids
+}
+
+func (s *CommitmentServiceSuite) TestCreate_BillingTerms_PublishesEvents() {
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+
+	req := s.billingTermsRequest()
+	req.IdempotencyKey = lo.ToPtr("cmt-terms-events")
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	events := publisher.Events()
+	s.Require().Len(events, 13, "commitment.created, billing_terms.created and one event per instalment")
+	s.Equal(types.WebhookEventCommitmentCreated, events[0].EventName)
+	s.Equal(types.WebhookEventBillingTermsCreated, events[1].EventName)
+	s.Equal(types.SystemEntityTypeCommitment, events[1].EntityType)
+	s.Equal(created.ID, events[1].EntityID)
+
+	var terms webhookDto.InternalBillingTermsEvent
+	s.Require().NoError(json.Unmarshal(events[1].Payload, &terms))
+	s.Equal(types.BillingTermOwnerCommitment, terms.OwnerType)
+	s.Equal(created.ID, terms.OwnerID)
+	s.Equal(types.GetTenantID(s.GetContext()), terms.TenantID)
+
+	stored := s.storedInstalments()
+	s.Require().Len(stored, 11)
+	s.ElementsMatch(
+		lo.Map(stored, func(i *billingterm.Instalment, _ int) string { return i.ID }),
+		s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCreated),
+	)
+
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	s.Len(publisher.Events(), 13, "a replay of the same key publishes nothing")
+}
+
+func (s *CommitmentServiceSuite) TestCreate_PerPeriodCommitment_PublishesNoBillingTermEvents() {
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+
+	_, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
+	s.Require().NoError(err)
+
+	events := publisher.Events()
+	s.Require().Len(events, 1)
+	s.Equal(types.WebhookEventCommitmentCreated, events[0].EventName)
+}
+
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_PublishesEvents() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+
+	before := s.storedInstalments()
+	s.claimFirstInstalment("inv_x")
+
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+
+	resp, err := s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	events := publisher.Events()
+	s.Require().Len(events, 23, "billing_terms.updated, 11 cancelled and 11 created")
+	s.Equal(types.WebhookEventBillingTermsUpdated, events[0].EventName)
+	s.Equal(created.ID, events[0].EntityID)
+
+	cancelled := s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCancelled)
+	s.ElementsMatch(lo.Map(before, func(i *billingterm.Instalment, _ int) string { return i.ID }), cancelled,
+		"every replaced instalment is reported, invoiced ones included")
+
+	createdIDs := s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCreated)
+	s.ElementsMatch(lo.Map(resp.Instalments, func(i *billingterm.Instalment, _ int) string { return i.ID }), createdIDs)
+
+	names := lo.Map(events, func(e *types.WebhookEvent, _ int) types.WebhookEventName { return e.EventName })
+	s.Equal(types.WebhookEventBillingTermsUpdated, names[0])
+	s.Equal(types.WebhookEventBillingInstalmentCancelled, names[1])
+	s.Equal(types.WebhookEventBillingInstalmentCreated, names[22], "cancellations precede the new instalments")
 }

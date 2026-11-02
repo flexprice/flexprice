@@ -15004,6 +15004,12 @@ definitions:
     - commitment.created
     - commitment.updated
     - commitment.terminated
+    - billing_terms.created
+    - billing_terms.updated
+    - billing_instalment.created
+    - billing_instalment.updated
+    - billing_instalment.cancelled
+    - billing_instalment.invoiced
     - wallet.created
     - wallet.updated
     - wallet.terminated
@@ -15071,6 +15077,12 @@ definitions:
     - WebhookEventCommitmentCreated
     - WebhookEventCommitmentUpdated
     - WebhookEventCommitmentTerminated
+    - WebhookEventBillingTermsCreated
+    - WebhookEventBillingTermsUpdated
+    - WebhookEventBillingInstalmentCreated
+    - WebhookEventBillingInstalmentUpdated
+    - WebhookEventBillingInstalmentCancelled
+    - WebhookEventBillingInstalmentInvoiced
     - WebhookEventWalletCreated
     - WebhookEventWalletUpdated
     - WebhookEventWalletTerminated
@@ -16325,6 +16337,26 @@ definitions:
         type: string
       wallet_id:
         type: string
+    type: object
+  webhookDto.BillingInstalmentWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      instalment:
+        $ref: '#/definitions/billingterm.Instalment'
+    type: object
+  webhookDto.BillingTermsWebhookPayload:
+    properties:
+      billing_terms:
+        items:
+          $ref: '#/definitions/billingterm.Term'
+        type: array
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      owner_id:
+        type: string
+      owner_type:
+        $ref: '#/definitions/types.BillingTermOwnerType'
     type: object
   webhookDto.CheckoutSession:
     properties:
@@ -27319,6 +27351,101 @@ paths:
       summary: Query wallet transactions
       tags:
       - Wallets
+  /webhook-events/billing_instalment.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a billing instalment is cancelled. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
+      summary: billing_instalment.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/billing_instalment.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a billing instalment is added to a commitment. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
+      summary: billing_instalment.created
+      tags:
+      - Webhook Events
+  /webhook-events/billing_instalment.invoiced:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the invoice carrying a billing instalment is finalized.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
+      summary: billing_instalment.invoiced
+      tags:
+      - Webhook Events
+  /webhook-events/billing_instalment.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a billing instalment's date or amount changes, or a
+        voided invoice reschedules it. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
+      summary: billing_instalment.updated
+      tags:
+      - Webhook Events
+  /webhook-events/billing_terms.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when billing terms are saved with a new commitment. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
+      summary: billing_terms.created
+      tags:
+      - Webhook Events
+  /webhook-events/billing_terms.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an edit replaces a commitment's billing terms. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
+      summary: billing_terms.updated
+      tags:
+      - Webhook Events
   /webhook-events/checkout.session.completed:
     post:
       consumes:

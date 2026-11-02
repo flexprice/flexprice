@@ -15118,6 +15118,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/billing_instalment.cancelled": {
+            "post": {
+                "description": "Fired when a billing instalment is cancelled. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.created": {
+            "post": {
+                "description": "Fired when a billing instalment is added to a commitment. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.invoiced": {
+            "post": {
+                "description": "Fired when the invoice carrying a billing instalment is finalized. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.invoiced",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_instalment.updated": {
+            "post": {
+                "description": "Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_instalment.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingInstalmentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_terms.created": {
+            "post": {
+                "description": "Fired when billing terms are saved with a new commitment. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_terms.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/billing_terms.updated": {
+            "post": {
+                "description": "Fired when an edit replaces a commitment's billing terms. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "billing_terms.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/checkout.session.completed": {
             "post": {
                 "description": "Fired when payment is confirmed; the subscription is now active and the invoice is finalized. Doc-only for parsing.",
@@ -37409,6 +37547,12 @@ const docTemplate = `{
                 "commitment.created",
                 "commitment.updated",
                 "commitment.terminated",
+                "billing_terms.created",
+                "billing_terms.updated",
+                "billing_instalment.created",
+                "billing_instalment.updated",
+                "billing_instalment.cancelled",
+                "billing_instalment.invoiced",
                 "wallet.created",
                 "wallet.updated",
                 "wallet.terminated",
@@ -37476,6 +37620,12 @@ const docTemplate = `{
                 "WebhookEventCommitmentCreated",
                 "WebhookEventCommitmentUpdated",
                 "WebhookEventCommitmentTerminated",
+                "WebhookEventBillingTermsCreated",
+                "WebhookEventBillingTermsUpdated",
+                "WebhookEventBillingInstalmentCreated",
+                "WebhookEventBillingInstalmentUpdated",
+                "WebhookEventBillingInstalmentCancelled",
+                "WebhookEventBillingInstalmentInvoiced",
                 "WebhookEventWalletCreated",
                 "WebhookEventWalletUpdated",
                 "WebhookEventWalletTerminated",
@@ -39135,6 +39285,37 @@ const docTemplate = `{
                 },
                 "wallet_id": {
                     "type": "string"
+                }
+            }
+        },
+        "webhookDto.BillingInstalmentWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "instalment": {
+                    "$ref": "#/definitions/billingterm.Instalment"
+                }
+            }
+        },
+        "webhookDto.BillingTermsWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "billing_terms": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/billingterm.Term"
+                    }
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "owner_id": {
+                    "type": "string"
+                },
+                "owner_type": {
+                    "$ref": "#/definitions/types.BillingTermOwnerType"
                 }
             }
         },

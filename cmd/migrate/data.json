@@ -1,6 +1,30 @@
 {
     "data": [
         {
+            "name": "billing_instalment.cancelled",
+            "description": "Fired when a billing instalment is cancelled"
+        },
+        {
+            "name": "billing_instalment.created",
+            "description": "Fired when a billing instalment is added to a commitment"
+        },
+        {
+            "name": "billing_instalment.invoiced",
+            "description": "Fired when the invoice carrying a billing instalment is finalized"
+        },
+        {
+            "name": "billing_instalment.updated",
+            "description": "Fired when a billing instalment's date or amount changes, or a voided invoice reschedules it"
+        },
+        {
+            "name": "billing_terms.created",
+            "description": "Fired when billing terms are saved with a new commitment"
+        },
+        {
+            "name": "billing_terms.updated",
+            "description": "Fired when an edit replaces a commitment's billing terms"
+        },
+        {
             "name": "checkout.session.completed",
             "description": "Payment was confirmed. The subscription is now active and the invoice is finalized."
         },

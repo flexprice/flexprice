@@ -137,6 +137,16 @@ const (
 	WebhookEventCommitmentTerminated WebhookEventName = "commitment.terminated"
 )
 
+// billing term and instalment event names
+const (
+	WebhookEventBillingTermsCreated        WebhookEventName = "billing_terms.created"
+	WebhookEventBillingTermsUpdated        WebhookEventName = "billing_terms.updated"
+	WebhookEventBillingInstalmentCreated   WebhookEventName = "billing_instalment.created"
+	WebhookEventBillingInstalmentUpdated   WebhookEventName = "billing_instalment.updated"
+	WebhookEventBillingInstalmentCancelled WebhookEventName = "billing_instalment.cancelled"
+	WebhookEventBillingInstalmentInvoiced  WebhookEventName = "billing_instalment.invoiced"
+)
+
 // wallet event names
 const (
 	WebhookEventWalletCreated            WebhookEventName = "wallet.created"
