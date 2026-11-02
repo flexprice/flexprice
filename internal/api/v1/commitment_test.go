@@ -28,6 +28,7 @@ type stubCommitmentService struct {
 	gotID        string
 	gotTerminate dto.TerminateCommitmentRequest
 	gotReplace   dto.ReplaceBillingTermsRequest
+	gotStatuses  []types.InstalmentStatus
 }
 
 func (s *stubCommitmentService) Preview(context.Context, dto.CreateCommitmentRequest) (*dto.CommitmentResponse, error) {
@@ -73,8 +74,8 @@ func (s *stubCommitmentService) ReplaceBillingTerms(_ context.Context, id string
 	return &dto.BillingTermsResponse{}, s.err
 }
 
-func (s *stubCommitmentService) ListInstalments(_ context.Context, id string) (*dto.ListInstalmentsResponse, error) {
-	s.gotID = id
+func (s *stubCommitmentService) ListInstalments(_ context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error) {
+	s.gotID, s.gotStatuses = id, statuses
 	return &dto.ListInstalmentsResponse{}, s.err
 }
 
@@ -160,6 +161,9 @@ func TestCommitmentHandler(t *testing.T) {
 		{"list instalments ok", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments", ``, http.StatusOK, "cmt_4"},
 		{"list instalments not found", ierr.NewError("missing").
 			Mark(ierr.ErrNotFound), http.MethodGet, "/v1/commitments/cmt_4/instalments", ``, http.StatusNotFound, ""},
+		{"list instalments with a status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=cancelled", ``, http.StatusOK, "cmt_4"},
+		{"list instalments with an unknown status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=paid", ``, http.StatusBadRequest, ""},
+		{"list instalments with an empty status", nil, http.MethodGet, "/v1/commitments/cmt_4/instalments?status=", ``, http.StatusBadRequest, ""},
 	}
 
 	for _, tc := range tests {
@@ -223,4 +227,30 @@ func TestCommitmentHandler_ReplaceBillingTermsPassesTermsToService(t *testing.T)
 	require.Equal(t, types.BillingTermKindOnce, svc.gotReplace.BillingTerms[0].Kind)
 	require.True(t, svc.gotReplace.BillingTerms[0].Percentage.Equal(decimal.NewFromInt(30)))
 	require.Equal(t, types.BillingTermValueRemainder, svc.gotReplace.BillingTerms[1].ValueType)
+}
+
+func TestCommitmentHandler_ListInstalmentsPassesStatusesToService(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want []types.InstalmentStatus
+	}{
+		{"no filter", "/v1/commitments/cmt_7/instalments", []types.InstalmentStatus{}},
+		{
+			"repeated status",
+			"/v1/commitments/cmt_7/instalments?status=scheduled&status=invoiced",
+			[]types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusInvoiced},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &stubCommitmentService{}
+			router := setupCommitmentRouter(t, svc)
+			w := doCommitmentRequest(router, http.MethodGet, tc.path, ``)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			require.Equal(t, "cmt_7", svc.gotID)
+			require.Equal(t, tc.want, svc.gotStatuses)
+		})
+	}
 }

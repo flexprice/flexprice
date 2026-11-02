@@ -588,7 +588,7 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
 	s.Require().Len(got.Instalments, 11, "cancelled instalments are not part of the current plan")
 	s.True(slices.IsSortedFunc(got.Instalments, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }))
 
-	listed, err := s.svc.ListInstalments(ctx, created.ID)
+	listed, err := s.svc.ListInstalments(ctx, created.ID, nil)
 	s.Require().NoError(err)
 	s.Len(listed.Items, 22, "history keeps the cancelled instalments")
 	s.True(slices.IsSortedFunc(listed.Items, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) }))
@@ -610,9 +610,51 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_And_ListInstalments() {
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
 
-	_, err = s.svc.ListInstalments(ctx, "cmt_missing")
+	_, err = s.svc.ListInstalments(ctx, "cmt_missing", nil)
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
+}
+
+func (s *CommitmentServiceSuite) TestListInstalments_FiltersByStatus() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+
+	s.claimFirstInstalment("inv_x")
+	_, err = s.svc.ReplaceBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	tests := []struct {
+		name     string
+		statuses []types.InstalmentStatus
+		want     int
+		wantOnly []types.InstalmentStatus
+	}{
+		{"every status", nil, 22, nil},
+		{"cancelled", []types.InstalmentStatus{types.InstalmentStatusCancelled}, 11, []types.InstalmentStatus{types.InstalmentStatusCancelled}},
+		{"scheduled", []types.InstalmentStatus{types.InstalmentStatusScheduled}, 11, []types.InstalmentStatus{types.InstalmentStatusScheduled}},
+		{"invoiced", []types.InstalmentStatus{types.InstalmentStatusInvoiced}, 0, nil},
+		{
+			"scheduled and cancelled",
+			[]types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusCancelled},
+			22,
+			[]types.InstalmentStatus{types.InstalmentStatusScheduled, types.InstalmentStatusCancelled},
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			listed, err := s.svc.ListInstalments(ctx, created.ID, tc.statuses)
+			s.Require().NoError(err)
+			s.Len(listed.Items, tc.want)
+
+			for _, i := range listed.Items {
+				if tc.wantOnly != nil {
+					s.Contains(tc.wantOnly, i.InstalmentStatus)
+				}
+			}
+		})
+	}
 }
 
 func (s *CommitmentServiceSuite) TestGetBillingTerms_ReadsWhenDisabledAndEmptyForPerPeriod() {
@@ -627,7 +669,7 @@ func (s *CommitmentServiceSuite) TestGetBillingTerms_ReadsWhenDisabledAndEmptyFo
 	s.Empty(got.BillingTerms)
 	s.Empty(got.Instalments)
 
-	listed, err := s.svc.ListInstalments(ctx, perPeriod.ID)
+	listed, err := s.svc.ListInstalments(ctx, perPeriod.ID, nil)
 	s.Require().NoError(err)
 	s.Empty(listed.Items)
 }

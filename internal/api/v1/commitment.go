@@ -354,12 +354,13 @@ func (h *CommitmentHandler) PreviewBillingTerms(c *gin.Context) {
 
 // @Summary List instalments
 // @ID listCommitmentInstalments
-// @Description Lists every instalment of the commitment in billing order, cancelled ones included.
+// @Description Lists the instalments of the commitment in billing order. Without a status filter every instalment is listed, cancelled ones included.
 // @Tags Commitments
 // @Produce json
 // @Security ApiKeyAuth
 // @x-scope "read"
 // @Param id path string true "Commitment ID"
+// @Param status query []string false "Only instalments in these statuses (scheduled, invoiced, cancelled)" collectionFormat(multi)
 // @Success 200 {object} dto.ListInstalmentsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
@@ -374,7 +375,24 @@ func (h *CommitmentHandler) ListInstalments(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.commitmentService.ListInstalments(c.Request.Context(), id)
+	statuses := lo.Map(c.QueryArray("status"), func(status string, _ int) types.InstalmentStatus {
+		return types.InstalmentStatus(status)
+	})
+	for _, status := range statuses {
+		if status == "" {
+			c.Error(ierr.NewError("status must not be empty").
+				WithHint("status must be one of scheduled, invoiced, cancelled").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		if err := status.Validate(); err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	resp, err := h.commitmentService.ListInstalments(c.Request.Context(), id, statuses)
 	if err != nil {
 		c.Error(err)
 		return

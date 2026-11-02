@@ -37,8 +37,8 @@ type CommitmentService interface {
 	PreviewBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
 	// ReplaceBillingTerms swaps the whole set of terms and regenerates every instalment.
 	ReplaceBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
-	// ListInstalments returns every instalment of the commitment, cancelled ones included, in billing order.
-	ListInstalments(ctx context.Context, id string) (*dto.ListInstalmentsResponse, error)
+	// ListInstalments returns the commitment's instalments in billing order; empty statuses list every status, cancelled included.
+	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.
 	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)

@@ -61,7 +61,11 @@ func (s *commitmentService) GetBillingTerms(ctx context.Context, id string) (*dt
 	return &dto.BillingTermsResponse{BillingTerms: terms, Instalments: instalments}, nil
 }
 
-func (s *commitmentService) ListInstalments(ctx context.Context, id string) (*dto.ListInstalmentsResponse, error) {
+func (s *commitmentService) ListInstalments(
+	ctx context.Context,
+	id string,
+	statuses []types.InstalmentStatus,
+) (*dto.ListInstalmentsResponse, error) {
 	c, err := s.CommitmentRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -70,6 +74,7 @@ func (s *commitmentService) ListInstalments(ctx context.Context, id string) (*dt
 	instalments, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType: types.BillingTermOwnerCommitment,
 		OwnerIDs:  []string{c.ID},
+		Statuses:  statuses,
 	})
 	if err != nil {
 		return nil, err

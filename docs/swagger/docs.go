@@ -2193,7 +2193,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Lists every instalment of the commitment in billing order, cancelled ones included.",
+                "description": "Lists the instalments of the commitment in billing order. Without a status filter every instalment is listed, cancelled ones included.",
                 "produces": [
                     "application/json"
                 ],
@@ -2209,6 +2209,16 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Only instalments in these statuses (scheduled, invoiced, cancelled)",
+                        "name": "status",
+                        "in": "query"
                     }
                 ],
                 "responses": {

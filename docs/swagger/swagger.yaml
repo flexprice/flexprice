@@ -18608,8 +18608,8 @@ paths:
       x-scope: read
   /commitments/{id}/instalments:
     get:
-      description: Lists every instalment of the commitment in billing order, cancelled
-        ones included.
+      description: Lists the instalments of the commitment in billing order. Without
+        a status filter every instalment is listed, cancelled ones included.
       operationId: listCommitmentInstalments
       parameters:
       - description: Commitment ID
@@ -18617,6 +18617,13 @@ paths:
         name: id
         required: true
         type: string
+      - collectionFormat: multi
+        description: Only instalments in these statuses (scheduled, invoiced, cancelled)
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
       produces:
       - application/json
       responses:
