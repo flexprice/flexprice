@@ -355,6 +355,14 @@ func rejectVoidedInvoiceEdit(inv *invoice.Invoice) error {
 // voidAndRecreateDraftForEdit voids a finalized invoice and creates a DRAFT copy of it
 // (data + line items, discount re-derived), linking the original to the copy. Run inside a transaction.
 func (s *invoiceService) voidAndRecreateDraftForEdit(ctx context.Context, inv *invoice.Invoice) (*invoice.Invoice, error) {
+	// The void reschedules the invoice's instalments, so a copy carrying them would bill them twice.
+	if lo.SomeBy(inv.LineItems, func(li *invoice.InvoiceLineItem) bool { return li.BillingInstalmentID != nil }) {
+		return nil, ierr.NewError("invoice carries commitment instalments and cannot be edited after finalization").
+			WithHint("Void and recalculate the invoice, or issue a credit note").
+			WithReportableDetails(map[string]any{"invoice_id": inv.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
 	voided, err := s.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
 	if err != nil {
 		return nil, err

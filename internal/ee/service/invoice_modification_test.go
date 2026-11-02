@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	cerrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -1094,6 +1095,46 @@ func (s *InvoiceModificationServiceSuite) TestExecuteOnVoidedOriginalIsRejectedW
 	s.NoError(err)
 	s.Equal(draftID, second.Invoice.ID)
 	s.Len(second.Invoice.LineItems, 2)
+}
+
+// A finalized invoice carrying an instalment is never voided to be edited: its copy would carry the instalment the
+// void reschedules, so the next invoice would bill it as well.
+func (s *InvoiceModificationServiceSuite) TestExecuteRejectsFinalizedInvoiceWithInstalments() {
+	ctx := s.GetContext()
+	inv, li := s.createFinalizedInvoiceWithLineItem()
+	instalmentLine := &invoice.InvoiceLineItem{
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:           inv.ID,
+		CustomerID:          inv.CustomerID,
+		DisplayName:         lo.ToPtr("Platform - Commitment payment"),
+		Amount:              decimal.NewFromInt(300),
+		Quantity:            decimal.NewFromInt(1),
+		Currency:            "usd",
+		BillingInstalmentID: lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().InvoiceLineItemRepo.Create(ctx, instalmentLine))
+
+	_, err := s.service.ModifyInvoice(ctx, inv.ID, dto.ExecuteInvoiceModifyRequest{
+		Type: dto.InvoiceModifyTypeLineItem,
+		LineItemParams: &dto.InvoiceModifyLineItemParams{
+			Action:     dto.InvoiceModifyLineItemActionUpdate,
+			LineItemID: li.ID,
+			Update:     &dto.UpdateLineItemRequest{Amount: lo.ToPtr(decimal.NewFromInt(250))},
+		},
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Contains(cerrors.FlattenHints(err), "credit note")
+
+	_, err = s.service.UpdateInvoice(ctx, inv.ID, dto.UpdateInvoiceRequest{ApplyDiscount: true})
+	s.Require().Error(err, "re-applying discounts voids and recreates too")
+	s.True(ierr.IsValidation(err), "got %v", err)
+
+	original, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, original.InvoiceStatus)
+	s.Nil(original.RecalculatedInvoiceID)
 }
 
 // A targeted update of a nonexistent line item errors; the flow runs in one
