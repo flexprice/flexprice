@@ -808,9 +808,8 @@ func (s *CommitmentE2ESuite) TestTriggerInstalment_B2() {
 	s.True(milestone.Amount.Equal(dec("6000")), "got %s", milestone.Amount)
 
 	asked := clock.Now()
-	closes := time.Date(asked.Year(), asked.Month()+1, 1, 0, 0, 0, 0, time.UTC)
-	opens := closes.AddDate(0, -1, 0)
-	_, billed := s.billsInstalment(sub.ID, milestone.ID, opens, closes)
+	thisMonth := time.Date(asked.UTC().Year(), asked.UTC().Month(), 1, 0, 0, 0, 0, time.UTC)
+	_, billed := s.billsInstalment(sub.ID, milestone.ID, thisMonth, thisMonth.AddDate(0, 1, 0))
 	s.False(billed, "an untriggered milestone is not billed before the end of the term")
 
 	publisher.Reset()
@@ -823,6 +822,15 @@ func (s *CommitmentE2ESuite) TestTriggerInstalment_B2() {
 	s.WithinDuration(asked, *triggered.TriggeredAt, time.Minute)
 	s.Equal(types.InstalmentStatusScheduled, triggered.InstalmentStatus)
 	s.Equal([]string{milestone.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentUpdated))
+
+	// The period is read from the stored bill_on, so a trigger just past a month boundary still finds its invoice:
+	// the first to close on or after bill_on.
+	billOn := triggered.BillOn.UTC()
+	closes := time.Date(billOn.Year(), billOn.Month(), 1, 0, 0, 0, 0, time.UTC)
+	if billOn.After(closes) {
+		closes = closes.AddDate(0, 1, 0)
+	}
+	opens := closes.AddDate(0, -1, 0)
 
 	line, billed := s.billsInstalment(sub.ID, milestone.ID, opens, closes)
 	s.Require().True(billed, "the triggered milestone is on the next subscription invoice")
