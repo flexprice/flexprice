@@ -469,10 +469,12 @@ type ConnectionResponse struct {
 	SyncConfig    *types.SyncConfig      `json:"sync_config,omitempty"`
 	// BillingEntityID is the owning billing entity; null when billing entities are off and for storage providers.
 	BillingEntityID *string `json:"billing_entity_id"`
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
-	CreatedBy       string  `json:"created_by"`
-	UpdatedBy       string  `json:"updated_by"`
+	// WebhookSecretSet tells whether inbound webhooks can be verified; omitted for providers without webhooks.
+	WebhookSecretSet *bool  `json:"webhook_secret_set,omitempty"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+	CreatedBy        string `json:"created_by"`
+	UpdatedBy        string `json:"updated_by"`
 }
 
 // ListConnectionsResponse represents the response for listing connections
@@ -500,20 +502,26 @@ func ToConnectionResponse(conn *connection.Connection) *ConnectionResponse {
 		return nil
 	}
 
+	var webhookSecretSet *bool
+	if set, applies := conn.EncryptedSecretData.WebhookSecretSet(conn.ProviderType); applies {
+		webhookSecretSet = &set
+	}
+
 	return &ConnectionResponse{
-		ID:              conn.ID,
-		Name:            conn.Name,
-		ProviderType:    conn.ProviderType,
-		EnvironmentID:   conn.EnvironmentID,
-		TenantID:        conn.TenantID,
-		Status:          conn.Status,
-		Metadata:        conn.Metadata,
-		SyncConfig:      conn.GetSyncConfig(),
-		BillingEntityID: conn.BillingEntityID,
-		CreatedAt:       conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:       conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		CreatedBy:       conn.CreatedBy,
-		UpdatedBy:       conn.UpdatedBy,
+		ID:               conn.ID,
+		Name:             conn.Name,
+		ProviderType:     conn.ProviderType,
+		EnvironmentID:    conn.EnvironmentID,
+		TenantID:         conn.TenantID,
+		Status:           conn.Status,
+		Metadata:         conn.Metadata,
+		SyncConfig:       conn.GetSyncConfig(),
+		BillingEntityID:  conn.BillingEntityID,
+		WebhookSecretSet: webhookSecretSet,
+		CreatedAt:        conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:        conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedBy:        conn.CreatedBy,
+		UpdatedBy:        conn.UpdatedBy,
 	}
 }
 
