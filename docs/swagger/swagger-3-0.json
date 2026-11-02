@@ -22237,6 +22237,7 @@
             "type": "string"
           },
           "description": {
+            "maxLength": 255,
             "type": "string"
           },
           "ends_on": {

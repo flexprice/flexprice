@@ -32,7 +32,7 @@ type BillingTermInput struct {
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
-	Description *string        `json:"description,omitempty"`
+	Description *string        `json:"description,omitempty" validate:"omitempty,max=255"`
 	Metadata    types.Metadata `json:"metadata,omitempty"`
 }
 
@@ -143,7 +143,7 @@ func (in CancellationFeeInput) Validate() error {
 
 // ReplaceBillingTermsRequest is the new set of terms of a commitment, which replaces the current set as a whole.
 type ReplaceBillingTermsRequest struct {
-	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1"`
+	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,dive"`
 }
 
 // ApplyDefaults aligns the dates of every term to whole seconds.

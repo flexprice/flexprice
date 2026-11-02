@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -213,6 +214,9 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_Validation() {
 		{"terms that miss the total", func(r *dto.CreateCommitmentRequest) { r.BillingTerms = r.BillingTerms[:1] }},
 		{"two remainder terms", func(r *dto.CreateCommitmentRequest) {
 			r.BillingTerms = append(r.BillingTerms, r.BillingTerms[1])
+		}},
+		{"a description template over 255 characters that renders shorter", func(r *dto.CreateCommitmentRequest) {
+			r.BillingTerms[1].Description = lo.ToPtr(strings.Repeat("{n}", 86))
 		}},
 	}
 

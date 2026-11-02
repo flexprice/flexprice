@@ -19214,7 +19214,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "ends_on": {
                     "type": "string"

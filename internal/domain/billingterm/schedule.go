@@ -145,6 +145,10 @@ func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
 
 // resolveTerm validates one term against the collection period and applies the defaults of its kind.
 func resolveTerm(index int, t *Term, collection types.Period, currency string, periods []PeriodValue) (*resolvedTerm, error) {
+	if utf8.RuneCountInString(lo.FromPtr(t.Description)) > maxDescriptionLength {
+		return nil, ierr.Validationf(termErrorFormat, index, "description", "must be at most 255 characters")
+	}
+
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
 		if (t.Amount == nil) == (t.Percentage == nil) {

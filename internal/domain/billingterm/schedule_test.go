@@ -691,6 +691,15 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].description:",
 		},
 		{
+			name:    "description template over 255 characters that renders shorter",
+			owner:   year,
+			periods: months,
+			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
+				t.Description = lo.ToPtr(strings.Repeat("{n}", 86))
+			})},
+			wantMsg: "billing_terms[0].description:",
+		},
+		{
 			name:    "an instalment rounds to 0",
 			owner:   usd("0.10", jan2027, date(2027, time.July, 1)),
 			periods: monthly(jan2027, 6, "100"),

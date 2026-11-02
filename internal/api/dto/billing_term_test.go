@@ -170,6 +170,13 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 			}},
 			"billing_terms[1].percentage",
 		},
+		{
+			"a description over 255 characters",
+			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
+				{ValueType: types.BillingTermValueRemainder, Description: lo.ToPtr(strings.Repeat("a", 256))},
+			}},
+			"BillingTerms[0].Description",
+		},
 	}
 
 	for _, tc := range tests {
