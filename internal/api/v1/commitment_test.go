@@ -83,6 +83,8 @@ func (s *stubCommitmentService) GetInstalment(context.Context, string) (*billing
 	return &billingterm.Instalment{}, s.err
 }
 
+func (s *stubCommitmentService) BillDueInstalments(context.Context) error { return s.err }
+
 func (s *stubCommitmentService) TerminateForSubscription(context.Context, string, time.Time) error {
 	return s.err
 }

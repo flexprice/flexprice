@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"time"
@@ -775,4 +776,160 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_PublishesEvents() {
 	s.Equal(types.WebhookEventBillingTermsUpdated, names[0])
 	s.Equal(types.WebhookEventBillingInstalmentCancelled, names[1])
 	s.Equal(types.WebhookEventBillingInstalmentCreated, names[22], "cancellations precede the new instalments")
+}
+
+// separateInvoiceCommitment commits 100 a month for two years to a new subscription and bills half of its 2,400
+// upfront and half on a milestone nobody has triggered, each on its own invoice.
+func (s *CommitmentE2ESuite) separateInvoiceCommitment(name string) (*dto.SubscriptionResponse, *dto.CommitmentResponse) {
+	tokens := s.planWith(name, types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	sub := s.subscribe(tokens, s.jan)
+
+	half := dto.BillingTermInput{
+		Kind:       types.BillingTermKindOnce,
+		ValueType:  types.BillingTermValuePercentage,
+		Percentage: lo.ToPtr(dec("50")),
+	}
+	milestone := half
+	milestone.BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
+
+	req := termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(2, 0, 0), half, milestone)
+	req.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySeparateInvoice)
+	committed := s.commit(sub.ID, req)
+	s.Require().Len(committed.Instalments, 2)
+	return sub, committed
+}
+
+func (s *CommitmentE2ESuite) setSubscriptionStatus(id string, status types.SubscriptionStatus) {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), id)
+	s.Require().NoError(err)
+
+	sub.SubscriptionStatus = status
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+}
+
+func (s *CommitmentE2ESuite) instalmentStatus(id string) *billingterm.Instalment {
+	inst, err := s.commitments.GetInstalment(s.GetContext(), id)
+	s.Require().NoError(err)
+	return inst
+}
+
+// B1: the upfront instalment is due, so one run bills it on a finalized one-off invoice and claims it; the milestone
+// waits for its trigger and a second run issues nothing.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_IssuesOneOffInvoices() {
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	sub, committed := s.separateInvoiceCommitment("issue")
+	upfront, milestone := committed.Instalments[0], committed.Instalments[1]
+
+	publisher.Reset()
+	s.Require().NoError(s.commitments.BillDueInstalments(context.Background()), "a run needs no tenant on its context")
+
+	invoices := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms)
+	s.Require().Len(invoices, 1)
+	inv := invoices[0]
+	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.Equal(sub.CustomerID, inv.CustomerID)
+	s.True(inv.AmountDue.Equal(dec("1200")), "amount due %s", inv.AmountDue)
+	s.True(inv.PeriodStart.Equal(upfront.ServicePeriodStart) && inv.PeriodEnd.Equal(upfront.ServicePeriodEnd))
+
+	lines := s.storedInstalmentLines(inv.ID)
+	s.Require().Len(lines, 1)
+	s.Equal(upfront.ID, lo.FromPtr(lines[0].BillingInstalmentID))
+	s.Equal(committed.ID, lo.FromPtr(lines[0].CommitmentID))
+	s.Equal(string(types.InvoiceLineItemEntityTypeCommitment), lo.FromPtr(lines[0].EntityType))
+	s.Equal("Platform - Commitment payment", lo.FromPtr(lines[0].DisplayName))
+
+	billed := s.instalmentStatus(upfront.ID)
+	s.Equal(types.InstalmentStatusInvoiced, billed.InstalmentStatus)
+	s.Equal(inv.ID, lo.FromPtr(billed.InvoiceID))
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(milestone.ID).InstalmentStatus, "an untriggered milestone is not due")
+	s.Equal([]string{upfront.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+
+	publisher.Reset()
+	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1, "a billed instalment is not billed again")
+	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+}
+
+// A trialing or paused subscription's instalments stay scheduled and bill on the first run after it is active again.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsTrialingAndPaused() {
+	waiting := map[types.SubscriptionStatus]*dto.SubscriptionResponse{}
+	for _, status := range []types.SubscriptionStatus{types.SubscriptionStatusTrialing, types.SubscriptionStatusPaused} {
+		sub, _ := s.separateInvoiceCommitment(string(status))
+		s.setSubscriptionStatus(sub.ID, status)
+		waiting[status] = sub
+	}
+
+	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))
+	for status, sub := range waiting {
+		s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), "a %s subscription is not billed", status)
+	}
+
+	for _, sub := range waiting {
+		s.setSubscriptionStatus(sub.ID, types.SubscriptionStatusActive)
+	}
+
+	s.Require().NoError(s.commitments.BillDueInstalments(s.GetContext()))
+	for status, sub := range waiting {
+		s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1, "a resumed %s subscription is billed", status)
+	}
+}
+
+// Voiding the invoice returns the instalment to scheduled with a new updated_at, so the next run bills it on a new
+// invoice under a new idempotency key.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAfterVoid() {
+	ctx := s.GetContext()
+	sub, committed := s.separateInvoiceCommitment("void")
+	upfront := committed.Instalments[0]
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	first := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms)
+	s.Require().Len(first, 1)
+
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	_, err := invoices.VoidInvoice(ctx, first[0].ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(upfront.ID).InstalmentStatus)
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	second := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms)
+	s.Require().Len(second, 1, "the voided invoice no longer counts")
+	s.NotEqual(first[0].ID, second[0].ID)
+	s.NotEqual(lo.FromPtr(first[0].IdempotencyKey), lo.FromPtr(second[0].IdempotencyKey))
+	s.Contains(lo.FromPtr(second[0].IdempotencyKey), "billing_instalment_"+upfront.ID+"_")
+
+	rebilled := s.instalmentStatus(upfront.ID)
+	s.Equal(types.InstalmentStatusInvoiced, rebilled.InstalmentStatus)
+	s.Equal(second[0].ID, lo.FromPtr(rebilled.InvoiceID))
+}
+
+func (s *CommitmentE2ESuite) TestBillDueInstalments_IgnoresDisabledEnvironments() {
+	ctx := s.GetContext()
+	sub, committed := s.separateInvoiceCommitment("disabled")
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(committed.Instalments[0].ID).InstalmentStatus)
+
+	setCommitmentsV2(s.T(), ctx, s.GetStores(), true)
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
+}
+
+// An instalment that cannot be billed is reported once the run finishes, and does not stop the others.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_ContinuesPastAFailure() {
+	ctx := s.GetContext()
+	brokenSub, broken := s.separateInvoiceCommitment("broken")
+	healthySub, healthy := s.separateInvoiceCommitment("healthy")
+	s.Require().NoError(s.GetStores().CommitmentRepo.Delete(ctx, broken.ID))
+
+	err := s.commitments.BillDueInstalments(ctx)
+	s.Require().Error(err)
+	s.Contains(err.Error(), broken.Instalments[0].ID)
+
+	s.Empty(s.invoicesWithReason(brokenSub.ID, types.InvoiceBillingReasonBillingTerms))
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(broken.Instalments[0].ID).InstalmentStatus)
+	s.Len(s.invoicesWithReason(healthySub.ID, types.InvoiceBillingReasonBillingTerms), 1)
+	s.Equal(types.InstalmentStatusInvoiced, s.instalmentStatus(healthy.Instalments[0].ID).InstalmentStatus)
 }

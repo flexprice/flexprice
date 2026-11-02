@@ -41,6 +41,9 @@ type CommitmentService interface {
 	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.
 	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
+	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment with
+	// commitments enabled. A failed instalment is logged and the rest still bill; the failures are returned together.
+	BillDueInstalments(ctx context.Context) error
 	ActiveForPeriod(ctx context.Context, subscriptionID string, from, to time.Time) ([]*commitment.Commitment, error)
 	// CheckPriceAttach rejects a usage price, billed from `at` until `until` (nil when open-ended), that would join a
 	// commitment's scope but break its rules: a single-meter commitment gaining a second meter, a bucket-size mismatch,

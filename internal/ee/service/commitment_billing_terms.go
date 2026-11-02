@@ -2,13 +2,17 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -248,4 +252,121 @@ func invoicesToReview(instalments []*billingterm.Instalment) []string {
 	slices.Sort(ids)
 
 	return ids
+}
+
+func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
+	configs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyCommitmentsV2)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for _, env := range configs {
+		cfg, err := utils.ToStruct[types.CommitmentsV2Config](env.Config)
+		if err != nil || !cfg.Enabled {
+			continue
+		}
+
+		envCtx := types.SetEnvironmentID(types.SetTenantID(ctx, env.TenantID), env.EnvironmentID)
+		errs = append(errs, s.billEnvironmentInstalments(envCtx))
+	}
+
+	return errors.Join(errs...)
+}
+
+// billEnvironmentInstalments bills the environment's due separate-invoice instalments one at a time, so a failure
+// leaves the others billed and its own instalment scheduled for the next run.
+func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) error {
+	dueBy := clock.Now()
+	due, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType:      types.BillingTermOwnerCommitment,
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		Deliveries:     []types.InstalmentDelivery{types.InstalmentDeliverySeparateInvoice},
+		BillOnOrBefore: &dueBy,
+	})
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for _, instalment := range due {
+		inv, err := s.billInstalment(ctx, instalment)
+		if err != nil {
+			s.Logger.Error(ctx, "failed to bill separate-invoice instalment",
+				"error", err,
+				"instalment_id", instalment.ID,
+				"commitment_id", instalment.OwnerID,
+				"subscription_id", instalment.SubscriptionID,
+			)
+			errs = append(errs, fmt.Errorf("billing instalment %s: %w", instalment.ID, err))
+			continue
+		}
+
+		if inv != nil {
+			s.Logger.Info(ctx, "commitment.instalment_invoiced",
+				"operation", "commitment.instalment_invoiced",
+				"instalment_id", instalment.ID,
+				"commitment_id", instalment.OwnerID,
+				"invoice_id", inv.ID,
+			)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// billInstalment issues the instalment's one-off invoice under its commitment's lock. Finalizing the invoice claims
+// the instalment, so it returns nil when the instalment was claimed or cancelled since it was listed, or when its
+// subscription is trialing or paused and the instalment waits for a later run.
+func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
+	var inv *dto.InvoiceResponse
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.lockCommitment(txCtx, listed.OwnerID); err != nil {
+			return err
+		}
+
+		instalment, err := s.BillingInstalmentRepo.Get(txCtx, listed.ID)
+		if err != nil {
+			return err
+		}
+
+		if instalment.InstalmentStatus != types.InstalmentStatusScheduled {
+			return nil
+		}
+
+		sub, err := s.SubRepo.Get(txCtx, instalment.SubscriptionID)
+		if err != nil {
+			return err
+		}
+
+		if sub.SubscriptionStatus == types.SubscriptionStatusTrialing || sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+			return nil
+		}
+
+		c, err := s.CommitmentRepo.Get(txCtx, instalment.OwnerID)
+		if err != nil {
+			return err
+		}
+
+		billingPeriod := string(sub.BillingPeriod)
+		inv, err = NewInvoiceService(s.ServiceParams).CreateInvoice(txCtx, dto.CreateInvoiceRequest{
+			CustomerID:     sub.GetInvoicingCustomerID(),
+			SubscriptionID: lo.ToPtr(sub.ID),
+			InvoiceType:    types.InvoiceTypeOneOff,
+			Currency:       instalment.Currency,
+			BillingReason:  types.InvoiceBillingReasonBillingTerms,
+			AmountDue:      instalment.Amount,
+			Total:          instalment.Amount,
+			Subtotal:       instalment.Amount,
+			PeriodStart:    lo.ToPtr(instalment.ServicePeriodStart),
+			PeriodEnd:      lo.ToPtr(instalment.ServicePeriodEnd),
+			BillingPeriod:  &billingPeriod,
+			// A reschedule changes updated_at, so a voided instalment bills again under a new key.
+			IdempotencyKey: lo.ToPtr(fmt.Sprintf("billing_instalment_%s_%d", instalment.ID, instalment.UpdatedAt.UnixMicro())),
+			LineItems:      []dto.CreateInvoiceLineItemRequest{instalmentLine(c, instalment)},
+		})
+		return err
+	})
+
+	return inv, err
 }
