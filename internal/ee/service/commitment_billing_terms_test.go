@@ -851,10 +851,16 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_IssuesOneOffInvoices() {
 	s.Empty(s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
-// A trialing or paused subscription's instalments stay scheduled and bill on the first run after it is active again.
-func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsTrialingAndPaused() {
+// Only an active subscription is billed: the instalments of a draft, incomplete, trialing or paused one stay
+// scheduled and bill on the first run after it is active again.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsNonActiveSubscriptions() {
 	waiting := map[types.SubscriptionStatus]*dto.SubscriptionResponse{}
-	for _, status := range []types.SubscriptionStatus{types.SubscriptionStatusTrialing, types.SubscriptionStatusPaused} {
+	for _, status := range []types.SubscriptionStatus{
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusIncomplete,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusPaused,
+	} {
 		sub, _ := s.separateInvoiceCommitment(string(status))
 		s.setSubscriptionStatus(sub.ID, status)
 		waiting[status] = sub
