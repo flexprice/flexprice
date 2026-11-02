@@ -341,7 +341,15 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink && r.PaymentMethodType != types.PaymentMethodTypeCard {
+	} else if r.PaymentMethodType == types.PaymentMethodTypeCard || r.PaymentMethodType == types.PaymentMethodTypeUPI {
+		if r.ProcessPayment {
+			if err := r.validateSavedMethodCharge(); err != nil {
+				return nil, err
+			}
+		}
+		// The saved method is resolved at charge time, so payment_method_id is optional.
+		p.TrackAttempts = true
+	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits {
 		if p.PaymentMethodID == "" {
 			return nil, ierr.NewError("payment method id is required for online payment method type").
 				WithHint("Payment method ID is required for online payment methods").
@@ -351,13 +359,38 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				Mark(ierr.ErrValidation)
 		}
 		p.TrackAttempts = true
-	} else if r.PaymentMethodType == types.PaymentMethodTypeCard {
-		// For CARD payments, we'll automatically fetch the customer's saved payment method
-		// So payment_method_id is optional - it will be populated during processing
-		p.TrackAttempts = true
 	}
 
 	return p, nil
+}
+
+// validateSavedMethodCharge checks the gateway for a CARD or UPI charge. CARD
+// supports Stripe (default) and Razorpay; UPI supports Razorpay only.
+func (r *CreatePaymentRequest) validateSavedMethodCharge() error {
+	gateway := lo.FromPtr(r.PaymentGateway)
+	details := map[string]interface{}{
+		"payment_method_type": r.PaymentMethodType,
+		"payment_gateway":     gateway,
+	}
+
+	switch {
+	case r.PaymentMethodType == types.PaymentMethodTypeUPI && gateway != types.PaymentGatewayTypeRazorpay:
+		return ierr.NewError("UPI payments require the razorpay gateway").
+			WithHint("Set payment_gateway to razorpay for UPI payments").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	case gateway != "" && gateway != types.PaymentGatewayTypeStripe && gateway != types.PaymentGatewayTypeRazorpay:
+		return ierr.NewError("unsupported payment gateway for card payments").
+			WithHint("CARD payments support the stripe and razorpay gateways").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	case gateway == types.PaymentGatewayTypeRazorpay && r.PaymentMethodID != "":
+		return ierr.NewError("payment_method_id is not supported for razorpay charges").
+			WithHint("Omit payment_method_id; the customer's active Razorpay mandate for this method is used").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // GetCustomerPaymentMethodsRequest represents a request to get customer payment methods
