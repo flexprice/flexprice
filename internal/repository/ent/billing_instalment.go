@@ -189,6 +189,7 @@ func (r *billingInstalmentRepository) Update(ctx context.Context, in *billingter
 
 	update := r.client.Writer(ctx).BillingInstalment.UpdateOneID(in.ID).
 		Where(r.scope(ctx)...).
+		Where(entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusScheduled)).
 		SetAmount(in.Amount).
 		SetBillOn(in.BillOn).
 		SetInstalmentStatus(in.InstalmentStatus).
@@ -206,6 +207,16 @@ func (r *billingInstalmentRepository) Update(ctx context.Context, in *billingter
 		SetSpanError(span, err)
 
 		if ent.IsNotFound(err) {
+			exists, existsErr := r.client.Writer(ctx).BillingInstalment.Query().
+				Where(r.scope(ctx)...).
+				Where(entbillinginstalment.ID(in.ID)).
+				Exist(ctx)
+			if existsErr == nil && exists {
+				return nil, ierr.WithError(err).
+					WithHintf("Billing instalment %s is no longer scheduled", in.ID).
+					Mark(ierr.ErrInvalidOperation)
+			}
+
 			return nil, ierr.WithError(err).
 				WithHintf("Billing instalment %s not found", in.ID).
 				Mark(ierr.ErrNotFound)

@@ -304,6 +304,12 @@ func (s *commitmentService) ReplanInstalments(
 			return err
 		}
 
+		// Cancelling first fixes what is invoiced: a finalize cannot claim a cancelled instalment.
+		scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+		if cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled); err != nil {
+			return err
+		}
+
 		invoiced, err := s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{types.InstalmentStatusInvoiced})
 		if err != nil {
 			return err
@@ -315,11 +321,6 @@ func (s *commitmentService) ReplanInstalments(
 				"instalments: the invoiced %s and the new %s add up to %s, not the commitment total of %s",
 				billed, planned, billed.Add(planned), total,
 			)
-		}
-
-		scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
-		if cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled); err != nil {
-			return err
 		}
 
 		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, replanned); err != nil {
@@ -388,7 +389,7 @@ func replannedInstalments(
 }
 
 // BringForwardInstalments adds one instalment of req.Amount and takes the same amount off the earliest scheduled
-// ones, cancelling those it empties. The response is the resulting plan.
+// ones, which it cancels, re-creating the part of each that is left. The response is the resulting plan.
 func (s *commitmentService) BringForwardInstalments(
 	ctx context.Context,
 	id string,
@@ -403,7 +404,7 @@ func (s *commitmentService) BringForwardInstalments(
 		return nil, err
 	}
 
-	var reduced, cancelled, created []*billingterm.Instalment
+	var cancelled, created []*billingterm.Instalment
 	var plan *dto.ListInstalmentsResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {
@@ -438,7 +439,7 @@ func (s *commitmentService) BringForwardInstalments(
 			return ierr.Validationf("amount: %s is more than the %s still scheduled", req.Amount, available)
 		}
 
-		var touched []*billingterm.Instalment
+		var touched, replacements []*billingterm.Instalment
 		remaining := req.Amount
 		for _, instalment := range scheduled.Items {
 			if !remaining.IsPositive() {
@@ -448,24 +449,30 @@ func (s *commitmentService) BringForwardInstalments(
 			taken := decimal.Min(instalment.Amount, remaining)
 			remaining = remaining.Sub(taken)
 
-			// A cancelled instalment keeps the amount it was scheduled for.
-			builder := billingterm.NewInstalmentBuilder(instalment)
-			if taken.Equal(instalment.Amount) {
-				builder.WithStatus(types.InstalmentStatusCancelled)
-			} else {
-				builder.WithAmount(instalment.Amount.Sub(taken))
-			}
-
-			updated, err := s.BillingInstalmentRepo.Update(txCtx, builder.Build())
+			// An amount is never changed in place: a draft invoice computed earlier may still carry the instalment,
+			// and finalizing it must fail instead of billing the old amount. A cancelled instalment keeps its amount.
+			cancelledRow, err := s.BillingInstalmentRepo.Update(txCtx,
+				billingterm.NewInstalmentBuilder(instalment).WithStatus(types.InstalmentStatusCancelled).Build())
 			if err != nil {
 				return err
 			}
 
-			touched = append(touched, updated)
-			if updated.InstalmentStatus == types.InstalmentStatusCancelled {
-				cancelled = append(cancelled, updated)
-			} else {
-				reduced = append(reduced, updated)
+			touched = append(touched, instalment)
+			cancelled = append(cancelled, cancelledRow)
+
+			if left := instalment.Amount.Sub(taken); left.IsPositive() {
+				replacement := billingterm.InstalmentTemplate(txCtx, c)
+				replacement.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
+				replacement.BillingTermID = instalment.BillingTermID
+				replacement.BillTrigger = instalment.BillTrigger
+				replacement.BillOn = instalment.BillOn
+				replacement.TriggeredAt = instalment.TriggeredAt
+				replacement.Amount = left
+				replacement.Description = instalment.Description
+				replacement.ServicePeriodStart = instalment.ServicePeriodStart
+				replacement.ServicePeriodEnd = instalment.ServicePeriodEnd
+				replacement.Metadata = instalment.Metadata
+				replacements = append(replacements, &replacement)
 			}
 		}
 
@@ -482,7 +489,7 @@ func (s *commitmentService) BringForwardInstalments(
 			return a.ServicePeriodEnd.After(b.ServicePeriodEnd)
 		}).ServicePeriodEnd
 
-		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, []*billingterm.Instalment{&broughtForward}); err != nil {
+		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, append(replacements, &broughtForward)); err != nil {
 			return err
 		}
 
@@ -500,11 +507,10 @@ func (s *commitmentService) BringForwardInstalments(
 		"operation", "commitment.instalments_brought_forward",
 		"commitment_id", id,
 		"amount", req.Amount.String(),
-		"reduced", len(reduced),
 		"cancelled", len(cancelled),
+		"created", len(created),
 	)
 
-	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, reduced)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
 

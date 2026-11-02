@@ -119,6 +119,12 @@ func (s *InMemoryBillingInstalmentStore) Update(ctx context.Context, in *billing
 		return nil, err
 	}
 
+	if updated.InstalmentStatus != types.InstalmentStatusScheduled {
+		return nil, ierr.NewErrorf("billing instalment %s is %s", in.ID, updated.InstalmentStatus).
+			WithHintf("Billing instalment %s is no longer scheduled", in.ID).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	updated.Amount = in.Amount
 	updated.BillOn = in.BillOn
 	updated.TriggeredAt = in.TriggeredAt

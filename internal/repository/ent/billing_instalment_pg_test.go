@@ -186,6 +186,53 @@ func TestInstalmentCancel_ByOwnerAndStatus(t *testing.T) {
 	require.True(t, ierr.IsValidation(err))
 }
 
+func TestInstalmentUpdate_OnlyScheduledRows(t *testing.T) {
+	f := newBillingTermFixture(t)
+	owner := "cmt_" + f.runID
+	invoiceID := "inv_" + f.runID + "_1"
+	start := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	scheduled := f.instalment(f.ctx, "a", owner, types.InstalmentStatusScheduled, start)
+	invoiced := f.instalment(f.ctx, "b", owner, types.InstalmentStatusInvoiced, start.AddDate(0, 1, 0))
+	invoiced.InvoiceID = &invoiceID
+	cancelled := f.instalment(f.ctx, "c", owner, types.InstalmentStatusCancelled, start.AddDate(0, 2, 0))
+	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{scheduled, invoiced, cancelled})
+	require.NoError(t, err)
+
+	for _, row := range []*billingterm.Instalment{invoiced, cancelled} {
+		_, err := f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
+			WithAmount(decimal.NewFromInt(50)).
+			WithStatus(types.InstalmentStatusScheduled).
+			Build())
+		require.Error(t, err)
+		require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
+
+		unchanged, err := f.instalments.Get(f.ctx, row.ID)
+		require.NoError(t, err)
+		require.Equal(t, row.InstalmentStatus, unchanged.InstalmentStatus)
+		require.True(t, row.Amount.Equal(unchanged.Amount))
+		require.Equal(t, row.InvoiceID, unchanged.InvoiceID)
+	}
+
+	missing := billingterm.NewInstalmentBuilder(scheduled).Build()
+	missing.ID = "binst_" + f.runID + "_missing"
+	_, err = f.instalments.Update(f.ctx, missing)
+	require.Error(t, err)
+	require.True(t, ierr.IsNotFound(err), "got %v", err)
+
+	updated, err := f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(scheduled).
+		WithAmount(decimal.NewFromInt(50)).
+		WithStatus(types.InstalmentStatusCancelled).
+		Build())
+	require.NoError(t, err)
+	require.Equal(t, types.InstalmentStatusCancelled, updated.InstalmentStatus)
+	require.True(t, decimal.NewFromInt(50).Equal(updated.Amount))
+
+	_, err = f.instalments.Update(f.ctx, billingterm.NewInstalmentBuilder(updated).WithAmount(decimal.NewFromInt(60)).Build())
+	require.Error(t, err)
+	require.True(t, ierr.IsInvalidOperation(err), "a cancelled row stays as it is: %v", err)
+}
+
 func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner := "cmt_" + f.runID

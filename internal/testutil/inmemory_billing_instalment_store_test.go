@@ -274,12 +274,11 @@ func TestInMemoryBillingInstalmentStore_Update(t *testing.T) {
 	updated, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
 		WithAmount(decimal.NewFromInt(250)).
 		WithBillOn(moved).
-		WithStatus(types.InstalmentStatusInvoiced).
 		Build())
 	require.NoError(t, err)
 	require.True(t, decimal.NewFromInt(250).Equal(updated.Amount))
 	require.Equal(t, moved, updated.BillOn)
-	require.Equal(t, types.InstalmentStatusInvoiced, updated.InstalmentStatus)
+	require.Equal(t, types.InstalmentStatusScheduled, updated.InstalmentStatus)
 	require.Equal(t, "user_1", updated.UpdatedBy)
 
 	cleared := billingterm.NewInstalmentBuilder(updated).Build()
@@ -292,4 +291,34 @@ func TestInMemoryBillingInstalmentStore_Update(t *testing.T) {
 	_, err = f.store.Update(types.SetEnvironmentID(f.ctx, "env_2"), updated)
 	require.Error(t, err)
 	require.True(t, ierr.IsNotFound(err))
+
+	missing := billingterm.NewInstalmentBuilder(updated).Build()
+	missing.ID = "binst_missing"
+	_, err = f.store.Update(f.ctx, missing)
+	require.Error(t, err)
+	require.True(t, ierr.IsNotFound(err))
+
+	cancelled, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(updated).WithStatus(types.InstalmentStatusCancelled).Build())
+	require.NoError(t, err)
+	require.Equal(t, types.InstalmentStatusCancelled, cancelled.InstalmentStatus)
+}
+
+func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
+	for _, status := range []types.InstalmentStatus{types.InstalmentStatusInvoiced, types.InstalmentStatusCancelled} {
+		t.Run(string(status), func(t *testing.T) {
+			f := newInstalmentFixture(t)
+			row := f.instalment("binst_a", "cmt_1", status, f.start)
+			f.seed(t, row)
+			before := f.get(t, row.ID)
+
+			_, err := f.store.Update(f.ctx, billingterm.NewInstalmentBuilder(row).
+				WithAmount(decimal.NewFromInt(250)).
+				WithBillOn(f.start.AddDate(0, 0, 7)).
+				WithStatus(types.InstalmentStatusScheduled).
+				Build())
+			require.Error(t, err)
+			require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
+			require.Equal(t, before, f.get(t, row.ID), "the row is left as it was")
+		})
+	}
 }

@@ -28,7 +28,8 @@ type InstalmentRepository interface {
 	// List returns the matching instalments ordered by bill_on, then id.
 	List(ctx context.Context, filter *InstalmentFilter) ([]*Instalment, error)
 
-	// Update writes amount, bill_on, triggered_at and instalment_status.
+	// Update writes amount, bill_on, triggered_at and instalment_status of a scheduled instalment. It fails with
+	// ErrInvalidOperation when the instalment is no longer scheduled, e.g. claimed by a finalizing invoice.
 	Update(ctx context.Context, instalment *Instalment) (*Instalment, error)
 
 	// Cancel cancels the owner's instalments in the given statuses, which must be non-empty, and keeps invoice_id.

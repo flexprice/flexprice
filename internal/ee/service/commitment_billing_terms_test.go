@@ -956,9 +956,6 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_Rejections() {
 		name        string
 		instalments []dto.ReplanInstalmentInput
 	}{
-		{"short of the total", []dto.ReplanInstalmentInput{date("699", sep)}},
-		{"over the total", []dto.ReplanInstalmentInput{date("701", sep)}},
-		{"the total without the invoiced", []dto.ReplanInstalmentInput{date("1200", sep)}},
 		{"before the term", []dto.ReplanInstalmentInput{date("700", created.StartDate.Add(-time.Second))}},
 		{"after the term", []dto.ReplanInstalmentInput{date("700", created.EndDate.Add(time.Second))}},
 		{"finer than the currency", []dto.ReplanInstalmentInput{date("350.005", sep), date("349.995", sep)}},
@@ -981,6 +978,96 @@ func (s *CommitmentServiceSuite) TestReplanInstalments_Rejections() {
 			s.Empty(publisher.Events())
 		})
 	}
+}
+
+// The total is checked after the scheduled instalments are cancelled, so the real transaction rolls them back; the
+// in-memory one does not, which is why only the absence of new instalments and events is asserted.
+func (s *CommitmentServiceSuite) TestReplanInstalments_RejectsAPlanThatMissesTheTotal() {
+	created, before := s.fiveOfTwelveInvoiced()
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+
+	for name, amount := range map[string]string{
+		"short of the total":             "699",
+		"over the total":                 "701",
+		"the total without the invoiced": "1200",
+	} {
+		s.Run(name, func() {
+			publisher.Reset()
+
+			_, err := s.svc.ReplanInstalments(s.GetContext(), created.ID, dto.ReplanInstalmentsRequest{
+				Instalments: []dto.ReplanInstalmentInput{{Amount: dec(amount), BillOn: &sep}},
+			})
+			s.Require().Error(err)
+			s.True(ierr.IsValidation(err), "got %v", err)
+			s.Empty(s.addedSince(before))
+			s.Empty(publisher.Events())
+		})
+	}
+}
+
+// racingInstalmentRepo runs a hook before the next Cancel or Update, standing in for an invoice that finalizes and
+// claims an instalment at that moment.
+type racingInstalmentRepo struct {
+	billingterm.InstalmentRepository
+
+	race func(ctx context.Context)
+}
+
+func (r *racingInstalmentRepo) fire(ctx context.Context) {
+	if race := r.race; race != nil {
+		r.race = nil
+		race(ctx)
+	}
+}
+
+func (r *racingInstalmentRepo) Cancel(
+	ctx context.Context,
+	ownerType types.BillingTermOwnerType,
+	ownerID string,
+	statuses []types.InstalmentStatus,
+) ([]*billingterm.Instalment, error) {
+	r.fire(ctx)
+	return r.InstalmentRepository.Cancel(ctx, ownerType, ownerID, statuses)
+}
+
+func (r *racingInstalmentRepo) Update(ctx context.Context, instalment *billingterm.Instalment) (*billingterm.Instalment, error) {
+	r.fire(ctx)
+	return r.InstalmentRepository.Update(ctx, instalment)
+}
+
+// racingCommitmentService is the commitment service over a repo that runs race before its next write.
+func (s *CommitmentServiceSuite) racingCommitmentService(race func(ctx context.Context)) CommitmentService {
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.BillingInstalmentRepo = &racingInstalmentRepo{InstalmentRepository: params.BillingInstalmentRepo, race: race}
+	return NewCommitmentService(params)
+}
+
+func (s *CommitmentServiceSuite) TestReplanInstalments_SizesThePlanAfterTheCancellation() {
+	created, before := s.fiveOfTwelveInvoiced()
+	sep := time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)
+	repo := s.GetStores().BillingInstalmentRepo
+
+	// A claim that lands just before the cancellation makes six instalments invoiced, leaving 600 to plan.
+	racing := s.racingCommitmentService(func(ctx context.Context) {
+		_, err := repo.Claim(ctx, "inv_race", []string{before[5].ID})
+		s.Require().NoError(err)
+	})
+
+	_, err := racing.ReplanInstalments(s.GetContext(), created.ID, dto.ReplanInstalmentsRequest{
+		Instalments: []dto.ReplanInstalmentInput{{Amount: dec("700"), BillOn: &sep}},
+	})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.Empty(s.addedSince(before))
+	s.Equal(types.InstalmentStatusInvoiced, s.instalmentByID(before[5].ID).InstalmentStatus)
+
+	racing = s.racingCommitmentService(nil)
+	_, err = racing.ReplanInstalments(s.GetContext(), created.ID, dto.ReplanInstalmentsRequest{
+		Instalments: []dto.ReplanInstalmentInput{{Amount: dec("600"), BillOn: &sep}},
+	})
+	s.Require().NoError(err)
+	s.True(s.liveTotal().Equal(dec("1200")))
 }
 
 func (s *CommitmentServiceSuite) TestReplanInstalments_RejectsInactiveOrPerPeriod() {
@@ -1083,34 +1170,77 @@ func (s *CommitmentServiceSuite) TestBringForwardInstalments_PartialReduction() 
 	_, err := s.svc.BringForwardInstalments(ctx, created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("250"), BillOn: &now})
 	s.Require().NoError(err)
 
-	for _, old := range before[5:7] {
-		s.Equal(types.InstalmentStatusCancelled, s.instalmentByID(old.ID).InstalmentStatus, "instalment %s", old.ID)
+	for _, old := range before[5:8] {
+		got := s.instalmentByID(old.ID)
+		s.Equal(types.InstalmentStatusCancelled, got.InstalmentStatus, "instalment %s", old.ID)
+		s.True(got.Amount.Equal(dec("100")), "an amount is never changed in place")
 	}
-
-	reduced := s.instalmentByID(before[7].ID)
-	s.Equal(types.InstalmentStatusScheduled, reduced.InstalmentStatus)
-	s.True(reduced.Amount.Equal(dec("50")), "got %s", reduced.Amount)
-	s.True(reduced.BillOn.Equal(before[7].BillOn), "a reduced instalment keeps its date")
 
 	for _, untouched := range before[8:] {
 		s.True(s.instalmentByID(untouched.ID).Amount.Equal(dec("100")))
 	}
 
-	s.Require().Len(s.addedSince(before), 1)
-	added := s.addedSince(before)[0]
-	s.True(added.Amount.Equal(dec("250")))
-	s.True(added.ServicePeriodStart.Equal(before[5].ServicePeriodStart))
-	s.True(added.ServicePeriodEnd.Equal(before[7].ServicePeriodEnd), "the partly reduced month is part of what it pays for")
+	added := s.addedSince(before)
+	s.Require().Len(added, 2)
+	replacement, broughtForward := added[0], added[1]
+	if replacement.Description == "Payment brought forward" {
+		replacement, broughtForward = broughtForward, replacement
+	}
+
+	partlyReduced := before[7]
+	s.NotEqual(partlyReduced.ID, replacement.ID)
+	s.True(replacement.Amount.Equal(dec("50")), "got %s", replacement.Amount)
+	s.True(replacement.BillOn.Equal(partlyReduced.BillOn), "what is left keeps its date")
+	s.Equal(partlyReduced.BillTrigger, replacement.BillTrigger)
+	s.Equal(partlyReduced.BillingTermID, replacement.BillingTermID)
+	s.Equal(partlyReduced.Description, replacement.Description)
+	s.Equal(partlyReduced.Kind, replacement.Kind)
+	s.Equal(partlyReduced.Delivery, replacement.Delivery)
+	s.Equal(types.InstalmentStatusScheduled, replacement.InstalmentStatus)
+	s.True(replacement.ServicePeriodStart.Equal(partlyReduced.ServicePeriodStart))
+	s.True(replacement.ServicePeriodEnd.Equal(partlyReduced.ServicePeriodEnd))
+
+	s.Equal("Payment brought forward", broughtForward.Description)
+	s.True(broughtForward.Amount.Equal(dec("250")))
+	s.True(broughtForward.ServicePeriodStart.Equal(before[5].ServicePeriodStart))
+	s.True(broughtForward.ServicePeriodEnd.Equal(before[7].ServicePeriodEnd), "the partly reduced month is part of what it pays for")
 	s.True(s.liveTotal().Equal(dec("1200")))
 
+	claimed, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_stale", []string{partlyReduced.ID})
+	s.Require().NoError(err)
+	s.Empty(claimed, "a draft invoice computed earlier cannot claim the cancelled instalment")
+
 	events := publisher.Events()
-	s.Require().Len(events, 4, "one updated, two cancelled and one created")
-	s.Equal([]string{before[7].ID}, s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentUpdated))
+	s.Require().Len(events, 5, "three cancelled and two created")
+	s.Empty(s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentUpdated))
 	s.Equal(
-		lo.Map(before[5:7], func(inst *billingterm.Instalment, _ int) string { return inst.ID }),
+		lo.Map(before[5:8], func(inst *billingterm.Instalment, _ int) string { return inst.ID }),
 		s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCancelled),
 	)
-	s.Equal([]string{added.ID}, s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCreated))
+	s.Equal([]string{replacement.ID, broughtForward.ID}, s.instalmentEventIDs(events, types.WebhookEventBillingInstalmentCreated))
+}
+
+func (s *CommitmentServiceSuite) TestBringForwardInstalments_FailsWhenAnInstalmentIsClaimedFirst() {
+	created, before := s.fiveOfTwelveInvoiced()
+	repo := s.GetStores().BillingInstalmentRepo
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+	publisher.Reset()
+
+	racing := s.racingCommitmentService(func(ctx context.Context) {
+		_, err := repo.Claim(ctx, "inv_race", []string{before[5].ID})
+		s.Require().NoError(err)
+	})
+
+	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
+	_, err := racing.BringForwardInstalments(s.GetContext(), created.ID, dto.BringForwardInstalmentsRequest{Amount: dec("300"), BillOn: &now})
+	s.Require().Error(err)
+	s.True(ierr.IsInvalidOperation(err), "got %v", err)
+
+	claimed := s.instalmentByID(before[5].ID)
+	s.Equal(types.InstalmentStatusInvoiced, claimed.InstalmentStatus, "a claimed instalment is not overwritten")
+	s.Equal("inv_race", lo.FromPtr(claimed.InvoiceID))
+	s.Empty(s.addedSince(before))
+	s.Empty(publisher.Events())
 }
 
 func (s *CommitmentServiceSuite) TestBringForwardInstalments_EverythingScheduled() {
