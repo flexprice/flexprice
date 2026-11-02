@@ -119,7 +119,6 @@ func (s *EntitlementQuantityTestSuite) setupServices() {
 		CreditGrantRepo:              stores.CreditGrantRepo,
 		CreditGrantApplicationRepo:   stores.CreditGrantApplicationRepo,
 		ConnectionRepo:               stores.ConnectionRepo,
-		ConnectionAssociationRepo:    stores.ConnectionAssociationRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		SettingsRepo:                 stores.SettingsRepo,
 		AlertLogsRepo:                stores.AlertLogsRepo,

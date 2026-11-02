@@ -9,7 +9,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
-	"github.com/flexprice/flexprice/internal/domain/connectionassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -760,11 +759,8 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		if dup := duplicateConnection(existing, conn.ProviderType, owner); dup != nil {
 			return errConnectionExists(txCtx, dup, owner, connectionExistsHint)
 		}
-		if err := s.ConnectionRepo.Create(txCtx, conn); err != nil {
-			return err
-		}
 		conn.BillingEntityID = owner
-		return createConnectionOwnerAssociation(txCtx, s.ConnectionAssociationRepo, conn)
+		return s.ConnectionRepo.Create(txCtx, conn)
 	}); err != nil {
 		s.Logger.Error(ctx, "failed to create connection", "error", err)
 		return nil, err
@@ -1181,7 +1177,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
-	if err := archiveConnection(ctx, s.ServiceParams, conn); err != nil {
+	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
 		s.Logger.Error(ctx, "failed to delete connection", "error", err, "connection_id", id)
 		return err
 	}
@@ -1243,53 +1239,6 @@ func errStorageHasNoEntity(provider types.SecretProvider) error {
 		Mark(ierr.ErrValidation)
 }
 
-// createConnectionOwnerAssociation links the connection to its owner; it does nothing for a connection without one.
-func createConnectionOwnerAssociation(ctx context.Context, repo connectionassociation.Repository, conn *connection.Connection) error {
-	if conn.BillingEntityID == nil {
-		return nil
-	}
-	return repo.Create(ctx, &connectionassociation.ConnectionAssociation{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION_ASSOCIATION),
-		EntityType:    types.ConnectionAssociationEntityTypeBillingEntity,
-		EntityID:      *conn.BillingEntityID,
-		ConnectionID:  conn.ID,
-		ProviderType:  conn.ProviderType,
-		EnvironmentID: conn.EnvironmentID,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	})
-}
-
-// archiveConnection archives the connection and all its associations in one transaction.
-func archiveConnection(ctx context.Context, params ServiceParams, conn *connection.Connection) error {
-	return params.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if err := params.ConnectionRepo.Delete(txCtx, conn); err != nil {
-			return err
-		}
-		return archiveAssociations(txCtx, params, conn.ID, nil)
-	})
-}
-
-// archiveAssociations archives the connection's associations; entityType limits it to one kind when set.
-func archiveAssociations(ctx context.Context, params ServiceParams, connectionID string, entityType *types.ConnectionAssociationEntityType) error {
-	filter := types.NewNoLimitConnectionAssociationFilter()
-	filter.ConnectionIDs = []string{connectionID}
-	if entityType != nil {
-		filter.EntityType = *entityType
-	}
-	associations, err := params.ConnectionAssociationRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-	for _, a := range associations {
-		a.UpdatedAt = time.Now().UTC()
-		a.UpdatedBy = types.GetUserID(ctx)
-		if err := params.ConnectionAssociationRepo.Delete(ctx, a); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // persistUpdate saves the connection and, when a billing entity is given, moves it there.
 func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.Connection, requested *string) error {
 	if lo.FromPtr(requested) == "" {
@@ -1309,8 +1258,7 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 			return err
 		}
 
-		current := conn.BillingEntityID
-		if lo.FromPtr(current) != *target {
+		if lo.FromPtr(conn.BillingEntityID) != *target {
 			existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
 			if err != nil {
 				return err
@@ -1318,19 +1266,9 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 			if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
 				return errConnectionExists(txCtx, dup, target, connectionExistsHint)
 			}
-			ownerType := types.ConnectionAssociationEntityTypeBillingEntity
-			if err := archiveAssociations(txCtx, s.ServiceParams, conn.ID, &ownerType); err != nil {
-				return err
-			}
 		}
 
-		if err := s.ConnectionRepo.Update(txCtx, conn); err != nil {
-			return err
-		}
 		conn.BillingEntityID = target
-		if lo.FromPtr(current) == *target {
-			return nil
-		}
-		return createConnectionOwnerAssociation(txCtx, s.ConnectionAssociationRepo, conn)
+		return s.ConnectionRepo.Update(txCtx, conn)
 	})
 }

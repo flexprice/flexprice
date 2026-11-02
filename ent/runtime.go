@@ -19,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/ent/checkoutsession"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
-	"github.com/flexprice/flexprice/ent/connectionassociation"
 	"github.com/flexprice/flexprice/ent/contract"
 	"github.com/flexprice/flexprice/ent/contractassociation"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -721,51 +720,6 @@ func init() {
 	connectionDescProviderType := connectionFields[2].Descriptor()
 	// connection.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
 	connection.ProviderTypeValidator = connectionDescProviderType.Validators[0].(func(string) error)
-	connectionassociationMixin := schema.ConnectionAssociation{}.Mixin()
-	connectionassociationMixinFields0 := connectionassociationMixin[0].Fields()
-	_ = connectionassociationMixinFields0
-	connectionassociationMixinFields1 := connectionassociationMixin[1].Fields()
-	_ = connectionassociationMixinFields1
-	connectionassociationFields := schema.ConnectionAssociation{}.Fields()
-	_ = connectionassociationFields
-	// connectionassociationDescTenantID is the schema descriptor for tenant_id field.
-	connectionassociationDescTenantID := connectionassociationMixinFields0[0].Descriptor()
-	// connectionassociation.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	connectionassociation.TenantIDValidator = connectionassociationDescTenantID.Validators[0].(func(string) error)
-	// connectionassociationDescStatus is the schema descriptor for status field.
-	connectionassociationDescStatus := connectionassociationMixinFields0[1].Descriptor()
-	// connectionassociation.DefaultStatus holds the default value on creation for the status field.
-	connectionassociation.DefaultStatus = connectionassociationDescStatus.Default.(string)
-	// connectionassociationDescCreatedAt is the schema descriptor for created_at field.
-	connectionassociationDescCreatedAt := connectionassociationMixinFields0[2].Descriptor()
-	// connectionassociation.DefaultCreatedAt holds the default value on creation for the created_at field.
-	connectionassociation.DefaultCreatedAt = connectionassociationDescCreatedAt.Default.(func() time.Time)
-	// connectionassociationDescUpdatedAt is the schema descriptor for updated_at field.
-	connectionassociationDescUpdatedAt := connectionassociationMixinFields0[3].Descriptor()
-	// connectionassociation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	connectionassociation.DefaultUpdatedAt = connectionassociationDescUpdatedAt.Default.(func() time.Time)
-	// connectionassociation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	connectionassociation.UpdateDefaultUpdatedAt = connectionassociationDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// connectionassociationDescEnvironmentID is the schema descriptor for environment_id field.
-	connectionassociationDescEnvironmentID := connectionassociationMixinFields1[0].Descriptor()
-	// connectionassociation.DefaultEnvironmentID holds the default value on creation for the environment_id field.
-	connectionassociation.DefaultEnvironmentID = connectionassociationDescEnvironmentID.Default.(string)
-	// connectionassociationDescEntityType is the schema descriptor for entity_type field.
-	connectionassociationDescEntityType := connectionassociationFields[1].Descriptor()
-	// connectionassociation.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
-	connectionassociation.EntityTypeValidator = connectionassociationDescEntityType.Validators[0].(func(string) error)
-	// connectionassociationDescEntityID is the schema descriptor for entity_id field.
-	connectionassociationDescEntityID := connectionassociationFields[2].Descriptor()
-	// connectionassociation.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
-	connectionassociation.EntityIDValidator = connectionassociationDescEntityID.Validators[0].(func(string) error)
-	// connectionassociationDescConnectionID is the schema descriptor for connection_id field.
-	connectionassociationDescConnectionID := connectionassociationFields[3].Descriptor()
-	// connectionassociation.ConnectionIDValidator is a validator for the "connection_id" field. It is called by the builders before save.
-	connectionassociation.ConnectionIDValidator = connectionassociationDescConnectionID.Validators[0].(func(string) error)
-	// connectionassociationDescProviderType is the schema descriptor for provider_type field.
-	connectionassociationDescProviderType := connectionassociationFields[4].Descriptor()
-	// connectionassociation.ProviderTypeValidator is a validator for the "provider_type" field. It is called by the builders before save.
-	connectionassociation.ProviderTypeValidator = connectionassociationDescProviderType.Validators[0].(func(string) error)
 	contractMixin := schema.Contract{}.Mixin()
 	contractMixinFields0 := contractMixin[0].Fields()
 	_ = contractMixinFields0

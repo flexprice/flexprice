@@ -34,15 +34,14 @@ func (s *PortalPaymentMethodSuite) SetupTest() {
 	s.ClearStores()
 
 	params := ServiceParams{
-		Logger:                    s.GetLogger(),
-		Config:                    s.GetConfig(),
-		DB:                        s.GetDB(),
-		ConnectionRepo:            s.GetStores().ConnectionRepo,
-		CustomerRepo:              s.GetStores().CustomerRepo,
-		ConnectionAssociationRepo: s.GetStores().ConnectionAssociationRepo,
-		TenantRepo:                s.GetStores().TenantRepo,
-		EnvironmentRepo:           s.GetStores().EnvironmentRepo,
-		IntegrationFactory:        s.GetIntegrationFactory(),
+		Logger:             s.GetLogger(),
+		Config:             s.GetConfig(),
+		DB:                 s.GetDB(),
+		ConnectionRepo:     s.GetStores().ConnectionRepo,
+		CustomerRepo:       s.GetStores().CustomerRepo,
+		TenantRepo:         s.GetStores().TenantRepo,
+		EnvironmentRepo:    s.GetStores().EnvironmentRepo,
+		IntegrationFactory: s.GetIntegrationFactory(),
 	}
 	s.paymentSvc = NewPaymentService(params)
 	s.svc = NewCustomerPortalService(params, NewCustomerService(params), nil)

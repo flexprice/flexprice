@@ -177,18 +177,6 @@ func (f ConnectionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectionMutation", m)
 }
 
-// The ConnectionAssociationFunc type is an adapter to allow the use of ordinary
-// function as ConnectionAssociation mutator.
-type ConnectionAssociationFunc func(context.Context, *ent.ConnectionAssociationMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f ConnectionAssociationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ConnectionAssociationMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ConnectionAssociationMutation", m)
-}
-
 // The ContractFunc type is an adapter to allow the use of ordinary
 // function as Contract mutator.
 type ContractFunc func(context.Context, *ent.ContractMutation) (ent.Value, error)
