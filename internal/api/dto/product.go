@@ -3,6 +3,8 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/product"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -20,7 +22,7 @@ func (r *CreateProductRequest) Validate() error {
 }
 
 func (r *CreateProductRequest) ToProduct() *product.Product {
-	now := time.Now().UTC()
+	now := clock.Now()
 	return product.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRODUCT)).
 		WithName(r.Name).

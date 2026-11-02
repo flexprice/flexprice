@@ -7,6 +7,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -21,8 +26,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // FindMatchingLineItemPeriodInput is the input for FindMatchingLineItemPeriodForInvoice.
@@ -73,7 +76,7 @@ type BillingService interface {
 	// CalculateMeterUsageCharges computes usage-based invoice line items from meter_usage.
 	// asOf is optional (variadic to stay additive for existing callers): pass a resolved
 	// reference instant (see resolveAsOf) to clip line items/windowed commitments against a
-	// day other than now; omit or pass a zero value to keep today's time.Now() behavior.
+	// day other than now; omit or pass a zero value to keep today's clock.Now() behavior.
 	CalculateMeterUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, source types.UsageSource, asOfOverride *time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
 	// SumUsageAmountForSubscription returns the total usage cost for a subscription over
@@ -879,7 +882,7 @@ func (s *billingService) CalculateUsageCharges(
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc, nil)
 
 	commitments, err := s.newCommitmentLoader(
-		ctx, sub, periodStart, periodEnd, time.Now().UTC(), rawChargesByLine(sub, usage), meterMap, "",
+		ctx, sub, periodStart, periodEnd, clock.Now(), rawChargesByLine(sub, usage), meterMap, "",
 	)
 	if err != nil {
 		return nil, err
@@ -2475,7 +2478,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 
 	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
 	// from when it is issued.
-	issueDate := time.Now().UTC()
+	issueDate := clock.Now()
 	if periodEnd.After(issueDate) {
 		issueDate = periodEnd
 	}
@@ -3006,7 +3009,7 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		}
 
 		// Get all entitlements for this subscription (plan + addons)
-		subEntitlements, err := subscriptionService.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, time.Now().UTC())
+		subEntitlements, err := subscriptionService.GetActiveSubscriptionEntitlementsForSubscription(ctx, sub, clock.Now())
 		if err != nil {
 			s.Logger.Info(ctx, "failed to get subscription entitlements, skipping",
 				"subscription_id", sub.ID,
@@ -3052,7 +3055,7 @@ func (s *billingService) attachGrantState(
 	subscriptions []*subscription.Subscription,
 ) {
 	grantSvc := NewEntitlementGrantService(s.ServiceParams)
-	at := time.Now().UTC()
+	at := clock.Now()
 
 	byFeature := make(map[string]*dto.GrantState)
 	for _, sub := range subscriptions {
@@ -3243,7 +3246,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 							usageLoc = loc
 						}
 					}
-					today := time.Now().In(usageLoc)
+					today := clock.Now().In(usageLoc)
 					todayStart := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
 					todayEnd := todayStart.AddDate(0, 0, 1)
@@ -3302,7 +3305,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 							usageLoc2 = loc
 						}
 					}
-					currentTime := time.Now().In(usageLoc2)
+					currentTime := clock.Now().In(usageLoc2)
 					if len(usageResult.Results) > 0 {
 						// Find the current month's bucket
 						for _, result := range usageResult.Results {
@@ -3372,7 +3375,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		}
 	}
 
-	currentTime := time.Now().UTC()
+	currentTime := clock.Now()
 	// 4. Calculate next usage reset at for metered features only
 	// Boolean and static features don't have usage reset periods
 	featureNextUsageResetAtMap := make(map[string]*time.Time)

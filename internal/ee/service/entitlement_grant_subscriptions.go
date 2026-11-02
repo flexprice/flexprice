@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
@@ -14,8 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 var (
@@ -98,7 +101,7 @@ func (s *entitlementGrantService) hasSubscriptionScopedEntitlement(ctx context.C
 	if err != nil {
 		return false, err
 	}
-	now := time.Now().UTC()
+	now := clock.Now()
 	return lo.ContainsBy(ecs, func(e *entitlement.Entitlement) bool {
 		return e.EndDate == nil || e.EndDate.After(now)
 	}), nil
@@ -214,7 +217,7 @@ func (s *entitlementService) CreateSubscriptionEntitlementGrant(ctx context.Cont
 	e.EntityType = types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION
 	e.EntityID = sub.ID
 	if e.StartDate == nil {
-		e.StartDate = lo.ToPtr(time.Now().UTC())
+		e.StartDate = lo.ToPtr(clock.Now())
 	}
 	e.ApplyGrantDefaults()
 	if err := e.Validate(); err != nil {
@@ -323,7 +326,7 @@ func (s *entitlementGrantService) subscriptionsWithSubscriptionScopedEntitlement
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
+	now := clock.Now()
 	ecs = lo.Filter(ecs, func(ec *entitlement.Entitlement, _ int) bool { return ec.EndDate == nil || ec.EndDate.After(now) })
 	if len(ecs) == 0 {
 		return nil, nil
@@ -397,7 +400,7 @@ func (s *entitlementService) updateSubscriptionEntitlementGrant(ctx context.Cont
 		if err != nil {
 			return err
 		}
-		return grants.reissueSubscriptionEntitlementGrantWindows(txCtx, live, "", delta, time.Now().UTC(), "entitlement_updated")
+		return grants.reissueSubscriptionEntitlementGrantWindows(txCtx, live, "", delta, clock.Now(), "entitlement_updated")
 	}); err != nil {
 		return nil, err
 	}
@@ -425,11 +428,11 @@ func (s *entitlementService) settleDeletedSubscriptionEntitlementGrant(ctx conte
 		survivors = lo.Reject(survivors, func(ec *entitlement.Entitlement, _ int) bool { return ec.ID == deleted.ID })
 		if len(survivors) > 0 {
 			slotECID := grantCandidates(survivors)[0].ec.ID
-			return grants.reissueSubscriptionEntitlementGrantWindows(ctx, live, slotECID, lo.FromPtr(deleted.GrantQuota).Neg(), time.Now().UTC(), "entitlement_deleted")
+			return grants.reissueSubscriptionEntitlementGrantWindows(ctx, live, slotECID, lo.FromPtr(deleted.GrantQuota).Neg(), clock.Now(), "entitlement_deleted")
 		}
 	}
 
-	_, err = grants.CloseEntitlementGrants(ctx, live, time.Now().UTC(), false)
+	_, err = grants.CloseEntitlementGrants(ctx, live, clock.Now(), false)
 	return err
 }
 
@@ -444,7 +447,7 @@ func (s *entitlementGrantService) liveSubscriptionEntitlementGrantWindows(ctx co
 		WithCustomerIDs(sub.CustomerID).
 		WithSubscriptionIDs(sub.ID).
 		WithScopeEntityType(types.EntitlementGrantScopeSubscription).
-		WithLiveOnly(time.Now().UTC())
+		WithLiveOnly(clock.Now())
 	if defaultedMode(ec.AggregationMode) == types.EntitlementAggregationModeParallel {
 		filter = filter.WithEntitlementConfigIDs(ec.ID)
 	}
@@ -643,7 +646,7 @@ func (s *entitlementGrantService) subscriptionEntitlementGrantsView(ctx context.
 		return nil, nil
 	}
 
-	state, err := s.SubscriptionEntitlementGrantState(ctx, sub, time.Now().UTC())
+	state, err := s.SubscriptionEntitlementGrantState(ctx, sub, clock.Now())
 	if err != nil {
 		s.Logger.Error(ctx, "failed to load subscription entitlement grant state, returning grants without it",
 			"error", err, "subscription_id", sub.ID)

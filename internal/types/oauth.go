@@ -3,6 +3,8 @@ package types
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -89,7 +91,7 @@ type OAuthSession struct {
 
 // IsExpired checks if the OAuth session has expired
 func (s *OAuthSession) IsExpired() bool {
-	return time.Now().UTC().After(s.ExpiresAt.UTC())
+	return clock.Now().After(s.ExpiresAt.UTC())
 }
 
 // Validate validates the OAuth session fields

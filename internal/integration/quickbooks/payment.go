@@ -2,7 +2,11 @@ package quickbooks
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -12,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // QuickBooksPaymentService defines the interface for QuickBooks payment operations
@@ -251,7 +253,7 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 
 	// Update payment to succeeded status with QuickBooks details
 	// Note: GatewayPaymentID stores QuickBooks payment ID for tracking, but PaymentGateway stays nil for offline payments
-	now := time.Now().UTC()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: lo.ToPtr(qbPayment.ID), // Store QuickBooks payment ID for reference

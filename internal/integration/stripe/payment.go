@@ -7,6 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/webhook"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -16,10 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/stripe/stripe-go/v82"
-	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 const refundLockTTL = 15 * time.Minute
@@ -114,7 +117,7 @@ func computeCheckoutDiscount(session *stripe.CheckoutSession, requestedAmount de
 			AmountOff:      lo.TernaryF(d.Coupon != nil, func() int64 { return d.Coupon.AmountOff }, func() int64 { return 0 }),
 			PercentOff:     lo.TernaryF(d.Coupon != nil, func() float64 { return d.Coupon.PercentOff }, func() float64 { return 0 }),
 			PromotionCode:  lo.TernaryF(d.PromotionCode != nil, func() string { return d.PromotionCode.Code }, func() string { return "" }),
-			AppliedAt:      time.Now().UTC(),
+			AppliedAt:      clock.Now(),
 		})
 	}
 
@@ -1829,7 +1832,7 @@ func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymen
 	}
 
 	// Update payment to the final status with all Stripe details (same as regular Stripe charge)
-	now := time.Now().UTC()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(status)),
 		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
@@ -2219,7 +2222,7 @@ func (s *PaymentService) recordLateCaptureRefund(
 	refundID string,
 	paymentService interfaces.PaymentService,
 ) error {
-	now := time.Now().UTC()
+	now := clock.Now()
 	metadata := existingPayment.Metadata
 	if refundID != "" {
 		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"stripe_refund_id": refundID})

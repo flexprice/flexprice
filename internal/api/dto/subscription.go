@@ -6,14 +6,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type SubscriptionPhaseCreateRequest struct {
@@ -319,6 +322,8 @@ func (r *SubscriptionCouponInput) Validate() error {
 type GroupedInvoicingChildRequest struct {
 	PlanID             string `json:"plan_id" validate:"required"`
 	ExternalCustomerID string `json:"external_customer_id" validate:"required"`
+	// ProrationBehavior is stored on the child. Empty defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 	SubscriptionCreationConfig
 }
 
@@ -756,6 +761,9 @@ type UpdateSubscriptionRequest struct {
 
 	// ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send "" to clear.
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+
+	// ProrationBehavior updates the stored behavior. Omit to leave it unchanged.
+	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -763,6 +771,12 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ProrationBehavior != nil {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -891,7 +905,7 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	}
 
 	if r.CancellationType == types.CancellationTypeImmediate && r.CancelAt != nil {
-		now := time.Now().UTC()
+		now := clock.Now()
 		if r.CancelAt.After(now) {
 			return ierr.NewError("cancel_at cannot be a future date for immediate cancellation").
 				WithHint("Use cancellation_type 'scheduled_date' to schedule a future cancellation").
@@ -1219,7 +1233,7 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	// Set default start date if not provided
 	if r.StartDate == nil {
-		now := time.Now().UTC()
+		now := clock.Now()
 		r.StartDate = &now
 	}
 
@@ -1470,7 +1484,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 	}
 
 	// Compare only the date portions (ignore time) - don't allow before current day
-	now := time.Now().UTC()
+	now := clock.Now()
 	startDateOnly := time.Date(request.StartDate.Year(), request.StartDate.Month(), request.StartDate.Day(), 0, 0, 0, 0, time.UTC)
 	nowDateOnly := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 

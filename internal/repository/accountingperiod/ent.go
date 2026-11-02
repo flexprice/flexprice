@@ -4,6 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/ent"
 	entAccountingPeriod "github.com/flexprice/flexprice/ent/accountingperiod"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -14,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type repository struct {
@@ -40,7 +43,7 @@ func (r *repository) GetOrCreate(ctx context.Context, periodStart time.Time) (*d
 	defer entRepo.FinishSpan(span)
 
 	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-	now, userID := time.Now().UTC(), types.GetUserID(ctx)
+	now, userID := clock.Now(), types.GetUserID(ctx)
 	_, err := r.client.Writer(ctx).ExecContext(ctx, `
 		INSERT INTO accounting_periods
 			(id, tenant_id, environment_id, period_start, period_status, status, created_at, created_by, updated_at, updated_by)

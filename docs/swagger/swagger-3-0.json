@@ -26721,6 +26721,9 @@
           "plan_id": {
             "type": "string"
           },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "subscription_coupons": {
             "type": "array",
             "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
@@ -32962,6 +32965,9 @@
           "parent_subscription_id": {
             "type": "string",
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"

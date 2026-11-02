@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -98,7 +100,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	a.logger.Info(ctx, "execution time", "execution_time", executionTime)
 	if executionTime.IsZero() {
 		// Fallback to current time if not provided (for backward compatibility)
-		executionTime = time.Now()
+		executionTime = clock.Now()
 	}
 
 	// Calculate start and end times

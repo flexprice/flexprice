@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -12,8 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TaxService interface {
@@ -631,7 +634,8 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// neither and must not pay for the fetches.
 	var sub *subscription.Subscription
 	if req.EntityType == types.TaxRateEntityTypeSubscription && req.EntityID != "" {
-		sub, err = s.SubRepo.Get(ctx, req.EntityID)
+		// Read from the writer: callers often link a tax rate right after creating the subscription, before the replica has it.
+		sub, err = s.SubRepo.Get(types.WithForceWriter(ctx), req.EntityID)
 		if err != nil {
 			return nil, err
 		}
@@ -1262,7 +1266,7 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 				TaxAmount:     line.taxAmount,
 				TaxBehavior:   line.taxBehavior,
 				Currency:      inv.Currency,
-				AppliedAt:     time.Now().UTC(),
+				AppliedAt:     clock.Now(),
 			},
 			TaxRate: rate.TaxRateResponse,
 		})
@@ -1533,7 +1537,7 @@ func (s *taxService) PersistTaxResult(ctx context.Context, entityType types.TaxR
 			applied.EntityID = entityID
 			applied.Currency = currency
 			applied.Provider = result.Provider
-			applied.AppliedAt = time.Now().UTC()
+			applied.AppliedAt = clock.Now()
 			applied.EnvironmentID = types.GetEnvironmentID(ctx)
 			applied.BaseModel = types.GetDefaultBaseModel(ctx)
 
@@ -1888,7 +1892,7 @@ func (s *taxService) recordReversal(ctx context.Context, req dto.TaxReversalRequ
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	for _, applied := range filed {
 		details := types.ExternalTaxDetails{}
 		if applied.ExternalTaxDetails != nil {

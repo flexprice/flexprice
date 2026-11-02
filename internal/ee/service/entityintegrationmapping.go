@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -143,7 +145,7 @@ func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx con
 	}
 
 	// Update timestamps
-	mapping.UpdatedAt = time.Now().UTC()
+	mapping.UpdatedAt = clock.Now()
 	mapping.UpdatedBy = types.GetUserID(ctx)
 
 	// Validate the updated mapping
@@ -307,13 +309,13 @@ func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Contex
 		metadata = map[string]interface{}{}
 	}
 	metadata["linked_via"] = "integrations_mapping_link_api"
-	metadata["linked_at"] = time.Now().UTC().Format(time.RFC3339)
+	metadata["linked_at"] = clock.Now().Format(time.RFC3339)
 
 	if len(existing) > 0 {
 		mapping := existing[0]
 		mapping.ProviderEntityID = req.ProviderEntityID
 		mapping.Metadata = metadata
-		mapping.UpdatedAt = time.Now().UTC()
+		mapping.UpdatedAt = clock.Now()
 		mapping.UpdatedBy = types.GetUserID(ctx)
 		if err := s.EntityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
 			return nil, err

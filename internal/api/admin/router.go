@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+
 	v1 "github.com/flexprice/flexprice/internal/api/admin/v1"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/gin-gonic/gin"
 )
 
 // Handlers is the admin portal HTTP surface. Add a handler here, construct it
@@ -30,6 +31,9 @@ type Server struct {
 }
 
 func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
+	// Admin-only deployments never build the public router, so install here too.
+	middleware.InstallMicrosecondBinding()
+
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 	engine.Use(middleware.RequestIDMiddleware)

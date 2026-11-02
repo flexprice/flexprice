@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // pendingCheckoutSessionForAssociation reports whether an outstanding checkout already gates this
@@ -303,10 +304,6 @@ func (s *subscriptionService) createAddonDetachParams(
 				}).
 				Mark(ierr.ErrValidation)
 		}
-
-		// Checked as requested, then cut to microseconds as the change's `now` is: cutting first could pull a date
-		// just past the period end onto it.
-		effectiveEndDate = effectiveEndDate.Truncate(time.Microsecond)
 	}
 
 	return &addonDetachParams{

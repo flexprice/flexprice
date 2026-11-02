@@ -805,9 +805,9 @@ func (s *SubscriptionServiceSuite) TestAddonBatch_TwoAddsAgreeingOnOneFeature_Is
 // caller-supplied dates — cut to microseconds like `now`
 // -----------------------------------------------------------------------------
 
-// A caller's start_date is cut to microseconds as the change's own `now` is, so the commitment guard compares the
-// dates Postgres stores.
-func (s *SubscriptionServiceSuite) TestAddonChange_CutsCallerDatesToMicroseconds() {
+// Caller dates flow through as given: precision is normalized at the API binding and on storage writes,
+// never inside the change resolution.
+func (s *SubscriptionServiceSuite) TestAddonChange_CallerDatesPassThrough() {
 	ctx := s.GetContext()
 	sub := s.monthlyPeriodSubscription()
 	s.seedFixedPriceAddon("addon_ns_out", decimal.NewFromInt(30), types.InvoiceCadenceAdvance)
@@ -822,15 +822,13 @@ func (s *SubscriptionServiceSuite) TestAddonChange_CutsCallerDatesToMicroseconds
 	})
 	s.Require().NoError(err)
 
-	cut := at.Truncate(time.Microsecond)
 	s.Require().Len(config.getAttaches(), 1)
-	s.Equal(cut, config.getAttaches()[0].getRequestedStart())
+	s.Equal(at, config.getAttaches()[0].getRequestedStart())
 	s.Require().Len(config.getDetaches(), 1)
-	s.Equal(cut, config.getDetaches()[0].getEffectiveDate())
+	s.Equal(at, config.getDetaches()[0].getEffectiveDate())
 }
 
-// A removal a fraction of a microsecond past the period end is still outside the period: the date is checked as
-// requested and only cut afterwards.
+// A removal a fraction of a microsecond past the period end is still outside the period.
 func (s *SubscriptionServiceSuite) TestAddonChange_RemovalJustPastThePeriodEndIsRejected() {
 	ctx := s.GetContext()
 	sub := s.monthlyPeriodSubscription()

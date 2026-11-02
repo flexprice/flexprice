@@ -5,12 +5,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // InvoiceCoupon represents a coupon to be applied at the invoice level.
@@ -534,7 +537,7 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 	}
 
 	// A past due_date fires invoice.payment.overdue against a draft nobody could pay yet.
-	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+	if r.DueDate != nil && r.DueDate.Before(clock.Now()) {
 		return ierr.NewError("due_date must be in the future when checkout is provided").
 			WithHint("A gated invoice cannot be overdue before its payment link expires").
 			WithReportableDetails(map[string]any{"due_date": r.DueDate}).
@@ -1077,7 +1080,7 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	}
 
 	// Validate that the due date is not in the past (optional business rule)
-	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+	if r.DueDate != nil && r.DueDate.Before(clock.Now()) {
 		return ierr.NewError("due_date cannot be in the past").
 			WithHint("Due date must be in the future").
 			Mark(ierr.ErrValidation)

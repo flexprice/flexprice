@@ -4,10 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"go.temporal.io/sdk/activity"
+
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
-	"go.temporal.io/sdk/activity"
 )
 
 // SubscriptionCronActivities wraps subscription-related cron jobs: auto-cancellation, billing
@@ -89,7 +92,7 @@ func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context
 	log := activity.GetLogger(ctx)
 	log.Info("Processing subscription renewal-due alerts (cron activity)")
 	if runTime.IsZero() {
-		runTime = time.Now()
+		runTime = clock.Now()
 	}
 	if err := a.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx, runTime); err != nil {
 		a.logger.Error(ctx, "ProcessRenewalDueAlertsActivity failed",

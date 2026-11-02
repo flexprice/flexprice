@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -469,7 +470,7 @@ func (s *refundService) claimForGateway(ctx context.Context, refundID string) (b
 			return nil
 		}
 
-		now := time.Now().UTC()
+		now := clock.Now()
 		updated := refund.NewRefundBuilder(locked).
 			WithStatus(types.RefundStatusProcessing).
 			WithInitiatedAt(&now).
@@ -539,7 +540,7 @@ func (s *refundService) Settle(ctx context.Context, req *dto.SettleRefundRequest
 				Mark(ierr.ErrValidation)
 		}
 
-		now := time.Now().UTC()
+		now := clock.Now()
 		builder := refund.NewRefundBuilder(row).
 			WithStatus(types.RefundStatusSucceeded).
 			WithSettledAmount(req.SettledAmount).
@@ -583,7 +584,7 @@ func (s *refundService) Fail(ctx context.Context, refundID, reason string) error
 			return nil
 		}
 
-		now := time.Now().UTC()
+		now := clock.Now()
 		failed = refund.NewRefundBuilder(row).
 			WithStatus(types.RefundStatusFailed).
 			WithFailureReason(lo.ToPtr(reason)).
@@ -713,7 +714,7 @@ func (s *refundService) publishSystemEvent(ctx context.Context, eventName types.
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(payload),
 		EntityType:    types.SystemEntityTypeRefund,
 		EntityID:      refundID,

@@ -114,6 +114,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	}
 
 	writerClient := ent.NewClient(writerOpts...)
+	writerClient.Use(truncateTimeFields)
 
 	logger.Debug(context.Background(), "connected to postgres writer",
 		"host", config.Postgres.Host,

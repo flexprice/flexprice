@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/flexprice/flexprice/internal/metrics"
 	"net/url"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/flexprice/flexprice/internal/metrics"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainconn "github.com/flexprice/flexprice/internal/domain/connection"
@@ -17,8 +22,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 const zohoWebhookSignatureHeader = "X-Zoho-Webhook-Signature"
@@ -224,7 +227,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 		return err
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	_, err = deps.PaymentService.UpdatePayment(ctx, payResp.ID, dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
 		GatewayPaymentID: &gatewayID,

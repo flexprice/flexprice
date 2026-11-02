@@ -24089,6 +24089,14 @@ const docTemplate = `{
                 "plan_id": {
                     "type": "string"
                 },
+                "proration_behavior": {
+                    "description": "ProrationBehavior is stored on the child. Empty defaults to none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
                 "subscription_coupons": {
                     "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
                     "type": "array",
@@ -30708,6 +30716,14 @@ const docTemplate = `{
                 "parent_subscription_id": {
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 },
                 "status": {
                     "$ref": "#/definitions/types.SubscriptionStatus"

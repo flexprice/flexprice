@@ -3,9 +3,12 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 // DeleteEventsRequest hard-deletes ingested events and the meter usage they
@@ -51,7 +54,7 @@ func (r *DeleteEventsRequest) Validate() error {
 
 	// A future period would fence the customer's live traffic for as long as the
 	// deletion runs, and anything already in Kafka would block its partition.
-	if r.PeriodEnd.After(time.Now().UTC()) {
+	if r.PeriodEnd.After(clock.Now()) {
 		return ierr.NewError("period_end is in the future").
 			WithHint("Delete a period that has already closed").
 			WithReportableDetails(map[string]interface{}{

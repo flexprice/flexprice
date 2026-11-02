@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -307,7 +309,7 @@ func (s *InvoiceService) createInvoiceMapping(ctx context.Context, invoiceID, qu
 		EnvironmentID:    environmentID,
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":            time.Now().UTC().Format(time.RFC3339),
+			"synced_at":            clock.Now().Format(time.RFC3339),
 			"flexprice_invoice_id": invoiceID,
 		},
 	}

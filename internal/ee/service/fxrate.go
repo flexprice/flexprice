@@ -6,13 +6,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	fxrate "github.com/flexprice/flexprice/internal/domain/fxrate"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // FXRateService configures and resolves tenant FX rates.
@@ -56,7 +59,7 @@ func NewFXRateService(params ServiceParams) FXRateService {
 }
 
 func (s *fxRateService) ResolveRate(ctx context.Context, req ResolveFXRateRequest) (*FXRateResolution, error) {
-	return s.resolveRateAt(ctx, req, time.Now().UTC())
+	return s.resolveRateAt(ctx, req, clock.Now())
 }
 
 // resolveRateAt is ResolveRate with an injected clock, so validity windows are testable.

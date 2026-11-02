@@ -3,14 +3,16 @@ package payments
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // PaymentLifecycle maintains cross-system traceability for Flexprice-initiated payments.
@@ -204,7 +206,7 @@ func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params Reco
 
 	succeededAt := params.SucceededAt
 	if succeededAt.IsZero() {
-		succeededAt = time.Now().UTC()
+		succeededAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{
@@ -375,7 +377,7 @@ func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params Reco
 
 	failedAt := params.FailedAt
 	if failedAt.IsZero() {
-		failedAt = time.Now().UTC()
+		failedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
@@ -462,7 +464,7 @@ func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params Recor
 
 	voidedAt := params.VoidedAt
 	if voidedAt.IsZero() {
-		voidedAt = time.Now().UTC()
+		voidedAt = clock.Now()
 	}
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusVoided)),
@@ -543,7 +545,7 @@ func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params Rec
 
 	refundedAt := params.RefundedAt
 	if refundedAt.IsZero() {
-		refundedAt = time.Now().UTC()
+		refundedAt = clock.Now()
 	}
 
 	updateReq := apidto.UpdatePaymentRequest{

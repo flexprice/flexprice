@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	entpaymentmethod "github.com/flexprice/flexprice/ent/paymentmethod"
@@ -158,7 +159,7 @@ func (r *paymentMethodRepository) Update(ctx context.Context, pm *domainPaymentM
 		SetIsDefault(pm.IsDefault).
 		SetMethodDetails(pm.MethodDetails).
 		SetStatus(string(pm.Status)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(pm.UpdatedBy).
 		SaveReturning(ctx)
 
@@ -205,7 +206,7 @@ func (r *paymentMethodRepository) Delete(ctx context.Context, id string) error {
 			entpaymentmethod.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SaveReturning(ctx)
 
 	if err != nil {

@@ -2,15 +2,17 @@ package stripe
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/stripe/stripe-go/v82"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v82"
 )
 
 // priceSyncItem is a single FlexPrice Price to ensure has a linked Stripe Product.
@@ -128,7 +130,7 @@ func (s *stripePriceSyncService) EnsureBulkProductsSynced(ctx context.Context, i
 			ProviderType:     "stripe",
 			ProviderEntityID: product.ID,
 			Metadata: map[string]interface{}{
-				"sync_timestamp": time.Now().Unix(),
+				"sync_timestamp": clock.Now().Unix(),
 				"sync_source":    "flexprice",
 			},
 			EnvironmentID: types.GetEnvironmentID(ctx),

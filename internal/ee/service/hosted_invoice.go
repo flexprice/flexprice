@@ -2,14 +2,16 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // HostedInvoiceService serves the public hosted invoice page.
@@ -69,7 +71,7 @@ func (s *hostedInvoiceService) Resolve(ctx context.Context, rawToken string) (co
 		return nil, err
 	}
 
-	if !token.IsActive(time.Now().UTC()) ||
+	if !token.IsActive(clock.Now()) ||
 		inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] != "" ||
 		t.InternalStatus == types.TenantInternalStatusSuspended {
 		s.Logger.Info(ctx, "hosted invoice link no longer valid", "token_id", token.ID, "invoice_id", inv.ID)
