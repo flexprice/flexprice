@@ -579,6 +579,7 @@ var (
 		{Name: "encrypted_secret_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "sync_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// ConnectionsTable holds the schema information for the "connections" table.
 	ConnectionsTable = &schema.Table{
@@ -591,57 +592,13 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[9]},
 			},
-		},
-	}
-	// ConnectionAssociationsColumns holds the columns for the "connection_associations" table.
-	ConnectionAssociationsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "connection_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-	}
-	// ConnectionAssociationsTable holds the schema information for the "connection_associations" table.
-	ConnectionAssociationsTable = &schema.Table{
-		Name:       "connection_associations",
-		Columns:    ConnectionAssociationsColumns,
-		PrimaryKey: []*schema.Column{ConnectionAssociationsColumns[0]},
-		Indexes: []*schema.Index{
 			{
-				Name:    "idx_connection_assoc_owner_connection",
+				Name:    "idx_connections_owner_provider",
 				Unique:  true,
-				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[10]},
+				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[13], ConnectionsColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'billing_entity'::text)",
+					Where: "((status)::text = 'published'::text AND billing_entity_id IS NOT NULL)",
 				},
-			},
-			{
-				Name:    "idx_connection_assoc_owner_provider",
-				Unique:  true,
-				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[9], ConnectionAssociationsColumns[11]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'billing_entity'::text)",
-				},
-			},
-			{
-				Name:    "idx_connection_assoc_customer",
-				Unique:  true,
-				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text AND (entity_type)::text = 'customer'::text)",
-				},
-			},
-			{
-				Name:    "idx_connection_assoc_lookup",
-				Unique:  false,
-				Columns: []*schema.Column{ConnectionAssociationsColumns[1], ConnectionAssociationsColumns[7], ConnectionAssociationsColumns[8], ConnectionAssociationsColumns[9]},
 			},
 		},
 	}
@@ -3691,7 +3648,6 @@ var (
 		CheckoutSessionsTable,
 		CommitmentsTable,
 		ConnectionsTable,
-		ConnectionAssociationsTable,
 		ContractsTable,
 		ContractAssociationsTable,
 		CostsheetsTable,

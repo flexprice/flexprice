@@ -18,7 +18,6 @@ import (
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
-	"github.com/flexprice/flexprice/internal/domain/connectionassociation"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -111,7 +110,6 @@ type Stores struct {
 	AddonRepo                    addon.Repository
 	AddonAssociationRepo         addonassociation.Repository
 	ConnectionRepo               connection.Repository
-	ConnectionAssociationRepo    connectionassociation.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
@@ -287,7 +285,6 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AddonRepo:                    NewInMemoryAddonStore(),
 		AddonAssociationRepo:         addonAssociationStore,
 		ConnectionRepo:               NewInMemoryConnectionStore(),
-		ConnectionAssociationRepo:    NewInMemoryConnectionAssociationStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
@@ -350,7 +347,6 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.CreditNoteRepo.(*InMemoryCreditNoteStore).Clear()
 	s.stores.CreditNoteLineItemRepo.(*InMemoryCreditNoteLineItemStore).Clear()
 	s.stores.ConnectionRepo.(*InMemoryConnectionStore).Clear()
-	s.stores.ConnectionAssociationRepo.(*InMemoryConnectionAssociationStore).Clear()
 	s.stores.EntityIntegrationMappingRepo.(*InMemoryEntityIntegrationMappingStore).Clear()
 	s.stores.TaxRateRepo.(*InMemoryTaxRateStore).Clear()
 	s.stores.FXRateRepo.(*InMemoryFXRateStore).Clear()

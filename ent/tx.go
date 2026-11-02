@@ -42,8 +42,6 @@ type Tx struct {
 	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
-	// ConnectionAssociation is the client for interacting with the ConnectionAssociation builders.
-	ConnectionAssociation *ConnectionAssociationClient
 	// Contract is the client for interacting with the Contract builders.
 	Contract *ContractClient
 	// ContractAssociation is the client for interacting with the ContractAssociation builders.
@@ -305,7 +303,6 @@ func (tx *Tx) init() {
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
 	tx.Commitment = NewCommitmentClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
-	tx.ConnectionAssociation = NewConnectionAssociationClient(tx.config)
 	tx.Contract = NewContractClient(tx.config)
 	tx.ContractAssociation = NewContractAssociationClient(tx.config)
 	tx.Costsheet = NewCostsheetClient(tx.config)

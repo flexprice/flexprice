@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
-	"github.com/flexprice/flexprice/internal/domain/connectionassociation"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/coupon_application"
@@ -265,10 +264,6 @@ func NewCreditNoteLineItemRepository(p RepositoryParams) creditnote.CreditNoteLi
 
 func NewConnectionRepository(p RepositoryParams) connection.Repository {
 	return entRepo.NewConnectionRepository(p.EntClient, p.Logger, p.RedisCache)
-}
-
-func NewConnectionAssociationRepository(p RepositoryParams) connectionassociation.Repository {
-	return entRepo.NewConnectionAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
 
 func NewEntityIntegrationMappingRepository(p RepositoryParams) entityintegrationmapping.Repository {

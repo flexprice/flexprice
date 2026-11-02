@@ -1,6 +1,8 @@
 package service
 
 import (
+	"time"
+
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
@@ -105,7 +107,9 @@ func (s *billingEntityService) assignConnectionsToEntity(ctx context.Context, en
 			continue
 		}
 		conn.BillingEntityID = &entityID
-		if err := createConnectionOwnerAssociation(ctx, s.ConnectionAssociationRepo, conn); err != nil {
+		conn.UpdatedAt = time.Now().UTC()
+		conn.UpdatedBy = types.GetUserID(ctx)
+		if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
 			return err
 		}
 	}

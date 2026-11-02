@@ -220,7 +220,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 				WithHint("Failed to store OAuth session in database").
 				Mark(ierr.ErrDatabase)
 		}
-		return createConnectionOwnerAssociation(txCtx, s.params.ConnectionAssociationRepo, incompleteConnection)
+		return nil
 	}); err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 	// Check if session has expired
 	if clock.Now().After(expiresAt) {
 		// Auto-delete expired session
-		_ = archiveConnection(ctx, s.params, conn)
+		_ = s.connectionRepo.Delete(ctx, conn)
 		return nil, ierr.NewError("OAuth session has expired").
 			WithHintf("OAuth sessions expire after %d minutes. Please restart the OAuth flow", int(OAuthSessionTTL/time.Minute)).
 			Mark(ierr.ErrNotFound)
@@ -567,7 +567,7 @@ func (s *oauthService) DeleteOAuthSession(ctx context.Context, sessionID string)
 		if err := json.Unmarshal([]byte(decryptedJSON), &sessionData); err == nil {
 			if storedSessionID, ok := sessionData["session_id"].(string); ok && storedSessionID == sessionID {
 				// Delete this connection
-				if err := archiveConnection(ctx, s.params, c); err != nil {
+				if err := s.connectionRepo.Delete(ctx, c); err != nil {
 					return ierr.WithError(err).
 						WithHint("Failed to delete OAuth session").
 						Mark(ierr.ErrDatabase)
@@ -803,7 +803,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 		qbIntegration, err := s.integrationFactory.GetQuickBooksIntegration(ctx)
 		if err != nil {
 			// Cleanup: Delete the incomplete connection
-			_ = archiveConnection(ctx, s.params, conn)
+			_ = s.connectionRepo.Delete(ctx, conn)
 			return "", ierr.WithError(err).
 				WithHint("Failed to get QuickBooks integration").
 				Mark(ierr.ErrInternal)
@@ -812,7 +812,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 		// Exchange auth_code for tokens (this updates the connection in DB)
 		if err := qbIntegration.Client.EnsureValidAccessToken(ctx); err != nil {
 			// Cleanup: Delete the incomplete connection on token exchange failure
-			_ = archiveConnection(ctx, s.params, conn)
+			_ = s.connectionRepo.Delete(ctx, conn)
 			return "", ierr.WithError(err).
 				WithHint("Failed to exchange authorization code for access tokens. The code may have expired.").
 				Mark(ierr.ErrInternal)

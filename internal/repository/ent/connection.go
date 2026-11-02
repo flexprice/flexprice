@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
-	"github.com/flexprice/flexprice/ent/connectionassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainConnection "github.com/flexprice/flexprice/internal/domain/connection"
@@ -65,6 +64,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetEncryptedSecretData(encryptedSecretDataMap).
 		SetMetadata(c.Metadata).
 		SetSyncConfig(c.SyncConfig).
+		SetNillableBillingEntityID(c.BillingEntityID).
 		SetStatus(string(c.Status)).
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
@@ -91,9 +91,7 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
-	owner := c.BillingEntityID
 	*c = *domainConnection.FromEnt(connection)
-	c.BillingEntityID = owner
 	r.deleteAllPublishedCache(ctx)
 	return nil
 }
@@ -140,12 +138,8 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainConn := domainConnection.FromEnt(c)
-	if err := r.fillBillingEntityIDs(ctx, []*domainConnection.Connection{domainConn}); err != nil {
-		SetSpanError(span, err)
-		return nil, err
-	}
 	SetSpanSuccess(span)
+	domainConn := domainConnection.FromEnt(c)
 
 	// Cache the result
 	r.SetCache(ctx, domainConn)
@@ -181,42 +175,8 @@ func (r *connectionRepository) GetUnscoped(ctx context.Context, id string) (*dom
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainConn := domainConnection.FromEnt(c)
-	ownerID, err := r.latestOwnerID(ctx, id)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, err
-	}
-	domainConn.BillingEntityID = lo.EmptyableToPtr(ownerID)
 	SetSpanSuccess(span)
-	return domainConn, nil
-}
-
-// latestOwnerID returns the connection's owner in any status: the published one, else the latest archived one.
-func (r *connectionRepository) latestOwnerID(ctx context.Context, connectionID string) (string, error) {
-	owners, err := r.client.Reader(ctx).ConnectionAssociation.Query().
-		Where(
-			connectionassociation.TenantID(types.GetTenantID(ctx)),
-			connectionassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			connectionassociation.EntityType(string(types.ConnectionAssociationEntityTypeBillingEntity)),
-			connectionassociation.ConnectionID(connectionID),
-		).
-		Order(ent.Desc(connectionassociation.FieldUpdatedAt)).
-		All(ctx)
-	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to read connection owner").
-			Mark(ierr.ErrDatabase)
-	}
-	if len(owners) == 0 {
-		return "", nil
-	}
-	if published, ok := lo.Find(owners, func(o *ent.ConnectionAssociation) bool {
-		return o.Status == string(types.StatusPublished)
-	}); ok {
-		return published.EntityID, nil
-	}
-	return owners[0].EntityID, nil
+	return domainConnection.FromEnt(c), nil
 }
 
 // GetByProvider is used for providers that does not support multiple connections per environment.
@@ -360,41 +320,7 @@ func (r *connectionRepository) List(ctx context.Context, filter *types.Connectio
 		result = append(result, domainConnection.FromEnt(c))
 	}
 
-	if err := r.fillBillingEntityIDs(ctx, result); err != nil {
-		return nil, err
-	}
 	return result, nil
-}
-
-// fillBillingEntityIDs sets each connection's owner from its published owner association.
-func (r *connectionRepository) fillBillingEntityIDs(ctx context.Context, conns []*domainConnection.Connection) error {
-	if len(conns) == 0 {
-		return nil
-	}
-
-	owners, err := r.client.Reader(ctx).ConnectionAssociation.Query().
-		Where(
-			connectionassociation.TenantID(types.GetTenantID(ctx)),
-			connectionassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			connectionassociation.EntityType(string(types.ConnectionAssociationEntityTypeBillingEntity)),
-			connectionassociation.Status(string(types.StatusPublished)),
-			connectionassociation.ConnectionIDIn(lo.Map(conns, func(c *domainConnection.Connection, _ int) string { return c.ID })...),
-		).
-		All(ctx)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to read connection owners").
-			Mark(ierr.ErrDatabase)
-	}
-
-	ownerByConnection := make(map[string]string, len(owners))
-	for _, o := range owners {
-		ownerByConnection[o.ConnectionID] = o.EntityID
-	}
-	for _, c := range conns {
-		c.BillingEntityID = lo.EmptyableToPtr(ownerByConnection[c.ID])
-	}
-	return nil
 }
 
 // convertConnectionMetadataToMap converts structured encrypted secret data to map format for database storage
@@ -679,6 +605,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 		SetEncryptedSecretData(encryptedSecretDataMap).
 		SetMetadata(c.Metadata).
 		SetSyncConfig(c.SyncConfig).
+		SetNillableBillingEntityID(c.BillingEntityID).
 		SetUpdatedAt(c.UpdatedAt).
 		SetUpdatedBy(c.UpdatedBy).
 		Save(ctx)
@@ -694,6 +621,15 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 				}).
 				Mark(ierr.ErrNotFound)
 		}
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("This billing entity already has a connection for this provider").
+				WithReportableDetails(map[string]any{
+					"connection_id":     c.ID,
+					"billing_entity_id": lo.FromPtr(c.BillingEntityID),
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 
 		return ierr.WithError(err).
 			WithHint("Failed to update connection").
@@ -701,9 +637,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	}
 
 	SetSpanSuccess(span)
-	owner := c.BillingEntityID
 	*c = *domainConnection.FromEnt(connection)
-	c.BillingEntityID = owner
 
 	// Invalidate cache to ensure fresh data on next read
 	afterCommit(ctx, func() { r.DeleteCache(ctx, c) })
@@ -825,7 +759,7 @@ func (o ConnectionQueryOptions) GetFieldResolver(field string) (string, error) {
 	return fieldName, nil
 }
 
-func (o ConnectionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.ConnectionFilter, query ConnectionQuery) (ConnectionQuery, error) {
+func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.ConnectionFilter, query ConnectionQuery) (ConnectionQuery, error) {
 	var err error
 	if f == nil {
 		return query, nil
@@ -840,7 +774,7 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(ctx context.Context, f *
 	}
 
 	if f.BillingEntityID != "" {
-		query = query.Where(predicate.Connection(columnInSelector(connection.FieldID, connectionIDsOfEntity(ctx, f.BillingEntityID))))
+		query = query.Where(connection.BillingEntityID(f.BillingEntityID))
 	}
 
 	if f.Filters != nil {

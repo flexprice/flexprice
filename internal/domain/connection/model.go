@@ -15,8 +15,8 @@ type Connection struct {
 	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
 	SyncConfig          *types.SyncConfig        `db:"sync_config" json:"sync_config,omitempty"`
 	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
-	// BillingEntityID is the owning billing entity, read from its owner association; nil off tenant and for storage
-	BillingEntityID *string `json:"billing_entity_id,omitempty"`
+	// BillingEntityID is the owning billing entity; nil when entities are off and for storage
+	BillingEntityID *string `db:"billing_entity_id" json:"billing_entity_id,omitempty"`
 	types.BaseModel
 }
 
@@ -366,6 +366,7 @@ func FromEnt(entConn *ent.Connection) *Connection {
 		Metadata:            entConn.Metadata,
 		SyncConfig:          entConn.SyncConfig,
 		EnvironmentID:       entConn.EnvironmentID,
+		BillingEntityID:     entConn.BillingEntityID,
 		BaseModel: types.BaseModel{
 			TenantID:  entConn.TenantID,
 			Status:    types.Status(entConn.Status),
