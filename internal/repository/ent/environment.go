@@ -3,11 +3,11 @@ package ent
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entEnvironment "github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/clock"
 	domainEnvironment "github.com/flexprice/flexprice/internal/domain/environment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -300,7 +300,7 @@ func (r *environmentRepository) SetBillingEntityMode(ctx context.Context, id str
 		UpdateOneID(id).
 		Where(entEnvironment.TenantID(types.GetTenantID(ctx))).
 		SetBillingEntityMode(string(mode)).
-		SetUpdatedAt(time.Now()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)

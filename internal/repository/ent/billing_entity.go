@@ -3,11 +3,11 @@ package ent
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entbillingentity "github.com/flexprice/flexprice/ent/billingentity"
 	entSchema "github.com/flexprice/flexprice/ent/schema"
+	"github.com/flexprice/flexprice/internal/clock"
 	domain "github.com/flexprice/flexprice/internal/domain/billingentity"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -212,7 +212,7 @@ func (r *billingEntityRepository) Update(ctx context.Context, e *domain.BillingE
 		SetSellerDetails(e.SellerDetails).
 		SetTaxIdentifiers(taxIdentifiersOrEmpty(e.TaxIdentifiers)).
 		SetMetadata(e.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 	if err != nil {
