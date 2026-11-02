@@ -175,15 +175,17 @@ In `ApplyStatusFilter` (`:443`), exclude `suppressed` in the empty-status branch
 
 ### 5.4 Cache: suppression is not immediate, and the spec must say so
 
-The deployed cache is **in-process, not Redis**. `internal/cache/init.go:29-33` falls through to `InitializeInMemoryCache` for anything that is not explicitly `redis`, and `internal/config/config.yaml:514-519` ships `cache.enabled: false` with both `inmemory.enabled` and `redis.enabled` false.
+> **Corrected 2026-11-02 after review.** An earlier draft claimed the deployed cache is in-process rather than Redis, citing `internal/cache/init.go:29-33`. **That file does not exist**, and `customerRepository` takes a `cache.RedisCache` (`internal/repository/ent/customer.go:23-36`). Re-verify every claim in this section against the code before relying on it.
 
-The TTL is **30 minutes regardless of backend**, because `customerRepository.SetCache` (`internal/repository/ent/customer.go:578`) passes `cache.ExpiryDefaultRedis` explicitly rather than a backend-appropriate default. Note that `ExpiryDefaultInMemory` is 2 minutes (`internal/cache/expiry.go:6`), so the in-process path is carrying the Redis TTL — worth a separate fix, but the 30-minute window below is what ships today.
+The customer cache is **Redis, keyed by ID only**, with a 30-minute TTL (`SetCache` passes `cache.ExpiryDefaultRedis`, `internal/repository/ent/customer.go:571-579`). `GetCache` reads that one key and `DeleteCache` deletes that one key; `GetByLookupKey` is not cached at all and goes straight to Postgres, as its own comment states.
+
+**Caching is disabled by default.** `internal/config/config.yaml:514-519` ships `cache.enabled: false` with both `inmemory.enabled` and `redis.enabled` false, so on a default deployment there is no cache window at all. The window below applies only where Redis caching is switched on — confirm the target environment's setting before any of it reaches a contract.
 
 Consequences, both of which must be designed for rather than hidden:
 
-**Per-pod eviction does not propagate.** `DeleteCache` (`:579`) clears the local process map only. With N replicas, the pod handling the suppression request evicts its own entry; the other N-1 keep serving the pre-suppression customer for up to 30 minutes. A single `DeleteCache` call cannot make suppression platform-immediate.
+**Eviction does propagate.** The cache is shared Redis, so one `DeleteCache` removes the entry for every replica. An earlier draft claimed per-pod in-process eviction leaving N-1 replicas stale; that was wrong, and it was the main argument for a bounded window. With Redis the window comes only from the repopulation race below, not from replica fan-out.
 
-**Concurrent repopulation.** A reader that passes `GetCache` (`:124`) before the status flip reaches `SetCache` (`:570-571`) after it, writing the pre-suppression customer back under both the ID and lookup-key keys. `Get` has no re-read-after-write and no version check, so eviction-after-commit does not close this either.
+**Concurrent repopulation.** A reader that passes `GetCache` before the status flip reaches `SetCache` after it, writing the pre-suppression customer back under the ID key. `Get` has no re-read-after-write and no version check, so eviction-after-commit does not close this on its own. The stale entry then survives for up to the 30-minute TTL. This race is the whole of the cache exposure, and it is narrow: it needs a read already in flight across the commit.
 
 Pick one of these and record the choice in the PR; do not leave it implicit:
 
@@ -199,7 +201,7 @@ Option 1 is the recommendation for Phase 1, because the contract commitment is 2
 
 `idx_customer_tenant_environment_email` (`:105-107`) carries the same `published` predicate but is **not unique**, so it releases no constraint. It matters only for query planning.
 
-Consequence for ordering: the release of external-ID uniqueness means FLE-1888 must precede FLE-1889 — and per §6.2 the window does not fully close even then, because `UpdateCustomer` can rename onto a retired ID through a path the index never guarded. "Ship 1888 first" and "accept and document the window" are therefore not equal options; the rename path has to be guarded regardless of order.
+Consequence for ordering: the release of external-ID uniqueness means FLE-1888 must precede FLE-1889. The rename path that the index never guarded is **closed as of FLE-1888**, which guards `UpdateCustomer` at `internal/ee/service/customer.go:255` as well as creation at `:38`. The paragraphs below that describe rename as an open hole are the pre-FLE-1888 analysis, kept because they explain why the guard sits in the service rather than the repository.
 
 ## 6. Service and API surface
 
@@ -245,9 +247,9 @@ Inside the transaction:
 3. Insert one category row: `customer_pg` / `pending`.
 4. Set the customer's status to `suppressed`.
 
-**After the transaction commits**, drop both cache keys — ID and lookup-key, since `SetCache` writes both (`internal/repository/ent/customer.go:570-571`).
+**After the transaction commits**, drop the cache entry via `DeleteCache`. There is one key, the ID key: `SetCache`, `GetCache` and `DeleteCache` all operate on it alone, and `GetByLookupKey` is uncached. An earlier draft said both an ID and a lookup-key entry had to be evicted; there is no lookup-key entry.
 
-The cache drop must not be inside the transaction. Two reasons: it is not a database operation, so `WithTx` gives it no atomicity and a rollback would leave the cache evicted for a change that never happened; and more importantly, evicting before commit means a concurrent `Get` in the gap reads the still-published row from Postgres and repopulates both keys — suppression then silently does not take effect. Per §5.4, after-commit eviction is still not sufficient on its own across replicas; it is the floor, not the fix.
+The cache drop must not be inside the transaction. Two reasons: it is not a database operation, so `WithTx` gives it no atomicity and a rollback would leave the cache evicted for a change that never happened; and more importantly, evicting before commit means a concurrent `Get` in the gap reads the still-published row from Postgres and repopulates the key — suppression then silently does not take effect. Per §5.4, after-commit eviction still does not close the repopulation race; it is the floor, not the fix.
 
 Idempotency: a second call for the same customer returns the existing request unchanged rather than erroring. The unique index on `(tenant_id, environment_id, customer_id)` is the backstop; handle the conflict rather than letting it surface as a 500.
 
@@ -342,8 +344,8 @@ Blocked by FLE-1887 **and FLE-1888**. FLE-1888 is a hard blocker, not a preferen
 
 1. `StatusSuppressed` in `internal/types/status.go`. No validator or enum to update — `Status` has no `Validate()`, and `varchar(20)` fits.
 2. Predicate in `Get`; verify `GetByLookupKey` (already filters published at `:180`).
-3. **`ApplyStatusFilter` at `:443`** — exclude `suppressed` in the empty-status branch, refuse explicit `status=suppressed`. This covers `List`/`Count`/`ListAll`; without it the S3 export at `sync/export/credit_usage_report.go:76` writes suppressed PII to object storage (§5.1).
-4. Cache invalidation after commit, both keys. Decide and record the §5.4 option — the deployed cache is per-pod in-process with a 30-minute TTL, so "immediate" is not achievable by eviction alone.
+3. **`ApplyStatusFilter`** — refuse an explicit `status=suppressed`. The empty-status branch already allow-lists `published` and `archived`, so the scheduled S3 exports, which call `ListAll` without a status, do **not** write suppressed PII today. Keep the explicit-status guard anyway: it is what stops a caller opting back into suppressed rows, and it is what keeps the allow-list from silently becoming load-bearing (§5.1).
+4. Cache invalidation after commit, one key (the ID key). Decide and record the §5.4 option. The cache is shared Redis with a 30-minute TTL and is **disabled by default**, so eviction does propagate across replicas; what remains is the repopulation race, not a per-pod fan-out problem.
 5. Audit every event-processing path that reads a customer and classify not-found as retry or skip (§6.3). At minimum fix `handleMissingCustomer`'s tail `Get` at `:1325` and `costsheet_usage_tracking.go:328-336`, both of which currently retry forever on a permanent condition.
 6. Service method to suppress, transactional with the request insert per §6.1.
 7. Tests: suppressed customer returns not-found via both getters **and is absent from list/count/export**; a warm cache behaves as the chosen §5.4 option documents; an event for a suppressed customer is skipped, not retried; archived-customer behaviour unchanged.
@@ -408,7 +410,7 @@ Consequences for sequencing:
 
 **Suppression releases customer-table external-ID uniqueness.** Per §5.5, a suppressed customer drops out of `idx_tenant_environment_external_id_unique`, so only the registry keeps the ID retired. Ship FLE-1888 before FLE-1889. Note this is necessary but not sufficient — the `UpdateCustomer` rename path (§6.2) bypasses the index regardless of ticket order and must be guarded on its own.
 
-**Suppression is not immediate, and the cache is the reason.** Per §5.4 the deployed cache is per-pod in-process with a 30-minute TTL, so eviction on the suppressing pod leaves other replicas serving the pre-suppression customer. A decision is required, not an assumption. The recommendation is to accept and document a bounded window, which fits inside the 24-hour suppression commitment — but then nothing may claim immediacy.
+**Suppression is near-immediate, and the cache is the only gap.** Per §5.4 the cache is shared Redis with a 30-minute TTL, disabled by default, so eviction after commit propagates to every replica. What survives is the repopulation race: a read in flight across the commit can write the pre-suppression row back for up to the TTL. A decision is still required rather than assumed, and the recommendation remains to document a bounded window that fits inside the 24-hour commitment — but the window is far narrower than the earlier per-pod analysis claimed, and on a default deployment there is no cache at all.
 
 **Scope grew during review.** FLE-1889 is no longer an S: it now covers three read paths rather than two, a cache decision, and an audit of event-path retry semantics. Re-estimate it to M before planning, or split the event-path audit out as its own ticket.
 
