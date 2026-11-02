@@ -120,6 +120,11 @@ var commands = []Command{
 		Run:         internal.SyncPriceToSubscriptions,
 	},
 	{
+		Name:        "fix-line-item-price-end-dates",
+		Description: "End plan line items of live subscriptions at their price's end date (dry run unless APPLY=true)",
+		Run:         internal.FixLineItemPriceEndDates,
+	},
+	{
 		Name:        "setup-draft-invoices",
 		Description: "Create draft invoices for subscriptions from a JSON file and trigger processing workflows",
 		Run:         internal.SetupDraftInvoices,
