@@ -1,10 +1,13 @@
 package service
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -75,15 +78,81 @@ func (s *CommitmentE2ESuite) TestFinalize_ClaimsInstalments() {
 	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
-// An edit after the draft was computed cancels the instalments it carries, so finalizing fails until a recompute
-// replaces them with the new terms' instalments.
-func (s *CommitmentE2ESuite) TestFinalize_StaleDraftFails() {
+// requireBilledBy checks that the invoice is finalized and that its instalment lines bill exactly the instalments
+// want, each invoiced by it.
+func (s *CommitmentE2ESuite) requireBilledBy(invoiceID string, want []string) {
+	stored, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), invoiceID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, stored.InvoiceStatus)
+
+	billed := s.billedInstalments(invoiceID)
+	s.ElementsMatch(want, instalmentIDs(billed))
+	for _, inst := range billed {
+		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus)
+		s.Equal(invoiceID, lo.FromPtr(inst.InvoiceID))
+	}
+}
+
+// An edit after the draft was computed cancels the instalments it carries, so finalizing recomputes the draft with
+// the new terms' instalments and finalizes it.
+func (s *CommitmentE2ESuite) TestFinalize_EditedTermsRecomputeTheDraft() {
 	ctx := s.GetContext()
 	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
 	draft, commitmentID := s.januaryDraft(invoices, "stale")
 	stale := instalmentIDs(s.billedInstalments(draft.ID))
 
 	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	billed := s.billedInstalments(draft.ID)
+	s.Require().Len(billed, 2)
+	for _, inst := range billed {
+		s.NotContains(stale, inst.ID, "the cancelled instalment left the recomputed draft")
+	}
+	s.requireBilledBy(draft.ID, instalmentIDs(billed))
+	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
+
+	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.True(finalized.AmountDue.Equal(dec("550")), "500 up front and the first of ten 50 instalments, got %s", finalized.AmountDue)
+}
+
+// A re-plan after the draft was computed cancels the instalments it carries, so finalizing recomputes the draft with
+// the re-planned instalment that is due by its boundary.
+func (s *CommitmentE2ESuite) TestFinalize_ReplannedInstalmentsRecomputeTheDraft() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, commitmentID := s.januaryDraft(invoices, "replanned")
+
+	plan, err := s.commitments.ReplanInstalments(ctx, commitmentID, dto.ReplanInstalmentsRequest{
+		Instalments: []dto.ReplanInstalmentInput{
+			{Amount: dec("400"), BillOn: lo.ToPtr(s.jan.AddDate(0, 0, 14))},
+			{Amount: dec("600"), BillOn: lo.ToPtr(s.jan.AddDate(0, 5, 0))},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().Len(plan.Items, 2)
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+	s.requireBilledBy(draft.ID, []string{plan.Items[0].ID})
+}
+
+// A manually edited draft is never recomputed, so a stale instalment still fails its finalization.
+func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedStaleDraftFails() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, commitmentID := s.januaryDraft(invoices, "edited")
+	stale := instalmentIDs(s.billedInstalments(draft.ID))
+
+	_, err := invoices.AddBulkLineItem(ctx, draft.ID, dto.AddBulkLineItemRequest{Items: []dto.AddLineItemRequest{
+		{DisplayName: "Setup fee", Amount: dec("50"), Quantity: dec("1")},
+	}})
+	s.Require().NoError(err)
+
+	_, err = s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
 	s.Require().NoError(err)
 
 	s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher).Reset()
@@ -95,18 +164,87 @@ func (s *CommitmentE2ESuite) TestFinalize_StaleDraftFails() {
 	stored, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusDraft, stored.InvoiceStatus)
+	s.ElementsMatch(stale, instalmentIDs(s.billedInstalments(draft.ID)), "the edited draft keeps its lines")
+}
 
-	_, err = invoices.RecalculateInvoiceV2(ctx, draft.ID, false)
-	s.Require().NoError(err)
-	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+// catchUpDrafts computes the January and February drafts of a commitment billed whole up front, as a catch-up over
+// two periods does, and returns them with their subscription. Both carry the upfront instalment, and each also bills
+// $50 of usage above the commitment.
+func (s *CommitmentE2ESuite) catchUpDrafts(
+	invoices InvoiceService,
+	name string,
+) (january, february *invoice.Invoice, sub *subscription.Subscription) {
+	ctx := s.GetContext()
+	feb, mar := s.jan.AddDate(0, 1, 0), s.jan.AddDate(0, 2, 0)
+	tokens := s.planWith(name, types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	created := s.subscribe(tokens, s.jan)
+	s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), wholeValueUpfront(nil)))
+	s.record(s.tokens, time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC), "1500")
+	s.record(s.tokens, time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC), "1500")
 
-	billed := s.billedInstalments(draft.ID)
-	s.Len(billed, 2)
-	for _, inst := range billed {
-		s.NotContains(stale, inst.ID, "the cancelled instalment left the recomputed draft")
-		s.Equal(types.InstalmentStatusInvoiced, inst.InstalmentStatus)
-		s.Equal(draft.ID, lo.FromPtr(inst.InvoiceID))
+	drafts := make([]*invoice.Invoice, 0, 2)
+	for _, period := range []types.Period{{Start: s.jan, End: feb}, {Start: feb, End: mar}} {
+		draft, err := invoices.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+			SubscriptionID: created.ID,
+			PeriodStart:    period.Start,
+			PeriodEnd:      period.End,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		})
+		s.Require().NoError(err)
+
+		computed, skipped, err := invoices.ComputeInvoice(ctx, draft.ID, nil)
+		s.Require().NoError(err)
+		s.Require().False(skipped)
+		drafts = append(drafts, computed)
 	}
+
+	upfront := instalmentIDs(s.billedInstalments(drafts[0].ID))
+	s.Require().Len(upfront, 1)
+	s.Require().Equal(upfront, instalmentIDs(s.billedInstalments(drafts[1].ID)))
+
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, created.ID)
+	s.Require().NoError(err)
+	return drafts[0], drafts[1], sub
+}
+
+// requireOnlyUsage checks that the invoice was finalized with no instalment, billing only its usage above the
+// commitment.
+func (s *CommitmentE2ESuite) requireOnlyUsage(invoiceID string) {
+	stored, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), invoiceID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, stored.InvoiceStatus)
+	s.Empty(s.storedInstalmentLines(invoiceID), "the recompute dropped the instalment the other draft billed")
+	s.True(stored.AmountDue.Equal(dec("50")), "only the usage above the commitment, got %s", stored.AmountDue)
+}
+
+// Finalizing the January draft bills the shared instalment, so the February draft is recomputed without it and
+// finalized with its usage.
+func (s *CommitmentE2ESuite) TestFinalize_CatchUpDraftsInOrder() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	january, february, _ := s.catchUpDrafts(invoices, "in_order")
+	upfront := instalmentIDs(s.billedInstalments(january.ID))
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, january.ID, dto.FinalizeInvoiceRequest{}))
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, february.ID, dto.FinalizeInvoiceRequest{}))
+
+	s.requireBilledBy(january.ID, upfront)
+	s.requireOnlyUsage(february.ID)
+}
+
+// Processing the February draft first bills the shared instalment, so the January draft is recomputed without it and
+// finalized with its usage.
+func (s *CommitmentE2ESuite) TestProcessDraft_CatchUpDraftsOutOfOrder() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	january, february, sub := s.catchUpDrafts(invoices, "out_of_order")
+	upfront := instalmentIDs(s.billedInstalments(february.ID))
+
+	s.Require().NoError(invoices.ProcessDraftInvoice(ctx, february.ID, nil, sub, types.InvoiceFlowRenewal))
+	s.Require().NoError(invoices.ProcessDraftInvoice(ctx, january.ID, nil, sub, types.InvoiceFlowRenewal))
+
+	s.requireBilledBy(february.ID, upfront)
+	s.requireOnlyUsage(january.ID)
 }
 
 // Voiding puts the invoice's instalments back on schedule and recalculating bills them on the replacement. Instalments

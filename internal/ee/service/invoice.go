@@ -1329,7 +1329,7 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	if err := s.performFinalizeInvoiceActions(ctx, inv, req.SourceID()); err != nil {
+	if err := s.finalizeDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
 		return err
 	}
 
@@ -1555,8 +1555,12 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			return err
 		}
 		if len(unclaimed) > 0 {
-			return ierr.NewError("invoice carries instalments that changed since it was computed").
+			return ierr.WithError(errStaleInstalments).
 				WithHint("Recompute the invoice and finalize again").
+				WithReportableDetails(map[string]any{
+					"invoice_id":     lockedInv.ID,
+					"instalment_ids": unclaimed,
+				}).
 				Mark(ierr.ErrInvalidOperation)
 		}
 
@@ -1952,8 +1956,13 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 	}
 
 	// try to finalize the invoice
-	if err := s.performFinalizeInvoiceActions(ctx, inv, ""); err != nil {
+	if err := s.finalizeDraft(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
 		return err
+	}
+
+	// Recomputing a stale draft can leave it nothing to bill.
+	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return nil
 	}
 
 	// The invoice is already sealed, so a failed read is logged and filing proceeds as before.

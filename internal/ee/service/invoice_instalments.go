@@ -2,12 +2,41 @@ package service
 
 import (
 	"context"
+	"errors"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
+
+// errStaleInstalments is the cause of a finalization that found instalments on the invoice no longer scheduled.
+var errStaleInstalments = errors.New("invoice carries instalments that changed since it was computed")
+
+// finalizeDraft finalizes the draft. A subscription draft carrying instalments that are no longer scheduled is
+// recomputed and finalized once more; a manually edited one is never recomputed, so it keeps the error.
+func (s *invoiceService) finalizeDraft(ctx context.Context, inv *invoice.Invoice, source dto.InvoiceStateChangeSource) error {
+	err := s.performFinalizeInvoiceActions(ctx, inv, source.SourceID())
+	if !errors.Is(err, errStaleInstalments) {
+		return err
+	}
+
+	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil || inv.IsManuallyEdited {
+		return err
+	}
+
+	s.Logger.Info(ctx, "recomputing a draft whose instalments changed since it was computed",
+		"invoice_id", inv.ID)
+
+	recomputed, _, err := s.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{InvoiceStateChangeSource: source})
+	if err != nil {
+		return err
+	}
+
+	*inv = *recomputed
+	return s.performFinalizeInvoiceActions(ctx, inv, source.SourceID())
+}
 
 // claimInstalments marks the scheduled instalments on a finalizing invoice as billed by it, in the caller's
 // finalize transaction, and returns the ids of those it could not claim because they are no longer scheduled.
