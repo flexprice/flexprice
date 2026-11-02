@@ -279,7 +279,10 @@ func (l *commitmentLoader) InvoiceLines(ctx context.Context) ([]dto.CreateInvoic
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
+	lines := coverWithBillingTerms(
+		commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost),
+		l.commitments,
+	)
 
 	total := decimal.Zero
 	for _, line := range lines {
@@ -290,6 +293,42 @@ func (l *commitmentLoader) InvoiceLines(ctx context.Context) ([]dto.CreateInvoic
 		"commitment_ids", lo.Map(l.commitments, func(sc *stackedCommitment, _ int) string { return sc.C.ID }),
 		"period_start", l.periodStart, "period_end", l.periodEnd, "lines", len(lines), "total", total.String())
 	return lines, total, nil
+}
+
+// coverWithBillingTerms zeroes the utilized rows and drops the true-up rows of commitments collected through
+// billing terms: their instalments carry the commitment's value, so usage within it is shown at no charge.
+func coverWithBillingTerms(lines []dto.CreateInvoiceLineItemRequest, commitments []*stackedCommitment) []dto.CreateInvoiceLineItemRequest {
+	covered := map[string]*commitment.Commitment{}
+	for _, sc := range commitments {
+		if lo.FromPtr(sc.C.CollectionMethod) == types.CommitmentCollectionBillingTerms {
+			covered[sc.C.ID] = sc.C
+		}
+	}
+
+	if len(covered) == 0 {
+		return lines
+	}
+
+	out := make([]dto.CreateInvoiceLineItemRequest, 0, len(lines))
+	for _, line := range lines {
+		c, ok := covered[lo.FromPtr(line.CommitmentID)]
+		if !ok {
+			out = append(out, line)
+			continue
+		}
+
+		switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
+		case types.CommitmentLineTrueUp:
+			continue
+		case types.CommitmentLineUtilized:
+			line.Amount = decimal.Zero
+			line.DisplayName = lo.ToPtr(c.InvoiceLabel + " (covered by commitment)")
+		}
+
+		out = append(out, line)
+	}
+
+	return out
 }
 
 // sameOveragePrice reports whether two overage prices agree: both absent, or both flat with equal amounts.
@@ -314,6 +353,7 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
+	// TODO: billed amounts of billing-terms commitments are reported at usage value, not the $0 their invoice lines carry.
 	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 
 	byID := map[string]*dto.CommitmentUsageBreakdown{}

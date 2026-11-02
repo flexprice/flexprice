@@ -335,6 +335,88 @@ func (s *BillingServiceSuite) TestCommitmentLoader_AmountTrueUp() {
 	s.True(stacks[0].Lines[0].Usage[0].Equal(dec("60")))
 }
 
+func (s *BillingServiceSuite) TestCommitmentInvoiceLines_BillingTermsCoverUsage() {
+	tests := []struct {
+		name       string
+		collection types.CommitmentCollectionMethod
+		calls      string
+		utilized   string
+		trueUp     string
+		overage    string
+		total      string
+	}{
+		{
+			name:       "billing terms cover usage within the commitment",
+			collection: types.CommitmentCollectionBillingTerms,
+			calls:      "7000",
+			utilized:   "0",
+			total:      "0",
+		},
+		{
+			name:       "billing terms still bill the overage",
+			collection: types.CommitmentCollectionBillingTerms,
+			calls:      "12000",
+			utilized:   "0",
+			overage:    "10",
+			total:      "10",
+		},
+		{
+			name:       "per period bills the usage and the true-up",
+			collection: types.CommitmentCollectionPerPeriod,
+			calls:      "7000",
+			utilized:   "60",
+			trueUp:     "40",
+			total:      "100",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.setupTestData()
+			s.enableCommitmentsV2()
+			periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
+			c := s.newTestCommitment(
+				types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), s.testData.subscription,
+				types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
+			)
+			c.CollectionMethod = lo.ToPtr(tt.collection)
+			s.storeCommitment(c)
+
+			l := s.loaderFor(s.testData.subscription, s.usageResponse(s.testData.prices.apiCalls, tt.calls), periodStart, periodEnd)
+			lines, total, err := l.InvoiceLines(s.GetContext())
+			s.Require().NoError(err)
+
+			utilized := s.loaderLine(lines, types.CommitmentLineUtilized, c.ID)
+			s.True(utilized.Amount.Equal(dec(tt.utilized)), "utilized %s", utilized.Amount)
+			s.True(utilized.Quantity.IsPositive(), "utilized quantity %s", utilized.Quantity)
+
+			trueUp := loaderLinesOfKind(lines, types.CommitmentLineTrueUp)
+			overage := loaderLinesOfKind(lines, types.CommitmentLineOverage)
+			if tt.trueUp == "" {
+				s.Empty(trueUp)
+			} else {
+				s.Require().Len(trueUp, 1)
+				s.True(trueUp[0].Amount.Equal(dec(tt.trueUp)), "true-up %s", trueUp[0].Amount)
+			}
+
+			if tt.overage == "" {
+				s.Empty(overage)
+			} else {
+				s.Require().Len(overage, 1)
+				s.True(overage[0].Amount.Equal(dec(tt.overage)), "overage %s", overage[0].Amount)
+			}
+
+			if tt.collection == types.CommitmentCollectionBillingTerms {
+				s.Equal(c.InvoiceLabel+" (covered by commitment)", lo.FromPtr(utilized.DisplayName))
+			} else {
+				s.Equal(c.InvoiceLabel, lo.FromPtr(utilized.DisplayName))
+			}
+
+			s.True(total.Equal(dec(tt.total)), "total %s", total)
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestCommitmentLoader_FlagOff_Empty() {
 	s.setupTestData()
 	periodStart, periodEnd := s.testData.subscription.CurrentPeriodStart, s.testData.subscription.CurrentPeriodEnd
