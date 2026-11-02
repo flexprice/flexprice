@@ -72,7 +72,7 @@ func publishAfterCommit(ctx context.Context, params ServiceParams, events ...*ty
 	publish := func() {
 		for _, event := range events {
 			if err := params.WebhookPublisher.PublishWebhook(publishCtx, event); err != nil {
-				params.Logger.Error(publishCtx, "failed to publish billing term webhook",
+				params.Logger.Error(publishCtx, "failed to publish webhook",
 					"error", err,
 					"event_name", event.EventName,
 					"entity_id", event.EntityID,

@@ -625,21 +625,7 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 		return
 	}
 
-	// The publisher records the event in Postgres, which must not run on the finished transaction.
-	publishCtx := types.WithoutDBTransaction(ctx)
-	publish := func() {
-		if err := s.WebhookPublisher.PublishWebhook(publishCtx, event); err != nil {
-			s.Logger.Error(publishCtx, "failed to publish commitment webhook",
-				"error", err,
-				"event_name", eventName,
-				"commitment_id", c.ID,
-			)
-		}
-	}
-
-	if !types.RegisterPostCommit(ctx, publish) {
-		publish()
-	}
+	publishAfterCommit(ctx, s.ServiceParams, event)
 }
 
 // lockCommitment serialises writes to one commitment and must run inside a transaction.
