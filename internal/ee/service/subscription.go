@@ -2083,6 +2083,10 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		}
 	}
 
+	if req.ProrationBehavior != nil {
+		subscription.ProrationBehavior = *req.ProrationBehavior
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing
@@ -8329,6 +8333,7 @@ func (s *subscriptionService) createGroupedInvoicingChildren(
 			BillingPeriodCount:         parent.BillingPeriodCount,
 			BillingCycle:               parent.BillingCycle,
 			BillingAnchor:              billingAnchor,
+			ProrationBehavior:          c.ProrationBehavior,
 			SubscriptionType:           types.SubscriptionTypeGroupedInvoicing,
 			SubscriptionCreationConfig: c.SubscriptionCreationConfig,
 			Checkout:                   checkout,

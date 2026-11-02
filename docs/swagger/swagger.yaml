@@ -5491,6 +5491,10 @@ definitions:
         type: array
       plan_id:
         type: string
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: ProrationBehavior is stored on the child. Empty defaults to none.
       subscription_coupons:
         description: |-
           SubscriptionCoupons is the preferred way to attach coupons at creation.
@@ -10257,6 +10261,11 @@ definitions:
         description: ParentSubscriptionID sets or clears the parent subscription.
           Omit to leave unchanged; send "" to clear.
         type: string
+      proration_behavior:
+        allOf:
+        - $ref: '#/definitions/types.ProrationBehavior'
+        description: ProrationBehavior updates the stored behavior. Omit to leave
+          it unchanged.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
