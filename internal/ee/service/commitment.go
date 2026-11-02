@@ -37,6 +37,12 @@ type CommitmentService interface {
 	PreviewBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
 	// ReplaceBillingTerms swaps the whole set of terms and regenerates every instalment.
 	ReplaceBillingTerms(ctx context.Context, id string, req dto.ReplaceBillingTermsRequest) (*dto.BillingTermsResponse, error)
+	// ReplanInstalments replaces the commitment's scheduled instalments with the given ones, which together with the
+	// invoiced ones must add up to the commitment's total. It returns the resulting plan.
+	ReplanInstalments(ctx context.Context, id string, req dto.ReplanInstalmentsRequest) (*dto.ListInstalmentsResponse, error)
+	// BringForwardInstalments moves an amount of the earliest scheduled instalments into one new instalment billed now
+	// or on the given date. It returns the resulting plan.
+	BringForwardInstalments(ctx context.Context, id string, req dto.BringForwardInstalmentsRequest) (*dto.ListInstalmentsResponse, error)
 	// ListInstalments returns the commitment's instalments in billing order; empty statuses list every status, cancelled included.
 	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.

@@ -2706,6 +2706,164 @@
           }
         ],
         "x-scope": "read"
+      },
+      "put": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Re-plan instalments",
+        "description": "Replaces every scheduled instalment of an active commitment with the given list. Invoiced instalments are untouched, so the new instalments must add up to what they leave of the commitment total. A manual instalment takes no bill_on and waits at the end of the commitment term until it is triggered. Returns the resulting scheduled and invoiced instalments in billing order.",
+        "operationId": "replanCommitmentInstalments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Instalments",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplanInstalmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstalmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "instalments"
+      }
+    },
+    "/commitments/{id}/instalments/bring-forward": {
+      "post": {
+        "tags": [
+          "Commitments"
+        ],
+        "summary": "Bring instalments forward",
+        "description": "Adds one instalment of the given amount, billed now unless bill_on is set, and takes the same amount off the earliest scheduled instalments. Instalments that reach zero are cancelled, so the commitment total does not change. Returns the resulting scheduled and invoiced instalments in billing order.",
+        "operationId": "bringForwardCommitmentInstalments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commitment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Amount to bring forward",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BringForwardInstalmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListInstalmentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "bring_forward"
       }
     },
     "/commitments/{id}/terminate": {
@@ -22044,6 +22202,17 @@
           }
         }
       },
+      "BringForwardInstalmentsRequest": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "bill_on": {
+            "type": "string"
+          }
+        }
+      },
       "BucketSummary": {
         "type": "object",
         "properties": {
@@ -29778,6 +29947,39 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BillingTermInput"
+            }
+          }
+        }
+      },
+      "ReplanInstalmentInput": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "bill_on": {
+            "type": "string"
+          },
+          "bill_trigger": {
+            "$ref": "#/components/schemas/types.InstalmentBillTrigger"
+          },
+          "description": {
+            "maxLength": 255,
+            "type": "string"
+          }
+        }
+      },
+      "ReplanInstalmentsRequest": {
+        "required": [
+          "instalments"
+        ],
+        "type": "object",
+        "properties": {
+          "instalments": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplanInstalmentInput"
             }
           }
         }

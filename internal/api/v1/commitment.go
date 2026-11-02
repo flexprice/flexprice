@@ -400,3 +400,83 @@ func (h *CommitmentHandler) ListInstalments(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Re-plan instalments
+// @ID replanCommitmentInstalments
+// @Description Replaces every scheduled instalment of an active commitment with the given list. Invoiced instalments are untouched, so the new instalments must add up to what they leave of the commitment total. A manual instalment takes no bill_on and waits at the end of the commitment term until it is triggered. Returns the resulting scheduled and invoiced instalments in billing order.
+// @Tags Commitments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Commitment ID"
+// @Param instalments body dto.ReplanInstalmentsRequest true "Instalments"
+// @Success 200 {object} dto.ListInstalmentsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/instalments [put]
+func (h *CommitmentHandler) ReplanInstalments(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ReplanInstalmentsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.ReplanInstalments(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Bring instalments forward
+// @ID bringForwardCommitmentInstalments
+// @Description Adds one instalment of the given amount, billed now unless bill_on is set, and takes the same amount off the earliest scheduled instalments. Instalments that reach zero are cancelled, so the commitment total does not change. Returns the resulting scheduled and invoiced instalments in billing order.
+// @Tags Commitments
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Commitment ID"
+// @Param bring_forward body dto.BringForwardInstalmentsRequest true "Amount to bring forward"
+// @Success 200 {object} dto.ListInstalmentsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /commitments/{id}/instalments/bring-forward [post]
+func (h *CommitmentHandler) BringForwardInstalments(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("commitment ID is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.BringForwardInstalmentsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.commitmentService.BringForwardInstalments(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

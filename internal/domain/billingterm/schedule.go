@@ -23,10 +23,12 @@ const (
 	MaxInstalments = 500
 )
 
+// DefaultOnceDescription labels an instalment that has no description of its own.
+const DefaultOnceDescription = "Commitment payment"
+
 const (
 	maxDescriptionLength = 255
 
-	defaultOnceDescription      = "Commitment payment"
 	defaultRecurringDescription = "Instalment {n} of {of}"
 
 	// termErrorFormat names the term's index, then the field, then the reason.
@@ -94,21 +96,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		return nil, ierr.Validationf("billing_terms: expand to %d instalments, more than the %d allowed", count, MaxInstalments)
 	}
 
-	template := Instalment{
-		OwnerType: owner.OwnerType(),
-		OwnerID:   owner.OwnerID(),
-
-		CustomerID:     owner.BilledCustomerID(),
-		SubscriptionID: owner.BilledSubscriptionID(),
-		Currency:       currency,
-
-		Kind:             types.InstalmentKindInstalment,
-		Delivery:         delivery,
-		InstalmentStatus: types.InstalmentStatusScheduled,
-
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
+	template := InstalmentTemplate(ctx, owner)
 
 	instalments := make([]*Instalment, 0, count)
 	for _, r := range resolved {
@@ -133,6 +121,26 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 	}
 
 	return instalments, nil
+}
+
+// InstalmentTemplate is a scheduled instalment of the owner with the owner's fields filled in. The caller sets the ID,
+// amount, dates, trigger, description and service period.
+func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
+	return Instalment{
+		OwnerType: owner.OwnerType(),
+		OwnerID:   owner.OwnerID(),
+
+		CustomerID:     owner.BilledCustomerID(),
+		SubscriptionID: owner.BilledSubscriptionID(),
+		Currency:       owner.BillingCurrency(),
+
+		Kind:             types.InstalmentKindInstalment,
+		Delivery:         owner.InstalmentDelivery(),
+		InstalmentStatus: types.InstalmentStatusScheduled,
+
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
 }
 
 // resolveTerm validates one term against the collection period and applies the defaults of its kind.
@@ -385,7 +393,7 @@ func (r *resolvedTerm) instalments(template Instalment, currency string) ([]*Ins
 		i.ServicePeriodEnd = r.covers.End
 		out = append(out, &i)
 
-		description = lo.CoalesceOrEmpty(description, defaultOnceDescription)
+		description = lo.CoalesceOrEmpty(description, DefaultOnceDescription)
 	} else {
 		amounts := r.stepAmounts(currency)
 		for n, step := range r.steps {

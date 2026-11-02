@@ -1518,6 +1518,13 @@ definitions:
           type: string
         type: array
     type: object
+  BringForwardInstalmentsRequest:
+    properties:
+      amount:
+        type: string
+      bill_on:
+        type: string
+    type: object
   BucketSummary:
     properties:
       base_charge:
@@ -7409,6 +7416,28 @@ definitions:
         type: array
     required:
     - billing_terms
+    type: object
+  ReplanInstalmentInput:
+    properties:
+      amount:
+        type: string
+      bill_on:
+        type: string
+      bill_trigger:
+        $ref: '#/definitions/types.InstalmentBillTrigger'
+      description:
+        maxLength: 255
+        type: string
+    type: object
+  ReplanInstalmentsRequest:
+    properties:
+      instalments:
+        items:
+          $ref: '#/definitions/ReplanInstalmentInput'
+        minItems: 1
+        type: array
+    required:
+    - instalments
     type: object
   ReportCatalogEntry:
     properties:
@@ -18681,6 +18710,97 @@ paths:
       tags:
       - Commitments
       x-scope: read
+    put:
+      consumes:
+      - application/json
+      description: Replaces every scheduled instalment of an active commitment with
+        the given list. Invoiced instalments are untouched, so the new instalments
+        must add up to what they leave of the commitment total. A manual instalment
+        takes no bill_on and waits at the end of the commitment term until it is triggered.
+        Returns the resulting scheduled and invoiced instalments in billing order.
+      operationId: replanCommitmentInstalments
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Instalments
+        in: body
+        name: instalments
+        required: true
+        schema:
+          $ref: '#/definitions/ReplanInstalmentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListInstalmentsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Re-plan instalments
+      tags:
+      - Commitments
+  /commitments/{id}/instalments/bring-forward:
+    post:
+      consumes:
+      - application/json
+      description: Adds one instalment of the given amount, billed now unless bill_on
+        is set, and takes the same amount off the earliest scheduled instalments.
+        Instalments that reach zero are cancelled, so the commitment total does not
+        change. Returns the resulting scheduled and invoiced instalments in billing
+        order.
+      operationId: bringForwardCommitmentInstalments
+      parameters:
+      - description: Commitment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Amount to bring forward
+        in: body
+        name: bring_forward
+        required: true
+        schema:
+          $ref: '#/definitions/BringForwardInstalmentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListInstalmentsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Bring instalments forward
+      tags:
+      - Commitments
   /commitments/{id}/terminate:
     post:
       consumes:

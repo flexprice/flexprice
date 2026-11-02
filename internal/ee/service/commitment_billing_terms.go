@@ -17,6 +17,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// broughtForwardDescription labels the instalment a bring forward adds.
+const broughtForwardDescription = "Payment brought forward"
+
 // planInstalments expands terms into the commitment's instalments, valuing each commitment period with amountOf.
 // terms must be new: expanding fills the amount of a percentage term.
 func (s *commitmentService) planInstalments(
@@ -210,16 +213,8 @@ func (s *commitmentService) planReplacement(
 	c *commitment.Commitment,
 	req dto.ReplaceBillingTermsRequest,
 ) ([]*billingterm.Term, []*billingterm.Instalment, error) {
-	if c.CommitmentStatus != types.CommitmentStatusActive {
-		return nil, nil, ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
-			WithHint("Only active commitments can have their billing terms edited").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
-		return nil, nil, ierr.NewErrorf("commitment %s does not collect through billing terms", c.ID).
-			WithHint("Only commitments with collection_method billing_terms have billing terms").
-			Mark(ierr.ErrInvalidOperation)
+	if err := requireActiveBillingTerms(c); err != nil {
+		return nil, nil, err
 	}
 
 	cc, err := s.loadCommitmentContext(ctx, c.SubscriptionID)
@@ -244,6 +239,24 @@ func (s *commitmentService) planReplacement(
 	return terms, instalments, nil
 }
 
+// requireActiveBillingTerms rejects a commitment whose plan cannot change: one that is not active or does not collect
+// through billing terms.
+func requireActiveBillingTerms(c *commitment.Commitment) error {
+	if c.CommitmentStatus != types.CommitmentStatusActive {
+		return ierr.NewErrorf("commitment %s is %s", c.ID, c.CommitmentStatus).
+			WithHint("Only active commitments can have their billing terms or instalments changed").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return ierr.NewErrorf("commitment %s does not collect through billing terms", c.ID).
+			WithHint("Only commitments with collection_method billing_terms have billing terms or instalments").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return nil
+}
+
 // invoicesToReview returns the distinct invoices the instalments sit on, in order.
 func invoicesToReview(instalments []*billingterm.Instalment) []string {
 	ids := lo.Uniq(lo.FilterMap(instalments, func(i *billingterm.Instalment, _ int) (string, bool) {
@@ -252,6 +265,257 @@ func invoicesToReview(instalments []*billingterm.Instalment) []string {
 	slices.Sort(ids)
 
 	return ids
+}
+
+// ReplanInstalments replaces the commitment's scheduled instalments with req's, which must add up to what the invoiced
+// ones leave of the commitment's total. The response is the resulting plan.
+func (s *commitmentService) ReplanInstalments(
+	ctx context.Context,
+	id string,
+	req dto.ReplanInstalmentsRequest,
+) (*dto.ListInstalmentsResponse, error) {
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+
+	req.ApplyDefaults()
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var cancelled, created []*billingterm.Instalment
+	var plan *dto.ListInstalmentsResponse
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.lockCommitment(txCtx, id); err != nil {
+			return err
+		}
+
+		c, err := s.CommitmentRepo.Get(txCtx, id)
+		if err != nil {
+			return err
+		}
+
+		if err := requireActiveBillingTerms(c); err != nil {
+			return err
+		}
+
+		replanned, err := replannedInstalments(txCtx, c, req.Instalments)
+		if err != nil {
+			return err
+		}
+
+		invoiced, err := s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{types.InstalmentStatusInvoiced})
+		if err != nil {
+			return err
+		}
+
+		billed, planned, total := sumInstalments(invoiced.Items), sumInstalments(replanned), c.CollectionTotal()
+		if !billed.Add(planned).Equal(total) {
+			return ierr.Validationf(
+				"instalments: the invoiced %s and the new %s add up to %s, not the commitment total of %s",
+				billed, planned, billed.Add(planned), total,
+			)
+		}
+
+		scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+		if cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled); err != nil {
+			return err
+		}
+
+		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, replanned); err != nil {
+			return err
+		}
+
+		plan, err = s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{
+			types.InstalmentStatusScheduled,
+			types.InstalmentStatusInvoiced,
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "commitment.instalments_replanned",
+		"operation", "commitment.instalments_replanned",
+		"commitment_id", id,
+		"cancelled", len(cancelled),
+		"created", len(created),
+	)
+
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
+
+	return plan, nil
+}
+
+// replannedInstalments builds the instalments a re-plan creates, in billing order. Each covers the whole commitment
+// term; a manual one waits at the end of it.
+func replannedInstalments(
+	ctx context.Context,
+	c *commitment.Commitment,
+	inputs []dto.ReplanInstalmentInput,
+) ([]*billingterm.Instalment, error) {
+	term := c.CollectionPeriod()
+	instalments := make([]*billingterm.Instalment, 0, len(inputs))
+	for n, in := range inputs {
+		if !in.Amount.Equal(types.RoundToCurrencyPrecision(in.Amount, c.Currency)) {
+			return nil, ierr.Validationf("instalments[%d].amount: must be rounded to %s precision", n, c.Currency)
+		}
+
+		billOn := lo.FromPtrOr(in.BillOn, term.End)
+		if billOn.Before(term.Start) || billOn.After(term.End) {
+			return nil, ierr.Validationf("instalments[%d].bill_on: must fall within the commitment term", n)
+		}
+
+		instalment := billingterm.InstalmentTemplate(ctx, c)
+		instalment.BillTrigger = in.Trigger()
+		instalment.BillOn = billOn
+		instalment.Amount = in.Amount
+		instalment.Description = lo.CoalesceOrEmpty(lo.FromPtr(in.Description), billingterm.DefaultOnceDescription)
+		instalment.ServicePeriodStart = term.Start
+		instalment.ServicePeriodEnd = term.End
+		instalments = append(instalments, &instalment)
+	}
+
+	// IDs are time-sortable, so generating them after a stable sort keeps the request's order among equal dates.
+	slices.SortStableFunc(instalments, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
+	for _, instalment := range instalments {
+		instalment.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
+	}
+
+	return instalments, nil
+}
+
+// BringForwardInstalments adds one instalment of req.Amount and takes the same amount off the earliest scheduled
+// ones, cancelling those it empties. The response is the resulting plan.
+func (s *commitmentService) BringForwardInstalments(
+	ctx context.Context,
+	id string,
+	req dto.BringForwardInstalmentsRequest,
+) (*dto.ListInstalmentsResponse, error) {
+	if err := s.requireEnabled(ctx); err != nil {
+		return nil, err
+	}
+
+	req.ApplyDefaults()
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	var reduced, cancelled, created []*billingterm.Instalment
+	var plan *dto.ListInstalmentsResponse
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.lockCommitment(txCtx, id); err != nil {
+			return err
+		}
+
+		c, err := s.CommitmentRepo.Get(txCtx, id)
+		if err != nil {
+			return err
+		}
+
+		if err := requireActiveBillingTerms(c); err != nil {
+			return err
+		}
+
+		if !req.Amount.Equal(types.RoundToCurrencyPrecision(req.Amount, c.Currency)) {
+			return ierr.Validationf("amount: must be rounded to %s precision", c.Currency)
+		}
+
+		term := c.CollectionPeriod()
+		billOn := lo.FromPtrOr(req.BillOn, clock.Now())
+		if billOn.Before(term.Start) || billOn.After(term.End) {
+			return ierr.Validation("bill_on: must fall within the commitment term")
+		}
+
+		scheduled, err := s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{types.InstalmentStatusScheduled})
+		if err != nil {
+			return err
+		}
+
+		if available := sumInstalments(scheduled.Items); req.Amount.GreaterThan(available) {
+			return ierr.Validationf("amount: %s is more than the %s still scheduled", req.Amount, available)
+		}
+
+		var touched []*billingterm.Instalment
+		remaining := req.Amount
+		for _, instalment := range scheduled.Items {
+			if !remaining.IsPositive() {
+				break
+			}
+
+			taken := decimal.Min(instalment.Amount, remaining)
+			remaining = remaining.Sub(taken)
+
+			// A cancelled instalment keeps the amount it was scheduled for.
+			builder := billingterm.NewInstalmentBuilder(instalment)
+			if taken.Equal(instalment.Amount) {
+				builder.WithStatus(types.InstalmentStatusCancelled)
+			} else {
+				builder.WithAmount(instalment.Amount.Sub(taken))
+			}
+
+			updated, err := s.BillingInstalmentRepo.Update(txCtx, builder.Build())
+			if err != nil {
+				return err
+			}
+
+			touched = append(touched, updated)
+			if updated.InstalmentStatus == types.InstalmentStatusCancelled {
+				cancelled = append(cancelled, updated)
+			} else {
+				reduced = append(reduced, updated)
+			}
+		}
+
+		broughtForward := billingterm.InstalmentTemplate(txCtx, c)
+		broughtForward.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
+		broughtForward.BillTrigger = types.InstalmentBillTriggerDate
+		broughtForward.BillOn = billOn
+		broughtForward.Amount = req.Amount
+		broughtForward.Description = broughtForwardDescription
+		broughtForward.ServicePeriodStart = lo.MinBy(touched, func(a, b *billingterm.Instalment) bool {
+			return a.ServicePeriodStart.Before(b.ServicePeriodStart)
+		}).ServicePeriodStart
+		broughtForward.ServicePeriodEnd = lo.MaxBy(touched, func(a, b *billingterm.Instalment) bool {
+			return a.ServicePeriodEnd.After(b.ServicePeriodEnd)
+		}).ServicePeriodEnd
+
+		if created, err = s.BillingInstalmentRepo.CreateMany(txCtx, []*billingterm.Instalment{&broughtForward}); err != nil {
+			return err
+		}
+
+		plan, err = s.ListInstalments(txCtx, c.ID, []types.InstalmentStatus{
+			types.InstalmentStatusScheduled,
+			types.InstalmentStatusInvoiced,
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Info(ctx, "commitment.instalments_brought_forward",
+		"operation", "commitment.instalments_brought_forward",
+		"commitment_id", id,
+		"amount", req.Amount.String(),
+		"reduced", len(reduced),
+		"cancelled", len(cancelled),
+	)
+
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentUpdated, reduced)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
+
+	return plan, nil
+}
+
+// sumInstalments adds up the amounts of the instalments.
+func sumInstalments(instalments []*billingterm.Instalment) decimal.Decimal {
+	return decimal.Sum(decimal.Zero, lo.Map(instalments, func(instalment *billingterm.Instalment, _ int) decimal.Decimal {
+		return instalment.Amount
+	})...)
 }
 
 func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
