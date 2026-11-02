@@ -2,7 +2,9 @@ package testutil
 
 import (
 	"context"
+	"reflect"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customerdeletion"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -49,8 +51,48 @@ func deepCopyJSONValue(v interface{}) interface{} {
 		}
 		return out
 	default:
+		return deepCopyReflect(v)
+	}
+}
+
+// deepCopyReflect catches typed containers like []string
+func deepCopyReflect(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Map:
+		if rv.IsNil() {
+			return v
+		}
+		out := reflect.MakeMapWithSize(rv.Type(), rv.Len())
+		iter := rv.MapRange()
+		for iter.Next() {
+			out.SetMapIndex(iter.Key(), reflect.ValueOf(deepCopyReflect(iter.Value().Interface())))
+		}
+		return out.Interface()
+	case reflect.Slice:
+		if rv.IsNil() {
+			return v
+		}
+		out := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			out.Index(i).Set(reflect.ValueOf(deepCopyReflect(rv.Index(i).Interface())))
+		}
+		return out.Interface()
+	default:
 		return v
 	}
+}
+
+func copyTimestamp(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	copied := *t
+	return &copied
 }
 
 func copyDeletionRequest(r *customerdeletion.CustomerDeletionRequest) *customerdeletion.CustomerDeletionRequest {
@@ -58,6 +100,10 @@ func copyDeletionRequest(r *customerdeletion.CustomerDeletionRequest) *customerd
 		return nil
 	}
 	c := *r
+	c.SuppressedAt = copyTimestamp(r.SuppressedAt)
+	c.RedactedAt = copyTimestamp(r.RedactedAt)
+	c.CooldownUntil = copyTimestamp(r.CooldownUntil)
+	c.IrreversibleStartedAt = copyTimestamp(r.IrreversibleStartedAt)
 	c.RetentionPolicy = deepCopyJSONMap(r.RetentionPolicy)
 	return &c
 }
@@ -67,6 +113,7 @@ func copyDeletionCategory(c *customerdeletion.CustomerDeletionCategory) *custome
 		return nil
 	}
 	cp := *c
+	cp.VerifiedAt = copyTimestamp(c.VerifiedAt)
 	cp.VerificationResult = deepCopyJSONMap(c.VerificationResult)
 	return &cp
 }
