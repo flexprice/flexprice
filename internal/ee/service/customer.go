@@ -9,8 +9,6 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/connection"
-	"github.com/flexprice/flexprice/internal/domain/connectionassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -145,11 +143,7 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 		return nil, err
 	}
 
-	resp := &dto.CustomerResponse{Customer: customer}
-	if err := fillPreferredConnectionIDs(ctx, s.ServiceParams, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
 func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
@@ -219,10 +213,6 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 		for _, m := range mappings.Items {
 			integrationsByCustomerID[m.EntityID] = append(integrationsByCustomerID[m.EntityID], m)
 		}
-	}
-
-	if err := fillPreferredConnectionIDs(ctx, s.ServiceParams, response...); err != nil {
-		return nil, err
 	}
 
 	for _, resp := range response {
@@ -341,12 +331,12 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		s.Logger.Error(ctx, "failed to resolve billing entity, customer update not pushed to integrations",
 			"error", err,
 			"customer_id", cust.ID)
-		return s.withPreferredConnection(ctx, cust)
+		return &dto.CustomerResponse{Customer: cust}, nil
 	}
 	s.syncCustomerUpdateToZoho(syncCtx, cust)
 	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
 
-	return s.withPreferredConnection(ctx, cust)
+	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
 // syncCustomerUpdateToStripe runs in the request rather than async: a checkout taxed against the
@@ -483,93 +473,7 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 		return nil, err
 	}
 
-	return s.withPreferredConnection(ctx, customer)
-}
-
-func (s *customerService) withPreferredConnection(ctx context.Context, cust *customer.Customer) (*dto.CustomerResponse, error) {
-	resp := &dto.CustomerResponse{Customer: cust}
-	if err := fillPreferredConnectionIDs(ctx, s.ServiceParams, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
-}
-
-// SetPreferredConnection makes the connection the customer's preferred payment connection.
-func (s *customerService) SetPreferredConnection(ctx context.Context, customerID, connectionID string) (*dto.CustomerResponse, error) {
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return nil, err
-	}
-	scoped, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.DB.WithTx(scoped, func(txCtx context.Context) error {
-		connections, err := s.ConnectionRepo.ListPublishedInScope(txCtx)
-		if err != nil {
-			return err
-		}
-		conn, found := lo.Find(connections, func(c *connection.Connection) bool { return c != nil && c.ID == connectionID })
-		if found {
-			_, found = types.PaymentGatewayFromSecretProvider(conn.ProviderType)
-		}
-		if !found {
-			return ierr.NewError("connection not allowed for customer").
-				WithHint("connection not allowed for customer").
-				WithReportableDetails(map[string]any{"customer_id": customerID, "connection_id": connectionID}).
-				Mark(ierr.ErrValidation)
-		}
-		if err := s.archivePreferredConnection(txCtx, customerID); err != nil {
-			return err
-		}
-		return s.ConnectionAssociationRepo.Create(txCtx, &connectionassociation.ConnectionAssociation{
-			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION_ASSOCIATION),
-			EntityType:    types.ConnectionAssociationEntityTypeCustomer,
-			EntityID:      customerID,
-			ConnectionID:  conn.ID,
-			ProviderType:  conn.ProviderType,
-			EnvironmentID: types.GetEnvironmentID(txCtx),
-			BaseModel:     types.GetDefaultBaseModel(txCtx),
-		})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.withPreferredConnection(ctx, cust)
-}
-
-// ClearPreferredConnection removes the customer's preferred payment connection.
-func (s *customerService) ClearPreferredConnection(ctx context.Context, customerID string) (*dto.CustomerResponse, error) {
-	cust, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return nil, err
-	}
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		return s.archivePreferredConnection(txCtx, customerID)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.withPreferredConnection(ctx, cust)
-}
-
-func (s *customerService) archivePreferredConnection(ctx context.Context, customerID string) error {
-	filter := types.NewNoLimitConnectionAssociationFilter()
-	filter.EntityType = types.ConnectionAssociationEntityTypeCustomer
-	filter.EntityIDs = []string{customerID}
-	existing, err := s.ConnectionAssociationRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-	for _, a := range existing {
-		a.UpdatedAt = time.Now().UTC()
-		a.UpdatedBy = types.GetUserID(ctx)
-		if err := s.ConnectionAssociationRepo.Delete(ctx, a); err != nil {
-			return err
-		}
-	}
-	return nil
+	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
 func (s *customerService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, customerID string) {

@@ -6,7 +6,6 @@ import (
 	"github.com/cockroachdb/errors"
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
-	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -243,80 +242,6 @@ func (s *BillingEntityServiceSuite) TestInScope_Customer() {
 			ok, err := s.service.InScope(ctx, "c1")
 			s.Require().NoError(err)
 			s.Equal(tc.want, ok)
-		})
-	}
-}
-
-func (s *BillingEntityServiceSuite) TestSetPreferredConnection() {
-	env := types.GetEnvironmentID(s.GetContext())
-
-	tests := []struct {
-		name     string
-		provider types.SecretProvider
-		owner    string
-		previous types.SecretProvider
-		wantErr  bool
-	}{
-		{name: "in_scope_gateway", provider: types.SecretProviderStripe, owner: "be_eu"},
-		{name: "out_of_scope_connection", provider: types.SecretProviderStripe, owner: "be_default", wantErr: true},
-		{name: "non_gateway_provider", provider: types.SecretProviderQuickBooks, owner: "be_eu", wantErr: true},
-		{name: "replaces_existing", provider: types.SecretProviderStripe, owner: "be_eu", previous: types.SecretProviderRazorpay},
-	}
-
-	for _, tc := range tests {
-		s.Run(tc.name, func() {
-			s.ClearStores()
-			s.setMode(types.BillingEntityModeEnabled)
-			s.addEntity("be_default", env, "INV", true)
-			s.addEntity("be_eu", env, "EU", false)
-			s.addCustomer("c1", lo.ToPtr("be_eu"))
-
-			ctx := s.GetContext()
-			stores := s.GetStores()
-			connect := func(provider types.SecretProvider, owner string) string {
-				conn := &connection.Connection{
-					ID:              "conn_" + string(provider),
-					Name:            string(provider),
-					ProviderType:    provider,
-					BillingEntityID: lo.ToPtr(owner),
-					EnvironmentID:   env,
-					BaseModel:       types.GetDefaultBaseModel(ctx),
-				}
-				s.Require().NoError(stores.ConnectionRepo.Create(ctx, conn))
-				return conn.ID
-			}
-			svc := NewCustomerService(ServiceParams{
-				Logger:                    s.GetLogger(),
-				DB:                        s.GetDB(),
-				TenantRepo:                stores.TenantRepo,
-				EnvironmentRepo:           stores.EnvironmentRepo,
-				CustomerRepo:              stores.CustomerRepo,
-				BillingEntityRepo:         stores.BillingEntityRepo,
-				ConnectionRepo:            stores.ConnectionRepo,
-				ConnectionAssociationRepo: stores.ConnectionAssociationRepo,
-			})
-
-			if tc.previous != "" {
-				_, err := svc.SetPreferredConnection(ctx, "c1", connect(tc.previous, tc.owner))
-				s.Require().NoError(err)
-			}
-			connectionID := connect(tc.provider, tc.owner)
-			resp, err := svc.SetPreferredConnection(ctx, "c1", connectionID)
-			if tc.wantErr {
-				s.Require().True(ierr.IsValidation(err), "expected validation error, got: %v", err)
-				s.Contains(err.Error(), "connection not allowed for customer")
-				return
-			}
-			s.Require().NoError(err)
-			s.Equal(connectionID, lo.FromPtr(resp.PreferredConnectionID))
-
-			filter := types.NewNoLimitConnectionAssociationFilter()
-			filter.EntityType = types.ConnectionAssociationEntityTypeCustomer
-			filter.EntityIDs = []string{"c1"}
-			associations, err := stores.ConnectionAssociationRepo.List(ctx, filter)
-			s.Require().NoError(err)
-			s.Require().Len(associations, 1)
-			s.Equal(connectionID, associations[0].ConnectionID)
 		})
 	}
 }
