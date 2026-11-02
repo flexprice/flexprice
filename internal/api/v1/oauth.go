@@ -95,6 +95,7 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		Metadata:        req.Metadata,
 		SyncConfig:      req.SyncConfig, // Pass through the sync configuration
 		BillingEntityID: req.BillingEntityID,
+		ConnectionID:    req.ID,
 		CSRFState:       csrfState,
 		ExpiresAt:       clock.Now().Add(service.OAuthSessionTTL),
 	}

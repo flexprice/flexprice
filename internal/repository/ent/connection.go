@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -18,6 +19,8 @@ import (
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
+
+const connectionPrimaryKey = "connections_pkey"
 
 type connectionRepository struct {
 	client     postgres.IClient
@@ -80,9 +83,20 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 		SetSpanError(span, err)
 
 		if ent.IsConstraintError(err) {
+			hint := "Failed to create connection"
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) {
+				switch pqErr.Constraint {
+				case connectionPrimaryKey:
+					hint = "A connection with this id already exists"
+				case schema.ConnectionOwnerProviderUnique:
+					hint = fmt.Sprintf("A published connection for provider '%s' already exists for this billing entity", c.ProviderType)
+				}
+			}
 			return ierr.WithError(err).
-				WithHint("Failed to create connection").
+				WithHint(hint).
 				WithReportableDetails(map[string]any{
+					"connection_id": c.ID,
 					"name":          c.Name,
 					"provider_type": c.ProviderType,
 				}).

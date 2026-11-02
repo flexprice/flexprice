@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
 // CreateConnectionRequest represents the request to create a connection
 type CreateConnectionRequest struct {
+	// ID is an optional client-generated connection id (conn_ followed by a ULID); generated when empty.
+	ID                  string                   `json:"id,omitempty"`
 	Name                string                   `json:"name" validate:"required,max=255"`
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
@@ -24,10 +27,22 @@ type CreateConnectionRequest struct {
 	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
+// ValidateConnectionID rejects a client-generated connection id that is not conn_ followed by a ULID.
+func ValidateConnectionID(id string) error {
+	if id == "" || types.IsPrefixedULID(id, types.UUID_PREFIX_CONNECTION) {
+		return nil
+	}
+	return ierr.NewError("invalid connection id").
+		WithHint("id must be conn_ followed by a ULID").
+		WithReportableDetails(map[string]any{"id": id}).
+		Mark(ierr.ErrValidation)
+}
+
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
 func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// First, unmarshal to a temporary struct to get the raw data
 	var temp struct {
+		ID                  string                 `json:"id,omitempty"`
 		Name                string                 `json:"name"`
 		ProviderType        types.SecretProvider   `json:"provider_type"`
 		EncryptedSecretData map[string]interface{} `json:"encrypted_secret_data,omitempty"`
@@ -41,6 +56,7 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	// Set the basic fields
+	req.ID = temp.ID
 	req.Name = temp.Name
 	req.ProviderType = temp.ProviderType
 	req.Metadata = temp.Metadata

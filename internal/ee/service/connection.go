@@ -561,11 +561,18 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		return nil, err
 	}
 
+	if err := dto.ValidateConnectionID(req.ID); err != nil {
+		return nil, err
+	}
+
 	// Convert DTO to domain model
 	conn := req.ToConnection()
 
 	// Set required fields
-	conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	conn.ID = req.ID
+	if conn.ID == "" {
+		conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	}
 	conn.TenantID = tenantID
 	conn.EnvironmentID = environmentID
 	conn.Status = types.StatusPublished

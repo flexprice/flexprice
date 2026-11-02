@@ -277,9 +277,12 @@ func (s *oauthService) encryptSessionBlob(session *types.OAuthSession, encrypted
 }
 
 func (s *oauthService) newIncompleteConnection(session *types.OAuthSession, providerType types.SecretProvider, encryptedSessionJSON string, encryptedCredentials map[string]string) *connection.Connection {
-	// Generate proper connection ID (NOT session_id)
+	id := session.ConnectionID
+	if id == "" {
+		id = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
+	}
 	return &connection.Connection{
-		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION),
+		ID:           id,
 		Name:         session.Name,
 		ProviderType: providerType, // Provider type for incomplete connection
 		// Store encrypted OAuth session data in OAuthSessionData field (temporary)
