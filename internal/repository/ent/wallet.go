@@ -5,8 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
+	"github.com/lib/pq"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/wallet"
@@ -18,9 +24,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/lib/pq"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type walletRepository struct {
@@ -207,7 +210,7 @@ func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, st
 		).
 		SetWalletStatus(status).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SaveReturning(ctx)
 
 	if err != nil {
@@ -342,7 +345,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 			ID: credit.ID,
 		}).
 			SetCreditsAvailable(newAvailable).
-			SetUpdatedAt(time.Now().UTC()).
+			SetUpdatedAt(clock.Now()).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			Save(ctx)
 
@@ -466,7 +469,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SaveReturning(ctx)
 
 	if err != nil {
@@ -812,7 +815,7 @@ func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id strin
 		).
 		SetTransactionStatus(status).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -1060,7 +1063,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	if w.AlertState != "" {
 		update.SetAlertState(types.AlertState(w.AlertState))
 	}
-	update.SetUpdatedAt(time.Now().UTC())
+	update.SetUpdatedAt(clock.Now())
 	update.SetUpdatedBy(types.GetUserID(ctx))
 
 	count, err := update.SaveReturning(ctx)

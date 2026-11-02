@@ -4,10 +4,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/shopspring/decimal"
 )
 
 // Event represents the base event structure
@@ -175,7 +178,7 @@ func NewEvent(
 		eventID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	if timestamp.IsZero() {
 		timestamp = now

@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"go.temporal.io/sdk/activity"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -15,8 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"go.temporal.io/sdk/activity"
 )
 
 // reportTimestampSafetyMargin is subtracted from the final record's period_end when it is reported,
@@ -157,7 +160,7 @@ func (a *FlushActivities) MarketplaceSubscriptionFinalUsageFlushActivity(
 				Field:    lo.ToPtr("period_end"),
 				Operator: lo.ToPtr(types.GREATER_THAN_EQUAL),
 				DataType: lo.ToPtr(types.DataTypeDate),
-				Value:    &types.Value{Date: lo.ToPtr(time.Now().UTC().Add(-backlogSubmissionWindow))},
+				Value:    &types.Value{Date: lo.ToPtr(clock.Now().Add(-backlogSubmissionWindow))},
 			},
 			{
 				Field:    lo.ToPtr("period_end"),

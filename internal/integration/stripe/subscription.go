@@ -5,12 +5,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/stripe/stripe-go/v82"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/stripe/stripe-go/v82"
 )
 
 type StripeSubscriptionService interface {
@@ -135,7 +138,7 @@ func (s *stripeSubscriptionService) CreateSubscription(ctx context.Context, stri
 				"created_via":            "stripe_subscription_service",
 				"stripe_subscription_id": stripeSubscriptionID,
 				"mapping_type":           "proxy",
-				"synced_at":              time.Now().UTC().Format(time.RFC3339),
+				"synced_at":              clock.Now().Format(time.RFC3339),
 			},
 		})
 		if err != nil {
@@ -329,7 +332,7 @@ func (s *stripeSubscriptionService) createOrFindCustomer(ctx context.Context, st
 		Metadata: map[string]interface{}{
 			"created_via":        "stripe_subscription_service",
 			"stripe_customer_id": stripeCustomerID,
-			"synced_at":          time.Now().UTC().Format(time.RFC3339),
+			"synced_at":          clock.Now().Format(time.RFC3339),
 		},
 	})
 	if err != nil {
@@ -538,7 +541,7 @@ func (s *stripeSubscriptionService) createFlexPriceSubscriptionWithoutTx(ctx con
 			"created_via":            "stripe_subscription_service",
 			"stripe_subscription_id": stripeSub.ID,
 			"mapping_type":           "proxy",
-			"synced_at":              time.Now().UTC().Format(time.RFC3339),
+			"synced_at":              clock.Now().Format(time.RFC3339),
 		},
 	})
 	if err != nil {

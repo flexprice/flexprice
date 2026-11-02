@@ -423,7 +423,7 @@ func (s *CommitmentServiceSuite) TestValidation_AcceptsStartMatchingAMidSecondSu
 	// The usage lines inherit the mid-second start, as subscription creation sets them.
 	line, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, s.fx.lineAPI.ID)
 	s.Require().NoError(err)
-	line.StartDate = sub.StartDate
+	line = subscription.NewSubscriptionLineItemBuilder(line).WithStartDate(sub.StartDate).Build()
 	s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, line))
 
 	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
@@ -1156,25 +1156,26 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_RejectsPriceOverrideEmptying
 	s.requireValidation(err, "terminate the commitment first")
 }
 
-// microsecondLineItemRepo stores line item dates the way Postgres does: rounded to the nearest microsecond.
+// microsecondLineItemRepo stores line item dates the way production writes them: the ent hook truncates
+// every time field to whole microseconds, leaving lib/pq's half-up rounding nothing to round.
 type microsecondLineItemRepo struct {
 	subscription.LineItemRepository
 }
 
 func (r *microsecondLineItemRepo) Create(ctx context.Context, li *subscription.SubscriptionLineItem) error {
 	stored := *li
-	stored.StartDate, stored.EndDate = stored.StartDate.Round(time.Microsecond), stored.EndDate.Round(time.Microsecond)
+	stored.StartDate, stored.EndDate = stored.StartDate.Truncate(time.Microsecond), stored.EndDate.Truncate(time.Microsecond)
 	return r.LineItemRepository.Create(ctx, &stored)
 }
 
 func (r *microsecondLineItemRepo) Update(ctx context.Context, li *subscription.SubscriptionLineItem) error {
 	stored := *li
-	stored.StartDate, stored.EndDate = stored.StartDate.Round(time.Microsecond), stored.EndDate.Round(time.Microsecond)
+	stored.StartDate, stored.EndDate = stored.StartDate.Truncate(time.Microsecond), stored.EndDate.Truncate(time.Microsecond)
 	return r.LineItemRepository.Update(ctx, &stored)
 }
 
-// An end instant with nanoseconds that round up stores the successor's start after the end the guard checks, which it
-// would report as a sub-microsecond gap in the binding commitment's coverage.
+// An end instant that reaches the service with stray nanoseconds (bypassing the API binding) must still
+// not open a sub-microsecond gap in the binding commitment's coverage: storage truncation is the backstop.
 func (s *CommitmentServiceSuite) TestLineItemUpdate_PriceEditKeepsCoverageAcrossMicrosecondRounding() {
 	ctx := s.GetContext()
 	req := validReq(s.fx.sub.ID, "")

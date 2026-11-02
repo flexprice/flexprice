@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
@@ -12,7 +15,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // HostedInvoiceTokenService issues and revokes public hosted invoice tokens.
@@ -100,7 +102,7 @@ func (s *hostedInvoiceTokenService) HostedInvoiceURLs(ctx context.Context, invoi
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
+	now := clock.Now()
 	for _, token := range tokens {
 		if token.IsActive(now) {
 			urls[token.InvoiceID] = hostedInvoiceURL(s.Config, token.ID)
@@ -140,7 +142,7 @@ func (s *hostedInvoiceTokenService) getOrCreate(ctx context.Context, inv *invoic
 			return err
 		}
 
-		now := time.Now().UTC()
+		now := clock.Now()
 		token = &hostedinvoicetoken.HostedInvoiceToken{
 			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_HOSTED_INVOICE_TOKEN),
 			EnvironmentID: types.GetEnvironmentID(ctx),

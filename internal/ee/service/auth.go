@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
@@ -13,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 type AuthService interface {
@@ -392,7 +394,7 @@ func (s *authService) SetPassword(ctx context.Context, req *dto.SetPasswordReque
 			return s.AuthRepo.CreateAuth(txCtx, auth.NewAuth(target.ID, types.AuthProviderFlexprice, hashedPassword))
 		}
 		existingAuth.Token = hashedPassword
-		existingAuth.UpdatedAt = time.Now().UTC()
+		existingAuth.UpdatedAt = clock.Now()
 		return s.AuthRepo.UpdateAuth(txCtx, existingAuth)
 	})
 	if err != nil {
@@ -448,7 +450,7 @@ func (s *authService) resolvePasswordLink(ctx context.Context, token string) (*a
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	verified, err := signer.Verify(token, currentPasswordHash, time.Now())
+	verified, err := signer.Verify(token, currentPasswordHash, clock.Now())
 	if err != nil {
 		return nil, nil, nil, err
 	}

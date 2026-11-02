@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -14,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/lib/pq"
 )
 
 type settingsRepository struct {
@@ -103,7 +105,7 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetValue(s.Value).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -146,7 +148,7 @@ func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -331,7 +333,7 @@ func (r *settingsRepository) archiveSetting(ctx context.Context, key types.Setti
 				settings.Status(string(types.StatusPublished)),
 			).
 			SetStatus(string(types.StatusArchived)).
-			SetUpdatedAt(time.Now().UTC()).
+			SetUpdatedAt(clock.Now()).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			Save(ctx)
 

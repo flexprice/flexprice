@@ -6,6 +6,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -15,7 +19,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const (
@@ -174,7 +177,7 @@ func (s *eventDeletionService) openRequest(ctx context.Context, req *dto.DeleteE
 		requestID = types.GenerateUUID()
 		ctx = types.WithRequestID(ctx, requestID)
 	}
-	startedAt := time.Now().UTC()
+	startedAt := clock.Now()
 	var rowIDs []string
 
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -697,7 +700,7 @@ func inProgressDeletionFilter(externalCustomerIDs []string) *types.EventDeletion
 	filter := types.NewNoLimitEventDeletionRequestFilter()
 	filter.DeletionStatus = types.EventDeletionStatusDeleting
 	filter.ExternalCustomerIDs = externalCustomerIDs
-	filter.StartedAtGT = lo.ToPtr(time.Now().UTC().Add(-staleDeletionAge))
+	filter.StartedAtGT = lo.ToPtr(clock.Now().Add(-staleDeletionAge))
 	return filter
 }
 
@@ -707,6 +710,6 @@ func abandonedDeletionFilter(externalCustomerIDs []string) *types.EventDeletionR
 	filter := types.NewNoLimitEventDeletionRequestFilter()
 	filter.DeletionStatus = types.EventDeletionStatusDeleting
 	filter.ExternalCustomerIDs = externalCustomerIDs
-	filter.StartedAtLT = lo.ToPtr(time.Now().UTC().Add(-staleDeletionAge))
+	filter.StartedAtLT = lo.ToPtr(clock.Now().Add(-staleDeletionAge))
 	return filter
 }

@@ -1,13 +1,14 @@
 package meter
 
 import (
-	"time"
+	"github.com/shopspring/decimal"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/schema"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 type Meter struct {
@@ -312,7 +313,7 @@ func (m *Meter) HasGroupBy() bool {
 
 // Constructor for creating new meters with defaults
 func NewMeter(name string, tenantID, createdBy string) *Meter {
-	now := time.Now().UTC()
+	now := clock.Now()
 	return &Meter{
 		ID:   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
 		Name: name,

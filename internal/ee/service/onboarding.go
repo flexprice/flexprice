@@ -5,11 +5,16 @@ import (
 	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- synthetic demo data, non-security
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"encoding/json"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -21,8 +26,6 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // OnboardingService handles onboarding-related operations
@@ -132,7 +135,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 		TenantID:         types.GetTenantID(ctx),
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		UserID:           types.GetUserID(ctx),
-		RequestTimestamp: time.Now(),
+		RequestTimestamp: clock.Now(),
 		SubscriptionID:   req.SubscriptionID,
 	}
 
@@ -170,7 +173,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 
 	return &dto.OnboardingEventsResponse{
 		Message:        "Event generation started",
-		StartedAt:      time.Now(),
+		StartedAt:      clock.Now(),
 		Duration:       req.Duration,
 		Count:          req.Duration * 5, // Five events per second
 		CustomerID:     customerID,
@@ -407,7 +410,7 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 		EventID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
 		ExternalCustomerID: eventMsg.CustomerExtID,
 		EventName:          meter.EventName,
-		Timestamp:          time.Now(),
+		Timestamp:          clock.Now(),
 		Properties:         properties,
 		Source:             "onboarding",
 	}
@@ -447,8 +450,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 			Status:    types.StatusPublished,
 			CreatedBy: req.UserID,
 			UpdatedBy: req.UserID,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			CreatedAt: clock.Now(),
+			UpdatedAt: clock.Now(),
 		},
 	}
 
@@ -471,8 +474,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dt
 				Status:    types.StatusPublished,
 				CreatedBy: req.UserID,
 				UpdatedBy: req.UserID,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
+				CreatedAt: clock.Now(),
+				UpdatedAt: clock.Now(),
 			},
 		}
 
@@ -844,7 +847,7 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		CustomerID:         customer.ID,
 		PlanID:             proPlan.ID,
 		Currency:           "USD",
-		StartDate:          lo.ToPtr(time.Now()),
+		StartDate:          lo.ToPtr(clock.Now()),
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,

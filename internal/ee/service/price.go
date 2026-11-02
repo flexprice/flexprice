@@ -5,6 +5,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -17,8 +22,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PriceService interface {
@@ -985,7 +988,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		var newPriceResp *dto.PriceResponse
 
 		// Set termination end date - use EndDate from request if provided, otherwise use current time
-		terminationEndDate := time.Now().UTC()
+		terminationEndDate := clock.Now()
 		if req.EffectiveFrom != nil {
 			terminationEndDate = *req.EffectiveFrom
 		}
@@ -1134,7 +1137,7 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	if req.EndDate != nil {
 		endDate = req.EndDate.UTC()
 	} else {
-		endDate = time.Now().UTC()
+		endDate = clock.Now()
 	}
 
 	// Validate end date is on or after start date

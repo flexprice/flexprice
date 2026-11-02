@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
@@ -16,7 +20,6 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 )
 
 // Checkout charge modes, a metrics label; "none" means the gateway was not contacted yet.
@@ -561,7 +564,7 @@ func archiveDraftInvoice(ctx context.Context, sp ServiceParams, invoiceID string
 const cleanupExpiredBatchSize = 1000
 
 func (s *checkoutSessionService) CleanupAllExpiredSessions(ctx context.Context, effectiveDate *time.Time) (*types.CheckoutSessionCleanupResult, error) {
-	cutoff := time.Now().UTC()
+	cutoff := clock.Now()
 	if effectiveDate != nil {
 		cutoff = effectiveDate.UTC()
 	}
@@ -628,7 +631,7 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	}
 
 	// Atomic claim: only one concurrent caller gets n > 0.
-	now := time.Now().UTC()
+	now := clock.Now()
 	ctx = activity.WithAction(ctx, sessionID, activity.CheckoutSessionCompleted)
 	claimed, err := s.CheckoutSessionRepo.MarkCompleted(ctx, sessionID, now, mergedResult)
 	if err != nil {
@@ -691,7 +694,7 @@ func (s *checkoutSessionService) publishCheckoutEvent(ctx context.Context, sessi
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now(),
 		Payload:       json.RawMessage(payload),
 		EntityType:    types.SystemEntityTypeCheckoutSession,
 		EntityID:      session.ID,

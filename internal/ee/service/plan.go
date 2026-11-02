@@ -5,6 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -15,8 +20,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PlanService = interfaces.PlanService
@@ -417,7 +420,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
 func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
-	syncStartTime := time.Now()
+	syncStartTime := clock.Mono()
 
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -434,7 +437,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		Limit:  1000,
 	}
 
-	terminationStartTime := time.Now()
+	terminationStartTime := clock.Mono()
 	terminationIteration := 0
 	for {
 		terminationIteration++
@@ -455,7 +458,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		return nil, err
 	}
 
-	creationStartTime := time.Now()
+	creationStartTime := clock.Mono()
 	cursorSubID := ""
 
 	creationIteration := 0
@@ -629,7 +632,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 // The line-item construction logic (display name, quantity, metadata, etc.)
 // is reused from `createPlanLineItem` to avoid behavior drift.
 func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
-	syncStartTime := time.Now()
+	syncStartTime := clock.Mono()
 
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
@@ -671,7 +674,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 
 	for {
 		pageIteration++
-		pageStart := time.Now()
+		pageStart := clock.Mono()
 		missingPairs, subIDsInPage, listErr := s.PlanPriceSyncRepo.ListPlanLineItemsToCreateV2(ctx, planpricesync.ListPlanLineItemsToCreateV2Params{
 			PlanID:    planID,
 			TargetSeq: targetSeq,
@@ -690,7 +693,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 
 		// 1. Build & insert any missing line items for this page.
 		if len(missingPairs) > 0 {
-			creationStart := time.Now()
+			creationStart := clock.Mono()
 			priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.PriceID }))
 			subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.SubscriptionID }))
 
@@ -778,7 +781,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 
 		// 2. End line items whose price ended after each sub's synced_price_sequence;
 		//    reads that value, so it must run before stamping.
-		terminationStart := time.Now()
+		terminationStart := clock.Mono()
 		terminated, terr := s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(ctx, planpricesync.TerminatePlanPricesLineItemsV2Params{
 			PlanID: planID,
 			SubIDs: subIDsInPage,
@@ -794,7 +797,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		// 3. Stamp this page's subs as caught up. This is the progress
 		//    marker — if we crash before reaching here, the same subs
 		//    re-appear in the next run's discovery.
-		stampStart := time.Now()
+		stampStart := clock.Mono()
 		stamped, serr := s.PlanPriceSyncRepo.StampSubsAsSynced(ctx, planpricesync.StampSubsAsSyncedParams{
 			TargetSeq: targetSeq,
 			SubIDs:    subIDsInPage,
