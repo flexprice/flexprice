@@ -109,7 +109,7 @@ func (s *billingEntityService) assignConnectionsToEntity(ctx context.Context, en
 		conn.BillingEntityID = &entityID
 		conn.UpdatedAt = time.Now().UTC()
 		conn.UpdatedBy = types.GetUserID(ctx)
-		if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
+		if err := s.ConnectionRepo.UpdateBillingEntity(ctx, conn); err != nil {
 			return err
 		}
 	}

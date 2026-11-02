@@ -1312,17 +1312,20 @@ func (s *connectionService) persistUpdate(ctx context.Context, conn *connection.
 			return err
 		}
 
-		if lo.FromPtr(conn.BillingEntityID) != *target {
-			existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
-			if err != nil {
-				return err
-			}
-			if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
-				return errConnectionExists(txCtx, dup, target, connectionExistsHint)
-			}
+		if err := s.ConnectionRepo.Update(txCtx, conn); err != nil {
+			return err
 		}
-
+		if lo.FromPtr(conn.BillingEntityID) == *target {
+			return nil
+		}
+		existing, err := s.ConnectionRepo.List(txCtx, &types.ConnectionFilter{ProviderType: conn.ProviderType})
+		if err != nil {
+			return err
+		}
+		if dup := duplicateConnection(existing, conn.ProviderType, target); dup != nil {
+			return errConnectionExists(txCtx, dup, target, connectionExistsHint)
+		}
 		conn.BillingEntityID = target
-		return s.ConnectionRepo.Update(txCtx, conn)
+		return s.ConnectionRepo.UpdateBillingEntity(txCtx, conn)
 	})
 }

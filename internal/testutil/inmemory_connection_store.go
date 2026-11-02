@@ -135,7 +135,21 @@ func (s *InMemoryConnectionStore) ListAll(ctx context.Context, filter *types.Con
 }
 
 func (s *InMemoryConnectionStore) Update(ctx context.Context, c *connection.Connection) error {
-	return s.store.Update(ctx, c.ID, copyConnection(c))
+	updated := copyConnection(c)
+	if existing, err := s.store.Get(ctx, c.ID); err == nil {
+		updated.BillingEntityID = existing.BillingEntityID
+	}
+	return s.store.Update(ctx, c.ID, updated)
+}
+
+func (s *InMemoryConnectionStore) UpdateBillingEntity(ctx context.Context, c *connection.Connection) error {
+	existing, err := s.store.Get(ctx, c.ID)
+	if err != nil {
+		return err
+	}
+	updated := copyConnection(existing)
+	updated.BillingEntityID = lo.EmptyableToPtr(lo.FromPtr(c.BillingEntityID))
+	return s.store.Update(ctx, c.ID, updated)
 }
 
 func (s *InMemoryConnectionStore) Delete(ctx context.Context, connection *connection.Connection) error {
