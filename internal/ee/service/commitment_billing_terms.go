@@ -395,9 +395,9 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 	return errors.Join(errs...)
 }
 
-// billInstalment issues the instalment's one-off invoice under its commitment's lock. Finalizing the invoice claims
-// the instalment, so it returns nil when the instalment was claimed or cancelled since it was listed, or when its
-// subscription is not active (draft, incomplete, trialing, paused) and the instalment waits for a later run.
+// billInstalment issues the instalment's one-off invoice under its commitment's lock; finalizing it claims the
+// instalment. It returns nil when the instalment was claimed or cancelled since it was listed, or when it is not a
+// settlement and its subscription is not active (draft, incomplete, trialing, paused), so it waits for a later run.
 func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
 	var inv *dto.InvoiceResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -419,7 +419,7 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 			return err
 		}
 
-		if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		if instalment.Kind == types.InstalmentKindInstalment && sub.SubscriptionStatus != types.SubscriptionStatusActive {
 			return nil
 		}
 

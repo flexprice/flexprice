@@ -1223,8 +1223,8 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_SkipPolicyBillsSe
 	s.Equal([]string{settlement.ID}, s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
-// Cancelled at the end of January, the commitment keeps billing per its terms until then: the January invoice bills
-// the $30 due on 1 Jan, and the settlement bills only the other $70 January earned. The rest is cancelled.
+// Cancelled at the end of January and rolled over by processSubscriptionPeriod, which finalizes the January invoice
+// before terminating: that invoice bills the $30 due on 1 Jan, and the settlement only the other $70 January earned.
 func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_KeepsBillingUntilEnd() {
 	ctx := s.GetContext()
 	feb, end := s.jan.AddDate(0, 1, 0), s.jan.AddDate(1, 0, 0)
@@ -1307,4 +1307,110 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_GenerateInvoicePo
 	s.Equal(types.InvoiceTypeSubscription, cancelInvoices[0].InvoiceType)
 	s.NotEqual(lo.FromPtr(settlement.InvoiceID), cancelInvoices[0].ID)
 	s.Empty(s.storedInstalmentLines(cancelInvoices[0].ID), "the cancel invoice carries no instalment")
+}
+
+// Voiding a settlement's invoice puts the settlement back on schedule, and the next run bills it again though the
+// subscription is cancelled.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAVoidedSettlement() {
+	ctx := s.GetContext()
+	end := s.jan.AddDate(1, 0, 0)
+	tokens := s.planWith("rebill_settlement", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	created := s.subscribe(tokens, s.jan)
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(&end)))
+
+	cancelAt := time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC)
+	_, err := s.subscriptions.CancelSubscription(ctx, created.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
+		CancelAt:         &cancelAt,
+	})
+	s.Require().NoError(err)
+
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, created.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(types.SubscriptionStatusCancelled, sub.SubscriptionStatus)
+
+	settlement := s.settlementOf(committed.ID)
+	voided := lo.FromPtr(settlement.InvoiceID)
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	_, err = invoices.VoidInvoice(ctx, voided, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(settlement.ID).InstalmentStatus)
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+
+	rebilled := s.instalmentStatus(settlement.ID)
+	s.Equal(types.InstalmentStatusInvoiced, rebilled.InstalmentStatus)
+	s.NotEqual(voided, lo.FromPtr(rebilled.InvoiceID))
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(rebilled.InvoiceID))
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.Equal(string(types.InvoiceBillingReasonBillingTerms), inv.BillingReason)
+	s.True(inv.AmountDue.Equal(dec("32.26")), "amount due %s", inv.AmountDue)
+}
+
+// A cancellation at period end fires before the period's draft is finalized, so the January draft still carries the
+// arrear instalment due at its end when the commitment terminates. Termination cancels it, and the settlement bills
+// what January earned less what finalized invoices billed. Recomputing the draft drops the cancelled line, so the
+// draft finalizes without billing it twice.
+func (s *CommitmentE2ESuite) TestCancelSubscriptionAtPeriodEnd_SettlesTheOpenDraftsInstalments() {
+	ctx := s.GetContext()
+	feb, end := s.jan.AddDate(0, 1, 0), s.jan.AddDate(1, 0, 0)
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	tokens := s.planWith("cancel_open_draft", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	created := s.subscribe(tokens, s.jan)
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end,
+		dto.BillingTermInput{
+			Kind:      types.BillingTermKindOnce,
+			ValueType: types.BillingTermValueFixed,
+			Amount:    lo.ToPtr(dec("30")),
+		},
+		dto.BillingTermInput{
+			Kind:           types.BillingTermKindRecurring,
+			ValueType:      types.BillingTermValueRemainder,
+			InvoiceCadence: lo.ToPtr(types.InvoiceCadenceArrear),
+		},
+	))
+	upfront, arrear := committed.Instalments[0], committed.Instalments[1]
+	s.Require().True(arrear.Amount.Equal(dec("97.5")) && arrear.BillOn.Equal(feb), "%s on %s", arrear.Amount, arrear.BillOn)
+
+	// The upfront was billed when January opened.
+	_, err := s.GetStores().BillingInstalmentRepo.Claim(ctx, "inv_opening", []string{upfront.ID})
+	s.Require().NoError(err)
+	s.record(s.tokens, time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC), "1500")
+
+	_, err = s.subscriptions.CancelSubscription(ctx, created.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeEndOfPeriod,
+	})
+	s.Require().NoError(err)
+
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, created.ID)
+	s.Require().NoError(err)
+	draft, _, err := invoices.GetOrComputeCurrentPeriodDraft(ctx, sub)
+	s.Require().NoError(err)
+	s.Equal([]string{arrear.ID}, instalmentIDs(s.billedInstalments(draft.ID)))
+
+	// The cancellation check marks the subscription cancelled, then terminates its resources at cancel_at.
+	s.Require().True(lo.FromPtr(sub.CancelAt).Equal(feb), "cancel_at %v", sub.CancelAt)
+	s.setSubscriptionStatus(created.ID, types.SubscriptionStatusCancelled)
+	s.Require().NoError(s.subscriptions.TerminateSubscriptionResources(ctx, dto.TerminateSubscriptionResourcesRequest{
+		SubscriptionID: created.ID,
+		EffectiveDate:  *sub.CancelAt,
+	}))
+
+	s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(arrear.ID).InstalmentStatus)
+	settlement := s.settlementOf(committed.ID)
+	s.True(settlement.Amount.Equal(dec("70")), "January earned 100, 30 of it already invoiced; got %s", settlement.Amount)
+	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
+
+	_, _, err = invoices.ComputeInvoice(ctx, draft.ID, nil)
+	s.Require().NoError(err)
+	s.Empty(s.storedInstalmentLines(draft.ID), "the recompute drops the cancelled instalment")
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	finalized, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+	s.True(finalized.AmountDue.Equal(dec("50")), "only the overage past the $100 floor, got %s", finalized.AmountDue)
 }
