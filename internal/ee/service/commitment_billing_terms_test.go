@@ -1154,14 +1154,31 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_IgnoresDisabledEnvironments(
 	s.Len(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms), 1)
 }
 
+// unreadableCommitmentRepo fails every read of one commitment.
+type unreadableCommitmentRepo struct {
+	commitment.Repository
+
+	id string
+}
+
+func (r *unreadableCommitmentRepo) Get(ctx context.Context, id string) (*commitment.Commitment, error) {
+	if id == r.id {
+		return nil, ierr.NewError("commitment could not be read").Mark(ierr.ErrDatabase)
+	}
+
+	return r.Repository.Get(ctx, id)
+}
+
 // An instalment that cannot be billed is reported once the run finishes, and does not stop the others.
 func (s *CommitmentE2ESuite) TestBillDueInstalments_ContinuesPastAFailure() {
 	ctx := s.GetContext()
 	brokenSub, broken := s.separateInvoiceCommitment("broken")
 	healthySub, healthy := s.separateInvoiceCommitment("healthy")
-	s.Require().NoError(s.GetStores().CommitmentRepo.Delete(ctx, broken.ID))
 
-	err := s.commitments.BillDueInstalments(ctx)
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.CommitmentRepo = &unreadableCommitmentRepo{Repository: params.CommitmentRepo, id: broken.ID}
+
+	err := NewCommitmentService(params).BillDueInstalments(ctx)
 	s.Require().Error(err)
 	s.Contains(err.Error(), broken.Instalments[0].ID)
 
@@ -1169,6 +1186,24 @@ func (s *CommitmentE2ESuite) TestBillDueInstalments_ContinuesPastAFailure() {
 	s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(broken.Instalments[0].ID).InstalmentStatus)
 	s.Len(s.invoicesWithReason(healthySub.ID, types.InvoiceBillingReasonBillingTerms), 1)
 	s.Equal(types.InstalmentStatusInvoiced, s.instalmentStatus(healthy.Instalments[0].ID).InstalmentStatus)
+}
+
+// An instalment whose subscription or commitment is gone is skipped without failing the run, and stays scheduled.
+func (s *CommitmentE2ESuite) TestBillDueInstalments_SkipsMissingSubscriptionOrCommitment() {
+	ctx := s.GetContext()
+	goneSub, ofGoneSub := s.separateInvoiceCommitment("gone_subscription")
+	archivedSub, archived := s.separateInvoiceCommitment("archived_commitment")
+	s.Require().NoError(s.GetStores().SubscriptionRepo.(*testutil.InMemorySubscriptionStore).InMemoryStore.Delete(ctx, goneSub.ID))
+	s.Require().NoError(s.GetStores().CommitmentRepo.Delete(ctx, archived.ID))
+
+	s.Require().NoError(s.commitments.BillDueInstalments(ctx))
+
+	for _, sub := range []*dto.SubscriptionResponse{goneSub, archivedSub} {
+		s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonBillingTerms))
+	}
+	for _, committed := range []*dto.CommitmentResponse{ofGoneSub, archived} {
+		s.Equal(types.InstalmentStatusScheduled, s.instalmentStatus(committed.Instalments[0].ID).InstalmentStatus)
+	}
 }
 
 // settlementOf returns the commitment's only settlement instalment.

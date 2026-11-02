@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -207,9 +208,26 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		return err
 	}
 	for _, c := range commitments {
-		if err := s.CommitmentRepo.Delete(ctx, c.ID); err != nil {
+		// An archived commitment collects nothing, so its terms and scheduled instalments go with it.
+		var cancelled []*billingterm.Instalment
+		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			if err := s.CommitmentRepo.Delete(txCtx, c.ID); err != nil {
+				return err
+			}
+
+			if _, err := s.BillingTermRepo.Archive(txCtx, types.BillingTermOwnerCommitment, c.ID); err != nil {
+				return err
+			}
+
+			scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
+			cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled)
+			return err
+		})
+		if err != nil {
 			return err
 		}
+
+		publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCancelled, cancelled)
 	}
 
 	taxFilter := &types.TaxAssociationFilter{

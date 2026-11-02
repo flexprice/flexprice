@@ -396,8 +396,9 @@ func (s *commitmentService) billEnvironmentInstalments(ctx context.Context) erro
 }
 
 // billInstalment issues the instalment's one-off invoice under its commitment's lock; finalizing it claims the
-// instalment. It returns nil when the instalment was claimed or cancelled since it was listed, or when it is not a
-// settlement and its subscription is not active (draft, incomplete, trialing, paused), so it waits for a later run.
+// instalment. It returns nil when the instalment was claimed or cancelled since it was listed, when its subscription
+// or commitment no longer exists, or when it is not a settlement and its subscription is not active (draft,
+// incomplete, trialing, paused), so it waits for a later run.
 func (s *commitmentService) billInstalment(ctx context.Context, listed *billingterm.Instalment) (*dto.InvoiceResponse, error) {
 	var inv *dto.InvoiceResponse
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -415,6 +416,13 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		}
 
 		sub, err := s.SubRepo.Get(txCtx, instalment.SubscriptionID)
+		if ierr.IsNotFound(err) {
+			s.Logger.Info(ctx, "skipping instalment whose subscription no longer exists",
+				"instalment_id", instalment.ID,
+				"subscription_id", instalment.SubscriptionID,
+			)
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -424,6 +432,13 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 		}
 
 		c, err := s.CommitmentRepo.Get(txCtx, instalment.OwnerID)
+		if ierr.IsNotFound(err) {
+			s.Logger.Info(ctx, "skipping instalment whose commitment no longer exists",
+				"instalment_id", instalment.ID,
+				"commitment_id", instalment.OwnerID,
+			)
+			return nil
+		}
 		if err != nil {
 			return err
 		}
