@@ -196,8 +196,9 @@ func TotalAmount(v decimal.Decimal) predicate.Commitment {
 }
 
 // InstalmentInvoicing applies equality check predicate on the "instalment_invoicing" field. It's identical to InstalmentInvoicingEQ.
-func InstalmentInvoicing(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldEQ(FieldInstalmentInvoicing, v))
+func InstalmentInvoicing(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldEQ(FieldInstalmentInvoicing, vc))
 }
 
 // StartDate applies equality check predicate on the "start_date" field. It's identical to StartDateEQ.
@@ -1849,58 +1850,75 @@ func TotalAmountNotNil() predicate.Commitment {
 }
 
 // InstalmentInvoicingEQ applies the EQ predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingEQ(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldEQ(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingEQ(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldEQ(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingNEQ applies the NEQ predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingNEQ(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldNEQ(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingNEQ(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldNEQ(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingIn applies the In predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingIn(vs ...string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldIn(FieldInstalmentInvoicing, vs...))
+func InstalmentInvoicingIn(vs ...types.InstalmentDelivery) predicate.Commitment {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Commitment(sql.FieldIn(FieldInstalmentInvoicing, v...))
 }
 
 // InstalmentInvoicingNotIn applies the NotIn predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingNotIn(vs ...string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldNotIn(FieldInstalmentInvoicing, vs...))
+func InstalmentInvoicingNotIn(vs ...types.InstalmentDelivery) predicate.Commitment {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Commitment(sql.FieldNotIn(FieldInstalmentInvoicing, v...))
 }
 
 // InstalmentInvoicingGT applies the GT predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingGT(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldGT(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingGT(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldGT(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingGTE applies the GTE predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingGTE(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldGTE(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingGTE(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldGTE(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingLT applies the LT predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingLT(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldLT(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingLT(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldLT(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingLTE applies the LTE predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingLTE(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldLTE(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingLTE(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldLTE(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingContains applies the Contains predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingContains(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldContains(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingContains(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldContains(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingHasPrefix applies the HasPrefix predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingHasPrefix(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldHasPrefix(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingHasPrefix(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldHasPrefix(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingHasSuffix applies the HasSuffix predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingHasSuffix(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldHasSuffix(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingHasSuffix(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldHasSuffix(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingIsNil applies the IsNil predicate on the "instalment_invoicing" field.
@@ -1914,13 +1932,15 @@ func InstalmentInvoicingNotNil() predicate.Commitment {
 }
 
 // InstalmentInvoicingEqualFold applies the EqualFold predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingEqualFold(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldEqualFold(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingEqualFold(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldEqualFold(FieldInstalmentInvoicing, vc))
 }
 
 // InstalmentInvoicingContainsFold applies the ContainsFold predicate on the "instalment_invoicing" field.
-func InstalmentInvoicingContainsFold(v string) predicate.Commitment {
-	return predicate.Commitment(sql.FieldContainsFold(FieldInstalmentInvoicing, v))
+func InstalmentInvoicingContainsFold(v types.InstalmentDelivery) predicate.Commitment {
+	vc := string(v)
+	return predicate.Commitment(sql.FieldContainsFold(FieldInstalmentInvoicing, vc))
 }
 
 // StartDateEQ applies the EQ predicate on the "start_date" field.

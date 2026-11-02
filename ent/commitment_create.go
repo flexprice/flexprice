@@ -283,13 +283,13 @@ func (_c *CommitmentCreate) SetNillableTotalAmount(v *decimal.Decimal) *Commitme
 }
 
 // SetInstalmentInvoicing sets the "instalment_invoicing" field.
-func (_c *CommitmentCreate) SetInstalmentInvoicing(v string) *CommitmentCreate {
+func (_c *CommitmentCreate) SetInstalmentInvoicing(v types.InstalmentDelivery) *CommitmentCreate {
 	_c.mutation.SetInstalmentInvoicing(v)
 	return _c
 }
 
 // SetNillableInstalmentInvoicing sets the "instalment_invoicing" field if the given value is not nil.
-func (_c *CommitmentCreate) SetNillableInstalmentInvoicing(v *string) *CommitmentCreate {
+func (_c *CommitmentCreate) SetNillableInstalmentInvoicing(v *types.InstalmentDelivery) *CommitmentCreate {
 	if v != nil {
 		_c.SetInstalmentInvoicing(*v)
 	}
@@ -569,6 +569,11 @@ func (_c *CommitmentCreate) check() error {
 	if v, ok := _c.mutation.CollectionMethod(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Commitment.collection_method": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.InstalmentInvoicing(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "instalment_invoicing", err: fmt.Errorf(`ent: validator failed for field "Commitment.instalment_invoicing": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.StartDate(); !ok {

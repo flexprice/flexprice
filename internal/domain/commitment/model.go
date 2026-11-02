@@ -31,7 +31,7 @@ type Commitment struct {
 	Binding             bool                              `json:"binding"`
 	CollectionMethod    *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
 	TotalAmount         *decimal.Decimal                  `json:"total_amount,omitempty" swaggertype:"string"`
-	InstalmentInvoicing *string                           `json:"instalment_invoicing,omitempty"`
+	InstalmentInvoicing *types.InstalmentDelivery         `json:"instalment_invoicing,omitempty"`
 	StartDate           time.Time                         `json:"start_date"`
 	// EndDate is exclusive; nil for an open-ended commitment, which runs until terminated.
 	EndDate            *time.Time                        `json:"end_date,omitempty"`

@@ -93,6 +93,18 @@ func (f AuthFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthMutation", m)
 }
 
+// The BillingInstalmentFunc type is an adapter to allow the use of ordinary
+// function as BillingInstalment mutator.
+type BillingInstalmentFunc func(context.Context, *ent.BillingInstalmentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BillingInstalmentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BillingInstalmentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingInstalmentMutation", m)
+}
+
 // The BillingSequenceFunc type is an adapter to allow the use of ordinary
 // function as BillingSequence mutator.
 type BillingSequenceFunc func(context.Context, *ent.BillingSequenceMutation) (ent.Value, error)
@@ -103,6 +115,18 @@ func (f BillingSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingSequenceMutation", m)
+}
+
+// The BillingTermFunc type is an adapter to allow the use of ordinary
+// function as BillingTerm mutator.
+type BillingTermFunc func(context.Context, *ent.BillingTermMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BillingTermFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BillingTermMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BillingTermMutation", m)
 }
 
 // The CheckoutSessionFunc type is an adapter to allow the use of ordinary
