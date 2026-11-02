@@ -7,6 +7,8 @@ import (
 
 // InitiateOAuthRequest represents a generic request to initiate OAuth for any provider
 type InitiateOAuthRequest struct {
+	// ID is an optional client-generated connection id (conn_ followed by a ULID); generated when empty.
+	ID          string              `json:"id,omitempty"`
 	Provider    types.OAuthProvider `json:"provider" binding:"required"`    // e.g., "quickbooks"
 	Name        string              `json:"name" binding:"required"`        // Connection name
 	Credentials map[string]string   `json:"credentials" binding:"required"` // Provider-specific credentials (all required for the provider)
@@ -18,6 +20,9 @@ type InitiateOAuthRequest struct {
 
 // Validate validates the OAuth init request with provider-specific rules
 func (r *InitiateOAuthRequest) Validate() error {
+	if err := ValidateConnectionID(r.ID); err != nil {
+		return err
+	}
 	switch r.Provider {
 	case types.OAuthProviderQuickBooks:
 		// Validate required credentials
