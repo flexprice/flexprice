@@ -1,6 +1,7 @@
 package activity
 
 import (
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -84,6 +85,16 @@ func Registrations() *Registry {
 			Snapshot: snapshotOf(feature.FromEnt),
 			Label:    []string{"name"},
 			Actions:  []Action{FeatureArchived},
+		},
+		Registration{
+			EntityType: types.SystemEntityTypeBillingTerm, EntName: "BillingTerm",
+			Snapshot: snapshotOf(billingterm.TermFromEnt),
+			Label:    []string{"description", "kind"},
+		},
+		Registration{
+			EntityType: types.SystemEntityTypeBillingInstalment, EntName: "BillingInstalment",
+			Snapshot: snapshotOf(billingterm.InstalmentFromEnt),
+			Label:    []string{"description"},
 		},
 	)
 	if err != nil {

@@ -1140,6 +1140,8 @@ func (s *SubscriptionServiceSuite) setupService() {
 		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 		AddonPriceSyncRepo:         s.GetStores().AddonPriceSyncRepo,
 		CommitmentRepo:             s.GetStores().CommitmentRepo,
+		BillingTermRepo:            s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:      s.GetStores().BillingInstalmentRepo,
 		// Read on cancellation to decide whether a marketplace usage flush is needed.
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 	})

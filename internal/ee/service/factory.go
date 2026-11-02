@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -151,6 +152,8 @@ type ServiceParams struct {
 	SelfBillingClickHouseRepo    domainsb.ClickHouseRepository
 	SelfBillingPostgresRepo      domainsb.PostgresRepository
 	CommitmentRepo               commitment.Repository
+	BillingTermRepo              billingterm.TermRepository
+	BillingInstalmentRepo        billingterm.InstalmentRepository
 	ProductRepo                  productRepo.Repository
 	ContractService              contractsvc.ContractService
 	POBService                   pobsvc.PerformanceObligationService
@@ -275,6 +278,8 @@ func NewServiceParams(
 	selfBillingClickHouseRepo domainsb.ClickHouseRepository,
 	selfBillingPostgresRepo domainsb.PostgresRepository,
 	commitmentRepo commitment.Repository,
+	billingTermRepo billingterm.TermRepository,
+	billingInstalmentRepo billingterm.InstalmentRepository,
 	productRepo productRepo.Repository,
 	contractService contractsvc.ContractService,
 	pobService pobsvc.PerformanceObligationService,
@@ -363,6 +368,8 @@ func NewServiceParams(
 		SelfBillingClickHouseRepo:    selfBillingClickHouseRepo,
 		SelfBillingPostgresRepo:      selfBillingPostgresRepo,
 		CommitmentRepo:               commitmentRepo,
+		BillingTermRepo:              billingTermRepo,
+		BillingInstalmentRepo:        billingInstalmentRepo,
 		ProductRepo:                  productRepo,
 		ContractService:              contractService,
 		POBService:                   pobService,

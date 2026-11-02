@@ -94,6 +94,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
 			SubscriptionLineItemID:      item.SubscriptionLineItemID,
 			CommitmentID:                item.CommitmentID,
+			BillingInstalmentID:         item.BillingInstalmentID,
 			ParentLineItemID:            item.ParentLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,

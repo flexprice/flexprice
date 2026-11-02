@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -188,6 +189,16 @@ func NewMeterUsageCheckpointRepository(p RepositoryParams) meterusagecheckpoint.
 
 func NewCommitmentRepository(p RepositoryParams) commitment.Repository {
 	return entRepo.NewCommitmentRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingTermRepository provides the billing term repository.
+func NewBillingTermRepository(p RepositoryParams) billingterm.TermRepository {
+	return entRepo.NewBillingTermRepository(p.EntClient, p.Logger)
+}
+
+// NewBillingInstalmentRepository provides the billing instalment repository.
+func NewBillingInstalmentRepository(p RepositoryParams) billingterm.InstalmentRepository {
+	return entRepo.NewBillingInstalmentRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

@@ -104,6 +104,8 @@ func (s *SubscriptionPauseSuite) SetupTest() {
 		PlanPriceSyncRepo:            stores.PlanPriceSyncRepo,
 		AddonPriceSyncRepo:           stores.AddonPriceSyncRepo,
 		CommitmentRepo:               stores.CommitmentRepo,
+		BillingTermRepo:              stores.BillingTermRepo,
+		BillingInstalmentRepo:        stores.BillingInstalmentRepo,
 		FXRateRepo:                   stores.FXRateRepo,
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		ProrationCalculator:          s.GetCalculator(),
