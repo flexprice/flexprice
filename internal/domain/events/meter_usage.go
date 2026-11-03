@@ -278,6 +278,12 @@ type MeterUsageRepository interface {
 	// meter in MeterIDs. Days with no usage are absent rather than zero.
 	GetDailyUsageByMeter(ctx context.Context, params *DailyUsageParams) (map[string][]DailyUsagePoint, error)
 
+	// GetAnalyticsV2LineUsage returns each line's quantity over its full window, aligned with params.Lines.
+	GetAnalyticsV2LineUsage(ctx context.Context, params *AnalyticsV2LineUsageParams) ([]AnalyticsV2LineUsage, error)
+
+	// RankAnalyticsV2Rows prices events by their line's rates, groups them into rows and returns one sorted page.
+	RankAnalyticsV2Rows(ctx context.Context, params *AnalyticsV2RankParams) (*AnalyticsV2RankResult, error)
+
 	// GetUsageActivitySince returns the customers with any usage ingested after
 	// the given time, so a rollup can scan what changed instead of everything.
 	GetUsageActivitySince(ctx context.Context, params *UsageActivityParams) (*UsageActivity, error)
