@@ -3,6 +3,8 @@ package expression
 import (
 	"encoding/json"
 	"math"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -331,4 +333,43 @@ func TestCELEvaluator_Identifiers(t *testing.T) {
 
 	_, err = NewCELEvaluator().Identifiers("input_tokens +")
 	assert.Error(t, err)
+}
+
+func TestCELEvaluator_ValidateLimits(t *testing.T) {
+	eval := NewCELEvaluator()
+
+	long := "a" + strings.Repeat(" + a", MaxExpressionLength/4+1)
+	require.Greater(t, len(long), MaxExpressionLength)
+	err := eval.Validate(long)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum length")
+
+	ids := make([]string, MaxExpressionIdents+1)
+	for i := range ids {
+		ids[i] = "v" + strings.Repeat("x", i%3) + string(rune('a'+i/26)) + string(rune('a'+i%26))
+	}
+	err = eval.Validate(strings.Join(ids, " + "))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "distinct identifiers")
+
+	require.NoError(t, eval.Validate("input_tokens * 2 + max(output_tokens, 1)"))
+	got, err := eval.EvaluateQuantity("input_tokens * 2", map[string]interface{}{"input_tokens": 3})
+	require.NoError(t, err)
+	assert.True(t, got.Equal(decimal.NewFromInt(6)))
+}
+
+func TestCELEvaluator_CacheBounded(t *testing.T) {
+	eval := &CELEvaluator{parser: NewCELEvaluator().parser}
+	for i := 0; i < maxCachedPrograms+5; i++ {
+		_, err := eval.EvaluateQuantity("a + "+strconv.Itoa(i), map[string]interface{}{"a": 1})
+		require.NoError(t, err)
+	}
+	assert.LessOrEqual(t, eval.cacheSize.Load(), int64(maxCachedPrograms))
+}
+
+func TestCELEvaluator_ProgramHasCostLimit(t *testing.T) {
+	src, err := os.ReadFile("cel_evaluator.go")
+	require.NoError(t, err)
+	assert.Contains(t, string(src), "cel.CostLimit(evalCostLimit)")
+	assert.Contains(t, string(src), "cel.InterruptCheckFrequency(")
 }
