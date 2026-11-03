@@ -7,8 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -77,7 +80,7 @@ type GetUsageAnalyticsV2Request struct {
 	// DataThrough pins every page to the events received by this instant; echo it from the first page.
 	DataThrough *time.Time       `json:"data_through,omitempty"`
 	WindowSize  types.WindowSize `json:"window_size,omitempty" example:"DAY"`
-	// Expand accepts "meter", "price" and "feature" when a row key is meter_id, feature_id or sub_line_item_id.
+	// Expand adds price, plan, addon and subscription objects; meter and feature need a meter_id, feature_id or sub_line_item_id row key.
 	Expand      []string `json:"expand,omitempty"`
 	Metrics     []string `json:"metrics,omitempty" example:"distinct:properties.owner"`
 	Deduplicate bool     `json:"deduplicate,omitempty"`
@@ -244,16 +247,17 @@ func (r *GetUsageAnalyticsV2Request) validateWindows() error {
 }
 
 func (r *GetUsageAnalyticsV2Request) validateExpand() error {
-	if len(r.Expand) == 0 {
-		return nil
-	}
+	lineRows := lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(analyticsV2LineKeys, k) })
 	for _, e := range r.Expand {
-		if e != "meter" && e != "price" && e != "feature" {
-			return analyticsV2Error(fmt.Sprintf("expand %q is not supported (use meter, price or feature)", e), nil)
+		switch e {
+		case "price", "plan", "addon", "subscription":
+		case "meter", "feature":
+			if !lineRows {
+				return analyticsV2Error(fmt.Sprintf("expand %q needs meter_id, feature_id or sub_line_item_id in group_by", e), nil)
+			}
+		default:
+			return analyticsV2Error(fmt.Sprintf("expand %q is not supported (use price, plan, addon, subscription, meter or feature)", e), nil)
 		}
-	}
-	if !lo.SomeBy(r.GroupBy, func(k string) bool { return lo.Contains(analyticsV2LineKeys, k) }) {
-		return analyticsV2Error("expand needs meter_id, feature_id or sub_line_item_id in group_by", nil)
 	}
 	return nil
 }
@@ -296,14 +300,18 @@ type GetUsageAnalyticsV2Response struct {
 	TotalCount  int64     `json:"total_count"`
 	DataThrough time.Time `json:"data_through"`
 	// ColumnValues lists every column across the full result, so every page has the same header.
-	ColumnValues   []string                    `json:"column_values,omitempty"`
-	Totals         AnalyticsV2Totals           `json:"totals"`
-	Items          []AnalyticsV2Item           `json:"items"`
-	Unattributed   AnalyticsV2Unattributed     `json:"unattributed"`
-	ExcludedMeters []AnalyticsV2ExcludedMeter  `json:"excluded_meters"`
-	Meters         map[string]*meter.Meter     `json:"meters,omitempty"`
-	Prices         map[string]*PriceResponse   `json:"prices,omitempty"`
-	Features       map[string]*feature.Feature `json:"features,omitempty"`
+	ColumnValues   []string                   `json:"column_values,omitempty"`
+	Totals         AnalyticsV2Totals          `json:"totals"`
+	Items          []AnalyticsV2Item          `json:"items"`
+	Unattributed   AnalyticsV2Unattributed    `json:"unattributed"`
+	ExcludedMeters []AnalyticsV2ExcludedMeter `json:"excluded_meters"`
+	// Object maps are filled only for the values requested in expand.
+	Meters        map[string]*meter.Meter               `json:"meters,omitempty"`
+	Prices        map[string]*PriceResponse             `json:"prices,omitempty"`
+	Features      map[string]*feature.Feature           `json:"features,omitempty"`
+	Plans         map[string]*plan.Plan                 `json:"plans,omitempty"`
+	Addons        map[string]*addon.Addon               `json:"addons,omitempty"`
+	Subscriptions map[string]*subscription.Subscription `json:"subscriptions,omitempty"`
 }
 
 // AnalyticsV2Totals: Cost = RowsCost + UnattributedCost + ExcludedCost.
@@ -339,12 +347,16 @@ type AnalyticsV2Item struct {
 	EventCount uint64                       `json:"event_count"`
 	Columns    map[string]AnalyticsV2Column `json:"columns,omitempty"`
 	// Metrics is keyed by the requested metric string, e.g. "distinct:properties.owner".
-	Metrics       map[string]AnalyticsV2MetricValue `json:"metrics,omitempty"`
-	Points        []AnalyticsV2Point                `json:"points,omitempty"`
-	PriceIDs      []string                          `json:"price_ids,omitempty"`
-	Unit          string                            `json:"unit,omitempty"`
-	UnitPlural    string                            `json:"unit_plural,omitempty"`
-	ReportingUnit *types.ReportingUnit              `json:"reporting_unit,omitempty"`
+	Metrics map[string]AnalyticsV2MetricValue `json:"metrics,omitempty"`
+	Points  []AnalyticsV2Point                `json:"points,omitempty"`
+	// A row can span several lines (a price change, two subscriptions), so these are lists.
+	PriceIDs        []string             `json:"price_ids,omitempty"`
+	SubscriptionIDs []string             `json:"subscription_ids,omitempty"`
+	PlanIDs         []string             `json:"plan_ids,omitempty"`
+	AddonIDs        []string             `json:"addon_ids,omitempty"`
+	Unit            string               `json:"unit,omitempty"`
+	UnitPlural      string               `json:"unit_plural,omitempty"`
+	ReportingUnit   *types.ReportingUnit `json:"reporting_unit,omitempty"`
 }
 
 type AnalyticsV2Column struct {
@@ -362,25 +374,31 @@ type AnalyticsV2Point struct {
 
 // AnalyticsV2Unattributed is invoice cost no row's usage can carry, e.g. unused commitment.
 type AnalyticsV2Unattributed struct {
-	Cost      decimal.Decimal               `json:"cost" swaggertype:"string"`
-	Breakdown AnalyticsV2Cost               `json:"breakdown"`
-	Lines     []AnalyticsV2UnattributedLine `json:"lines,omitempty"`
-	Points    []AnalyticsV2Point            `json:"points,omitempty"`
+	Cost      decimal.Decimal `json:"cost" swaggertype:"string"`
+	Breakdown AnalyticsV2Cost `json:"breakdown"`
+	// Charges lists each billed charge no row carries, e.g. one per unused commitment.
+	Charges []AnalyticsV2UnattributedCharge `json:"charges,omitempty"`
+	Points  []AnalyticsV2Point              `json:"points,omitempty"`
 }
 
 type AnalyticsV2UnattributedReason string
 
 const (
 	AnalyticsV2ReasonUnusedCommitment AnalyticsV2UnattributedReason = "unused_commitment"
+	// AnalyticsV2ReasonUnlinkedCharge is a usage charge billing did not tie to a subscription line.
+	AnalyticsV2ReasonUnlinkedCharge AnalyticsV2UnattributedReason = "unlinked_charge"
 )
 
-type AnalyticsV2UnattributedLine struct {
-	MeterID       string                        `json:"meter_id,omitempty"`
-	SubLineItemID string                        `json:"sub_line_item_id,omitempty"`
-	PriceID       string                        `json:"price_id,omitempty"`
-	Cost          decimal.Decimal               `json:"cost" swaggertype:"string"`
-	Breakdown     AnalyticsV2Cost               `json:"breakdown"`
-	Reason        AnalyticsV2UnattributedReason `json:"reason"`
+type AnalyticsV2UnattributedCharge struct {
+	SubscriptionID string                        `json:"subscription_id,omitempty"`
+	PlanID         string                        `json:"plan_id,omitempty"`
+	AddonID        string                        `json:"addon_id,omitempty"`
+	MeterID        string                        `json:"meter_id,omitempty"`
+	SubLineItemID  string                        `json:"sub_line_item_id,omitempty"`
+	PriceID        string                        `json:"price_id,omitempty"`
+	Cost           decimal.Decimal               `json:"cost" swaggertype:"string"`
+	Breakdown      AnalyticsV2Cost               `json:"breakdown"`
+	Reason         AnalyticsV2UnattributedReason `json:"reason"`
 }
 
 type AnalyticsV2ExcludedReason string

@@ -87,11 +87,11 @@ func TestGetUsageAnalyticsV2Request_Validate(t *testing.T) {
 			r.StartTime = r.EndTime.AddDate(-2, 0, 0)
 			r.WindowSize = types.WindowSizeDay
 		}, "use a larger window_size"},
-		{"expand without meter rows", func(r *GetUsageAnalyticsV2Request) { r.Expand = []string{"price"} }, "expand needs"},
-		{"unknown expand", func(r *GetUsageAnalyticsV2Request) {
-			r.GroupBy = []string{"meter_id"}
-			r.Expand = []string{"plan"}
-		}, "not supported"},
+		{"valid expand of price, plan, addon, subscription on any rows", func(r *GetUsageAnalyticsV2Request) {
+			r.Expand = []string{"price", "plan", "addon", "subscription"}
+		}, ""},
+		{"expand meter without meter rows", func(r *GetUsageAnalyticsV2Request) { r.Expand = []string{"meter"} }, "needs meter_id"},
+		{"unknown expand", func(r *GetUsageAnalyticsV2Request) { r.Expand = []string{"customer"} }, "not supported"},
 		{"metric on row key", func(r *GetUsageAnalyticsV2Request) { r.Metrics = []string{"distinct:properties.app"} }, "always 1"},
 		{"unknown metric", func(r *GetUsageAnalyticsV2Request) { r.Metrics = []string{"avg:properties.x"} }, "not supported"},
 	}

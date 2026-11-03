@@ -2455,12 +2455,7 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 
-	filter := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
-		return c.Type == types.CouponTypePercentage &&
-			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
-			c.IsValid()
-	}
-	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, filter)
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, isAnalyticsCoupon)
 	if err != nil {
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return nil, nil
@@ -2470,6 +2465,13 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 	return lineItemCoupons, subscriptionCoupons
+}
+
+// isAnalyticsCoupon selects the coupons analytics applies: valid percentage coupons that recur.
+func isAnalyticsCoupon(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+	return c.Type == types.CouponTypePercentage &&
+		(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+		c.IsValid()
 }
 
 // calculateCosts calculates costs for all analytics items in the data.
