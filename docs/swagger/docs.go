@@ -19061,6 +19061,10 @@ const docTemplate = `{
         },
         "BillingTermInput": {
             "type": "object",
+            "required": [
+                "kind",
+                "value_type"
+            ],
             "properties": {
                 "bill_on": {
                     "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now.",
@@ -19312,7 +19316,8 @@ const docTemplate = `{
         "CancellationFeeInput": {
             "type": "object",
             "required": [
-                "type"
+                "type",
+                "value"
             ],
             "properties": {
                 "type": {

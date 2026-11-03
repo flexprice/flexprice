@@ -443,6 +443,34 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAFullyInvoicedCo
 	s.requireValidation(err, "the commitment is fully invoiced")
 }
 
+// Invoiced instalments count toward the plan's limit, which keeps every numbered label within its template's length.
+func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAPlanOverTheLimit() {
+	ctx := s.GetContext()
+	created, err := s.svc.Create(ctx, s.billingTermsRequest())
+	s.Require().NoError(err)
+
+	c, err := s.GetStores().CommitmentRepo.Get(ctx, created.ID)
+	s.Require().NoError(err)
+
+	invoiced := make([]*billingterm.Instalment, 0, billingterm.MaxInstalments-10)
+	for range billingterm.MaxInstalments - 10 {
+		inst := billingterm.InstalmentTemplate(ctx, c)
+		inst.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
+		inst.Amount = dec("1")
+		inst.BillOn = c.StartDate
+		inst.InvoiceLabel = "Instalment"
+		inst.InstalmentStatus = types.InstalmentStatusInvoiced
+		inst.InvoiceID = lo.ToPtr("inv_x")
+		invoiced = append(invoiced, &inst)
+	}
+	_, err = s.GetStores().BillingInstalmentRepo.CreateMany(ctx, invoiced)
+	s.Require().NoError(err)
+
+	// The 490 invoiced and the 11 instalments of the new terms make 501.
+	_, err = s.svc.PreviewBillingTerms(ctx, created.ID, halfUpfrontPlusRemainder())
+	s.requireValidation(err, "the plan holds 501, more than the 500 allowed")
+}
+
 func (s *CommitmentServiceSuite) TestReplaceBillingTerms_CanReplaceTwice() {
 	ctx := s.GetContext()
 	created, err := s.svc.Create(ctx, s.billingTermsRequest())

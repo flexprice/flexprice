@@ -14,24 +14,48 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// instalmentBillAt is the bill_on up to which an invoice computed at referencePoint bills instalments: the invoice
+// issued at a boundary bills those due by it, and ok is false for the other reference points, which bill none.
+func instalmentBillAt(referencePoint types.InvoiceReferencePoint, periodStart, periodEnd time.Time) (time.Time, bool) {
+	switch referencePoint {
+	case types.ReferencePointPeriodStart:
+		return periodStart, true
+	case types.ReferencePointPeriodEnd, types.ReferencePointPreview, types.ReferencePointInternalPreview:
+		return periodEnd, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+// dueInstalments returns the subscription's scheduled subscription-invoice instalments due by billAt, in billing
+// order; none while commitments_v2 is off.
+func dueInstalments(
+	ctx context.Context,
+	params ServiceParams,
+	subscriptionID string,
+	billAt time.Time,
+) ([]*billingterm.Instalment, error) {
+	enabled, err := NewCommitmentService(params).IsEnabled(ctx)
+	if err != nil || !enabled {
+		return nil, err
+	}
+
+	return params.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType:       types.BillingTermOwnerCommitment,
+		SubscriptionIDs: []string{subscriptionID},
+		Statuses:        []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		Deliveries:      []types.InstalmentDelivery{types.InstalmentDeliverySubscriptionInvoice},
+		BillOnOrBefore:  &billAt,
+	})
+}
+
 // dueInstalmentLines returns the subscription's scheduled subscription-invoice instalments due by billAt as fixed lines.
 func (s *billingService) dueInstalmentLines(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	billAt time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
-	enabled, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, decimal.Zero, err
-	}
-
-	instalments, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		OwnerType:       types.BillingTermOwnerCommitment,
-		SubscriptionIDs: []string{sub.ID},
-		Statuses:        []types.InstalmentStatus{types.InstalmentStatusScheduled},
-		Deliveries:      []types.InstalmentDelivery{types.InstalmentDeliverySubscriptionInvoice},
-		BillOnOrBefore:  &billAt,
-	})
+	instalments, err := dueInstalments(ctx, s.ServiceParams, sub.ID, billAt)
 	if err != nil || len(instalments) == 0 {
 		return nil, decimal.Zero, err
 	}

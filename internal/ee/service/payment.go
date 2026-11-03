@@ -246,21 +246,11 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
 	}
 
-	// Nor does it recompute a draft whose instalments changed, so paying one would bill them twice. A payment a gateway
-	// already collected (process_payment false) is still recorded.
-	if invoice.InvoiceStatus == types.InvoiceStatusDraft && p.ProcessPayment {
-		stale, err := invSvc.staleInstalments(ctx, invoice)
-		if err != nil {
+	// A payment a gateway already collected (process_payment false) is still recorded; ProcessPayment checks it if it
+	// is charged later.
+	if p.ProcessPayment {
+		if err := invSvc.requireFreshInstalments(ctx, invoice); err != nil {
 			return err
-		}
-		if len(stale) > 0 {
-			return ierr.WithError(errStaleInstalments).
-				WithHint("Recompute the invoice before paying it").
-				WithReportableDetails(map[string]any{
-					"invoice_id":     invoice.ID,
-					"instalment_ids": stale,
-				}).
-				Mark(ierr.ErrInvalidOperation)
 		}
 	}
 

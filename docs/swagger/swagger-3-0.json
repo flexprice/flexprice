@@ -22055,6 +22055,10 @@
         }
       },
       "BillingTermInput": {
+        "required": [
+          "kind",
+          "value_type"
+        ],
         "type": "object",
         "properties": {
           "bill_on": {
@@ -22276,7 +22280,8 @@
       },
       "CancellationFeeInput": {
         "required": [
-          "type"
+          "type",
+          "value"
         ],
         "type": "object",
         "properties": {

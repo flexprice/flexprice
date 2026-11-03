@@ -62,6 +62,11 @@ func (s *commitmentService) planInstalments(
 	}
 
 	plan := append(slices.Clone(invoiced), instalments...)
+	if len(plan) > billingterm.MaxInstalments {
+		return nil, ierr.Validationf("billing_terms: with the %d invoiced instalments the plan holds %d, more than the %d allowed",
+			len(invoiced), len(plan), billingterm.MaxInstalments)
+	}
+
 	slices.SortStableFunc(plan, func(a, b *billingterm.Instalment) int { return a.BillOn.Compare(b.BillOn) })
 	billingterm.NumberLabels(plan)
 
@@ -498,7 +503,9 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 
 		sub, err := s.SubRepo.Get(txCtx, lo.FromPtr(instalment.SubscriptionID))
 		if ierr.IsNotFound(err) {
-			s.Logger.Info(ctx, "skipping instalment whose subscription no longer exists",
+			s.Logger.Info(ctx, "commitment.instalment_skipped",
+				"operation", "commitment.instalment_skipped",
+				"reason", "subscription no longer exists",
 				"instalment_id", instalment.ID,
 				"subscription_id", lo.FromPtr(instalment.SubscriptionID),
 			)
@@ -514,7 +521,9 @@ func (s *commitmentService) billInstalment(ctx context.Context, listed *billingt
 
 		c, err := s.CommitmentRepo.Get(txCtx, instalment.OwnerID)
 		if ierr.IsNotFound(err) {
-			s.Logger.Info(ctx, "skipping instalment whose commitment no longer exists",
+			s.Logger.Info(ctx, "commitment.instalment_skipped",
+				"operation", "commitment.instalment_skipped",
+				"reason", "commitment no longer exists",
 				"instalment_id", instalment.ID,
 				"commitment_id", instalment.OwnerID,
 			)

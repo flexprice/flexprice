@@ -12,12 +12,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// BillingTermInput is one billing term as a request states it. The rules are checked when the terms are expanded.
+// BillingTermInput is one billing term as a request states it. The request checks that kind and value_type are set;
+// the other rules are checked when the terms are expanded.
 type BillingTermInput struct {
-	Kind types.BillingTermKind `json:"kind"`
+	Kind types.BillingTermKind `json:"kind" validate:"required"`
 
 	// ValueType is fixed or remainder; percentage is rejected as not supported yet.
-	ValueType types.BillingTermValueType `json:"value_type"`
+	ValueType types.BillingTermValueType `json:"value_type" validate:"required"`
 	Value     *decimal.Decimal           `json:"value,omitempty" swaggertype:"string"`
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
@@ -79,7 +80,7 @@ func (in BillingTermInput) ToTerm(ctx context.Context, ownerID string) *billingt
 type CancellationFeeInput struct {
 	// Type is fixed or percentage; a percentage fee is rejected as not supported yet.
 	Type  types.CancellationFeeType `json:"type" validate:"required"`
-	Value decimal.Decimal           `json:"value" swaggertype:"string"`
+	Value decimal.Decimal           `json:"value" validate:"required" swaggertype:"string"`
 }
 
 // Validate checks the fee against its type. A percentage fee is rejected as not supported yet.

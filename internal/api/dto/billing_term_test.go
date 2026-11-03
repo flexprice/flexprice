@@ -105,7 +105,7 @@ func TestCancellationFeeInput_Validate(t *testing.T) {
 }
 
 func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
-	remainder := BillingTermInput{ValueType: types.BillingTermValueRemainder}
+	remainder := BillingTermInput{Kind: types.BillingTermKindOnce, ValueType: types.BillingTermValueRemainder}
 	tests := []struct {
 		name    string
 		req     ReplaceBillingTermsRequest
@@ -115,9 +115,23 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 		{"no terms", ReplaceBillingTermsRequest{}, "BillingTerms"},
 		{"empty terms", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{}}, "BillingTerms"},
 		{
+			"no kind",
+			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{{ValueType: types.BillingTermValueRemainder}}},
+			"BillingTerms[0].Kind",
+		},
+		{
+			"no value_type",
+			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{{Kind: types.BillingTermKindOnce}}},
+			"BillingTerms[0].ValueType",
+		},
+		{
 			"an invoice_label over 255 characters",
 			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
-				{ValueType: types.BillingTermValueRemainder, InvoiceLabel: lo.ToPtr(strings.Repeat("a", 256))},
+				{
+					Kind:         types.BillingTermKindOnce,
+					ValueType:    types.BillingTermValueRemainder,
+					InvoiceLabel: lo.ToPtr(strings.Repeat("a", 256)),
+				},
 			}},
 			"BillingTerms[0].InvoiceLabel",
 		},

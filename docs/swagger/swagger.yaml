@@ -1501,6 +1501,9 @@ definitions:
         - $ref: '#/definitions/types.BillingTermValueType'
         description: ValueType is fixed or remainder; percentage is rejected as not
           supported yet.
+    required:
+    - kind
+    - value_type
     type: object
   BillingTermsResponse:
     properties:
@@ -1652,6 +1655,7 @@ definitions:
         type: string
     required:
     - type
+    - value
     type: object
   ChangedAddonAssociation:
     properties:

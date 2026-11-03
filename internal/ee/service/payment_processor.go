@@ -74,6 +74,17 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
+	if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+		inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
+		if err != nil {
+			return paymentObj, err
+		}
+
+		if err := NewInvoiceService(p.ServiceParams).(*invoiceService).requireFreshInstalments(ctx, inv); err != nil {
+			return paymentObj, err
+		}
+	}
+
 	// For payment links, if status is INITIATED, we need to create the payment link
 	// If status is already PENDING, we don't need to do anything more
 	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink && paymentObj.PaymentStatus == types.PaymentStatusInitiated {

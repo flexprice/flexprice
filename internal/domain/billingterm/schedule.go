@@ -19,7 +19,8 @@ const (
 	// MaxTerms is the most billing terms an owner can have.
 	MaxTerms = 20
 
-	// MaxInstalments is the most instalments an owner's terms can expand to.
+	// MaxInstalments is the most instalments an owner's terms can expand to, and the most its plan can hold with the
+	// invoiced ones.
 	MaxInstalments = 500
 )
 
@@ -116,7 +117,8 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 }
 
 // NumberLabels fills {n} and {of} in each invoice label with the instalment's position in plan and the plan's length.
-// plan is all of an owner's instalments in billing order; labels already numbered are left as they are.
+// plan is all of an owner's instalments in billing order; labels already numbered are left as they are. Within
+// MaxInstalments, a numbered label is never longer than its template.
 func NumberLabels(plan []*Instalment) {
 	of := strconv.Itoa(len(plan))
 	for n, i := range plan {

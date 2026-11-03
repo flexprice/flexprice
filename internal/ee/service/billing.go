@@ -1715,17 +1715,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		NextPeriodEnd:      nextPeriodEnd,
 	})
 
-	// The invoice issued at a boundary bills the instalments due by it; other reference points bill none.
 	var instalments []dto.CreateInvoiceLineItemRequest
 	instalmentTotal := decimal.Zero
-	switch referencePoint {
-	case types.ReferencePointPeriodStart:
-		instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, periodStart)
-	case types.ReferencePointPeriodEnd, types.ReferencePointPreview, types.ReferencePointInternalPreview:
-		instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, periodEnd)
-	}
-	if err != nil {
-		return nil, err
+	if billAt, ok := instalmentBillAt(referencePoint, periodStart, periodEnd); ok {
+		if instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, billAt); err != nil {
+			return nil, err
+		}
 	}
 
 	var calculationResult *dto.BillingCalculationResult

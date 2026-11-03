@@ -636,6 +636,22 @@ func (s *invoiceService) ListOpenCycleDrafts(ctx context.Context, subscriptionID
 //
 // Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
 // OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
+// subscriptionReferencePoint is the reference point a subscription invoice with this billing reason is computed at.
+func subscriptionReferencePoint(reason types.InvoiceBillingReason) types.InvoiceReferencePoint {
+	switch reason {
+	case types.InvoiceBillingReasonSubscriptionCreate,
+		types.InvoiceBillingReasonSubscriptionTrialEnd,
+		types.InvoiceBillingReasonSubscriptionTrialStart,
+		types.InvoiceBillingReasonSubscriptionUpdate,
+		types.InvoiceBillingReasonSubscriptionResume:
+		return types.ReferencePointPeriodStart
+	case types.InvoiceBillingReasonProration:
+		return types.ReferencePointCancel
+	default:
+		return types.ReferencePointPeriodEnd
+	}
+}
+
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
@@ -708,20 +724,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return nil, false, err
 		}
-		refPoint := types.ReferencePointPeriodEnd
-		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate,
-			types.InvoiceBillingReasonSubscriptionTrialEnd,
-			types.InvoiceBillingReasonSubscriptionTrialStart,
-			types.InvoiceBillingReasonSubscriptionUpdate,
-			types.InvoiceBillingReasonSubscriptionResume:
-
-			// for create, trial end, trial start, update, and resume, we use the period start as the reference point
-			refPoint = types.ReferencePointPeriodStart
-
-		case types.InvoiceBillingReasonProration:
-			refPoint = types.ReferencePointCancel
-		}
+		refPoint := subscriptionReferencePoint(types.InvoiceBillingReason(inv.BillingReason))
 		if req != nil && req.ProrationBehavior != nil {
 			sub.ProrationBehavior = *req.ProrationBehavior
 		}

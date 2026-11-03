@@ -120,6 +120,103 @@ func (s *CommitmentE2ESuite) TestFinalize_EditedTermsRecomputeTheDraft() {
 	s.True(finalized.AmountDue.Equal(dec("550")), "500 up front and the first of ten 50 instalments, got %s", finalized.AmountDue)
 }
 
+// milestoneDraft subscribes from 1 Jan to a commitment billing a $300 milestone and $70 a month in arrears, computes
+// the January draft, then triggers the milestone for 15 January, after the draft was computed. It returns the draft
+// and the milestone's id.
+func (s *CommitmentE2ESuite) milestoneDraft(invoices InvoiceService, name string, edit func(draftID string)) (*invoice.Invoice, string) {
+	ctx := s.GetContext()
+	tokens := s.planWith(name, types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	created := s.subscribe(tokens, s.jan)
+	terms := upfrontPlusRemainder()
+	terms[0].BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), terms...))
+
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, created.ID)
+	s.Require().NoError(err)
+	draft, _, err := invoices.GetOrComputeCurrentPeriodDraft(ctx, sub)
+	s.Require().NoError(err)
+	s.Require().Len(s.storedInstalmentLines(draft.ID), 1, "the untriggered milestone waits at the end of the term")
+	edit(draft.ID)
+
+	listed, err := s.commitments.ListInstalments(ctx, committed.ID, nil)
+	s.Require().NoError(err)
+	milestone, ok := lo.Find(listed.Items, func(inst *billingterm.Instalment) bool {
+		return inst.BillTrigger == types.InstalmentBillTriggerManual
+	})
+	s.Require().True(ok)
+
+	_, err = s.commitments.TriggerInstalment(ctx, committed.ID, milestone.ID, dto.TriggerInstalmentRequest{
+		BillOn: lo.ToPtr(s.jan.AddDate(0, 0, 14)),
+	})
+	s.Require().NoError(err)
+	return draft, milestone.ID
+}
+
+func (s *CommitmentE2ESuite) TestFinalize_RecomputesADraftMissingADueInstalment() {
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, milestoneID := s.milestoneDraft(invoices, "missed", func(string) {})
+
+	s.Require().NoError(invoices.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	billed := instalmentIDs(s.billedInstalments(draft.ID))
+	s.Len(billed, 2)
+	s.Contains(billed, milestoneID, "the recomputed draft bills the triggered milestone")
+	s.requireBilledBy(draft.ID, billed)
+}
+
+// A manually edited draft is never recomputed: it finalizes without the milestone, which waits for the next invoice.
+func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedDraftLeavesADueInstalmentScheduled() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	draft, milestoneID := s.milestoneDraft(invoices, "missed_edited", func(draftID string) {
+		_, err := invoices.AddBulkLineItem(ctx, draftID, dto.AddBulkLineItemRequest{Items: []dto.AddLineItemRequest{
+			{DisplayName: "Setup fee", Amount: dec("50"), Quantity: dec("1")},
+		}})
+		s.Require().NoError(err)
+	})
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	s.NotContains(instalmentIDs(s.billedInstalments(draft.ID)), milestoneID)
+	milestone, err := s.GetStores().BillingInstalmentRepo.Get(ctx, milestoneID)
+	s.Require().NoError(err)
+	s.Equal(types.InstalmentStatusScheduled, milestone.InstalmentStatus)
+}
+
+// A payment created without processing is charged later through ProcessPayment, which refuses a stale draft before
+// the payment leaves pending.
+func (s *CommitmentE2ESuite) TestProcessPayment_RefusesAStaleDraft() {
+	ctx := s.GetContext()
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	draft, commitmentID := s.januaryDraft(NewInvoiceService(params), "process_stale")
+
+	pending := &payment.Payment{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT),
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     draft.ID,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
+		Amount:            draft.AmountDue,
+		Currency:          draft.Currency,
+		PaymentStatus:     types.PaymentStatusPending,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, pending))
+
+	_, err := s.commitments.ReplaceBillingTerms(ctx, commitmentID, halfUpfrontPlusRemainder())
+	s.Require().NoError(err)
+
+	_, err = NewPaymentProcessorService(params).ProcessPayment(ctx, pending.ID)
+	s.Require().ErrorIs(err, errStaleInstalments)
+
+	stored, err := s.GetStores().PaymentRepo.Get(ctx, pending.ID)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusPending, stored.PaymentStatus)
+
+	unpaid, err := s.GetStores().InvoiceRepo.Get(ctx, draft.ID)
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceStatusDraft, unpaid.InvoiceStatus)
+}
+
 // A manually edited draft is never recomputed, so a stale instalment still fails its finalization.
 func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedStaleDraftFails() {
 	ctx := s.GetContext()
