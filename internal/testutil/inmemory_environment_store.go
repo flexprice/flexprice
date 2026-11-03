@@ -52,7 +52,7 @@ func (s *InMemoryEnvironmentStore) Get(ctx context.Context, id string) (*environ
 	}
 	return nil, ierr.NewError("environment not found").
 		WithHint("Environment not found").
-		Mark(ierr.ErrDatabase)
+		Mark(ierr.ErrNotFound)
 }
 
 func (s *InMemoryEnvironmentStore) List(ctx context.Context, filter types.Filter) ([]*environment.Environment, error) {

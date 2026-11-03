@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -42,7 +41,4 @@ type ClickHouseRepository interface {
 type PostgresRepository interface {
 	// SumInvoicesByTenantHour sums finalized invoices per tenant environment, currency and finalized hour in [from, to).
 	SumInvoicesByTenantHour(ctx context.Context, from, to time.Time) ([]*TenantHourInvoices, error)
-
-	// ListEnvironmentTypes returns the type of each given environment, in any status, keyed by environment ID.
-	ListEnvironmentTypes(ctx context.Context, environmentIDs []string) (map[string]types.EnvironmentType, error)
 }

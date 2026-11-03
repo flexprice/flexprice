@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -39,18 +40,25 @@ func (s *selfBillingService) pushUsage(ctx context.Context, now time.Time) error
 		return err
 	}
 
-	envIDs := make([]string, 0, len(counts)+len(invoices))
+	envTenants := make(map[string]string, len(counts)+len(invoices))
 	for _, c := range counts {
-		envIDs = append(envIDs, c.EnvironmentID)
+		envTenants[c.EnvironmentID] = c.TenantID
 	}
 	for _, inv := range invoices {
-		envIDs = append(envIDs, inv.EnvironmentID)
+		envTenants[inv.EnvironmentID] = inv.TenantID
 	}
 
 	// environment_type lets Flexprice Cloud meters bill production usage only; an unknown environment counts as production.
-	envTypes, err := s.SelfBillingPostgresRepo.ListEnvironmentTypes(ctx, lo.Uniq(envIDs))
-	if err != nil {
-		return err
+	envTypes := make(map[string]types.EnvironmentType, len(envTenants))
+	for envID, tenantID := range envTenants {
+		env, err := s.EnvironmentRepo.Get(types.SetTenantID(ctx, tenantID), envID)
+		if ierr.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		envTypes[envID] = env.Type
 	}
 
 	events := make([]usageEvent, 0, len(counts)+len(invoices))

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 // InMemorySelfBillingStore fakes both self-billing repositories with pre-aggregated hourly rows.
@@ -14,7 +13,6 @@ type InMemorySelfBillingStore struct {
 	mu       sync.Mutex
 	events   []*domainsb.TenantHourEvents
 	invoices []*domainsb.TenantHourInvoices
-	envTypes map[string]types.EnvironmentType
 }
 
 func NewInMemorySelfBillingStore() *InMemorySelfBillingStore {
@@ -33,16 +31,6 @@ func (s *InMemorySelfBillingStore) AddInvoices(row *domainsb.TenantHourInvoices)
 	defer s.mu.Unlock()
 
 	s.invoices = append(s.invoices, row)
-}
-
-func (s *InMemorySelfBillingStore) AddEnvironment(id string, envType types.EnvironmentType) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.envTypes == nil {
-		s.envTypes = make(map[string]types.EnvironmentType)
-	}
-	s.envTypes[id] = envType
 }
 
 func (s *InMemorySelfBillingStore) CountEventsByTenantHour(_ context.Context, from, to time.Time) ([]*domainsb.TenantHourEvents, error) {
@@ -71,24 +59,10 @@ func (s *InMemorySelfBillingStore) SumInvoicesByTenantHour(_ context.Context, fr
 	return out, nil
 }
 
-func (s *InMemorySelfBillingStore) ListEnvironmentTypes(_ context.Context, environmentIDs []string) (map[string]types.EnvironmentType, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	out := make(map[string]types.EnvironmentType, len(environmentIDs))
-	for _, id := range environmentIDs {
-		if envType, ok := s.envTypes[id]; ok {
-			out[id] = envType
-		}
-	}
-	return out, nil
-}
-
 func (s *InMemorySelfBillingStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.events = nil
 	s.invoices = nil
-	s.envTypes = nil
 }
