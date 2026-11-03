@@ -266,12 +266,14 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	if environmentID == "" {
 		environmentID = types.GetEnvironmentID(ctx)
 	}
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	if tenantID == "" || environmentID == "" {
+		s.Logger.Info(ctx, "dropping bulk meter usage batch: scope missing",
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
 	// Per-event Redis dedup mirrors the single-event path: acquire an event-ID
 	// keyed lock (TTL = 24h) before doing any work for that event, skip events
@@ -311,18 +313,11 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
 		}
-		if evt.TenantID == "" || evt.EnvironmentID == "" {
-			s.Logger.Info(ctx, "tenant_id and environment_id are required for meter usage tracking",
-				"event_id", evt.ID,
-				"message_uuid", msg.UUID,
-			)
-			continue
-		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
 
 		// Ahead of the dedup lock: a held event must take no lock. The whole batch
 		// is held, and the deferred release above returns the locks it already took.
-		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(withEventScope(ctx, evt), evt.ExternalCustomerID, evt.Timestamp) {
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
 			s.Logger.Error(ctx, "holding bulk meter usage batch: a deletion is in progress for this customer and period",
 				"error", types.ErrEventDeletionInProgress,
 				"event_id", evt.ID,
@@ -348,7 +343,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			}
 		}
 
-		meters, err := s.MeterRepo.GetMatchingMetersByEventName(withEventScope(ctx, evt), evt.EventName)
+		meters, err := s.MeterRepo.GetMatchingMetersByEventName(ctx, evt.EventName)
 		if err != nil {
 			// Meter-lookup errors are retriable: return so the whole batch is
 			// redelivered rather than silently dropping downstream billing rows.

@@ -193,9 +193,13 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 	if environmentID == "" {
 		environmentID = types.GetEnvironmentID(ctx)
 	}
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	if tenantID == "" {
+		s.Logger.Info(ctx, "dropping bulk event batch: tenant missing",
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	if environmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
