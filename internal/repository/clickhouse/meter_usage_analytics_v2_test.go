@@ -112,6 +112,11 @@ func TestRankAnalyticsV2Rows_MatchesOracle_Integration(t *testing.T) {
 			p.Search = "PRO" // case-insensitive: matches promo
 			p.Limit = 10
 		}},
+		{"filter and search values with quotes and backslashes", func(p *events.AnalyticsV2RankParams) {
+			p.Filters = []events.AnalyticsV2Filter{{Key: "properties.app", Exclude: true, Values: []string{"payout", "it's", `a\b`, "x') OR 1=1 --"}}}
+			p.Search = "o"
+			p.Limit = 10
+		}},
 		{"filter by line", func(p *events.AnalyticsV2RankParams) {
 			p.Filters = []events.AnalyticsV2Filter{{Key: "sub_line_item_id", Values: []string{"li_ai_new", "li_gpu"}}}
 			p.Sort = events.AnalyticsV2Sort{By: events.AnalyticsV2SortByEventCount, Desc: true}

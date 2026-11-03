@@ -383,7 +383,7 @@ func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params
 	totals := map[string]*events.AnalyticsV2PointCell{}
 	for _, c := range cells {
 		weight := decimal.Zero
-		if cellPeakSum[rowLine(c)].IsPositive() {
+		if p.Lines[c.line].IsMax && cellPeakSum[rowLine(c)].IsPositive() {
 			weight = rowPeak[rowLine(c)].Mul(c.pk).Div(cellPeakSum[rowLine(c)])
 		}
 		if row, ok := page[c.rk]; ok {

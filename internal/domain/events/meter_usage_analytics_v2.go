@@ -167,8 +167,8 @@ type AnalyticsV2PointCell struct {
 	Column      string
 	Line        int
 	Quantity    decimal.Decimal
-	// PeakWeight is the cell's part of its row's peak: row peak x cell peak / sum of the row's cell peaks.
-	// A MAX line's cell costs rate x PeakWeight, so a row's cells add up to rate x row peak.
+	// PeakWeight, for MAX lines only, is the cell's part of its row's peak: row peak x cell peak / sum of the
+	// row's cell peaks. A MAX line's cell costs rate x PeakWeight, so a row's cells add up to rate x row peak.
 	PeakWeight decimal.Decimal
 	// Peak is the highest event value in the cell.
 	Peak       decimal.Decimal
