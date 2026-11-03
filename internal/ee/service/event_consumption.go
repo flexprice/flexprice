@@ -143,6 +143,22 @@ func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Route
 	)
 }
 
+// scopeConflict reports two non-empty, differing scope values.
+func scopeConflict(a, b string) bool {
+	return a != "" && b != "" && a != b
+}
+
+// withEventScope pins ctx to the tenant and environment the event is written under.
+func withEventScope(ctx context.Context, evt *events.Event) context.Context {
+	if evt.TenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, evt.TenantID)
+	}
+	if evt.EnvironmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, evt.EnvironmentID)
+	}
+	return ctx
+}
+
 // processBulkMessage unmarshals a RawEventBatch and bulk-inserts every event
 // in the batch with a single call. Malformed rows inside the batch are
 // skipped so healthy siblings still land in ClickHouse.
@@ -161,6 +177,14 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		return nil
 	}
 
+	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
+		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
+		s.Logger.Error(ctx, "dropping bulk event batch: message scope mismatch",
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
 	tenantID := batch.TenantID
 	environmentID := batch.EnvironmentID
 	if tenantID != "" {
@@ -176,6 +200,13 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 			continue
 		}
 
+		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
+			s.Logger.Error(ctx, "dropping bulk event: scope mismatch",
+				"event_id", evt.ID,
+				"message_uuid", msg.UUID,
+			)
+			continue
+		}
 		if evt.TenantID == "" {
 			evt.TenantID = tenantID
 		}
@@ -184,7 +215,7 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		}
 		// The whole batch is held: one Kafka message cannot be part-acknowledged,
 		// and writing the rest would duplicate them on every redelivery.
-		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, evt.ExternalCustomerID, evt.Timestamp) {
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(withEventScope(ctx, evt), evt.ExternalCustomerID, evt.Timestamp) {
 			s.Logger.Error(ctx, "holding bulk event batch: a deletion is in progress for this customer and period",
 				"error", types.ErrEventDeletionInProgress,
 				"event_id", evt.ID,
@@ -343,6 +374,14 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 			return fmt.Errorf("non-retriable unmarshal error: %w", err)
 		}
 		return err
+	}
+
+	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
+		s.Logger.Error(ctx, "dropping event: scope mismatch",
+			"event_id", event.ID,
+			"message_uuid", msg.UUID,
+		)
+		return nil
 	}
 
 	if tenantID == "" && event.TenantID != "" {
