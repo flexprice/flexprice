@@ -33213,6 +33213,7 @@
           },
           "invoice_label": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           },
           "metadata": {
@@ -33220,6 +33221,7 @@
           },
           "name": {
             "maxLength": 255,
+            "minLength": 1,
             "type": "string"
           }
         }

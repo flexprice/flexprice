@@ -30864,14 +30864,16 @@ const docTemplate = `{
                 },
                 "invoice_label": {
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "minLength": 1
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
                     "type": "string",
-                    "maxLength": 255
+                    "maxLength": 255,
+                    "minLength": 1
                 }
             }
         },

@@ -10008,11 +10008,13 @@ definitions:
         type: string
       invoice_label:
         maxLength: 255
+        minLength: 1
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         maxLength: 255
+        minLength: 1
         type: string
     type: object
   UpdateCostsheetRequest:
