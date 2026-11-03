@@ -62,9 +62,32 @@ func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.Webh
 	return &PaymentWebhookPayload{EventType: eventType, Payment: NewPayment(payment)}
 }
 
+type PaymentAttempt struct {
+	ID               string         `json:"id"`
+	AttemptNumber    int            `json:"attempt_number"`
+	GatewayAttemptID *string        `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string        `json:"error_message,omitempty"`
+	Metadata         types.Metadata `json:"metadata,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
+}
+
+func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
+	if resp == nil {
+		return nil
+	}
+	return &PaymentAttempt{
+		ID:               resp.ID,
+		AttemptNumber:    resp.AttemptNumber,
+		GatewayAttemptID: resp.GatewayAttemptID,
+		ErrorMessage:     resp.ErrorMessage,
+		Metadata:         resp.Metadata,
+		CreatedAt:        resp.CreatedAt,
+	}
+}
+
 type PaymentAttemptWebhookPayload struct {
-	EventType       types.WebhookEventName      `json:"event_type"`
-	Payment         *Payment                    `json:"payment"`
-	Attempt         *dto.PaymentAttemptResponse `json:"attempt"`
-	CheckoutSession *CheckoutSession            `json:"checkout_session,omitempty"`
+	EventType       types.WebhookEventName `json:"event_type"`
+	Payment         *Payment               `json:"payment"`
+	Attempt         *PaymentAttempt        `json:"attempt"`
+	CheckoutSession *CheckoutSession       `json:"checkout_session,omitempty"`
 }

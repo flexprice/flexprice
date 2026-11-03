@@ -684,6 +684,14 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 	return nil
 }
 
+func (s *paymentService) GetAttempt(ctx context.Context, attemptID string) (*dto.PaymentAttemptResponse, error) {
+	attempt, err := s.PaymentRepo.GetAttempt(types.WithForceWriter(ctx), attemptID)
+	if err != nil {
+		return nil, err
+	}
+	return dto.NewPaymentAttemptResponse(attempt), nil
+}
+
 // ListPayments lists payments based on filter
 func (s *paymentService) ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
 	if filter == nil {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -73,16 +72,21 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	payment, err := b.services.PaymentService.GetPayment(ctx, event.PaymentID)
+	attempt, err := b.services.PaymentService.GetAttempt(ctx, event.AttemptID)
 	if err != nil {
 		return nil, err
 	}
 
-	attempt, ok := lo.Find(payment.Attempts, func(a *dto.PaymentAttemptResponse) bool { return a.ID == event.AttemptID })
-	if !ok {
-		return nil, ierr.NewError("payment attempt not found").
-			WithHint("The payment attempt for this event no longer exists").
-			WithReportableDetails(map[string]any{"payment_id": event.PaymentID, "attempt_id": event.AttemptID}).
+	payments, err := b.services.PaymentService.ListPayments(ctx, &types.PaymentFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+		PaymentIDs:  []string{event.PaymentID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(payments.Items) == 0 {
+		return nil, ierr.NewError("payment not found").
+			WithReportableDetails(map[string]any{"payment_id": event.PaymentID}).
 			Mark(ierr.ErrNotFound)
 	}
 
@@ -102,8 +106,8 @@ func (b *PaymentAttemptPayloadBuilder) BuildPayload(ctx context.Context, eventTy
 
 	return json.Marshal(webhookDto.PaymentAttemptWebhookPayload{
 		EventType:       eventType,
-		Payment:         webhookDto.NewPayment(payment),
-		Attempt:         attempt,
+		Payment:         webhookDto.NewPayment(payments.Items[0]),
+		Attempt:         webhookDto.NewPaymentAttempt(attempt),
 		CheckoutSession: session,
 	})
 }
