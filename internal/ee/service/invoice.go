@@ -628,14 +628,6 @@ func (s *invoiceService) ListOpenCycleDrafts(ctx context.Context, subscriptionID
 	return drafts, nil
 }
 
-// ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
-// applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
-// Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
-// For one-off/credit invoices, pass the original request to apply coupons/taxes; for subscription invoices, pass nil.
-// Always sets LastComputedAt on successful computation.
-//
-// Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
-// OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 // subscriptionReferencePoint is the reference point a subscription invoice with this billing reason is computed at.
 func subscriptionReferencePoint(reason types.InvoiceBillingReason) types.InvoiceReferencePoint {
 	switch reason {
@@ -652,6 +644,14 @@ func subscriptionReferencePoint(reason types.InvoiceBillingReason) types.Invoice
 	}
 }
 
+// ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
+// applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
+// Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
+// For one-off/credit invoices, pass the original request to apply coupons/taxes; for subscription invoices, pass nil.
+// Always sets LastComputedAt on successful computation.
+//
+// Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
+// OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error) {
 	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
 	//    This avoids holding the row lock during expensive ClickHouse queries.
