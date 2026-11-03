@@ -19100,6 +19100,27 @@
         }
       }
     },
+    "/webhook-events/payment.attempt.failed": {
+      "post": {
+        "tags": [
+          "Webhook Events"
+        ],
+        "summary": "payment.attempt.failed",
+        "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
+        "responses": {
+          "200": {
+            "description": "Webhook payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/webhookDto.PaymentAttemptWebhookPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook-events/payment.created": {
       "post": {
         "tags": [
@@ -28906,6 +28927,9 @@
             "type": "string"
           },
           "error_message": {
+            "type": "string"
+          },
+          "gateway_attempt_id": {
             "type": "string"
           },
           "id": {
@@ -40060,6 +40084,7 @@
           "payment.created",
           "payment.updated",
           "payment.failed",
+          "payment.attempt.failed",
           "payment.success",
           "payment.pending",
           "refund.created",
@@ -40133,6 +40158,7 @@
           "WebhookEventPaymentCreated",
           "WebhookEventPaymentUpdated",
           "WebhookEventPaymentFailed",
+          "WebhookEventPaymentAttemptFailed",
           "WebhookEventPaymentSuccess",
           "WebhookEventPaymentPending",
           "WebhookEventRefundCreated",
@@ -42524,6 +42550,47 @@
           "voided_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "webhookDto.PaymentAttempt": {
+        "type": "object",
+        "properties": {
+          "attempt_number": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "gateway_attempt_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          }
+        }
+      },
+      "webhookDto.PaymentAttemptWebhookPayload": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "$ref": "#/components/schemas/webhookDto.PaymentAttempt"
+          },
+          "checkout_session": {
+            "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/types.WebhookEventName"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/webhookDto.Payment"
           }
         }
       },

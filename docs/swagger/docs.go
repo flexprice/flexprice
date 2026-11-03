@@ -15994,6 +15994,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/payment.attempt.failed": {
+            "post": {
+                "description": "Fired when one charge attempt is declined and the payment stays open for retry. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.attempt.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentAttemptWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/payment.created": {
             "post": {
                 "description": "Fired when a new payment is created. Doc-only for parsing.",
@@ -26271,6 +26294,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "error_message": {
+                    "type": "string"
+                },
+                "gateway_attempt_id": {
                     "type": "string"
                 },
                 "id": {
@@ -37657,6 +37683,7 @@ const docTemplate = `{
                 "payment.created",
                 "payment.updated",
                 "payment.failed",
+                "payment.attempt.failed",
                 "payment.success",
                 "payment.pending",
                 "refund.created",
@@ -37730,6 +37757,7 @@ const docTemplate = `{
                 "WebhookEventPaymentCreated",
                 "WebhookEventPaymentUpdated",
                 "WebhookEventPaymentFailed",
+                "WebhookEventPaymentAttemptFailed",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
                 "WebhookEventRefundCreated",
@@ -40098,6 +40126,46 @@ const docTemplate = `{
                 },
                 "voided_at": {
                     "type": "string"
+                }
+            }
+        },
+        "webhookDto.PaymentAttempt": {
+            "type": "object",
+            "properties": {
+                "attempt_number": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "gateway_attempt_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                }
+            }
+        },
+        "webhookDto.PaymentAttemptWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "attempt": {
+                    "$ref": "#/definitions/webhookDto.PaymentAttempt"
+                },
+                "checkout_session": {
+                    "$ref": "#/definitions/webhookDto.CheckoutSession"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "payment": {
+                    "$ref": "#/definitions/webhookDto.Payment"
                 }
             }
         },

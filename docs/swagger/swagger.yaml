@@ -6746,6 +6746,8 @@ definitions:
         type: string
       error_message:
         type: string
+      gateway_attempt_id:
+        type: string
       id:
         type: string
       metadata:
@@ -15042,6 +15044,7 @@ definitions:
     - payment.created
     - payment.updated
     - payment.failed
+    - payment.attempt.failed
     - payment.success
     - payment.pending
     - refund.created
@@ -15115,6 +15118,7 @@ definitions:
     - WebhookEventPaymentCreated
     - WebhookEventPaymentUpdated
     - WebhookEventPaymentFailed
+    - WebhookEventPaymentAttemptFailed
     - WebhookEventPaymentSuccess
     - WebhookEventPaymentPending
     - WebhookEventRefundCreated
@@ -16832,6 +16836,32 @@ definitions:
         type: string
       voided_at:
         type: string
+    type: object
+  webhookDto.PaymentAttempt:
+    properties:
+      attempt_number:
+        type: integer
+      created_at:
+        type: string
+      error_message:
+        type: string
+      gateway_attempt_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+    type: object
+  webhookDto.PaymentAttemptWebhookPayload:
+    properties:
+      attempt:
+        $ref: '#/definitions/webhookDto.PaymentAttempt'
+      checkout_session:
+        $ref: '#/definitions/webhookDto.CheckoutSession'
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      payment:
+        $ref: '#/definitions/webhookDto.Payment'
     type: object
   webhookDto.PaymentWebhookPayload:
     properties:
@@ -28010,6 +28040,22 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
+      tags:
+      - Webhook Events
+  /webhook-events/payment.attempt.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when one charge attempt is declined and the payment stays
+        open for retry. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
+      summary: payment.attempt.failed
       tags:
       - Webhook Events
   /webhook-events/payment.created:
