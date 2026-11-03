@@ -7,9 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/environment"
 	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -19,34 +17,6 @@ import (
 )
 
 var usageNow = time.Date(2026, 10, 1, 12, 34, 0, 0, time.UTC)
-
-func seedEnvironment(t *testing.T, d *testDeps, tenantID, id string, envType types.EnvironmentType) {
-	t.Helper()
-	require.NoError(t, d.envs.Create(tenantCtx(tenantID), &environment.Environment{
-		ID:        id,
-		Name:      envType.DisplayTitle(),
-		Type:      envType,
-		BaseModel: types.BaseModel{TenantID: tenantID, Status: types.StatusPublished},
-	}))
-}
-
-// tenantScopedEnvStore fails every Get with err, or else hides other tenants' environments as Postgres does.
-type tenantScopedEnvStore struct {
-	*testutil.InMemoryEnvironmentStore
-	err error
-}
-
-func (s *tenantScopedEnvStore) Get(ctx context.Context, id string) (*environment.Environment, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-
-	env, err := s.InMemoryEnvironmentStore.Get(ctx, id)
-	if err == nil && env.TenantID != types.GetTenantID(ctx) {
-		return nil, ierr.NewError("environment not found").Mark(ierr.ErrNotFound)
-	}
-	return env, err
-}
 
 func allIngested(f *fakeClient) []usageEvent {
 	f.mu.Lock()
@@ -94,7 +64,7 @@ func TestPushUsage_Events(t *testing.T) {
 	fc := newFakeClient()
 	s, d := newTestService(fc)
 	s.Config.Billing.TenantID = "t_billing"
-	seedEnvironment(t, d, "t1", "env_1", types.EnvironmentProduction)
+	d.usage.AddEnvironment("env_1", types.EnvironmentProduction)
 
 	d.usage.AddEvents(&domainsb.TenantHourEvents{
 		TenantID:      "t1",
@@ -187,9 +157,8 @@ func TestPushUsage_EnvironmentType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := newFakeClient()
 			s, d := newTestService(fc)
-			s.EnvironmentRepo = &tenantScopedEnvStore{InMemoryEnvironmentStore: d.envs}
 			if tt.envType != "" {
-				seedEnvironment(t, d, "t1", "env_1", tt.envType)
+				d.usage.AddEnvironment("env_1", tt.envType)
 			}
 			d.usage.AddEvents(&domainsb.TenantHourEvents{
 				TenantID:      "t1",
@@ -216,12 +185,21 @@ func TestPushUsage_EnvironmentType(t *testing.T) {
 	}
 }
 
+type envLookupFailingStore struct {
+	*testutil.InMemorySelfBillingStore
+	err error
+}
+
+func (s *envLookupFailingStore) ListEnvironmentTypes(context.Context, []string) (map[string]types.EnvironmentType, error) {
+	return nil, s.err
+}
+
 func TestPushUsage_EnvironmentLookupErrorReturned(t *testing.T) {
 	fc := newFakeClient()
 	s, d := newTestService(fc)
 	lookupErr := errors.New("postgres down")
-	s.EnvironmentRepo = &tenantScopedEnvStore{
-		InMemoryEnvironmentStore: d.envs,
+	s.SelfBillingPostgresRepo = &envLookupFailingStore{
+		InMemorySelfBillingStore: d.usage,
 		err:                      lookupErr,
 	}
 	d.usage.AddEvents(&domainsb.TenantHourEvents{
