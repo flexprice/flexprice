@@ -66,7 +66,7 @@ ClickHouse   1. quantity per line window                       → rate = line c
              2. (MAX meters only) sum of each row's peak       → rate = line cost ÷ sum of peaks
              3. rank: each event × its line's rate, added up per row and column
                 → sorted → one page + total row count + totals
-             4. (only if asked) time points and per-row metrics for the page rows
+             4. (only if asked) time points (priced the same way) and per-row metrics for the page rows
 ```
 
 **Example** — 2 meters, 4 users, "top 2 users by cost":
@@ -210,7 +210,8 @@ Distinct values (7 vs 1M) and number of meters matter far less.
 |---|---|---|---|
 | ~1M | < 0.5 s | < 1 s | Comfortable |
 | ~10M | ~2–3.5 s | ~5–7 s | Works; chart is the slow part |
-| ~30M, 250 meters | ~2 s (by model) – ~9 s (100k users) | ~5–19 s | Works for few rows; slow for many |
+| ~10M, 300–3,000 meters | ~1.6–4.8 s | ~4–8 s | Works; meter count barely matters |
+| ~30M, 250 meters | ~2 s (by model) – ~9 s (100k users) | ~5–15 s | Works for few rows; slow for many |
 | ~100M | ~22–25 s | ~40–60 s | Too slow → v2 rollup |
 | 10M, 50 JSON keys per event | ~7 s | ~13 s | Keep events lean |
 
@@ -238,6 +239,7 @@ properties = {"user":"u412","service":"svc3","sub_service":"sub87","model":"mode
 | Shape | Events | Meters | Distinct values of the row key |
 |---|---|---|---|
 | Per-user credits | 1M / 10M / 100M | 2 (one SUM, one MAX) | 1k / 50k / 1M users |
+| Many meters | 10M | 300 / 500 / 3,000 SUM | 10 services / 100k users |
 | App spend | 10M / 100M | 5 SUM | 5k apps × 50 teams × 3k owners |
 | Per-model spend | 30M | 250 SUM | 100k users, 250 models |
 | Per-minute bucketed | 6M | 6 (3 per-minute bucketed) | 90 (`token_uuid × source`) |
@@ -254,9 +256,15 @@ rows and daily totals across all rows (app spend also counts distinct owners and
 | Per-user credits 10M, by user | 615k | 0.29 | 0.88 | 4.35 | 4.29 | **9.8** |
 | App spend 10M, app + build/run + owner/team counts | 5k | 0.28 | — | 2.42 | 4.21 | **6.9** |
 | App spend 10M, app × team | 250k | 0.29 | — | 3.00 | 2.24 | **5.5** |
-| Per-model spend 30M, by model | 250 | 0.83 | — | 1.15 | 3.08 | **5.1** |
-| Per-model spend 30M, by user | 100k | 0.94 | — | 8.14 | 9.64 | **18.7** |
-| Per-model spend 30M, 7,500 daily line windows | 100k | 1.11 | — | 11.48 | 9.93 | **22.5** |
+| Per-model spend 30M, by model | 250 | 0.84 | — | 1.06 | 3.12 | **5.0** |
+| Per-model spend 30M, by user | 100k | 0.86 | — | 8.52 | 5.60 | **15.0** |
+| Per-model spend 30M, 7,500 daily line windows | 100k | 1.04 | — | 11.90 | 6.58 | **19.5** |
+| Many meters 10M, 300 meters, by service | 10 | 0.38 | — | 1.61 | 1.80 | **3.8** |
+| Many meters 10M, 500 meters, by service | 10 | 0.42 | — | 1.69 | 1.99 | **4.1** |
+| Many meters 10M, 3,000 meters, by service | 10 | 0.59 | — | 1.77 | 1.98 | **4.3** |
+| Many meters 10M, 300 meters, by user | 100k | 0.36 | — | 3.61 | 2.14 | **6.1** |
+| Many meters 10M, 500 meters, by user | 100k | 0.41 | — | 3.86 | 2.88 | **7.2** |
+| Many meters 10M, 3,000 meters, by user | 100k | 0.51 | — | 4.75 | 2.39 | **7.7** |
 | Per-minute bucketed 6M, token × source | 90 | 0.21 | — | 0.96 | 1.16 | **2.3** |
 | Wide events 10M, by user | 50k | 0.29 | — | 6.52 | 6.15 | **13.0** |
 | Per-user credits 100M, by user | 50k | 2.64 | 7.28 | 14.82 | 17.26 | **42.0** |
@@ -270,7 +278,9 @@ rows and daily totals across all rows (app spend also counts distinct owners and
    a second in every case.
 3. Distinct values matter little for time (7 → 615k values: 3.5 s → 9.8 s with chart) and memory stays under
    ~2 GB; the app receives one page, not every value (today's API ships up to millions of rows).
-4. Number of line windows doesn't limit the approach: 7,500 daily windows run in ~22 s on 30M events.
+4. Number of meters and line windows doesn't limit the approach: 300 → 3,000 meters at 10M events stays at ~4 s
+   (few rows) / ~6–8 s (100k rows); 7,500 daily windows run in ~20 s on 30M events. The chart is priced inside
+   ClickHouse, so it returns one row per point, not one per meter.
 5. Wide JSON doubles the cost; 100M events per request is beyond a dashboard and needs the v2 rollup.
 
 ## 9. What's next — v2: hourly rollup
