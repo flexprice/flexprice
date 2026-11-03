@@ -63,7 +63,7 @@ func TestRankAnalyticsV2Rows_MatchesOracle_Integration(t *testing.T) {
 		{Usage: d("1.5")},
 		{CommitmentUtilized: d("3"), TrueUp: d("0.5")},
 		{Usage: d("0.1"), Overage: d("0.05")},
-		{Usage: d("800"), Overage: d("120.5")}, // MAX line: whole-line amounts split by peak share
+		{Usage: d("12"), Overage: d("1.5")}, // MAX line: per unit of each row's peak
 	}
 
 	base := func() *events.AnalyticsV2RankParams {
@@ -153,6 +153,63 @@ func TestRankAnalyticsV2Rows_MatchesOracle_Integration(t *testing.T) {
 		})
 	}
 
+	t.Run("max line peaks ignore filters", func(t *testing.T) {
+		for _, groupBy := range [][]string{{"properties.app"}, {"source", "feature_id"}} {
+			pp := &events.AnalyticsV2LinePeakParams{Scope: scope, StartTime: aug(1, 0), EndTime: aug(31, 0), Lines: lines,
+				GroupBy: groupBy, MeterFeatures: base().MeterFeatures}
+			got, err := repo.GetAnalyticsV2LinePeaks(ctx, pp)
+			require.NoError(t, err)
+			want, err := ref.GetAnalyticsV2LinePeaks(ctx, pp)
+			require.NoError(t, err)
+			for i := range lines {
+				requireAnalyticsV2DecimalEqual(t, fmt.Sprintf("%v line %s", groupBy, lines[i].ID), want[i], got[i])
+			}
+			require.True(t, got[4].IsPositive(), "the MAX line has peaks")
+			require.True(t, got[0].IsZero(), "additive lines have none")
+		}
+	})
+
+	detailCases := []struct {
+		name   string
+		mutate func(p *events.AnalyticsV2RankParams)
+	}{
+		{"daily points by app", func(p *events.AnalyticsV2RankParams) {}},
+		{"daily points with build/run columns, filter and search", func(p *events.AnalyticsV2RankParams) {
+			p.Column = "properties.type"
+			p.Filters = []events.AnalyticsV2Filter{{Key: "properties.app", Exclude: true, Values: []string{"launch"}}}
+			p.Search = "p"
+		}},
+		{"points by meter and app", func(p *events.AnalyticsV2RankParams) { p.GroupBy = []string{"meter_id", "properties.app"} }},
+	}
+	for _, tc := range detailCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rank := base()
+			rank.Timezone = "UTC"
+			rank.Limit = 4
+			tc.mutate(rank)
+			page, err := ref.RankAnalyticsV2Rows(ctx, rank)
+			require.NoError(t, err)
+			require.NotEmpty(t, page.Rows)
+
+			dp := &events.AnalyticsV2DetailParams{
+				Rank:         *rank,
+				Rows:         lo.Map(page.Rows, func(r events.AnalyticsV2Row, _ int) []string { return r.Group }),
+				WindowSize:   types.WindowSizeDay,
+				DistinctKeys: []string{"source", "properties.type"},
+			}
+			got, err := repo.GetAnalyticsV2Detail(ctx, dp)
+			require.NoError(t, err)
+			want, err := ref.GetAnalyticsV2Detail(ctx, dp)
+			require.NoError(t, err)
+
+			require.True(t, lo.SomeBy(want.Points, func(c events.AnalyticsV2PointCell) bool { return c.Row == -1 }), "has all-rows cells")
+			require.True(t, lo.SomeBy(want.Points, func(c events.AnalyticsV2PointCell) bool { return c.Row == 0 }), "has page-row cells")
+			require.NotEmpty(t, want.Distinct[0])
+			require.Equal(t, renderAnalyticsV2Points(want.Points), renderAnalyticsV2Points(got.Points))
+			require.Equal(t, want.Distinct, got.Distinct)
+		})
+	}
+
 	t.Run("line usage over full windows", func(t *testing.T) {
 		for _, final := range []bool{false, true} {
 			sc := scope
@@ -233,6 +290,16 @@ func seedAnalyticsV2Events(t *testing.T, ctx context.Context, repo *MeterUsageRe
 	require.NoError(t, conn.QueryRow(ctx, "SELECT count() FROM meter_usage WHERE tenant_id = ?", tenant).Scan(&stored))
 	require.Equal(t, uint64(len(records)), stored, "a background merge already collapsed the duplicates; rerun")
 	require.NoError(t, ref.BulkInsertMeterUsage(ctx, records))
+}
+
+// renderAnalyticsV2Points prints point cells sorted, at 9 decimals.
+func renderAnalyticsV2Points(cells []events.AnalyticsV2PointCell) []string {
+	out := lo.Map(cells, func(c events.AnalyticsV2PointCell, _ int) string {
+		return fmt.Sprintf("row=%d w=%s col=%s line=%d q=%s weight=%s n=%d", c.Row, c.WindowStart.UTC().Format(time.RFC3339),
+			c.Column, c.Line, c.Quantity.Round(9), c.PeakWeight.Round(9), c.EventCount)
+	})
+	sort.Strings(out)
+	return out
 }
 
 // renderAnalyticsV2Rows prints rows at 9 decimals so the two implementations' rounding cannot differ.

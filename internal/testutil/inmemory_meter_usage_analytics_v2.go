@@ -128,18 +128,13 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 		}
 	}
 
-	// MAX lines: a row's share is its peak over the sum of row peaks; columns split it by column peak.
+	// MAX lines: a row is priced by its peak, split across columns by column peak.
 	rowLine := func(c *cell) string { return fmt.Sprintf("%s\x01%d", strings.Join(c.group, "\x00"), c.line) }
-	rowPeak, colPeakSum, linePeak := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}, map[int]decimal.Decimal{}
+	rowPeak, colPeakSum := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}
 	for _, c := range cells {
 		rl := rowLine(c)
 		rowPeak[rl] = decimal.Max(rowPeak[rl], c.pk)
 		colPeakSum[rl] = colPeakSum[rl].Add(c.pk)
-	}
-	for _, c := range cells {
-		if colPeakSum[rowLine(c)].IsPositive() {
-			linePeak[c.line] = linePeak[c.line].Add(rowPeak[rowLine(c)].Mul(c.pk).Div(colPeakSum[rowLine(c)]))
-		}
 	}
 
 	type row struct {
@@ -163,10 +158,10 @@ func (s *InMemoryMeterUsageStore) RankAnalyticsV2Rows(_ context.Context, p *even
 				return c.q.Mul(v)
 			}
 			rl := rowLine(c)
-			if linePeak[c.line].IsZero() || colPeakSum[rl].IsZero() {
+			if colPeakSum[rl].IsZero() {
 				return decimal.Zero
 			}
-			return v.Mul(rowPeak[rl]).Div(linePeak[c.line]).Mul(c.pk).Div(colPeakSum[rl])
+			return v.Mul(rowPeak[rl]).Mul(c.pk).Div(colPeakSum[rl])
 		}
 		am := events.AnalyticsV2Amounts{
 			Usage: amount(rate.Usage), CommitmentUtilized: amount(rate.CommitmentUtilized), Overage: amount(rate.Overage),
@@ -267,4 +262,141 @@ func addAnalyticsV2Amounts(dst *events.AnalyticsV2Amounts, a events.AnalyticsV2A
 	dst.TrueUp = dst.TrueUp.Add(a.TrueUp)
 	dst.Discount = dst.Discount.Add(a.Discount)
 	dst.Free = dst.Free.Add(a.Free)
+}
+
+func (s *InMemoryMeterUsageStore) GetAnalyticsV2LinePeaks(_ context.Context, p *events.AnalyticsV2LinePeakParams) ([]decimal.Decimal, error) {
+	out := make([]decimal.Decimal, len(p.Lines))
+	keyParams := &events.AnalyticsV2RankParams{MeterFeatures: p.MeterFeatures}
+	rowPeak := map[string]decimal.Decimal{}
+	for _, r := range s.analyticsV2Visible(p.Scope) {
+		if r.Timestamp.Before(p.StartTime) || !r.Timestamp.Before(p.EndTime) {
+			continue
+		}
+		for li, line := range p.Lines {
+			if !line.IsMax || !inLine(r, line) {
+				continue
+			}
+			group := lo.Map(p.GroupBy, func(k string, _ int) string { return analyticsV2Key(r, line, k, keyParams, time.UTC) })
+			k := fmt.Sprintf("%s\x01%d", strings.Join(group, "\x00"), li)
+			if prev, ok := rowPeak[k]; !ok || r.QtyTotal.GreaterThan(prev) {
+				rowPeak[k] = r.QtyTotal
+			}
+		}
+	}
+	for k, pk := range rowPeak {
+		var li int
+		fmt.Sscan(k[strings.LastIndex(k, "\x01")+1:], &li)
+		out[li] = out[li].Add(pk)
+	}
+	return out, nil
+}
+
+// GetAnalyticsV2Detail is the reference for page points and distinct metrics. Windows are bucketed in UTC.
+func (s *InMemoryMeterUsageStore) GetAnalyticsV2Detail(_ context.Context, params *events.AnalyticsV2DetailParams) (*events.AnalyticsV2Detail, error) {
+	p := &params.Rank
+	detail := &events.AnalyticsV2Detail{Distinct: make([]map[string]events.AnalyticsV2Distinct, len(params.Rows))}
+	if len(params.Rows) == 0 {
+		return detail, nil
+	}
+	page := map[string]int{}
+	for i, row := range params.Rows {
+		page[strings.Join(row, "\x1f")] = i
+	}
+
+	type cell struct {
+		rk    string
+		w     time.Time
+		col   string
+		line  int
+		q, pk decimal.Decimal
+		n     uint64
+	}
+	cells := map[string]*cell{}
+	distinct := make([]map[string]map[string]bool, len(params.Rows))
+	for _, r := range s.analyticsV2Visible(p.Scope) {
+		if r.Timestamp.Before(p.StartTime) || !r.Timestamp.Before(p.EndTime) {
+			continue
+		}
+		for li, line := range p.Lines {
+			if !inLine(r, line) || lo.SomeBy(p.Filters, func(f events.AnalyticsV2Filter) bool {
+				return lo.Contains(f.Values, analyticsV2Key(r, line, f.Key, p, time.UTC)) == f.Exclude
+			}) {
+				continue
+			}
+			group := lo.Map(p.GroupBy, func(k string, _ int) string { return analyticsV2Key(r, line, k, p, time.UTC) })
+			rk := strings.Join(group, "\x1f")
+			if row, ok := page[rk]; ok {
+				if distinct[row] == nil {
+					distinct[row] = map[string]map[string]bool{}
+				}
+				for _, k := range params.DistinctKeys {
+					if distinct[row][k] == nil {
+						distinct[row][k] = map[string]bool{}
+					}
+					distinct[row][k][analyticsV2Key(r, line, k, p, time.UTC)] = true
+				}
+			}
+			if params.WindowSize == "" || (p.Search != "" && !strings.Contains(strings.ToLower(strings.Join(group, " ")), strings.ToLower(p.Search))) {
+				continue
+			}
+			col := ""
+			if p.Column != "" {
+				col = analyticsV2Key(r, line, p.Column, p, time.UTC)
+			}
+			w := truncateToWindow(r.Timestamp, params.WindowSize, params.BillingAnchor)
+			k := fmt.Sprintf("%s\x01%d\x01%s\x01%d", rk, w.Unix(), col, li)
+			c := cells[k]
+			if c == nil {
+				c = &cell{rk: rk, w: w, col: col, line: li, pk: r.QtyTotal}
+				cells[k] = c
+			}
+			c.q, c.pk, c.n = c.q.Add(r.QtyTotal), decimal.Max(c.pk, r.QtyTotal), c.n+1
+		}
+	}
+
+	for row, keys := range distinct {
+		if keys == nil {
+			continue
+		}
+		detail.Distinct[row] = map[string]events.AnalyticsV2Distinct{}
+		for k, values := range keys {
+			d := events.AnalyticsV2Distinct{Count: uint64(len(values))}
+			if len(values) <= 5 {
+				d.Values = lo.Keys(values)
+				sort.Strings(d.Values)
+			}
+			detail.Distinct[row][k] = d
+		}
+	}
+
+	// Peak weight: row peak x cell peak / sum of the row's cell peaks, per (row, line).
+	rowLine := func(c *cell) string { return fmt.Sprintf("%s\x01%d", c.rk, c.line) }
+	rowPeak, cellPeakSum := map[string]decimal.Decimal{}, map[string]decimal.Decimal{}
+	for _, c := range cells {
+		rowPeak[rowLine(c)] = decimal.Max(rowPeak[rowLine(c)], c.pk)
+		cellPeakSum[rowLine(c)] = cellPeakSum[rowLine(c)].Add(c.pk)
+	}
+	totals := map[string]*events.AnalyticsV2PointCell{}
+	for _, c := range cells {
+		weight := decimal.Zero
+		if cellPeakSum[rowLine(c)].IsPositive() {
+			weight = rowPeak[rowLine(c)].Mul(c.pk).Div(cellPeakSum[rowLine(c)])
+		}
+		if row, ok := page[c.rk]; ok {
+			detail.Points = append(detail.Points, events.AnalyticsV2PointCell{
+				Row: row, WindowStart: c.w, Column: c.col, Line: c.line, Quantity: c.q, PeakWeight: weight, EventCount: c.n,
+			})
+		}
+		tk := fmt.Sprintf("%d\x01%s\x01%d", c.w.Unix(), c.col, c.line)
+		t := totals[tk]
+		if t == nil {
+			t = &events.AnalyticsV2PointCell{Row: -1, WindowStart: c.w, Column: c.col, Line: c.line}
+			totals[tk] = t
+		}
+		t.Quantity, t.PeakWeight, t.EventCount = t.Quantity.Add(c.q), t.PeakWeight.Add(weight), t.EventCount+c.n
+	}
+	for _, t := range totals {
+		detail.Points = append(detail.Points, *t)
+	}
+	return detail, nil
 }

@@ -3,6 +3,7 @@ package events
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -26,7 +27,7 @@ type AnalyticsV2Line struct {
 	MeterID string
 	Start   time.Time
 	End     time.Time
-	// IsMax splits the line's amounts by each row's own peak instead of quantity x rate.
+	// IsMax prices a row by its own peak (rate x peak) instead of quantity x rate.
 	IsMax bool
 }
 
@@ -85,7 +86,7 @@ type AnalyticsV2Sort struct {
 }
 
 // AnalyticsV2RankParams ranks rows of events priced by their line's rates.
-// Rates[i] belongs to Lines[i]: per-unit rates for additive lines, whole-line amounts for MAX lines.
+// Rates[i] belongs to Lines[i]: per unit of quantity for additive lines, per unit of row peak for MAX lines.
 type AnalyticsV2RankParams struct {
 	Scope     AnalyticsV2Scope
 	StartTime time.Time
@@ -128,4 +129,54 @@ type AnalyticsV2RankResult struct {
 	// Totals and ColumnTotals cover every row that matched, not just the page.
 	Totals       AnalyticsV2Measure
 	ColumnTotals map[string]AnalyticsV2Measure
+}
+
+// AnalyticsV2LinePeakParams asks, per MAX line, for the sum over all rows of each row's peak in the range.
+// Filters are ignored on purpose, so a row's MAX cost is the same filtered or not.
+type AnalyticsV2LinePeakParams struct {
+	Scope     AnalyticsV2Scope
+	StartTime time.Time
+	EndTime   time.Time
+	Lines     []AnalyticsV2Line
+	GroupBy   []string
+	// MeterFeatures maps meter ID to feature ID for the feature_id key.
+	MeterFeatures map[string]string
+}
+
+// AnalyticsV2DetailParams asks for time points and distinct-value metrics of the page rows,
+// plus per-window points across every matching row. Sort, Limit and Offset in Rank are unused.
+type AnalyticsV2DetailParams struct {
+	Rank AnalyticsV2RankParams
+	// Rows are the page rows' group values, in GroupBy order.
+	Rows          [][]string
+	WindowSize    types.WindowSize
+	BillingAnchor *time.Time
+	// DistinctKeys are the keys whose distinct values are counted per page row.
+	DistinctKeys []string
+}
+
+// AnalyticsV2PointCell is one (row, window, column, line) aggregate. Row is the index into the
+// request's Rows, or -1 for the cell summed over every matching row.
+type AnalyticsV2PointCell struct {
+	Row         int
+	WindowStart time.Time
+	Column      string
+	Line        int
+	Quantity    decimal.Decimal
+	// PeakWeight is the cell's part of its row's peak: row peak x cell peak / sum of the row's cell peaks.
+	// A MAX line's cell costs rate x PeakWeight, so a row's cells add up to rate x row peak.
+	PeakWeight decimal.Decimal
+	EventCount uint64
+}
+
+// AnalyticsV2Distinct counts a key's distinct values in a row; Values is set when there are few.
+type AnalyticsV2Distinct struct {
+	Count  uint64
+	Values []string
+}
+
+type AnalyticsV2Detail struct {
+	Points []AnalyticsV2PointCell
+	// Distinct[row][key] for each page row and requested key.
+	Distinct []map[string]AnalyticsV2Distinct
 }
