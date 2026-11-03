@@ -672,7 +672,7 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 			TenantID:      types.GetTenantID(ctx),
 			EnvironmentID: types.GetEnvironmentID(ctx),
 			UserID:        types.GetUserID(ctx),
-			Timestamp:     time.Now().UTC(),
+			Timestamp:     clock.Now(),
 			Payload:       json.RawMessage(webhookPayload),
 			EntityType:    types.SystemEntityTypePayment,
 			EntityID:      paymentID,
