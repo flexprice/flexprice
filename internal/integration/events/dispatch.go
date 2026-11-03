@@ -473,7 +473,7 @@ func triggerRazorpayIfEnabled(
 	if err != nil {
 		return err
 	}
-	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
+	if conn == nil {
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderRazorpay) {
