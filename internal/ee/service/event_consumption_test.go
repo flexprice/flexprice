@@ -9,6 +9,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
@@ -174,4 +175,80 @@ func TestMeterUsageTracking_ScopeMismatchDropped(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, newSvc().processMessage(ctx, message.NewMessage("m1", payload)))
 	})
+}
+
+type lookupRecordingMeterRepo struct {
+	meter.Repository
+	scopes []string
+}
+
+func (r *lookupRecordingMeterRepo) GetMatchingMetersByEventName(ctx context.Context, _ string) ([]*meter.Meter, error) {
+	r.scopes = append(r.scopes, types.GetTenantID(ctx)+"|"+types.GetEnvironmentID(ctx))
+	return nil, nil
+}
+
+func scopedCtx(tenant, env string) context.Context {
+	ctx := context.WithValue(context.Background(), types.CtxTenantID, tenant)
+	return context.WithValue(ctx, types.CtxEnvironmentID, env)
+}
+
+func TestBulkScope_EffectiveScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		batch   events.EventBatch
+		mdTen   string
+		mdEnv   string
+		wantIDs []string
+		// Tenant and env seen by the meter lookup.
+		wantScope string
+	}{
+		{"empty batch tenant, ctx A, event B", events.EventBatch{EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tB", "e1")}}, "tA", "e1", nil, ""},
+		{"empty batch env, ctx e1, event e2", events.EventBatch{TenantID: "tA", Events: []*events.Event{mkEvt("a", "tA", "e2")}}, "tA", "e1", nil, ""},
+		{"fully empty envelope, ctx A, event B", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e2")}}, "tA", "e1", nil, ""},
+		{"empty batch tenant, ctx A, event A", events.EventBatch{EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tA", "e1", []string{"a"}, "tA|e1"},
+		{"empty batch, event empty falls back to ctx", events.EventBatch{Events: []*events.Event{mkEvt("a", "", "")}}, "tA", "e1", []string{"a"}, "tA|e1"},
+		{"consistent", events.EventBatch{TenantID: "tA", EnvironmentID: "e1", Events: []*events.Event{mkEvt("a", "tA", "e1")}}, "tA", "e1", []string{"a"}, "tA|e1"},
+		{"no scope anywhere, event scoped", events.EventBatch{Events: []*events.Event{mkEvt("a", "tB", "e2")}}, "", "", []string{"a"}, "tB|e2"},
+	}
+	for _, tt := range tests {
+		t.Run("events/"+tt.name, func(t *testing.T) {
+			repo := &recordingEventRepo{}
+			s := &eventConsumptionService{
+				ServiceParams: ServiceParams{Logger: logger.NewNoopLogger(), Config: &config.Configuration{}},
+				eventRepo:     repo,
+			}
+			require.NoError(t, s.processBulkMessage(scopedCtx(tt.mdTen, tt.mdEnv), scopedMsg(t, tt.batch)))
+			var ids []string
+			for _, e := range repo.inserted {
+				ids = append(ids, e.ID)
+			}
+			assert.Equal(t, tt.wantIDs, ids)
+		})
+		t.Run("meter/"+tt.name, func(t *testing.T) {
+			mr := &lookupRecordingMeterRepo{}
+			s := &meterUsageTrackingService{ServiceParams: ServiceParams{
+				Logger:    logger.NewNoopLogger(),
+				Config:    &config.Configuration{},
+				MeterRepo: mr,
+			}}
+			require.NoError(t, s.processBulkMessage(scopedCtx(tt.mdTen, tt.mdEnv), scopedMsg(t, tt.batch)))
+			if tt.wantIDs == nil {
+				assert.Empty(t, mr.scopes)
+				return
+			}
+			assert.Equal(t, []string{tt.wantScope}, mr.scopes)
+		})
+	}
+}
+
+func TestMeterUsageBulk_EmptyScopeSkipped(t *testing.T) {
+	mr := &lookupRecordingMeterRepo{}
+	s := &meterUsageTrackingService{ServiceParams: ServiceParams{
+		Logger:    logger.NewNoopLogger(),
+		Config:    &config.Configuration{},
+		MeterRepo: mr,
+	}}
+	b := events.EventBatch{Events: []*events.Event{mkEvt("a", "", "")}}
+	require.NoError(t, s.processBulkMessage(context.Background(), scopedMsg(t, b)))
+	assert.Empty(t, mr.scopes)
 }
