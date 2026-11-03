@@ -26868,6 +26868,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/PaymentAttemptResponse"
                     }
                 },
+                "connection_id": {
+                    "description": "connection_id is the connection that took this payment; null when no gateway connection was used",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -40795,6 +40799,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
+                    "type": "string"
+                },
+                "connection_id": {
                     "type": "string"
                 },
                 "currency": {
