@@ -576,6 +576,7 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 	}
 
 	*a = *domainPayment.FromEntAttempt(attempt)
+	r.DeleteCache(ctx, a.PaymentID)
 	return nil
 }
 

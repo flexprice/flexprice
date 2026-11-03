@@ -625,12 +625,17 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		attemptNumber = latestAttempt.AttemptNumber + 1
 	}
 
+	metadata := req.Metadata
+	if metadata == nil {
+		metadata = types.Metadata{}
+	}
+
 	attempt := &payment.PaymentAttempt{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
 		PaymentID:     paymentID,
 		AttemptNumber: attemptNumber,
 		PaymentStatus: req.PaymentStatus,
-		Metadata:      types.Metadata{},
+		Metadata:      metadata,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -657,7 +662,42 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		"gateway_attempt_id", req.GatewayAttemptID,
 	)
 
+	switch req.PaymentStatus {
+	case types.PaymentStatusFailed:
+		webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
+			PaymentID: paymentID,
+			TenantID:  types.GetTenantID(ctx),
+			AttemptID: attempt.ID,
+		})
+		if err != nil {
+			s.Logger.Error(ctx, "failed to marshal payment attempt webhook payload", "error", err, "payment_id", paymentID)
+			return nil
+		}
+
+		if err := s.WebhookPublisher.PublishWebhook(ctx, &types.WebhookEvent{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+			EventName:     types.WebhookEventPaymentAttemptFailed,
+			TenantID:      types.GetTenantID(ctx),
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			UserID:        types.GetUserID(ctx),
+			Timestamp:     clock.Now(),
+			Payload:       json.RawMessage(webhookPayload),
+			EntityType:    types.SystemEntityTypePayment,
+			EntityID:      paymentID,
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to publish payment attempt webhook", "error", err, "payment_id", paymentID)
+		}
+	}
+
 	return nil
+}
+
+func (s *paymentService) GetAttempt(ctx context.Context, attemptID string) (*dto.PaymentAttemptResponse, error) {
+	attempt, err := s.PaymentRepo.GetAttempt(types.WithForceWriter(ctx), attemptID)
+	if err != nil {
+		return nil, err
+	}
+	return dto.NewPaymentAttemptResponse(attempt), nil
 }
 
 // ListPayments lists payments based on filter

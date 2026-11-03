@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -856,4 +858,45 @@ func (s *PaymentServiceSuite) TestRecordAttemptCountsByStatus() {
 
 	s.NoError(s.service.RecordAttempt(s.GetContext(), p.ID, dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusFailed}))
 	s.Equal(before+1, r.Sum("payment.attempts", failed))
+}
+
+func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
+	ctx := s.GetContext()
+	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
+
+	p := &payment.Payment{
+		ID:                "pay_attempt_failed",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		TrackAttempts:     true,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "inr",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+	publisher.Reset()
+
+	req := dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusFailed,
+		ErrorMessage:     "card declined",
+		GatewayAttemptID: "pay_rzp_001",
+		Metadata:         types.Metadata{"error_reason": "incorrect_card_details"},
+	}
+	s.NoError(s.service.RecordAttempt(ctx, p.ID, req))
+
+	events := publisher.Events()
+	s.Require().Len(events, 1)
+	s.Equal(types.WebhookEventPaymentAttemptFailed, events[0].EventName)
+
+	var event webhookDto.InternalPaymentEvent
+	s.NoError(json.Unmarshal(events[0].Payload, &event))
+	s.Equal(p.ID, event.PaymentID)
+
+	stored, err := s.GetStores().PaymentRepo.GetAttempt(ctx, event.AttemptID)
+	s.NoError(err)
+	s.Equal(1, stored.AttemptNumber)
+	s.Equal("pay_rzp_001", lo.FromPtr(stored.GatewayAttemptID))
+	s.Equal("incorrect_card_details", stored.Metadata["error_reason"])
 }

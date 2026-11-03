@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
+	temporalInterceptor "github.com/flexprice/flexprice/internal/temporal/interceptor"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/serviceerror"
@@ -159,4 +160,16 @@ func TestBuildWorkerOptionsQueueOverrides(t *testing.T) {
 	if other.TaskQueueActivitiesPerSecond != 0 {
 		t.Fatalf("unlisted queue rate = %v, want 0", other.TaskQueueActivitiesPerSecond)
 	}
+}
+
+func TestBuildWorkerOptionsRegistersTimePrecisionInterceptor(t *testing.T) {
+	s := &temporalService{}
+
+	options := s.buildWorkerOptions(types.TemporalTaskQueueInvoice)
+	for _, i := range options.Interceptors {
+		if _, ok := i.(*temporalInterceptor.TimePrecisionInterceptor); ok {
+			return
+		}
+	}
+	t.Fatalf("worker interceptors %T do not include the time-precision interceptor", options.Interceptors)
 }
