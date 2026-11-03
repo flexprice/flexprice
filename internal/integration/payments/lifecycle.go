@@ -2,13 +2,17 @@ package payments
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/samber/lo"
 
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -600,4 +604,41 @@ func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) 
 		return ierr.NewError("currency is required").Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+const invoiceChargeLockTTL = 15 * time.Minute
+
+// LockInvoiceCharge takes the per-invoice charge lock and returns an ErrAlreadyExists error
+// when another charge for the invoice is PROCESSING. Hold it until the charge is submitted.
+func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID string) (cache.Lock, error) {
+	key := fmt.Sprintf("invoicecharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
+	lock, err := locker.AcquireLock(ctx, key, invoiceChargeLockTTL)
+	if err != nil {
+		return nil, err
+	}
+	if !lock.AcquiredSuccessfully() {
+		return nil, errChargeInFlight(invoiceID)
+	}
+
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
+	filter.Limit = lo.ToPtr(1)
+	inFlight, err := paymentRepo.List(ctx, filter)
+	if err == nil && len(inFlight) > 0 {
+		err = errChargeInFlight(invoiceID)
+	}
+	if err != nil {
+		_ = lock.Release(ctx)
+		return nil, err
+	}
+	return lock, nil
+}
+
+func errChargeInFlight(invoiceID string) error {
+	return ierr.NewError("a charge is already in progress for this invoice").
+		WithHint("A charge for this invoice is already in progress; wait for it to settle").
+		WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+		Mark(ierr.ErrAlreadyExists)
 }

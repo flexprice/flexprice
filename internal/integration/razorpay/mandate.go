@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -276,7 +277,7 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 		return nil, false, nil
 	}
 
-	lock, err := LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID)
+	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID)
 	if err != nil {
 		return nil, false, err
 	}

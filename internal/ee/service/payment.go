@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/metrics"
@@ -101,8 +102,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 
 	if req.ProcessPayment && lo.FromPtr(req.PaymentGateway) == types.PaymentGatewayTypeRazorpay &&
 		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
-		// Held until the charge is submitted, so no other path charges this invoice meanwhile.
-		lock, err := razorpay.LockInvoiceCharge(ctx, s.Locker, s.PaymentRepo, types.GetEnvironmentID(ctx), p.DestinationID)
+		lock, err := payments.LockInvoiceCharge(ctx, s.Locker, s.PaymentRepo, types.GetEnvironmentID(ctx), p.DestinationID)
 		if err != nil {
 			return nil, err
 		}
