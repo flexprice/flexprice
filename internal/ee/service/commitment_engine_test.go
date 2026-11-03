@@ -48,16 +48,16 @@ func quantityLine(usage ...int64) *usageLine {
 
 // stacked builds a commitment with the given pool capacities and window-to-pool mapping.
 func stacked(id string, priority int, poolOf []int, lines []*usageLine, capacities ...int64) *stackedCommitment {
-	pools := make([]capacityPool, len(capacities))
+	pools := make([]decimal.Decimal, len(capacities))
 	for i, c := range capacities {
-		pools[i] = capacityPool{Capacity: intDec(c)}
+		pools[i] = intDec(c)
 	}
 
 	return &stackedCommitment{
-		C:      &commitment.Commitment{ID: id, Priority: priority},
-		Lines:  lines,
-		Pools:  pools,
-		PoolOf: poolOf,
+		Commitment: &commitment.Commitment{ID: id, Priority: priority},
+		Lines:      lines,
+		Pools:      pools,
+		PoolOf:     poolOf,
 	}
 }
 
@@ -358,7 +358,7 @@ func TestAllocateRejectsBrokenInput(t *testing.T) {
 func TestSortCommitmentStack(t *testing.T) {
 	day := func(d int) time.Time { return time.Date(2027, 1, d, 0, 0, 0, 0, time.UTC) }
 	mk := func(id string, priority int, start time.Time) *stackedCommitment {
-		return &stackedCommitment{C: &commitment.Commitment{ID: id, Priority: priority, StartDate: start}}
+		return &stackedCommitment{Commitment: &commitment.Commitment{ID: id, Priority: priority, StartDate: start}}
 	}
 
 	tests := []struct {
@@ -388,7 +388,7 @@ func TestSortCommitmentStack(t *testing.T) {
 			sortCommitmentStack(tt.input)
 			got := make([]string, len(tt.input))
 			for i, sc := range tt.input {
-				got[i] = sc.C.ID
+				got[i] = sc.ID
 			}
 
 			require.Equal(t, tt.want, got)
@@ -424,15 +424,15 @@ func invoiceLine(id string, quantity, cost string, usage ...string) *usageLine {
 
 // committed builds a commitment stacked over the given lines with one pool per capacity.
 func committed(id string, binding bool, periodAmount string, poolOf []int, lines []*usageLine, capacities ...string) *stackedCommitment {
-	pools := make([]capacityPool, len(capacities))
+	pools := make([]decimal.Decimal, len(capacities))
 	capacity := decimal.Zero
 	for i, c := range capacities {
-		pools[i] = capacityPool{Capacity: dec(c)}
+		pools[i] = dec(c)
 		capacity = capacity.Add(dec(c))
 	}
 
 	return &stackedCommitment{
-		C: &commitment.Commitment{
+		Commitment: &commitment.Commitment{
 			ID:                 id,
 			Binding:            binding,
 			InvoiceLabel:       "Label " + id,

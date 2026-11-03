@@ -23,27 +23,22 @@ type commitmentPeriod struct {
 	Clipped       bool            // cut to part of the period by the invoice window or a termination
 }
 
+// amountFn values a commitment's capacity in money.
+type amountFn func(capacity decimal.Decimal) decimal.Decimal
+
 // commitmentPeriods returns the billing periods clipped to the commitment term from the one holding `from`, valued
 // by amountOf; with no end_date they run through the period holding `through`.
 func commitmentPeriods(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	bucket types.WindowSize,
 	from time.Time,
 	through time.Time,
 ) ([]commitmentPeriod, error) {
-	horizon := lo.FromPtr(c.EndDate)
-	if c.EndDate == nil {
-		var err error
-		if horizon, err = periodEndAt(sub, through); err != nil {
-			return nil, err
-		}
-
-		// The subscription's own end bounds an open-ended commitment: no floor accrues past it.
-		if sub.EndDate != nil {
-			horizon = minTime(horizon, *sub.EndDate)
-		}
+	horizon, err := periodsHorizon(c, sub, through)
+	if err != nil {
+		return nil, err
 	}
 
 	first, err := periodAt(sub, maxTime(from, c.StartDate))
@@ -95,13 +90,32 @@ func commitmentPeriods(
 	return out, nil
 }
 
+// periodsHorizon returns where c's periods stop: its end_date, or with none the end of the billing period holding
+// through, never past the subscription's end.
+func periodsHorizon(c *commitment.Commitment, sub *subscription.Subscription, through time.Time) (time.Time, error) {
+	if c.EndDate != nil {
+		return *c.EndDate, nil
+	}
+
+	horizon, err := periodEndAt(sub, through)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if sub.EndDate != nil {
+		return minTime(horizon, *sub.EndDate), nil
+	}
+
+	return horizon, nil
+}
+
 // clipCommitmentPeriod returns p cut to [from, until), with its capacity and amount recomputed.
 // Bounds within the same second as p's edges leave it whole, since computed billing dates drop sub-seconds.
 func clipCommitmentPeriod(
 	c *commitment.Commitment,
 	p commitmentPeriod,
 	from, until time.Time,
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	bucket types.WindowSize,
 	anchor time.Time,
 ) commitmentPeriod {
@@ -129,7 +143,7 @@ func clipCommitmentPeriod(
 // accruedAmount values the capacity accrued between two cumulative points of a period as the difference of
 // their rounded values, so the partial floors of a period sum exactly to its rounded whole.
 func accruedAmount(
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	before, through decimal.Decimal,
 	currency string,
 ) decimal.Decimal {
@@ -163,8 +177,7 @@ func periodCapacity(
 
 	var buckets int64
 	if dur, fixed := bucketDuration(bucket); fixed && len(c.ActiveWindows) == 0 {
-		// Clock-aligned buckets with no active windows count arithmetically: a minute-bucket
-		// year would otherwise walk half a million instants on every value computation.
+		// Count clock-aligned buckets arithmetically; walking a long term minute by minute is too slow.
 		if first.Before(to) {
 			buckets = int64(to.Sub(first)-1)/int64(dur) + 1
 		}
@@ -195,7 +208,7 @@ func commitmentValue(periods []commitmentPeriod) decimal.Decimal {
 func termValue(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	bucket types.WindowSize,
 ) (*decimal.Decimal, error) {
 	if c.EndDate == nil {
@@ -214,7 +227,7 @@ func termValue(
 func earnedAmount(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	bucket types.WindowSize,
 	at time.Time,
 ) (decimal.Decimal, error) {
@@ -244,8 +257,8 @@ func earnedAmount(
 	return types.RoundToCurrencyPrecision(earned, c.Currency), nil
 }
 
-// periodAt returns the subscription billing period [Start, End) holding t, uncut by the subscription
-// end, with the edges generating every period from sub.StartDate gives, without generating the ones before it.
+// periodAt returns the subscription billing period holding t, uncut by the subscription end, with the edges
+// generating every period from sub.StartDate would give.
 func periodAt(sub *subscription.Subscription, t time.Time) (types.Period, error) {
 	firstEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
 		CurrentPeriodStart: sub.StartDate,
@@ -390,21 +403,10 @@ func minTime(a, b time.Time) time.Time {
 // month) step by calendar rules and return false.
 func bucketDuration(size types.WindowSize) (time.Duration, bool) {
 	switch size {
-	case types.WindowSizeMinute:
-		return time.Minute, true
-	case types.WindowSize15Min:
-		return 15 * time.Minute, true
-	case types.WindowSize30Min:
-		return 30 * time.Minute, true
-	case types.WindowSizeHour:
-		return time.Hour, true
-	case types.WindowSize3Hour:
-		return 3 * time.Hour, true
-	case types.WindowSize6Hour:
-		return 6 * time.Hour, true
-	case types.WindowSize12Hour:
-		return 12 * time.Hour, true
-	default:
+	case types.WindowSizeDay, types.WindowSizeWeek, types.WindowSizeMonth:
 		return 0, false
 	}
+
+	minutes := size.ToMinutes()
+	return time.Duration(minutes) * time.Minute, minutes > 0
 }

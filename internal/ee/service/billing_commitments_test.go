@@ -896,7 +896,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_BillingPeriodPoolsAcrossTheSp
 	s.Require().Len(stacks, 1)
 	s.Len(stacks[0].Windows, 2)
 	px, py := stacks[0].Commitments[0], stacks[0].Commitments[1]
-	s.Equal("cmt_x", px.C.ID)
+	s.Equal("cmt_x", px.ID)
 	s.Len(px.Pools, 1)
 	s.Equal([]int{0, 0}, px.PoolOf)
 	s.Equal([]int{-1, 0}, py.PoolOf)
@@ -1036,7 +1036,7 @@ func (s *BillingServiceSuite) TestCommitmentLoader_DailyGridIsUTCForChargesKeyed
 	s.True(allocs[0].Commitments[0].Used.Equal(dec("14")), "used %s", allocs[0].Commitments[0].Used)
 	s.True(allocs[0].Overage[0][4].Equal(dec("5")))
 	s.True(allocs[0].Commitments[0].Capacity.Equal(dec("310")), "capacity %s", allocs[0].Commitments[0].Capacity)
-	s.Equal(c.ID, stacks[0].Commitments[0].C.ID)
+	s.Equal(c.ID, stacks[0].Commitments[0].ID)
 }
 
 // Terminated at 20:00 UTC on 9 Aug, the UTC grid holds nine daily buckets from the period start;
