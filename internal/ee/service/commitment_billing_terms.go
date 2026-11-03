@@ -334,6 +334,36 @@ func (s *commitmentService) settle(
 	return created[0], nil
 }
 
+// settleEnded bills the instalments still scheduled on a billing-terms commitment that ended before its subscription
+// was cancelled, since no later subscription invoice will carry them. It must run inside the cancel transaction.
+func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commitment) error {
+	if lo.FromPtr(c.CollectionMethod) != types.CommitmentCollectionBillingTerms {
+		return nil
+	}
+
+	if err := s.lockCommitment(ctx, c.ID); err != nil {
+		return err
+	}
+
+	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		OwnerType: types.BillingTermOwnerCommitment,
+		OwnerIDs:  []string{c.ID},
+		Statuses:  []types.InstalmentStatus{types.InstalmentStatusScheduled},
+	})
+	if err != nil || len(scheduled) == 0 {
+		return err
+	}
+
+	end := *c.EffectiveEnd()
+	settlement, err := s.settle(ctx, c, end)
+	if err != nil || settlement == nil {
+		return err
+	}
+
+	_, err = s.billTermination(ctx, c, end, nil, settlement)
+	return err
+}
+
 func (s *commitmentService) BillDueInstalments(ctx context.Context) error {
 	configs, err := s.SettingsRepo.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeyCommitmentsV2)
 	if err != nil {

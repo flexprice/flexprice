@@ -580,6 +580,9 @@ func (s *commitmentService) TerminateForSubscription(
 
 		for _, c := range listed {
 			if c.EndedBy(effectiveAt) {
+				if err := s.settleEnded(txCtx, c); err != nil {
+					return err
+				}
 				continue
 			}
 

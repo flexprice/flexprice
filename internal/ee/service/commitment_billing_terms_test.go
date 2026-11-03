@@ -1348,6 +1348,41 @@ func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_GenerateInvoicePo
 	s.Empty(s.storedInstalmentLines(cancelInvoices[0].ID), "the cancel invoice carries no instalment")
 }
 
+// A commitment that ended on 21 Jan still has its instalment due that day scheduled for the January invoice when the
+// subscription is cancelled at once on 25 Jan. No January invoice follows, so a settlement bills it.
+func (s *CommitmentE2ESuite) TestCancelSubscriptionImmediately_SettlesAnEndedCommitment() {
+	ctx := s.GetContext()
+	end := time.Date(2026, 1, 21, 0, 0, 0, 0, time.UTC)
+	tokens := s.planWith("cancel_after_end", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	created := s.subscribe(tokens, s.jan)
+	committed := s.commit(created.ID, termsRequest("Platform", tokens.ID, "100", s.jan, end, wholeValueUpfront(&end)))
+	s.Require().Len(committed.Instalments, 1)
+	due := committed.Instalments[0]
+
+	cancelAt := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+	_, err := s.subscriptions.CancelSubscription(ctx, created.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
+		CancelAt:         &cancelAt,
+	})
+	s.Require().NoError(err)
+
+	s.Equal(types.InstalmentStatusCancelled, s.instalmentStatus(due.ID).InstalmentStatus)
+
+	settlement := s.settlementOf(committed.ID)
+	s.True(settlement.Amount.Equal(due.Amount), "settlement %s, due %s", settlement.Amount, due.Amount)
+	s.True(settlement.ServicePeriodStart.Equal(s.jan) && settlement.ServicePeriodEnd.Equal(end))
+	s.Equal(types.InstalmentStatusInvoiced, settlement.InstalmentStatus)
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, lo.FromPtr(settlement.InvoiceID))
+	s.Require().NoError(err)
+	s.Equal(types.InvoiceTypeOneOff, inv.InvoiceType)
+	s.True(inv.AmountDue.Equal(due.Amount), "amount due %s", inv.AmountDue)
+
+	ended, err := s.commitments.Get(ctx, committed.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CommitmentStatusActive, ended.CommitmentStatus, "an ended commitment is not terminated")
+}
+
 // Voiding a settlement's invoice puts the settlement back on schedule, and the next run bills it again though the
 // subscription is cancelled.
 func (s *CommitmentE2ESuite) TestBillDueInstalments_RebillsAVoidedSettlement() {
