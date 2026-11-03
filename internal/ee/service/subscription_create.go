@@ -219,6 +219,7 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 				return err
 			}
 
+			var err error
 			scheduled := []types.InstalmentStatus{types.InstalmentStatusScheduled}
 			cancelled, err = s.BillingInstalmentRepo.Cancel(txCtx, types.BillingTermOwnerCommitment, c.ID, scheduled)
 			return err
