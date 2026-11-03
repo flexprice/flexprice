@@ -752,10 +752,7 @@ func (s *commitmentService) billTermination(
 		lines = append(lines, line)
 	}
 
-	total := decimal.Zero
-	for _, line := range lines {
-		total = total.Add(line.Amount)
-	}
+	total := sumAmounts(lines)
 
 	// The invoice period spans its lines: the settled term before effective_at, the rest the fee covers, or both.
 	first := lo.MinBy(lines, func(a, b dto.CreateInvoiceLineItemRequest) bool { return a.PeriodStart.Before(*b.PeriodStart) })
@@ -858,7 +855,7 @@ func (s *commitmentService) ListOverlapping(
 func identityAmount(capacity decimal.Decimal) decimal.Decimal { return capacity }
 
 // priceAmountFn values a quantity by applying p, the way billing prices usage.
-func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) func(decimal.Decimal) decimal.Decimal {
+func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) amountFn {
 	prices := NewPriceService(params)
 	return func(qty decimal.Decimal) decimal.Decimal { return prices.CalculateCost(ctx, p, qty) }
 }
@@ -867,7 +864,7 @@ func priceAmountFn(ctx context.Context, params ServiceParams, p *price.Price) fu
 func (s *commitmentService) committedAmountFn(
 	ctx context.Context,
 	c *commitment.Commitment,
-) (func(decimal.Decimal) decimal.Decimal, error) {
+) (amountFn, error) {
 	if c.Type == types.COMMITMENT_TYPE_AMOUNT {
 		return identityAmount, nil
 	}

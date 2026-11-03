@@ -24,7 +24,7 @@ func (s *commitmentService) planInstalments(
 	ctx context.Context,
 	c *commitment.Commitment,
 	cc *commitmentContext,
-	amountOf func(capacity decimal.Decimal) decimal.Decimal,
+	amountOf amountFn,
 	terms []*billingterm.Term,
 	invoiced []*billingterm.Instalment,
 	from time.Time,
