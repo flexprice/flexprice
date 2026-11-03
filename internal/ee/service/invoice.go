@@ -29,6 +29,7 @@ import (
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -2086,8 +2087,8 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	return nil
 }
 
-// SyncInvoiceToRazorpayIfEnabled syncs the invoice to Razorpay unless it's already
-// paid, has zero balance, or Razorpay sync isn't enabled for the tenant.
+// SyncInvoiceToRazorpayIfEnabled auto-charges the saved mandate for charge_automatically
+// subscriptions, then syncs the invoice to Razorpay if outbound sync is enabled.
 func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
@@ -2113,11 +2114,6 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 			"invoice_id", inv.ID, "error", err)
 		return nil
 	}
-	if !conn.IsInvoiceOutboundEnabled() {
-		s.Logger.Debug(ctx, "invoice sync disabled for Razorpay connection, skipping",
-			"invoice_id", inv.ID, "connection_id", conn.ID)
-		return nil
-	}
 
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
@@ -2126,14 +2122,23 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 		return nil
 	}
 
+	// A submitted auto-charge skips the sync so the customer gets no payable link for it.
+	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.InvoiceSyncSvc)
+	if err != nil || charged {
+		return err
+	}
+
+	if !conn.IsInvoiceOutboundEnabled() {
+		return nil
+	}
+
 	customerService := NewCustomerService(s.ServiceParams)
-	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoice(ctx, inv, customerService)
+	result, err := razorpayIntegration.InvoiceSyncSvc.SyncInvoiceToRazorpay(ctx, razorpay.RazorpayInvoiceSyncRequest{InvoiceID: inv.ID}, customerService)
 	if err != nil {
 		return err
 	}
 
-	// Only the send-invoice path needs the URL persisted; auto-charge is reconciled via webhook.
-	if !result.AutoCharged && result.ShortURL != "" {
+	if result.ShortURL != "" {
 		metadata := inv.Metadata
 		if metadata == nil {
 			metadata = types.Metadata{}
@@ -2149,6 +2154,23 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 	}
 
 	return nil
+}
+
+// autoChargeRazorpayInvoice charges the saved Razorpay mandate when the invoice's subscription collects automatically.
+func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, syncSvc *razorpay.InvoiceSyncService) (bool, error) {
+	if inv.SubscriptionID == nil {
+		return false, nil
+	}
+
+	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+	if err != nil {
+		return false, err
+	}
+	if sub.CollectionMethod != string(types.CollectionMethodChargeAutomatically) {
+		return false, nil
+	}
+
+	return syncSvc.TryAutoCharge(ctx, inv)
 }
 
 // SyncInvoiceToChargebeeIfEnabled syncs the invoice to Chargebee if Chargebee connection is enabled.
