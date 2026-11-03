@@ -27,12 +27,12 @@ func instalmentBillAt(referencePoint types.InvoiceReferencePoint, periodStart, p
 	}
 }
 
-// dueInstalments returns the subscription's scheduled subscription-invoice instalments due by billAt, in billing
+// dueInstalments returns the subscriptions' scheduled subscription-invoice instalments due by billAt, in billing
 // order; none while commitments_v2 is off.
 func dueInstalments(
 	ctx context.Context,
 	params ServiceParams,
-	subscriptionID string,
+	subscriptionIDs []string,
 	billAt time.Time,
 ) ([]*billingterm.Instalment, error) {
 	enabled, err := NewCommitmentService(params).IsEnabled(ctx)
@@ -42,7 +42,7 @@ func dueInstalments(
 
 	return params.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType:       types.BillingTermOwnerCommitment,
-		SubscriptionIDs: []string{subscriptionID},
+		SubscriptionIDs: subscriptionIDs,
 		Statuses:        []types.InstalmentStatus{types.InstalmentStatusScheduled},
 		Deliveries:      []types.InstalmentDelivery{types.InstalmentDeliverySubscriptionInvoice},
 		BillOnOrBefore:  &billAt,
@@ -55,7 +55,7 @@ func (s *billingService) dueInstalmentLines(
 	sub *subscription.Subscription,
 	billAt time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
-	instalments, err := dueInstalments(ctx, s.ServiceParams, sub.ID, billAt)
+	instalments, err := dueInstalments(ctx, s.ServiceParams, []string{sub.ID}, billAt)
 	if err != nil || len(instalments) == 0 {
 		return nil, decimal.Zero, err
 	}

@@ -16031,6 +16031,8 @@ definitions:
     - BillingTermSplitEven
     - BillingTermSplitProportional
   types.BillingTermValueType:
+    description: fixed or remainder; percentage is reserved and rejected as not supported
+      yet
     enum:
     - fixed
     - percentage
@@ -16041,6 +16043,7 @@ definitions:
     - BillingTermValuePercentage
     - BillingTermValueRemainder
   types.CancellationFeeType:
+    description: fixed; percentage is reserved and rejected as not supported yet
     enum:
     - fixed
     - percentage

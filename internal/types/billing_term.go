@@ -26,6 +26,8 @@ func (k BillingTermKind) Validate() error {
 	})
 }
 
+// BillingTermValueType says how a billing term's value is read.
+// @Description fixed or remainder; percentage is reserved and rejected as not supported yet
 type BillingTermValueType string
 
 const (
@@ -115,6 +117,8 @@ func (d InstalmentDelivery) Validate() error {
 	})
 }
 
+// CancellationFeeType says how a cancellation fee's value is read.
+// @Description fixed; percentage is reserved and rejected as not supported yet
 type CancellationFeeType string
 
 const (

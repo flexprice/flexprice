@@ -164,6 +164,52 @@ func (s *CommitmentE2ESuite) TestFinalize_RecomputesADraftMissingADueInstalment(
 	s.requireBilledBy(draft.ID, billed)
 }
 
+// A parent's draft bills its grouped children's instalments too, so a child's milestone triggered after the draft was
+// computed is picked up when the draft is finalized.
+func (s *CommitmentE2ESuite) TestFinalize_RecomputesAParentDraftMissingAChildInstalment() {
+	ctx := s.GetContext()
+	invoices := NewInvoiceService(fullServiceParams(&s.BaseServiceTestSuite))
+	tokens := s.planWith("grouped_child", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
+	parent := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeParent, nil)
+	child := s.groupSubscription(s.subscribe(tokens, s.jan).ID, types.SubscriptionTypeGroupedInvoicing, lo.ToPtr(parent.ID))
+
+	terms := upfrontPlusRemainder()
+	terms[0].BillTrigger = lo.ToPtr(types.InstalmentBillTriggerManual)
+	committed := s.commit(child.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), terms...))
+
+	draft, _, err := invoices.GetOrComputeCurrentPeriodDraft(ctx, parent)
+	s.Require().NoError(err)
+
+	listed, err := s.commitments.ListInstalments(ctx, committed.ID, nil)
+	s.Require().NoError(err)
+	milestone, ok := lo.Find(listed.Items, func(inst *billingterm.Instalment) bool {
+		return inst.BillTrigger == types.InstalmentBillTriggerManual
+	})
+	s.Require().True(ok)
+	s.Require().NotContains(lo.Map(s.storedInstalmentLines(draft.ID), func(line *invoice.InvoiceLineItem, _ int) string {
+		return lo.FromPtr(line.BillingInstalmentID)
+	}), milestone.ID)
+
+	_, err = s.commitments.TriggerInstalment(ctx, committed.ID, milestone.ID, dto.TriggerInstalmentRequest{
+		BillOn: lo.ToPtr(s.jan.AddDate(0, 0, 14)),
+	})
+	s.Require().NoError(err)
+
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+	s.Contains(instalmentIDs(s.billedInstalments(draft.ID)), milestone.ID, "the parent's recomputed draft bills the child's milestone")
+}
+
+// groupSubscription makes the subscription a grouped-invoicing parent or child and returns it.
+func (s *CommitmentE2ESuite) groupSubscription(id string, subType types.SubscriptionType, parentID *string) *subscription.Subscription {
+	sub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), id)
+	s.Require().NoError(err)
+
+	sub.SubscriptionType = subType
+	sub.ParentSubscriptionID = parentID
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+	return sub
+}
+
 // A manually edited draft is never recomputed: it finalizes without the milestone, which waits for the next invoice.
 func (s *CommitmentE2ESuite) TestFinalize_ManuallyEditedDraftLeavesADueInstalmentScheduled() {
 	ctx := s.GetContext()

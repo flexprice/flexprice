@@ -41362,6 +41362,7 @@
       },
       "types.BillingTermValueType": {
         "type": "string",
+        "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
         "enum": [
           "fixed",
           "percentage",
@@ -41376,6 +41377,7 @@
       },
       "types.CancellationFeeType": {
         "type": "string",
+        "description": "fixed; percentage is reserved and rejected as not supported yet",
         "enum": [
           "fixed",
           "percentage"

@@ -38974,6 +38974,7 @@ const docTemplate = `{
             ]
         },
         "types.BillingTermValueType": {
+            "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
             "type": "string",
             "enum": [
                 "fixed",
@@ -38987,6 +38988,7 @@ const docTemplate = `{
             ]
         },
         "types.CancellationFeeType": {
+            "description": "fixed; percentage is reserved and rejected as not supported yet",
             "type": "string",
             "enum": [
                 "fixed",

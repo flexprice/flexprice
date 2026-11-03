@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -81,7 +82,8 @@ func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) 
 	return lo.Without(billed, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
 }
 
-// missingInstalments returns the scheduled instalments due within a subscription draft that it does not bill.
+// missingInstalments returns the scheduled instalments due within a subscription draft that it does not bill; a
+// parent's draft also bills its grouped children's.
 func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.Invoice, billed []string) ([]string, error) {
 	// A trial-start invoice drops its instalments and a paused period's invoice is never computed.
 	reason := types.InvoiceBillingReason(inv.BillingReason)
@@ -95,7 +97,25 @@ func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.In
 		return nil, nil
 	}
 
-	due, err := dueInstalments(ctx, s.ServiceParams, *inv.SubscriptionID, billAt)
+	enabled, err := newCommitmentService(s.ServiceParams).IsEnabled(ctx)
+	if err != nil || !enabled {
+		return nil, err
+	}
+
+	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
+	if err != nil {
+		return nil, err
+	}
+
+	subscriptionIDs := append([]string{sub.ID}, lo.Map(children, func(child *subscription.Subscription, _ int) string {
+		return child.ID
+	})...)
+	due, err := dueInstalments(ctx, s.ServiceParams, subscriptionIDs, billAt)
 	if err != nil {
 		return nil, err
 	}

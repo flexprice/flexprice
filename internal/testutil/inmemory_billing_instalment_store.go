@@ -69,6 +69,9 @@ func billingInstalmentSortFn(i, j *billingterm.Instalment) bool {
 }
 
 func (s *InMemoryBillingInstalmentStore) CreateMany(ctx context.Context, instalments []*billingterm.Instalment) ([]*billingterm.Instalment, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
 	created := make([]*billingterm.Instalment, 0, len(instalments))
 	for _, in := range instalments {
 		row := *in
@@ -77,6 +80,11 @@ func (s *InMemoryBillingInstalmentStore) CreateMany(ctx context.Context, instalm
 		}
 
 		if err := s.InMemoryStore.Create(ctx, row.ID, &row); err != nil {
+			// The bulk insert is all or nothing, so the rows already added go too.
+			for _, c := range created {
+				_ = s.InMemoryStore.Delete(ctx, c.ID)
+			}
+
 			return nil, err
 		}
 
