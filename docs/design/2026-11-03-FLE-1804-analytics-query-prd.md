@@ -59,14 +59,32 @@ the chart. Rolling them up to the requested window inside ClickHouse cuts that t
 **Price each line like the invoice, then let ClickHouse rank.** Pricing stays in our app (the invoice
 calculation); ClickHouse only multiplies and adds up per row.
 
-```
-App          price every billing period in the range with the invoice calculation
-             (entitlements, commitments, overage, bucketed tiers, percentage coupons)
-ClickHouse   1. quantity per line window                       → rate = line cost ÷ quantity
-             2. (MAX meters only) sum of each row's peak       → rate = line cost ÷ sum of peaks
-             3. rank: each event × its line's rate, added up per row and column
-                → sorted → one page + total row count + totals
-             4. (only if asked) time points (priced the same way) and per-row metrics for the page rows
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as Flexprice API
+    participant P as Postgres
+    participant B as Invoice calculation
+    participant CH as ClickHouse (meter_usage)
+
+    C->>A: POST /v1/events/analytics/query
+    A->>P: customer, subscriptions, line items, prices, meters, coupons in range
+    A->>B: price every billing period in the range
+    B-->>A: cost per line window (entitlements, commitments, tiers, coupons)
+    Note over A: true-up → unattributed, unsupported meters → excluded_meters
+    par step 1 and 2
+        A->>CH: 1. quantity per line window
+    and
+        A->>CH: 2. MAX meters: sum of each row's peak
+    end
+    Note over A: rate = line cost ÷ quantity (or ÷ sum of peaks)
+    A->>CH: 3. rank: events × rate, added up per row and column
+    CH-->>A: one page + total row count + totals
+    opt chart or metrics asked
+        A->>CH: 4. time points (priced in ClickHouse) and per-row metrics for the page rows
+    end
+    Note over A: fix rounding so rows + unattributed + excluded = billed cost
+    A-->>C: page of rows, totals, unattributed, excluded_meters
 ```
 
 **Example** — 2 meters, 4 users, "top 2 users by cost":
