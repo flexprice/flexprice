@@ -276,6 +276,16 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 		return nil, false, nil
 	}
 
+	lock, err := LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			a.Svc.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", req.InvoiceID, "error", releaseErr)
+		}
+	}()
+
 	result, charged, err := a.Svc.ChargeSavedToken(ctx, ChargeSavedTokenRequest{
 		Customer:           custResp.Customer,
 		InvoiceID:          req.InvoiceID,

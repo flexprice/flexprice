@@ -37,6 +37,44 @@ const razorpayExpireBySafetyMargin = 2 * time.Minute
 // ambiguous (network timeout vs. definitive failure can't be reliably told apart).
 const autoChargeLockTTL = 15 * time.Minute
 
+// LockInvoiceCharge takes the per-invoice Razorpay charge lock and returns a 409 error
+// when another Razorpay charge for the invoice is PROCESSING. Every mandate charge path
+// calls it before creating or charging its payment, since Razorpay does not dedupe
+// orders by receipt. The caller releases the lock once its charge is submitted.
+func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID string) (cache.Lock, error) {
+	key := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
+	lock, err := locker.AcquireLock(ctx, key, autoChargeLockTTL)
+	if err != nil {
+		return nil, err
+	}
+	if !lock.AcquiredSuccessfully() {
+		return nil, errChargeInFlight(invoiceID)
+	}
+
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeRazorpay))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
+	filter.Limit = lo.ToPtr(1)
+	inFlight, err := paymentRepo.List(ctx, filter)
+	if err == nil && len(inFlight) > 0 {
+		err = errChargeInFlight(invoiceID)
+	}
+	if err != nil {
+		_ = lock.Release(ctx)
+		return nil, err
+	}
+	return lock, nil
+}
+
+func errChargeInFlight(invoiceID string) error {
+	return ierr.NewError("razorpay charge already in progress for this invoice").
+		WithHint("A charge for this invoice is already in progress at Razorpay; wait for it to settle").
+		WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+		Mark(ierr.ErrAlreadyExists)
+}
+
 // SyncInvoiceResult carries data the caller must persist (e.g. payment-link
 // URLs) back to invoice metadata; done by the caller to avoid a circular
 // import between InvoiceSyncService and the service layer.
@@ -264,6 +302,22 @@ func (s *InvoiceSyncService) executeAutoCharge(
 		return nil
 	}
 
+	lock, err := LockInvoiceCharge(ctx, s.locker, s.paymentRepo, inv.EnvironmentID, inv.ID)
+	if ierr.IsAlreadyExists(err) {
+		s.logger.Info(ctx, "a razorpay charge is already in progress for this invoice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+	if err != nil {
+		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
+		return err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
+		}
+	}()
+
 	pymnt, skip, err := s.findOrCreateAutoChargePayment(ctx, inv, paymentMethodType)
 	if err != nil {
 		return err
@@ -273,23 +327,6 @@ func (s *InvoiceSyncService) executeAutoCharge(
 			"invoice_id", inv.ID)
 		return nil
 	}
-
-	lockKey := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), inv.EnvironmentID, inv.ID)
-	lock, err := s.locker.AcquireLock(ctx, lockKey, autoChargeLockTTL)
-	if err != nil {
-		s.logger.Error(ctx, "failed to acquire auto-charge lock", "invoice_id", inv.ID, "error", err)
-		return err
-	}
-	if !lock.AcquiredSuccessfully() {
-		s.logger.Info(ctx, "auto-charge already in progress for this invoice, skipping",
-			"invoice_id", inv.ID)
-		return nil
-	}
-	defer func() {
-		if releaseErr := lock.Release(ctx); releaseErr != nil {
-			s.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", inv.ID, "error", releaseErr)
-		}
-	}()
 
 	freshInv, err := s.invoiceRepo.Get(ctx, inv.ID)
 	if err != nil {

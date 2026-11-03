@@ -101,6 +101,16 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 
 	if req.ProcessPayment && lo.FromPtr(req.PaymentGateway) == types.PaymentGatewayTypeRazorpay &&
 		(p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI) {
+		// Held until the charge is submitted, so no other path charges this invoice meanwhile.
+		lock, err := razorpay.LockInvoiceCharge(ctx, s.Locker, s.PaymentRepo, types.GetEnvironmentID(ctx), p.DestinationID)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release razorpay charge lock", "invoice_id", p.DestinationID, "error", releaseErr)
+			}
+		}()
 		if err := s.validateRazorpayMandate(ctx, invoice.CustomerID, p); err != nil {
 			return nil, err
 		}
@@ -272,28 +282,9 @@ func validateChargeGateway(r *dto.CreatePaymentRequest) error {
 	return nil
 }
 
-// validateRazorpayMandate rejects the charge before a payment row exists when a Razorpay
-// charge is already in flight for the invoice, or the customer has no usable mandate.
+// validateRazorpayMandate rejects the charge before a payment row exists when the
+// customer has no usable Razorpay mandate for the method and amount.
 func (s *paymentService) validateRazorpayMandate(ctx context.Context, customerID string, p *payment.Payment) error {
-	// Razorpay does not dedupe orders by receipt, so a second charge here would double-charge.
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(p.DestinationID)
-	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeRazorpay))
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
-	inFlight, err := s.PaymentRepo.Count(ctx, filter)
-	if err != nil {
-		return err
-	}
-	if inFlight > 0 {
-		return ierr.NewError("razorpay charge already in progress for this invoice").
-			WithHint("A charge for this invoice is already in progress at Razorpay; wait for it to settle").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": p.DestinationID,
-			}).
-			Mark(ierr.ErrAlreadyExists)
-	}
-
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
 		return ierr.WithError(err).
