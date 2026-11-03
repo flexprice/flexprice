@@ -47,10 +47,13 @@ row": by the time a late operation runs, the row may already be redacted.
 | `customer_id` | deletion request row |
 | `external_id` | deletion request row |
 
-Both identifiers are required. The internal ID is the join key across Postgres; the
-external ID is the only customer key in ClickHouse, which never stores `customer_id`
-except as a nullable column on `events`. An operation given only one of the two cannot
-cover both stores.
+Both identifiers are required. The internal ID is the join key across Postgres.
+ClickHouse is not keyed uniformly: `events`, `raw_events` and `meter_usage` carry
+`external_customer_id`, while `activity_logs` carries only `customer_id` and has no
+external-ID column at all. An implementation that filters every ClickHouse table by
+external ID will not match `activity_logs`, and verification would then report success
+while those rows remain. §6.1 states the key per table; use it rather than assuming one
+key. An operation given only one of the two identifiers cannot cover both stores.
 
 ### 2.2 Output
 
@@ -130,10 +133,26 @@ disposition:
   → submitted, in flight. A retry **looks that marker up in `system.mutations`** rather
   than submitting again (§6.2).
 
-The request's `state` is **derived from its category dispositions**, not set
-independently: a request is complete when every category has a terminal disposition.
-Without that rule an orchestrator will set request state on its own and the two will
-disagree.
+The request's `state` is **constrained by its category dispositions**, not derived from
+them alone. A request may only reach `completed` when every category has a terminal
+disposition — that direction is a hard rule, and without it an orchestrator will report
+completion over unfinished work.
+
+Dispositions alone are not sufficient to pick a state, because `pending` covers both
+"not started" and "attempted and failed", while the request states
+(`internal/domain/customerdeletion/model.go`) distinguish `suppressed`, `redacting`,
+`completed` and `failed`. The missing inputs are the stage reached (§2.5) and whether
+the last attempt errored. The mapping:
+
+| Condition | State |
+|---|---|
+| Suppression stage done, redaction not started | `suppressed` |
+| Redaction stage started, categories still `pending` | `redacting` |
+| Every category terminal | `completed` |
+| Any category's last attempt errored and retries are exhausted | `failed` |
+
+`failed` is therefore a property of the attempt, not of the disposition, and has to be
+recorded by the orchestrator. This must be settled before orchestration is written.
 
 ### 2.3 Retry safety
 
@@ -146,9 +165,11 @@ Three rules follow, and all three are already violable in the current code:
    `name` to `[redacted]` must treat an already-redacted row as success, not as a
    missing target.
 2. **A permanent condition must not be returned as a retryable error.** This is the
-   poison-pill class: the usage-event path retries on error, and a retired external ID
-   never becomes valid, so returning an error there retries forever. FLE-1888 returns
-   `(nil, nil)` for exactly this reason.
+   poison-pill class: the usage-event path retries on error, so any condition that will
+   never become valid must not surface as one. Under date-scoped erasure the event path
+   has no such condition — events for an erased external ID onboard normally (§4) — but
+   the rule still governs every other operation, including a redaction whose target
+   field is immutable (§9.12).
 3. **Verification is a separate read, after the write.** A disposition of `purged`
    backed by "the delete returned no error" is not evidence; §2.4 defines what is.
 4. **A retry must find a prior attempt's in-flight work before starting new work.**
@@ -194,15 +215,25 @@ carry no status predicate. Follow that.
 |---|---|
 | Postgres, purge | Row count by `(tenant_id, environment_id, customer_id)`, no status predicate, taken after commit, expected 0 |
 | Postgres, redact | The sentinel is present **and** `customers.updated_at` is not later than the recorded `redacted_at`. Sentinel presence alone is not evidence — see rule 3 |
-| ClickHouse | Row count by **that table's own customer key** (`external_customer_id` for `events`, `raw_events`, `meter_usage`, `deleted_events_logs`; **`customer_id` for `activity_logs`**, which has no `external_customer_id` column), with `FINAL`, taken after the mutation reports done — not after it is submitted (§6.2) |
-| File storage | Object listing under the customer's prefix, expected empty |
+| Postgres, purged JSON field | `contact_persons` and `metadata` are purged as whole fields (§5.1), so neither a row count nor the `[redacted]` sentinel applies. Evidence is that the column is SQL `NULL` or an empty container (`[]` / `{}`) — the operation must write one agreed form, and verification must assert that exact form. An empty-string or `"null"` string value is a failure, not a pass |
+| ClickHouse | Row count by **that table's own customer key** (`external_customer_id` for `events`, `raw_events`, `meter_usage`, `deleted_events_logs`; **`customer_id` for `activity_logs`**, which has no `external_customer_id` column), **bounded by `ingested_at < requested_at`**, with `FINAL`, taken after the mutation reports done — not after it is submitted (§6.2). The bound is mandatory: events arriving after the request are outside its scope (§4), so an unbounded count fails as soon as the tenant sends one more event (§9.8) |
+| File storage | Per-object existence check for every known key, **not** a prefix listing. `GetInvoicePDFUrl` (`internal/ee/service/invoice.go`) stores PDFs under `{tenant_id}/{invoice_id}`, so no customer-scoped prefix exists and an empty customer-prefix listing would be vacuously true. The key set must be derived from the subject's invoice IDs before `invoices_pg` removes them (§2.5) |
 | Cache | Not verifiable by count; verified by the absence of the key, with the TTL and the repopulation race stated (§7) |
 
 `FINAL` is required because `events`, `raw_events`, `meter_usage` and `activity_logs` are
-all `ReplacingMergeTree`: a count without it is a deduplicated view, not a statement
-about what is on disk. `deleted_events_logs` is plain `MergeTree` and needs none. The
+all `ReplacingMergeTree`: a count without it collapses nothing and can report rows a
+query would never return. `deleted_events_logs` is plain `MergeTree` and needs none. The
 existing code already does this — `event_deletion.go` counts `FROM meter_usage FINAL`
 with a comment saying the count must match what the mutation removed.
+
+**What `FINAL` does and does not prove.** It collapses duplicate versions at query
+time, so a zero count with `FINAL` establishes that **no row is visible to any query** —
+logical erasure. It does not establish that obsolete parts have been merged away on
+disk. The evidence this contract requires is the logical claim, because that is what a
+data subject's right bears on and what any reader of the data can observe. Physical
+removal follows from the mutation itself (§6.2) plus ClickHouse merge behaviour, and is
+not independently asserted by the verification count. Where a stronger physical claim is
+needed, it has to come from part-level inspection, not from a `FINAL` count.
 
 **Rule 3 — redaction evidence must not be circular.** The sentinel is `[redacted]`
 (§5.1), and `name` is `NotEmpty()`, so `[redacted]` is a value a tenant can set through
@@ -210,9 +241,11 @@ the normal API. Asserting `name = '[redacted]'` therefore cannot distinguish a r
 row from a tenant who named a customer that, nor from a row that was redacted and then
 overwritten with fresh PII.
 
-Nothing currently prevents the overwrite: `rejectRetiredExternalID`
-(`internal/ee/service/customer.go`) guards the **external ID** only, so `UpdateCustomer`
-can write a new `name` and `email` onto a redacted row. Two requirements follow:
+Nothing currently prevents the overwrite: no write path consults `redacted_at`, so
+`UpdateCustomer` can write a new `name` and `email` onto a redacted row. Date-scoped
+erasure makes this sharper rather than milder — the same external ID may legitimately
+be re-onboarded (§4), so a write fence keyed on the identifier is not available and the
+fence must key on the customer row's own redaction state. Two requirements follow:
 
 - Record the redaction timestamp in `verification_result` and compare it against
   `customers.updated_at`, so a later write is detectable.
@@ -287,12 +320,21 @@ reached by traversal. Invoice line items, credit note line items, subscription l
 items, phases, pauses and schedules, wallet transactions.
 
 **`payment` is indirect, and this is easy to get wrong.** `ent/schema/payment.go` has
-**no `customer_id` column at all**. A payment is reachable only through
-`destination_id` → invoice → `invoice.customer_id`, and `payment_attempt` only through
-`payment`. Two consequences: `payments_pg` cannot be implemented independently of
-invoices (§2.5), and the traversal lands on an invoice that **may be payer-owned rather
-than subject-owned**, so the payer-versus-usage-owner hazard below applies to `payment`
-through a path that does not mention customers anywhere.
+**no `customer_id` column at all**. There are two reachability paths, and an
+invoice-only traversal misses one of them:
+
+- `destination_type = INVOICE` → `destination_id` → invoice → `invoice.customer_id`
+- `destination_type = CUSTOMER` → **`destination_id` holds the customer ID directly**
+  (`PaymentDestinationTypeCustomer`, `internal/types/payment.go`), used when the
+  payment's purpose is to tokenize a payment method rather than settle an invoice
+
+`payment_attempt` is reachable only through `payment`. Three consequences:
+`payments_pg` cannot be implemented independently of invoices (§2.5); the query must
+branch on `destination_type` rather than joining invoices alone, or customer-directed
+payments escape erasure entirely; and the invoice traversal lands on an invoice that
+**may be payer-owned rather than subject-owned**, so the payer-versus-usage-owner
+hazard below applies to `payment` through a path that does not mention customers
+anywhere.
 
 **Payer versus usage owner.** These are different customers in the same billing
 relationship, and the distinction is load-bearing. `invoice` carries both `customer_id`
@@ -318,76 +360,57 @@ customer's; the catalog entry is not.
 
 ---
 
-## 4. The permanently retained external ID
+## 4. The external ID and the erasure cutoff
 
-The external ID is **retained permanently and never cleared**. This is a deliberate
-exception to erasure, and the one most likely to be challenged, so it is stated here in
-full rather than left implicit.
+Erasure is **date-scoped**, and the external ID is **reusable**. This replaces an
+earlier permanent-retirement design; the reasoning for the change is recorded on
+FLE-1836.
 
-**What is retained.** One string per erased customer, in
-`customer_deletion_requests.external_id`, with the unique index on
-`(tenant_id, environment_id, external_id)` carrying no partial predicate so that a
-soft-deleted row cannot release a retired identifier.
+**What is retained.** One row per erasure request in `customer_deletion_requests`,
+holding the `external_id` and the request's `requested_at`. That row is the record of
+*what was erased and up to when*. It is not a block on reuse.
 
-**Why.** Two reasons, and they are different:
+**No unique index on the identifier.** `(tenant_id, environment_id, external_id)` must
+**not** be unique. A customer may be erased, re-onboard with the same external ID, and
+request erasure again — each request is a separate row with its own cutoff. A unique
+index rejects the second request, which is itself a compliance failure.
 
-1. **Anti-recreation.** Without a suppression list, the next import recreates the
-   customer and the erasure is undone. A suppression list is the standard mechanism and
-   requires keeping the identifier.
-2. **Evidence.** A tenant must be able to ask, indefinitely, what was erased for a
-   given external ID. An erasure that cannot be evidenced cannot be demonstrated.
+**The cutoff is ingestion time.** An erasure deletes data for the customer that was
+**ingested before `requested_at`**, compared against `ingested_at`, not against the
+event's own timestamp. Two consequences:
 
-**The legal position, stated honestly.** Permanent retention needs a lawful basis under
-Article 6 and a storage-limitation rationale under Article 5(1)(e). **Article 5(2)
+- Anything held at request time is erased, so there is no late-arrival hole where an
+  old-period event ingested after the deletion ran survives it.
+- An old-period event the tenant sends *after* the request is kept, because they sent
+  it knowingly after asking for erasure.
+
+**Events are never blocked.** A client's event emitters are outside our control, so an
+event arriving for an erased external ID is ingested normally and onboards a customer
+as usual. Re-onboarding is a legitimate outcome, not a violation. Pre-cutoff events
+are deleted by the erasure itself, so a re-onboarded customer inherits no history from
+the erased person.
+
+**What it is not.** The retained request row is **not anonymised**. An external ID is
+frequently itself personal data — an email, a phone number, a person's name.
+Describing the post-erasure record as anonymous would be false.
+
+**The legal position.** Retaining the request row needs a lawful basis under Article 6
+and a storage-limitation rationale under Article 5(1)(e). **Article 5(2)
 accountability does not supply that basis** — it obliges the controller to demonstrate
-compliance with Article 5(1); it is not itself a ground for processing. An earlier draft
-of the Phase 1 spec asserted 5(2) as the basis and was wrong. Counsel must confirm both
-the Article 6 basis and the 5(1)(e) rationale before this reaches a DPA.
+compliance with Article 5(1); it is not itself a ground for processing. An earlier
+draft of the Phase 1 spec asserted 5(2) as the basis and was wrong. Counsel must
+confirm both before this reaches a DPA. Note that the retention being justified here is
+far narrower than under the previous design: a dated record of a request, not a
+permanent registry governing future writes.
 
-**What it is not.** The retained record is **not anonymised**. An external ID is
-frequently itself personal data — an email, a phone number, a person's name. Describing
-the post-erasure record as anonymous would be false, and would also remove the basis for
-retaining it, since anonymous data needs none.
+**Retention period for the request row is open.** Date-scoped erasure removes the
+anti-recreation purpose that previously justified keeping the identifier forever, so
+"permanent" no longer follows from the design. What remains is the evidence purpose,
+which a bounded period serves. Tracked as §9.13.
 
-**Why plaintext rather than a hash.** Article 5(1)(c) minimisation asks whether the
-purpose can be met with less, so this has to be answered rather than skipped.
-
-It could be. Both registry methods are equality-only — `IsExternalIDRetired` is an
-`Exist` on an equality predicate and `GetByExternalID` looks up a caller-supplied value
-— so **neither reads the stored string back**, and both would work unchanged over a
-keyed hash. Anti-recreation needs only a membership test; the evidence purpose needs
-only comparison against an ID the tenant supplies.
-
-Plaintext is chosen anyway, on operability: a hash cannot answer "which identifiers are
-retired for this tenant", which is the question that arises during an incident or a DPA
-audit, and a hash of a low-entropy identifier such as an email is weakly protected
-regardless. Article 5(1)(c) requires justifying the choice, not taking the most minimal
-option — this paragraph is that justification, and counsel should confirm it is enough.
-
-**Cross-environment is a bypass, and it is deliberate.** Retirement is environment
-scoped, so erasing a customer in production leaves that external ID freely creatable in
-**any other environment of the same tenant**. The sandbox rationale above is sound in one
-direction only; a data subject's erasure right is not environment scoped. Phase 2 must
-state which environment classes share a retirement namespace — the likely answer is that
-all production-grade environments share one, with sandbox carved out. Tracked as §9.9.
-
-**The registry is the only control, and it fails open.** The `customers` unique index is
-partial on `status = 'published'` (`ent/schema/customer.go`), so a suppressed or archived
-customer leaves that index and its external ID becomes free there. Only the deletion
-request's non-partial unique index refuses reuse, enforced by `rejectRetiredExternalID`
-(`internal/ee/service/customer.go`). That guard returns nil when the deletion repository
-is not wired, which keeps ~200 existing test fixtures working but means **an unwired
-repository silently permits recreation of every retired identifier**. Any deployment
-path that constructs the customer service without it loses the control with no error.
-
-**Scope of retirement is per environment.** The same external ID can be retired in
-sandbox and remain usable in production. A sandbox request erased no production data, so
-it makes no promise about production, and a sandbox test must not permanently burn an
-identifier in the tenant's live namespace.
-
-The temporary-identifier lifecycle and per-tenant salt design are out of scope: they
-existed only so an audit row could survive clearing of a temporary identifier, and
-nothing is cleared.
+The temporary-identifier lifecycle and per-tenant salt design remain out of scope. They
+existed to let an audit row survive clearing of a temporary identifier; the request row
+holds the identifier directly, so no indirection is needed.
 
 ---
 
@@ -401,7 +424,7 @@ plus `BaseMixin`, `EnvironmentMixin` and `MetadataMixin`.
 | Field | Disposition | Basis / note |
 |---|---|---|
 | `id` | **retained** | Internal ID, not personal data; the join key that makes the remaining financial rows attributable without re-identifying a person |
-| `external_id` | **retained permanently** | §4 — anti-recreation and evidence. Needs the Article 6 + 5(1)(e) sign-off |
+| `external_id` | **retained on the deletion-request row, cleared on the customer row** | §4. The request row records what was erased and at what cutoff; it does **not** block reuse. The same `(tenant_id, external_id)` may be re-onboarded later |
 | `name` | **redacted** | Personal data, no retention duty |
 | `email` | **redacted** | Personal data |
 | `contact` | **redacted** | Personal data (phone) |
@@ -436,7 +459,7 @@ customer row:
 | Table | Field | Disposition |
 |---|---|---|
 | `usagerecord` | `customer_external_id` | **redacted or purged with the record** — classify in Phase 2 with the usage-derivative decision (§9.2) |
-| `event_deletion_request` | `external_customer_id` | **redacted** — the request row is the other team's audit evidence and should survive; the identifier in it should not |
+| `event_deletion_request` | `external_customer_id` | **redacted** — the request row is the other team's audit evidence and should survive; the identifier in it should not. **Blocked as specified:** the field is `Immutable()` (`ent/schema/event_deletion_request.go`), so no Ent update can clear it. Redaction here requires either dropping `Immutable()` on that field or a raw SQL update outside Ent, and that is the other team's schema. Owner needed (§9.12) |
 
 That list is complete for the *identifier-copy* pattern: a search of `ent/schema` for
 `external_customer_id` / `customer_external_id` / `external_id` returns only
@@ -455,6 +478,7 @@ can carry customer identity:
 | `payment` | `gateway_metadata` (JSON) | Reached via invoice (§3) |
 | `taxapplied` | `external_tax_details` (JSON) | A tax identifier is personal data for a sole trader |
 | `commitment` | `invoice_label`, `invoice_description` | Row carries `customer_id` |
+| `invoice` | `description` | Row carries `customer_id`. `ToInvoice` (`internal/api/dto/invoice.go`) copies the caller-supplied description straight onto the persisted invoice, so it is tenant-controlled free text on a **retained** row (§5.3). Identity written there survives redaction of the `customers` row unless this column is handled |
 | `coupon_application` | `coupon_snapshot` (JSON) | Reached via subscription |
 
 **Outbound and derived copies**, which leave the database entirely:
@@ -583,25 +607,27 @@ touchpoints, three Phase 2 tickets, and `activity_logs` is the awkward one (§6.
 `activity_logs` is the one table where "delete everything" conflicts with keeping an
 audit trail, and it is **the most important finding in this document**.
 
-**`state` is a complete copy of the `customers` row, always, by construction.**
+**`state` holds the external ID, not the full customer row.**
 `internal/activity/entities.go` registers the customer entity with
-`Snapshot: snapshotOf(customer.FromEnt)`, and `customer.FromEnt`
-(`internal/domain/customer/model.go`) returns every field — `ExternalID`, `Name`,
-`Email`, `Contact`, `ContactPersons`, the full address, `Timezone`, `Metadata`. An
-earlier draft of this section said `state` *can* contain the record. It does not merely
-can.
+`Snapshot: snapshotOf(customer.FromEnt)`, but `snapshotOf`
+(`internal/activity/snapshot.go`) omits every field tagged `activity:"drop"` on the
+customer model (`internal/domain/customer/model.go`): `Name`, `Email`, `Contact`,
+`ContactPersons`, `AddressLine1`, `AddressLine2`, `AddressCity`, `AddressState`,
+`AddressPostalCode`, `Metadata`. What survives in the snapshot is `ExternalID`,
+alongside non-identifying fields such as `BillingCurrency`, `AddressCountry`,
+`Timezone` and `TaxTreatment`.
 
 **`entity_label` is a second permanent copy of the external ID**, in ClickHouse, outside
 the registry. The same registration sets `Label: ["external_id"]`, so for a customer the
 label column holds the external ID verbatim. §4 describes the external ID as retained in
 one place; this is the other place, and it was unclassified.
 
-**Therefore every disposition in §5.1 is void unless this touchpoint covers it.**
-Redacting `name` and purging `contact_persons` in Postgres achieves nothing while a
-ClickHouse row holds the whole pre-redaction struct, and a §2.4 Postgres row count will
-report `redacted` truthfully while the data stays fully readable one store over. The
-`customer_pg` and `activity_logs_ch` categories are not independent in effect, even
-though they are separate tickets.
+**The identity dispositions in §5.1 hold, but the external-ID disposition does not.**
+Because the snapshot drops the name, email, contact, address and metadata fields,
+redacting those in Postgres is not undone here. The external ID is the exception: it
+survives in both `state` and `entity_label`, so a §2.4 check that reports the Postgres
+external ID handled says nothing about these two ClickHouse columns. For the external
+ID alone, `customer_pg` and `activity_logs_ch` are not independent in effect.
 
 The table also holds `ip`, `user_agent` and `actor_id` — personal data in their own
 right, and `ip`/`user_agent` relate to whoever made the request rather than to the
@@ -610,10 +636,9 @@ subject.
 **Proposed split**, to be confirmed:
 
 - **Every existing row for the subject is deleted.** No pre-existing `activity_logs` row
-  is retained, because any customer row carries the full snapshot and `entity_label`.
-  This includes the `CustomerArchived` row that suppression itself writes
-  (`internal/repository/ent/customer.go`), which is erasure-adjacent and still carries
-  the complete customer.
+  is retained, because any customer row carries the external ID in both `state` and
+  `entity_label`. This includes the `CustomerArchived` row that suppression itself writes
+  (`internal/repository/ent/customer.go`).
 - **The retained audit record is a new, purpose-written row**, not a filtered existing
   one: `occurred_at`, `action`, `entity_type`, `customer_id`, `request_id` and nothing
   else.
@@ -651,7 +676,7 @@ rationale, not legal advice.
 
 | # | Retained | Period | Stated basis |
 |---|---|---|---|
-| 1 | `customers.external_id` | **Permanent** | Anti-recreation and erasure evidence. Requires Article 6 basis + Article 5(1)(e) rationale — **not** Article 5(2) (§4) |
+| 1 | `customer_deletion_requests.external_id` | **Open — §9.13** | Erasure evidence: a dated record of what was erased. The anti-recreation purpose is gone with date-scoped erasure, so "permanent" no longer follows. Requires Article 6 basis + Article 5(1)(e) rationale — **not** Article 5(2) (§4). The `customers.external_id` column itself is cleared |
 | 2 | `customers.id` | Permanent | Non-personal internal key; keeps retained financial rows attributable without identifying a person |
 | 3 | Invoices and line items | Per jurisdiction | Statutory tax and accounting record retention. **Counsel owns the citations** |
 | 4 | Payments, refunds, credit notes | Per jurisdiction | As above; a refund is part of the taxable record |
@@ -716,19 +741,32 @@ verification, then either a statement or an exception.
 FLE-1847 specifies super-admin auth and feature gating for the Phase 4 public API.
 Phase 1's internal endpoint must not be weaker. **Needs:** FLE-1847's owner, or the
 route ships behind an off flag.
-### 9.8 Ingest fence for the ClickHouse touchpoints
-There is no ingest suppression: events for a suppressed external ID are still accepted
-and still land in ClickHouse. So a CH deletion races live ingest and §2.4's "count
-expected 0" is not satisfiable while that continues. This is a **prerequisite** for
-`events_ch`, `raw_events_ch` and `meter_usage_ch` (§2.5), not a detail inside them, and
-it has no owner and no ticket. **Needs:** an owner before those three can be verified.
+### 9.8 Ingest fence for the ClickHouse touchpoints — RESOLVED
+No fence is needed, and none should be built. Events are deliberately never blocked
+(§4), so the previous framing — that live ingest races the deletion and makes §2.4's
+"count expected 0" unsatisfiable — was a consequence of expecting an unbounded count.
 
-### 9.9 Cross-environment retirement namespace
-Erasing in production leaves the external ID creatable in another environment of the
-same tenant (§4). Which environment classes should share one retirement namespace?
-Likely all production-grade environments, with sandbox carved out. **Needs:** product +
-counsel, since it is a question about the scope of the subject's right, not a config
-value.
+The ingestion-time cutoff removes the race. Verification counts rows for the customer
+**with `ingested_at < requested_at`** and expects 0; rows ingested after the request are
+outside the request's scope by definition and must not be counted as failures. An
+unbounded count would fail the moment the tenant sent one more event, which is why the
+bound is part of the evidence rule and not an optimisation.
+
+**Cost, not a blocker:** `events` is `PARTITION BY toYYYYMMDD(timestamp)` and
+`ORDER BY (tenant_id, environment_id, timestamp, id)` — both on `timestamp`, not
+`ingested_at`. An ingestion-time-scoped delete therefore cannot prune partitions and
+will scan; the minmax index on `ingested_at`
+(`migrations/clickhouse/000009_events_ingested_at_minmax_index.sql`) limits it, but a
+mutation touches more parts than a timestamp-scoped delete would. Relevant at ~60M
+rows/day/tenant.
+
+### 9.9 Cross-environment scope of one request — RESOLVED, narrowed
+Previously framed as which environments share a retirement namespace. Date-scoped
+erasure removes the namespace, so the remaining question is narrower: does one request
+erase the customer in **every environment** of the tenant, or only the one it was
+raised in? A subject's right is not environment scoped, so the answer is likely all
+production-grade environments with sandbox excluded, but the request row is keyed by
+`environment_id` today and would need to fan out. **Needs:** product.
 
 ### 9.10 PII write-fence after redaction
 Nothing currently stops `UpdateCustomer` writing fresh `name`/`email` onto a redacted
@@ -737,13 +775,27 @@ Open question is its scope: reject all writes to a redacted customer, or only to
 fields? **Needs:** a decision before the `customer_pg` redaction ticket.
 
 ### 9.11 Erasure blast-radius controls
-A single authorized call permanently burns an external ID (immutable, non-partial unique
-index) and purges `metadata` across subscriptions, invoices, wallets, payments, credit
+A single authorized call purges `metadata` across subscriptions, invoices, wallets, payments, credit
 notes and checkout sessions. There is no rate limit, no bulk threshold, no second
 approval and no cap on concurrent ClickHouse mutations — and N concurrent erasures are N
 concurrent mutation sets on the largest tables. §9.5's cooldown is the **primary
 reversibility control**, not a tenant convenience. **Needs:** product, before the public
 API in Phase 4.
+
+### 9.12 Redacting an immutable field owned by another team
+`event_deletion_request.external_customer_id` is marked `Immutable()`
+(`ent/schema/event_deletion_request.go`), so no Ent update can clear it, yet §5.2
+requires it redacted. Options: drop `Immutable()` on that field, or write a raw SQL
+update outside Ent for this one column. Both touch the event-deletion team's schema.
+**Needs:** an owner on that team, and a decision before `events_ch` claims a complete
+disposition.
+
+### 9.13 Retention period for the deletion-request row
+Date-scoped erasure removes the anti-recreation purpose that justified keeping the
+external ID forever (§4). The evidence purpose remains and is served by a bounded
+period. How long should the request row live, and what happens at the end of it —
+deletion of the row, or clearing the identifier while keeping the dated record?
+**Needs:** counsel + product.
 
 ---
 
