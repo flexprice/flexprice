@@ -10,16 +10,16 @@ time range, **sorted and one page at a time**, with totals that cover everything
 Our analytics API (`POST /v1/events/analytics`) returns every line item × property value, unsorted,
 with no page or total count, and gets slower as customers' data and pricing setups grow.
 
-## 2. Customers and use cases
+## 2. Use cases
 
-| Customer | What they want to show | Group by |
+| Use case | What the screen shows | Group by |
 |---|---|---|
-| **M** — AI-credits SaaS | Credits per user table (month columns, search, pages); top services | `user`, `service`, `sub_service` |
-| **Z** — internal app platform | Spend by app / team / owner / model; build vs run columns; top 10 + "Other" chart; owner and app counts | `app`, `team`, `model`… |
-| **S** — AI API provider | One end-customer's spend by model | `model` — hundreds of meters, one per model |
-| **SS** — per-minute bucketed pricing | Same analytics, but it takes **4–17 s** today | `token_uuid`, `source` |
+| **Per-user credits** | Credits per user table (month columns, search, pages); top services | `user`, `service`, `sub_service` |
+| **App spend** | Spend by app / team / owner / model; build vs run columns; top 10 + "Other" cost-over-time chart; owner and app counts per row | `app`, `team`, `model`… |
+| **Per-model spend** | One end-customer's spend by model, with hundreds of meters (one per model) | `model` / meter |
+| **Per-minute bucketed pricing** | The same breakdowns for meters priced per minute, which take **4–17 s** today | `token_uuid`, `source` |
 
-One more ask: query **long time ranges** with paginated results.
+Also: query **long time ranges** with paginated results.
 
 All of them reduce to the same request:
 
@@ -44,14 +44,14 @@ subscription, per line item, and for bucketed meters **one per property value**)
 Today's results also depend on how you group. For a line with a commitment, grouping by a property drops the
 true-up entirely, while not grouping shows the whole month's commitment even for a one-week range.
 
-**Customer SS, one real request:** 17 s, **311 ClickHouse queries**, 267 of them one per `token_uuid`.
+**A per-minute bucketed customer, one real request:** 17 s, **311 ClickHouse queries**, 267 of them one per `token_uuid`.
 
 ## 4. Step 0 — fix today's bucketed queries (no contract change)
 
 Bucketed meters run one query for the totals plus **one query per property value**. Step 0 makes it one
-query per meter, with the same response. On SS-shaped data: **273 → 3 queries, ClickHouse time 56 s → 7 s**.
+query per meter, with the same response. On per-minute bucketed data: **273 → 3 queries, ClickHouse time 56 s → 7 s**.
 
-**Step 0b:** today's response carries every value's per-minute points (2.45M rows for SS) only to draw
+**Step 0b:** today's response carries every value's per-minute points (2.45M rows in that example) only to draw
 the chart. Rolling them up to the requested window inside ClickHouse cuts that to ~3k rows.
 
 ## 5. Approach
@@ -111,8 +111,8 @@ unchanged in shape and values; it can move onto this engine later behind a flag.
 | `filters` | `[{key, op: in \| not_in, values}]` on any key, ANDed. |
 | `search` | Case-insensitive contains on the row key values. |
 | `sort` | `total` (default) \| `column` \| `name` \| `usage` (single meter only) \| `event_count`; ties broken by row values. |
-| `limit` (≤ 100), `offset` | Paging. Each request reads the latest data; rows can shift slightly between pages while events arrive. |
-| `window_size` | Time points for the page rows (and totals); ≤ 400 windows. |
+| `limit` (≤ 100), `offset` | Paging. Each request reads the latest data, so rows can shift slightly between pages while events arrive. |
+| `window_size` | Cost-over-time points (e.g. per day) for the page rows, plus totals per window across all rows for the chart's "Other"; ≤ 400 windows. |
 | `expand` | `price`, `plan`, `addon`, `subscription`; `meter` and `feature` when a row key is the meter, feature or line. |
 | `metrics` | Extensible per-row extras; v1: `distinct:<key>` → `{count, values}` (values when ≤ 5). |
 | `deduplicate` | Off by default, like today. |
@@ -124,7 +124,6 @@ unchanged in shape and values; it can move onto this engine later behind a flag.
 {
   "currency": "usd",
   "total_count": 3,
-  "data_through": "2026-11-03T16:32:40Z",
   "column_values": ["build", "run"],
   "totals": {
     "cost": "50.41", "subtotal": "50.41", "discount": "0",
@@ -194,9 +193,9 @@ With a commitment and rows grouped by a property, the unused part appears as:
 
 | | What | Customers |
 |---|---|---|
-| **v1** | SUM, COUNT, SUM_WITH_MULTIPLIER and **MAX** meters, incl. **bucketed SUM** (flat or tiered); entitlements, commitments, true-up, percentage coupons, daily line items; 1–3 row keys + one column key; include/exclude filters; search; sort; pages + total count + totals; time points; distinct metrics; `expand`; one customer per request | M, Z, S (242 of 243 meters), SS (bucketed SUM) |
-| **v1, if parity holds** | Package pricing on bucketed meters; billing-group pricing — both are line cost × usage share | SS |
-| **v1.1** | Bucketed MAX; COUNT_UNIQUE / AVG / LATEST; cumulative meters; parent/child customers and `include_children`; CSV export; coupon IDs per row | SS, parent/child tenants |
+| **v1** | SUM, COUNT, SUM_WITH_MULTIPLIER and **MAX** meters, incl. **bucketed SUM** (flat or tiered); entitlements, commitments, true-up, percentage coupons, daily line items; 1–3 row keys + one column key; include/exclude filters; search; sort; pages + total count + totals; cost-over-time points; distinct metrics; `expand`; one customer per request | All four use cases (per-minute bucketed: SUM meters) |
+| **v1, if parity holds** | Package pricing on bucketed meters; billing-group pricing — both are line cost × usage share | Per-minute bucketed |
+| **v1.1** | Bucketed MAX; COUNT_UNIQUE / AVG / LATEST; cumulative meters; parent/child customers and `include_children`; CSV export; coupon IDs per row | Per-minute bucketed, parent/child tenants |
 | **Not planned** | Tenant-wide breakdown across all customers (separate design); commitment time-bucket detail; multi-currency (deferred) | — |
 
 Until v1.1, meters that can't be split are listed in `excluded_meters` with their cost, and parent/child
@@ -207,7 +206,7 @@ customers get a clear 400.
 The limit is **events scanned per request** (customer × time range) and how wide each event's JSON is.
 Distinct values (7 vs 1M) and number of meters matter far less.
 
-| Events in the requested range | Table only | Table + daily chart (+ counts) | Verdict |
+| Events in the requested range | Table only | Table + cost-over-time chart (+ counts) | Verdict |
 |---|---|---|---|
 | ~1M | < 0.5 s | < 1 s | Comfortable |
 | ~10M | ~2–3.5 s | ~5–7 s | Works; chart is the slow part |
@@ -228,7 +227,7 @@ concurrent viewers per customer.
 per request (§5 steps 1–4); the app-side pricing step is not included.
 
 **Data:** 30 days of events per synthetic customer, timestamps spread evenly, usage skewed (a few heavy
-users, many light ones), ~8 JSON properties (~160 bytes) per event unless noted. Example event (M shape):
+users, many light ones), ~8 JSON properties (~160 bytes) per event unless noted. Example event (per-user credits):
 
 ```
 meter_id = mA_cost   qty_total = 4.37   source = src_2   timestamp = 2026-10-14 08:21:09
@@ -238,36 +237,36 @@ properties = {"user":"u412","service":"svc3","sub_service":"sub87","model":"mode
 
 | Shape | Events | Meters | Distinct values of the row key |
 |---|---|---|---|
-| M | 1M / 10M / 100M | 2 (one SUM, one MAX) | 1k / 50k / 1M users |
-| Z | 10M / 100M | 5 SUM | 5k apps × 50 teams × 3k owners |
-| S | 30M | 250 SUM | 100k users, 250 models |
-| SS | 6M | 6 (3 per-minute bucketed) | 90 (`token_uuid × source`) |
-| Wide | 10M | 2 | 50k users, **50 JSON keys** per event |
+| Per-user credits | 1M / 10M / 100M | 2 (one SUM, one MAX) | 1k / 50k / 1M users |
+| App spend | 10M / 100M | 5 SUM | 5k apps × 50 teams × 3k owners |
+| Per-model spend | 30M | 250 SUM | 100k users, 250 models |
+| Per-minute bucketed | 6M | 6 (3 per-minute bucketed) | 90 (`token_uuid × source`) |
+| Wide events | 10M | 2 | 50k users, **50 JSON keys** per event |
 
-**Results** — seconds per request; page of 25 rows; "detail" = daily points for the page rows and all-rows
-chart totals (Z also counts distinct owners and teams per row).
+**Results** — seconds per request; page of 25 rows; "Detail" = the cost-over-time chart: daily points for the page
+rows and daily totals across all rows (app spend also counts distinct owners and teams per row).
 
 | Scenario | Rows ranked | Quantity | MAX peaks | Rank | Detail | **Total** |
 |---|---|---|---|---|---|---|
-| M 1M, by user | 1k | 0.08 | 0.13 | 0.26 | 0.30 | **0.8** |
-| M 10M, by service × month columns | 7 | 0.29 | — | 1.66 | 1.58 | **3.5** |
-| M 10M, by user | 50k | 0.30 | 0.78 | 2.10 | 2.64 | **5.8** |
-| M 10M, by user | 615k | 0.29 | 0.88 | 4.35 | 4.29 | **9.8** |
-| Z 10M, app + build/run + owner/team counts | 5k | 0.28 | — | 2.42 | 4.21 | **6.9** |
-| Z 10M, app × team | 250k | 0.29 | — | 3.00 | 2.24 | **5.5** |
-| S 30M, by model | 250 | 0.83 | — | 1.15 | 3.08 | **5.1** |
-| S 30M, by user | 100k | 0.94 | — | 8.14 | 9.64 | **18.7** |
-| S 30M, 7,500 daily line windows | 100k | 1.11 | — | 11.48 | 9.93 | **22.5** |
-| SS 6M bucketed, token × source | 90 | 0.21 | — | 0.96 | 1.16 | **2.3** |
-| Wide 10M, by user | 50k | 0.29 | — | 6.52 | 6.15 | **13.0** |
-| M 100M, by user | 50k | 2.64 | 7.28 | 14.82 | 17.26 | **42.0** |
-| Z 100M, app + build/run + owner count | 5k | 2.54 | — | 19.26 | 38.74 | **60.5** |
+| Per-user credits 1M, by user | 1k | 0.08 | 0.13 | 0.26 | 0.30 | **0.8** |
+| Per-user credits 10M, by service × month columns | 7 | 0.29 | — | 1.66 | 1.58 | **3.5** |
+| Per-user credits 10M, by user | 50k | 0.30 | 0.78 | 2.10 | 2.64 | **5.8** |
+| Per-user credits 10M, by user | 615k | 0.29 | 0.88 | 4.35 | 4.29 | **9.8** |
+| App spend 10M, app + build/run + owner/team counts | 5k | 0.28 | — | 2.42 | 4.21 | **6.9** |
+| App spend 10M, app × team | 250k | 0.29 | — | 3.00 | 2.24 | **5.5** |
+| Per-model spend 30M, by model | 250 | 0.83 | — | 1.15 | 3.08 | **5.1** |
+| Per-model spend 30M, by user | 100k | 0.94 | — | 8.14 | 9.64 | **18.7** |
+| Per-model spend 30M, 7,500 daily line windows | 100k | 1.11 | — | 11.48 | 9.93 | **22.5** |
+| Per-minute bucketed 6M, token × source | 90 | 0.21 | — | 0.96 | 1.16 | **2.3** |
+| Wide events 10M, by user | 50k | 0.29 | — | 6.52 | 6.15 | **13.0** |
+| Per-user credits 100M, by user | 50k | 2.64 | 7.28 | 14.82 | 17.26 | **42.0** |
+| App spend 100M, app + build/run + owner count | 5k | 2.54 | — | 19.26 | 38.74 | **60.5** |
 
 **Findings**
 
 1. Every query reads the customer's events once; time tracks **events × JSON size**. Each extra pass re-parses
    the JSON, so the number of passes per request is the main lever.
-2. The ranked table alone is ~2–3.5 s at 10M; the chart (detail) roughly doubles a request. 1M events is under
+2. The ranked table alone is ~2–3.5 s at 10M; the cost-over-time chart roughly doubles a request. 1M events is under
    a second in every case.
 3. Distinct values matter little for time (7 → 615k values: 3.5 s → 9.8 s with chart) and memory stays under
    ~2 GB; the app receives one page, not every value (today's API ships up to millions of rows).
@@ -283,7 +282,7 @@ chart totals (Z also counts distinct owners and teams per row).
    the month shows the full current shortfall. Alternative: keep it out of cost while the period is open.
 3. **Coupon visibility.** Rows carry the discount amount, not which coupons applied. Add `coupon_ids` if needed.
 4. **v2 trigger.** Build the hourly rollup when customers regularly scan ~30M+ events per request.
-5. **Customer Z:** confirm each event carries `app`, `owner`, `team`, `type`, `model`, and whether values are IDs
+5. **App-spend dashboards:** confirm events carry `app`, `owner`, `team`, `type`, `model`, and whether values are IDs
    or display names (search matches the raw value).
 
 ## 10. What's next — v2: hourly rollup
@@ -316,8 +315,7 @@ Later, separate design: tenant-wide breakdowns across all customers.
 - A row's cost is the same filtered or unfiltered.
 - No de-duplication by default (like today); optional `deduplicate`.
 - Entitlements applied as on the invoice; percentage coupons as today.
-- Paging is `limit` + `offset`; each page reads the latest data (small drift accepted); `data_through` is
-  returned for display.
+- Paging is `limit` + `offset`; each page reads the latest data (small drift between pages accepted).
 - v1 ranks additive meters and MAX; other meters are reported in `excluded_meters` until v1.1.
 - Parent/child customers come in v1.1 (clear 400 until then).
 - Multi-currency deferred; v1 assumes one currency per customer, like today.
