@@ -237,8 +237,7 @@ type PaymentFilter struct {
 	GatewayTrackingID *string  `form:"gateway_tracking_id"` // For filtering by gateway tracking ID
 
 	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
-	UpdatedAtGTE    *time.Time `form:"updated_at_gte"`
-	BillingEntityID *string    `form:"billing_entity_id"` // Filters by the invoice customer's billing entity
+	UpdatedAtGTE *time.Time `form:"updated_at_gte"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit

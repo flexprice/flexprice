@@ -122,9 +122,6 @@ type CreditNoteFilter struct {
 	CreditNoteType   CreditNoteType     `json:"credit_note_type,omitempty" form:"credit_note_type"`
 	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
 	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte"`
-
-	// billing_entity_id filters by the customer's billing entity
-	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 // NewCreditNoteFilter creates a new credit note filter with default options

@@ -67,8 +67,7 @@ Variation: the customer belongs to a non-default entity → the invoice is not a
 online payment, and is not synced to any integration; it is recorded as paid manually.
 
 **UC5 — API client reads billing records by entity.**
-1. Client lists customers, invoices, subscriptions, wallets, credit notes, payments or refunds,
-   optionally filtered by one entity.
+1. Client lists customers or invoices, optionally filtered by one entity.
 2. Every returned customer and invoice, and every outbound webhook for one, shows the entity it belongs to.
 
 Variation: the environment is off → the filter is rejected and records show no entity.
@@ -136,7 +135,7 @@ release on, the new prefix starts its own series instead of continuing the old p
 | FR-19 | For customers with an entity, biller tax IDs come from the entity. | UC4 | Entity with a GSTIN → GSTIN on the PDF. |
 | FR-20 | Invoices of a non-default entity's customers are never auto-charged, never get checkout, payment links or saved payment methods, and their customers, invoices and subscriptions are never synced to integrations. | UC4 | Non-default customer with `charge_automatically` → invoice stays pending, no gateway call; checkout or payment method request → 400; no sync workflow started. |
 | FR-21 | Delegated and grouped invoices only combine customers of one entity. | UC4 | Set `invoicing_customer_id` to a customer of another entity → 400; grouped invoice across entities → 400. |
-| FR-22 | Lists and searches of customers, invoices, subscriptions, wallets, credit notes, payments and refunds accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
+| FR-22 | Lists and searches of customers and invoices accept an optional `billing_entity_id`; absent means all entities. | UC5 | Filter by entity → only that entity's records; no filter → all. |
 | FR-23 | Customers and invoices carry `billing_entity_id` in Get, List and outbound webhook payloads. | UC5 | Each response and webhook shows the stored or derived entity; off environment → null. |
 | FR-24 | Get, update and delete by ID are not scoped by entity. | UC5 | Get a record of any entity by ID → returned with its entity. |
 
@@ -345,7 +344,7 @@ and `entity_id` set to the entity.
 |---|---|
 | Create customer | Optional `billing_entity_id` (FR-12, FR-15) |
 | Update customer | `billing_entity_id` not accepted (FR-13) |
-| List / search customers, invoices, subscriptions, wallets, credit notes, payments, refunds | Optional `billing_entity_id` filter (FR-22) |
+| List / search customers and invoices | Optional `billing_entity_id` filter (FR-22) |
 | Customers and invoices: Get, List, outbound webhooks | `billing_entity_id` field (FR-23) |
 | Update `invoice_config` setting | Prefix change rejected from `enabling` on (FR-11) |
 | Create, update or delete tenant-level tax association | Rejected from `enabling` on (FR-11) |

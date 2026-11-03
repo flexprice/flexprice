@@ -2549,10 +2549,6 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset())
 
-	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
-		return nil, err
-	}
-
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Error(ctx, "failed to list subscriptions from repository", "error", err, "filter", filter)

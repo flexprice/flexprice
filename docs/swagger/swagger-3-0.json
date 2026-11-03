@@ -9596,14 +9596,6 @@
         "operationId": "listPayments",
         "parameters": [
           {
-            "name": "billing_entity_id",
-            "in": "query",
-            "description": "Filters by the invoice customer's billing entity",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "currency",
             "in": "query",
             "schema": {
@@ -39644,10 +39636,6 @@
               "$ref": "#/components/schemas/types.BillingCadence"
             }
           },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id filters by the customer's billing entity"
-          },
           "billing_period": {
             "type": "array",
             "description": "BillingPeriod filters by billing period",
@@ -40542,10 +40530,6 @@
         "properties": {
           "alert_enabled": {
             "type": "boolean"
-          },
-          "billing_entity_id": {
-            "type": "string",
-            "description": "billing_entity_id filters by the customer's billing entity"
           },
           "expand": {
             "type": "string"

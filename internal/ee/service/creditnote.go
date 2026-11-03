@@ -416,10 +416,6 @@ func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.C
 		return nil, err
 	}
 
-	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
-		return nil, err
-	}
-
 	creditNotes, err := s.CreditNoteRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err

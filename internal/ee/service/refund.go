@@ -741,10 +741,6 @@ func (s *refundService) ListRefunds(ctx context.Context, filter *types.RefundFil
 		return nil, err
 	}
 
-	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
-		return nil, err
-	}
-
 	rows, err := s.RefundRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err

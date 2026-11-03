@@ -14390,9 +14390,6 @@ definitions:
         items:
           $ref: '#/definitions/types.BillingCadence'
         type: array
-      billing_entity_id:
-        description: billing_entity_id filters by the customer's billing entity
-        type: string
       billing_period:
         description: BillingPeriod filters by billing period
         items:
@@ -15057,9 +15054,6 @@ definitions:
     properties:
       alert_enabled:
         type: boolean
-      billing_entity_id:
-        description: billing_entity_id filters by the customer's billing entity
-        type: string
       expand:
         type: string
       limit:
@@ -22867,10 +22861,6 @@ paths:
         by customer, invoice, status.
       operationId: listPayments
       parameters:
-      - description: Filters by the invoice customer's billing entity
-        in: query
-        name: billing_entity_id
-        type: string
       - in: query
         name: currency
         type: string

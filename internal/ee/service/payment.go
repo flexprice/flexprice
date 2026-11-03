@@ -724,10 +724,6 @@ func (s *paymentService) ListPayments(ctx context.Context, filter *types.Payment
 		}
 	}
 
-	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, lo.FromPtr(filter.BillingEntityID)); err != nil {
-		return nil, err
-	}
-
 	payments, err := s.PaymentRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err // Repository already using ierr

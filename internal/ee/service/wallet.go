@@ -2906,10 +2906,6 @@ func (s *walletService) GetWallets(ctx context.Context, filter *types.WalletFilt
 	}
 
 	// Get wallets using filter
-	if err := NewBillingEntityService(s.ServiceParams).ValidateFilter(ctx, filter.BillingEntityID); err != nil {
-		return nil, err
-	}
-
 	wallets, err := s.WalletRepo.GetWalletsByFilter(ctx, filter)
 	if err != nil {
 		return nil, err

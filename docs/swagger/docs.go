@@ -7944,12 +7944,6 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Filters by the invoice customer's billing entity",
-                        "name": "billing_entity_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
                         "name": "currency",
                         "in": "query"
                     },
@@ -37183,10 +37177,6 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.BillingCadence"
                     }
                 },
-                "billing_entity_id": {
-                    "description": "billing_entity_id filters by the customer's billing entity",
-                    "type": "string"
-                },
                 "billing_period": {
                     "description": "BillingPeriod filters by billing period",
                     "type": "array",
@@ -38075,10 +38065,6 @@ const docTemplate = `{
             "properties": {
                 "alert_enabled": {
                     "type": "boolean"
-                },
-                "billing_entity_id": {
-                    "description": "billing_entity_id filters by the customer's billing entity",
-                    "type": "string"
                 },
                 "expand": {
                     "type": "string"
