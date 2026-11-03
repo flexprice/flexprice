@@ -252,14 +252,20 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
 		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
-		s.Logger.Error(ctx, "dropping bulk meter usage batch: message scope mismatch",
+		s.Logger.Info(ctx, "dropping bulk meter usage batch: message scope mismatch",
 			"message_uuid", msg.UUID,
 		)
 		return nil
 	}
 
 	tenantID := batch.TenantID
+	if tenantID == "" {
+		tenantID = types.GetTenantID(ctx)
+	}
 	environmentID := batch.EnvironmentID
+	if environmentID == "" {
+		environmentID = types.GetEnvironmentID(ctx)
+	}
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
@@ -293,7 +299,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			continue
 		}
 		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
-			s.Logger.Error(ctx, "dropping bulk event: scope mismatch",
+			s.Logger.Info(ctx, "dropping bulk event: scope mismatch",
 				"event_id", evt.ID,
 				"message_uuid", msg.UUID,
 			)
@@ -304,6 +310,13 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		}
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
+		}
+		if evt.TenantID == "" || evt.EnvironmentID == "" {
+			s.Logger.Info(ctx, "tenant_id and environment_id are required for meter usage tracking",
+				"event_id", evt.ID,
+				"message_uuid", msg.UUID,
+			)
+			continue
 		}
 		evt.EventName = strings.TrimSpace(evt.EventName)
 
@@ -335,7 +348,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			}
 		}
 
-		meters, err := s.MeterRepo.GetMatchingMetersByEventName(ctx, evt.EventName)
+		meters, err := s.MeterRepo.GetMatchingMetersByEventName(withEventScope(ctx, evt), evt.EventName)
 		if err != nil {
 			// Meter-lookup errors are retriable: return so the whole batch is
 			// redelivered rather than silently dropping downstream billing rows.
@@ -424,7 +437,7 @@ func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *mes
 	}
 
 	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
-		s.Logger.Error(ctx, "dropping event: scope mismatch",
+		s.Logger.Info(ctx, "dropping event: scope mismatch",
 			"event_id", event.ID,
 			"message_uuid", msg.UUID,
 		)

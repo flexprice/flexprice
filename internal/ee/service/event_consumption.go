@@ -179,14 +179,20 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 
 	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
 		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
-		s.Logger.Error(ctx, "dropping bulk event batch: message scope mismatch",
+		s.Logger.Info(ctx, "dropping bulk event batch: message scope mismatch",
 			"message_uuid", msg.UUID,
 		)
 		return nil
 	}
 
 	tenantID := batch.TenantID
+	if tenantID == "" {
+		tenantID = types.GetTenantID(ctx)
+	}
 	environmentID := batch.EnvironmentID
+	if environmentID == "" {
+		environmentID = types.GetEnvironmentID(ctx)
+	}
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
@@ -201,7 +207,7 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		}
 
 		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
-			s.Logger.Error(ctx, "dropping bulk event: scope mismatch",
+			s.Logger.Info(ctx, "dropping bulk event: scope mismatch",
 				"event_id", evt.ID,
 				"message_uuid", msg.UUID,
 			)
@@ -377,7 +383,7 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 	}
 
 	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
-		s.Logger.Error(ctx, "dropping event: scope mismatch",
+		s.Logger.Info(ctx, "dropping event: scope mismatch",
 			"event_id", event.ID,
 			"message_uuid", msg.UUID,
 		)
