@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -367,7 +368,31 @@ func TestCELEvaluator_CacheBounded(t *testing.T) {
 	assert.LessOrEqual(t, eval.cacheSize.Load(), int64(maxCachedPrograms))
 }
 
-func TestCELEvaluator_ProgramHasCostLimit(t *testing.T) {
+func TestCELEvaluator_CacheBoundedConcurrent(t *testing.T) {
+	eval := &CELEvaluator{parser: NewCELEvaluator().parser}
+	const workers, perWorker = 8, 2000
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			for i := 0; i < perWorker; i++ {
+				_, err := eval.Identifiers("a + " + strconv.Itoa(w*perWorker+i))
+				assert.NoError(t, err)
+				assert.LessOrEqual(t, eval.cacheSize.Load(), int64(maxCachedPrograms))
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	n := 0
+	eval.cache.Range(func(_, _ any) bool { n++; return true })
+	assert.LessOrEqual(t, n, maxCachedPrograms)
+	assert.Equal(t, int64(n), eval.cacheSize.Load())
+}
+
+// Cost is linear in size without macros; source check only.
+func TestCELEvaluator_ProgramOptionsInSource(t *testing.T) {
 	src, err := os.ReadFile("cel_evaluator.go")
 	require.NoError(t, err)
 	assert.Contains(t, string(src), "cel.CostLimit(evalCostLimit)")

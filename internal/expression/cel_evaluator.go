@@ -50,11 +50,15 @@ type cacheEntry struct {
 type CELEvaluator struct {
 	cache     sync.Map // expression string -> *cacheEntry
 	cacheSize atomic.Int64
-	parser    *parser.Parser
+	// mu serializes cache insert and clear.
+	mu     sync.Mutex
+	parser *parser.Parser
 }
 
 const (
-	MaxExpressionLength    = 2048
+	// MaxExpressionLength is the maximum accepted expression length in bytes.
+	MaxExpressionLength = 2048
+	// MaxExpressionIdents is the maximum number of distinct identifiers per expression.
 	MaxExpressionIdents    = 64
 	maxCachedPrograms      = 10000
 	evalCostLimit          = 100000
@@ -195,6 +199,8 @@ func (e *CELEvaluator) getOrCompile(expr string) (*cacheEntry, error) {
 		return nil, err
 	}
 
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.cacheSize.Load() >= maxCachedPrograms {
 		e.cache.Clear()
 		e.cacheSize.Store(0)
