@@ -662,7 +662,7 @@ be compliant is not an audit record.
 | Managed exports / imports | **deleted or regenerated** without the subject | Mixed-customer files cannot be deleted wholesale; regeneration is the only correct answer and it is expensive. Open: §9.3 |
 | Redis cache | Key **evicted** after commit | One key, the ID key. `GetByLookupKey` is uncached. Caching ships disabled by default; where enabled, TTL is 30 minutes and eviction propagates because the cache is shared |
 | Kafka / pipeline | Suppression enforced at the consumer; **expiry** relied on for in-flight | Verify the topic retention is inside the 30-day commitment, or record an approved exception |
-| Temporal | New deletion histories carry **no PII**; existing histories age out | A workflow argument containing an external ID is a PII copy with its own retention |
+| Temporal | New deletion histories carry **no PII** — pass the internal `customer_id` and the request ID, never the external ID. Existing histories are bounded by namespace retention, which **must be ≤ 30 days** to sit inside the redaction commitment | A workflow argument containing an external ID is a PII copy with its own retention. "Ages out" is not a disposition until it carries a number: if namespace retention exceeds 30 days, a history created before the change still holds the identifier past the commitment, and a retention change is not retroactive. Needs the configured value read per environment, and histories predating it either deleted or shown to be inside the window. Owner required (§9.14) |
 | Backups | **Expire on rotation**; erasure **reapplied after any restore** | A restore silently resurrects an erased customer. The reapply step is the control, and it has no owner yet (§9.4) |
 | Provider copies (Stripe, Chargebee, HubSpot, Paddle) | **Out of our boundary**; documented, not erased by us | We cannot erase another controller's copy. The DPA must say so plainly rather than implying coverage |
 
@@ -796,6 +796,15 @@ external ID forever (§4). The evidence purpose remains and is served by a bound
 period. How long should the request row live, and what happens at the end of it —
 deletion of the row, or clearing the identifier while keeping the dated record?
 **Needs:** counsel + product.
+
+### 9.14 Temporal history retention
+§7 requires new deletion workflows to carry no external ID, but existing histories hold
+one wherever a workflow argument included it, and the current disposition says only that
+they "age out". That is not a period. Two things are needed: the configured namespace
+retention per environment, read rather than assumed, and a decision on histories created
+before any retention change, since such a change is not retroactive. If retention
+exceeds the 30-day redaction commitment, those histories are a PII copy outstanding past
+the commitment. **Needs:** an owner with Temporal namespace access.
 
 ---
 
