@@ -336,8 +336,8 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_ClaimsInstalments() {
 	s.ElementsMatch(instalmentIDs(billed), s.instalmentEvents(types.WebhookEventBillingInstalmentInvoiced))
 }
 
-// After an edit cancelled a draft's instalments, a new payment on it is refused. One taken before the edit still
-// records and finalizes it; the cancelled instalments stay cancelled and unclaimed.
+// After an edit cancelled a draft's instalments, a new payment on it is refused, while one a gateway already collected
+// is recorded. Such a payment still finalizes the draft; the cancelled instalments stay cancelled and unclaimed.
 func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 	ctx := s.GetContext()
 	params := fullServiceParams(&s.BaseServiceTestSuite)
@@ -356,8 +356,17 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 		DestinationID:   draft.ID,
 		Amount:          draft.AmountDue,
 		Currency:        draft.Currency,
+		ProcessPayment:  true,
 	})
 	s.Require().ErrorIs(err, errStaleInstalments, "a new payment on the stale draft is refused")
+
+	s.Require().NoError(payments.validateInvoicePaymentEligibility(ctx, draft, &dto.CreatePaymentRequest{
+		DestinationType: types.PaymentDestinationTypeInvoice,
+		DestinationID:   draft.ID,
+		Amount:          draft.AmountDue,
+		Currency:        draft.Currency,
+		ProcessPayment:  false,
+	}), "a payment a gateway already collected is recorded")
 
 	// A payment taken before the edit still lands.
 	paid := &payment.Payment{

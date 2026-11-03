@@ -246,8 +246,9 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 		return errInvoiceEventDeletionGated(invoice.ID, gatedDeletion.RequestID)
 	}
 
-	// Nor does it recompute a draft whose instalments changed, so paying one would bill them twice.
-	if invoice.InvoiceStatus == types.InvoiceStatusDraft {
+	// Nor does it recompute a draft whose instalments changed, so paying one would bill them twice. A payment a gateway
+	// already collected (process_payment false) is still recorded.
+	if invoice.InvoiceStatus == types.InvoiceStatusDraft && p.ProcessPayment {
 		stale, err := invSvc.staleInstalments(ctx, invoice)
 		if err != nil {
 			return err
