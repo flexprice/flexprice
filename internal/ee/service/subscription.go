@@ -8703,7 +8703,7 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 
 func (s *subscriptionService) HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error) {
 	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, &types.EntityIntegrationMappingFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(1)},
 		EntityID:    subscriptionID,
 		EntityType:  types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{
