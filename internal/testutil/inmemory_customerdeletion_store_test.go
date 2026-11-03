@@ -335,3 +335,20 @@ func TestInMemoryCustomerDeletionStore_OptionalTimestampsIsolated(t *testing.T) 
 	require.Len(t, cats, 1)
 	assert.Equal(t, original, *cats[0].VerifiedAt)
 }
+
+func TestDeepCopyPreservesNilInTypedSlice(t *testing.T) {
+	out := deepCopyJSONMap(map[string]interface{}{"k": [][]any{{nil}}})
+	got := out["k"].([][]any)
+	if len(got) != 1 || len(got[0]) != 1 || got[0][0] != nil {
+		t.Fatalf("nested nil lost: %#v", got)
+	}
+}
+
+func TestDeepCopyPreservesNilValuedKeyInNamedMap(t *testing.T) {
+	type named map[string]any
+	out := deepCopyJSONMap(map[string]interface{}{"k": named{"inner": nil}})
+	got := out["k"].(named)
+	if _, ok := got["inner"]; !ok {
+		t.Fatalf("nil-valued key dropped: %#v", got)
+	}
+}

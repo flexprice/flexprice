@@ -70,7 +70,7 @@ func deepCopyReflect(v interface{}) interface{} {
 		out := reflect.MakeMapWithSize(rv.Type(), rv.Len())
 		iter := rv.MapRange()
 		for iter.Next() {
-			out.SetMapIndex(iter.Key(), reflect.ValueOf(deepCopyReflect(iter.Value().Interface())))
+			out.SetMapIndex(iter.Key(), copiedValue(iter.Value(), deepCopyReflect(iter.Value().Interface())))
 		}
 		return out.Interface()
 	case reflect.Slice:
@@ -79,12 +79,20 @@ func deepCopyReflect(v interface{}) interface{} {
 		}
 		out := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
 		for i := 0; i < rv.Len(); i++ {
-			out.Index(i).Set(reflect.ValueOf(deepCopyReflect(rv.Index(i).Interface())))
+			out.Index(i).Set(copiedValue(rv.Index(i), deepCopyReflect(rv.Index(i).Interface())))
 		}
 		return out.Interface()
 	default:
 		return v
 	}
+}
+
+// nil copies yield an invalid Value that Set would panic on
+func copiedValue(original reflect.Value, copied interface{}) reflect.Value {
+	if copied == nil {
+		return reflect.Zero(original.Type())
+	}
+	return reflect.ValueOf(copied).Convert(original.Type())
 }
 
 func copyTimestamp(t *time.Time) *time.Time {
