@@ -29554,6 +29554,10 @@
               "$ref": "#/components/schemas/PaymentAttemptResponse"
             }
           },
+          "connection_id": {
+            "type": "string",
+            "description": "connection_id is the connection that took this payment; null when no gateway connection was used"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -43236,6 +43240,9 @@
         "type": "object",
         "properties": {
           "amount": {
+            "type": "string"
+          },
+          "connection_id": {
             "type": "string"
           },
           "currency": {
