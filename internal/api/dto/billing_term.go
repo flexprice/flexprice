@@ -23,7 +23,8 @@ type BillingTermInput struct {
 
 	BillTrigger *types.InstalmentBillTrigger `json:"bill_trigger,omitempty"`
 
-	// BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now.
+	// BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or
+	// to the commitment start once the term has ended.
 	BillOn *time.Time `json:"bill_on,omitempty"`
 
 	// StartDate defaults like BillOn; EndDate defaults to the commitment end.
@@ -101,7 +102,7 @@ func (in CancellationFeeInput) Validate() error {
 
 // ReplaceBillingTermsRequest is the new set of terms of a commitment, which replaces the current set as a whole.
 type ReplaceBillingTermsRequest struct {
-	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,dive"`
+	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=20,dive"`
 }
 
 // ApplyDefaults aligns the dates of every term to whole seconds.

@@ -18,9 +18,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// planInstalments expands terms into the commitment's new instalments, valuing each commitment period with amountOf.
-// They add up to what the invoiced instalments leave of the total and are numbered among them. A term without dates
-// starts at the billing period holding from, or at the commitment start when from is past its end.
+// planInstalments expands terms into new instalments for what the invoiced ones leave of the total, numbered among
+// them; undated terms start at the billing period holding from, or at the commitment start once from is past its end.
 func (s *commitmentService) planInstalments(
 	ctx context.Context,
 	c *commitment.Commitment,

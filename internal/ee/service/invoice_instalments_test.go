@@ -326,6 +326,22 @@ func (s *CommitmentE2ESuite) TestProcessDraft_CatchUpDraftsOutOfOrder() {
 
 // Voiding puts the invoice's instalments back on schedule and recalculating bills them on the replacement. Instalments
 // an edit cancelled stay cancelled when the invoice carrying them is voided.
+// Voiding takes the lock of each commitment whose instalments it reschedules, so it can't land halfway through an edit.
+func (s *CommitmentE2ESuite) TestVoid_LocksTheCommitment() {
+	ctx := s.GetContext()
+	var events []string
+	params := fullServiceParams(&s.BaseServiceTestSuite)
+	params.DB = &recordingDB{IClient: s.GetDB(), events: &events}
+	invoices := NewInvoiceService(params)
+	draft, commitmentID := s.januaryDraft(invoices, "void_lock")
+	s.Require().NoError(invoices.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
+
+	events = events[:0]
+	_, err := invoices.VoidInvoice(ctx, draft.ID, dto.InvoiceVoidRequest{})
+	s.Require().NoError(err)
+	s.Contains(events, "lock:commitment:"+commitmentID)
+}
+
 func (s *CommitmentE2ESuite) TestVoid_ReschedulesInstalments() {
 	ctx := s.GetContext()
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)

@@ -19067,7 +19067,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "bill_on": {
-                    "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now.",
+                    "description": "BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or\nto the commitment start once the term has ended.",
                     "type": "string"
                 },
                 "bill_trigger": {
@@ -20745,6 +20745,7 @@ const docTemplate = `{
                 "billing_terms": {
                     "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
                     "type": "array",
+                    "maxItems": 20,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"
                     }
@@ -27252,6 +27253,7 @@ const docTemplate = `{
             "properties": {
                 "billing_terms": {
                     "type": "array",
+                    "maxItems": 20,
                     "minItems": 1,
                     "items": {
                         "$ref": "#/definitions/BillingTermInput"

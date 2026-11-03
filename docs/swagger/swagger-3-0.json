@@ -22063,7 +22063,7 @@
         "properties": {
           "bill_on": {
             "type": "string",
-            "description": "BillOn defaults to the commitment start, or on an edit to the start of the billing period holding now."
+            "description": "BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or\nto the commitment start once the term has ended."
           },
           "bill_trigger": {
             "$ref": "#/components/schemas/types.InstalmentBillTrigger"
@@ -23624,6 +23624,7 @@
             }
           },
           "billing_terms": {
+            "maxItems": 20,
             "type": "array",
             "description": "BillingTerms apply only to collection_method billing_terms, which requires at least one.",
             "items": {
@@ -29866,6 +29867,7 @@
         "type": "object",
         "properties": {
           "billing_terms": {
+            "maxItems": 20,
             "minItems": 1,
             "type": "array",
             "items": {

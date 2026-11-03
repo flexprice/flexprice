@@ -116,8 +116,7 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 	return instalments, nil
 }
 
-// NumberLabels fills {n} and {of} in each invoice label with the instalment's position in plan and the plan's length.
-// plan is all of an owner's instalments in billing order; labels already numbered are left as they are. Within
+// NumberLabels fills {n} and {of} in the labels of plan, all of an owner's instalments in billing order. Within
 // MaxInstalments, a numbered label is never longer than its template.
 func NumberLabels(plan []*Instalment) {
 	of := strconv.Itoa(len(plan))

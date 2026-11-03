@@ -114,6 +114,7 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 		{"one term", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{remainder}}, ""},
 		{"no terms", ReplaceBillingTermsRequest{}, "BillingTerms"},
 		{"empty terms", ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{}}, "BillingTerms"},
+		{"21 terms", ReplaceBillingTermsRequest{BillingTerms: lo.Times(21, func(int) BillingTermInput { return remainder })}, "BillingTerms"},
 		{
 			"no kind",
 			ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{{ValueType: types.BillingTermValueRemainder}}},

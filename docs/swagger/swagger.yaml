@@ -1470,8 +1470,9 @@ definitions:
   BillingTermInput:
     properties:
       bill_on:
-        description: BillOn defaults to the commitment start, or on an edit to the
-          start of the billing period holding now.
+        description: |-
+          BillOn defaults to the commitment start. On an edit it defaults to the start of the billing period holding now, or
+          to the commitment start once the term has ended.
         type: string
       bill_trigger:
         $ref: '#/definitions/types.InstalmentBillTrigger'
@@ -2623,6 +2624,7 @@ definitions:
           requires at least one.
         items:
           $ref: '#/definitions/BillingTermInput'
+        maxItems: 20
         type: array
       binding:
         description: default false
@@ -7418,6 +7420,7 @@ definitions:
       billing_terms:
         items:
           $ref: '#/definitions/BillingTermInput'
+        maxItems: 20
         minItems: 1
         type: array
     required:

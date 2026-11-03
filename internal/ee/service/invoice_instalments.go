@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
@@ -15,9 +16,8 @@ import (
 // errStaleInstalments is the cause of a finalization that found instalments on the invoice no longer scheduled.
 var errStaleInstalments = errors.New("invoice carries instalments that changed since it was computed")
 
-// finalizeDraft finalizes the draft. A subscription draft is recomputed first when it misses an instalment that fell
-// due within it, and once more when it carries instalments that are no longer scheduled. A manually edited one is
-// never recomputed: it finalizes without a missed instalment, which waits for the next invoice, and keeps the error.
+// finalizeDraft finalizes the draft, recomputing a subscription draft first if it misses a due instalment and again if
+// it bills one no longer scheduled. A manually edited draft is never recomputed and keeps the stale error.
 func (s *invoiceService) finalizeDraft(ctx context.Context, inv *invoice.Invoice, source dto.InvoiceStateChangeSource) error {
 	recomputable := inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil && !inv.IsManuallyEdited
 	recompute := func(reason string, instalmentIDs []string) error {
@@ -159,8 +159,28 @@ func (s *invoiceService) billedInstalmentIDs(ctx context.Context, invoiceID stri
 	}), nil
 }
 
-// rescheduleInstalments puts a voided invoice's instalments back on schedule. It runs in the void transaction.
+// rescheduleInstalments puts a voided invoice's instalments back on schedule in the void transaction, under their
+// commitments' locks so an edit sizing its plan by the invoiced instalments never runs halfway through it.
 func (s *invoiceService) rescheduleInstalments(ctx context.Context, invoiceID string) error {
+	ids, err := s.billedInstalmentIDs(ctx, invoiceID)
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+
+	billed, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{IDs: ids})
+	if err != nil {
+		return err
+	}
+
+	owners := lo.Uniq(lo.Map(billed, func(inst *billingterm.Instalment, _ int) string { return inst.OwnerID }))
+	slices.Sort(owners)
+	commitments := NewCommitmentService(s.ServiceParams).(*commitmentService)
+	for _, id := range owners {
+		if err := commitments.lockCommitment(ctx, id); err != nil {
+			return err
+		}
+	}
+
 	rescheduled, err := s.BillingInstalmentRepo.Reschedule(ctx, invoiceID)
 	if err != nil {
 		return err
