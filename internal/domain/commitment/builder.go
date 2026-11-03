@@ -45,7 +45,7 @@ func (b *commitmentBuilder) WithMetadata(m types.Metadata) *commitmentBuilder {
 	return b
 }
 
-func (b *commitmentBuilder) WithStatus(s types.CommitmentStatus) *commitmentBuilder {
+func (b *commitmentBuilder) WithCommitmentStatus(s types.CommitmentStatus) *commitmentBuilder {
 	b.c.CommitmentStatus = s
 	return b
 }

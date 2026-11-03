@@ -412,7 +412,7 @@ func (s *commitmentService) settleEnded(ctx context.Context, c *commitment.Commi
 		return err
 	}
 
-	_, err = s.billTermination(ctx, c, end, nil, settlement)
+	_, err = s.billTermination(ctx, c, end, decimal.Zero, settlement)
 	return err
 }
 

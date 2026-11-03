@@ -85,7 +85,7 @@ func (s *billingService) newCommitmentLoader(
 		return l, nil
 	}
 
-	active, err := svc.ActiveForPeriod(ctx, sub.ID, periodStart, periodEnd)
+	active, err := svc.ListOverlapping(ctx, sub.ID, periodStart, periodEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +111,7 @@ func (s *billingService) newCommitmentLoader(
 
 		// The call must carry one of the commitment's lines; other cadence groups and filtered items leave it alone.
 		scopeLineItems := scopeLinesInPeriod(
-			c.ScopeEntityType,
-			c.ScopeEntityID,
+			c,
 			l.subContext,
 			maxTime(periodStart, c.StartDate),
 			lo.ToPtr(c.Until(periodEnd)),

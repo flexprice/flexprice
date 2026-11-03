@@ -201,9 +201,7 @@ func (s *subscriptionService) archiveDraftSubscriptionDependencies(ctx context.C
 		}
 	}
 
-	commitmentFilter := commitment.NewNoLimitFilter()
-	commitmentFilter.SubscriptionIDs = []string{subscriptionID}
-	commitments, err := s.CommitmentRepo.List(ctx, commitmentFilter)
+	commitments, err := s.CommitmentRepo.List(ctx, commitment.NewSubscriptionFilter(subscriptionID))
 	if err != nil {
 		return err
 	}

@@ -836,6 +836,20 @@ func (s *CommitmentServiceSuite) TestCreate_BillingTerms_PublishesEvents() {
 	s.Len(publisher.Events(), 13, "a replay of the same key publishes nothing")
 }
 
+// A replayed create returns the commitment with its billing terms and instalments, like the original.
+func (s *CommitmentServiceSuite) TestCreate_ReplayReturnsBillingTerms() {
+	req := s.billingTermsRequest()
+	req.IdempotencyKey = lo.ToPtr("cmt-terms-replay")
+	created, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	replayed, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+	s.Equal(created.ID, replayed.ID)
+	s.Len(replayed.BillingTerms, len(created.BillingTerms))
+	s.Len(replayed.Instalments, len(created.Instalments))
+}
+
 func (s *CommitmentServiceSuite) TestCreate_PerPeriodCommitment_PublishesNoBillingTermEvents() {
 	publisher := s.GetWebhookPublisher().(*testutil.InMemoryWebhookPublisher)
 	publisher.Reset()

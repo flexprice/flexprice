@@ -30,12 +30,12 @@ type CommitmentPriceInput struct {
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 }
 
-// ToCreatePriceRequest builds the subscription-scoped usage price backing the rate; kind is committed or overage.
+// ToCreatePriceRequest builds the subscription-scoped usage price backing the commitment's rate.
 func (in *CommitmentPriceInput) ToCreatePriceRequest(
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
 	meterID string,
-	kind string,
+	rate types.CommitmentRate,
 ) CreatePriceRequest {
 	return CreatePriceRequest{
 		Amount:               in.Amount,
@@ -52,11 +52,11 @@ func (in *CommitmentPriceInput) ToCreatePriceRequest(
 		TransformQuantity:    in.TransformQuantity,
 		InvoiceCadence:       types.InvoiceCadenceArrear,
 		MeterID:              meterID,
-		DisplayName:          c.Name + " (" + kind + ")",
+		DisplayName:          c.Name + " (" + string(rate) + ")",
 		SkipEntityValidation: true,
 		Metadata: map[string]string{
-			"commitment_id":   c.ID,
-			"commitment_rate": kind,
+			types.MetadataKeyCommitmentID:   c.ID,
+			types.MetadataKeyCommitmentRate: string(rate),
 		},
 	}
 }
@@ -111,8 +111,7 @@ type CreateCommitmentRequest struct {
 
 // ApplyDefaults fills label, timezone and the binding-dependent settings.
 func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
-	// Term edges align to whole seconds, like every computed billing date; the loader's window grid
-	// and pool checks compare at that granularity.
+	// Term edges are whole seconds, like every computed billing date.
 	r.StartDate = r.StartDate.Truncate(time.Second)
 	if r.EndDate != nil {
 		r.EndDate = lo.ToPtr(r.EndDate.Truncate(time.Second))
@@ -208,14 +207,6 @@ func (r *CreateCommitmentRequest) Validate() error {
 		return err
 	}
 
-	if len(r.Name) == 0 || len(r.Name) > 255 || len(r.InvoiceLabel) > 255 {
-		return ierr.Validation("name and invoice_label must be 1-255 characters")
-	}
-
-	if r.InvoiceDescription != nil && len(*r.InvoiceDescription) > 500 {
-		return ierr.Validation("invoice_description must be at most 500 characters")
-	}
-
 	return nil
 }
 
@@ -247,20 +238,23 @@ func (r *CreateCommitmentRequest) validateBillingTerms() error {
 // package details once the scope meter is known.
 func (r *CreateCommitmentRequest) validatePrices() error {
 	if r.CommittedPrice != nil {
-		if err := r.CommittedPrice.validate("committed_price", true); err != nil {
+		if err := r.CommittedPrice.validate(types.CommitmentRateCommitted); err != nil {
 			return err
 		}
 	}
 
 	if r.OveragePrice != nil {
-		return r.OveragePrice.validate("overage_price", false)
+		return r.OveragePrice.validate(types.CommitmentRateOverage)
 	}
 
 	return nil
 }
 
-// validate checks the rate against its billing model; positive requires a FLAT_FEE or PACKAGE amount above zero.
-func (in *CommitmentPriceInput) validate(field string, positive bool) error {
+// validate checks the rate against its billing model; a committed rate needs a FLAT_FEE or PACKAGE amount above zero
+// and SLAB tiers.
+func (in *CommitmentPriceInput) validate(rate types.CommitmentRate) error {
+	field := string(rate) + "_price"
+	committed := rate == types.CommitmentRateCommitted
 	if in.BillingModel != types.BILLING_MODEL_TIERED && len(in.Tiers) > 0 {
 		return ierr.Validationf("%s.tiers can only be set on a TIERED price", field)
 	}
@@ -271,7 +265,7 @@ func (in *CommitmentPriceInput) validate(field string, positive bool) error {
 			return ierr.Validationf("%s.amount must be zero or greater", field)
 		}
 
-		if positive && !in.Amount.IsPositive() {
+		if committed && !in.Amount.IsPositive() {
 			return ierr.Validationf("%s.amount must be greater than zero", field)
 		}
 
@@ -287,7 +281,7 @@ func (in *CommitmentPriceInput) validate(field string, positive bool) error {
 			return err
 		}
 
-		if positive && in.TierMode == types.BILLING_TIER_VOLUME {
+		if committed && in.TierMode == types.BILLING_TIER_VOLUME {
 			return ierr.Validationf("%s.tier_mode must be SLAB: committed prices must price marginally so usage never exceeds the commitment's value", field)
 		}
 
@@ -335,10 +329,14 @@ func (r *CreateCommitmentRequest) ToCommitment(
 }
 
 type UpdateCommitmentRequest struct {
-	Name               *string        `json:"name,omitempty" validate:"omitempty,max=255"`
-	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
+	Name               *string        `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
+	InvoiceLabel       *string        `json:"invoice_label,omitempty" validate:"omitempty,min=1,max=255"`
 	InvoiceDescription *string        `json:"invoice_description,omitempty" validate:"omitempty,max=500"`
 	Metadata           types.Metadata `json:"metadata,omitempty"`
+}
+
+func (r *UpdateCommitmentRequest) Validate() error {
+	return validator.ValidateRequest(r)
 }
 
 // TerminateCommitmentRequest ends a commitment now. effective_at may not be in the future; cancellation_fee is billed

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -593,6 +594,20 @@ func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesOpenEnde
 	s.True(got.TerminatedAt.Equal(at), "got %s", got.TerminatedAt)
 }
 
+// Name and label limits count characters, like their columns, so a long name in a multibyte script is accepted.
+func (s *CommitmentServiceSuite) TestCreate_CountsNameCharactersNotBytes() {
+	req := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Name = strings.Repeat("é", 200)
+	_, err := s.svc.Create(s.GetContext(), req)
+	s.Require().NoError(err)
+
+	req = validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
+	req.Priority = 1
+	req.Name = strings.Repeat("é", 256)
+	_, err = s.svc.Create(s.GetContext(), req)
+	s.True(ierr.IsValidation(err), "got %v", err)
+}
+
 func (s *CommitmentServiceSuite) TestUpdate_OnlyLabelsAndMetadata() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
@@ -989,19 +1004,19 @@ func (s *CommitmentServiceSuite) TestTerminateForSubscription_TerminatesActiveOn
 	s.Equal(active.ID, events[0].EntityID)
 }
 
-func (s *CommitmentServiceSuite) TestActiveForPeriod_IncludesTerminated() {
+func (s *CommitmentServiceSuite) TestListOverlapping_IncludesTerminated() {
 	created, err := s.svc.Create(s.GetContext(), validReq(s.fx.sub.ID, s.fx.priceAPI.ID))
 	s.Require().NoError(err)
 	at := created.StartDate.AddDate(0, 4, 0)
 	_, err = s.svc.Terminate(s.GetContext(), created.ID, dto.TerminateCommitmentRequest{EffectiveAt: &at})
 	s.Require().NoError(err)
 
-	got, err := s.svc.ActiveForPeriod(s.GetContext(), s.fx.sub.ID, at.AddDate(0, -1, 0), at)
+	got, err := s.svc.ListOverlapping(s.GetContext(), s.fx.sub.ID, at.AddDate(0, -1, 0), at)
 	s.Require().NoError(err)
 	s.Require().Len(got, 1)
 	s.Equal(created.ID, got[0].ID)
 
-	got, err = s.svc.ActiveForPeriod(s.GetContext(), "subs_other", at.AddDate(0, -1, 0), at)
+	got, err = s.svc.ListOverlapping(s.GetContext(), "subs_other", at.AddDate(0, -1, 0), at)
 	s.Require().NoError(err)
 	s.Empty(got)
 }
@@ -1131,7 +1146,7 @@ func (s *CommitmentServiceSuite) TestSameCommitmentOverage() {
 	svc := s.svc.(*commitmentService)
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			got, err := svc.sameCommitmentOverage(ctx, &commitment.Commitment{OveragePriceID: tt.a}, &commitment.Commitment{OveragePriceID: tt.b})
+			got, err := svc.sameOverage(ctx, &commitment.Commitment{OveragePriceID: tt.a}, &commitment.Commitment{OveragePriceID: tt.b})
 			s.Require().NoError(err)
 			s.Equal(tt.want, got)
 		})

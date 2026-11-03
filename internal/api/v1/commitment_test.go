@@ -104,7 +104,7 @@ func (s *stubCommitmentService) TerminateForSubscription(context.Context, string
 
 func (s *stubCommitmentService) IsEnabled(context.Context) (bool, error) { return true, s.err }
 
-func (s *stubCommitmentService) ActiveForPeriod(context.Context, string, time.Time, time.Time) ([]*commitment.Commitment, error) {
+func (s *stubCommitmentService) ListOverlapping(context.Context, string, time.Time, time.Time) ([]*commitment.Commitment, error) {
 	return nil, s.err
 }
 

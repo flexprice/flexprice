@@ -889,10 +889,6 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				return err
 			}
 
-			if err := rejectLegacyCommitmentInScope(ctx, s.ServiceParams, sub, newLineItem); err != nil {
-				return err
-			}
-
 			if err := checkLineItemCommitmentAttach(ctx, s.ServiceParams, sub, newLineItem); err != nil {
 				return err
 			}

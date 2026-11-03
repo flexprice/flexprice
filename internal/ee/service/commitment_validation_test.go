@@ -854,6 +854,21 @@ func (s *CommitmentServiceSuite) TestLineItemUpdate_LegacyGuardCoversTerminatedC
 	s.Require().NoError(rejectLegacyCommitmentInScope(ctx, fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &line))
 }
 
+// A line joining through an addon or a price change runs the attach guard, which also refuses legacy commitment
+// fields inside a commitment's scope.
+func (s *CommitmentServiceSuite) TestLineItemAttach_RejectsLegacyCommitmentInScope() {
+	ctx := s.GetContext()
+	req := validReq(s.fx.sub.ID, "")
+	req.Scope = dto.CommitmentScopeInput{EntityType: types.CommitmentScopeMeter, EntityID: s.fx.meterAPI.ID}
+	_, err := s.svc.Create(ctx, req)
+	s.Require().NoError(err)
+
+	line := *s.fx.lineAPI
+	line.CommitmentAmount, line.CommitmentType = lo.ToPtr(dec("50")), types.COMMITMENT_TYPE_AMOUNT
+	err = checkLineItemCommitmentAttach(ctx, fullServiceParams(&s.BaseServiceTestSuite), s.fx.sub, &line)
+	s.requireValidation(err, "legacy line-item commitment")
+}
+
 func (s *CommitmentServiceSuite) TestCreate_RejectsSamePriorityOverFutureCutoff() {
 	a := validReq(s.fx.sub.ID, s.fx.priceAPI.ID)
 	created, err := s.svc.Create(s.GetContext(), a)
