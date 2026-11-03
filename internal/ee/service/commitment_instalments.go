@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
@@ -322,6 +323,12 @@ func (s *commitmentService) TriggerInstalment(
 		billOn := lo.FromPtrOr(req.BillOn, clock.Now())
 		if billOn.Before(term.Start) || billOn.After(term.End) {
 			return ierr.Validation("bill_on: must fall within the commitment term")
+		}
+
+		// A draft computed since may already bill it at its current bill_on; a re-plan cancels it so that draft recomputes.
+		if billOn.After(instalment.BillOn) {
+			return ierr.Validationf("bill_on: cannot move past the instalment's bill_on %s; re-plan the instalments to bill it later",
+				instalment.BillOn.Format(time.RFC3339))
 		}
 
 		triggered, err = s.BillingInstalmentRepo.Update(txCtx,

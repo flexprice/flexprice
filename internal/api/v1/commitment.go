@@ -483,7 +483,7 @@ func (h *CommitmentHandler) BringForwardInstalments(c *gin.Context) {
 
 // @Summary Trigger instalment
 // @ID triggerCommitmentInstalment
-// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Until it is triggered, a manual instalment waits at the end of the term.
+// @Description Bills a manual instalment of an active commitment on bill_on, now by default, which must fall within the commitment term. The instalment goes on the first subscription invoice at or after that date, or on its own invoice once due when the commitment's instalment_invoicing is separate_invoice. Either way it waits while the subscription is trialing or paused. Until it is triggered, a manual instalment waits at the end of the term, and bill_on can only move earlier; re-plan the instalments to bill it later.
 // @Tags Commitments
 // @Accept json
 // @Produce json

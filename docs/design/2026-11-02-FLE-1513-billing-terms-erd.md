@@ -269,7 +269,7 @@ Every operation locks the commitment row and runs in one transaction. All of the
 | Preview edit | `POST /v1/commitments/{id}/billing-terms/preview` | Same as edit without saving. | Same response. |
 | Re-plan | `PUT /v1/commitments/{id}/instalments` | Replaces every scheduled instalment with the given list. | Each amount > 0, each `bill_on` within the term (or `manual`); invoiced + new = `total_amount`. |
 | Bring forward | `POST /v1/commitments/{id}/instalments/bring-forward` `{amount, bill_on?}` | Adds one instalment of `amount` (default `bill_on` now) and takes the same total off the earliest scheduled instalments. Every instalment it reduces is cancelled, and one only partly reduced is replaced by a new instalment for what is left, with the same date, service period and `billing_term_id`. Amounts never change in place, so a draft that still carries a cancelled instalment is recomputed when it is finalized (BT11). | 0 < amount ≤ sum of scheduled; `bill_on` within the term. |
-| Trigger | `POST /v1/commitments/{id}/instalments/{instalment_id}/trigger` `{bill_on?}` | Sets `bill_on` (default now) and `triggered_at` on a manual instalment. | The instalment is manual and scheduled; `bill_on` within the term. |
+| Trigger | `POST /v1/commitments/{id}/instalments/{instalment_id}/trigger` `{bill_on?}` | Sets `bill_on` (default now) and `triggered_at` on a manual instalment. | The instalment is manual and scheduled; `bill_on` within the term and not after its current `bill_on`, since a draft may already carry it there. Billing it later is a re-plan. |
 
 ## 9. Termination
 

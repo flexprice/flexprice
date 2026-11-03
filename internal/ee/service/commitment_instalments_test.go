@@ -653,26 +653,33 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_SetsBillOnAndTriggeredAt(
 func (s *CommitmentServiceSuite) TestTriggerInstalment_TermEdgesAreInside() {
 	created, milestone := s.milestoneOf(s.milestoneRequest())
 
-	for _, billOn := range []time.Time{created.StartDate, *created.EndDate} {
+	for _, billOn := range []time.Time{*created.EndDate, created.StartDate} {
 		triggered, err := s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &billOn})
 		s.Require().NoError(err)
 		s.True(triggered.BillOn.Equal(billOn))
 	}
 }
 
-// A triggered milestone stays scheduled until an invoice claims it, so the trigger can move its date.
-func (s *CommitmentServiceSuite) TestTriggerInstalment_MovesAScheduledMilestone() {
+// A triggered milestone stays scheduled until an invoice claims it, so the trigger can move its date earlier. It
+// cannot move it later: a draft computed since may already bill it.
+func (s *CommitmentServiceSuite) TestTriggerInstalment_MovesAScheduledMilestoneEarlier() {
 	created, milestone := s.milestoneOf(s.milestoneRequest())
-	first := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
-	second := time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)
+	first := time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)
+	earlier := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
+	later := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
 
 	_, err := s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &first})
 	s.Require().NoError(err)
 
-	triggered, err := s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &second})
+	triggered, err := s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &earlier})
 	s.Require().NoError(err)
-	s.True(triggered.BillOn.Equal(second))
+	s.True(triggered.BillOn.Equal(earlier))
 	s.NotNil(triggered.TriggeredAt)
+
+	_, err = s.svc.TriggerInstalment(s.GetContext(), created.ID, milestone.ID, dto.TriggerInstalmentRequest{BillOn: &later})
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "got %v", err)
+	s.True(s.instalmentByID(milestone.ID).BillOn.Equal(earlier), "a rejected trigger keeps bill_on")
 }
 
 func (s *CommitmentServiceSuite) TestTriggerInstalment_Rejections() {
