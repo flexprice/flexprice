@@ -24,11 +24,13 @@ type fakeBillingTermsService struct {
 	instalment *billingterm.Instalment
 
 	gotOwnerID      string
+	gotTenantID     string
 	gotInstalmentID string
 }
 
-func (f *fakeBillingTermsService) GetBillingTerms(_ context.Context, id string) (*dto.BillingTermsResponse, error) {
+func (f *fakeBillingTermsService) GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error) {
 	f.gotOwnerID = id
+	f.gotTenantID = types.GetTenantID(ctx)
 	return f.terms, nil
 }
 
@@ -103,7 +105,8 @@ func TestBillingTermsPayloadBuilder(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			out, err := b.BuildPayload(context.Background(), types.WebhookEventBillingTermsCreated, data)
+			ctx := context.WithValue(context.Background(), types.CtxTenantID, "ten_1")
+			out, err := b.BuildPayload(ctx, types.WebhookEventBillingTermsCreated, data)
 			if tt.wantErr {
 				require.Error(t, err)
 				require.True(t, ierr.IsInvalidOperation(err), "got %v", err)
@@ -113,6 +116,7 @@ func TestBillingTermsPayloadBuilder(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, "cmt_1", svc.gotOwnerID)
+			require.Equal(t, "ten_1", svc.gotTenantID, "terms are read under the event's tenant")
 
 			var payload webhookDto.BillingTermsWebhookPayload
 			require.NoError(t, json.Unmarshal(out, &payload))
