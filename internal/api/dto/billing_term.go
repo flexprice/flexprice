@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -37,6 +38,22 @@ type BillingTermInput struct {
 	// filled with each instalment's place among all of the commitment's instalments and their count.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
+}
+
+// ApplyDefaults aligns the term's dates to whole seconds, like the billing period edges they are compared with.
+func (in *BillingTermInput) ApplyDefaults() {
+	in.BillOn = wholeSecond(in.BillOn)
+	in.StartDate = wholeSecond(in.StartDate)
+	in.EndDate = wholeSecond(in.EndDate)
+}
+
+// wholeSecond truncates t to the second; nil stays nil.
+func wholeSecond(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+
+	return lo.ToPtr(t.Truncate(time.Second))
 }
 
 // ToTerm builds the term of the commitment ownerID with a new ID.
@@ -97,7 +114,14 @@ type ReplaceBillingTermsRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=20,dive"`
 }
 
-// Validate checks the rules that need only the request.
+// ApplyDefaults aligns the dates of every term to whole seconds.
+func (r *ReplaceBillingTermsRequest) ApplyDefaults() {
+	for i := range r.BillingTerms {
+		r.BillingTerms[i].ApplyDefaults()
+	}
+}
+
+// Validate checks the rules that need only the request. Call ApplyDefaults first.
 func (r ReplaceBillingTermsRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
@@ -111,6 +135,11 @@ type BillingTermsResponse struct {
 // TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.
 type TriggerInstalmentRequest struct {
 	BillOn *time.Time `json:"bill_on,omitempty"`
+}
+
+// ApplyDefaults aligns bill_on to whole seconds.
+func (r *TriggerInstalmentRequest) ApplyDefaults() {
+	r.BillOn = wholeSecond(r.BillOn)
 }
 
 // ListInstalmentsResponse is the instalments of a commitment in billing order.

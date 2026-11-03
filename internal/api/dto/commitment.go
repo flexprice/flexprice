@@ -113,9 +113,7 @@ type CreateCommitmentRequest struct {
 func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 	// Term edges are whole seconds, like every computed billing date.
 	r.StartDate = r.StartDate.Truncate(time.Second)
-	if r.EndDate != nil {
-		r.EndDate = lo.ToPtr(r.EndDate.Truncate(time.Second))
-	}
+	r.EndDate = wholeSecond(r.EndDate)
 
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
@@ -135,6 +133,10 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 
 	if lo.FromPtr(r.CollectionMethod) == types.CommitmentCollectionBillingTerms && r.InstalmentInvoicing == nil {
 		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySubscriptionInvoice)
+	}
+
+	for i := range r.BillingTerms {
+		r.BillingTerms[i].ApplyDefaults()
 	}
 
 	for _, p := range []*CommitmentPriceInput{r.CommittedPrice, r.OveragePrice} {

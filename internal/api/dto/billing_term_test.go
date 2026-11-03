@@ -137,3 +137,42 @@ func TestReplaceBillingTermsRequest_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestBillingTermInput_ApplyDefaults(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	in := BillingTermInput{
+		BillOn:    lo.ToPtr(jan.Add(750 * time.Millisecond)),
+		StartDate: lo.ToPtr(jan.Add(time.Second + 1)),
+	}
+
+	in.ApplyDefaults()
+
+	require.True(t, in.BillOn.Equal(jan))
+	require.True(t, in.StartDate.Equal(jan.Add(time.Second)))
+	require.Nil(t, in.EndDate)
+}
+
+func TestReplaceBillingTermsRequest_ApplyDefaults(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	req := ReplaceBillingTermsRequest{BillingTerms: []BillingTermInput{
+		{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))},
+		{StartDate: lo.ToPtr(jan.Add(time.Second + 1))},
+	}}
+
+	req.ApplyDefaults()
+
+	require.True(t, req.BillingTerms[0].BillOn.Equal(jan))
+	require.True(t, req.BillingTerms[1].StartDate.Equal(jan.Add(time.Second)))
+}
+
+func TestTriggerInstalmentRequest_ApplyDefaults(t *testing.T) {
+	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	req := TriggerInstalmentRequest{BillOn: lo.ToPtr(jan.Add(750 * time.Millisecond))}
+	req.ApplyDefaults()
+	require.True(t, req.BillOn.Equal(jan))
+
+	none := TriggerInstalmentRequest{}
+	none.ApplyDefaults()
+	require.Nil(t, none.BillOn)
+}
