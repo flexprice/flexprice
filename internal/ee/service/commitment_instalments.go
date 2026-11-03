@@ -23,8 +23,6 @@ func (s *commitmentService) TriggerInstalment(
 		return nil, err
 	}
 
-	req.ApplyDefaults()
-
 	var triggered *billingterm.Instalment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {

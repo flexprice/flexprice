@@ -13,58 +13,76 @@ import (
 	"github.com/samber/lo"
 )
 
-// errStaleInstalments is the cause of a finalization that found instalments on the invoice no longer scheduled.
-var errStaleInstalments = errors.New("invoice carries instalments that changed since it was computed")
+// errStaleDraft is the cause of refusing to finalize or charge a draft that bills instalments no longer scheduled.
+var errStaleDraft = errors.New("draft bills instalments that are no longer scheduled")
 
-// finalizeDraft finalizes the draft, recomputing a subscription draft first if it misses a due instalment and again if
-// it bills one no longer scheduled. A manually edited draft is never recomputed and keeps the stale error.
-func (s *invoiceService) finalizeDraft(ctx context.Context, inv *invoice.Invoice, source dto.InvoiceStateChangeSource) error {
-	recomputable := inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil && !inv.IsManuallyEdited
-	recompute := func(reason string, instalmentIDs []string) error {
-		s.Logger.Info(ctx, "invoice.instalments_recomputed",
-			"operation", "invoice.instalments_recomputed",
-			"reason", reason,
-			"invoice_id", inv.ID,
-			"instalment_ids", instalmentIDs,
-		)
-
-		recomputed, _, err := s.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{InvoiceStateChangeSource: source})
-		if err != nil {
-			return err
-		}
-
-		*inv = *recomputed
+// refreshDraftInstalments recomputes a subscription draft whose instalments changed since it was computed: it bills one
+// an edit cancelled or another invoice claimed, or misses one that fell due, like a triggered milestone.
+func (s *invoiceService) refreshDraftInstalments(
+	ctx context.Context,
+	inv *invoice.Invoice,
+	source dto.InvoiceStateChangeSource,
+) error {
+	// A manually edited draft is never recomputed; finalizing it fails if it bills a stale instalment.
+	if inv.InvoiceStatus != types.InvoiceStatusDraft || inv.InvoiceType != types.InvoiceTypeSubscription ||
+		inv.SubscriptionID == nil || inv.IsManuallyEdited {
 		return nil
 	}
 
-	if recomputable {
-		missing, err := s.missingInstalments(ctx, inv)
-		if err != nil {
-			return err
-		}
-
-		if len(missing) > 0 {
-			if err := recompute("due instalments missing from the draft", missing); err != nil {
-				return err
-			}
-		}
-	}
-
-	err := s.performFinalizeInvoiceActions(ctx, inv, source.SourceID())
-	if !errors.Is(err, errStaleInstalments) || !recomputable {
+	billed, err := s.billedInstalmentIDs(ctx, inv.ID)
+	if err != nil {
 		return err
 	}
 
-	if err := recompute("instalments changed since the draft was computed", nil); err != nil {
+	stale, err := s.staleInstalments(ctx, billed)
+	if err != nil {
 		return err
 	}
 
-	return s.performFinalizeInvoiceActions(ctx, inv, source.SourceID())
+	missing, err := s.missingInstalments(ctx, inv, billed)
+	if err != nil {
+		return err
+	}
+
+	if len(stale) == 0 && len(missing) == 0 {
+		return nil
+	}
+
+	s.Logger.Info(ctx, "invoice.instalments_recomputed",
+		"operation", "invoice.instalments_recomputed",
+		"invoice_id", inv.ID,
+		"stale_instalment_ids", stale,
+		"missing_instalment_ids", missing,
+	)
+
+	recomputed, _, err := s.ComputeInvoice(ctx, inv.ID, &dto.InvoiceComputeRequest{InvoiceStateChangeSource: source})
+	if err != nil {
+		return err
+	}
+
+	*inv = *recomputed
+	return nil
 }
 
-// missingInstalments returns the ids of the scheduled instalments due within a subscription draft that it does not
-// bill, such as a milestone triggered after the draft was computed.
-func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.Invoice) ([]string, error) {
+// staleInstalments returns those of the billed instalments that are no longer scheduled.
+func (s *invoiceService) staleInstalments(ctx context.Context, billed []string) ([]string, error) {
+	if len(billed) == 0 {
+		return nil, nil
+	}
+
+	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
+		IDs:      billed,
+		Statuses: []types.InstalmentStatus{types.InstalmentStatusScheduled},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Without(billed, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
+}
+
+// missingInstalments returns the scheduled instalments due within a subscription draft that it does not bill.
+func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.Invoice, billed []string) ([]string, error) {
 	// A trial-start invoice drops its instalments and a paused period's invoice is never computed.
 	reason := types.InvoiceBillingReason(inv.BillingReason)
 	if reason == types.InvoiceBillingReasonSubscriptionTrialStart || reason == types.InvoiceBillingReasonSubscriptionPaused ||
@@ -78,11 +96,6 @@ func (s *invoiceService) missingInstalments(ctx context.Context, inv *invoice.In
 	}
 
 	due, err := dueInstalments(ctx, s.ServiceParams, *inv.SubscriptionID, billAt)
-	if err != nil || len(due) == 0 {
-		return nil, err
-	}
-
-	billed, err := s.billedInstalmentIDs(ctx, inv.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -108,43 +121,35 @@ func (s *invoiceService) claimInstalments(ctx context.Context, inv *invoice.Invo
 	return lo.Without(ids, claimedIDs...), nil
 }
 
-// requireFreshInstalments refuses to charge a draft that bills instalments no longer scheduled: paying it in full
-// finalizes it without a recompute, so it would bill them twice.
-func (s *invoiceService) requireFreshInstalments(ctx context.Context, inv *invoice.Invoice) error {
+// requireFreshDraft refuses to charge a draft that bills instalments no longer scheduled: paying it in full finalizes
+// it without a refresh, so it would bill them twice.
+func (s *invoiceService) requireFreshDraft(ctx context.Context, inv *invoice.Invoice) error {
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
 		return nil
 	}
 
-	stale, err := s.staleInstalments(ctx, inv)
+	billed, err := s.billedInstalmentIDs(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
+	stale, err := s.staleInstalments(ctx, billed)
 	if err != nil || len(stale) == 0 {
 		return err
 	}
 
-	return ierr.WithError(errStaleInstalments).
-		WithHint("Recompute the invoice before paying it").
-		WithReportableDetails(map[string]any{
-			"invoice_id":     inv.ID,
-			"instalment_ids": stale,
-		}).
-		Mark(ierr.ErrInvalidOperation)
+	return staleDraftError(inv.ID, stale, "Recompute the invoice before paying it")
 }
 
-// staleInstalments returns the ids of the instalments a draft bills that are no longer scheduled.
-func (s *invoiceService) staleInstalments(ctx context.Context, inv *invoice.Invoice) ([]string, error) {
-	ids, err := s.billedInstalmentIDs(ctx, inv.ID)
-	if err != nil || len(ids) == 0 {
-		return nil, err
-	}
-
-	scheduled, err := s.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
-		IDs:      ids,
-		Statuses: []types.InstalmentStatus{types.InstalmentStatusScheduled},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return lo.Without(ids, lo.Map(scheduled, func(inst *billingterm.Instalment, _ int) string { return inst.ID })...), nil
+// staleDraftError refuses a draft that bills the given instalments, which are no longer scheduled.
+func staleDraftError(invoiceID string, instalmentIDs []string, hint string) error {
+	return ierr.WithError(errStaleDraft).
+		WithHint(hint).
+		WithReportableDetails(map[string]any{
+			"invoice_id":     invoiceID,
+			"instalment_ids": instalmentIDs,
+		}).
+		Mark(ierr.ErrInvalidOperation)
 }
 
 // billedInstalmentIDs returns the ids of the instalments the invoice's lines bill.

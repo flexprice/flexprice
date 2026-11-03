@@ -150,7 +150,6 @@ func (s *commitmentService) PreviewBillingTerms(
 		return nil, err
 	}
 
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -191,7 +190,6 @@ func (s *commitmentService) ReplaceBillingTerms(
 		return nil, err
 	}
 
-	req.ApplyDefaults()
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -369,18 +367,17 @@ func (s *commitmentService) settle(
 		return nil, nil
 	}
 
-	settlement := billingterm.InstalmentTemplate(ctx, c)
-	settlement.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
-	settlement.Kind = types.InstalmentKindSettlement
-	settlement.BillTrigger = types.InstalmentBillTriggerDate
-	settlement.BillOn = effectiveAt
-	settlement.Amount = unbilled
-	settlement.InvoiceLabel = settlementLabel
-	settlement.ServicePeriodStart = c.StartDate
-	settlement.ServicePeriodEnd = effectiveAt
-	settlement.Delivery = types.InstalmentDeliverySeparateInvoice
+	settlement := billingterm.NewOwnerInstalment(ctx, c).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
+		WithKind(types.InstalmentKindSettlement).
+		WithDelivery(types.InstalmentDeliverySeparateInvoice).
+		WithBillOn(effectiveAt).
+		WithAmount(unbilled).
+		WithInvoiceLabel(settlementLabel).
+		WithServicePeriod(types.Period{Start: c.StartDate, End: effectiveAt}).
+		Build()
 
-	created, err := s.BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{&settlement})
+	created, err := s.BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{settlement})
 	if err != nil {
 		return nil, err
 	}

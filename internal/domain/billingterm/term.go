@@ -42,6 +42,36 @@ type Term struct {
 	types.BaseModel
 }
 
+// recurringOnlyField names the first field set on the term that only recurring terms use, or returns "".
+func (t *Term) recurringOnlyField() string {
+	switch {
+	case t.StartDate != nil:
+		return "start_date"
+	case t.EndDate != nil:
+		return "end_date"
+	case t.PeriodCount != nil:
+		return "period_count"
+	case t.InvoiceCadence != nil:
+		return "invoice_cadence"
+	case t.Split != nil:
+		return "split"
+	default:
+		return ""
+	}
+}
+
+// onceOnlyField names the first field set on the term that only once terms use, or returns "".
+func (t *Term) onceOnlyField() string {
+	switch {
+	case t.BillTrigger != nil:
+		return "bill_trigger"
+	case t.BillOn != nil:
+		return "bill_on"
+	default:
+		return ""
+	}
+}
+
 // TermFromEnt converts an ent row to a Term; it returns nil for a nil row.
 func TermFromEnt(e *ent.BillingTerm) *Term {
 	if e == nil {

@@ -1332,7 +1332,11 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 		return err
 	}
 
-	if err := s.finalizeDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+	if err := s.refreshDraftInstalments(ctx, inv, req.InvoiceStateChangeSource); err != nil {
+		return err
+	}
+
+	if err := s.performFinalizeInvoiceActions(ctx, inv, req.SourceID()); err != nil {
 		return err
 	}
 
@@ -1553,18 +1557,13 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		if err := issueSubscriptionInvoice(txCtx, s.ServiceParams, lockedInv, now); err != nil {
 			return err
 		}
+		// An instalment cancelled or claimed since the draft was refreshed fails the finalize, so it is never billed twice.
 		unclaimed, err := s.claimInstalments(txCtx, lockedInv)
 		if err != nil {
 			return err
 		}
 		if len(unclaimed) > 0 {
-			return ierr.WithError(errStaleInstalments).
-				WithHint("Recompute the invoice and finalize again").
-				WithReportableDetails(map[string]any{
-					"invoice_id":     lockedInv.ID,
-					"instalment_ids": unclaimed,
-				}).
-				Mark(ierr.ErrInvalidOperation)
+			return staleDraftError(lockedInv.ID, unclaimed, "Recompute the invoice and finalize again")
 		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {
@@ -1958,14 +1957,18 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return ierr.NewError("invoice has not been computed").WithHint("Invoice must be computed before processing").Mark(ierr.ErrValidation)
 	}
 
-	// try to finalize the invoice
-	if err := s.finalizeDraft(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
+	if err := s.refreshDraftInstalments(ctx, inv, dto.InvoiceStateChangeSource{}); err != nil {
 		return err
 	}
 
-	// Recomputing a stale draft can leave it nothing to bill.
+	// Recomputing can leave the draft nothing to bill.
 	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
 		return nil
+	}
+
+	// try to finalize the invoice
+	if err := s.performFinalizeInvoiceActions(ctx, inv, ""); err != nil {
+		return err
 	}
 
 	// The invoice is already sealed, so a failed read is logged and filing proceeds as before.

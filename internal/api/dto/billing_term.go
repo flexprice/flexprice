@@ -8,7 +8,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,17 +33,10 @@ type BillingTermInput struct {
 	InvoiceCadence *types.InvoiceCadence   `json:"invoice_cadence,omitempty"`
 	Split          *types.BillingTermSplit `json:"split,omitempty"`
 
+	// InvoiceLabel names the term's instalments on the invoice, "Instalment {n} of {of}" by default. {n} and {of} are
+	// filled with each instalment's place among all of the commitment's instalments and their count.
 	InvoiceLabel *string        `json:"invoice_label,omitempty" validate:"omitempty,max=255"`
 	Metadata     types.Metadata `json:"metadata,omitempty"`
-}
-
-// ApplyDefaults aligns the term's dates to whole seconds, like the dates of the commitment they sit in.
-func (in *BillingTermInput) ApplyDefaults() {
-	for _, date := range []**time.Time{&in.BillOn, &in.StartDate, &in.EndDate} {
-		if *date != nil {
-			*date = lo.ToPtr((*date).Truncate(time.Second))
-		}
-	}
 }
 
 // ToTerm builds the term of the commitment ownerID with a new ID.
@@ -105,14 +97,7 @@ type ReplaceBillingTermsRequest struct {
 	BillingTerms []BillingTermInput `json:"billing_terms" validate:"required,min=1,max=20,dive"`
 }
 
-// ApplyDefaults aligns the dates of every term to whole seconds.
-func (r *ReplaceBillingTermsRequest) ApplyDefaults() {
-	for i := range r.BillingTerms {
-		r.BillingTerms[i].ApplyDefaults()
-	}
-}
-
-// Validate checks the rules that need only the request. Call ApplyDefaults first.
+// Validate checks the rules that need only the request.
 func (r ReplaceBillingTermsRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
@@ -126,13 +111,6 @@ type BillingTermsResponse struct {
 // TriggerInstalmentRequest triggers a manual instalment to be billed on BillOn, now by default.
 type TriggerInstalmentRequest struct {
 	BillOn *time.Time `json:"bill_on,omitempty"`
-}
-
-// ApplyDefaults aligns bill_on to whole seconds.
-func (r *TriggerInstalmentRequest) ApplyDefaults() {
-	if r.BillOn != nil {
-		r.BillOn = lo.ToPtr(r.BillOn.Truncate(time.Second))
-	}
 }
 
 // ListInstalmentsResponse is the instalments of a commitment in billing order.

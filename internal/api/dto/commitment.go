@@ -138,10 +138,6 @@ func (r *CreateCommitmentRequest) ApplyDefaults(subTimezone string) {
 		r.InstalmentInvoicing = lo.ToPtr(types.InstalmentDeliverySubscriptionInvoice)
 	}
 
-	for i := range r.BillingTerms {
-		r.BillingTerms[i].ApplyDefaults()
-	}
-
 	for _, p := range []*CommitmentPriceInput{r.CommittedPrice, r.OveragePrice} {
 		if p != nil && p.BillingModel == "" {
 			p.BillingModel = types.BILLING_MODEL_FLAT_FEE

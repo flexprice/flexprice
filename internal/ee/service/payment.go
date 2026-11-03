@@ -249,7 +249,7 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 	// A payment a gateway already collected (process_payment false) is still recorded; ProcessPayment checks it if it
 	// is charged later.
 	if p.ProcessPayment {
-		if err := invSvc.requireFreshInstalments(ctx, invoice); err != nil {
+		if err := invSvc.requireFreshDraft(ctx, invoice); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,7 @@ package billingterm
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -40,4 +41,20 @@ type InstalmentRepository interface {
 
 	// Reschedule moves the invoice's invoiced instalments back to scheduled and clears invoice_id.
 	Reschedule(ctx context.Context, invoiceID string) ([]*Instalment, error)
+}
+
+// InstalmentFilter selects instalments for List; empty fields do not constrain.
+type InstalmentFilter struct {
+	OwnerType types.BillingTermOwnerType
+	OwnerIDs  []string
+
+	SubscriptionIDs []string
+	Statuses        []types.InstalmentStatus
+	Deliveries      []types.InstalmentDelivery
+
+	// BillOnOrBefore selects instalments whose bill_on is at or before it.
+	BillOnOrBefore *time.Time
+
+	InvoiceIDs []string
+	IDs        []string
 }

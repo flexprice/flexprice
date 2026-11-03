@@ -22077,7 +22077,8 @@
           },
           "invoice_label": {
             "maxLength": 255,
-            "type": "string"
+            "type": "string",
+            "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count."
           },
           "kind": {
             "$ref": "#/components/schemas/types.BillingTermKind"

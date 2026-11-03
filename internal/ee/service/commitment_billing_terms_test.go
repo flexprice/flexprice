@@ -454,14 +454,15 @@ func (s *CommitmentServiceSuite) TestReplaceBillingTerms_RejectsAPlanOverTheLimi
 
 	invoiced := make([]*billingterm.Instalment, 0, billingterm.MaxInstalments-10)
 	for range billingterm.MaxInstalments - 10 {
-		inst := billingterm.InstalmentTemplate(ctx, c)
-		inst.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)
-		inst.Amount = dec("1")
-		inst.BillOn = c.StartDate
-		inst.InvoiceLabel = "Instalment"
+		inst := billingterm.NewOwnerInstalment(ctx, c).
+			WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
+			WithAmount(dec("1")).
+			WithBillOn(c.StartDate).
+			WithInvoiceLabel("Instalment").
+			Build()
 		inst.InstalmentStatus = types.InstalmentStatusInvoiced
 		inst.InvoiceID = lo.ToPtr("inv_x")
-		invoiced = append(invoiced, &inst)
+		invoiced = append(invoiced, inst)
 	}
 	_, err = s.GetStores().BillingInstalmentRepo.CreateMany(ctx, invoiced)
 	s.Require().NoError(err)

@@ -2903,7 +2903,7 @@ func (s *meterUsageService) calculateLineItemCommitments(
 		commitmentCharges[lineID] = []*dto.SubscriptionUsageByMetersResponse{charge}
 	}
 
-	lines, _, err := loader.InvoiceLines(ctx)
+	lines, err := loader.usageLines(ctx)
 	if err != nil {
 		return nil, err
 	}

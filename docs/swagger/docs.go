@@ -19080,6 +19080,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
                 "invoice_label": {
+                    "description": "InvoiceLabel names the term's instalments on the invoice, \"Instalment {n} of {of}\" by default. {n} and {of} are\nfilled with each instalment's place among all of the commitment's instalments and their count.",
                     "type": "string",
                     "maxLength": 255
                 },

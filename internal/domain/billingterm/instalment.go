@@ -1,6 +1,7 @@
 package billingterm
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -95,6 +96,31 @@ type instalmentBuilder struct {
 	i *Instalment
 }
 
+// NewOwnerInstalment starts a scheduled instalment of the owner, billed on a date, with the owner's fields filled in.
+func NewOwnerInstalment(ctx context.Context, owner Owner) *instalmentBuilder {
+	var subscriptionID *string
+	if id := owner.BilledSubscriptionID(); id != "" {
+		subscriptionID = &id
+	}
+
+	return &instalmentBuilder{i: &Instalment{
+		OwnerType: owner.OwnerType(),
+		OwnerID:   owner.OwnerID(),
+
+		CustomerID:     owner.BilledCustomerID(),
+		SubscriptionID: subscriptionID,
+		Currency:       owner.BillingCurrency(),
+
+		Kind:             types.InstalmentKindInstalment,
+		BillTrigger:      types.InstalmentBillTriggerDate,
+		Delivery:         owner.InstalmentDelivery(),
+		InstalmentStatus: types.InstalmentStatusScheduled,
+
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}}
+}
+
 // NewInstalmentBuilder starts from a copy of i (or an empty instalment when i is nil).
 func NewInstalmentBuilder(i *Instalment) *instalmentBuilder {
 	if i == nil {
@@ -105,6 +131,47 @@ func NewInstalmentBuilder(i *Instalment) *instalmentBuilder {
 	cp.Metadata = lo.Assign(types.Metadata{}, i.Metadata)
 
 	return &instalmentBuilder{i: &cp}
+}
+
+func (b *instalmentBuilder) WithID(id string) *instalmentBuilder {
+	b.i.ID = id
+	return b
+}
+
+func (b *instalmentBuilder) WithBillingTermID(id string) *instalmentBuilder {
+	b.i.BillingTermID = &id
+	return b
+}
+
+func (b *instalmentBuilder) WithKind(kind types.InstalmentKind) *instalmentBuilder {
+	b.i.Kind = kind
+	return b
+}
+
+func (b *instalmentBuilder) WithBillTrigger(trigger types.InstalmentBillTrigger) *instalmentBuilder {
+	b.i.BillTrigger = trigger
+	return b
+}
+
+func (b *instalmentBuilder) WithAmount(amount decimal.Decimal) *instalmentBuilder {
+	b.i.Amount = amount
+	return b
+}
+
+func (b *instalmentBuilder) WithInvoiceLabel(label string) *instalmentBuilder {
+	b.i.InvoiceLabel = label
+	return b
+}
+
+func (b *instalmentBuilder) WithServicePeriod(period types.Period) *instalmentBuilder {
+	b.i.ServicePeriodStart = period.Start
+	b.i.ServicePeriodEnd = period.End
+	return b
+}
+
+func (b *instalmentBuilder) WithDelivery(delivery types.InstalmentDelivery) *instalmentBuilder {
+	b.i.Delivery = delivery
+	return b
 }
 
 // WithBillOn sets when the instalment becomes billable.

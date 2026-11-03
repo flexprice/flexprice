@@ -129,42 +129,8 @@ func (r *billingInstalmentRepository) List(ctx context.Context, filter *billingt
 	})
 	defer FinishSpan(span)
 
-	var preds []predicate.BillingInstalment
-	if filter.OwnerType != "" {
-		preds = append(preds, entbillinginstalment.OwnerTypeEQ(filter.OwnerType))
-	}
-
-	if len(filter.OwnerIDs) > 0 {
-		preds = append(preds, entbillinginstalment.OwnerIDIn(filter.OwnerIDs...))
-	}
-
-	if len(filter.SubscriptionIDs) > 0 {
-		preds = append(preds, entbillinginstalment.SubscriptionIDIn(filter.SubscriptionIDs...))
-	}
-
-	if len(filter.Statuses) > 0 {
-		preds = append(preds, entbillinginstalment.InstalmentStatusIn(filter.Statuses...))
-	}
-
-	if len(filter.Deliveries) > 0 {
-		preds = append(preds, entbillinginstalment.DeliveryIn(filter.Deliveries...))
-	}
-
-	if filter.BillOnOrBefore != nil {
-		preds = append(preds, entbillinginstalment.BillOnLTE(*filter.BillOnOrBefore))
-	}
-
-	if len(filter.InvoiceIDs) > 0 {
-		preds = append(preds, entbillinginstalment.InvoiceIDIn(filter.InvoiceIDs...))
-	}
-
-	if len(filter.IDs) > 0 {
-		preds = append(preds, entbillinginstalment.IDIn(filter.IDs...))
-	}
-
-	rows, err := r.client.Reader(ctx).BillingInstalment.Query().
-		Where(r.scope(ctx)...).
-		Where(preds...).
+	query := r.client.Reader(ctx).BillingInstalment.Query().Where(r.scope(ctx)...)
+	rows, err := applyInstalmentFilter(query, filter).
 		Order(
 			ent.Asc(entbillinginstalment.FieldBillOn),
 			ent.Asc(entbillinginstalment.FieldID),
@@ -179,6 +145,43 @@ func (r *billingInstalmentRepository) List(ctx context.Context, filter *billingt
 
 	SetSpanSuccess(span)
 	return billingterm.InstalmentsFromEnt(rows), nil
+}
+
+func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.InstalmentFilter) *ent.BillingInstalmentQuery {
+	var preds []predicate.BillingInstalment
+	if f.OwnerType != "" {
+		preds = append(preds, entbillinginstalment.OwnerTypeEQ(f.OwnerType))
+	}
+
+	if len(f.OwnerIDs) > 0 {
+		preds = append(preds, entbillinginstalment.OwnerIDIn(f.OwnerIDs...))
+	}
+
+	if len(f.SubscriptionIDs) > 0 {
+		preds = append(preds, entbillinginstalment.SubscriptionIDIn(f.SubscriptionIDs...))
+	}
+
+	if len(f.Statuses) > 0 {
+		preds = append(preds, entbillinginstalment.InstalmentStatusIn(f.Statuses...))
+	}
+
+	if len(f.Deliveries) > 0 {
+		preds = append(preds, entbillinginstalment.DeliveryIn(f.Deliveries...))
+	}
+
+	if f.BillOnOrBefore != nil {
+		preds = append(preds, entbillinginstalment.BillOnLTE(*f.BillOnOrBefore))
+	}
+
+	if len(f.InvoiceIDs) > 0 {
+		preds = append(preds, entbillinginstalment.InvoiceIDIn(f.InvoiceIDs...))
+	}
+
+	if len(f.IDs) > 0 {
+		preds = append(preds, entbillinginstalment.IDIn(f.IDs...))
+	}
+
+	return q.Where(preds...)
 }
 
 func (r *billingInstalmentRepository) Update(ctx context.Context, in *billingterm.Instalment) (*billingterm.Instalment, error) {

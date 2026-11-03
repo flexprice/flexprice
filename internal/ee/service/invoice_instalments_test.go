@@ -206,7 +206,7 @@ func (s *CommitmentE2ESuite) TestProcessPayment_RefusesAStaleDraft() {
 	s.Require().NoError(err)
 
 	_, err = NewPaymentProcessorService(params).ProcessPayment(ctx, pending.ID)
-	s.Require().ErrorIs(err, errStaleInstalments)
+	s.Require().ErrorIs(err, errStaleDraft)
 
 	stored, err := s.GetStores().PaymentRepo.Get(ctx, pending.ID)
 	s.Require().NoError(err)
@@ -454,7 +454,7 @@ func (s *CommitmentE2ESuite) TestPaymentFinalize_StaleDraftKeepsPayment() {
 		Currency:        draft.Currency,
 		ProcessPayment:  true,
 	})
-	s.Require().ErrorIs(err, errStaleInstalments, "a new payment on the stale draft is refused")
+	s.Require().ErrorIs(err, errStaleDraft, "a new payment on the stale draft is refused")
 
 	s.Require().NoError(payments.validateInvoicePaymentEligibility(ctx, draft, &dto.CreatePaymentRequest{
 		DestinationType: types.PaymentDestinationTypeInvoice,

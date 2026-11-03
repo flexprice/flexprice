@@ -80,7 +80,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			return paymentObj, err
 		}
 
-		if err := NewInvoiceService(p.ServiceParams).(*invoiceService).requireFreshInstalments(ctx, inv); err != nil {
+		if err := NewInvoiceService(p.ServiceParams).(*invoiceService).requireFreshDraft(ctx, inv); err != nil {
 			return paymentObj, err
 		}
 	}

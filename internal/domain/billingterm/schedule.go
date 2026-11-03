@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -27,29 +26,26 @@ const (
 // DefaultInvoiceLabel is the invoice label of an instalment given none. NumberLabels fills {n} and {of}.
 const DefaultInvoiceLabel = "Instalment {n} of {of}"
 
-const (
-	maxInvoiceLabelLength = 255
+// termErrorFormat names the term's index, then the field, then the reason.
+const termErrorFormat = "billing_terms[%d].%s: %s"
 
-	// termErrorFormat names the term's index, then the field, then the reason.
-	termErrorFormat = "billing_terms[%d].%s: %s"
-)
-
-// resolvedTerm is a validated term with its defaults applied, its steps cut and its amount resolved.
+// resolvedTerm is a validated term with its defaults applied, its steps cut and its total resolved.
 type resolvedTerm struct {
 	index int
 	term  *Term
 
+	// Once terms.
 	billTrigger   types.InstalmentBillTrigger
 	billOn        time.Time
 	servicePeriod types.Period
 
+	// Recurring terms.
 	cadence types.InvoiceCadence
 	split   types.BillingTermSplit
 	steps   []PeriodValue
 
-	// amount is the term's share of the total; instalmentAmount is the amount of each instalment of a fixed term.
-	amount           decimal.Decimal
-	instalmentAmount decimal.Decimal
+	// total is the term's share of the owner's total, which its instalments split.
+	total decimal.Decimal
 }
 
 // Expand validates the terms against the owner and its period values and returns their instalments in billing order.
@@ -95,11 +91,9 @@ func Expand(ctx context.Context, owner Owner, periods []PeriodValue, terms []*Te
 		return nil, ierr.Validationf("billing_terms: expand to %d instalments, more than the %d allowed", count, MaxInstalments)
 	}
 
-	template := InstalmentTemplate(ctx, owner)
-
 	instalments := make([]*Instalment, 0, count)
 	for _, r := range resolved {
-		rendered, err := r.instalments(template, currency)
+		rendered, err := r.instalments(ctx, owner)
 		if err != nil {
 			return nil, err
 		}
@@ -125,26 +119,6 @@ func NumberLabels(plan []*Instalment) {
 	}
 }
 
-// InstalmentTemplate is a scheduled instalment of the owner with the owner's fields filled in. The caller sets the ID,
-// amount, dates, trigger, invoice label and service period.
-func InstalmentTemplate(ctx context.Context, owner Owner) Instalment {
-	return Instalment{
-		OwnerType: owner.OwnerType(),
-		OwnerID:   owner.OwnerID(),
-
-		CustomerID:     owner.BilledCustomerID(),
-		SubscriptionID: lo.EmptyableToPtr(owner.BilledSubscriptionID()),
-		Currency:       owner.BillingCurrency(),
-
-		Kind:             types.InstalmentKindInstalment,
-		Delivery:         owner.InstalmentDelivery(),
-		InstalmentStatus: types.InstalmentStatusScheduled,
-
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
-	}
-}
-
 // resolveTerm validates one term against the collection period and applies the defaults of its kind; a term without
 // dates starts at termStart.
 func resolveTerm(
@@ -155,10 +129,6 @@ func resolveTerm(
 	currency string,
 	periods []PeriodValue,
 ) (*resolvedTerm, error) {
-	if utf8.RuneCountInString(lo.FromPtr(t.InvoiceLabel)) > maxInvoiceLabelLength {
-		return nil, ierr.Validationf(termErrorFormat, index, "invoice_label", "must be at most 255 characters")
-	}
-
 	switch t.ValueType {
 	case types.BillingTermValueFixed:
 		if t.Value == nil || !t.Value.IsPositive() {
@@ -191,17 +161,8 @@ func resolveTerm(
 // resolveOnce checks a once term's dates; bill_on defaults to termStart. The collection period is the service period of
 // its instalment.
 func resolveOnce(index int, t *Term, collection types.Period, termStart time.Time) (*resolvedTerm, error) {
-	unused := []lo.Entry[string, bool]{
-		{Key: "start_date", Value: t.StartDate != nil},
-		{Key: "end_date", Value: t.EndDate != nil},
-		{Key: "period_count", Value: t.PeriodCount != nil},
-		{Key: "invoice_cadence", Value: t.InvoiceCadence != nil},
-		{Key: "split", Value: t.Split != nil},
-	}
-	for _, field := range unused {
-		if field.Value {
-			return nil, ierr.Validationf(termErrorFormat, index, field.Key, "is not used by once terms")
-		}
+	if field := t.recurringOnlyField(); field != "" {
+		return nil, ierr.Validationf(termErrorFormat, index, field, "is not used by once terms")
 	}
 
 	r := &resolvedTerm{
@@ -241,14 +202,8 @@ func resolveRecurring(
 	termStart time.Time,
 	periods []PeriodValue,
 ) (*resolvedTerm, error) {
-	unused := []lo.Entry[string, bool]{
-		{Key: "bill_trigger", Value: t.BillTrigger != nil},
-		{Key: "bill_on", Value: t.BillOn != nil},
-	}
-	for _, field := range unused {
-		if field.Value {
-			return nil, ierr.Validationf(termErrorFormat, index, field.Key, "is not used by recurring terms")
-		}
+	if field := t.onceOnlyField(); field != "" {
+		return nil, ierr.Validationf(termErrorFormat, index, field, "is not used by recurring terms")
 	}
 
 	cadence := lo.FromPtr(t.InvoiceCadence)
@@ -337,9 +292,8 @@ func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal) error {
 			continue
 		}
 
-		r.instalmentAmount = lo.FromPtr(r.term.Value)
-		r.amount = r.instalmentAmount.Mul(decimal.NewFromInt(int64(r.instalmentCount())))
-		others = others.Add(r.amount)
+		r.total = lo.FromPtr(r.term.Value).Mul(decimal.NewFromInt(int64(r.instalmentCount())))
+		others = others.Add(r.total)
 	}
 
 	if remainder == nil {
@@ -353,8 +307,8 @@ func resolveAmounts(terms []*resolvedTerm, total decimal.Decimal) error {
 		return nil
 	}
 
-	remainder.amount = total.Sub(others)
-	if !remainder.amount.IsPositive() {
+	remainder.total = total.Sub(others)
+	if !remainder.total.IsPositive() {
 		return ierr.Validationf(
 			termErrorFormat, remainder.index, "value_type",
 			fmt.Sprintf("the other terms add up to %s and leave nothing of the total of %s for the remainder", others, total),
@@ -372,70 +326,64 @@ func (r *resolvedTerm) instalmentCount() int {
 	return len(r.steps)
 }
 
-// instalments renders the term's instalments onto copies of template, which carries the owner's fields.
-func (r *resolvedTerm) instalments(template Instalment, currency string) ([]*Instalment, error) {
-	out := make([]*Instalment, 0, r.instalmentCount())
+// instalments renders the term's instalments of the owner, unnumbered and without IDs.
+func (r *resolvedTerm) instalments(ctx context.Context, owner Owner) ([]*Instalment, error) {
+	var builders []*instalmentBuilder
 	if r.term.Kind == types.BillingTermKindOnce {
-		i := template
-		i.BillTrigger = r.billTrigger
-		i.BillOn = r.billOn
-		i.Amount = r.amount
-		i.ServicePeriodStart = r.servicePeriod.Start
-		i.ServicePeriodEnd = r.servicePeriod.End
-		out = append(out, &i)
+		builders = append(builders, NewOwnerInstalment(ctx, owner).
+			WithBillTrigger(r.billTrigger).
+			WithBillOn(r.billOn).
+			WithServicePeriod(r.servicePeriod))
 	} else {
-		amounts := r.stepAmounts(currency)
-		for n, step := range r.steps {
-			i := template
-			i.BillTrigger = types.InstalmentBillTriggerDate
-			i.BillOn = step.End
+		for _, step := range r.steps {
+			billOn := step.End
 			if r.cadence == types.InvoiceCadenceAdvance {
-				i.BillOn = step.Start
+				billOn = step.Start
 			}
 
-			i.Amount = amounts[n]
-			i.ServicePeriodStart = step.Start
-			i.ServicePeriodEnd = step.End
-			out = append(out, &i)
+			builders = append(builders, NewOwnerInstalment(ctx, owner).WithBillOn(billOn).WithServicePeriod(step.Period))
 		}
 	}
 
-	for n, i := range out {
-		i.BillingTermID = lo.ToPtr(r.term.ID)
-		i.InvoiceLabel = lo.CoalesceOrEmpty(lo.FromPtr(r.term.InvoiceLabel), DefaultInvoiceLabel)
-		if !i.Amount.IsPositive() {
+	label := lo.CoalesceOrEmpty(lo.FromPtr(r.term.InvoiceLabel), DefaultInvoiceLabel)
+	amounts := r.instalmentAmounts(owner.BillingCurrency())
+	out := make([]*Instalment, 0, len(builders))
+	for n, b := range builders {
+		if !amounts[n].IsPositive() {
 			return nil, ierr.Validationf(
 				termErrorFormat, r.index, "value",
-				fmt.Sprintf("instalment %d of %d comes to %s; every instalment must be greater than 0", n+1, len(out), i.Amount),
+				fmt.Sprintf("instalment %d of %d comes to %s; every instalment must be greater than 0", n+1, len(amounts), amounts[n]),
 			)
 		}
+
+		out = append(out, b.WithBillingTermID(r.term.ID).WithAmount(amounts[n]).WithInvoiceLabel(label).Build())
 	}
 
 	return out, nil
 }
 
-// stepAmounts splits the term's amount over its steps; on a remainder term the last step absorbs the rounding.
-func (r *resolvedTerm) stepAmounts(currency string) []decimal.Decimal {
+// instalmentAmounts splits the term's total over its instalments: the term's value each on a fixed term; evenly or in
+// proportion to the steps' values on a remainder term, the last absorbing the rounding.
+func (r *resolvedTerm) instalmentAmounts(currency string) []decimal.Decimal {
+	count := r.instalmentCount()
 	if r.term.ValueType == types.BillingTermValueFixed {
-		return lo.Times(len(r.steps), func(int) decimal.Decimal { return r.instalmentAmount })
+		return lo.Times(count, func(int) decimal.Decimal { return lo.FromPtr(r.term.Value) })
 	}
 
-	termValue := sumValues(r.steps)
-	stepCount := decimal.NewFromInt(int64(len(r.steps)))
-	amounts := make([]decimal.Decimal, len(r.steps))
+	stepsValue := sumValues(r.steps)
+	amounts := make([]decimal.Decimal, count)
 	allocated := decimal.Zero
-	for n, step := range r.steps[:len(r.steps)-1] {
-		share := r.amount.Div(stepCount)
+	for n := range count - 1 {
+		share := r.total.Div(decimal.NewFromInt(int64(count)))
 		if r.split == types.BillingTermSplitProportional {
-			share = r.amount.Mul(step.Amount).Div(termValue)
+			share = r.total.Mul(r.steps[n].Amount).Div(stepsValue)
 		}
 
 		amounts[n] = types.RoundToCurrencyPrecision(share, currency)
 		allocated = allocated.Add(amounts[n])
 	}
 
-	amounts[len(amounts)-1] = r.amount.Sub(allocated)
-
+	amounts[count-1] = r.total.Sub(allocated)
 	return amounts
 }
 

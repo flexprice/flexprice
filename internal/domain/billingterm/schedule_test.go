@@ -649,22 +649,6 @@ func TestExpand_Validation(t *testing.T) {
 			wantMsg: "billing_terms[0].split:",
 		},
 		{
-			name:    "invoice_label over 255 characters",
-			owner:   year,
-			periods: months,
-			terms:   []*Term{with(onceRemainder(), func(t *Term) { t.InvoiceLabel = lo.ToPtr(strings.Repeat("a", 256)) })},
-			wantMsg: "billing_terms[0].invoice_label:",
-		},
-		{
-			name:    "invoice_label template over 255 characters that renders shorter",
-			owner:   year,
-			periods: months,
-			terms: []*Term{with(recurringRemainder(types.InvoiceCadenceArrear), func(t *Term) {
-				t.InvoiceLabel = lo.ToPtr(strings.Repeat("{n}", 86))
-			})},
-			wantMsg: "billing_terms[0].invoice_label:",
-		},
-		{
 			name:    "an instalment rounds to 0",
 			owner:   usd("0.10", jan2027, date(2027, time.July, 1)),
 			periods: monthly(jan2027, 6, "100"),
