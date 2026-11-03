@@ -366,7 +366,6 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	// TODO: billed amounts of billing-terms commitments are reported at usage value, not the $0 their invoice lines carry.
 	lines := commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 
 	byID := map[string]*dto.CommitmentUsageBreakdown{}
@@ -399,15 +398,20 @@ func (l *commitmentLoader) UsageBreakdown(ctx context.Context) ([]*dto.Commitmen
 
 	for _, line := range lines {
 		b := byID[lo.FromPtr(line.CommitmentID)]
+		if b != nil && types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) == types.CommitmentLineUtilized {
+			b.Used.Amount = b.Used.Amount.Add(line.Amount)
+		}
+	}
+
+	// Billed amounts follow the usage invoice, which covers billing-terms commitments.
+	for _, line := range coverWithBillingTerms(lines, l.commitments) {
+		b := byID[lo.FromPtr(line.CommitmentID)]
 		if b == nil {
 			continue
 		}
 
 		switch types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) {
-		case types.CommitmentLineUtilized:
-			b.Used.Amount = b.Used.Amount.Add(line.Amount)
-			b.BilledAmount = b.BilledAmount.Add(line.Amount)
-		case types.CommitmentLineTrueUp:
+		case types.CommitmentLineUtilized, types.CommitmentLineTrueUp:
 			b.BilledAmount = b.BilledAmount.Add(line.Amount)
 		}
 	}

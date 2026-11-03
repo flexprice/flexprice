@@ -2239,6 +2239,28 @@ func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_AmountCommitment() {
 	s.True(partial.Commitments[0].AppliesTo.Equal(sub.CurrentPeriodEnd), "applies to %s", partial.Commitments[0].AppliesTo)
 }
 
+// A billing-terms commitment's usage invoice bills nothing within it, so it reports no billed amount while its
+// used amount keeps the usage value.
+func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_BillingTermsBillNothing() {
+	s.setupTestData()
+	s.enableCommitmentsV2()
+	sub := s.testData.subscription
+	periodStart := sub.CurrentPeriodStart
+	c := s.newTestCommitment(
+		types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT), sub,
+		types.COMMITMENT_TYPE_AMOUNT, "100", s.testData.prices.apiCalls.ID, periodStart, periodStart.AddDate(1, 0, 0),
+	)
+	c.CollectionMethod = lo.ToPtr(types.CommitmentCollectionBillingTerms)
+	s.storeCommitment(c)
+
+	usage := s.rawUsage(sub)
+	s.Require().Len(usage.Commitments, 1)
+	b := usage.Commitments[0]
+	s.True(b.Used.Amount.Equal(dec("10")), "value within %s", b.Used.Amount)
+	s.True(b.Unused.Amount.Equal(dec("90")), "value unused %s", b.Unused.Amount)
+	s.True(b.BilledAmount.IsZero(), "billed %s", b.BilledAmount)
+}
+
 // An open-ended commitment applies to the end of the queried period, at that period's full floor, whether the
 // window covers the whole period or stops inside it.
 func (s *BillingServiceSuite) TestCommitmentUsageBreakdown_OpenEndedAppliesToThePeriodEnd() {

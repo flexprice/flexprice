@@ -125,6 +125,7 @@ func (s *CommitmentE2ESuite) TestInstalments_ArrearAndAdvanceLanding() {
 
 	previewed := instalmentLines(s.invoiceAt(types.ReferencePointPreview, a3Sub.ID, s.jan, feb))
 	s.Len(previewed, 2, "a preview lists the instalments due by the period end")
+	s.Len(instalmentLines(s.invoiceAt(types.ReferencePointInternalPreview, a3Sub.ID, s.jan, feb)), 2)
 	s.Empty(instalmentLines(s.invoiceAt(types.ReferencePointCancel, a3Sub.ID, s.jan, feb)))
 
 	a7Price := s.planWith("a7", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")

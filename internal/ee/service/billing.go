@@ -1721,7 +1721,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	switch referencePoint {
 	case types.ReferencePointPeriodStart:
 		instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, periodStart)
-	case types.ReferencePointPeriodEnd, types.ReferencePointPreview:
+	case types.ReferencePointPeriodEnd, types.ReferencePointPreview, types.ReferencePointInternalPreview:
 		instalments, instalmentTotal, err = s.dueInstalmentLines(ctx, sub, periodEnd)
 	}
 	if err != nil {
