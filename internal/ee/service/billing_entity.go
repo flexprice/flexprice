@@ -21,7 +21,6 @@ type BillingEntityService interface {
 
 	// WithMode runs fn in a transaction with the mode read from the database; before enabled it holds the shared enable lock.
 	WithMode(ctx context.Context, fn func(txCtx context.Context, mode types.BillingEntityMode) error) error
-	GetOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error)
 	ResolveForCreate(ctx context.Context, mode types.BillingEntityMode, requested *string) (*string, error)
 	// EffectiveEntity is the customer's entity; a customer the enable backfill has not reached belongs to the default.
 	EffectiveEntity(ctx context.Context, cust *customer.Customer) (*billingentity.BillingEntity, error)
@@ -38,7 +37,6 @@ type BillingEntityService interface {
 	InScope(ctx context.Context, customerID string) (bool, error)
 	RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error
 	ValidateFilter(ctx context.Context, billingEntityID string) error
-	EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error)
 
 	Create(ctx context.Context, req dto.CreateBillingEntityRequest) (*dto.BillingEntityResponse, error)
 	Get(ctx context.Context, id string) (*dto.BillingEntityResponse, error)
@@ -139,7 +137,7 @@ func (s *billingEntityService) WithMode(ctx context.Context, fn func(txCtx conte
 	})
 }
 
-func (s *billingEntityService) GetOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
+func (s *billingEntityService) getOrCreateDefault(ctx context.Context) (*billingentity.BillingEntity, error) {
 	existing, err := s.BillingEntityRepo.GetDefault(ctx)
 	if err == nil {
 		return existing, nil
@@ -241,7 +239,7 @@ func (s *billingEntityService) ResolveBillingEntityID(ctx context.Context, mode 
 		return lo.ToPtr(entity.ID), nil
 	}
 
-	def, err := s.GetOrCreateDefault(ctx)
+	def, err := s.getOrCreateDefault(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -440,10 +438,6 @@ func (s *billingEntityService) ValidateFilter(ctx context.Context, billingEntity
 	}
 	_, err := s.entityInEnvironment(ctx, billingEntityID)
 	return err
-}
-
-func (s *billingEntityService) EntityIDsForCustomers(ctx context.Context, customerIDs []string) (map[string]*string, error) {
-	return s.CustomerRepo.BillingEntityIDsByCustomerIDs(ctx, lo.Uniq(customerIDs))
 }
 
 func (s *billingEntityService) Create(ctx context.Context, req dto.CreateBillingEntityRequest) (*dto.BillingEntityResponse, error) {
